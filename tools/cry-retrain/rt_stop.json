@@ -1,0 +1,9316 @@
+{
+ "summary": {
+  "cry_head24.json t0.5": {
+   "none_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.7,
+    "re_alarm": "0/18"
+   },
+   "wn10_c10": {
+    "alarm": "16/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "1/16",
+    "stop_delay_med": 23.4,
+    "re_alarm": "0/16"
+   },
+   "wn20_c10": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/17",
+    "stop_delay_med": 29.1,
+    "re_alarm": "0/17"
+   },
+   "brown10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.3,
+    "re_alarm": "0/18"
+   },
+   "brown0_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.9,
+    "re_alarm": "0/18"
+   },
+   "song10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.15,
+    "re_alarm": "2/18"
+   },
+   "song20_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.65,
+    "re_alarm": "7/18"
+   },
+   "wngap10_c10": {
+    "alarm": "16/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/16"
+   },
+   "songgap10_c10": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/17"
+   },
+   "songgap20_c10": {
+    "alarm": "16/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/16"
+   },
+   "none_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.3,
+    "re_alarm": "0/18"
+   },
+   "wn10_c0": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "1/17",
+    "stop_delay_med": 26.700000000000003,
+    "re_alarm": "0/17"
+   },
+   "wn20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.15,
+    "re_alarm": "0/18"
+   },
+   "brown10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.65,
+    "re_alarm": "0/18"
+   },
+   "brown0_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.35,
+    "re_alarm": "0/18"
+   },
+   "song10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.85,
+    "re_alarm": "4/18"
+   },
+   "song20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.35,
+    "re_alarm": "2/18"
+   },
+   "wngap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   }
+  },
+  "cry_head24.json t0.7": {
+   "none_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.7,
+    "re_alarm": "0/18"
+   },
+   "wn10_c10": {
+    "alarm": "16/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "1/16",
+    "stop_delay_med": 22.9,
+    "re_alarm": "0/16"
+   },
+   "wn20_c10": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/17",
+    "stop_delay_med": 28.8,
+    "re_alarm": "0/17"
+   },
+   "brown10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.9,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.7,
+    "re_alarm": "0/18"
+   },
+   "brown0_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.9,
+    "re_alarm": "0/18"
+   },
+   "song10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 28.799999999999997,
+    "re_alarm": "1/18"
+   },
+   "song20_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 3.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.0,
+    "re_alarm": "4/18"
+   },
+   "wngap10_c10": {
+    "alarm": "16/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/16"
+   },
+   "songgap10_c10": {
+    "alarm": "16/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/16"
+   },
+   "songgap20_c10": {
+    "alarm": "16/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/16"
+   },
+   "none_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.3,
+    "re_alarm": "0/18"
+   },
+   "wn10_c0": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "1/17",
+    "stop_delay_med": 23.15,
+    "re_alarm": "0/17"
+   },
+   "wn20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.15,
+    "re_alarm": "0/18"
+   },
+   "brown10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.3,
+    "re_alarm": "0/18"
+   },
+   "brown0_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.35,
+    "re_alarm": "0/18"
+   },
+   "song10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.05,
+    "re_alarm": "3/18"
+   },
+   "song20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.1,
+    "re_alarm": "2/18"
+   },
+   "wngap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   }
+  },
+  "cry_head24_rt.json t0.5": {
+   "none_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.85,
+    "re_alarm": "0/18"
+   },
+   "wn10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.0,
+    "re_alarm": "0/18"
+   },
+   "wn20_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.450000000000003,
+    "re_alarm": "0/18"
+   },
+   "brown10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.65,
+    "re_alarm": "0/18"
+   },
+   "brown0_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.8,
+    "re_alarm": "0/18"
+   },
+   "song10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.15,
+    "re_alarm": "3/18"
+   },
+   "song20_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.65,
+    "re_alarm": "8/18"
+   },
+   "wngap10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap20_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "none_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.65,
+    "re_alarm": "0/18"
+   },
+   "wn10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.4,
+    "re_alarm": "0/18"
+   },
+   "wn20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.85,
+    "re_alarm": "0/18"
+   },
+   "brown10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.85,
+    "re_alarm": "0/18"
+   },
+   "brown0_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.8,
+    "re_alarm": "0/18"
+   },
+   "song10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.3,
+    "re_alarm": "6/18"
+   },
+   "song20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.85,
+    "re_alarm": "10/18"
+   },
+   "wngap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   }
+  },
+  "cry_head24_rt.json t0.7": {
+   "none_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.65,
+    "re_alarm": "0/18"
+   },
+   "wn10_c10": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/17",
+    "stop_delay_med": 28.8,
+    "re_alarm": "0/17"
+   },
+   "wn20_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.75,
+    "re_alarm": "0/18"
+   },
+   "brown10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.65,
+    "re_alarm": "0/18"
+   },
+   "brown0_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.8,
+    "re_alarm": "0/18"
+   },
+   "song10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.15,
+    "re_alarm": "2/18"
+   },
+   "song20_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.5,
+    "re_alarm": "7/18"
+   },
+   "wngap10_c10": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap10_c10": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/17"
+   },
+   "songgap20_c10": {
+    "alarm": "17/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/17"
+   },
+   "none_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.65,
+    "re_alarm": "0/18"
+   },
+   "wn10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 28.9,
+    "re_alarm": "0/18"
+   },
+   "wn20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 29.85,
+    "re_alarm": "0/18"
+   },
+   "brown10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.85,
+    "re_alarm": "0/18"
+   },
+   "brown0_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.8,
+    "re_alarm": "0/18"
+   },
+   "song10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 31.0,
+    "re_alarm": "5/18"
+   },
+   "song20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "0/18",
+    "stop_delay_med": 30.6,
+    "re_alarm": "5/18"
+   },
+   "wngap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap10_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   },
+   "songgap20_c0": {
+    "alarm": "18/18",
+    "alarm_delay_med": 2.4,
+    "early_stop": "측정 불가",
+    "stop_delay_med": "측정 불가",
+    "re_alarm": "0/18"
+   }
+  }
+ },
+ "detail": {
+  "cry_head24.json t0.5": {
+   "none_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 17.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 29.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 14.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 29.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 23.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": true,
+     "stop_delay": -36.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 9.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 17.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 18.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 20.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 6.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 23.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 29.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 20.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 10.2,
+     "early_stop": false,
+     "stop_delay": 28.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 23.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song20_c10": [
+    {
+     "alarm": 13.2,
+     "early_stop": false,
+     "stop_delay": 36.8,
+     "re_alarm": true
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": true
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 39.8,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 43.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "none_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 29.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 16.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 28.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 27.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 23.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": true,
+     "stop_delay": -36.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 10.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 27.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 19.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 28.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 34.9,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.1,
+     "re_alarm": true
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 29.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song20_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 34.2,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 59.5,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ]
+  },
+  "cry_head24.json t0.7": {
+   "none_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 17.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 29.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 14.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 29.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 23.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": true,
+     "stop_delay": -36.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 9.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 9.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 16.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 20.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 6.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 23.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 19.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 29.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 23.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 20.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 29.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 12.2,
+     "early_stop": false,
+     "stop_delay": 28.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 23.4,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 23.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song20_c10": [
+    {
+     "alarm": 13.2,
+     "early_stop": false,
+     "stop_delay": 36.8,
+     "re_alarm": true
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 20.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": true
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 37.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 43.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "none_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 20.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 12.2,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 10.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 14.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 26.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 27.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 27.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 23.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": true,
+     "stop_delay": -36.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 9.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 19.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 18.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 14.1,
+     "early_stop": false,
+     "stop_delay": 20.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 17.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 23.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 21.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 34.9,
+     "re_alarm": true
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.3,
+     "re_alarm": true
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 27.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song20_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 34.2,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 59.5,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 5.3,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ]
+  },
+  "cry_head24_rt.json t0.5": {
+   "none_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 10.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 10.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 23.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 5.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 33.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 26.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 33.0,
+     "re_alarm": false
+    }
+   ],
+   "song20_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.6,
+     "re_alarm": true
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 40.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.8,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "none_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 16.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 33.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 29.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 27.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 27.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 33.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 47.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 39.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 45.6,
+     "re_alarm": true
+    }
+   ],
+   "song20_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 40.3,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 42.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 43.4,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 49.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ]
+  },
+  "cry_head24_rt.json t0.7": {
+   "none_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 10.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 23.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 4.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c10": [
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 18.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 28.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 25.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c10": [
+    {
+     "alarm": 11.2,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 26.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 33.0,
+     "re_alarm": false
+    }
+   ],
+   "song20_c10": [
+    {
+     "alarm": 13.2,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 38.6,
+     "re_alarm": true
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 40.0,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 33.0,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c10": [
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c10": [
+    {
+     "alarm": null
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "none_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 26.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 12.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 24.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 16.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 23.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 27.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wn20_c0": [
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 29.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 27.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "brown0_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 14.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 32.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 27.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 25.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 19.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "song10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.7,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": 30.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": false,
+     "stop_delay": 31.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 22.5,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 18.8,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 45.6,
+     "re_alarm": true
+    }
+   ],
+   "song20_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 20.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 21.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 31.9,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.7,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 13.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": false,
+     "stop_delay": null,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 30.6,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 30.1,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 40.0,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 28.3,
+     "re_alarm": true
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 59.5,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 29.3,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 32.1,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 24.2,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 42.4,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": false,
+     "stop_delay": 47.1,
+     "re_alarm": true
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": false,
+     "stop_delay": 32.0,
+     "re_alarm": false
+    }
+   ],
+   "wngap10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap10_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 3.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ],
+   "songgap20_c0": [
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 4.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 2.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    },
+    {
+     "alarm": 1.4,
+     "early_stop": null,
+     "stop_delay": null,
+     "re_alarm": false
+    }
+   ]
+  }
+ }
+}

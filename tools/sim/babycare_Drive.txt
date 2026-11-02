@@ -1,0 +1,63 @@
+mode=babycare
+CAP fan [ROW_1_LEFT+ROW_1_RIGHT=1..8]
+CAP temp [ROW_1_LEFT=15.0..30.0, ROW_1_RIGHT=15.0..30.0]
+CAP power CapabilityConfig(accessType=READ_WRITE) [ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT]
+CAP fanDir [ROW_1_LEFT+ROW_1_RIGHT=[]]
+CAP defroster [FRONT_WINDSHIELD, REAR_WINDSHIELD]
+CAP seatVent CapabilityConfig(accessType=READ_WRITE) [ROW_1_LEFT=0..3, ROW_1_RIGHT=0..3]
+CAP seatHeat CapabilityConfig(accessType=READ_WRITE) [ROW_2_LEFT=0..3, ROW_2_RIGHT=0..3, ROW_1_LEFT=-3..3, ROW_1_RIGHT=-3..3]
+CAP wheelHeat CapabilityConfig(accessType=READ_WRITE) 0..3
+CAP mirrorHeat CapabilityConfig(accessType=READ_WRITE) [DRIVER_LEFT=0..3, DRIVER_RIGHT=0..3, DRIVER_LEFT+DRIVER_RIGHT=0..3]
+CAP doorPos CapabilityConfig(accessType=READ_WRITE) [ROW_2_LEFT=0..1, ROW_2_RIGHT=0..1, REAR=0..100, HOOD=0..100, ROW_1_LEFT=0..1, ROW_1_RIGHT=0..1]
+ERR capTire a: ERROR_NOT_SUPPORTED_PROPERTY
+ERR capAirbag a: ERROR_NOT_SUPPORTED_PROPERTY
+STATE gear=GEAR_DRIVE speed=16.666668
+EVT door ROW_2_LEFT 1793564034907 0
+EVT door ROW_2_RIGHT 1793564034908 0
+ERR tripTimeListener ERROR_NOT_SUPPORTED_PROPERTY
+ERR tripTime a: ERROR_NOT_SUPPORTED_PROPERTY
+EVT door ROW_2_RIGHT 1793564034915 0
+CAP occupancy CapabilityConfig(accessType=READ) [ROW_2_LEFT, ROW_2_RIGHT, ROW_2_CENTER, ROW_1_LEFT, ROW_1_RIGHT]
+GET occupancy ROW_2_LEFT true
+GET occupancy ROW_2_RIGHT true
+GET occupancy ROW_2_CENTER true
+RES seatHeat_ROW_2_LEFT 0 ack=110 seen=133 ok
+RES seatHeat_ROW_2_LEFT 1 ack=35 seen=122 ok
+RES seatHeat_ROW_2_LEFT 2 ack=5 seen=109 ok
+RES seatHeat_ROW_2_LEFT 3 ack=9 seen=108 ok
+RES seatHeat_ROW_2_LEFT 4 ack=13 seen=112 ok
+RES seatHeat_ROW_2_LEFT 5 ack=7 seen=117 ok
+CAP readingLight [ROW_2_LEFT, ROW_2_RIGHT, ROW_1_LEFT, ROW_1_RIGHT]
+ERR readingLight Exception: java.lang.IllegalArgumentException: 50001
+RES readingLight_ROW_2_LEFT 0 ack=-1 seen=-1 FAIL last=ON noAck
+ERR readingLight Exception: java.lang.IllegalArgumentException: 50001
+RES readingLight_ROW_2_LEFT 1 ack=-1 seen=-1 FAIL last=ON noAck
+ERR readingLight Exception: java.lang.IllegalArgumentException: 50001
+RES readingLight_ROW_2_LEFT 2 ack=-1 seen=-1 FAIL last=ON noAck
+ERR readingLight Exception: java.lang.IllegalArgumentException: 50001
+RES readingLight_ROW_2_LEFT 3 ack=-1 seen=-1 FAIL last=ON noAck
+ERR readingLight Exception: java.lang.IllegalArgumentException: 50001
+RES readingLight_ROW_2_LEFT 4 ack=-1 seen=-1 FAIL last=ON noAck
+ERR readingLight Exception: java.lang.IllegalArgumentException: 50001
+RES readingLight_ROW_2_LEFT 5 ack=-1 seen=-1 FAIL last=ON noAck
+CAP windowLock [ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_RIGHT, ROW_2_LEFT, ROW_2_RIGHT]
+RES windowLock_ROW_2_LEFT 0 ack=7 seen=106 ok
+RES windowLock_ROW_2_LEFT 1 ack=7 seen=107 ok
+RES windowLock_ROW_2_LEFT 2 ack=5 seen=105 ok
+RES windowLock_ROW_2_LEFT 3 ack=7 seen=105 ok
+RES windowLock_ROW_2_LEFT 4 ack=4 seen=106 ok
+RES windowLock_ROW_2_LEFT 5 ack=10 seen=106 ok
+ERR capEtcs a: ERROR_NOT_SUPPORTED_PROPERTY
+RES hvacTemp_ROW_1_LEFT 0 ack=18 seen=109 ok
+RES hvacTemp_ROW_1_LEFT 1 ack=7 seen=112 ok
+RES hvacTemp_ROW_1_LEFT 2 ack=10 seen=107 ok
+RES hvacTemp_ROW_1_LEFT 3 ack=20 seen=110 ok
+RES hvacTemp_ROW_1_LEFT 4 ack=23 seen=109 ok
+RES hvacTemp_ROW_1_LEFT 5 ack=9 seen=110 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 0 ack=11 seen=109 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 1 ack=16 seen=122 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 2 ack=11 seen=112 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 3 ack=16 seen=105 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 4 ack=10 seen=113 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 5 ack=6 seen=116 ok
+RES done

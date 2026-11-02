@@ -1,0 +1,23 @@
+# 뒷좌석 존 재생 실측 (2026-11-02, Pleos 에뮬레이터 PleosProbe, user 10, 앱이 만든 백색소음 3초 재생)
+# 명령: adb shell am start --user 10 -n dev.probe.pleos/.SoundProbe --es cmd noise [--es bus bus100_audio_zone_1] --ei sec 3   (로그: adb logcat -s SOUND)
+# 볼 곳: OUTS의 출력 장치 주소 목록, NOISE preferred(setPreferredDevice 결과), NOISE routed(실제 경로). bus 지정 시 routed가 bus100_audio_zone_1이고 미지정 시 다른 주소면 존 지정이 먹힌 것
+
+## bus 지정: --es bus bus100_audio_zone_1
+OUTS bus1000_mirror_device, bus211_audio_zone_2, bus210_audio_zone_2, bus201_audio_zone_2, bus200_audio_zone_2, bus111_audio_zone_1, bus110_audio_zone_1, bus101_audio_zone_1, bus100_audio_zone_1, bus8_vehicle_sound_out, bus7_system_sound_out, bus6_notification_out, bus5_alarm_out, bus4_call_out, bus3_call_ring_out, bus2_voice_command_out, bus1_navigation_out, bus0_media_out
+NOISE preferred=true bus100_audio_zone_1
+NOISE routed=bus100_audio_zone_1
+
+## bus 미지정(비교)
+OUTS bus1000_mirror_device, bus211_audio_zone_2, bus210_audio_zone_2, bus201_audio_zone_2, bus200_audio_zone_2, bus111_audio_zone_1, bus110_audio_zone_1, bus101_audio_zone_1, bus100_audio_zone_1, bus8_vehicle_sound_out, bus7_system_sound_out, bus6_notification_out, bus5_alarm_out, bus4_call_out, bus3_call_ring_out, bus2_voice_command_out, bus1_navigation_out, bus0_media_out
+NOISE routed=bus0_media_out
+
+## 존 소속 확인(읽기 전용): adb shell dumpsys car_service | grep -E "CarAudioZone\(|MUSIC -> Address"
+## bus100_audio_zone_1, bus110_audio_zone_1은 "rear seat zone 1" 존의 MUSIC 출력 주소다.
+    CarAudioZone(primary zone:0) isPrimary? true
+            Context: MUSIC -> Address: bus0_media_out
+    CarAudioZone(rear seat zone 1:1) isPrimary? false
+            Context: MUSIC -> Address: bus100_audio_zone_1
+            Context: MUSIC -> Address: bus110_audio_zone_1
+    CarAudioZone(rear seat zone 2:2) isPrimary? false
+            Context: MUSIC -> Address: bus200_audio_zone_2
+            Context: MUSIC -> Address: bus210_audio_zone_2

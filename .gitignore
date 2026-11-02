@@ -1,0 +1,31 @@
+# Android / Gradle 빌드 산출물
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.cxx/
+.externalNativeBuild/
+
+# 서명 키
+*.jks
+*.keystore
+*.p8
+*.p12
+keystore.properties
+
+# 비밀 값(API 키 등)
+.env
+.env.*
+!.env.example
+.dev.vars*
+secrets.properties
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc

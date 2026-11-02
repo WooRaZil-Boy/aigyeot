@@ -1,0 +1,73 @@
+# 백그라운드 마이크 시작 실측 (2026-11-02, Pleos 에뮬레이터 PleosProbe, Android 14, targetSdk 34, user 10)
+# 코드: app/src/main/kotlin/dev/probe/pleos/BootProbe.kt(경로 A~E), MicServiceProbe.kt(녹음·isClientSilenced), ScenarioProbe.kt(mode=mic)
+# 에뮬레이터는 -no-audio로 띄웠다. 마이크가 열리면 기본 잡음 rms 약 4.8, 시스템이 무음 처리하면 rms 0.0
+# 경로 E(백그라운드 액티비티 실행, bg-activity-launch)는 재부팅 2회차에서만 시험했다. 1회차에는 A~D만 있다. 대조군은 원본 로그가 없어 대표 줄(t=0, t=7)만 남겼다
+
+## 대조군: 화면(액티비티)에서 시작 — am start --user 10 -n dev.probe.pleos/.ScenarioProbe --es mode mic
+11-02 02:18:53.104 I MICTEST : fg-activity startForeground(MICROPHONE) ok
+11-02 02:18:54.408 I MICTEST : fg-activity t=0 read=16000 rms=4.7 recState=3 silenced=false confFound=true
+11-02 02:19:01.391 I MICTEST : fg-activity t=7 read=16000 rms=4.8 recState=3 silenced=false confFound=true
+(t=0~7 모두 rms 4.7~4.8, silenced=false)
+
+## 재부팅 1회차(adb reboot, 앱 화면을 열지 않음) — 경로 A~D만 시험. 원본 logcat(-v time)에서 MICTEST 전부와 PROBE·경고 줄을 그대로 옮김
+11-02 02:20:05.548 W/ActivityManager(  778): Foreground service started from background can not have location/camera/microphone access: service ai.pleos.gleoai.model.provider/.GleoAiModelProviderService
+11-02 02:20:05.585 W/ActivityManager(  778): Foreground service started from background can not have location/camera/microphone access: service ai.umos.mediaapp/.miniapp.ui.MiniAppUpdateService
+11-02 02:20:07.447 W/ActivityManager(  778): Foreground service started from background can not have location/camera/microphone access: service ai.umos.mediaapp/.miniapp.ui.MiniAppUpdateService
+11-02 02:20:56.590 I/PROBE   ( 7066): BOOT received android.intent.action.BOOT_COMPLETED
+11-02 02:20:56.596 I/MICTEST ( 7066): boot-receiver importance=125
+11-02 02:20:56.639 W/ActivityManager(  778): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MonitorService
+11-02 02:20:56.656 I/PROBE   ( 7066): SERVICE foreground ok
+11-02 02:20:56.780 I/PROBE   ( 7066): SERVICE vehicle init ok
+11-02 02:20:57.996 W/ActivityManager(  778): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MicService
+11-02 02:20:58.011 I/MICTEST ( 7066): boot-receiver startForeground(MICROPHONE) ERR SecurityException Starting FGS with type microphone callerApp=ProcessRecord{4ad4708 7066:dev.probe.pleos/u10a174} targetSDK=34 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_MICROPHONE] any of the permissions allOf=false [android.permission.CAPTURE_AUDIO_HOTWORD, android.permission.CAPTURE_AUDIO_OUTPUT, android.permission.CAPTURE_MEDIA_OUTPUT, android.permission.CAPTURE_TUNER_AUDIO_INPUT, android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT, android.permission.RECORD_AUDIO]  and the app must be in the eligible state/exemptions to access the foreground only permission
+11-02 02:21:03.041 I/PROBE   ( 7066): SERVICE wiper OFF
+11-02 02:21:08.055 I/PROBE   ( 7066): SERVICE wiper OFF
+11-02 02:21:13.053 I/PROBE   ( 7066): SERVICE wiper OFF
+11-02 02:21:36.661 I/MICTEST ( 7066): bg-start-fgs importance=125
+11-02 02:21:36.665 W/ActivityManager(  778): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MicService
+11-02 02:21:36.666 I/MICTEST ( 7066): bg-start-fgs startForeground(MICROPHONE) ERR SecurityException Starting FGS with type microphone callerApp=ProcessRecord{4ad4708 7066:dev.probe.pleos/u10a174} targetSDK=34 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_MICROPHONE] any of the permissions allOf=false [android.permission.CAPTURE_AUDIO_HOTWORD, android.permission.CAPTURE_AUDIO_OUTPUT, android.permission.CAPTURE_MEDIA_OUTPUT, android.permission.CAPTURE_TUNER_AUDIO_INPUT, android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT, android.permission.RECORD_AUDIO]  and the app must be in the eligible state/exemptions to access the foreground only permission
+11-02 02:21:56.715 I/MICTEST ( 7066): bg-specialuse-record AudioRecord state=1
+11-02 02:21:57.745 I/MICTEST ( 7066): bg-specialuse-record t=0 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:21:58.759 I/MICTEST ( 7066): bg-specialuse-record t=1 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:21:59.740 I/MICTEST ( 7066): bg-specialuse-record t=2 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:22:00.743 I/MICTEST ( 7066): bg-specialuse-record t=3 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:22:01.747 I/MICTEST ( 7066): bg-specialuse-record t=4 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:22:02.739 I/MICTEST ( 7066): bg-specialuse-record t=5 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:22:03.744 I/MICTEST ( 7066): bg-specialuse-record t=6 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:22:04.746 I/MICTEST ( 7066): bg-specialuse-record t=7 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:22:04.771 I/MICTEST ( 7066): bg-specialuse-record done
+11-02 02:22:16.662 I/MICTEST ( 7066): bg-upgrade-type importance=125
+11-02 02:22:16.664 W/ActivityManager(  778): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MonitorService
+11-02 02:22:16.666 I/MICTEST ( 7066): bg-upgrade-type startForeground ERR SecurityException Starting FGS with type microphone callerApp=ProcessRecord{4ad4708 7066:dev.probe.pleos/u10a174} targetSDK=34 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_MICROPHONE] any of the permissions allOf=false [android.permission.CAPTURE_AUDIO_HOTWORD, android.permission.CAPTURE_AUDIO_OUTPUT, android.permission.CAPTURE_MEDIA_OUTPUT, android.permission.CAPTURE_TUNER_AUDIO_INPUT, android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT, android.permission.RECORD_AUDIO]  and the app must be in the eligible state/exemptions to access the foreground only permission
+
+## 재부팅 2회차(경로 A~D + 경로 E 활동 실행). 경로 E(백그라운드에서 startActivity)는 이 회차에서만 시험했다
+11-02 02:23:53.189 W/ActivityManager(  763): Foreground service started from background can not have location/camera/microphone access: service ai.pleos.gleoai.model.provider/.GleoAiModelProviderService
+11-02 02:23:59.378 I/PROBE   ( 5590): BOOT received android.intent.action.BOOT_COMPLETED
+11-02 02:23:59.383 I/MICTEST ( 5590): boot-receiver importance=125
+11-02 02:23:59.391 W/ActivityManager(  763): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MonitorService
+11-02 02:23:59.392 I/PROBE   ( 5590): SERVICE foreground ok
+11-02 02:23:59.417 I/PROBE   ( 5590): SERVICE vehicle init ok
+11-02 02:23:59.764 W/ActivityManager(  763): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MicService
+11-02 02:23:59.767 I/MICTEST ( 5590): boot-receiver startForeground(MICROPHONE) ERR SecurityException Starting FGS with type microphone callerApp=ProcessRecord{4980a43 5590:dev.probe.pleos/u10a174} targetSDK=34 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_MICROPHONE] any of the permissions allOf=false [android.permission.CAPTURE_AUDIO_HOTWORD, android.permission.CAPTURE_AUDIO_OUTPUT, android.permission.CAPTURE_MEDIA_OUTPUT, android.permission.CAPTURE_TUNER_AUDIO_INPUT, android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT, android.permission.RECORD_AUDIO]  and the app must be in the eligible state/exemptions to access the foreground only permission
+11-02 02:24:04.842 I/PROBE   ( 5590): SERVICE wiper OFF
+11-02 02:24:09.862 I/PROBE   ( 5590): SERVICE wiper OFF
+11-02 02:24:14.890 I/PROBE   ( 5590): SERVICE wiper OFF
+11-02 02:24:39.399 I/MICTEST ( 5590): bg-start-fgs importance=125
+11-02 02:24:39.442 W/ActivityManager(  763): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MicService
+11-02 02:24:39.456 I/MICTEST ( 5590): bg-start-fgs startForeground(MICROPHONE) ERR SecurityException Starting FGS with type microphone callerApp=ProcessRecord{4980a43 5590:dev.probe.pleos/u10a174} targetSDK=34 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_MICROPHONE] any of the permissions allOf=false [android.permission.CAPTURE_AUDIO_HOTWORD, android.permission.CAPTURE_AUDIO_OUTPUT, android.permission.CAPTURE_MEDIA_OUTPUT, android.permission.CAPTURE_TUNER_AUDIO_INPUT, android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT, android.permission.RECORD_AUDIO]  and the app must be in the eligible state/exemptions to access the foreground only permission
+11-02 02:24:59.453 I/MICTEST ( 5590): bg-specialuse-record AudioRecord state=1
+11-02 02:25:00.484 I/MICTEST ( 5590): bg-specialuse-record t=0 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:01.491 I/MICTEST ( 5590): bg-specialuse-record t=1 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:02.476 I/MICTEST ( 5590): bg-specialuse-record t=2 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:03.484 I/MICTEST ( 5590): bg-specialuse-record t=3 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:04.486 I/MICTEST ( 5590): bg-specialuse-record t=4 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:05.476 I/MICTEST ( 5590): bg-specialuse-record t=5 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:06.483 I/MICTEST ( 5590): bg-specialuse-record t=6 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:07.487 I/MICTEST ( 5590): bg-specialuse-record t=7 read=16000 rms=0.0 recState=3 silenced=true confFound=true
+11-02 02:25:07.503 I/MICTEST ( 5590): bg-specialuse-record done
+11-02 02:25:19.395 I/MICTEST ( 5590): bg-upgrade-type importance=125
+11-02 02:25:19.402 W/ActivityManager(  763): Foreground service started from background can not have location/camera/microphone access: service dev.probe.pleos/.MonitorService
+11-02 02:25:19.406 I/MICTEST ( 5590): bg-upgrade-type startForeground ERR SecurityException Starting FGS with type microphone callerApp=ProcessRecord{4980a43 5590:dev.probe.pleos/u10a174} targetSDK=34 requires permissions: all of the permissions allOf=true [android.permission.FOREGROUND_SERVICE_MICROPHONE] any of the permissions allOf=false [android.permission.CAPTURE_AUDIO_HOTWORD, android.permission.CAPTURE_AUDIO_OUTPUT, android.permission.CAPTURE_MEDIA_OUTPUT, android.permission.CAPTURE_TUNER_AUDIO_INPUT, android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT, android.permission.RECORD_AUDIO]  and the app must be in the eligible state/exemptions to access the foreground only permission
+11-02 02:25:39.397 I/MICTEST ( 5590): bg-activity-launch importance=125
+11-02 02:25:39.401 W/ActivityTaskManager(  763): Background activity launch blocked [callingPackage: dev.probe.pleos; callingUid: 1010174; appSwitchState: 2; callingUidHasAnyVisibleWindow: false; callingUidProcState: FOREGROUND_SERVICE; isCallingUidPersistentSystemProcess: false; balAllowedByPiSender: BackgroundStartPrivileges[allowsBackgroundActivityStarts=false, allowsBackgroundForegroundServiceStarts=true, originatingToken=null]; realCallingPackage: dev.probe.pleos; realCallingUid: 1010174; realCallingUidHasAnyVisibleWindow: false; realCallingUidProcState: FOREGROUND_SERVICE; isRealCallingUidPersistentSystemProcess: false; originatingPendingIntent: null; backgroundStartPrivileges: BackgroundStartPrivileges[allowsBackgroundActivityStarts=false, allowsBackgroundForegroundServiceStarts=false, originatingToken=null]; intent: Intent { flg=0x10000000 cmp=dev.probe.pleos/.ScenarioProbe (has extras) }; callerApp: ProcessRecord{4980a43 5590:dev.probe.pleos/u10a174}; inVisibleTask: false]
+11-02 02:25:39.408 I/MICTEST ( 5590): bg-activity-launch startActivity returned

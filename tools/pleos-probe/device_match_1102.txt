@@ -1,0 +1,108 @@
+아이곁 에뮬레이터 YAMNet + 울음 판별층 대조 (2026-11-02)
+
+목적: 공식 Pleos 에뮬레이터(AVD PleosProbe, 운전자 user 10)의 YAMNet + 울음 판별층이 맥 파이썬(MediaPipe 0.10.14)과 같은 확률을 내는지 확인한다.
+파일: 6개 시험 PCM(16kHz mono s16le, 10초, 3초 구간 9개씩), yamnet.tflite, cry_head24_rt.json
+만든 방법:
+  python tools/cry-retrain/mk_pcm.py <데이터 폴더>     # PCM 6개와 맥 기준값(ref.json, 소수 둘째 자리 반올림)
+  # 프로브 설치·권한은 README 2장. 입력 파일을 앱 files 폴더(user 10)에 넣는다. S는 mk_pcm이 쓴 데이터 폴더(경로는 환경에 맞게)
+  D=/data/user/10/dev.probe.pleos/files
+  adb shell run-as dev.probe.pleos --user 10 mkdir -p $D   # 갓 설치한 앱에는 files 폴더가 아직 없다
+  for f in S/assets/rt/*.pcm S/dl/yamnet.tflite S/cry/cry_head24_rt.json; do adb shell "run-as dev.probe.pleos --user 10 sh -c 'cat > $D/$(basename $f)'" < $f; done
+  adb logcat -c
+  adb shell am start -W --user 10 -n dev.probe.pleos/.SoundProbe --es cmd yamnet
+  sleep 15
+  adb logcat -d -s SOUND:I
+읽는 법: 1) 아래 SOUND 로그 원문(YAMNET은 상위 클래스, HEAD가 판별층 울음 확률과 경보). 2) 비교표는 구간 9개의 울음 확률을 맥/기기로 나란히 놓고 절댓값 차이의 최댓값과 경보(맥/기기)를 적었다.
+한계: 두 쪽 모두 소수 둘째 자리로 찍히므로 비교는 0.01 단위다. 그보다 작은 차이는 이 로그로 알 수 없다.
+
+== SOUND 로그 원문 ==
+CMD yamnet dir=/data/user/10/dev.probe.pleos/files
+YAMNET axon_car10 t=0 Wail, moan:0.33, Groan:0.33, Grunt:0.20 | Wail, moan:0.33, Crying, sobbing:0.08, Baby cry, infant cry:0.04, Screaming:0.04, Whimper:0.04, Cough:0.03
+YAMNET axon_car10 t=975 Speech:0.20, Snoring:0.15, Bleat:0.08 | Snoring:0.15, Crying, sobbing:0.03
+YAMNET axon_car10 t=1950 Laughter:0.67, Baby laughter:0.50, Giggle:0.26 | Crying, sobbing:0.15, Baby cry, infant cry:0.08, Cough:0.04
+YAMNET axon_car10 t=2925 Animal:0.50, Livestock, farm animals, working animals:0.50, Crying, sobbing:0.41 | Crying, sobbing:0.41, Baby cry, infant cry:0.26, Screaming:0.08
+YAMNET axon_car10 t=3900 Crying, sobbing:0.59, Baby cry, infant cry:0.50, Laughter:0.41 | Crying, sobbing:0.59, Baby cry, infant cry:0.50, Whimper:0.06, Screaming:0.04, Child speech, kid speaking:0.03
+YAMNET axon_car10 t=4875 Crying, sobbing:0.33, Baby cry, infant cry:0.26, Laughter:0.20 | Crying, sobbing:0.33, Baby cry, infant cry:0.26, Screaming:0.04, Child speech, kid speaking:0.04
+YAMNET axon_car10 t=5850 Crying, sobbing:0.50, Baby cry, infant cry:0.41, Laughter:0.41 | Crying, sobbing:0.50, Baby cry, infant cry:0.41
+YAMNET axon_car10 t=6825 Laughter:0.80, Baby laughter:0.50, Belly laugh:0.41 | Crying, sobbing:0.11, Baby cry, infant cry:0.08
+YAMNET axon_car10 t=7800 Crying, sobbing:0.67, Baby cry, infant cry:0.59, Laughter:0.20 | Crying, sobbing:0.67, Baby cry, infant cry:0.59, Whimper:0.08, Screaming:0.03
+YAMNET axon_car10 t=8775 Crying, sobbing:0.80, Baby cry, infant cry:0.67, Laughter:0.50 | Crying, sobbing:0.80, Baby cry, infant cry:0.67, Whimper:0.04
+YAMNET axon_car10 t=9750 Crying, sobbing:0.50, Baby cry, infant cry:0.41, Goat:0.08 | Crying, sobbing:0.50, Baby cry, infant cry:0.41, Whimper:0.06, Screaming:0.04, Child speech, kid speaking:0.03
+YAMNET axon_car10 10.0s took 458ms
+HEAD axon_car10 cry=0.10, 1.00, 1.00, 1.00, 1.00, 0.99, 1.00, 1.00, 1.00 alarm=true
+YAMNET cry_song10 t=0 Child speech, kid speaking:0.15, Crying, sobbing:0.15, Humming:0.11 | Child speech, kid speaking:0.15, Crying, sobbing:0.15, Whimper:0.08, Baby cry, infant cry:0.06, Wail, moan:0.04
+YAMNET cry_song10 t=975 Speech:0.11, Silence:0.11, Animal:0.08 | Snoring:0.06, Child speech, kid speaking:0.03
+YAMNET cry_song10 t=1950 Lullaby:0.26, Humming:0.15, Singing:0.15 |
+YAMNET cry_song10 t=2925 Babbling:0.20, Humming:0.15, Child speech, kid speaking:0.15 | Child speech, kid speaking:0.15, Crying, sobbing:0.08, Whimper:0.04, Baby cry, infant cry:0.03
+YAMNET cry_song10 t=3900 Laughter:0.33, Sneeze:0.33, Baby laughter:0.26 | Cough:0.11, Crying, sobbing:0.06, Child speech, kid speaking:0.04, Baby cry, infant cry:0.03
+YAMNET cry_song10 t=4875 Lullaby:0.33, Singing:0.11, Music:0.03 |
+YAMNET cry_song10 t=5850 Lullaby:0.20, Silence:0.15, Singing:0.06 |
+YAMNET cry_song10 t=6825 Lullaby:0.26, Music:0.15, Singing:0.08 |
+YAMNET cry_song10 t=7800 Babbling:0.67, Crying, sobbing:0.50, Baby cry, infant cry:0.26 | Crying, sobbing:0.50, Baby cry, infant cry:0.26, Whimper:0.15, Wail, moan:0.15, Child speech, kid speaking:0.08
+YAMNET cry_song10 t=8775 Speech:0.15, Child speech, kid speaking:0.11, Inside, small room:0.06 | Child speech, kid speaking:0.11
+YAMNET cry_song10 t=9750 Cat:0.15, Meow:0.15, Music:0.06 |
+YAMNET cry_song10 10.0s took 185ms
+HEAD cry_song10 cry=0.62, 0.77, 0.84, 0.87, 0.27, 0.04, 1.00, 1.00, 1.00 alarm=true
+YAMNET dac_car0 t=0 Cat:0.89, Domestic animals, pets:0.80, Animal:0.80 |
+YAMNET dac_car0 t=975 Cat:0.85, Domestic animals, pets:0.85, Animal:0.67 |
+YAMNET dac_car0 t=1950 Crying, sobbing:0.74, Baby cry, infant cry:0.59, Domestic animals, pets:0.33 | Crying, sobbing:0.74, Baby cry, infant cry:0.59, Whimper:0.33, Wail, moan:0.20, Screaming:0.03
+YAMNET dac_car0 t=2925 Silence:0.59, Animal:0.50, Dog:0.41 |
+YAMNET dac_car0 t=3900 Silence:0.74, Animal:0.03, Domestic animals, pets:0.02 |
+YAMNET dac_car0 t=4875 Silence:0.74, Domestic animals, pets:0.04, Dog:0.04 |
+YAMNET dac_car0 t=5850 Silence:0.50, Speech:0.04, Animal:0.03 |
+YAMNET dac_car0 t=6825 Cat:0.85, Meow:0.74, Animal:0.59 |
+YAMNET dac_car0 t=7800 Domestic animals, pets:0.59, Cat:0.59, Meow:0.50 | Crying, sobbing:0.03
+YAMNET dac_car0 t=8775 Crying, sobbing:0.50, Domestic animals, pets:0.41, Animal:0.33 | Crying, sobbing:0.50, Baby cry, infant cry:0.33, Wail, moan:0.26, Whimper:0.26, Screaming:0.04, Cough:0.04
+YAMNET dac_car0 t=9750 Silence:0.20, Speech:0.04, Animal:0.03 |
+YAMNET dac_car0 10.0s took 93ms
+HEAD dac_car0 cry=0.99, 0.97, 0.97, 0.27, 0.16, 0.27, 0.12, 0.90, 0.89 alarm=true
+YAMNET music_car10 t=0 Music:0.92, Country:0.02, Swing music:0.02 |
+YAMNET music_car10 t=975 Music:0.94, Country:0.06, Bluegrass:0.03 |
+YAMNET music_car10 t=1950 Music:0.92, Country:0.20, Bluegrass:0.15 |
+YAMNET music_car10 t=2925 Music:0.94, Country:0.02, Blues:0.01 |
+YAMNET music_car10 t=3900 Music:0.98, Country:0.08, Bluegrass:0.03 |
+YAMNET music_car10 t=4875 Music:0.96, Country:0.08, Bluegrass:0.04 |
+YAMNET music_car10 t=5850 Music:0.89, Christmas music:0.08, Christian music:0.04 |
+YAMNET music_car10 t=6825 Music:0.89, Swing music:0.03, Country:0.03 |
+YAMNET music_car10 t=7800 Music:0.92, Country:0.04, Bluegrass:0.02 |
+YAMNET music_car10 t=8775 Music:0.89, Country:0.20, Bluegrass:0.15 |
+YAMNET music_car10 t=9750 Music:0.74, Silence:0.02, Speech:0.01 |
+YAMNET music_car10 10.0s took 147ms
+HEAD music_car10 cry=0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00 alarm=false
+YAMNET song_car10 t=0 Speech:0.85, Silence:0.06, Narration, monologue:0.02 |
+YAMNET song_car10 t=975 Lullaby:0.20, Singing:0.11, Chant:0.11 |
+YAMNET song_car10 t=1950 Lullaby:0.26, Vocal music:0.15, A capella:0.15 |
+YAMNET song_car10 t=2925 Lullaby:0.20, Singing:0.15, Music:0.08 |
+YAMNET song_car10 t=3900 Singing:0.33, Lullaby:0.15, A capella:0.11 |
+YAMNET song_car10 t=4875 Lullaby:0.41, Singing:0.20, Vocal music:0.04 |
+YAMNET song_car10 t=5850 Singing:0.11, Speech:0.08, Lullaby:0.08 | Child speech, kid speaking:0.04
+YAMNET song_car10 t=6825 Singing:0.20, Lullaby:0.20, Chant:0.04 |
+YAMNET song_car10 t=7800 Lullaby:0.15, Singing:0.11, Vocal music:0.06 |
+YAMNET song_car10 t=8775 Lullaby:0.50, Singing:0.20, Mantra:0.06 |
+YAMNET song_car10 t=9750 Music:0.11, Lullaby:0.08, Humming:0.08 | Child speech, kid speaking:0.04
+YAMNET song_car10 10.0s took 58ms
+HEAD song_car10 cry=0.31, 0.06, 0.06, 0.07, 0.13, 0.12, 0.11, 0.08, 0.08 alarm=false
+YAMNET speech_car10 t=0 Speech:0.97, Narration, monologue:0.02, Inside, small room:0.00 |
+YAMNET speech_car10 t=975 Speech:0.99, Narration, monologue:0.01, Inside, small room:0.00 |
+YAMNET speech_car10 t=1950 Speech:0.98, Speech synthesizer:0.02, Narration, monologue:0.01 |
+YAMNET speech_car10 t=2925 Speech:0.98, Narration, monologue:0.03, Inside, small room:0.00 |
+YAMNET speech_car10 t=3900 Speech:1.00, Narration, monologue:0.01, Conversation:0.00 |
+YAMNET speech_car10 t=4875 Speech:0.98, Narration, monologue:0.02, Speech synthesizer:0.01 |
+YAMNET speech_car10 t=5850 Speech:1.00, Narration, monologue:0.03, Speech synthesizer:0.01 |
+YAMNET speech_car10 t=6825 Speech:0.99, Narration, monologue:0.01, Inside, small room:0.01 |
+YAMNET speech_car10 t=7800 Speech:0.97, Inside, small room:0.01, Speech synthesizer:0.00 |
+YAMNET speech_car10 t=8775 Speech:0.98, Narration, monologue:0.02, Inside, small room:0.00 |
+YAMNET speech_car10 t=9750 Silence:0.26, Speech:0.04, Sound effect:0.02 |
+YAMNET speech_car10 10.0s took 114ms
+HEAD speech_car10 cry=0.03, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.03, 0.07 alarm=false
+
+== 비교표 (울음 확률 구간 9개: 맥 | 기기) ==
+파일          | 맥 | 기기 | 최대 절대차 | 경보 맥/기기
+axon_car10   | 0.10 1.00 1.00 1.00 1.00 0.99 1.00 1.00 1.00 | 0.10 1.00 1.00 1.00 1.00 0.99 1.00 1.00 1.00 | 0.00 | true / true
+dac_car0     | 0.99 0.97 0.97 0.27 0.16 0.27 0.12 0.90 0.89 | 0.99 0.97 0.97 0.27 0.16 0.27 0.12 0.90 0.89 | 0.00 | true / true
+speech_car10 | 0.03 0.02 0.02 0.02 0.02 0.02 0.03 0.03 0.07 | 0.03 0.02 0.02 0.02 0.02 0.02 0.03 0.03 0.07 | 0.00 | false / false
+song_car10   | 0.31 0.06 0.06 0.07 0.13 0.12 0.11 0.08 0.08 | 0.31 0.06 0.06 0.07 0.13 0.12 0.11 0.08 0.08 | 0.00 | false / false
+music_car10  | 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 | 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 | 0.00 | false / false
+cry_song10   | 0.62 0.77 0.84 0.87 0.27 0.04 1.00 1.00 1.00 | 0.62 0.77 0.84 0.87 0.27 0.04 1.00 1.00 1.00 | 0.00 | true / true
+
+파일 6개, 구간 54개 모두 비교. 최대 절대차 0.00. 경보 6/6 일치.

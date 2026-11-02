@@ -1,0 +1,57 @@
+mode=babycare
+CAP fan [ROW_1_LEFT+ROW_1_RIGHT=1..8]
+CAP power CapabilityConfig(accessType=READ_WRITE) [ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT]
+CAP temp [ROW_1_LEFT=15.0..30.0, ROW_1_RIGHT=15.0..30.0]
+CAP defroster [FRONT_WINDSHIELD, REAR_WINDSHIELD]
+CAP fanDir [ROW_1_LEFT+ROW_1_RIGHT=[]]
+CAP seatVent CapabilityConfig(accessType=READ_WRITE) [ROW_1_LEFT=0..3, ROW_1_RIGHT=0..3]
+CAP seatHeat CapabilityConfig(accessType=READ_WRITE) [ROW_2_LEFT=0..3, ROW_2_RIGHT=0..3, ROW_1_LEFT=-3..3, ROW_1_RIGHT=-3..3]
+CAP wheelHeat CapabilityConfig(accessType=READ_WRITE) 0..3
+CAP mirrorHeat CapabilityConfig(accessType=READ_WRITE) [DRIVER_LEFT=0..3, DRIVER_RIGHT=0..3, DRIVER_LEFT+DRIVER_RIGHT=0..3]
+CAP doorPos CapabilityConfig(accessType=READ_WRITE) [ROW_2_LEFT=0..1, ROW_2_RIGHT=0..1, REAR=0..100, HOOD=0..100, ROW_1_LEFT=0..1, ROW_1_RIGHT=0..1]
+ERR capTire a: ERROR_NOT_SUPPORTED_PROPERTY
+ERR capAirbag a: ERROR_NOT_SUPPORTED_PROPERTY
+STATE gear=GEAR_PARK speed=0.0
+ERR tripTimeListener ERROR_NOT_SUPPORTED_PROPERTY
+ERR tripTime a: ERROR_NOT_SUPPORTED_PROPERTY
+EVT door ROW_2_LEFT 1793564237333 0
+EVT door ROW_2_RIGHT 1793564237337 0
+EVT door ROW_2_RIGHT 1793564237340 0
+CAP occupancy CapabilityConfig(accessType=READ) [ROW_2_LEFT, ROW_2_RIGHT, ROW_2_CENTER, ROW_1_LEFT, ROW_1_RIGHT]
+GET occupancy ROW_2_LEFT true
+GET occupancy ROW_2_RIGHT true
+GET occupancy ROW_2_CENTER true
+RES seatHeat_ROW_2_LEFT 0 ack=33 seen=133 ok
+RES seatHeat_ROW_2_LEFT 1 ack=32 seen=120 ok
+RES seatHeat_ROW_2_LEFT 2 ack=25 seen=126 ok
+RES seatHeat_ROW_2_LEFT 3 ack=9 seen=117 ok
+RES seatHeat_ROW_2_LEFT 4 ack=13 seen=116 ok
+RES seatHeat_ROW_2_LEFT 5 ack=13 seen=121 ok
+CAP readingLight [ROW_2_LEFT, ROW_2_RIGHT, ROW_1_LEFT, ROW_1_RIGHT]
+RES readingLight_ROW_2_LEFT 0 ack=27 seen=129 ok
+RES readingLight_ROW_2_LEFT 1 ack=12 seen=121 ok
+RES readingLight_ROW_2_LEFT 2 ack=118 seen=140 ok
+RES readingLight_ROW_2_LEFT 3 ack=37 seen=110 ok
+RES readingLight_ROW_2_LEFT 4 ack=12 seen=110 ok
+RES readingLight_ROW_2_LEFT 5 ack=10 seen=110 ok
+CAP windowLock [ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_RIGHT, ROW_2_LEFT, ROW_2_RIGHT]
+RES windowLock_ROW_2_LEFT 0 ack=20 seen=113 ok
+RES windowLock_ROW_2_LEFT 1 ack=15 seen=111 ok
+RES windowLock_ROW_2_LEFT 2 ack=10 seen=117 ok
+RES windowLock_ROW_2_LEFT 3 ack=11 seen=117 ok
+RES windowLock_ROW_2_LEFT 4 ack=14 seen=123 ok
+RES windowLock_ROW_2_LEFT 5 ack=21 seen=119 ok
+ERR capEtcs a: ERROR_NOT_SUPPORTED_PROPERTY
+RES hvacTemp_ROW_1_LEFT 0 ack=7 seen=113 ok
+RES hvacTemp_ROW_1_LEFT 1 ack=9 seen=115 ok
+RES hvacTemp_ROW_1_LEFT 2 ack=9 seen=119 ok
+RES hvacTemp_ROW_1_LEFT 3 ack=12 seen=106 ok
+RES hvacTemp_ROW_1_LEFT 4 ack=54 seen=275 ok
+RES hvacTemp_ROW_1_LEFT 5 ack=36 seen=121 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 0 ack=6 seen=105 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 1 ack=8 seen=104 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 2 ack=67 seen=154 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 3 ack=10 seen=109 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 4 ack=12 seen=114 ok
+RES ambientColor_ROW_1_LEFT+ROW_1_RIGHT+ROW_2_LEFT+ROW_2_CENTER+ROW_2_RIGHT 5 ack=26 seen=108 ok
+RES done
