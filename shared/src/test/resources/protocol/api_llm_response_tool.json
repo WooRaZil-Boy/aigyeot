@@ -1,0 +1,1 @@
+{"text":"","tool_calls":[{"name":"switch_sound","input":{"method":"lullaby"}}],"stop_reason":"tool_use","model":"claude-haiku-5-5","prompt_version":"p2","latency_ms":950}
