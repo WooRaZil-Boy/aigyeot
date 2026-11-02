@@ -29,3 +29,16 @@ secrets.properties
 # Python
 __pycache__/
 *.pyc
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# npm·Cloudflare Workers
+node_modules/
+.wrangler/
+
+# Firebase 설정 파일(README에 만드는 법만 적는다)
+google-services.json
+GoogleService-Info.plist
