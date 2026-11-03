@@ -42,3 +42,6 @@ node_modules/
 # Firebase 설정 파일(README에 만드는 법만 적는다)
 google-services.json
 GoogleService-Info.plist
+
+# wrangler types로 만드는 파일
+relay/worker-configuration.d.ts
