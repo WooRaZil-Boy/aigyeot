@@ -1,0 +1,7 @@
+# 로컬 `wrangler dev`용 비밀값 예시. 이 파일을 relay/.dev.vars로 복사해 진짜 값을 넣는다(.dev.vars는 저장소에 넣지 않는다).
+# 배포는 `npx wrangler secret put <이름>`으로 넣는다. 값을 비워 두면 /v1/health의 llm·push가 false다.
+ANTHROPIC_API_KEY=EXAMPLE-anthropic-api-key
+FCM_PROJECT_ID=example-firebase-project
+FCM_CLIENT_EMAIL=EXAMPLE@example-firebase-project.iam.gserviceaccount.com
+# 서비스 계정 JSON의 private_key 값(PEM)을 한 줄로(줄바꿈은 \n) 따옴표 안에 넣는다.
+FCM_PRIVATE_KEY="EXAMPLE-service-account-private-key-pem"

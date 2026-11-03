@@ -1,0 +1,17 @@
+// 아이곁 중계(연결 계약 0장). 비밀값은 `wrangler secret put`, 로컬은 relay/.dev.vars(dev.vars.example 참고).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aigyeot-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-20",
+  "durable_objects": {
+    "bindings": [
+      { "name": "CAR_ROOM", "class_name": "CarRoom" },
+      { "name": "DIRECTORY", "class_name": "Directory" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CarRoom", "Directory"] }],
+  "vars": { "LLM_MODEL": "claude-haiku-5-5" },
+  // 에뮬레이터의 10.0.2.2는 맥의 127.0.0.1이라 기본 주소로 충분하다.
+  "dev": { "port": 8787 }
+}
