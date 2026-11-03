@@ -61,6 +61,7 @@ data class Params(
     val reconnectMaxMs: Long = 60_000,
     val steerLowpassHz: Double = 0.6,
     val steerReversalDeg: Double = 3.0,
+    val steerDirMinDeg: Double = 0.5,      // 첫 방향을 정하는 최소 움직임(잡음 위). 설계값·근거 없음, 첫날 센서 잡음으로 조정
     val steerWindowMs: Long = 60_000,
     val yamnetHopMs: Long = 975,
 )

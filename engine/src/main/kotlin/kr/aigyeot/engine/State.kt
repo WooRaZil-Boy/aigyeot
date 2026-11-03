@@ -51,6 +51,7 @@ data class CarView(
     val cabinC: Double?,
     val route: RouteView?,
     val seatHeat: Map<Area, Int>,
+    val outPauses: Set<PauseReason> = emptySet(),   // 세션 밖에서 받은 입력 끊김 사유. 다음 세션이 이어받는다(21a·21h, C79)
 )
 
 @Serializable
@@ -93,6 +94,9 @@ data class SessionState(
     val waypointPending: WaypointPending?,
     val recordsCleared: Boolean,
     val pendingAlarm: PendingAlarm?,
+    val restLog: List<RestLogEntry> = emptyList(),   // 휴식 기록(6.1 session.rest_log): 제안 시각·문장·쉼터·답·경유지
+    val playStarted: Boolean = false,    // 이 세션에 PlaybackStarted가 한 번이라도 있었음(output_route null 판단, C85)
+    val micPath: MicPath? = null,        // 세션을 열 때의 마이크 경로. 세션 중 바뀌어도 SaveSession 행은 이 값을 유지(C88)
 )
 
 @Serializable
@@ -103,6 +107,7 @@ data class Play(
     val startedAt: Long?,                 // null = PlaybackStarted를 기다림
     val endAt: Long,
     val mode: PlayMode,
+    val action: SecondAction? = null,     // 2차 시도: 시작할 때 정한 행동(C81). PlaybackStarted는 이 값만 따른다
 )
 
 @Serializable
@@ -116,6 +121,7 @@ data class EpisodeState(
     val laterReasons: List<Unjudged>,
     val cryMs: Long,                      // G37
     val recried: Boolean,                 // C55: 에피소드를 만들 때만 false로 초기화
+    val waypointAdded: Boolean = false,   // H5: 이 에피소드에 경유지를 넣음(인계와 따로, 6.1 episode.waypoint_added)
 )
 
 @Serializable
@@ -164,6 +170,7 @@ data class HandoffRecord(
 @Serializable data class WaypointPending(
     val cmdId: String, val restId: String, val sessionId: String, val episodeId: String?,
     val fromQa: Boolean = false,
+    val restLogIndex: Int? = null,        // 이 요청을 낸 휴식 기록 줄(SessionState.restLog의 위치). 결과는 그 줄에만 붙인다
 )
 @Serializable data class NursingStop(
     val restId: String,
@@ -179,10 +186,19 @@ data class HandoffRecord(
     val listenId: String, val step: QaStep,
     val until: Long,
     val ruleSaid: Boolean,
+    val songHeard: Boolean = false,       // Q5d: 이 듣기 창이 열린 동안 자장가·부모 노래가 있었다(재생이 먼저 끝나도 가사를 질문으로 받지 않는다)
 )
 @Serializable data class Line(
     val sid: Sid, val vars: Map<String, String>, val askRestId: String?,
     val qaAnswer: Boolean = false,
+    val longDrive: Boolean = false,       // 2시간 제안(S11, 쉼터 없으면 S10). 말하기가 끝나야 longDriveOffered가 선다(L1, C84)
+    val playId: String? = null,           // S02~S04: 이 알림을 낸 재생. 그 재생이 계속될 때만 말한다(C15)
+)
+/** 휴식 기록 한 줄. sid는 제안 문장(S07·S07_DEPART·S08·S10·S11) 또는 ④ 경유지 요청이면 QA. */
+@Serializable data class RestLogEntry(
+    val at: Long, val sid: Sid, val restId: String?,
+    val answer: YesNo? = null,            // '응/아니' 답. 없으면 아직 답이 없음
+    val waypointOk: Boolean? = null,      // 경유지 결과(WaypointResult.ok). 없으면 요청하지 않음·결과 전
 )
 
 // ---- 열거(2.2 표) ----

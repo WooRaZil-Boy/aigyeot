@@ -1,0 +1,49 @@
+아이곁 판단 코어 성능 (2026-11-03)
+
+목적: 판단 코어(engine/, 순수 Kotlin)의 사건당 처리 시간, SaveSnapshot용 상태 JSON 크기·직렬화 시간, 스냅숏 저장 횟수를 재서 공식 예산(주행 중 CPU 5% 미만, RAM 400MB 이하, 앱 전체)에 대한 뜻을 본다. 상태가 커지기만 하는 목록도 같이 본다.
+방법(저장소 루트, JDK는 Android Studio 번들):
+  PERF=true PERF_OUT=tools/measure/perf_engine_raw.txt ./gradlew --console=plain :engine:test --tests '*PerfBench*'
+  (engine/src/test/.../PerfBench.kt. PERF=true가 없으면 JUnit Assumption으로 건너뛰므로 tools/check.sh는 느려지지 않는다)
+  시나리오: 시동 → 뒷문 열고 닫기 → D → 2시간. Tick 1Hz, CrySegment 0.975초마다, VehicleSample 10Hz(속도 85~95km/h, 조향 ±8°), RouteState 30초마다(휴게소 2·졸음쉼터 1), 울음 에피소드 4번(10·40·70·100분 부근 1~4분), 재생 시작·말하기 끝은 2초 안에 시험이 응답한다.
+  초기 상태: 성적(history) 280줄(28일 × 하루 10번). 전체를 3번 돌려 JIT를 예열하고 4번째 실행만 잰다(콜드 첫 실행 합계도 적는다).
+  스냅숏: 위 상태의 끝에 history 285줄, 휴식 기록 24줄, 열린 세션을 얹은 상태를 kotlinx.serialization Json으로 직렬화(예열 3000번 뒤 2000번 중앙값).
+읽는 법: step 시간은 Engine.step 호출 하나(사건 하나)의 System.nanoTime 차이다. 중앙값 0.0 µs는 1 µs 미만이라는 뜻이다. 스냅숏 횟수 (가)(나)(다)는 저장 규칙을 어떻게 읽느냐에 따른 세 가지 수다(계약 2.4: step 결과 state가 이전과 달라진 Step마다, 시간 값 now·quietMs만 바뀐 Step 제외).
+한계: 맥(JVM) 값이라 차 SoC의 속도는 모른다(에뮬레이터·실차 미측정). 시나리오는 흉내이므로 사건 분포는 실제와 다르다. 호스트의 큐·Room 쓰기 시간은 포함하지 않는다(판단 코어 순수 계산만). 사건 흐름이 정해진 한 가지뿐이라 최악의 경우를 보장하지 않는다.
+
+== 사건 하나당 Engine.step 시간 (2시간 주행 흉내 1회, 예열 3회 뒤) ==
+Tick           n=  7200  중앙값     0.0 µs  p99      0.3 µs  최대     272.4 µs  합계      1.0 ms
+CrySegment     n=  7384  중앙값     0.0 µs  p99      0.6 µs  최대    2441.3 µs  합계      5.2 ms
+VehicleSample  n= 72000  중앙값     0.1 µs  p99      0.3 µs  최대     643.7 µs  합계      8.3 ms
+RouteState     n=   240  중앙값     0.2 µs  p99      3.3 µs  최대       4.5 µs  합계      0.1 ms
+기타             n=    29  중앙값     6.5 µs  p99     77.1 µs  최대      77.1 µs  합계      0.5 ms
+전체: step 86853번, 재는 포함 실행 시간 76 ms (콜드 첫 실행 394 ms)
+step 시간 합계: 콜드 207 ms, 예열 뒤 15 ms (2시간 = 7,200,000 ms)
+
+== 상태 증가 ==
+history 최대 282, restLog 최대 5, lastOffer 최대 2, 말 큐 최대 3
+2시간 중 관측한 EngineState JSON 최대 22865 바이트(1분마다 표본)
+
+== SaveSnapshot용 EngineState JSON (history 285줄, restLog 24줄, 세션 열림) ==
+크기 23965 바이트, 직렬화 중앙값 36 µs / p99 347 µs, 복원 중앙값 174 µs
+
+== 2시간 동안 SaveSnapshot이 나올 횟수(계약 2.4: 상태가 바뀐 Step마다, 시간 값 now·quietMs만 바뀐 Step 제외) ==
+(가) 문자 그대로(조향 필터값 steer도 상태이므로 VehicleSample마다 바뀜): 73068번 → 시간당 36534번
+(나) steer 필터 값(filtered·lastSampleAt·extremumDeg·window·dir)만 바뀐 Step도 제외: 1085번 → 시간당 542번
+(나)의 사건별: {기타=29, RouteState=240, CrySegment=799, VehicleSample=17}
+2시간 동안 낸 명령 수: {SaveSession=9, SetWindowLock=1, SaveSteerWindow=119, StartPlayback=8, SaveEpisode=28, CaptureContext=4, Speak=10, Listen=2, SavePlay=8, SendToPhone=4, Ask=5}
+(다) Save*(Session·Episode·Play)·CloseSession 명령이 나온 Step만: 29번 → 시간당 14번
+(가) 쓰기량 추정: 시간당 36534 × 23965 바이트 ≈ 875 MB
+
+
+== 뜻 ==
+- 사건 처리는 중앙값 1 µs 미만, p99 6 µs 이하, 최대 약 0.4 ms(JIT 뒤 가끔 튄 값)다. 2시간 전체 step 합계 14 ms(콜드 209 ms)라 7,200,000 ms 대비 0.001% 수준이다. 판단 코어 계산은 CPU 5% 예산에 의미 있는 몫이 아니다(차 SoC 환산은 하지 않았다: 미판정).
+- 가장 큰 비용은 스냅숏이다. 상태 하나가 약 24KB(대부분 history 285줄)이고 직렬화는 약 36 µs다. 한 번은 싸지만 저장 횟수 해석이 (가)이면 시간당 36,534번(약 875MB 쓰기)이다. VehicleSample 10Hz마다 조향 필터값(steer.filtered·lastSampleAt)이 바뀌기 때문이다. (나)(조향 필터 값만 바뀐 Step 제외)면 시간당 약 540번, (다)(Save* 명령이 나온 Step만)면 시간당 14번이다. 호스트 구현은 (가)를 피해야 한다(계약 2.4 문구를 '조향 필터 값 제외'로 못 박거나 디바운스).
+- 목록 증가: history는 maybeOpen에서만 28일 밖을 자른다(Engine.kt 233). 세션 안에서는 한 에피소드당 한 줄씩 느는 것이 전부다. restLog는 상한이 없다(아래 코드 읽기).
+
+== 자원 해제·무한 증가 점검(코드 읽기, 감지 갈래) ==
+- 스레드: DetectorRunner.stop()이 stopped 표시, detector.shutdown(), source.cancel(), 읽기 스레드 interrupt를 한다. 읽기 스레드는 finally에서 source.close와 onClose(MediaPipe classifier.close)를 부른다(DetectorRunner.kt run). 감시 스레드는 daemon이고 stopped 또는 읽기 스레드 종료를 보면 최대 0.5초 안에 끝난다. 서비스 종료(MicService.onDestroy)는 이 stop()을 부른다. 문제 없음.
+- AudioRecord: MicPcmSource.close가 unregisterAudioRecordingCallback, stop, release를 한다. 다만 start()에서 AudioRecord 생성 뒤 STATE_INITIALIZED 검사가 실패하면 rec에 넣기 전에 던져(PcmSource.kt:93-95) release되지 않는다. close()는 rec만 놓기 때문이다. 드물고(마이크 초기화 실패, 서비스는 MIC_ERROR로 끝난다) 한 번만 새지만, 최소 수정은 check 실패 전에 r.release()를 부르는 것이다.
+- MediaPipe AudioClassifier: 읽기 스레드 종료 때 onClose로 닫힌다. MicService.onStartCommand가 source 또는 scorer 생성에 실패하면 둘 다 닫는다. 문제 없음.
+- 녹음 콜백: close()에서 해제. 문제 없음.
+- 경미: MicService.kt:45에서 MicService(running=true)를 낸 뒤 46행 CryHead.parse가 던지면(assets 손상) try 밖이라 서비스가 예외로 죽고 running=false 사건이 나가지 않는다. 앱 자산은 빌드에 고정이라 실제로는 드물다.
+- 판단 코어 상태 증가: history는 maybeOpen에서 28일 밖을 자르고(Engine.kt:233) 한 에피소드에 한 줄씩만 는다. lastOffer는 Sid 키라 최대 5개(Engine.kt:704). addedRestIds는 사용자가 경유지를 더할 때만 는다(Engine.kt:750). restLog(Engine.kt:881, 733)는 상한이 없다: 제안 문장 5종(S07·S07_DEPART·S08·S10·S11)이 문장마다 10분(offerRepeatMs) 간격이라 최악 시간당 약 30줄(한 줄 약 70바이트 → 8시간 약 17KB)이고, 장면 시험에서는 2시간에 5줄이었다. 세션이 끝나면 비워진다(closeSession, Engine.kt:260 session=null). 위험은 작다. 필요하면 SessionState.restLog를 최근 N줄로 자르는 한 줄 규칙(예: takeLast(50))이면 된다. windowLockPending은 결과가 오면 비워지고(Engine.kt:328) 결과가 영영 안 오는 경우의 정리 규칙은 코드에서 확인하지 못했다(미판정).
