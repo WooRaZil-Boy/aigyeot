@@ -27,5 +27,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
-    <application android:label="아이곁" />
+    <application android:label="아이곁">
+        <!-- 갈래 ① 감지: 마이크 Foreground Service. 앱 화면이 있을 때만 시작한다(명세서 6장) -->
+        <service
+            android:name=".detect.MicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+    </application>
 </manifest>

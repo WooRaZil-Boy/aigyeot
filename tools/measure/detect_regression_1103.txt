@@ -1,0 +1,57 @@
+아이곁 감지 기기 회귀 (2026-11-03)
+
+목적: 감지 갈래의 앱 코드(kr.aigyeot.app, debug 전용 DetectReplayActivity)가 공식 Pleos 에뮬레이터(AVD PleosProbe, 운전자 user 10)에서 맥 기준값(ref.json)과 11-02 프로브 실측(tools/pleos-probe/device_match_1102.txt)과 같은 울음 확률·경보를 내는지 확인한다.
+파일: 시험 PCM 6개(16kHz mono s16le, 10초, 3초 구간 9개씩), 앱 assets의 yamnet.tflite와 cry_head24_rt.json, 맥 기준값 ref.json(소수 둘째 자리 반올림)
+방법(S는 mk_pcm이 쓴 데이터 폴더, W는 감지 갈래 작업 폴더):
+  adb uninstall dev.probe.pleos                         # 프로브가 있으면 부팅 시험이 마이크를 쓰므로 먼저 지운다
+  (cd W && ./gradlew :app:assembleDebug)
+  adb install -r W/app/build/outputs/apk/debug/app-debug.apk
+  adb shell pm grant --user 10 kr.aigyeot.app android.permission.RECORD_AUDIO
+  D=/data/user/10/kr.aigyeot.app/files
+  adb shell run-as kr.aigyeot.app --user 10 mkdir -p $D
+  for f in S/assets/rt/*.pcm; do adb shell "run-as kr.aigyeot.app --user 10 sh -c 'cat > $D/$(basename $f)'" < $f; done
+  adb logcat -c
+  adb shell am start -W --user 10 -n kr.aigyeot.app/.detect.DetectReplayActivity
+  sleep 20; adb logcat -d -s DETECT:I
+읽는 법: 아래 표는 구간 9개의 울음 확률을 기준값(ref)과 기기(dev)로 놓고 절댓값 차이의 최댓값, 경보 일치, 처리 시간(took, 10초 PCM 전체를 최대한 빨리 돌린 시간)을 적었다. 처리 시간의 11-02는 프로브 SoundProbe의 YAMNet 호출 시간이다.
+한계: 두 쪽 모두 소수 둘째 자리로 찍히므로 0.01보다 작은 차이는 알 수 없다. 처리 시간은 맥이 다른 작업으로 몹시 바빴던 때(load average 100 이상)에 쟀다.
+발견: 작업 폴더의 첫 빌드는 MediaPipeScorer의 setMaxResults(-1)이 기기에서 IllegalArgumentException("If specified, maxResults must be > 0")으로 죽었다(DetectReplayActivity 시작 직후). 이 호출을 뺀 사본으로 아래를 쟀다. 감지 담당이 원본도 같게 고쳤다고 알려 왔다(원본 재측정은 하지 않았다).
+
+== 비교표 ==
+클립             최대차      ref경보  dev경보  took(ms)  11-02 took
+axon_car10     0.00     True    True    435       458
+   ref [0.1, 1.0, 1.0, 1.0, 1.0, 0.99, 1.0, 1.0, 1.0]
+   dev [0.1, 1.0, 1.0, 1.0, 1.0, 0.99, 1.0, 1.0, 1.0]
+dac_car0       0.00     True    True    169       93
+   ref [0.99, 0.97, 0.97, 0.27, 0.16, 0.27, 0.12, 0.9, 0.89]
+   dev [0.99, 0.97, 0.97, 0.27, 0.16, 0.27, 0.12, 0.9, 0.89]
+speech_car10   0.00     False   False   109       114
+   ref [0.03, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.03, 0.07]
+   dev [0.03, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.03, 0.07]
+song_car10     0.00     False   False   95        58
+   ref [0.31, 0.06, 0.06, 0.07, 0.13, 0.12, 0.11, 0.08, 0.08]
+   dev [0.31, 0.06, 0.06, 0.07, 0.13, 0.12, 0.11, 0.08, 0.08]
+music_car10    0.00     False   False   89        147
+   ref [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+   dev [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+cry_song10     0.00     True    True    167       185
+   ref [0.62, 0.77, 0.84, 0.87, 0.27, 0.04, 1.0, 1.0, 1.0]
+   dev [0.62, 0.77, 0.84, 0.87, 0.27, 0.04, 1.0, 1.0, 1.0]
+
+클립 6개, 구간 54개 비교. 최대 절대차 0.00. 경보 6/6 일치(ref 경보는 3초 구간 2개 연속 0.7 이상으로 다시 계산). 11-02 프로브 기기값과도 54개 모두 같음.
+
+== DETECT 로그 원문 ==
+CMD replay dir=/data/user/10/kr.aigyeot.app/files files=6
+axon_car10 10.0s took 435ms
+HEAD axon_car10 cry=0.10, 1.00, 1.00, 1.00, 1.00, 0.99, 1.00, 1.00, 1.00 alarm=true
+cry_song10 10.0s took 167ms
+HEAD cry_song10 cry=0.62, 0.77, 0.84, 0.87, 0.27, 0.04, 1.00, 1.00, 1.00 alarm=true
+dac_car0 10.0s took 169ms
+HEAD dac_car0 cry=0.99, 0.97, 0.97, 0.27, 0.16, 0.27, 0.12, 0.90, 0.89 alarm=true
+music_car10 10.0s took 89ms
+HEAD music_car10 cry=0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00 alarm=false
+song_car10 10.0s took 95ms
+HEAD song_car10 cry=0.31, 0.06, 0.06, 0.07, 0.13, 0.12, 0.11, 0.08, 0.08 alarm=false
+speech_car10 10.0s took 109ms
+HEAD speech_car10 cry=0.03, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.03, 0.07 alarm=false
+DONE

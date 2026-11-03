@@ -44,4 +44,5 @@ dependencies {
     implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit4)
+    testImplementation(kotlin("test-junit")) // 갈래 ① 감지 시험(assertNotNull 등). JUnit4 위에서 돈다
 }

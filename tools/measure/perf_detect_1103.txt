@@ -1,0 +1,39 @@
+아이곁 감지 성능 (2026-11-03)
+
+목적: 감지 갈래(app/.../detect: AudioRecord 대신 녹음 파일 입력 + 실제 MediaPipe YAMNet + 판별층)가 공식 Pleos 에뮬레이터에서 쓰는 CPU·메모리와 창당 처리 시간을 재서 공식 예산(주행 중 CPU 5% 미만, RAM 400MB 이하, 앱 전체)에 대한 뜻을 본다.
+방법(저장소 루트, AVD PleosProbe를 -no-snapshot -no-boot-anim -gpu host -no-audio로 띄운 뒤. 프로브 dev.probe.pleos는 깔려 있지 않았다):
+  ./gradlew :app:assembleDebug
+  adb install --user 10 -r app/build/outputs/apk/debug/app-debug.apk
+  adb shell pm grant --user 10 kr.aigyeot.app android.permission.RECORD_AUDIO
+  (시험 PCM 6개, 16kHz mono s16le 10초씩을 앱 files 폴더에 run-as로 넣는다)
+  # 1) 최대한 빨리: 창당 점수 시간과 took
+  adb shell am start -W --user 10 -n kr.aigyeot.app/.detect.DetectReplayActivity
+  # 2) 마이크 속도(실시간): 한 파일을 7번 이어서 77초
+  adb shell am start -W --user 10 -n kr.aigyeot.app/.detect.DetectReplayActivity --es file cry_song10 --ez realtime true --ei repeat 7
+  CPU: 시작 12초 뒤부터 64초 동안 /proc/<pid>/stat의 utime+stime(틱, 초당 100) 차이 ÷ 경과 초. PSS: 6초 간격 adb shell dumpsys meminfo kr.aigyeot.app의 TOTAL PSS 10번.
+  (DetectReplayActivity에 인텐트 엑스트라 realtime·repeat와 창당 점수 시간 로그 SCORE를 debug 전용 코드로 더했다)
+읽는 법: took는 10초 PCM 한 클립의 처리 전체 시간이다(빨리 모드는 YAMNet 11창, 실시간 모드는 창마다 0.975초 대기 포함이라 약 10.8초가 정상). SCORE는 YAMNet 점수기 호출 한 번(창 하나, 0.975초 오디오)이다. CPU%는 한 코어 100% 기준이고, 에뮬레이터 코어는 4개다.
+한계: 에뮬레이터 CPU(맥 호스트 가상화)는 실차 SoC와 다르다. 앱 전체(재생·화면·Room·엔진 연결)가 아직 없어 감지만 잰 값이라 앱 전체 예산 판정은 못 한다(미판정). 마이크(AudioRecord)가 아니라 파일 입력이므로 마이크 읽기 비용은 빠졌다. 측정 시간이 77초뿐이라 장시간 누수는 보지 못한다(PSS가 77초 동안 97~99MB에서 오르지 않았다는 정도). 에뮬레이터 전체 부하(dumpsys cpuinfo TOTAL 76%)는 에뮬레이터 자체의 부하가 섞여 앱 몫을 구분하지 못해 쓰지 않았다.
+
+== 1) 최대한 빨리(점수 시간) ==
+클립            took(ms)  창수  SCORE 중앙값(µs)  p99=최대(µs)
+axon_car10      816       11    41890             208030
+cry_song10      758       11    45389             223194
+dac_car0        108       11    6125              38529
+music_car10     86        11    5691              12012
+song_car10      90        11    6537              12947
+speech_car10    113       11    9825              17982
+(앞 두 클립이 느린 것은 모델의 첫 호출 예열이다. 첫 창이 200ms 넘고 이후 창은 6~10ms.)
+11-03 감지 회귀 표의 took(435·169·109ms 등)와 같은 자릿수다. 이번 값은 맥 부하가 적은 때다.
+
+== 2) 마이크 속도(실시간) 77초, cry_song10 ×7 ==
+CPU: 64초 동안 155틱 = 1.55초 → 한 코어의 2.4% (4코어 기준 약 0.6%).
+PSS: 97.2~98.5MB (측정 10번, 시작 전 첫 표본 96.8MB). 끝에 클립이 끝난 뒤 87.6MB. RSS 약 200MB(공유 라이브러리 포함).
+창당 SCORE(77창): 중앙값 11.4ms, p99 293ms(첫 창 예열 한 번). 클립 7번 모두 took 10.8~11.3초(실시간 한계 안).
+Java heap은 앞서 6클립 연속 실행(68초)에서 7.6~9.8MB, native heap 17.5~18.5MB로 늘지 않았다.
+
+== 뜻 ==
+- 감지만의 CPU는 한 코어의 2.4%라 예산 5% 미만 안이다(에뮬레이터 값. 실차 SoC 환산은 하지 않았다: 미판정). 앱의 나머지(재생·화면·Room)가 더해지면 달라지므로 앱 전체 CPU는 미판정이다.
+- PSS 약 98MB는 앱 전체 예산 RAM 400MB의 약 1/4이다. 나머지 기능이 더해진 값은 미판정이다.
+- 창 하나 처리는 중앙값 약 11ms로 0.975초 간격보다 훨씬 짧아 실시간으로 밀리지 않는다.
+- 경보 지연 3초 이하는 이번 측정 범위가 아니다(미판정).

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug 빌드 전용: 녹음 파일을 감지 파이프라인에 넣어 로그를 찍는 길(기기 회귀). 사용자 앱 화면이 아니라 adb로만 연다. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".detect.DetectReplayActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+    </application>
+</manifest>
