@@ -1,0 +1,532 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		053A97EFBB9D213B6CB09968 /* ProtocolFixturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0429EF81B07EA045D9BF5B96 /* ProtocolFixturesTests.swift */; };
+		18716934C22116C002496F7C /* AigyeotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EE67FA58C0ED8D260F686ED /* AigyeotApp.swift */; };
+		2CA762AF927F21ACDC1485BF /* OutboxPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80B42DFE8AF09F6F531E1D3 /* OutboxPolicy.swift */; };
+		2FB6C05F858DC000D82783B8 /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594A1DD608CE67669A2ADA5D /* Support.swift */; };
+		3251FA80F2DA409746D91ACD /* GuardianSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D53E21E3250B660FEDCABB96 /* GuardianSettingsViews.swift */; };
+		43502AE87DFC460296F1DC24 /* SongViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A243CDD94E523959DDD7480F /* SongViews.swift */; };
+		532E2B33DE3F06EEF67837DE /* Coding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3587F9777E42D05E0656EB /* Coding.swift */; };
+		5A5122D6D82DA3AAB63B6151 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B23FF09E488317980ED7CB1 /* QRScanner.swift */; };
+		67081D8215C7C0F848B7E62E /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB49E41DCBEDA5556093FFD /* AppModel.swift */; };
+		73FC55C39F7B8E56D76717E0 /* Storage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866ABA3D5BE34A5536656718 /* Storage.swift */; };
+		821611F966AE57E96B2DD1AA /* HomeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B54A9731120D736B665C291 /* HomeViews.swift */; };
+		8A5BD6532D71A6C301DDE8F9 /* Rfc3339Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49A4E607F02F9D570786FB71 /* Rfc3339Tests.swift */; };
+		8DB28BECC742F5540A6835C9 /* ReportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493FF9F3C06C1D8BA38DECF1 /* ReportViews.swift */; };
+		A302FDB0104E282B221A23CE /* RelaySocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFFB596FCF350CB541487CCB /* RelaySocket.swift */; };
+		AB78C3785DAADE1E4F7BBA3D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E07DDA0D3C02C11E94F611A /* RootView.swift */; };
+		C317399057F0C5037609F5CB /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FBEF74ED6FD154573FDAE3 /* RelayClient.swift */; };
+		CF4ECC1E1D273F042A19C962 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6591B91036F66BC64B40A96 /* Messages.swift */; };
+		D6015FB736FE802F395DEA24 /* LogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A3D7C3A47BB50CC54256DC /* LogicTests.swift */; };
+		E220175BA7A5E59AFDAE273C /* RelayTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D82A4388D7156E2D412416 /* RelayTypes.swift */; };
+		FE8478255AB1EC6588644BB5 /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E90A3D914A3F62E8F4F0582 /* Recorder.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		227EA66B1E89CF56456EF884 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A3F405FBD612B9EF9930FDC1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9045A2ED3C7FC80C1F402C92;
+			remoteInfo = Aigyeot;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0429EF81B07EA045D9BF5B96 /* ProtocolFixturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolFixturesTests.swift; sourceTree = "<group>"; };
+		06AA2FB0A43D2BE9B2585C79 /* AigyeotTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AigyeotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B23FF09E488317980ED7CB1 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
+		1D3587F9777E42D05E0656EB /* Coding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Coding.swift; sourceTree = "<group>"; };
+		1FB49E41DCBEDA5556093FFD /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		26A3D7C3A47BB50CC54256DC /* LogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogicTests.swift; sourceTree = "<group>"; };
+		3E07DDA0D3C02C11E94F611A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		493FF9F3C06C1D8BA38DECF1 /* ReportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportViews.swift; sourceTree = "<group>"; };
+		49A4E607F02F9D570786FB71 /* Rfc3339Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rfc3339Tests.swift; sourceTree = "<group>"; };
+		4E90A3D914A3F62E8F4F0582 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		594A1DD608CE67669A2ADA5D /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
+		5B54A9731120D736B665C291 /* HomeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViews.swift; sourceTree = "<group>"; };
+		6E31C46992EADD5886436204 /* Aigyeot.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Aigyeot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7EE67FA58C0ED8D260F686ED /* AigyeotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AigyeotApp.swift; sourceTree = "<group>"; };
+		866ABA3D5BE34A5536656718 /* Storage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Storage.swift; sourceTree = "<group>"; };
+		A243CDD94E523959DDD7480F /* SongViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongViews.swift; sourceTree = "<group>"; };
+		A5FBEF74ED6FD154573FDAE3 /* RelayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayClient.swift; sourceTree = "<group>"; };
+		A7D82A4388D7156E2D412416 /* RelayTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayTypes.swift; sourceTree = "<group>"; };
+		A80B42DFE8AF09F6F531E1D3 /* OutboxPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxPolicy.swift; sourceTree = "<group>"; };
+		B6591B91036F66BC64B40A96 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
+		CEF3FFA0A38AF33418438C74 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D53E21E3250B660FEDCABB96 /* GuardianSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardianSettingsViews.swift; sourceTree = "<group>"; };
+		FFFB596FCF350CB541487CCB /* RelaySocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaySocket.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		02FFAD098032D7F6BFD427B7 /* Protocol */ = {
+			isa = PBXGroup;
+			children = (
+				1D3587F9777E42D05E0656EB /* Coding.swift */,
+				B6591B91036F66BC64B40A96 /* Messages.swift */,
+				A7D82A4388D7156E2D412416 /* RelayTypes.swift */,
+			);
+			path = Protocol;
+			sourceTree = "<group>";
+		};
+		185BE81A3F7EBC4FD9E3DE01 = {
+			isa = PBXGroup;
+			children = (
+				A1E5C8F0CF77F03BD8D9E2EA /* Aigyeot */,
+				1FD2608470C214DF05879CFF /* AigyeotTests */,
+				862D8CB38C8981070E511910 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1FD2608470C214DF05879CFF /* AigyeotTests */ = {
+			isa = PBXGroup;
+			children = (
+				26A3D7C3A47BB50CC54256DC /* LogicTests.swift */,
+				0429EF81B07EA045D9BF5B96 /* ProtocolFixturesTests.swift */,
+				49A4E607F02F9D570786FB71 /* Rfc3339Tests.swift */,
+			);
+			path = AigyeotTests;
+			sourceTree = "<group>";
+		};
+		50B9D3E610D3A8F94D123F9D /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				1FB49E41DCBEDA5556093FFD /* AppModel.swift */,
+				A80B42DFE8AF09F6F531E1D3 /* OutboxPolicy.swift */,
+				4E90A3D914A3F62E8F4F0582 /* Recorder.swift */,
+				866ABA3D5BE34A5536656718 /* Storage.swift */,
+				594A1DD608CE67669A2ADA5D /* Support.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		6EEB38133AA542F9BA04B1AF /* Relay */ = {
+			isa = PBXGroup;
+			children = (
+				A5FBEF74ED6FD154573FDAE3 /* RelayClient.swift */,
+				FFFB596FCF350CB541487CCB /* RelaySocket.swift */,
+			);
+			path = Relay;
+			sourceTree = "<group>";
+		};
+		862D8CB38C8981070E511910 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6E31C46992EADD5886436204 /* Aigyeot.app */,
+				06AA2FB0A43D2BE9B2585C79 /* AigyeotTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1E5C8F0CF77F03BD8D9E2EA /* Aigyeot */ = {
+			isa = PBXGroup;
+			children = (
+				7EE67FA58C0ED8D260F686ED /* AigyeotApp.swift */,
+				CEF3FFA0A38AF33418438C74 /* Info.plist */,
+				50B9D3E610D3A8F94D123F9D /* Core */,
+				02FFAD098032D7F6BFD427B7 /* Protocol */,
+				6EEB38133AA542F9BA04B1AF /* Relay */,
+				C06309D023118EA821B9E21C /* Views */,
+			);
+			path = Aigyeot;
+			sourceTree = "<group>";
+		};
+		C06309D023118EA821B9E21C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				D53E21E3250B660FEDCABB96 /* GuardianSettingsViews.swift */,
+				5B54A9731120D736B665C291 /* HomeViews.swift */,
+				1B23FF09E488317980ED7CB1 /* QRScanner.swift */,
+				493FF9F3C06C1D8BA38DECF1 /* ReportViews.swift */,
+				3E07DDA0D3C02C11E94F611A /* RootView.swift */,
+				A243CDD94E523959DDD7480F /* SongViews.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9045A2ED3C7FC80C1F402C92 /* Aigyeot */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3AC8D8E38B98081E2FE1F452 /* Build configuration list for PBXNativeTarget "Aigyeot" */;
+			buildPhases = (
+				2F03CFD799519A1F59630688 /* Debug용 Info.plist(로컬 평문 허용) */,
+				08E8D29AC9130E2FDAF6F2A5 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Aigyeot;
+			packageProductDependencies = (
+			);
+			productName = Aigyeot;
+			productReference = 6E31C46992EADD5886436204 /* Aigyeot.app */;
+			productType = "com.apple.product-type.application";
+		};
+		97FBF867E5E6627290306563 /* AigyeotTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 703BAE9F5044F482A7F2366E /* Build configuration list for PBXNativeTarget "AigyeotTests" */;
+			buildPhases = (
+				AF7C67F7F42130D75CEC9AF8 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				57BEFABFC177DF40D3EF1F71 /* PBXTargetDependency */,
+			);
+			name = AigyeotTests;
+			packageProductDependencies = (
+			);
+			productName = AigyeotTests;
+			productReference = 06AA2FB0A43D2BE9B2585C79 /* AigyeotTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A3F405FBD612B9EF9930FDC1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					9045A2ED3C7FC80C1F402C92 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					97FBF867E5E6627290306563 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = D5678060B637A91B8DDEF226 /* Build configuration list for PBXProject "Aigyeot" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 185BE81A3F7EBC4FD9E3DE01;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 862D8CB38C8981070E511910 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9045A2ED3C7FC80C1F402C92 /* Aigyeot */,
+				97FBF867E5E6627290306563 /* AigyeotTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		2F03CFD799519A1F59630688 /* Debug용 Info.plist(로컬 평문 허용) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Debug용 Info.plist(로컬 평문 허용)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Info-Debug.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$CONFIGURATION\" = \"Debug\" ]; then\n  cp \"$SRCROOT/Aigyeot/Info.plist\" \"$DERIVED_FILE_DIR/Info-Debug.plist\"\n  /usr/libexec/PlistBuddy -c \"Add :NSAppTransportSecurity dict\" -c \"Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true\" \"$DERIVED_FILE_DIR/Info-Debug.plist\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		08E8D29AC9130E2FDAF6F2A5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				18716934C22116C002496F7C /* AigyeotApp.swift in Sources */,
+				67081D8215C7C0F848B7E62E /* AppModel.swift in Sources */,
+				532E2B33DE3F06EEF67837DE /* Coding.swift in Sources */,
+				3251FA80F2DA409746D91ACD /* GuardianSettingsViews.swift in Sources */,
+				821611F966AE57E96B2DD1AA /* HomeViews.swift in Sources */,
+				CF4ECC1E1D273F042A19C962 /* Messages.swift in Sources */,
+				2CA762AF927F21ACDC1485BF /* OutboxPolicy.swift in Sources */,
+				5A5122D6D82DA3AAB63B6151 /* QRScanner.swift in Sources */,
+				FE8478255AB1EC6588644BB5 /* Recorder.swift in Sources */,
+				C317399057F0C5037609F5CB /* RelayClient.swift in Sources */,
+				A302FDB0104E282B221A23CE /* RelaySocket.swift in Sources */,
+				E220175BA7A5E59AFDAE273C /* RelayTypes.swift in Sources */,
+				8DB28BECC742F5540A6835C9 /* ReportViews.swift in Sources */,
+				AB78C3785DAADE1E4F7BBA3D /* RootView.swift in Sources */,
+				43502AE87DFC460296F1DC24 /* SongViews.swift in Sources */,
+				73FC55C39F7B8E56D76717E0 /* Storage.swift in Sources */,
+				2FB6C05F858DC000D82783B8 /* Support.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AF7C67F7F42130D75CEC9AF8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D6015FB736FE802F395DEA24 /* LogicTests.swift in Sources */,
+				053A97EFBB9D213B6CB09968 /* ProtocolFixturesTests.swift in Sources */,
+				8A5BD6532D71A6C301DDE8F9 /* Rfc3339Tests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		57BEFABFC177DF40D3EF1F71 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9045A2ED3C7FC80C1F402C92 /* Aigyeot */;
+			targetProxy = 227EA66B1E89CF56456EF884 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1C0741DA3AA2635071FE2E87 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(DERIVED_FILE_DIR)/Info-Debug.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = kr.aigyeot.phone;
+				RELAY_BASE_URL = "http://localhost:8787";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		3EDFE7950FB7FE7950FB9BBD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		421A2123DA9658FCB1B7B3D9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		85390CB24B9763772230A188 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = kr.aigyeot.phone.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aigyeot.app/Aigyeot";
+			};
+			name = Debug;
+		};
+		910DE97474E8A3C61BD77228 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = kr.aigyeot.phone.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aigyeot.app/Aigyeot";
+			};
+			name = Release;
+		};
+		BE8A89A4B2624FD5D5F34234 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Aigyeot/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = kr.aigyeot.phone;
+				RELAY_BASE_URL = "https://aigyeot-relay.workers.dev";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3AC8D8E38B98081E2FE1F452 /* Build configuration list for PBXNativeTarget "Aigyeot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1C0741DA3AA2635071FE2E87 /* Debug */,
+				BE8A89A4B2624FD5D5F34234 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		703BAE9F5044F482A7F2366E /* Build configuration list for PBXNativeTarget "AigyeotTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				85390CB24B9763772230A188 /* Debug */,
+				910DE97474E8A3C61BD77228 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D5678060B637A91B8DDEF226 /* Build configuration list for PBXProject "Aigyeot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3EDFE7950FB7FE7950FB9BBD /* Debug */,
+				421A2123DA9658FCB1B7B3D9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A3F405FBD612B9EF9930FDC1 /* Project object */;
+}

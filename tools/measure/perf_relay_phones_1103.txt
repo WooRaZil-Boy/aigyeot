@@ -1,0 +1,64 @@
+아이곁 중계·폰 성능 (2026-11-03)
+
+목적: 중계(relay/), 안드로이드 폰(phone/android/), iOS 폰(phone/ios/)의 자원 사용과 효율을 본다. 이 셋에는 공식 성능 예산이 없어 새 기준 숫자를 만들지 않고, 잰 값과 '문제 있음/없음'의 근거만 적는다.
+방법: 세 갈래 모두 소스 읽기. 중계는 추가로 npm test와 wrangler dev --port 8787(로컬)에 요청을 보내 처리 시간을 쟀다(쟀던 스크립트는 저장소 밖 임시 폴더). iOS는 Rfc3339.parse를 그대로 옮긴 작은 Swift 프로그램(swiftc -O, 맥 호스트)으로 한 번 부르는 시간을 쟀다.
+읽는 법: [문제]는 파일:줄, 근거, 영향, 최소 수정안 순이다. 등급은 높음/중간/낮음(자원 낭비 크기 기준)이며 계약 위반 여부와는 별개다. '문제 없음'은 읽은 범위에서 못 찾았다는 뜻이다.
+한계: 중계 시간은 로컬 workerd 한 프로세스, 요청 한 줄씩(동시 부하 없음)이다. SQLite 읽은 행 수·청구는 로컬에서 보이지 않아 코드로 추정했다. 안드로이드는 에뮬레이터·실기기에서 돌리지 않았다(배터리·메모리 미판정). iOS 시뮬레이터에서 앱 메모리는 재지 않았다(미판정: 이미 다른 앱이 켜진 시뮬레이터가 있고 앱 빌드·설치 시간이 30분 안에 맞지 않는다고 봤다). iOS 시간은 맥 호스트 값이라 아이폰과 다르다.
+
+== 잰 숫자 ==
+중계 npm test: 3개 파일 84개 통과, 1.8초.
+중계 wrangler dev(로컬, 순차 요청, 직렬 한 줄씩):
+  POST /v1/cars 17ms(첫 요청, 방 생성 포함) / POST /v1/pair-codes 4ms / POST /v1/pair 4ms
+  POST /v1/messages 60건: 중앙값 2.9ms, 최대 5.5ms
+  GET /v1/inbox(61건 쌓임): 중앙값 3.7ms
+  POST /v1/ack(100개): 6ms
+  GET /v1/devices: 중앙값 2.0ms
+iOS Rfc3339.parse 한 번(소수점 없는 시각): 404us (포매터를 매번 새로 만들고, 소수점 형식이 실패해 두 번 파싱한다)
+iOS 보고서 90개 정렬(ReportViews 쪽 applyMessage와 같은 비교): 620ms, parse 1828번
+
+== 중계: 문제 ==
+[중간] relay/src/car-room.ts:430-434 dropDeliveredBodies: ack마다(WebSocket ack 프레임 하나도 한 번, 라인 690) messages 전체 표를 훑는다. 조건 `body IS NOT NULL AND NOT EXISTS(...)`에 쓸 인덱스가 없다. 본문을 비워도 행은 7일 동안 남으므로 훑는 행이 7일치 메시지 수만큼 커진다. 영향: 메시지 N개면 ack 한 번에 N행을 읽는다(청구되는 읽은 행 수·CPU). 폰이 붙어 메시지를 받을 때마다 반복한다. 최소 수정안: 방금 ack한 id만 `UPDATE messages SET body=NULL WHERE id=? AND NOT EXISTS(SELECT 1 FROM deliveries WHERE message_id=?)`로 처리한다(removeDevice의 같은 호출은 한 번뿐이라 지금대로 둬도 된다).
+[낮음] relay/src/car-room.ts:398 envelope()가 봉투마다 this.room()을 부른다. pending()(라인 672)이 봉투를 만들 때마다라서, 소켓을 붙일 때·inbox 100건이면 질의가 100번 늘어난다. 최소 수정안: car_id를 한 번 읽어 envelope에 넘긴다.
+[낮음] relay/src/car-room.ts:312-315, 324 auth()가 모든 요청마다 touch()로 devices와 room 두 행을 쓴다(GET /v1/inbox·/v1/devices 포함). 영향: 읽기 요청마다 쓰기 두 번. 최소 수정안: 마지막 기록이 1분 안이면 건너뛴다(last_seen_at 정확도는 분 단위로 충분, 계약 4.2 '마지막 연락'은 ping 시각과 견주므로 영향 없음). 이 항목은 계약의 last_activity_at 정의에 맞는지 확인이 필요하다.
+[낮음] relay/src/car-room.ts:437-450·788 push_jobs가 있는데 push 비밀값이 빠진 환경이면(키를 지운 경우) scheduleAlarm이 이미 지난 next_at을 고르고 alarm()은 runPush를 건너뛰어 같은 알람이 곧바로 다시 설정된다(작업의 expires_at, 최대 30분까지 반복). 작업은 pushConfigured일 때만 넣으므로 비밀값을 뺐을 때만 생긴다. 최소 수정안: pushConfigured가 아니면 push_jobs를 지우거나 scheduleAlarm 후보에서 뺀다.
+[낮음] relay/src/car-room.ts:754 webSocket()이 붙자마자 밀린 메시지를 상한 없이(`pending(dev)` limit -1) 모두 보낸다. 받은 함은 7일 보관이라 오래 끊긴 기기는 한 번에 많이 받는다. 영향: 한 요청 안의 질의·전송량(메시지 수에 비례). 폰은 이미 inbox를 100개씩 받으므로 서버는 상한(예: 100)만 보내도 된다는 점은 계약 2장과 맞는지 확인이 필요하다.
+
+== 중계: 문제 없음으로 본 것 ==
+- 알람: CarRoom은 가장 이른 만료 시각 하나만 설정한다(메시지·노래 7일, 푸시 next_at, 빈 방 30일). 주기적 알람이 아니다. Directory만 1시간 주기 알람이고 하루 24번이다.
+- WebSocket Hibernation: acceptWebSocket과 setWebSocketAutoResponse("ping","pong")를 쓴다. setInterval·setTimeout이 없다(grep). ping은 방을 깨우지 않는다. 깨우는 것은 폰이 보내는 ack 프레임뿐이다.
+- 반복문 안 질의: ack(최대 100개)가 id마다 DELETE 두 번이다(트랜잭션 한 번 안, 인덱스 있음). store()가 받는 사람마다 INSERT 한 번(받는 사람은 최대 몇 명). 흔한 경로에서 N+1은 위 envelope()뿐이다.
+- 커지는 것: 메시지함 deliveries·messages 7일, 노래 3곡·2MB(song_quota), 푸시 작업 30분·3회, rate_limits는 키마다 한 행으로 알람 때 만료분 삭제, 본문은 모두 ack하면 비운다. 상한 없이 커지는 표는 못 찾았다. 단 messages 행(본문 없는 것)은 7일 동안 쌓이며 보낸 사람의 분당 60개 제한이 상한이다.
+- 노래 저장: song_blobs 2MB 한 건씩, 업로드 요청에서 readBytes로 한 번 읽는다. 복사는 한 번(buffer를 그대로 바인딩).
+- 처리 시간: 위 숫자대로 로컬 순차 요청이 모두 한 자리 ms다.
+
+== 안드로이드 폰: 문제 ==
+[낮음] phone/android/.../data/Stores.kt:110-118 · AppModel.kt:143-149 메시지(WebSocket 프레임·받은 함 메시지)마다 PhoneState 전체를 JSON으로 만들어 임시 파일에 쓰고 fsync한 뒤 이름을 바꾼다(commit). 영향: 받은 함 100개를 받으면 fsync가 100번이다. 상태 크기는 processed·shown(7일), reports·alerts(90일)에 비례해 천천히 커지지만 제한 목록이 없어 장기로는 쓰기량이 늘어난다. 변경이 없으면 쓰지 않는 점(next == _state.value)은 좋다. 최소 수정안: syncInbox에서 한 쪽(최대 100개)을 모아 commit 한 번으로 저장한 뒤 ack한다(계약 1.4 'ack는 처리를 저장한 뒤'를 지킨다).
+[낮음] phone/android/.../AppModel.kt:441-444 보낼 함에 재시도할 항목이 있으면 `wake` 타이머가 delay(최대 60초)를 반복하며 화면이 뒤로 간 뒤에도 돌고 HTTPS를 보낸다(onBackground는 소켓·연결 루프만 멈춘다). 항목은 7일 지나면 앱을 열 때에야 지워진다. 영향: 오프라인에서 보낼 함이 남은 채 앱이 뒤로 가면 프로세스가 살아 있는 동안 분 단위 재시도. 계약 7.5가 이 재시도를 뒤에서도 허용하는지 확인이 필요하다. 최소 수정안: 뒤에서는 타이머를 걸지 않고 onForeground·netCallback에서만 pumpOutbox를 부른다.
+[낮음] phone/android/.../AppModel.kt:101, 261 kick 채널이 CONFLATED라 연결돼 있는 동안 온 통신 복귀 신호가 남아, 나중에 끊겼을 때 첫 기다림이 건너뛰어진다. 영향: 재접속이 한 번 간격 없이 일어난다(1초 정도의 낭비). 최소 수정안: 끊긴 뒤 기다림에 들어가기 전에 kick.tryReceive()로 비운다.
+
+== 안드로이드 폰: 문제 없음으로 본 것 ==
+- 화면이 없을 때: onStop에서 stopConnection이 NetworkCallback 해제, 연결 루프 취소, 소켓 닫기, ping 작업 취소(runSocket finally)를 한다. 폴링·AlarmManager·WorkManager·서비스가 없다. FCM 수신 때만 syncInbox 한 번(onPush)이다.
+- 재접속 간격: 1·2·4…60초(backoffMs), 429·4008은 60초. 한 번 시도가 기기 목록·소켓·받은 함 세 요청이다. 너무 짧지는 않다.
+- ping은 25초마다, 앞에 있을 때만(2장). pinger는 finally에서 취소한다.
+- 녹음기·플레이어: Recorder.stop()에서 release, start 실패에서도 release, 시트의 ON_STOP에서 녹음 멈춤·재생 해제, DisposableEffect에서 정리. 스캐너는 Google 코드 스캐너(별도 화면)라 앱이 카메라를 잡지 않는다.
+- 코루틴: 앱 수명 scope(SupervisorJob+Main.immediate)가 하나이고, 장기 작업은 연결 루프(foreground Job을 취소)와 보내기 일꾼 하나뿐이다. 화면 쪽은 rememberCoroutineScope·LaunchedEffect라 수명이 맞는다.
+- 저장 크기: feedings를 50개로 자르고(takeLast), 나머지는 pruned가 7일·90일로 자른다.
+
+== iOS 폰: 문제 ==
+[높음] phone/ios/Aigyeot/Core/Support.swift:19-25 Rfc3339.parse가 호출마다 ISO8601DateFormatter를 새로 만들고, 소수점 형식이 실패하면 형식을 바꿔 한 번 더 파싱한다. 한 번에 404us(위 측정). 이것이 정렬 비교 안에서 불린다: AppModel.swift:594(report_summary를 받을 때마다 reports 전체 정렬), :600(handoff_alert 정렬). 영향: 보고서가 90개면 한 번 받을 때 620ms를 메인 액터에서 쓴다(`update` 클로저 안이라 화면이 멈춘다). 90일 보관이라 보고서가 쌓일수록 느려지고, 받은 함을 처음 받을 때(여러 개 연속)는 곱해진다. 화면(ReportViews·HomeViews)도 렌더 때마다 같은 함수를 부른다. 최소 수정안: 포매터 두 개를 static 상수로 한 번만 만든다(ISO8601DateFormatter는 스레드 안전). 정렬은 키를 한 번씩만 파싱한다(map 뒤 정렬).
+[중간] phone/ios/Aigyeot/Core/AppModel.swift:138-148, 738, 154 update가 바뀐 것이 없어도 상태 전체를 JSON으로 인코딩해 파일에 쓴다. didBecomeActive의 purgeExpired(라인 317)와 flushOutbox 시작의 만료 정리(라인 738)가 변경 없이도 저장한다. flushOutbox는 kick·refresh·재시도 타이머마다 불린다. 영향: 메인 액터에서 인코딩과 atomic write가 불필요하게 반복된다. 안드로이드는 같은 값이면 쓰지 않는다. 최소 수정안: update에서 `copy == state`(PhoneState가 Equatable이면)일 때 저장을 건너뛴다.
+[낮음] phone/ios/Aigyeot/Core/AppModel.swift:355, 538 소켓으로 온 프레임마다 별도 Task를 띄워 ingest하고 ack를 HTTPS 요청 한 번으로 보낸다. 안드로이드는 이미 열린 소켓에 ack 프레임을 보낸다. 영향: 실시간 메시지 하나당 저장 한 번과 HTTPS 요청 한 번(연결 설정 포함 가능). 메시지가 하루 몇 건이라 작은 비용이며, 계약 1.4가 ack 두 길을 모두 허용하는지 확인이 필요하다. 최소 수정안: 소켓 프레임의 ack는 같은 소켓으로 보낸다.
+[낮음] phone/ios/Aigyeot/Relay/RelaySocket.swift:112 ping 사이 25초를 1초마다 깨어나(25번 sleep, 매번 actor 호출) 닫혔는지 본다. 앞에 있는 동안 초당 한 번 깬다. 영향: 화면이 켜진 동안 작은 CPU 깨움. 최소 수정안: 한 번에 25초를 자고 닫힘은 receive 실패 쪽에서 취소 신호로 알린다.
+
+== iOS 폰: 문제 없음으로 본 것 ==
+- 배경: didEnterBackground에서 stopSocket(루프 Task 취소, URLSessionWebSocketTask를 connectOnce의 defer에서 cancel(.goingAway))을 한다. UIBackgroundModes가 project.yml에 없고 백그라운드 작업·타이머·푸시 외 폴링이 없다. NWPathMonitor는 앱 수명 동안 하나이며 돌아올 때만 refresh를 부른다(배경 대기 비용은 낮다).
+- URLSessionWebSocketTask: connectOnce의 defer에서 receiver.cancel()과 task.cancel을 한다. 재접속은 1·2·4…60초, 4008과 429는 60초/Retry-After를 따른다.
+- AVAudioRecorder·AVAudioPlayer·AVAudioSession: 모든 종료 경로가 AudioSessionRelease.deactivate()(notifyOthers)를 부른다. 시트 onDisappear에서 discard가 타이머·녹음기·플레이어·임시 파일을 정리한다. 10Hz 타이머는 녹음 중에만 돌고 finish·discard에서 invalidate한다. 파형 배열은 60개에서 자른다.
+- Task 누수: spawn이 UUID로 추적하고 끝나면 지운다. retryTask·staleRetryTask는 만들 때 이전 것을 취소한다. QRScanner는 dismantle에서 stopScanning한다.
+- 저장 크기: feedingLog 30개, processed·shown 7일, reports·alerts 90일로 잘린다(전체를 쓰는 방식은 위 [중간]과 같다).
+
+== 못 잰 것(미판정) ==
+- 중계 동시 접속·실제 Cloudflare 배포의 읽은 행 수 청구, 알람 지연.
+- 안드로이드·iOS 앱의 실행 중 CPU·메모리·배터리(코드 읽기만 했다).
+- iOS 시뮬레이터 메모리: 앱을 빌드해 올리지 않았다(위 한계).
+- iOS 녹음 중 앱이 뒤로 가면 녹음이 어떻게 되는지(UIBackgroundModes가 없어 끊길 것으로 보이나 확인하지 않았다).
