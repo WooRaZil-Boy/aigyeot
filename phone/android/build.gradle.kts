@@ -6,6 +6,10 @@ plugins {
 }
 if (file("google-services.json").exists()) apply(plugin = libs.plugins.google.services.get().pluginId)
 
+// 중계 주소. debug는 에뮬레이터에서 맥의 wrangler dev(10.0.2.2:8787), release는 배포한 주소를 -Paigyeot.relayUrl=https://… 로 넣는다.
+val relayDebug = providers.gradleProperty("aigyeot.relayUrl.debug").getOrElse("http://10.0.2.2:8787")
+val relayRelease = providers.gradleProperty("aigyeot.relayUrl").getOrElse("https://aigyeot-relay.invalid")
+
 android {
     namespace = "kr.aigyeot.phone"
     compileSdk = 37
@@ -16,8 +20,15 @@ android {
         versionCode = 1
         versionName = "0.1"
     }
+    buildTypes {
+        debug { buildConfigField("String", "RELAY_URL", "\"$relayDebug\"") }
+        release { buildConfigField("String", "RELAY_URL", "\"$relayRelease\"") }
+    }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 dependencies {
@@ -28,11 +39,11 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
-    implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.navigation.compose)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.code.scanner)
+    implementation(libs.zxing.core) // 초대 QR 만들기
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     debugImplementation(libs.compose.ui.tooling)

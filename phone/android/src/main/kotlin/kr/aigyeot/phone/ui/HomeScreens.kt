@@ -1,0 +1,288 @@
+package kr.aigyeot.phone.ui
+
+import android.Manifest
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
+import kotlinx.coroutines.launch
+import kr.aigyeot.phone.AigyeotApp
+import kr.aigyeot.phone.AppModel
+import kr.aigyeot.phone.BuildConfig
+import kr.aigyeot.phone.core.PhoneState
+import kr.aigyeot.phone.core.lastFeedingStart
+import kr.aigyeot.shared.InviteResponse
+import kr.aigyeot.shared.Role
+
+@Composable
+private fun Nav(vararg items: Pair<String, () -> Unit>) = Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    for ((label, go) in items) OutlinedButton(onClick = go) { Text(label) }
+}
+
+@Composable
+internal fun StatusBands(model: AppModel) {
+    val ui by model.ui.collectAsState()
+    if (!ui.online) Band("오프라인이에요. 누른 것은 연결되면 차로 가요.", "다시 시도") { model.pumpOutbox() }
+    ui.notice?.let { Band(it, "닫기") { model.clearNotice() } }
+    ui.clockSkewMin?.takeIf { kotlin.math.abs(it) >= 2 }?.let { Band("휴대폰 시계가 ${kotlin.math.abs(it)}분 달라요. 수유 시각이 어긋날 수 있어요.") }
+}
+
+/** 홈 차 타일(7.2): 오프라인이면 알 수 없음, 아니면 연결됨 또는 차 꺼짐 · 마지막 연락 n분 전. */
+@Composable
+private fun CarTile(s: PhoneState, online: Boolean) {
+    val car = s.devices.find { it.role == Role.CAR }
+    val text = when {
+        !online -> "알 수 없음"
+        car == null -> "차를 기다리고 있어요"
+        car.online -> "연결됨"
+        else -> "차 꺼짐" + (kr.aigyeot.phone.core.instantOf(car.lastSeenAt)?.let { " · 마지막 연락 ${minutesAgo(it)}분 전" } ?: "")
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Muted("차")
+            Text(text, style = MaterialTheme.typography.titleLarge)
+        }
+    }
+}
+
+/** owner 홈: 큰 숫자 두 개, 화면 폭 '수유 시작', 최근 기록(구현 계획 8장). */
+@Composable
+fun OwnerHome(model: AppModel, go: (String) -> Unit) {
+    val s by model.state.collectAsState()
+    val ui by model.ui.collectAsState()
+    Page("아이곁") {
+        StatusBands(model)
+        CarTile(s, ui.online)
+        val last = s.lastFeedingStart()
+        if (last == null) {
+            Muted("아직 수유 기록이 없어요")
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column { Muted("마지막 수유 시작"); Text(clock(last), style = MaterialTheme.typography.displaySmall) }
+                Column { Muted("다음 수유 예상"); Text(clock(s.feeding?.value?.windowStartExpected), style = MaterialTheme.typography.displaySmall) }
+            }
+        }
+        Button(onClick = model::startFeeding, modifier = Modifier.fillMaxWidth().height(72.dp)) {
+            Text("수유 시작", style = MaterialTheme.typography.titleLarge)
+        }
+        for (r in s.feedings.asReversed().take(5)) {
+            val status = when {
+                r.failed != null -> r.failed
+                r.reflected -> "차에 반영됨"
+                r.sentAt != null -> "보냄 ${clock(r.sentAt)}"
+                else -> "보내는 중"
+            }
+            Row { Text(clock(r.at), Modifier.weight(1f)); Muted(status) }
+        }
+        HorizontalDivider()
+        Nav("우리 노래" to { go("songs") }, "리포트" to { go("reports") })
+        Nav("보호자" to { go("guardians") }, "설정" to { go("settings") })
+    }
+}
+
+/** 앱 알림 전체(33+는 POST_NOTIFICATIONS 포함) 또는 인계 알림 채널이 꺼졌는지. */
+private fun isNotifOff(context: Context): Boolean {
+    val nm = NotificationManagerCompat.from(context)
+    return !nm.areNotificationsEnabled() ||
+        nm.getNotificationChannel(AigyeotApp.CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE
+}
+
+/** guardian 홈: 받은 리포트·인계 알림(7.2). 알림 권한이 꺼져 있으면 띠. */
+@Composable
+fun GuardianHome(model: AppModel, go: (String) -> Unit) {
+    val s by model.state.collectAsState()
+    val context = LocalContext.current
+    var notifOff by remember { mutableStateOf(isNotifOff(context)) }
+    // 설정에서 알림을 켜거나 끄고 돌아오면 다시 본다.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { notifOff = isNotifOff(context) }
+    Page("아이곁") {
+        StatusBands(model)
+        if (notifOff) {
+            Band("알림이 꺼져 있어 인계 알림을 못 받아요", "설정 열기") {
+                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+            }
+        }
+        if (s.alerts.isEmpty() && s.reports.isEmpty()) Muted("아직 받은 리포트·인계 알림이 없어요")
+        for (a in s.alerts.asReversed().take(10)) {
+            Card(onClick = { go("alert/${a.id}") }, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(a.body.text)
+                    Muted("${minutesAgo(kr.aigyeot.phone.core.instantOf(a.body.occurredAt) ?: a.receivedAt)}분 전")
+                }
+            }
+        }
+        HorizontalDivider()
+        Nav("리포트" to { go("reports") }, "인계 알림 받기" to { go("guardians") }, "설정" to { go("settings") })
+    }
+}
+
+/** 인계 알림 상세(guardian). */
+@Composable
+fun AlertScreen(model: AppModel, id: String, onBack: () -> Unit) {
+    val s by model.state.collectAsState()
+    val a = s.alerts.find { it.id == id }
+    Page("인계 알림", onBack) {
+        if (a == null) {
+            Muted("알림 내용을 받고 있어요")
+        } else {
+            Text(a.body.text, style = MaterialTheme.typography.titleMedium)
+            a.body.restName?.let { Text("쉼터: $it") }
+            a.body.minutesToArrival?.let { Text("도착까지 ${it}분") }
+            Muted("${dateTime(a.body.occurredAt)} · ${minutesAgo(kr.aigyeot.phone.core.instantOf(a.body.occurredAt) ?: a.receivedAt)}분 전")
+        }
+    }
+}
+
+private fun qr(text: String): Bitmap {
+    val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 512, 512)
+    return Bitmap.createBitmap(m.width, m.height, Bitmap.Config.RGB_565).apply {
+        for (x in 0 until m.width) for (y in 0 until m.height) setPixel(x, y, if (m[x, y]) 0xFF000000.toInt() else -1)
+    }
+}
+
+/** 보호자: owner는 초대·목록, guardian은 인계 알림 받기(7.1). */
+@Composable
+fun GuardiansScreen(model: AppModel, onBack: () -> Unit) {
+    val s by model.state.collectAsState()
+    val ui by model.ui.collectAsState()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var invite by remember { mutableStateOf<InviteResponse?>(null) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    Page("보호자", onBack) {
+        if (s.role == Role.GUARDIAN) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("인계 알림 받기", Modifier.weight(1f))
+                Switch(
+                    checked = s.handoffAlerts == true,
+                    enabled = !busy,
+                    onCheckedChange = { on ->
+                        if (on && Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        busy = true
+                        scope.launch {
+                            error = model.setHandoffAlerts(on)
+                            busy = false
+                        }
+                    },
+                )
+            }
+            Muted("아기가 계속 울어 운전자에게 쉬어 가기를 안내할 때 알림을 받아요.")
+        } else {
+            Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요.")
+            Muted("초대 코드는 24시간 동안 한 번만 쓸 수 있어요. 받는 사람은 수유·노래를 보내지 못해요.")
+            if (busy) Muted("초대 코드를 만들고 있어요")
+            Button(
+                enabled = !busy && ui.online,
+                onClick = {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        model.invite().onSuccess { invite = it }.onFailure { error = it.message }
+                        busy = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+            ) { Text("초대 코드 만들기") }
+            if (!ui.online) Muted("인터넷이 필요해요")
+            invite?.let { inv ->
+                Text(inv.display, style = MaterialTheme.typography.displaySmall)
+                Muted("${dateTime(inv.expiresAt)}까지")
+                Image(qr(inv.link).asImageBitmap(), "초대 QR", Modifier.size(220.dp))
+                OutlinedButton(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(Intent.EXTRA_TEXT, "아이곁 초대 코드 ${inv.display}\n${inv.link}")
+                    context.startActivity(Intent.createChooser(send, "링크로 보내기"))
+                }) { Text("링크로 보내기") }
+            }
+            HorizontalDivider()
+            for (d in s.devices.filter { it.role != Role.CAR }) {
+                Row {
+                    Text(if (d.role == Role.OWNER) "함께 타는 보호자" else "다른 보호자", Modifier.weight(1f))
+                    Muted(if (d.deviceId == s.myDeviceId) "이 휴대폰" else d.platform.name.lowercase())
+                }
+            }
+        }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+/** 설정: 연결 끊기, 이 휴대폰의 기록 지우기(구현 계획 3장). */
+@Composable
+fun SettingsScreen(model: AppModel, onBack: () -> Unit, onDisconnected: () -> Unit) {
+    // 끊기는 모델이 끝까지 한다. 화면이 다시 만들어져도 진행·결과를 모델 상태에서 읽는다.
+    val run by model.disconnectRun.collectAsState()
+    val busy = run?.busy == true
+    val error = run?.takeIf { !it.busy }?.error
+    LaunchedEffect(run) {
+        val r = run ?: return@LaunchedEffect
+        if (!r.busy && r.error == null) {
+            model.clearDisconnectRun()
+            if (model.creds.value == null) onDisconnected() // 지금 자격이 없을 때만(그사이 새로 연결했으면 지난 결과다)
+        }
+    }
+    var confirm by remember { mutableStateOf<String?>(null) }
+    Page("설정", onBack) {
+        StatusBands(model)
+        if (busy) Muted("끊고 있어요")
+        Button(enabled = !busy, onClick = { confirm = "disconnect" }, modifier = Modifier.fillMaxWidth()) { Text("연결 끊기") }
+        OutlinedButton(onClick = { confirm = "clear" }, modifier = Modifier.fillMaxWidth()) { Text("이 휴대폰의 기록 지우기") }
+        Muted("기록을 지워도 연결은 그대로예요. 차에 남은 기록은 차 화면에서 지워요.")
+        error?.let { Band(it) }
+        Muted("판 ${BuildConfig.VERSION_NAME}")
+    }
+    confirm?.let { what ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text(if (what == "clear") "이 휴대폰의 기록을 지울까요?" else "연결을 끊을까요?") },
+            text = { Text(if (what == "clear") "리포트·인계 알림·노래 녹음·수유 기록을 지워요." else "다시 연결하려면 차 화면의 새 코드가 필요해요.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = null
+                    if (what == "clear") model.clearRecords() else model.startDisconnect()
+                }) { Text("지우기".takeIf { what == "clear" } ?: "끊기") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("취소") } },
+        )
+    }
+}
