@@ -99,7 +99,7 @@ class SoundProbe : Activity() {
             Triple(IntArray(cl.length()) { cl.getInt(it) }, DoubleArray(w.length()) { w.getDouble(it) }, j.getDouble("bias"))
         }
         val watch = listOf("Baby cry, infant cry", "Crying, sobbing", "Whimper", "Wail, moan", "Child speech, kid speaking", "Cough", "Snoring", "Screaming", "Children shouting")
-        dir.listFiles { f -> f.extension == "pcm" }!!.sorted().forEach { f ->
+        dir.listFiles { f -> f.extension == "pcm" && f.name.startsWith(intent.getStringExtra("only") ?: "") }!!.sorted().forEach { f ->
             val pcm = f.readBytes()
             val s = ShortArray(pcm.size / 2).also { ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(it) }
             val data = AudioData.create(AudioData.AudioDataFormat.builder().setNumOfChannels(1).setSampleRate(16000f).build(), s.size)

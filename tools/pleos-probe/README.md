@@ -206,3 +206,7 @@ adb shell dumpsys car_service | grep -E "CarAudioZone\(|MUSIC -> Address"
 6. 끝나면 프로브를 지운다(`adb uninstall dev.probe.pleos`).
 
 공개한 실측도 이렇게 했다. 대조군(`mode=mic`)을 02:18:53에 돌리고 곧바로 첫 재부팅을 했다([`mictest_1102.txt`](mictest_1102.txt) 참고).
+
+## MeasureProbe (11-03 위험 실측)
+
+`MeasureProbe`는 STT 듣기(`--es cmd stt|sttpcm`)와 녹음 rms·무음 기록(`--es cmd rec`)을 돈다. 쓰는 법과 결과는 `tools/measure/`의 로그 머리말에 있다. 같은 화면을 다시 열 때는 먼저 force-stop한다. 마이크를 맥과 잇는 시험은 에뮬레이터를 `-allow-host-audio`로 띄워야 한다.

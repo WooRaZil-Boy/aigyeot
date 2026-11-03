@@ -1,0 +1,79 @@
+아이곁 5초 듣기 STT 오인식 실측 (2026-11-03) — D1, 명세서 17장 C76
+목적: 안내 직후 5초 듣기에서 Pleos SpeechToText(ON_DEVICE, 한국어)가 재생 소리를 말로 잘못 받는지, 사람 질문은 제대로 받는지 잰다.
+방법: 프로브 MeasureProbe(이번에 더함)의 sttpcm 명령. 5초 PCM(16kHz mono s16le)을 같은 STT 인스턴스에 sendAudio로 100ms씩 실시간 속도로 넣고 completeAudioSend 뒤 2.5초 기다려 마지막 글자를 기록한다(명세서 6장의 공유 PCM 경로).
+  adb shell am force-stop --user 10 dev.probe.pleos; adb logcat -c
+  adb shell am start --user 10 -n dev.probe.pleos/.MeasureProbe --es cmd sttpcm --es files <PCM 이름 목록, 쉼표>
+  adb logcat -d -s MEASURE:I        # RESULT 줄: chars는 공백을 뺀 글자 수
+  입력 PCM(데이터 폴더 T, 맥에서 만들어 앱 files 폴더에 넣음):
+    sil  = 무음 5초
+    wn   = 백색소음 5초(±3000 균등, rms 약 1730, 전체 크기의 약 -25 dBFS), wnL = ±12000(rms 약 6900)
+    q1~q5 = 맥 say -v Yuna 한국어 질문(afconvert로 16kHz mono, 5초로 0 채움)
+    qn1~qn5 = q1~q5 + wn 합성
+    m_music_car10, m_song_car10, m_axon_car10(울음), m_cry_song10(울음+노래) = 감지 시험 클립의 앞 5초
+읽는 법: chars 2 미만이면 명세서 C76에 따라 '들은 말 없음'이다. 무음·소음·울음에서 chars가 2 이상이면 잘못 받은 것이다.
+한계:
+  1) 마이크 경로(s.request())는 재지 못했다. 에뮬레이터 마이크(맥 마이크)로는 어떤 소리도 들어오지 않았다(rms 0.0~0.5, mic_loopback_gleo_1103.txt 참고). 그래서 '뒷좌석 존에 틀어 마이크로 되돌아온 소리'가 아니라 그 소리가 들어왔다고 가정한 PCM을 직접 넣었다. 실제 차 실내에서 되돌아오는 크기·울림은 모른다.
+  2) 백색소음은 앱이 만든 균등 잡음이다. 실제 백색소음 음원이나 자장가가 아니다. 음악 두 개(m_music, m_song)는 시험용 클립이라 자장가와 다르다.
+  3) 시도 수가 적다(10/10/5/5/4/3).
+
+== 결과 요약 ==
+(a) 무음 PCM 10번: 10번 모두 chars=0, 시작 알림도 없음
+(b) 백색소음 PCM 10번(±3000): 10번 모두 chars=0. ±12000 3번도 chars=0
+(b') 울음 PCM(m_axon_car10, m_cry_song10): chars=0, 0
+(b'') 음악·노래 PCM: m_music_car10 → '여보세요? 이 마비의 부른 디어 어제'(15자), m_song_car10 → 'abcd 예쁘지 h'(8자). 2번 모두 말로 잘못 받음(2/2)
+(c) 사람 질문 q1~q5: 5번 모두 받음. 정확히 맞은 것 3개(q1 '지금 몇 분 울었어?', q3, q4), 한 글자 틀린 것 2개(q2 '언제 그만 올까?', q5 '소리 바꿔 줘' 띄어쓰기). 뜻은 모두 통함
+(d) 질문+백색소음 qn1~qn5: 5번 모두 받음. '지금 예약한 오락성'(q1, 뜻 틀림), '언제 그만둘까'(q2, 뜻 바뀜), '아기가 왜 울어', '다음 쉼터까지 얼마나 남았어', '소리 바꿔 줘'
+
+== RESULT 줄 원문: (c) q1~q5 ==
+RESULT 1 started=true chars=8 text='지금 몇 분 울었어?' err=''
+RESULT 2 started=true chars=7 text='언제 그만 올까?' err=''
+RESULT 3 started=true chars=7 text='아기가 왜 울어?' err=''
+RESULT 4 started=true chars=13 text='다음 쉼터까지 얼마나 남았어?' err=''
+RESULT 5 started=true chars=5 text='소리 바꿔 줘' err=''
+
+== (a) sil 10번 ==
+RESULT 1~10 모두 started=false chars=0 text='' err=''  (원문 10줄)
+
+== (b) wn 10번 ==
+RESULT 1 started=false chars=0 text='' err=''
+RESULT 2 started=false chars=0 text='' err=''
+RESULT 3 started=false chars=0 text='' err=''
+RESULT 4 started=false chars=0 text='' err=''
+RESULT 5 started=false chars=0 text='' err=''
+RESULT 6 started=false chars=0 text='' err=''
+RESULT 7 started=false chars=0 text='' err=''
+RESULT 8 started=false chars=0 text='' err=''
+RESULT 9 started=false chars=0 text='' err=''
+RESULT 10 started=false chars=0 text='' err=''
+
+== (d) qn1~qn5 ==
+RESULT 1 started=true chars=8 text='지금 예약한 오락성' err=''
+RESULT 2 started=true chars=6 text='언제 그만둘까' err=''
+RESULT 3 started=true chars=6 text='아기가 왜 울어' err=''
+RESULT 4 started=true chars=12 text='다음 쉼터까지 얼마나 남았어' err=''
+RESULT 5 started=true chars=5 text='소리 바꿔 줘' err=''
+
+== (b')(b'')(b''') 음악·울음·큰 소음 ==
+LISTEN 1 m_music_car10
+RESULT 1 started=true chars=15 text='여보세요? 이 마비의 부른 디어 어제' err=''
+LISTEN 2 m_song_car10
+RESULT 2 started=true chars=8 text='abcd 예쁘지 h' err=''
+LISTEN 3 m_axon_car10
+RESULT 3 started=false chars=0 text='' err=''
+LISTEN 4 m_cry_song10
+RESULT 4 started=false chars=0 text='' err=''
+LISTEN 5 wnL
+RESULT 5 started=false chars=0 text='' err=''
+LISTEN 6 wnL
+RESULT 6 started=false chars=0 text='' err=''
+LISTEN 7 wnL
+RESULT 7 started=false chars=0 text='' err=''
+
+== 부분 글자 흐름 예(q4) ==
+  text '아기가 왜 울어' final=false
+  text '아기가 왜 울어?' final=true
+RESULT 3 started=true chars=7 text='아기가 왜 울어?' err=''
+  text '다' final=false
+  text '다음 수행' final=false
+  text '다음 쉼터까지' final=false
+  text '다음 쉼터까지 얼마' final=false
