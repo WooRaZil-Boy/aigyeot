@@ -19,6 +19,7 @@ android {
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true } // Robolectric(Room in-memory 시험)
 }
 
 dependencies {
@@ -45,4 +46,6 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit4)
     testImplementation(kotlin("test-junit")) // 갈래 ① 감지 시험(assertNotNull 등). JUnit4 위에서 돈다
+    testImplementation(libs.robolectric) // store·link Room 시험을 JVM에서
+    testImplementation(libs.androidx.test.core)
 }

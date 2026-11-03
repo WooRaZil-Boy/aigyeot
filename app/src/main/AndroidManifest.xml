@@ -28,6 +28,35 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <application android:label="아이곁">
+        <!-- 아래 셋은 0단계에서 이름만 정했다. 클래스는 ui-store-host가 만든다(handoff 0-scaffold 3절) -->
+        <!-- 정차 화면: DO(distractionOptimized)를 선언하지 않는다(명세서 11장) -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 감시 서비스: 부팅 때 시작해 중계 연결과 뒷문·기어 감시를 붙든다(구현 계획 2장) -->
+        <service
+            android:name=".host.MonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="아이 탑승 감시: 뒷문·기어 신호로 주행 세션을 열고 보호자 휴대폰 연결을 유지한다" />
+        </service>
+
+        <receiver
+            android:name=".host.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- 갈래 ① 감지: 마이크 Foreground Service. 앱 화면이 있을 때만 시작한다(명세서 6장) -->
         <service
             android:name=".detect.MicService"

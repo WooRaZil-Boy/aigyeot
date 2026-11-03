@@ -52,7 +52,8 @@ class MicService : Service() {
         val (head, source, sc) = prep
         emit(MicServiceEvent(clock(), true, path))
         val d = CryDetector(head, sc, clock, emit).also { detector = it }
-        d.assumePaused(pendingPauses); pendingPauses = emptySet() // 앞 서비스·복원에서 풀리지 않은 사유: 실제 입력이 돌아오면 사유마다 InputRestored
+        // 앞 서비스·복원에서 풀리지 않은 사유: 실제 입력이 돌아오면 사유마다 InputRestored. assumePausedNow와 겹쳐도 사유를 잃지 않게 한 잠금 안에서
+        synchronized(Companion) { d.assumePaused(pendingPauses); pendingPauses = emptySet(); running = d }
         // 판별기는 읽기 스레드가 끝나는 길에서 놓는다(처리 중인 classify와 close가 겹치지 않게)
         runner = DetectorRunner(source, d, onClose = { sc.close() }) { unexpected -> if (!unexpected) intentional = true; stopSelf() }.also { it.start() }
         return START_NOT_STICKY
@@ -65,9 +66,12 @@ class MicService : Service() {
             ended = true
             if (!wasIntentional) { // 오류·시스템이 멈춤
                 if (detector != null) detector?.onMicError(force = true) else emit(InputLost(clock(), PauseReason.MIC_ERROR))
-                pendingPauses = pendingPauses + PauseReason.MIC_ERROR
             }
-            detector?.let { pendingPauses = pendingPauses + it.pauses() } // 다음 서비스가 이어받는다
+            synchronized(Companion) { // assumePausedNow와 겹쳐도 사유를 잃지 않게 한 잠금 안에서
+                running = null
+                if (!wasIntentional) pendingPauses = pendingPauses + PauseReason.MIC_ERROR
+                detector?.let { pendingPauses = pendingPauses + it.pauses() } // 다음 서비스가 이어받는다
+            }
             emit(MicServiceEvent(clock(), false, null))
         }
         super.onDestroy()
@@ -97,6 +101,18 @@ class MicService : Service() {
          * 프로세스가 죽었다가 복원하는 호스트는 시작 전에 직접 넣는다(예: 복원한 MIC_ERROR).
          */
         @Volatile var pendingPauses: Set<PauseReason> = emptySet()
+        /** 읽은 PCM(16kHz mono s16)을 그대로 넘긴다. exec STT가 쓴다. 감지 스레드에서 부르므로 빨리 돌아와야 하고, 배열은 다시 쓰이니 필요하면 복사한다. */
+        @Volatile var pcmTap: ((ShortArray, Int) -> Unit)? = null
+        /** 지금 도는 서비스의 감지기. 서비스가 시작·끝날 때만 바꾼다. */
+        @Volatile internal var running: CryDetector? = null
+
+        /** 서비스가 돌고 있으면 감지기의 풀리지 않은 사유, 아니면 null(C82 대조용). */
+        fun runningPauses(): Set<PauseReason>? = running?.pauses()
+
+        /** 돌고 있는 감지기에 '엔진에만 있는 사유'를 넣는다(C82). 그사이 서비스가 끝났으면 다음 서비스가 이어받게 [pendingPauses]에 넣는다. */
+        fun assumePausedNow(reasons: Set<PauseReason>) = synchronized(this) {
+            running?.assumePaused(reasons) ?: run { pendingPauses = pendingPauses + reasons }
+        }
 
         /** 앱 화면이 있을 때만 부른다. [path]는 시작 경로(홈 버튼·알림·앱 실행). */
         fun start(context: Context, path: MicPath) =

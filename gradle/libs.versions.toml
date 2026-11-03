@@ -20,6 +20,8 @@ pleosVehicle = "2.3.2"
 pleosNavi = "3.0.5"
 pleosSpeech = "3.3.1"
 junit4 = "4.13.2"
+robolectric = "4.17"            # 11-04 Maven Central 확인(0단계 Room 시험)
+androidxTestCore = "1.7.0"      # 11-04 Google Maven 확인
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
@@ -46,6 +48,8 @@ pleos-navi = { module = "ai.pleos.playground:NaviHelper", version.ref = "pleosNa
 pleos-stt = { module = "ai.pleos.playground:SpeechToText", version.ref = "pleosSpeech" }
 pleos-tts = { module = "ai.pleos.playground:TextToSpeech", version.ref = "pleosSpeech" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

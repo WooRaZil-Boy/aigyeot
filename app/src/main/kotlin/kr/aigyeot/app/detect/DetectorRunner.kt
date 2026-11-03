@@ -41,6 +41,7 @@ class DetectorRunner(
                 if (stopped) break // 읽는 사이 멈췄다면 결과를 버린다
                 if (n == PcmSource.END) { detector.finish(); break }
                 if (n < 0) { if (!stopped) { detector.onMicError(); unexpected = true }; break }
+                MicService.pcmTap?.let { tap -> runCatching { tap(buf, n) } } // 받는 쪽 오류가 감지를 멈추지 않게
                 detector.onWindow(buf, source.isSilenced())
             }
         } catch (_: InterruptedException) {
