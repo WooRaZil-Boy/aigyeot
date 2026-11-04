@@ -135,7 +135,7 @@ internal object Lines {
         return when (sid) {
             Sid.S02 -> "뒤에서 울어요. 뒷자리에 ${g("method")} 틀었어요."
             Sid.S03 -> "아직 울어요. ${g("method")}${ro(g("method"))} 바꿨어요."
-            Sid.S04 -> "실내가 ${g("tempC")}도예요. 2도 낮췄어요."
+            Sid.S04 -> "실내가 ${g("tempC")}도예요. ${g("loweredC")}도 낮췄어요."
             Sid.S06 -> "수유한 지 ${g("elapsed")}이에요. 배고플 수 있어요."
             Sid.S07 -> "$km 앞 ${rest}에 수유실이 있어요. 들를까요?"
             Sid.S07_DEPART -> "${g("hungryAt")}쯤 배고플 시간이라, $km 앞 수유실 있는 $rest${eul(rest)} 경유지로 넣을까요?"

@@ -36,10 +36,19 @@ class ContractTypesTest {
             EpisodeState("e-1", EpisodeTrigger.ALARM, 1L, 1L, 0L, 0L, null, null, false,
                 HandoffRecord(HandoffCause.TWO_ATTEMPTS, HandoffKind.PARKED, false, false), emptyList(), 0L, false),
             setOf(PauseReason.SILENCED), 0L, 0L, false, null, false, null, 0L, false, false,
-            mapOf(Sid.S10 to 3L), null, mapOf(Area.ROW_2_LEFT to true), false, false, null,
+            mapOf(Sid.S10 to 3L), null, mapOf(Area.ROW_2_LEFT to true), false, false, null, null,   // comfortDone, comfortPending, nursingStop
             waypointPending = null, recordsCleared = false, pendingAlarm = null,
         ))
         assertEquals(s, json.decodeFromString<EngineState>(json.encodeToString(s)))
+    }
+
+    @Test fun comfortPendingRoundTripAndOldSnapshotDefault() {
+        val sim = session().ev(CabinTemp(T0, 27.6)).attempt2()
+        val withPending = sim.s
+        assertEquals(withPending, json.decodeFromString<EngineState>(json.encodeToString(withPending)))
+        // 필드가 없던 옛 스냅숏은 comfortPending = null로 읽힌다
+        val old = json.encodeToString(withPending).replace(Regex(",?\"comfortPending\":\\{[^}]*\\}"), "")
+        assertEquals(null, json.decodeFromString<EngineState>(old).session!!.comfortPending)
     }
 
     @Test fun eventsRoundTrip() {

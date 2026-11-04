@@ -20,6 +20,7 @@ data class Params(
     val comfortTempC: Double = 26.0,
     val comfortDeltaC: Double = -2.0,
     val comfortHvacAreas: List<Area> = listOf(Area.ROW_1_LEFT),
+    val hvacMinC: Double = 15.0,          // 공조 설정 최솟값을 차에서 못 읽을 때의 하한(C101, 에뮬레이터 실측)
     val feedingWindowStart: Double = 0.8,
     val feedingWindowEnd: Double = 2.0,
     val targetLufs: Double = -30.0,

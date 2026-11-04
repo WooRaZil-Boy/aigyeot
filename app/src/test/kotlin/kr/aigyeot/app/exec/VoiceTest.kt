@@ -202,6 +202,8 @@ class VoiceTest {
         assertEquals("아직 울어요. 백색소음으로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "백색소음")))
         assertEquals("아직 울어요. 자장가로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "자장가")))
         assertEquals("아직 울어요. 우리 노래로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "우리 노래")))
+        assertEquals("실내가 28도예요. 2도 낮췄어요.", Lines.text(Sid.S04, mapOf("tempC" to "28", "loweredC" to "2")))
+        assertEquals("실내가 28도예요. 1.5도 낮췄어요.", Lines.text(Sid.S04, mapOf("tempC" to "28", "loweredC" to "1.5")))
         assertEquals("안성휴게소를 경유지로 넣었어요.", Lines.text(Sid.S09, mapOf("restName" to "안성휴게소")))
         assertEquals("망향 졸음쉼터를 경유지로 넣었어요.", Lines.text(Sid.S09, mapOf("restName" to "망향 졸음쉼터")))
         assertEquals("서울만남의광장을 경유지로 넣었어요.", Lines.text(Sid.S09, mapOf("restName" to "서울만남의광장")))

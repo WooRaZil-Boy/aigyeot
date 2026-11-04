@@ -89,6 +89,7 @@ data class SessionState(
     val windowLockBefore: Map<Area, Boolean>?,
     val frontAudible: Boolean,
     val comfortDone: Boolean,
+    val comfortPending: ComfortPending? = null, // 42a에서 낸 `LowerHvac`의 결과를 기다리는 중(C102). 결과(42g·42h)가 오면 null. 스냅숏 호환을 위해 기본값 null
     val nursingStop: NursingStop?,
     val addedRestIds: Set<String> = emptySet(),
     val waypointPending: WaypointPending?,
@@ -142,6 +143,7 @@ data class HandoffRecord(
 )
 
 @Serializable data class PendingAlarm(val alarmAt: Long, val delayFromAt: Long)   // C36
+@Serializable data class ComfortPending(val cmdId: String, val tempC: Double, val playId: String)  // S04는 이 cmdId의 ControlResult가 ok로 온 뒤 말한다(C102)
 @Serializable data class WindowLockPending(
     val sessionId: String,
     val locking: Map<String, Set<Area>>,

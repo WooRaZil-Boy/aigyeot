@@ -51,7 +51,7 @@ class ReviewFixTest {
         assertEquals(WN, sim.step<StartPlayback>().single().method)
         sim.ev(CabinTemp(sim.t, 20.0)).started()
         assertEquals(SecondAction.COMFORT, sim.ep.second!!.action)
-        assertTrue(Sid.S04 in sim.sids() && Sid.S03 !in sim.sids())
+        assertTrue(Sid.S04 !in sim.sids() && Sid.S03 !in sim.sids())   // S04는 결과가 온 뒤(C102)
         assertTrue(sim.step<LowerHvac>().size == 1)
     }
 

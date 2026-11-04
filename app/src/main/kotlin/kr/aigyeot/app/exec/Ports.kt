@@ -59,6 +59,8 @@ internal interface MicTap {
 internal interface ControlPort {
     fun read(kind: ControlKind, area: Area, cb: (Double?) -> Unit)
     fun write(kind: ControlKind, area: Area, value: Double, ack: (Boolean) -> Unit)
+    /** 공조 설정 온도 최솟값(차가 알려 주는 범위, C101). 못 읽으면 null — [Controls]가 `Params.hvacMinC`를 쓴다. */
+    fun minTemp(area: Area, cb: (Double?) -> Unit) = cb(null)
 }
 
 /** NaviHelper addWaypoint. 결과 콜백(경로 변경)이나 오류만 [done]으로 준다(C75). [note]는 ControlLog actual. */

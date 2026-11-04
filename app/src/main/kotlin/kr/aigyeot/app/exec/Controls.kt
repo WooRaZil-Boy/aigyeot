@@ -32,7 +32,7 @@ internal class Controls(
     fun seatHeat(c: SetSeatHeat) = c.areas.forEach { verify(c.cmdId, ControlKind.SEAT_HEAT, it, c.level.toDouble()) }
     fun windowLock(c: SetWindowLock) = c.values.forEach { (a, v) -> verify(c.cmdId, ControlKind.WINDOW_LOCK, a, if (v) 1.0 else 0.0) }
     fun readingLight(c: SetReadingLight) = c.areas.forEach { verify(c.cmdId, ControlKind.READING_LIGHT, it, if (c.on) 1.0 else 0.0) }
-    /** 목표 = 지금 설정 온도 + deltaC. 설정 온도를 읽지 못하면 보내지 않고 실패. */
+    /** 목표 = max(지금 설정 온도 + deltaC, 설정 최솟값)(C101). 설정 온도를 읽지 못하면 보내지 않고 실패. */
     fun lowerHvac(c: LowerHvac) = c.areas.forEach { verify(c.cmdId, ControlKind.HVAC_TEMP, it, null, c.deltaC) }
 
     private inner class Job(val cmdId: String, val kind: ControlKind, val area: Area) {
@@ -47,20 +47,30 @@ internal class Controls(
         val timers = mutableListOf<() -> Unit>()
     }
 
-    /** [target]이 null이면 바꾸기 전 값 + [delta]가 목표다(LowerHvac). */
+    /** [target]이 null이면 바꾸기 전 값 + [delta]가 목표다(LowerHvac). 이 경우 목표는 max(그 값, 설정 최솟값)이고 이미 최솟값 이하면 쓰지 않고 실패(C101). */
     private fun verify(cmdId: String, kind: ControlKind, area: Area, target: Double?, delta: Double = 0.0) {
         val j = Job(cmdId, kind, area)
         jobs += j
+        val lower = target == null
         var gotBefore = false
-        fun go(before: Double?) {
-            if (gotBefore) return
+        var before: Double? = null; var beforeIn = false
+        var lo: Double? = null; var loIn = !lower
+        fun go() {
+            if (gotBefore || !beforeIn || !loIn) return
             gotBefore = true
             j.before = before
-            j.target = target ?: before?.plus(delta) ?: return finish(j, false)
+            if (target != null) j.target = target
+            else {
+                val base = before ?: return finish(j, false)
+                val min = lo ?: p.hvacMinC                               // 차가 범위를 안 주면 Params.hvacMinC
+                j.target = maxOf(base + delta, min)
+                if (base <= min) { j.last = base; return finish(j, false) }   // 이미 최솟값 이하: 쓰지 않는다. before = after = 지금 값
+            }
             send(j, 0)
         }
-        j.timers += sched.after(p.verifyTimeoutMs) { go(null) }         // 바꾸기 전 값을 끝내 못 읽으면 모르는 채로 보낸다
-        safeRead(kind, area) { go(it) }
+        j.timers += sched.after(p.verifyTimeoutMs) { beforeIn = true; loIn = true; go() }   // 바꾸기 전 값을 끝내 못 읽으면 모르는 채로 보낸다
+        safeRead(kind, area) { before = it; beforeIn = true; go() }
+        if (lower) try { port.minTemp(area) { lo = it; loIn = true; go() } } catch (e: Exception) { loIn = true; go() }
     }
 
     /** 포트가 던지면 못 읽은 것(null)으로 본다. 던진 예외가 Exec까지 올라가 결과를 두 번 내지 않게. */

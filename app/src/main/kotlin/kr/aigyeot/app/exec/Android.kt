@@ -533,6 +533,14 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         } catch (e: Exception) { ack(false) }
     }
 
+    /** 공조 설정 범위의 최솟값(Pleos `checkHvacTemperatureCapabilities`, CAR_CLIMATE 권한). 못 읽으면 null(C101). */
+    override fun minTemp(area: Area, cb: (Double?) -> Unit) {
+        val v = vehicle ?: return cb(null)
+        try {
+            v.getHVAC().checkHvacTemperatureCapabilities({ _, m -> ex.guard { cb(m[seat(area)]?.minValue?.toDouble()) } }, { ex.guard { cb(null) } })
+        } catch (e: Exception) { cb(null) }
+    }
+
     private companion object { const val SUBSCRIBE_DELAY_MS = 1_500L }
 }
 

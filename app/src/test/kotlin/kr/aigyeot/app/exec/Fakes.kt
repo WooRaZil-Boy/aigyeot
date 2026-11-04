@@ -72,6 +72,8 @@ internal class FakeControl(private val t: FakeTime) : ControlPort {
     var ackOk = true
     var readOk = true
     var throwRead = false
+    var minC: Double? = 15.0                       // 차가 알려 주는 공조 설정 최솟값(null = 못 읽음)
+    override fun minTemp(area: Area, cb: (Double?) -> Unit) { cb(minC) }
     var throwWrite = false
     val writes = mutableListOf<Triple<ControlKind, Area, Double>>()
     val reads = mutableListOf<Long>()

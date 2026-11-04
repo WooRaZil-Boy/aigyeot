@@ -52,6 +52,9 @@ class ScenesTest {
         val rows = runAll("B")
         assertMeetsLimits("B", rows)
         rows.forEach { assertEquals(2, it.maxAttempts); assertEquals(1.0, it.controlOkRate!!, 0.0) }
+        // S04는 실제로 낮춘 값(22℃ → 20℃)을 말한다(C102)
+        val w = FakeWorld(cryLen); w.play(scene("B"))
+        assertEquals("2", w.commands.map { it.second }.filterIsInstance<kr.aigyeot.engine.Speak>().first { it.sid == kr.aigyeot.engine.Sid.S04 }.vars["loweredC"])
     }
 
     @Test fun `장면 C 수유 시간대 - 쉼터 응 뒤 경유지`() {

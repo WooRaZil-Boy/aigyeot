@@ -10,7 +10,7 @@ class S54SecondTest {
     /** 1차 실패 뒤 ATTEMPT(2) 시작 대기. */
     private fun Sim.wait2() = attempt1().toGap().recry()
 
-    @Test fun r42a_hot_lowersHvacReplaysFirstSaysS04() {
+    @Test fun r42a_hot_lowersHvacReplaysFirstNoS04Yet() {
         val sim = session().ev(CabinTemp(T0, 27.6)).wait2()
         assertEquals(WN, sim.step<StartPlayback>().single().method)     // 1차 음원을 다시
         sim.started()
@@ -18,9 +18,60 @@ class S54SecondTest {
         assertTrue(sim.ses.comfortDone)
         val hv = sim.step<LowerHvac>().single()
         assertEquals(listOf(Area.ROW_1_LEFT), hv.areas); assertEquals(-2.0, hv.deltaC)
-        assertTrue(Sid.S04 in sim.sids())
+        assertTrue(Sid.S04 !in sim.sids())                              // 결과가 오기 전에는 말하지 않는다(C102)
         sim.flush()
-        assertEquals(mapOf("tempC" to "28"), sim.all<Speak>().first { it.sid == Sid.S04 }.vars)
+        assertTrue(Sid.S04 !in sim.sids())
+        assertEquals(ComfortPending(hv.cmdId, 28.0, sim.play().id), sim.ses.comfortPending)
+    }
+
+    private fun hvac(sim: Sim, ok: Boolean, before: Double?, after: Double?): Sim {
+        val id = sim.ses.comfortPending!!.cmdId
+        return sim.ev(ControlResult(sim.t, id, ControlKind.HVAC_TEMP, Area.ROW_1_LEFT, ok, before, after))
+    }
+
+    @Test fun r42g_hvacLowered_saysS04ActualDelta() {
+        val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
+        hvac(sim, true, 22.0, 20.5)
+        assertNull(sim.ses.comfortPending)
+        assertEquals(sim.play().id, sim.s.speech.queue.single { it.sid == Sid.S04 }.playId)   // C15: 그 재생
+        sim.flush()
+        val s04 = sim.all<Speak>().single { it.sid == Sid.S04 }
+        assertEquals(mapOf("tempC" to "28", "loweredC" to "1.5"), s04.vars)   // before − after
+    }
+
+    @Test fun r42h_hvacFailedOrPlayEnded_noS04() {
+        val fail = session().ev(CabinTemp(T0, 27.6)).wait2().started()
+        hvac(fail, false, 16.0, 16.0)
+        assertNull(fail.ses.comfortPending)
+        fail.flush()
+        assertTrue(Sid.S04 !in fail.sids())
+
+        val ended = session().ev(CabinTemp(T0, 27.6)).wait2().started()
+        ended.ev(Tick(ended.play().endAt))                      // 그 재생이 끝남
+        hvac(ended, true, 22.0, 20.0)
+        assertNull(ended.ses.comfortPending)
+        ended.flush()
+        assertTrue(Sid.S04 !in ended.sids())
+    }
+
+    @Test fun r42h_hvacNotLowered_noS04() {
+        for ((b, a) in listOf(22.0 to 22.0, 20.0 to 22.0, null to 20.0, 22.0 to null)) {
+            val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
+            hvac(sim, true, b, a)
+            assertNull(sim.ses.comfortPending)
+            sim.flush()
+            assertTrue(Sid.S04 !in sim.sids(), "$b→$a")
+        }
+    }
+
+    @Test fun r14g_bootClearsComfortPending() {
+        val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
+        assertTrue(sim.ses.comfortPending != null)
+        sim.ev(Resume(sim.t + 1_000))
+        assertTrue(sim.ses.comfortPending != null)               // Resume은 지우지 않는다
+        sim.ev(Boot(sim.t + 1_000, Gear.D, 10))
+        assertNull(sim.ses.comfortPending)
+        assertTrue(sim.ses.comfortDone)                          // comfortDone은 그대로
     }
 
     @Test fun r42b_feeding_otherBestS03S06Offer() {

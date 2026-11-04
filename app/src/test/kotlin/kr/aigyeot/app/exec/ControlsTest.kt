@@ -141,6 +141,41 @@ class ControlsTest {
         assertEquals("setHvacTemperature", r.rows.single().api)
     }
 
+    @Test fun `공조 보통 22에서 20으로`() {
+        car.values[HVAC_TEMP to ROW_1_LEFT] = 22.0
+        c.lowerHvac(LowerHvac("s1-11", listOf(ROW_1_LEFT), -2.0))
+        t.advance(1_000)
+        assertEquals(20.0, car.writes.single().third)
+        assertEquals(ControlResult(t0 + 400, "s1-11", HVAC_TEMP, ROW_1_LEFT, true, 22.0, 20.0), r.events.single())
+    }
+
+    @Test fun `공조 하한에 걸리면 최솟값까지만 낮춘다 16에서 15로`() {
+        car.values[HVAC_TEMP to ROW_1_LEFT] = 16.0
+        c.lowerHvac(LowerHvac("s1-11", listOf(ROW_1_LEFT), -2.0))
+        t.advance(1_000)
+        assertEquals(15.0, car.writes.single().third)
+        assertEquals(ControlResult(t0 + 400, "s1-11", HVAC_TEMP, ROW_1_LEFT, true, 16.0, 15.0), r.events.single())
+    }
+
+    @Test fun `공조가 이미 최솟값이면 쓰지 않고 ok=false에 before=after`() {
+        car.values[HVAC_TEMP to ROW_1_LEFT] = 15.0
+        c.lowerHvac(LowerHvac("s1-11", listOf(ROW_1_LEFT), -2.0))
+        t.advance(Params().verifyTimeoutMs * 3)
+        assertTrue(car.writes.isEmpty())
+        assertEquals(ControlResult(t0, "s1-11", HVAC_TEMP, ROW_1_LEFT, false, 15.0, 15.0), r.events.single())
+        val row = r.rows.single()
+        assertEquals(listOf("setHvacTemperature", "ROW_1_LEFT", "15", "15"), listOf(row.api, row.target, row.goal, row.actual))
+        assertTrue(!row.ok)
+    }
+
+    @Test fun `최솟값을 못 읽으면 Params hvacMinC를 쓴다`() {
+        car.minC = null
+        car.values[HVAC_TEMP to ROW_1_LEFT] = 16.0
+        c.lowerHvac(LowerHvac("s1-11", listOf(ROW_1_LEFT), -2.0))
+        t.advance(1_000)
+        assertEquals(Params().hvacMinC, car.writes.single().third)
+    }
+
     @Test fun `설정 온도를 읽지 못하면 보내지 않고 실패`() {
         car.readOk = false
         c.lowerHvac(LowerHvac("s1-11", listOf(ROW_1_LEFT), -2.0))

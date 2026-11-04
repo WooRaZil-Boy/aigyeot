@@ -72,6 +72,7 @@ class FakeWorld(
     var ended = false
     var vcSent = ArrayList<String>()
     var simulated = 0
+    private var hvacC = 22.0
 
     private class Job(val at: Long, val seq: Int, val f: () -> Unit)
     private val queue = PriorityQueue<Job>(compareBy<Job>({ it.at }, { it.seq }))
@@ -154,7 +155,14 @@ class FakeWorld(
             is Listen -> at(now + c.ms) { post(Heard(now, c.listenId, null)) }
             is SetSeatHeat -> result(c.cmdId, ControlKind.SEAT_HEAT, c.areas.associateWith { c.level.toDouble() })
             is SetReadingLight -> result(c.cmdId, ControlKind.READING_LIGHT, c.areas.associateWith { if (c.on) 1.0 else 0.0 })
-            is LowerHvac -> result(c.cmdId, ControlKind.HVAC_TEMP, c.areas.associateWith { 20.0 })
+            is LowerHvac -> at(now + 300) {   // 22℃에서 시작해 deltaC만큼 내린 실제 before·after(최솟값 15℃)
+                val before = hvacC
+                hvacC = maxOf(15.0, before + c.deltaC)
+                c.areas.forEach { area ->
+                    control(ControlKind.HVAC_TEMP.name, area.name, "$hvacC")
+                    post(ControlResult(now, c.cmdId, ControlKind.HVAC_TEMP, area, true, before, hvacC))
+                }
+            }
             is SetWindowLock -> result(c.cmdId, ControlKind.WINDOW_LOCK, c.values.mapValues { if (it.value) 1.0 else 0.0 })
             is AddWaypoint -> at(now + 500) { post(WaypointResult(now, c.cmdId, c.restId, true)) }
             else -> {}

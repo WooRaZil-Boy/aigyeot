@@ -104,7 +104,7 @@ private class Ctx(val p: Params, var s: EngineState) {
                 car { copy(gear = e.gear, gearSince = now) }
                 ign { copy(driverUserId = e.userId, doorOpenedSinceP = if (e.gear == Gear.P) false else doorOpenedSinceP) }
                 newIgnition()
-                ses { copy(waypointPending = null) }   // 프로세스가 새로 떴다: 옛 AddWaypoint의 콜백은 오지 않는다(C84). Resume은 살아 있을 수 있어 비우지 않는다
+                ses { copy(waypointPending = null, comfortPending = null) }   // comfortPending도: 옛 ControlResult는 오지 않는다(14g, C102). waypointPending: 프로세스가 새로 떴다: 옛 AddWaypoint의 콜백은 오지 않는다(C84). Resume은 살아 있을 수 있어 비우지 않는다
                 dropLostLocks()
             }
             is Resume -> newIgnition()
@@ -135,6 +135,7 @@ private class Ctx(val p: Params, var s: EngineState) {
             is ControlResult -> when (e.control) {
                 ControlKind.SEAT_HEAT -> if (!e.ok && ses != null) out += ShowNotice(Notice.SAFETY_CONTROL_FAILED) // 3d
                 ControlKind.WINDOW_LOCK -> windowResult(e)
+                ControlKind.HVAC_TEMP -> hvacResult(e)
                 else -> {}
             }
             is WaypointResult -> waypoint(e)
@@ -293,6 +294,18 @@ private class Ctx(val p: Params, var s: EngineState) {
         val left = getValue(k) - a
         return if (left.isEmpty()) this - k else this + (k to left)
     }
+
+    /** 42g·42h: 쾌적 조정 결과. 성공이고 그 재생이 계속될 때만 실제로 낮춘 값을 말한다(C102, 말하기 직전 valid가 C15를 다시 본다). */
+    fun hvacResult(e: ControlResult) {
+        val c = ses?.comfortPending?.takeIf { it.cmdId == e.cmdId } ?: return
+        ses { copy(comfortPending = null) }
+        val lowered = if (e.ok && e.before != null && e.after != null) e.before - e.after else return
+        if (!lowered.isFinite() || lowered <= 0.0) return   // 42h: 낮추지 못했거나 값이 이상하면 말하지 않는다
+        if (ses?.play?.id != c.playId) return
+        say(Line(Sid.S04, mapOf("tempC" to "${c.tempC.roundToInt()}", "loweredC" to fmtC(lowered)), null, playId = c.playId))
+    }
+
+    private fun fmtC(v: Double) = if (v == v.toLong().toDouble()) v.toLong().toString() else "%.1f".format(java.util.Locale.ROOT, v)
 
     fun windowResult(e: ControlResult) {
         val l = s.ign.windowLockPending.toMutableList()
@@ -505,9 +518,9 @@ private class Ctx(val p: Params, var s: EngineState) {
                 ep { copy(second = TryRecord(pl.method, action, null, null)) }
                 when (action) {
                     SecondAction.COMFORT -> {
-                        ses { copy(comfortDone = true) }
-                        out += LowerHvac(newId(), p.comfortHvacAreas, p.comfortDeltaC)
-                        say(Line(Sid.S04, mapOf("tempC" to "${(s.car.cabinC ?: 0.0).roundToInt()}"), null, playId = pl.id))
+                        val cmd = LowerHvac(newId(), p.comfortHvacAreas, p.comfortDeltaC)
+                        out += cmd
+                        ses { copy(comfortDone = true, comfortPending = ComfortPending(cmd.cmdId, (s.car.cabinC ?: 0.0).roundToInt().toDouble(), pl.id)) }   // S04는 결과가 ok로 온 뒤(42g, C102)
                     }
                     SecondAction.FEEDING -> {
                         say(Line(Sid.S03, method, null, playId = pl.id))
