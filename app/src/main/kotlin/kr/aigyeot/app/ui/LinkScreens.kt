@@ -64,11 +64,11 @@ fun ConnectScreen(link: Link, clock: () -> Long, onBack: () -> Unit) = Page("휴
     BigButton("목록 새로 보기", primary = false) { link.refreshPhones() }
 }
 
-/** 정차 화면의 연결 상태 한 줄(contracts-link 8.6). NONE은 표시하지 않는다. */
-internal fun connText(c: LinkConn): String? = when (c) {
+/** 정차 화면의 연결 상태 한 줄(contracts-link 8.6). NONE은 표시하지 않는다. CONNECTED는 연결된 폰이 있을 때만 "연결됨"(C106). */
+internal fun connText(c: LinkConn, hasPhone: Boolean): String? = when (c) {
     LinkConn.NONE -> null
     LinkConn.CONNECTING -> "휴대폰 연결: 붙는 중"
-    LinkConn.CONNECTED -> "휴대폰 연결됨"
+    LinkConn.CONNECTED -> if (hasPhone) "휴대폰 연결됨" else "아직 연결된 휴대폰이 없어요"
     LinkConn.BACKOFF -> "휴대폰 연결: 다시 붙는 중"
 }
 
@@ -88,7 +88,7 @@ internal class LinkLine(val text: String, val error: Boolean = false)
 
 /** 연결 상태·"연결됐어요"([paired])·오류 문장(link가 넣은 그대로, 8.6 '차 토큰 무효' 등) 순서. */
 internal fun linkLines(st: LinkStatus, paired: Boolean): List<LinkLine> = listOfNotNull(
-    connText(st.conn)?.let(::LinkLine),
+    connText(st.conn, st.phones.isNotEmpty())?.let(::LinkLine),
     if (paired) LinkLine("연결됐어요") else null,
     st.error?.let { LinkLine(it, error = true) },
 )
