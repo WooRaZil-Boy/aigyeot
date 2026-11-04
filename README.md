@@ -59,6 +59,14 @@ Pleos 공식 에뮬레이터에서 잰 것입니다.
 
 울음이 실제로 줄어드는지, 운전자가 덜 돌아보는지는 사람과 아기가 있어야 잴 수 있어 아직 재지 않았습니다.
 
+## 출처 고지
+
+- **자장가:** 브람스 「자장가」 Op.49 No.4(퍼블릭 도메인). MIDI: Rabanus Flavus(Peter Gerloff), CC0, Wikimedia Commons. 음색: FluidR3_GM(Frank Wen, MIT). −30 LUFS로 맞춰 렌더링함.
+- **휴게소·졸음쉼터 정보:** 공공데이터포털 전국휴게소정보표준데이터(한국도로공사, 2026-09-21)·전국졸음쉼터표준데이터(한국도로공사, 2026-03-05). 졸음쉼터 데이터 번호는 15028203입니다.
+- **울음 판별 바탕 모델:** YAMNet(TensorFlow Model Garden, Apache 2.0)과 MediaPipe tasks-audio(Apache 2.0). Apache 2.0 전문은 [app/src/main/assets/licenses/Apache-2.0.txt](app/src/main/assets/licenses/Apache-2.0.txt)에 있습니다.
+- **AudioSet 온톨로지:** YAMNet 모델 파일에 들어 있는 클래스 이름은 AudioSet 온톨로지(CC BY-SA 4.0)에서 왔습니다.
+- **판별층:** YAMNet 점수 위에 얹은 판별층의 학습 데이터와 라이선스는 아래 표에 있습니다.
+
 ## 학습 데이터와 라이선스
 
 판별층 학습에 쓴 데이터입니다. 비상업 조건 데이터가 들어 있어 이 판별층은 공모전 시연용입니다. 상용 배포 전에는 상용 가능한 데이터로 다시 학습합니다. 라이선스는 2026-11-02에 각 배포처의 표기를 확인했습니다.
