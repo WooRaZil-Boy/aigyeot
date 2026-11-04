@@ -1,0 +1,59 @@
+{
+ "format": 1,
+ "id": "F14-07",
+ "title": "프로필 없음 → 뒷문 순환 뒤 D에도 열리지 않음",
+ "repeat": 1,
+ "setup": {
+  "profile": null,
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 107,
+  "override": [
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expectNone": {
+    "command": "SaveSession",
+    "for": 30
+   }
+  },
+  {
+   "t": 20,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  }
+ ]
+}

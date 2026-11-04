@@ -1,0 +1,14 @@
+# system_volume_changes 측정 길 확인(계약 7.4) — 2026-11-04, AVD PleosProbe, user 10, debug
+방법: 장면 F14-01 실행 중 `adb shell input keyevent 24`(볼륨 올림)·`25`(내림), 그리고 `cmd media_session volume --stream 3 --set 10`.
+
+결과
+- 볼륨 키는 CarAudioManager 그룹 볼륨만 바꾼다:
+  MediaAgent:VolumeController: volume changed (CarAudioManager): VolumeStatus(current=20, ...) -> VolumeStatus(current=21, ...)
+  MediaAgent:VolumeController: volume changed (CarAudioManager): VolumeStatus(current=21, ...) -> VolumeStatus(current=20, ...)
+- `dumpsys audio`의 STREAM_MUSIC 값은 키 전후와 set 명령 뒤 모두 그대로였다: Current: 1000000 (bus): 15, 40000000 (default): 15
+- 장면 재생기의 android.media.VOLUME_CHANGED_ACTION(STREAM_MUSIC) 수신기는 0번 받았다(그 실행 CSV의 system_volume_changes = 0).
+
+해석
+- Pleos(AAOS, 동적 라우팅)에서 볼륨은 CarAudio 그룹 단위다. AudioManager 스트림 볼륨은 바뀌지 않고 그 방송도 오지 않는다.
+- CarAudio 그룹 볼륨을 바꾸거나 콜백을 받으려면 시스템 권한(android.car.permission.CAR_CONTROL_AUDIO_VOLUME)이 필요하다(AOSP 기준, 이 에뮬레이터에서 권한 부여는 재지 않음). 일반 앱은 그룹 볼륨을 바꿀 수 없다.
+- 그래서 이 칼럼은 exec가 control_log에 남기는 setStreamVolume·adjustStreamVolume 호출 줄(계약 7.4, C96)이 실제 측정이고, 방송 수신기는 비AAOS 대비로만 남는다.

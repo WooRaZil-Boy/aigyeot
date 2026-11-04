@@ -1,0 +1,72 @@
+{
+ "format": 1,
+ "id": "F14-14",
+ "title": "한쪽이 열린 채 다른 쪽만 순환 → 열리지 않음",
+ "repeat": 1,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 114,
+  "override": [
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "LEFT",
+    "open": true
+   }
+  },
+  {
+   "t": 3,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expectNone": {
+    "command": "SaveSession",
+    "for": 20
+   }
+  },
+  {
+   "t": 20,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  }
+ ]
+}

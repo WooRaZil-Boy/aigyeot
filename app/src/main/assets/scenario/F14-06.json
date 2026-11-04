@@ -1,0 +1,68 @@
+{
+ "format": 1,
+ "id": "F14-06",
+ "title": "뒷문이 열린 채 D, 주행 중 닫음 → 열리지 않음",
+ "repeat": 1,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 106,
+  "override": [
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "LEFT",
+    "open": true
+   }
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expectNone": {
+    "command": "SaveSession",
+    "for": 30
+   }
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=40&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 20,
+   "inject": {
+    "event": "RearDoor",
+    "side": "LEFT",
+    "open": false
+   }
+  },
+  {
+   "t": 30,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  }
+ ]
+}

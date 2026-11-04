@@ -1,0 +1,130 @@
+{
+ "format": 1,
+ "id": "E",
+ "title": "도착: 꺼내 눕히기 안내, 뒷문 열면 리포트",
+ "repeat": 5,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": 180,
+   "hasSibling": true
+  },
+  "feedingStartOffsetSec": -3600,
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 5,
+  "override": [
+   "CabinTemp",
+   "RouteState",
+   "RearDoor"
+  ],
+  "otherGuardians": 1
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "RouteState",
+    "hasDestination": true,
+    "remainingSec": 400,
+    "rests": []
+   }
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 6,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expect": {
+    "command": "SetWindowLock",
+    "by": 3
+   }
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=30&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 370,
+   "vc": "PUT /vehicle/controls?speed=0&accelerator=0&brake=100&steering=0"
+  },
+  {
+   "t": 372,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 372,
+   "expect": {
+    "command": "Speak",
+    "sid": "S12",
+    "by": 10
+   }
+  },
+  {
+   "t": 390,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 390,
+   "expect": {
+    "command": "SetWindowLock",
+    "by": 3
+   }
+  },
+  {
+   "t": 390,
+   "expect": {
+    "command": "CloseSession",
+    "by": 3
+   }
+  },
+  {
+   "t": 390,
+   "expect": {
+    "command": "SendToPhone",
+    "type": "feeding_state",
+    "by": 3
+   }
+  },
+  {
+   "t": 390,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  }
+ ]
+}

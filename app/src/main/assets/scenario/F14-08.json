@@ -1,0 +1,98 @@
+{
+ "format": 1,
+ "id": "F14-08",
+ "title": "주행 중 P만(뒷문 안 엶) → 세션 유지, 뒷문 열면 닫힘",
+ "repeat": 1,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 108,
+  "override": [
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expect": {
+    "state": "LISTENING",
+    "by": 3
+   }
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=40&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 30,
+   "vc": "PUT /vehicle/controls?speed=0&accelerator=0&brake=100&steering=0"
+  },
+  {
+   "t": 32,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 35,
+   "expect": {
+    "state": "LISTENING",
+    "by": 3
+   }
+  },
+  {
+   "t": 32,
+   "expectNone": {
+    "command": "CloseSession",
+    "for": 20
+   }
+  },
+  {
+   "t": 55,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 55,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  }
+ ]
+}

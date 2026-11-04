@@ -1,0 +1,52 @@
+{
+ "format": 1,
+ "id": "F14-05",
+ "title": "뒷문·누르기 없이 D → 열리지 않음",
+ "repeat": 1,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 105,
+  "override": [
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expectNone": {
+    "command": "SaveSession",
+    "for": 30
+   }
+  },
+  {
+   "t": 20,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=40&accelerator=0&brake=0&steering=0"
+  }
+ ]
+}

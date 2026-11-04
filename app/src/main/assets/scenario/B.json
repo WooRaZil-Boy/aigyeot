@@ -1,0 +1,139 @@
+{
+ "format": 1,
+ "id": "B",
+ "title": "장보기 40분: 실내 27℃, 쾌적 조정 뒤 그침",
+ "repeat": 5,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-07",
+   "carseat": "LEFT",
+   "feedingIntervalMin": 180,
+   "hasSibling": false
+  },
+  "feedingStartOffsetSec": -3600,
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [
+   {
+    "method": "WHITE_NOISE",
+    "result": "SUCCESS",
+    "daysAgo": 1
+   }
+  ],
+  "seed": 2,
+  "override": [
+   "CabinTemp",
+   "RouteState",
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "CabinTemp",
+    "celsius": 27
+   }
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "RouteState",
+    "hasDestination": true,
+    "remainingSec": 2400,
+    "rests": []
+   }
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "LEFT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "LEFT",
+    "open": false
+   }
+  },
+  {
+   "t": 6,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=40&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 300,
+   "audio": {
+    "file": "cry/cont_75s.pcm",
+    "fromSec": 0,
+    "durSec": 75,
+    "gainDb": 0,
+    "cry": true
+   }
+  },
+  {
+   "t": 300,
+   "expect": {
+    "state": "ATTEMPT",
+    "attempt": 1,
+    "by": 4
+   }
+  },
+  {
+   "t": 356,
+   "expect": {
+    "state": "ATTEMPT",
+    "attempt": 2,
+    "by": 14
+   }
+  },
+  {
+   "t": 356,
+   "expect": {
+    "command": "LowerHvac",
+    "by": 14
+   }
+  },
+  {
+   "t": 356,
+   "expect": {
+    "command": "StartPlayback",
+    "method": "LULLABY",
+    "by": 14
+   }
+  },
+  {
+   "t": 356,
+   "expect": {
+    "command": "Speak",
+    "sid": "S04",
+    "by": 20
+   }
+  },
+  {
+   "t": 450,
+   "expect": {
+    "state": "LISTENING",
+    "by": 20
+   }
+  }
+ ]
+}

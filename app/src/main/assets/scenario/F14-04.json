@@ -1,0 +1,95 @@
+{
+ "format": 1,
+ "id": "F14-04",
+ "title": "뒷문 순환 + '아기 탔어요' → 한 번만 열림",
+ "repeat": 1,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 104,
+  "override": [
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 6,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expect": {
+    "state": "LISTENING",
+    "by": 3
+   }
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=40&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 40,
+   "vc": "PUT /vehicle/controls?speed=0&accelerator=0&brake=100&steering=0"
+  },
+  {
+   "t": 42,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 45,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 45,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  },
+  {
+   "t": 11,
+   "expectNone": {
+    "command": "SaveSession",
+    "for": 25
+   }
+  }
+ ]
+}

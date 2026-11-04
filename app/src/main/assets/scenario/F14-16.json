@@ -1,0 +1,103 @@
+{
+ "format": 1,
+ "id": "F14-16",
+ "title": "P에서 뒷문 닫힘 + 마이크 꺼짐 → S16 안내, 누르고 D → 열림",
+ "repeat": 1,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 116,
+  "override": [
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 5,
+   "expect": {
+    "command": "Speak",
+    "sid": "S16",
+    "by": 3
+   }
+  },
+  {
+   "t": 5,
+   "expect": {
+    "command": "ShowNotice",
+    "by": 3
+   }
+  },
+  {
+   "t": 15,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 20,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 20,
+   "expect": {
+    "state": "LISTENING",
+    "by": 3
+   }
+  },
+  {
+   "t": 22,
+   "vc": "PUT /vehicle/controls?speed=40&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 50,
+   "vc": "PUT /vehicle/controls?speed=0&accelerator=0&brake=100&steering=0"
+  },
+  {
+   "t": 52,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 55,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 55,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  }
+ ]
+}

@@ -1,0 +1,189 @@
+{
+ "format": 1,
+ "id": "C",
+ "title": "명절: 수유 시간대 울음, 수유실 휴게소 경유",
+ "repeat": 5,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-08",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": 180,
+   "hasSibling": false
+  },
+  "feedingStartOffsetSec": -10200,
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [
+   {
+    "method": "LULLABY",
+    "result": "SUCCESS",
+    "daysAgo": 2
+   },
+   {
+    "method": "LULLABY",
+    "result": "SUCCESS",
+    "daysAgo": 3
+   },
+   {
+    "method": "WHITE_NOISE",
+    "result": "FAIL",
+    "daysAgo": 2
+   }
+  ],
+  "seed": 3,
+  "override": [
+   "CabinTemp",
+   "RouteState",
+   "RearDoor"
+  ],
+  "otherGuardians": 1
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "CabinTemp",
+    "celsius": 23
+   }
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "RouteState",
+    "hasDestination": true,
+    "remainingSec": 9000,
+    "rests": [
+     {
+      "id": "r1",
+      "name": "○○휴게소",
+      "kind": "REST_AREA",
+      "distanceKm": 7,
+      "hasNursingRoom": true
+     },
+     {
+      "id": "r2",
+      "name": "△△졸음쉼터",
+      "kind": "DROWSY_SHELTER",
+      "distanceKm": 3,
+      "hasNursingRoom": false
+     }
+    ]
+   }
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 6,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=90&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 60,
+   "audio": {
+    "file": "cry/stop_50s.pcm",
+    "fromSec": 0,
+    "durSec": 50,
+    "gainDb": 0,
+    "cry": true
+   }
+  },
+  {
+   "t": 60,
+   "expect": {
+    "command": "StartPlayback",
+    "method": "LULLABY",
+    "by": 4
+   }
+  },
+  {
+   "t": 60,
+   "expect": {
+    "command": "Speak",
+    "sid": "S02",
+    "by": 6
+   }
+  },
+  {
+   "t": 60,
+   "expect": {
+    "command": "Speak",
+    "sid": "S06",
+    "by": 20
+   }
+  },
+  {
+   "t": 60,
+   "expect": {
+    "command": "Ask",
+    "sid": "S07",
+    "by": 35
+   }
+  },
+  {
+   "t": 60,
+   "say": {
+    "intent": "YES",
+    "onAsk": "S07",
+    "by": 45
+   }
+  },
+  {
+   "t": 60,
+   "expect": {
+    "command": "AddWaypoint",
+    "by": 50
+   }
+  },
+  {
+   "t": 60,
+   "expect": {
+    "command": "Speak",
+    "sid": "S09",
+    "by": 65
+   }
+  },
+  {
+   "t": 60,
+   "expectNone": {
+    "command": "StopPlayback",
+    "for": 50
+   }
+  },
+  {
+   "t": 60,
+   "expectNone": {
+    "command": "SendToPhone",
+    "type": "handoff_alert",
+    "for": 120
+   }
+  }
+ ],
+ "note": "G31 출발 제안(S07_DEPART)을 만들면 세션이 열릴 때 그 Ask에 답하는 say를 t=10 근처에 더한다"
+}

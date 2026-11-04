@@ -1,0 +1,168 @@
+{
+ "format": 1,
+ "id": "D2",
+ "title": "도심: 인계인데 목적지까지 6분",
+ "repeat": 5,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-05",
+   "carseat": "CENTER",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 4,
+  "override": [
+   "CabinTemp",
+   "RouteState",
+   "RearDoor"
+  ],
+  "otherGuardians": 1
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "CabinTemp",
+    "celsius": 22
+   }
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "RouteState",
+    "hasDestination": true,
+    "remainingSec": 360,
+    "rests": []
+   }
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "LEFT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "LEFT",
+    "open": false
+   }
+  },
+  {
+   "t": 6,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=80&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 60,
+   "audio": {
+    "file": "cry/cont_long.pcm",
+    "fromSec": 0,
+    "durSec": 240,
+    "gainDb": 0,
+    "cry": true
+   }
+  },
+  {
+   "t": 60,
+   "expect": {
+    "state": "ATTEMPT",
+    "attempt": 1,
+    "by": 4
+   }
+  },
+  {
+   "t": 116,
+   "expect": {
+    "state": "ATTEMPT",
+    "attempt": 2,
+    "by": 14
+   }
+  },
+  {
+   "t": 116,
+   "expect": {
+    "command": "Speak",
+    "sid": "S03",
+    "by": 20
+   }
+  },
+  {
+   "t": 172,
+   "expect": {
+    "state": "HANDOFF",
+    "by": 14
+   }
+  },
+  {
+   "t": 172,
+   "expect": {
+    "command": "Speak",
+    "sid": "S15",
+    "by": 20
+   }
+  },
+  {
+   "t": 172,
+   "expectNone": {
+    "command": "Ask",
+    "for": 60
+   }
+  },
+  {
+   "t": 172,
+   "expectNone": {
+    "command": "AddWaypoint",
+    "for": 60
+   }
+  },
+  {
+   "t": 172,
+   "expect": {
+    "command": "SendToPhone",
+    "type": "handoff_alert",
+    "by": 14
+   }
+  },
+  {
+   "t": 182,
+   "expectNone": {
+    "command": "AddWaypoint",
+    "for": 30
+   }
+  },
+  {
+   "t": 186,
+   "expectNone": {
+    "command": "StartPlayback",
+    "for": 300
+   }
+  },
+  {
+   "t": 600,
+   "expect": {
+    "state": "LISTENING",
+    "by": 30
+   }
+  }
+ ]
+}

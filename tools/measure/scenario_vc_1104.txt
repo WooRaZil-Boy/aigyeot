@@ -1,0 +1,15 @@
+# 앱 안에서 Virtual Console(127.0.0.1:8088)에 닿는가 (계약 7.1 미측정 항목) — 2026-11-04
+환경: AVD PleosProbe(android-34 pleos_car_emulator arm64-v8a), 운전자 사용자 10, kr.aigyeot.app debug(평문은 debug network_security_config의 127.0.0.1·localhost만)
+조건: 맥 쪽 `adb forward tcp:8088 tcp:8088`을 지운 상태(앱 → 에뮬레이터 안 127.0.0.1:8088만 쓰는 길)
+
+1) 앱 안 GET /vehicle/state (세션 신호 전) → 200, gear.actual.value = "Park" 읽힘
+   05:14:45.656 BENCH: gear Park
+2) 앱 안 POST /browser/session?client=aigyeot → 200 {"active":true,"clients":1,"timeout_ms":3000}
+   앱 안 GET /vehicle/state → 200 {"gear":{"bridge_ready":true,...}}
+   05:14:46.525 SCENARIO: VC session 200 {"active":true,"clients":1,"timeout_ms":3000} · state 200 {"gear":{"bridge_ready":true,...
+3) 장면 실행 중 앱 안 PUT /vehicle/gear?gear=Drive·Park, PUT /vehicle/controls?... → 모두 200,
+   0.2~0.3초 뒤 GET /vehicle/state의 gear.actual.value가 Drive·Park로 바뀜(scenario_F14-01_1104.txt, scenario_C_1104.txt)
+
+결론: debug 빌드에서는 앱 안에서 Virtual Console에 닿고, 세션 신호·기어·주행 입력이 실제 차 상태를 바꾼다. 맥 보조 스크립트(tools/demo)는 필요 없다.
+참고: 부팅 직후에는 세션 신호가 한 번 와야 bridge_ready가 true가 된다(신호 전 gear.actual = null).
+미판정: release 빌드(평문 금지)에서는 재지 않았다. release 네트워크 설정이 없으면 UnknownServiceException(CLEARTEXT not permitted)일 것이다(코드 읽기만).

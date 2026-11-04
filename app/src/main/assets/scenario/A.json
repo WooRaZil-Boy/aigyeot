@@ -1,0 +1,176 @@
+{
+ "format": 1,
+ "id": "A",
+ "title": "등원 20분: 출발 5분 뒤 울음, 1차에 그침",
+ "repeat": 5,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-02",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": null,
+   "hasSibling": false
+  },
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [
+   {
+    "method": "WHITE_NOISE",
+    "result": "SUCCESS",
+    "daysAgo": 1
+   }
+  ],
+  "seed": 1,
+  "override": [
+   "CabinTemp",
+   "RouteState",
+   "RearDoor"
+  ],
+  "otherGuardians": 0
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "CabinTemp",
+    "celsius": 22
+   }
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "RouteState",
+    "hasDestination": true,
+    "remainingSec": 1200,
+    "rests": []
+   }
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   },
+   "note": "G42: 형식을 알면 vc로"
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 6,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expect": {
+    "state": "LISTENING",
+    "by": 3
+   }
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=50&accelerator=0&brake=0&steering=0"
+  },
+  {
+   "t": 310,
+   "audio": {
+    "file": "cry/stop_40s.pcm",
+    "fromSec": 0,
+    "durSec": 40,
+    "gainDb": 0,
+    "cry": true
+   }
+  },
+  {
+   "t": 310,
+   "expect": {
+    "state": "ATTEMPT",
+    "attempt": 1,
+    "by": 4
+   }
+  },
+  {
+   "t": 310,
+   "expect": {
+    "command": "StartPlayback",
+    "method": "LULLABY",
+    "by": 4
+   }
+  },
+  {
+   "t": 310,
+   "expect": {
+    "command": "Speak",
+    "sid": "S02",
+    "by": 6
+   }
+  },
+  {
+   "t": 366,
+   "expect": {
+    "state": "GAP",
+    "by": 6
+   }
+  },
+  {
+   "t": 374,
+   "expect": {
+    "state": "CONFIRM",
+    "by": 6
+   }
+  },
+  {
+   "t": 404,
+   "expect": {
+    "state": "LISTENING",
+    "by": 6
+   }
+  },
+  {
+   "t": 1210,
+   "vc": "PUT /vehicle/controls?speed=0&accelerator=0&brake=100&steering=0"
+  },
+  {
+   "t": 1212,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 1212,
+   "expect": {
+    "command": "Speak",
+    "sid": "S12",
+    "by": 10
+   }
+  },
+  {
+   "t": 1230,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 1230,
+   "expect": {
+    "state": "IDLE",
+    "by": 3
+   }
+  }
+ ]
+}
