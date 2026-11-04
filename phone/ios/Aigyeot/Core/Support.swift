@@ -64,6 +64,14 @@ enum PairCode: Equatable, Identifiable {
         }
     }
 
+    /// 확인 화면 제목. 초대 코드에 "차 화면에…"라고 묻지 않는다(G17).
+    var confirmTitle: String {
+        switch self {
+        case .pair: return "차 화면에 이 코드가 보이나요?"
+        case .invite: return "받은 초대 코드가 이것과 같나요?"
+        }
+    }
+
     private static let crockford = Set("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
 
     /// 공백·하이픈을 지우고 대문자로 바꾼 뒤 Crockford 규칙(O→0, I·L→1)을 적용한다. 형식이 아니면 nil.

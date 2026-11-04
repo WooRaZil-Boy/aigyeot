@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,7 +32,14 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import kr.aigyeot.phone.AppModel
 import kotlinx.coroutines.delay
+import kr.aigyeot.phone.core.CodeSource
+import kr.aigyeot.phone.core.TypedAction
+import kr.aigyeot.phone.core.canOpenConfirm
 import kr.aigyeot.phone.core.codeFromLink
+import kr.aigyeot.phone.core.isPairLocked
+import kr.aigyeot.phone.core.typedSubmitAction
+import kr.aigyeot.phone.core.confirmTitle
+import kr.aigyeot.phone.core.needsConfirm
 import kr.aigyeot.phone.core.isInviteCode
 import kr.aigyeot.phone.core.normalizeCode
 import kr.aigyeot.shared.Role
@@ -46,26 +54,67 @@ fun IntroScreen(onNext: () -> Unit) = Page("아이곁") {
     Button(onClick = onNext, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("연결하기") }
 }
 
-/** 연결: QR 찍기 또는 코드 넣기(7.1). 6자리를 다 넣으면 바로 확인 화면으로 간다. */
+/** 429 잠금이 남았는가. 시각은 모델이 들고 있고, 끝나는 때에 다시 그린다(화면을 옮겨도 풀리지 않는다, 9장). */
 @Composable
-fun ConnectScreen(model: AppModel, onCode: (String) -> Unit) {
+private fun rememberPairLocked(model: AppModel): Boolean {
+    val until by model.pairLockedUntil.collectAsState()
+    var locked by remember(until) { mutableStateOf(isPairLocked(until, System.currentTimeMillis())) }
+    LaunchedEffect(until) {
+        val u = until ?: return@LaunchedEffect
+        delay((u - System.currentTimeMillis()).coerceAtLeast(0))
+        locked = false
+    }
+    return locked
+}
+
+/**
+ * 연결: QR 찍기 또는 코드 넣기(7.1). QR로 읽은 코드만 확인 화면으로 간다.
+ * 직접 친 코드는 코드 대조 없이 바로 연결하고(G17, L57), 오류는 이 화면 입력칸 아래에 보인다.
+ * 다만 이미 연결된 폰이면 확인 화면의 교체 확인(G16)을 먼저 거친다.
+ */
+@Composable
+fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) -> Unit) {
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    // 이 화면에서 직접 시작한 연결만 본다. 확인 화면에서 돌아온 옛 결과는 보이지 않는다.
+    var typed by rememberSaveable { mutableStateOf<String?>(null) }
+    val run by model.pairRun.collectAsState()
+    val mine = run?.takeIf { it.code == typed }
+    // 요청 중 여부는 이 화면의 입력만이 아니라 모델 전체의 연결 작업으로 본다.
+    val busy = run?.busy == true
+    val locked = rememberPairLocked(model)
+    BackHandler(enabled = busy) {}
+    LaunchedEffect(mine) {
+        val done = mine ?: return@LaunchedEffect
+        if (!done.busy && done.error == null && done.role != null) {
+            model.clearPairRun()
+            onPaired(done.role)
+        }
+    }
     fun submit(raw: String) {
         val code = normalizeCode(raw)
-        if (code == null) error = "6자리 숫자 또는 초대 코드를 넣어 주세요" else onCode(code)
+        when (typedSubmitAction(code, model.creds.value != null, busy, model.pairLockedUntil.value, System.currentTimeMillis())) {
+            TypedAction.BAD_FORMAT -> error = "6자리 숫자 또는 초대 코드를 넣어 주세요"
+            TypedAction.IGNORE -> {}
+            TypedAction.CONFIRM_REPLACE -> onCode(code!!)
+            TypedAction.PAIR -> { typed = code; model.startPair(code!!) }
+        }
     }
     Page("차와 연결") {
         Text("차 화면의 QR을 비춰 주세요", style = MaterialTheme.typography.titleMedium)
         Button(
+            enabled = !busy,
             onClick = {
                 // 카메라 권한과 스캔 화면은 Google code scanner가 맡는다(7.3). 처음에는 모듈을 내려받을 수 있다.
                 val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
                 GmsBarcodeScanning.getClient(context, options).startScan()
                     .addOnSuccessListener { b ->
                         val code = b.rawValue?.let { codeFromLink(it) ?: normalizeCode(it) }
-                        if (code == null) error = "올바른 연결 링크가 아니에요" else onCode(code)
+                        // 스캔 중에 직접 친 코드의 요청이 시작됐을 수 있다. 끝난 결과를 받을 화면이 사라지지 않게 간다.
+                        if (code == null) error = "올바른 연결 링크가 아니에요"
+                        else if (!canOpenConfirm(model.pairRun.value?.busy == true)) error = "연결하고 있어요. 끝난 뒤에 다시 찍어 주세요."
+                        else if (needsConfirm(CodeSource.QR)) onCode(code)
                     }
                     .addOnFailureListener { error = "QR을 찍지 못했어요. 코드로 입력해 주세요." }
             },
@@ -77,22 +126,27 @@ fun ConnectScreen(model: AppModel, onCode: (String) -> Unit) {
             onValueChange = {
                 text = it.take(12)
                 error = null
+                model.clearPairRun()
                 if (Regex("\\d{6}").matches(text)) submit(text)
             },
             label = { Text("6자리 숫자 또는 초대 코드") },
-            isError = error != null,
-            supportingText = { error?.let { Text(it) } },
+            isError = (error ?: mine?.error) != null,
+            supportingText = { (error ?: mine?.error)?.let { Text(it) } },
+            enabled = !busy,
             singleLine = true,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
             modifier = Modifier.fillMaxWidth(),
         )
-        Button(onClick = { submit(text) }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("확인") }
+        if (busy) Row { CircularProgressIndicator(); Text("  확인하고 있어요") }
+        if (locked) Muted("잠시 뒤에 다시 해 주세요.")
+        Button(onClick = { submit(text) }, enabled = text.isNotBlank() && !busy && !locked, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("확인") }
         if (model.creds.value != null) Muted("이미 연결된 차가 있어요. 새로 연결하면 지금 연결을 끊어요.")
     }
 }
 
 /**
- * 확인(G17): QR·링크·코드 셋 다 "차 화면에 이 코드가 보이나요?"를 거친다.
+ * 확인(G17): QR·링크로 들어온 코드만 거친다. 연결 코드는 "차 화면에 이 코드가 보이나요?",
+ * 초대 코드는 "받은 초대 코드가 이것과 같나요?"(직접 친 코드는 ConnectScreen에서 바로 연결).
  * 이미 연결된 폰이면 지금 차를 끊을지 먼저 묻는다(G16).
  */
 @Composable
@@ -113,16 +167,11 @@ fun ConfirmScreen(model: AppModel, code: String, onDone: (Role) -> Unit, onRetry
             onDone(done.role)
         }
     }
-    // 429 뒤에는 Retry-After(없으면 10초)까지 연결 버튼을 잠근다(9장).
-    var locked by remember(mine?.lockUntil) { mutableStateOf(mine?.lockUntil?.let { it > System.currentTimeMillis() } == true) }
-    LaunchedEffect(mine?.lockUntil) {
-        val until = mine?.lockUntil ?: return@LaunchedEffect
-        delay((until - System.currentTimeMillis()).coerceAtLeast(0))
-        locked = false
-    }
+    // 429 뒤에는 Retry-After(없으면 10초)까지 연결 버튼을 잠근다(9장). 직접 입력 길과 같은 모델 값이다.
+    val locked = rememberPairLocked(model)
     val shown = if (isInviteCode(code)) "${code.take(5)}-${code.drop(5)}" else code
     Page("확인") {
-        Text("차 화면에 이 코드가 보이나요?", style = MaterialTheme.typography.titleMedium)
+        Text(confirmTitle(code), style = MaterialTheme.typography.titleMedium)
         Text(shown, style = MaterialTheme.typography.displaySmall)
         if (isInviteCode(code)) Muted("다른 보호자 초대 코드예요. 리포트와 인계 알림을 받아요.")
         if (replacing) Text("지금 연결된 차를 끊고 새 차에 연결할까요?")

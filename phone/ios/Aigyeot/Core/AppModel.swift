@@ -50,11 +50,13 @@ final class AppModel {
     private(set) var clockSkew: TimeInterval?
     /// 401·4001로 끊긴 뒤 연결 화면에 보이는 안내.
     private(set) var gone = false
-    /// 확인 화면을 기다리는 코드(QR·링크·입력 공통, G17).
+    /// 확인 화면을 기다리는 코드(QR·링크만, G17. 직접 친 코드는 `connect(typed:)`로 바로 연결한다).
     var pendingCode: PairCode?
     /// 이미 연결된 폰에 새 링크가 왔을 때(G16).
     var replaceCandidate: PairCode?
     var linkError: String?
+    /// 연결 429 잠금이 끝나는 시각. 직접 입력·확인 화면이 같이 본다. 화면을 옮기거나 코드를 고쳐도 풀리지 않는다(계약 9장).
+    private(set) var pairLockedUntil: Date?
     /// 앱 안 배너로 띄울 인계 알림 메시지 id(`show(msg_id)`, 5.6).
     var bannerAlertId: String?
     /// 알림을 눌러 열었을 때 상세로 갈 인계 알림 id.
@@ -210,7 +212,7 @@ final class AppModel {
 
     // MARK: 연결
 
-    /// 링크·QR·입력이 모두 이 길로 온다. 확인 화면을 거치고 바로 연결하지 않는다(G17).
+    /// 링크·QR이 이 길로 온다. 확인 화면을 거치고 바로 연결하지 않는다(G17).
     func receive(link url: URL) {
         guard let code = PairCode.parse(link: url) else {
             linkError = "올바른 연결 링크가 아니에요"
@@ -219,9 +221,24 @@ final class AppModel {
         propose(code)
     }
 
+    /// 429 잠금이 남았는가. 시각은 `now` 시계로 본다.
+    var isPairLocked: Bool { pairLockedUntil.map { $0 > now() } ?? false }
+
+    /// 429 뒤 잠금 길이(초). Retry-After가 없거나 1초 미만이면 10초·1초(안드로이드 pairLockUntil과 같다).
+    static func pairLockSeconds(_ retryAfter: TimeInterval?) -> TimeInterval { max(retryAfter ?? 10, 1) }
+
     func propose(_ code: PairCode) {
+        // 직접 친 코드의 요청이 진행 중이면 확인 화면으로 옮기지 않는다(끝난 결과를 받을 화면이 닫힌다).
+        guard !pairing else { linkError = "연결하고 있어요. 끝난 뒤에 다시 해 주세요."; return }
         linkError = nil
         if isPaired { replaceCandidate = code } else { pendingCode = code }
+    }
+
+    /// 코드 넣기 화면에서 직접 친 코드는 확인 없이 바로 연결한다(G17, L57). 오류는 호출한 화면이 보인다.
+    /// 코드 넣기 화면은 연결되지 않았을 때만 보이므로 바꾸기 확인(G16)은 거치지 않는다.
+    func connect(typed code: PairCode) async -> ConnectFailure? {
+        linkError = nil
+        return await pair(code)
     }
 
     /// "지금 연결된 차를 끊고 새 차에 연결할까요?"에 예(G16).
@@ -236,6 +253,7 @@ final class AppModel {
 
     func pair(_ code: PairCode) async -> ConnectFailure? {
         guard !pairing else { return .busy }
+        if isPairLocked, let until = pairLockedUntil { return .rateLimited(until.timeIntervalSince(now())) }
         pairing = true
         defer { pairing = false }
         do {
@@ -261,12 +279,25 @@ final class AppModel {
         } catch let e as RelayError {
             switch (e.status, e.code) {
             case (404, _): return .codeInvalid
-            case (429, _): return .rateLimited(e.retryAfter)
+            case (429, _):
+                lockPair(e.retryAfter)
+                return .rateLimited(e.retryAfter)
             case (400, "bad_code_format"): return .badCode
             default: return e.isOffline ? .offline : .other
             }
         } catch {
             return .other
+        }
+    }
+
+    private func lockPair(_ retryAfter: TimeInterval?) {
+        let secs = Self.pairLockSeconds(retryAfter)
+        let until = now().addingTimeInterval(secs)
+        pairLockedUntil = until
+        // 끝나는 때 화면이 다시 그려지게 값을 비운다. 그 사이 새 429가 와서 시각이 바뀌었으면 건드리지 않는다.
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000))
+            if self?.pairLockedUntil == until { self?.pairLockedUntil = nil }
         }
     }
 

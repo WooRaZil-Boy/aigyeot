@@ -67,6 +67,34 @@ fun codeFromLink(link: String): String? {
 /** 6자리면 연결 코드(owner), 아니면 초대 코드(guardian). */
 fun isInviteCode(code: String) = code.length == 10
 
+/** 코드가 들어온 길. QR·링크만 확인 화면을 거치고, 직접 친 코드는 바로 연결한다(G17, 명세서 17장 L57). */
+enum class CodeSource { LINK, QR, TYPED }
+
+fun needsConfirm(source: CodeSource) = source != CodeSource.TYPED
+
+/** 직접 친 코드를 냈을 때 화면이 할 일. */
+enum class TypedAction { BAD_FORMAT, IGNORE, CONFIRM_REPLACE, PAIR }
+
+/**
+ * 직접 친 코드 제출(자동 제출 포함). 요청 중이거나 429 잠금 중이면 요청하지 않는다(9장).
+ * 이미 연결된 폰이면 요청 전에 교체 확인 화면(G16)으로 보낸다. 코드 대조 생략(G17)과 교체 동의는 별개다.
+ */
+fun typedSubmitAction(code: String?, connected: Boolean, busy: Boolean, lockUntil: Long?, now: Long): TypedAction = when {
+    code == null -> TypedAction.BAD_FORMAT
+    busy || isPairLocked(lockUntil, now) -> TypedAction.IGNORE
+    connected -> TypedAction.CONFIRM_REPLACE
+    else -> TypedAction.PAIR
+}
+
+/** 429 잠금이 아직 남았는가. 시각은 화면이 아니라 모델이 들고 있다. */
+fun isPairLocked(lockUntil: Long?, now: Long) = lockUntil != null && lockUntil > now
+
+/** 직접 친 코드의 요청이 진행 중이면 QR·링크로 확인 화면에 가지 않는다(끝난 결과를 받을 화면이 사라진다). */
+fun canOpenConfirm(pairBusy: Boolean) = !pairBusy
+
+/** 확인 화면 제목. 초대 코드에 "차 화면에…"라고 묻지 않는다(G17). */
+fun confirmTitle(code: String) = if (isInviteCode(code)) "받은 초대 코드가 이것과 같나요?" else "차 화면에 이 코드가 보이나요?"
+
 /** 보낼 함 다시 보내기·재접속 간격(1·2·4…60초, 2장). */
 fun backoffMs(attempts: Int): Long = minOf(60_000L, 1000L shl minOf(attempts, 6))
 

@@ -157,6 +157,7 @@ final class AppModelTests: XCTestCase {
             let got = await model.pair(.pair("042917"))
             XCTAssertEqual(got, want)
             XCTAssertNil(creds.value)
+            clock = clock.addingTimeInterval(11)   // 429의 잠금(10초)을 지나 다음 경우로
         }
     }
 
@@ -168,6 +169,37 @@ final class AppModelTests: XCTestCase {
         model.receive(link: URL(string: "aigyeot://pair?code=zz")!)
         XCTAssertNil(model.pendingCode)
         XCTAssertNotNil(model.linkError)
+    }
+
+    func test_직접_친_코드는_확인_없이_연결_요청() async {
+        make(paired: false)
+        relay.pairResult = .success(PairResponse(carId: "c_9", deviceId: "d_9", deviceToken: "at1.c_9.d_9.s", role: .owner))
+        let f = await model.connect(typed: .pair("042917"))
+        XCTAssertNil(f)
+        XCTAssertNil(model.pendingCode)       // 확인 화면을 거치지 않았다
+        XCTAssertTrue(model.isPaired)
+    }
+
+    func test_직접_친_코드의_오류는_호출한_화면에_돌려준다() async {
+        make(paired: false)
+        relay.pairResult = .failure(.http(status: 404, code: "code_invalid", retryAfter: nil))
+        let f = await model.connect(typed: .pair("042917"))
+        XCTAssertEqual(f, .codeInvalid)
+        XCTAssertNil(model.pendingCode)
+        XCTAssertFalse(model.isPaired)
+    }
+
+    func test_링크로_온_연결_코드는_확인_화면_제목이_차_화면() {
+        make(paired: false)
+        model.receive(link: URL(string: "aigyeot://pair?code=042917")!)
+        XCTAssertEqual(model.pendingCode?.confirmTitle, "차 화면에 이 코드가 보이나요?")
+    }
+
+    func test_링크로_온_초대_코드는_확인_화면_제목이_받은_초대_코드() {
+        make(paired: false)
+        model.receive(link: URL(string: "aigyeot://pair?code=7k3qm-2xw9d")!)
+        XCTAssertEqual(model.pendingCode, .invite("7K3QM2XW9D"))
+        XCTAssertEqual(model.pendingCode?.confirmTitle, "받은 초대 코드가 이것과 같나요?")
     }
 
     func test_이미_연결된_폰에_새_링크가_오면_바꿀지_묻는다() {
@@ -697,6 +729,49 @@ final class AppModelTests: XCTestCase {
         let f = await model.pair(.pair("042917"))
         XCTAssertEqual(f, .rateLimited(30))
         XCTAssertTrue(f!.message.contains("30초"))
+    }
+
+    func test_연결_429_뒤_잠금_중에는_직접_친_코드도_요청하지_않는다() async {
+        make(paired: false)
+        relay.pairResult = .failure(.http(status: 429, code: "rate_limited", retryAfter: 30))
+        _ = await model.connect(typed: .pair("042917"))
+        XCTAssertTrue(model.isPairLocked)
+        XCTAssertEqual(relay.pairCalls, 1)
+        let f = await model.connect(typed: .pair("111111"))     // 코드를 고쳐도(자동 제출) 잠금은 풀리지 않는다
+        XCTAssertEqual(f, .rateLimited(30))
+        XCTAssertEqual(relay.pairCalls, 1)                      // 두 번째는 중계까지 가지 않았다
+        let g = await model.pair(.pair("042917"))               // 확인 화면 길도 같은 잠금을 쓴다
+        XCTAssertEqual(g, .rateLimited(30))
+        XCTAssertEqual(relay.pairCalls, 1)
+    }
+
+    func test_잠금은_RetryAfter가_지나면_풀린다() async {
+        make(paired: false)
+        relay.pairResult = .failure(.http(status: 429, code: "rate_limited", retryAfter: 30))
+        _ = await model.connect(typed: .pair("042917"))
+        clock = clock.addingTimeInterval(31)
+        XCTAssertFalse(model.isPairLocked)
+        relay.pairResult = .failure(.http(status: 404, code: "code_invalid", retryAfter: nil))
+        let f = await model.connect(typed: .pair("042917"))
+        XCTAssertEqual(f, .codeInvalid)
+        XCTAssertEqual(relay.pairCalls, 2)
+    }
+
+    func test_잠금_길이는_RetryAfter_없으면_10초_1초_미만은_1초() {
+        XCTAssertEqual(AppModel.pairLockSeconds(nil), 10)
+        XCTAssertEqual(AppModel.pairLockSeconds(0), 1)
+        XCTAssertEqual(AppModel.pairLockSeconds(30), 30)
+    }
+
+    func test_직접_친_코드의_요청_중에_QR_링크가_와도_확인_화면으로_옮기지_않는다() async {
+        make(paired: false)
+        relay.pairResult = .success(PairResponse(carId: "c_9", deviceId: "d_9", deviceToken: "at1.c_9.d_9.s", role: .owner))
+        relay.pairHook = { [unowned self] in self.model.propose(.pair("111111")) }   // 응답이 늦는 사이 QR을 읽었다
+        let f = await model.connect(typed: .pair("042917"))
+        XCTAssertNil(f)
+        XCTAssertNil(model.pendingCode)
+        XCTAssertNotNil(model.linkError)
+        XCTAssertTrue(model.isPaired)
     }
 
     // MARK: 2회차 검토 반영

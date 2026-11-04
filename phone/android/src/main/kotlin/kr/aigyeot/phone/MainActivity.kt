@@ -34,6 +34,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import kr.aigyeot.phone.core.canOpenConfirm
 import kr.aigyeot.phone.core.codeFromLink
 import kr.aigyeot.phone.core.isUlid
 import kr.aigyeot.phone.ui.AlertScreen
@@ -92,6 +93,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Root(model: AppModel) {
     val nav = rememberNavController()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val creds by model.creds.collectAsState()
     val ui by model.ui.collectAsState()
     val pending by model.pendingCode.collectAsState()
@@ -104,7 +106,9 @@ private fun Root(model: AppModel) {
     // 코드는 확인 화면 경로에 실렸으니 바로 비운다. 다시 그려도 확인 화면을 또 띄우지 않는다.
     LaunchedEffect(pending) {
         pending?.let {
-            nav.navigate("confirm/$it")
+            // 직접 친 코드의 요청이 진행 중이면 확인 화면으로 옮기지 않는다(끝난 결과를 받을 화면이 사라진다).
+            if (canOpenConfirm(model.pairRun.value?.busy == true)) nav.navigate("confirm/$it")
+            else android.widget.Toast.makeText(ctx, "연결하고 있어요. 끝난 뒤에 링크를 다시 열어 주세요", android.widget.Toast.LENGTH_SHORT).show()
             model.pendingCode.value = null
         }
     }
@@ -117,7 +121,7 @@ private fun Root(model: AppModel) {
     Box(Modifier.fillMaxSize().safeDrawingPadding()) {
         NavHost(nav, startDestination = start) {
             composable("intro") { IntroScreen { nav.navigate("connect") } }
-            composable("connect") { ConnectScreen(model) { code -> nav.navigate("confirm/$code") } }
+            composable("connect") { ConnectScreen(model, onCode = { code -> nav.navigate("confirm/$code") }, onPaired = { role -> nav.reset("done/${role.name}") }) }
             composable("confirm/{code}") { e ->
                 val code = e.arguments?.getString("code").orEmpty()
                 ConfirmScreen(

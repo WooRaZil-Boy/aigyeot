@@ -50,12 +50,13 @@ struct IntroView: View {
     }
 }
 
-/// 연결: QR 찍기 또는 코드 넣기(7.1).
+/// 연결: QR 찍기 또는 코드 넣기(7.1). QR·링크는 확인 화면으로, 직접 친 코드는 확인 없이 바로 연결한다(G17).
 struct ConnectView: View {
     @Environment(AppModel.self) private var model
     @State private var code = ""
     @State private var inputError: String?
     @State private var scanning = false
+    @State private var connecting = false
 
     var body: some View {
         NavigationStack {
@@ -70,7 +71,7 @@ struct ConnectView: View {
                     Button { scanning = true } label: {
                         Label("QR 찍기", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .buttonStyle(.borderedProminent).controlSize(.large).disabled(connecting)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("코드로 입력").font(.headline)
@@ -81,11 +82,12 @@ struct ConnectView: View {
                             .autocorrectionDisabled()
                             .onChange(of: code) { _, v in
                                 inputError = nil
-                                // 6자리를 다 넣으면 바로 확인 화면으로 간다.
-                                if v.filter(\.isNumber).count == 6, v.allSatisfy({ $0.isNumber || $0 == " " || $0 == "-" }) { submit() }
+                                // 6자리를 다 넣으면 바로 연결한다.
+                                if v.filter(\.isNumber).count == 6, v.allSatisfy({ $0.isNumber || $0 == " " || $0 == "-" }) { submit() }   // 잠금 중이면 submit이 막는다
                             }
                         if let e = inputError ?? model.linkError { Text(e).font(.footnote).foregroundStyle(.red) }
-                        Button("확인") { submit() }.buttonStyle(.bordered).disabled(code.isEmpty)
+                        if connecting { HStack { ProgressView(); Text("확인하고 있어요") } }
+                        Button("확인") { submit() }.buttonStyle(.bordered).disabled(code.isEmpty || connecting || model.isPairLocked)
                     }
                     Text("링크 aigyeot://pair?code=… 를 열어도 같은 화면으로 와요.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -99,8 +101,17 @@ struct ConnectView: View {
 
     private func submit() {
         guard let c = PairCode.normalize(code) else { inputError = ConnectFailure.badCode.message; return }
+        // 429 잠금 중에는 요청하지 않고 입력도 지우지 않는다. 시각은 모델이 들고 있다(9장).
+        guard !connecting else { return }
+        guard !model.isPairLocked else { inputError = ConnectFailure.rateLimited(nil).message; return }
         code = ""
-        model.propose(c)
+        connecting = true
+        Task {
+            let f = await model.connect(typed: c)
+            connecting = false
+            if let f { inputError = f.message }
+            else if model.role == .guardian { await NotificationAccess.request() }   // 받을 푸시가 있는 guardian만 묻는다(G13)
+        }
     }
 }
 
@@ -149,27 +160,26 @@ struct ScanView: View {
     }
 }
 
-/// 확인: 남이 보낸 링크로 남의 차에 붙지 않도록 차 화면의 코드와 맞는지 묻는다(G17).
+/// 확인(QR·링크만): 남이 보낸 링크로 남의 차에 붙지 않도록 코드가 맞는지 묻는다(G17).
+/// 연결 코드는 차 화면, 초대 코드는 받은 초대 코드와 견준다.
 struct ConfirmView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let code: PairCode
     @State private var busy = false
     @State private var failure: ConnectFailure?
-    /// 429의 Retry-After 동안 버튼을 잠근다(7.2).
-    @State private var locked = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Spacer()
-            Text("차 화면에 이 코드가 보이나요?").font(.title2.bold())
+            Text(code.confirmTitle).font(.title2.bold())
             Text(code.display).font(.system(size: 44, weight: .bold, design: .monospaced))
             if case .invite = code { Text("다른 보호자가 보낸 초대 코드예요. 리포트와 인계 알림을 받게 돼요.").font(.callout) }
             if let failure { Text(failure.message).foregroundStyle(.red) }
             Spacer()
             if busy { HStack { ProgressView(); Text("확인하고 있어요") } }
             Button { connect() } label: { Text("연결하기").frame(maxWidth: .infinity) }
-                .buttonStyle(.borderedProminent).controlSize(.large).disabled(busy || locked)
+                .buttonStyle(.borderedProminent).controlSize(.large).disabled(busy || model.isPairLocked)
             Button("아니에요") { dismiss() }.frame(maxWidth: .infinity).disabled(busy)
         }
         .padding(24)
@@ -182,14 +192,7 @@ struct ConfirmView: View {
         Task {
             let f = await model.pair(code)
             busy = false
-            if let f {
-                failure = f
-                if case .rateLimited(let wait) = f {
-                    locked = true
-                    try? await Task.sleep(nanoseconds: UInt64(max(wait ?? 10, 1) * 1_000_000_000))
-                    locked = false
-                }
-            }
+            if let f { failure = f }   // 429 잠금은 모델이 들고 있다
             else if model.role == .guardian { await NotificationAccess.request() }   // 받을 푸시가 있는 guardian만 묻는다(G13)
         }
     }

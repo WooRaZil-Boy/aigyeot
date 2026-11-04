@@ -32,6 +32,7 @@ import kr.aigyeot.phone.core.StoredAlert
 import kr.aigyeot.phone.core.addSong
 import kr.aigyeot.phone.core.afterSend
 import kr.aigyeot.phone.core.backoffMs
+import kr.aigyeot.phone.core.isPairLocked
 import kr.aigyeot.phone.core.pairLockUntil
 import kr.aigyeot.phone.core.clearedRecords
 import kr.aigyeot.phone.core.dropNotice
@@ -580,22 +581,25 @@ class AppModel(private val app: Application) {
     }
 
     /** 연결 작업 상태. 화면이 회전·재구성돼도 작업은 모델 수명에서 끝나고, 화면은 결과만 본다. */
-    data class PairRun(val code: String, val busy: Boolean, val error: String? = null, val role: Role? = null, val lockUntil: Long? = null)
+    data class PairRun(val code: String, val busy: Boolean, val error: String? = null, val role: Role? = null)
 
     val pairRun = MutableStateFlow<PairRun?>(null)
     private var pairJob: Job? = null
+    /** 429 잠금이 끝나는 시각(epoch ms). 화면·입력·확인 화면이 같이 본다. 화면을 옮기거나 코드를 고쳐도 풀리지 않는다. */
+    val pairLockedUntil = MutableStateFlow<Long?>(null)
     /** 마지막 pair가 429였으면 Retry-After 초(헤더 없으면 0), 아니면 -1. 0은 [pairLockUntil]이 10초로 본다. */
     private val pairRetryAfterS = java.util.concurrent.atomic.AtomicLong(-1L)
 
     /** 확인 화면의 '연결할게요'. 이미 연결된 차가 있으면 먼저 끊고(G16), 둘 다 성공해야 role이 실린다. */
     fun startPair(code: String) {
-        if (pairJob?.isActive == true) return
+        if (pairJob?.isActive == true || isPairLocked(pairLockedUntil.value, now())) return
         pairRun.value = PairRun(code, busy = true)
         pairJob = scope.launch {
             var err = if (creds.value != null) disconnectNow() else null
             if (err == null) err = pair(code)
             val lock = pairRetryAfterS.getAndSet(-1L).takeIf { it >= 0 }?.let { pairLockUntil(now(), it) }
-            pairRun.value = PairRun(code, busy = false, error = err, role = if (err == null) creds.value?.role else null, lockUntil = lock)
+            if (lock != null) pairLockedUntil.value = lock
+            pairRun.value = PairRun(code, busy = false, error = err, role = if (err == null) creds.value?.role else null)
         }
     }
 
