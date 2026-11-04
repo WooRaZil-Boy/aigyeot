@@ -60,8 +60,8 @@
     "remainingSec": 9000,
     "rests": [
      {
-      "id": "r1",
-      "name": "○○휴게소",
+      "id": "tbt:rest:안성휴게소(부산방향)",
+      "name": "안성휴게소(부산방향)",
       "kind": "REST_AREA",
       "distanceKm": 7,
       "hasNursingRoom": true

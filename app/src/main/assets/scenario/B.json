@@ -33,6 +33,10 @@
  "steps": [
   {
    "t": 0,
+   "vc": "PUT /vehicle/hvac?driver_temp=22.0"
+  },
+  {
+   "t": 0,
    "vc": "PUT /vehicle/gear?gear=Park"
   },
   {
