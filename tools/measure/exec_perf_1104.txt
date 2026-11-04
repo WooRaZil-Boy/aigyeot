@@ -1,0 +1,153 @@
+아이곁 exec 갈래 성능 (2026-11-04) — 정적 자원 점검 + JVM 처리 시간(참고값)
+
+목적: exec(app/src/main/kotlin/kr/aigyeot/app/exec/*.kt)가 만드는 스레드·리스너·오디오 자원·반복 작업을 코드로 하나씩 짝지어(만드는 곳 ↔ 놓는 곳) 새는 것과 평소에 도는 것이 없는지 본다. 무거운 순수 계산 부분의 처리 시간을 이 맥 JVM에서 재어 실시간 비율로 적는다.
+기준: Pleos 성능 예산(주행 중 CPU 5% 미만·RAM 400MB 이하)과 경보 지연 3초 이하(명세서 15장), 스레드·리스너·서비스·AudioRecord·파일 핸들 해제, 불필요한 반복·폴링·백그라운드 작업이 없는지, 오디오 스레드·리스너·AudioTrack 해제와 폴링 대신 콜백.
+
+방법:
+  1) 정적 점검: 위 파일 전체를 읽고 생성·해제 짝을 `파일:줄`로 찾았다(실행 없음). 줄 번호는 브랜치 feat/car-exec 작업 트리(2026-11-04)의 값이다.
+  2) JVM 시간(저장소 aigyeot-exec 루트). app/src/test/kotlin/kr/aigyeot/app/exec/ExecPerfScratchTest.kt를 임시로 만들어(재고 나서 지웠다, 남기지 않음) println으로 결과를 받았다:
+     export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"; ./gradlew --console=plain :app:testDebugUnitTest --tests 'kr.aigyeot.app.exec.ExecPerfScratchTest'
+     결과는 app/build/test-results/testDebugUnitTest/TEST-kr.aigyeot.app.exec.ExecPerfScratchTest.xml의 system-out(PERF 줄).
+     각 항목은 예열 뒤 여러 번 재서 중앙값(System.nanoTime)을 썼다. WhiteNoise 1초 버퍼 100번 예열·200번, 50ms 버퍼 1000·2000번, Loudness·scale 3번 예열·7번, Sampler·RouteFeed·keepTail은 200만~500만 호출을 한 묶음으로 3번 예열·9번.
+     기기: Apple M4 Pro 맥, Android Studio 번들 JBR(JVM).
+
+읽는 법:
+  - 표(1장)의 '놓는 곳'은 그 자원을 닫는 코드다. '정상'은 Exec.stop(), '끝·오류'는 재생이 끝나거나 오류·ReleaseAudio일 때, '예외'는 만드는 도중 던졌을 때다. ○=그 경로에서 놓음, △=조건부·메모 참고, ×=놓지 않음, -=해당 없음.
+  - 2장의 realtime_ratio = 처리 시간 ÷ 그 오디오의 길이. 한 코어 대비 % = ratio × 100. 계속 도는 일(백색소음 생성)은 이 %가 곧 CPU 점유 추정이고, 한 번만 하는 일(3분 노래 측정)은 '3분 노래 한 곡을 처리하는 데 걸린 시간'이 의미 있는 값이고 %는 참고만 한다.
+
+한계:
+  - 에뮬레이터를 재지 않았다(사용자 결정: 호스트 연결이 합쳐진 뒤 잰다. 에뮬레이터는 다른 세션이 쓰는 중). 그래서 앱 CPU 5% 미만·RAM 400MB 이하(명세서 15장)와 경보 지연 3초 이하는 모두 미판정이다. 이유: 실제 AudioTrack·MediaPlayer·Pleos SDK 호출 비용, 스레드 수, 메모리 사용은 에뮬레이터에서만 볼 수 있다.
+  - 2장 숫자는 맥(M4 Pro)의 JVM(HotSpot JIT)이다. 차 SoC·ART와 다르므로 차에서의 값이 아니고 참고값이다. 차에서는 더 느리다고만 알 뿐 몇 배인지 모른다(환산하지 않았다).
+  - Sampler·RouteFeed·keepTail은 호출당 몇 ns로, JIT이 시험의 가짜 시계·가짜 post와 함께 인라인해 줄인 값일 수 있다. '순수 로직 비용이 무시할 만하다'는 뜻 이상으로 읽지 않는다. 실제 비용은 SDK 콜백·잠금·Handler 전달이 지배하며 이는 재지 못했다.
+  - 정적 점검은 SDK 내부 동작(예: AudioTrack·MediaPlayer·TextToSpeech·NaviHelper의 release가 라우팅·이벤트 리스너를 스스로 정리하는지)을 이 환경에서 확인하지 못했다. 그 칸은 '명시 제거 없음(SDK 의존, 미확인)'으로 적었다.
+  - 스레드 수·핸들 수·장시간 누수는 코드로 짝만 봤고 실행으로 세지 않았다.
+
+== 1) 정적 자원 점검 ==
+(파일은 모두 app/src/main/kotlin/kr/aigyeot/app/exec/. 짧게 Android.kt=A, Player.kt=P, Voice.kt=V, Exec.kt=E, Controls.kt=C, SongLoudness.kt=S.)
+
+1-1. 스레드·실행기
+자원                          만드는 곳            놓는 곳                                  정상(stop)  끝·오류  예외/비고
+HandlerThread "exec"          A:85 (ExecThread)    A:94 quit()(지금 stop은 부르지 않는다), A:106 stop     ○           -        Exec 생성(A:99) 때 바로 시작한다. start() 안 불러도 시작되므로 stop()이 유일한 해제다(호스트가 모든 경로에서 stop 필요, 3-1). Exec.stop 뒤 start가 다시 오므로 ExecThread는 stop에서 끝내지 않는다(쉬는 스레드는 싸다). 타이머는 각 부품이 stop에서 직접 취소한다(Controls.closeAll 등).
+"noise" 쓰기 스레드           A:177 생성, A:206 start()  A:213~219 release(): running=false→notify→pause/flush/stop→join(300ms)→track.release   ○ (Player.release→track.release)  ○ (Player.end, failed)  ○ start() 도중 던지면 Player.start:82가 release. 스레드 시작(A:206)은 start()의 마지막이라 시작 전 던지면 스레드가 없다. join이 300ms 안에 안 끝나도 running=false라 다음 write 결과로 스스로 끝난다. 쓰기 오류(n<0)는 exec 스레드로 넘겨 자기 join을 피한다(A:195).
+Dispatchers.IO (노래 변환)    S:26 withContext     코루틴 풀이 관리                          -           ○        한 곡 변환이 끝나면 풀로 돌아감. 취소를 확인하는 곳이 없다(3-8).
+
+1-2. 오디오 자원
+자원                          만드는 곳            놓는 곳                                  정상(stop)  끝·오류  예외/비고
+AudioTrack (백색소음)         A:168~171            A:219 track.release (release 마지막), A:183 init에서 던지면 release   ○ (Player.release)  ○  init 실패 A:183 ○. 버퍼 200ms(9600표본)
+AudioTrack 라우팅 리스너      A:182 addOnRoutingChangedListener  명시 제거 없음. track.release에 맡김(SDK 의존, 미확인)  ○(release)  ○  -
+MediaPlayer (자장가·노래)     A:225                A:245 mp.stop→mp.release, A:238 init에서 던지면 release   ○  ○  setOnErrorListener(A:233)→Player.failed→end→release ○
+MediaPlayer 라우팅 리스너     A:234                명시 제거 없음. mp.release에 맡김(SDK 의존, 미확인)  ○  ○  -
+AssetFileDescriptor(자장가)   A:134 openFd          A:134 .use                              -           ○        열자마자 닫음(setDataSource 뒤).
+오디오 포커스(재생)           A:119~125 requestFocus  A:128 abandonFocus. P:128(release), P:167(reject), P:177(end)  ○  ○  requestFocus 앞에서 이전 요청을 abandon(A:120)해 겹침 없음. 포커스 변경 리스너(A:122)는 요청 객체가 쥔다
+오디오 포커스(TTS)            A:255 요청 객체      A:260 abandon (TtsGate.settled·stop 안에서만 불림. Gates:42, 56)  △          ○        TtsGate.stop은 걸린 문장(cur)이 있을 때만 abandon(Gates:54). 걸린 문장이 없으면 포커스도 안 잡은 상태라 짝이 맞는다. 문장 시작 중 SDK가 던지면 Gates:65에서 abandon ○
+MediaCodec 디코더             S:89                 S:127 stop→release (finally)             -           ○        decode가 던져도 finally. createDecoderByType(S:89)이 던지면 아직 쥔 코덱 없음
+MediaExtractor                S:82                 S:131 release (finally)                  -           ○        위와 같음
+MediaCodec 인코더             S:153                S:216 stop→release (finally), tmp는 S:217 실패 시 delete  -  ○  configure·start 전에 던져도 stop은 runCatching
+MediaMuxer                    S:156                S:209 release (finally)                  -           ○        mux.stop(S:207)이 던져도 release
+.tmp 파일                     S:150                성공은 renameTo(S:212), 실패는 S:217 delete  -   ○        makeCopy의 catch(S:44)도 output.delete
+MicService.pcmTap (감지 PCM)  A:337 설정           A:338 close. V:52(cancel)·V:71(새 듣기)·V:77(finish)·V:90(예외)·V:96(창 끝)  ○ (Exec.stop→voice.cancel)  ○  tap은 듣기 창이 끝나면(V:96) STT 최종 결과를 기다리는 동안에도 이미 닫는다. close는 자기 것일 때만 null(A:338)
+AudioRecord                   -                    -                                        -           -        exec는 직접 열지 않는다(마이크는 MicService, 이 갈래 밖). 해당 없음
+
+1-3. SDK 리스너
+Pleos Vehicle: 리스너 종류 7(Gear, Door ×2 쪽, SeatTemperature ×2 구역, Cabin(HvacTemperature), SteeringWheelAngle, BrakePedalStatus, TurnSignalState)이고 등록은 모두 9번이다(A:422~430). 8종이라는 말은 이 갈래 지시문의 숫자이고 코드로는 7종 9등록이다.
+자원                       만드는 곳                          놓는 곳                                  정상(stop)  재구독·끊김   비고
+Vehicle (SDK 객체)         A:406 Vehicle(ctx).initialize      A:457 vehicle.release (runCatching)      ○           -            initialize 실패는 로그만 남기고 계속(A:406) — 실패한 객체로 구독 시도(A:419 vehicle non-null)해도 subscribe가 runCatching(A:420)이라 안 새나 구독은 안 된다
+GearSelectionListener      A:422 register                     A:441 unregister                         ○           ○ unsubscribe가 subscribe 맨 앞(A:418)
+DoorPositionListener ×2    A:423 register                     A:442                                    ○           ○
+HvacSeatTemperatureListener ×2  A:424 register                A:443                                    ○           ○
+HvacTemperatureListener    A:426 register                     A:444                                    ○           ○
+SteeringWheelAngleListener A:428 register                     A:445                                    ○           ○
+BrakePedalStatusListener   A:429 register                     A:446                                    ○           ○
+TurnSignalStateListener    A:430 register                     A:447                                    ○           ○
+Car (android.car)          A:407 Car.createCar(콜백 4인자)    A:456 car.disconnect (runCatching)       ○           준비될 때마다 cancelSub→새 구독(A:409~410), 끊기면 props=null만(A:410) — 이때 등록된 리스너는 SDK가 이미 잃었다고 본다(미확인)
+CarPropertyManager 속도    A:433~434 registerCallback(PERF_VEHICLE_SPEED, SENSOR_RATE_FAST)   A:448 unregisterCallback   ○   ○            속도 구독은 CAR_SPEED 권한이 없으면 실패하고 로그만(A:436)
+구독 지연 타이머           A:410 ex.after(1.5초)              A:409 cancelSub, A:453 stop              ○           ○            한 번짜리
+AudioManager 모드 리스너   A:413 addOnModeChangedListener(mainExecutor)   A:455 removeOnModeChangedListener   ○   -    SDK_INT 31 미만이면 등록·제거 둘 다 안 함(A:413, 455 같은 조건) — 짝이 맞음
+NaviHelperEventListener    A:521 addListener (initialize 콜백 안)  A:525 removeListener+release       ○           -            initialize가 stop보다 늦게 끝나면 해제된 helper에 addListener(3-3)
+TextToSpeech 이벤트        A:275 addEventListener (initialize 성공 안)  A:283 tts.release (removeEventListener는 없음)   ○   -   SDK release에 맡김(SDK 의존, 미확인)
+SpeechToText 결과 리스너   A:306 addListener                  A:314 stt.release (removeListener는 없음)   ○          -            위와 같음
+SpeechToText 묶음(듣기)    SttGate.begin Gates:104            Gates:107 cancel → stt.stop              ○           ○            V:52·V:71·V:90 모든 끝 경로에서 cancel 또는 finish→complete. 최종 없이 끝나면 V:99 cancel
+TextToSpeech 객체          A:253                              A:283 release (gate.stop 뒤)             ○           -
+SpeechToText 객체          A:288                              A:314 release (cancel 뒤)                 ○           -
+
+1-4. 타이머·반복(Sched.after = Handler.postDelayed, A:89~93). 취소 함수를 부르면 removeCallbacks다.
+무엇                       걸리는 곳               주기·길이                                            언제만 도는가
+페이드 이득 갱신 ramp      P:96 첫 예약, P:186 재예약, P:106 정지 페이드  RAMP_MS=50ms (P:211), 페이드 길이 Params.fadeMs=2초(engine Params.kt:11)  재생 끝 앞 2초와 StopPlayback(fade) 받은 뒤 2초 동안만. 페이드 밖에서는 타이머가 없다(P:182 주석, fadeEnd P:189). 최대 40번×페이드당. PAUSE 중에도 페이드 구간이면 계속 apply한다(이득이 같으면 track.gain은 안 부름, P:204). 재생 끝(end)·release에서 모두 취소(P:175, P:124)
+재생 끝 타이머             P:98 (endAt)            한 번짜리                                            재생 중
+경로 확정 타이머           P:95                    1초 한 번(ROUTE_CONFIRM_MS)                          뒷좌석 경로가 처음에 null일 때만
+F19 확인 폴링 poll         C:88, C:90              첫 100ms 뒤, 이후 150ms마다(Params verifyFirstMs·verifyIntervalMs)  차 제어(열선·창문 잠금·독서등·온도) 한 건이 끝날 때까지. 한 시도 최대 5초(verifyTimeoutMs), 재시도 1번이므로 한 건 최대 약 10초 ≈ 읽기 67번. 끝나면 finish(C:99)가 모든 타이머 취소. 제어 명령이 없으면 전혀 안 돈다
+F19 읽기 시한·시도 시한   C:61, C:91             5초 한 번씩                                          제어 한 건 동안
+경유지 시한                C:117                   10초 한 번                                           addWaypoint 한 건 동안. wpDone(C:124)이 취소
+TTS 한 문장 감시           V:65                    20초 한 번(SPEECH_TIMEOUT_MS)                       말하는 동안만. done(V:61)이 취소
+듣기 창·STT 최종 대기      V:93, V:98              듣기 창(Listen·Ask의 ms) 한 번, 이후 800ms 한 번   듣기 동안만. finish·cancel이 취소(V:76, V:52)
+TTS 직렬화 대기            Gates:75 arm            예열 3초(WARM_MS), stop 뒤 1초(SETTLE_MS) 한 번씩   시작 때 예열 한 번, 걸린 문장을 stop한 뒤만
+차량 구독 지연             A:410                   1.5초 한 번                                          start 뒤·CarService가 준비될 때만
+백색소음 쓰기 스레드        A:177                   50ms 버퍼(2400표본)를 계속 만들어 write(블로킹)     백색소음 재생 중만. 멈추면(pause) lock.wait로 쉼(A:189), 폴링 없음. 자장가·노래(MediaPlayer)는 별도 스레드 없음
+Sampler(10Hz)              Feeds:87 emit           타이머 없음. 콜백이 올 때 100ms보다 촘촘하면 버림(Feeds:91)  타이머가 아니라 콜백 구동이다. 최종 사건 최대 10/초
+
+평소(재생·제어·듣기 없음, 구독만 된 상태)에 도는 것:
+  - 타이머·스레드: 없다. "exec" HandlerThread는 메시지가 없으면 Looper에서 쉬고, "noise" 스레드는 백색소음을 틀 때만 있다.
+  - 콜백: 있다. Vehicle 조향각·브레이크·방향지시등·열선·실내 온도·문 위치, 속도(CarPropertyManager SENSOR_RATE_FAST, A:434)는 start() 뒤 stop() 전까지 계속 구독 중이고, 오는 대로 exec 잠금 안에서 처리된다(A:363~397). 속도·조향이 지속 신호라면 평소에도 콜백마다 잠금을 잡고 Sampler(Feeds:75)에 들어간다. 이는 폴링이 아니라 SDK가 밀어주는 콜백이며, 설계상 필요한 상시 입력(F9·F17)이다. 콜백 빈도와 이 처리가 앱 CPU에 주는 몫은 에뮬레이터에서 재야 한다(미측정).
+  - 그 밖(내비·모드·TTS·STT·포커스)은 변화가 있을 때만 콜백이다.
+  - 폴링: F19 확인 폴링(C:88) 하나뿐이고 차 제어 한 건 동안만 돈다(계약 4.2가 정한 것).
+
+1-5. 예외 경로에서 놓이는지
+  - Exec.stop(E:68~72): voice.cancel(말하기·듣기·tap·STT 묶음) → player.release(타이머·트랙·포커스) → io.stop(차 구독·내비·TTS·STT·스레드). 앞 단계가 던져도 뒤 단계가 안 도는 구조다(try/finally 없음). voice.cancel·player.release는 내부가 runCatching(P:125, P:128)이지만 voice.cancel의 tts.stop·stt.cancel(V:51~52)은 감싸지 않았다. TtsGate.stop(Gates:57)·SttGate의 SDK 호출은 runCatching(A:291~293)이라 실제로는 던지지 않는다. 그래서 문제로 올리지 않는다(3-4 메모).
+  - Player: start 도중 던지는 곳 중 audio.hasRearOutput·requestFocus·open·track.start는 각각 잡아 reject(P:60, 65, 76, 82)하고 포커스를 놓는다(P:167). track.gain(P:90 apply)은 감싸지 않았다(3-2).
+  - 재생 끝·오류·ReleaseAudio: end(P:172)·release(P:121)가 타이머 전부 취소→track.release→abandonFocus. end는 PlaybackEnded를 post, release는 사건 없음(계약 4.1).
+  - 새 재생이 이전 재생을 덮을 때: Player.start:58이 먼저 end(STOPPED)로 놓고 시작한다.
+  - NoiseTrack: 스레드가 write 중 오류면 exec로 넘겨 end→release(A:195→P:160).
+  - FileTrack: 준비(prepare) 중 던지면 mp.release(A:238), 재생 중 오류는 A:233→P:160.
+  - 노래 변환(SongLoudness): decode·transcode 모두 finally로 코덱·추출기·먹서 해제, 실패하면 .tmp 삭제.
+
+== 2) JVM 처리 시간(이 맥, 참고값) ==
+기기: Apple M4 Pro, JBR JVM. 아래 숫자는 위 '방법'의 PERF 줄 그대로(소수점 반올림).
+항목                                                         중앙값        오디오 길이   realtime_ratio   한 코어 대비
+WhiteNoise.fill 48,000표본(1초 버퍼)                         0.031 ms      1 s           0.00003          0.003%
+WhiteNoise.fill 2,400표본(앱의 실제 50ms 버퍼)               0.002 ms      0.05 s        0.00003          0.003%
+Loudness 3분 44.1kHz 스테레오(add 전부 + integrated)         66.0 ms       180 s         0.00037          (한 번짜리, 한 곡 66ms)
+Loudness 3분 48kHz 스테레오                                  70.3 ms       180 s         0.00039          (한 번짜리, 70ms)
+Loudness 3분 44.1kHz 모노                                    25.7 ms       180 s         0.00014          (한 번짜리, 26ms)
+  Loudness.integrated()만(표본은 이미 넣음)                   0.04~0.19 ms  -             -                -
+SongLoudness.scale 3분 44.1kHz 스테레오 PCM                  13.7 ms       180 s         0.00008          (한 번짜리)
+SongLoudness.scale 3분 48kHz 스테레오                        14.5 ms       180 s         0.00008
+SongLoudness.scale 3분 44.1kHz 모노                          7.1 ms        180 s         0.00004
+keepTail 한 번                                               0.78 ns/호출  -             -                -
+PcmTap 창 하나 변환(15,600표본 → 31,200바이트)               0.005 ms      0.975 s       0.00000          0.0005%
+Sampler.emit(방출 경로) 한 번                                4.4 ns/호출   -             -                -
+Sampler 억제 경로(100ms 안 중복) 한 번                       1.0 ns/호출   -             -                -
+RouteFeed 값이 같아 낼 것 없음 한 번                         3.7 ns/호출   -             -                -
+RouteFeed 값이 바뀌어 post 한 번                             4.4 ns/호출   -             -                -
+RouteFeed.rests 같은 목록 한 번                              4.5 ns/호출   -             -                -
+뜻(참고값일 뿐):
+  - 백색소음 생성은 실시간의 0.003% 수준이라 쓰기 스레드의 CPU는 생성보다 AudioTrack.write 호출·스레드 깨움이 지배할 것이다(재지 못함).
+  - 3분 노래 측정은 이 맥에서 한 곡 70ms 안팎이다. SongLoudness.makeCopy 전체는 MediaCodec 디코드 3번(measure·measureScaled·transcode, S:36·S:137·S:204) + AAC 인코드라 디코드·인코드 비용이 훨씬 클 것이다. 이는 에뮬레이터·차에서만 잴 수 있다(미측정). 한 곡을 받을 때 한 번만 하는 작업이다.
+  - Sampler·RouteFeed·keepTail은 호출당 한 자릿수 ns다. 신호 4종이 각 10Hz(40호출/초라고 가정)여도 이 로직의 몫은 초당 수백 ns 수준이다(위 한계의 JIT 주의 참조).
+  - 이 숫자로 CPU 5% 미만·RAM 400MB 이하·경보 지연 3초 이하는 판정하지 않았다(미판정).
+
+== 3) 찾은 문제 ==
+심각도: P1 안전·데이터 손실, P2 계약 위반·자원 누수·불필요한 상시 작업, P3 사소. 이번 점검에서 P1·P2는 찾지 못했다. 아래는 P3와 확인할 점이다(코드는 고치지 않았다).
+
+3-1 (P3) Exec 생성만 하고 stop을 안 부르면 "exec" HandlerThread가 남는다. A:99(androidIo가 ExecThread를 만든다)·A:85. start()를 부르지 않아도 스레드가 시작되고, 닫는 길은 Exec.stop()뿐이다. 호스트가 서비스 종료·생성 실패 경로 모두에서 stop()을 불러야 한다(Exec 한 번 쓰고 새로 만든다는 E:41 규칙은 있으나 호스트 연결은 아직 없음). 호스트가 합쳐질 때 확인.
+
+3-2 (P3) Player.start:90의 apply(→track.gain)는 감싸지 않았다. 던지면(예: 오류 상태가 된 MediaPlayer.setVolume의 IllegalStateException) Exec.handle의 catch(E:93)가 PlaybackRejected만 낸다. 이때 cur(P:80)은 지워지지 않고 트랙도 놓지 않는다(타이머도 아직 안 걸림). 백색소음 쓰기 스레드는 이득 0(A:202 setVolume 0)으로 계속 돈다. 다음 StartPlayback(P:58)이나 ReleaseAudio에서야 놓인다. 발생 조건이 드물고 소리는 나지 않아 안전 문제는 아니다. 고친다면 P:89~92를 try로 감싸 reject 경로(P:82와 같은 cur=null·release)로 보낸다.
+
+3-3 (P3) initialize 콜백이 stop보다 늦으면 해제된 객체에 리스너를 건다. A:271~277(TTS), A:305~306(STT), A:520~521(내비). ex.guard가 예외는 삼키므로 새지는 않으나, SDK가 release 뒤 addListener를 받으면 어떻게 하는지는 확인 못 했다(미확인). stop이 start 직후 불리는 경우(서비스가 금방 꺼짐)에만 해당한다.
+
+3-4 (P3) Exec.stop(E:68~72)은 단계마다 try가 없어 voice.cancel이 던지면 player.release·io.stop이 안 돈다. 실제 던질 곳(tts.stop·stt.cancel)은 각각 runCatching(Gates:57, A:291~293)이라 지금은 던지지 않는다. 방어만 하는 의견이다. 고치기보다 호스트가 stop 예외를 잡는지 확인하면 충분하다.
+
+3-5 (해결, 4회차) Controls에 일괄 닫기 closeAll이 생겼다. Exec.stop이 진행 중인 F19 작업(ok=false)·경유지 작업을 닫고 타이머를 취소한다. ExecThread는 stop 뒤 start가 다시 오므로 끝내지 않으며(quitSafely를 부르지 않는다), 예약은 부품이 stop에서 직접 취소한다.
+
+3-6 (P3) FileTrack.init의 prepare()(A:237)는 동기 호출이다. Exec.handle(StartPlayback)이 이 호출이 끝날 때까지 exec 잠금을 쥐고 호출한 스레드(엔진 쪽)를 붙잡는다. E:40~41의 "[handle]은 빨리 돌아온다"와 부딪힐 수 있고 경보 지연 3초 예산에 들어간다. 자장가 assets·노래 로컬 파일이라 보통 짧을 것으로 보이나 지연은 재지 못했다(미측정, 에뮬레이터에서 StartPlayback→PlaybackStarted 시간을 재야 한다). NoiseTrack.start의 첫 무음 write(A:204)도 같은 성격이다.
+
+3-7 (P3) NoiseTrack.release의 join(300)(A:217)은 호출한 스레드가 exec 잠금을 쥔 채 최대 300ms 기다린다(Player.end·release는 잠금 안). 그동안 다른 콜백이 기다린다. Exec.stop이 메인 스레드에서 불리면 메인이 최대 300ms 막힌다. 평소에는 stop으로 write가 바로 깨어나므로 훨씬 짧을 것이다(미측정).
+
+3-8 (P3) SongLoudness.makeCopy(S:26)는 withContext(Dispatchers.IO) 안의 블로킹 반복이라 코루틴 취소를 확인하지 않는다. link가 작업을 취소해도 디코드·인코드가 끝까지(또는 MAX_IDLE 한계까지) 돈다. 취소 뒤 output이 남는지는 link 쪽 처리에 달렸다. 3분 노래를 디코드 3번 하는 것(S:36 measureScaled, S:137 measure, S:204 transcode)도 비용이다. 이 변환은 노래 한 곡을 받을 때만 하는 일이다.
+
+3-9 (P3, 확인할 점) "noise" 쓰기 스레드는 우선순위를 올리지 않았다(A:177, 기본 스레드). 버퍼가 200ms(A:170)라 여유는 있으나, 차에서 다른 부하가 많을 때 끊김이 나는지는 에뮬레이터·실차에서 들어봐야 안다(미측정).
+
+3-10 (P3, 확인할 점) TTS 직렬화(Gates:29~30, WARM_MS 3초)에서 시작 직후 예열 끝 신호가 안 오면 그 동안 도착한 첫 문장이 최대 3초 늦다. 경보 지연 3초 예산과 같은 크기라 시작 직후에는 걸릴 수 있다(평상시 예열은 짧을 것으로 보이나 미측정). stop 뒤 SETTLE_MS 1초(Gates:87)도 다음 문장을 미룬다. 둘 다 설계값(근거 없음 표시되어 있음)이고 에뮬레이터에서 재야 판정된다.
+
+3-11 (P3) 속도 구독이 SENSOR_RATE_FAST(A:434)이고 Sampler는 받은 뒤 100ms 이하 간격을 버리는 방식이다(Feeds:91). 구독 단계에서 빈도를 줄이는 것이 아니라 SDK가 보내는 만큼 콜백 비용(잠금·람다)을 치른다. 빈도(FAST가 몇 Hz인지)는 이 환경에서 확인하지 못했다(미확인). 에뮬레이터 CPU를 잴 때 속도·조향 콜백의 몫을 따로 보면 된다.
+
+다음에 에뮬레이터로 잴 것(호스트 연결이 합쳐진 뒤): 주행 장면 dumpsys cpuinfo·meminfo(CPU 5% 미만·RAM 400MB 이하), StartPlayback→PlaybackStarted 시간(3-6), 백색소음 재생 중 스레드 수(/proc/<pid>/task)와 정지 뒤 줄어드는지(A:177·A:94), AudioTrack·MediaPlayer 해제 뒤 오디오 서비스 세션(dumpsys audio), 열린 파일 핸들(/proc/<pid>/fd) 수의 재생 반복 전후 비교, 속도 콜백 빈도(3-11).
