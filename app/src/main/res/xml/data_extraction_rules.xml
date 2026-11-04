@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 31+: Room 파일 하나(aigyeot.db)에 차 토큰(relay_credential)이 함께 있어 파일째 클라우드 백업·기기 간 이전에서 뺀다.
+     토큰을 봉인한 Keystore 키는 옮겨지지 않으므로, 어떤 길로 복원돼도 복호화에 실패해 재등록 경로를 탄다. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="aigyeot.db" />
+        <exclude domain="database" path="aigyeot.db-wal" />
+        <exclude domain="database" path="aigyeot.db-shm" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="aigyeot.db" />
+        <exclude domain="database" path="aigyeot.db-wal" />
+        <exclude domain="database" path="aigyeot.db-shm" />
+    </device-transfer>
+</data-extraction-rules>
