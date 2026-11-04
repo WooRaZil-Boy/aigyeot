@@ -98,7 +98,11 @@ internal class Player(
         if (x.pendingRoute) x.timers += sched.after(ROUTE_CONFIRM_MS) { confirmRoute(x) }
         x.timers += sched.after(c.endAt - c.fadeMs - clock()) { ramp(x) }
         // 마지막 페이드 중 StopPlayback(fade)을 받았으면 DEADLINE이 아니라 STOPPED로 끝낸다(4.1)
-        x.timers += sched.after(c.endAt - clock()) { end(x, if (x.stopFadeAt != null) EndReason.STOPPED else EndReason.DEADLINE) }
+        // 끝 시각까지 경로가 한 번도 안 정해졌으면(소리 없는 재생) DEADLINE(끝까지 틀었다)이 아니라 확인 실패와 같은 ERROR로 끝낸다
+        x.timers += sched.after(c.endAt - clock()) {
+            if (x.pendingRoute && x.stopFadeAt == null) resolve(x, null, true)
+            else end(x, if (x.stopFadeAt != null) EndReason.STOPPED else EndReason.DEADLINE)
+        }
     }
 
     fun stop(c: StopPlayback) {
@@ -222,8 +226,11 @@ internal class Player(
 
     companion object {
         const val RAMP_MS = 50L
-        /** 경로 미정(null)인 뒷좌석 재생이 확정을 기다리는 시간. 설계값, 근거 없음. */
-        const val ROUTE_CONFIRM_MS = 1_000L
+        /**
+         * 경로 미정(null)인 뒷좌석 재생이 확정을 기다리는 시간(그동안 무음). 설계값. 11-04 에뮬레이터 실측(자장가 MediaPlayer, 포커스 → 경로):
+         * 보통 0.08~0.24초, 설치 직후 첫 재생 0.72초, 한 번은 1초 안에 정해지지 않아 ERROR로 끝났다(디코더 준비만 start() +0.55초). 그래서 3배 여유.
+         */
+        const val ROUTE_CONFIRM_MS = 3_000L
         /** CAN_DUCK 때 줄이는 배수. 설계값, 근거 없음(14장에 감쇄 크기가 없다). 첫날 들어 보고 정한다. */
         const val DUCK_GAIN = 0.5f
     }

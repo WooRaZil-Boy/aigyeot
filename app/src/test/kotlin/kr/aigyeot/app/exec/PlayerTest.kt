@@ -86,9 +86,42 @@ class PlayerTest {
         audio.onRouted!!(REAR_ZONE)
         assertEquals(listOf(1.0f), track.gains)
         assertTrue(r.rows.any { it.api == "getRoutedDevice" && it.actual == REAR_ZONE && it.ok })
-        t.advance(2_000)
+        t.advance(Player.ROUTE_CONFIRM_MS + 1)
         assertTrue(r.of<PlaybackEnded>().isEmpty(), "확정 뒤 확인 타이머가 끝내지 않는다")
+        assertEquals(listOf(1.0f), track.gains, "이득은 한 번만 정해졌다")
+    }
+
+    @Test fun `확인 타이머가 REAR로 먼저 정하고 뒤늦은 콜백이 와도 이득은 한 번뿐이고 끝나지 않는다`() {
+        audio.routed = null
+        start()
+        track.routed = REAR_ZONE
+        t.advance(Player.ROUTE_CONFIRM_MS)
         assertEquals(listOf(1.0f), track.gains)
+        audio.onRouted!!(REAR_ZONE)
+        t.advance(Player.ROUTE_CONFIRM_MS)
+        assertEquals(listOf(1.0f), track.gains, "콜백이 이득을 다시 정하지 않는다")
+        assertTrue(r.of<PlaybackEnded>().isEmpty())
+    }
+
+    @Test fun `경로가 끝내 정해지지 않고 남은 시간이 확인 시간보다 짧으면 DEADLINE이 아니라 ERROR`() {
+        audio.routed = null
+        start(lenMs = Player.ROUTE_CONFIRM_MS - 1_000)
+        t.advance(Player.ROUTE_CONFIRM_MS)
+        assertTrue(track.gains.isEmpty(), "한 번도 소리를 열지 않았다: ${track.gains}")
+        assertEquals(EndReason.ERROR, r.of<PlaybackEnded>().single().reason)
+        assertTrue(r.rows.any { it.api == "playback" && it.actual == "routing unknown" })
+        assertTrue(track.released && !audio.focusHeld)
+    }
+
+    // 11-04 에뮬레이터 장면 C: 설치 직후 부하에서 MediaPlayer는 start() 1초 뒤에도 경로가 없었다(디코더 준비만 +0.55초). 1초 확인이면 첫 자장가가 ERROR → WAIT
+    @Test fun `경로가 1_5초 늦게 와도 끝내지 않고 그때 처음 1_0`() {
+        audio.routed = null
+        start()
+        t.advance(1_500)
+        assertTrue(r.of<PlaybackEnded>().isEmpty() && track.gains.isEmpty(), "확인 전: 끝나지 않고 무음")
+        audio.onRouted!!(REAR_ZONE)
+        assertEquals(listOf(1.0f), track.gains)
+        assertTrue(r.of<PlaybackEnded>().isEmpty())
     }
 
     @Test fun `경로 null 뒤 다른 곳이고 허락하지 않으면 소리 없이 ERROR로 끝난다`() {
@@ -110,12 +143,12 @@ class PlayerTest {
         assertTrue(r.of<PlaybackEnded>().isEmpty())
     }
 
-    @Test fun `콜백 없이 1초가 지나면 다시 읽어 REAR면 1_0, 아직 null이면 ERROR`() {
+    @Test fun `콜백 없이 확인 시간이 지나면 다시 읽어 REAR면 1_0, 아직 null이면 ERROR`() {
         audio.routed = null
         start()
         track.routed = REAR_ZONE
         t.advance(Player.ROUTE_CONFIRM_MS - 1)
-        assertTrue(track.gains.isEmpty(), "1초 전에는 그대로")
+        assertTrue(track.gains.isEmpty(), "확인 시간 전에는 그대로")
         t.advance(1)
         assertEquals(listOf(1.0f), track.gains)
         // 다시 읽어도 null
