@@ -1,0 +1,22 @@
+# 재부팅 뒤 감시 서비스·복원 실측(11-04, ui-store-host). AVD PleosProbe(adb reboot), user 10, 디버그 APK
+# 재부팅 전: 프로필 저장, '아기 탔어요'로 마이크 서비스 켜짐(예약), 정차
+
+## 부팅 수신기 → 감시 서비스
+11-04 05:41:49.295 I ActivityManager: Start proc 6364:kr.aigyeot.app/u10a175 for broadcast {kr.aigyeot.app/kr.aigyeot.app.host.BootReceiver}
+11-04 05:41:50.349 I ActivityManager: Background started FGS: Allowed [callingPackage: kr.aigyeot.app; callingUid: 1010175; uidState: RCVR; uidBFSL: n/a; intent: Intent { cmp=kr.aigyeot.app/.host.MonitorService }; code:BOOT_COMPLETED; targetSdkVersion:34; callerTargetSdkVersion:34; startForegroundCount:0; bindFromPackage:null: isBindService:false]
+11-04 05:41:50.360 W ActivityManager: Foreground service started from background can not have location/camera/microphone access: service kr.aigyeot.app/.host.MonitorService
+
+## 서비스
+  * ServiceRecord{5e47300 u10 kr.aigyeot.app/.host.MonitorService}
+
+## 복원 뒤 알림(C69: 스냅숏은 마이크 켜짐, 실제로는 없음 → MIC_STOPPED)
+ NotificationRecord(0x037b350c: pkg=kr.aigyeot.app user=UserHandle{10} id=13 tag=null importance=3 key=10|kr.aigyeot.app|13|null|1010175: Notification(channel=notice shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x10 color=0x00000000 vis=PRIVATE))
+ icon=Icon(typ=RESOURCE pkg=kr.aigyeot.app id=0x0108009b)
+ NotificationRecord(0x0e4cc936: pkg=kr.aigyeot.app user=UserHandle{10} id=2147483647 tag=ranker_group importance=2 key=10|kr.aigyeot.app|2147483647|ranker_group|1010175|ranker_group: Notification(channel=monitor shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x722 color=0x00000000 groupKey=ranker_group vis=PRIVATE))
+ icon=Icon(typ=RESOURCE pkg=kr.aigyeot.app id=0x0108009b)
+ NotificationRecord(0x0670130d: pkg=kr.aigyeot.app user=UserHandle{10} id=1 tag=null importance=2 key=10|kr.aigyeot.app|1|null|1010175: Notification(channel=monitor shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x62 color=0x00000000 vis=PRIVATE))
+ icon=Icon(typ=RESOURCE pkg=kr.aigyeot.app id=0x0108009b)
+- 위 id=13 알림이 Notice.MIC_STOPPED(ordinal 3 + 10)다. 복원 ③의 마이크 대조가 동작했다.
+
+## 알림 누르기(C69: 알림 → 앱 화면 → 마이크 서비스)
+- Pleos 알림 판(cmd statusbar expand-notifications)에 "듣기가 멈췄어요"가 보였고, 누르니 앱 화면이 열리며 마이크 서비스가 다시 켜졌다(녹음 not silenced). 화면 없이 바로 켜는 알림 액션(C70)은 만들지 않아 미판정.

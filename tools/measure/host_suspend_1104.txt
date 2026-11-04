@@ -1,0 +1,22 @@
+# C67·C68 실측(11-04, ui-store-host). AVD PleosProbe, user 10, 디버그 APK
+# 명령: adb shell cmd car_service suspend --simulate → 8초 → adb shell cmd car_service resume (이 이미지에서는 둘 다 동작함)
+# 상태: 정차, 감시 서비스 + 마이크 서비스 켜짐
+
+## 감시 서비스가 받은 신호(logcat tag monitor)
+11-04 05:40:31.725 I monitor : C67 신호 policy:system_power_policy_no_user_interaction off=true suspended=false
+11-04 05:40:32.318 I monitor : C67 신호 android.intent.action.SCREEN_OFF off=true suspended=true
+11-04 05:40:39.718 I monitor : C67 신호 android.intent.action.SCREEN_ON off=false suspended=true
+11-04 05:40:39.733 I monitor : C67 신호 policy:system_power_policy_initial_on off=false suspended=false
+
+## 녹음 무음 처리 기록(dumpsys audio, 앱 녹음)
+11-04 05:38:13:540 rec update riid:311 uid:1010175 session:313 src:MIC not silenced pack:kr.aigyeot.app
+
+## 프로세스·서비스 생존(resume 뒤)
+pidof: 17609
+  * ServiceRecord{d0f1fc2 u10 kr.aigyeot.app/.host.MonitorService}
+  * ServiceRecord{e7013ff u10 kr.aigyeot.app/.detect.MicService}
+
+## 메모
+- 전원 정책 리스너(READ_CAR_POWER_POLICY)가 서드파티에서 붙고, Suspend 때 가장 먼저 왔다(SCREEN_OFF보다 약 0.6초 앞). Resume 때는 SCREEN_ON이 정책보다 약 15ms 앞이었다. 두 신호가 같은 짐작을 내도 호스트가 한 번만 넣었다(suspended=true 줄).
+- 이 흉내(suspend --simulate)에서는 프로세스·마이크 서비스가 그대로 살아 있었고, 녹음의 무음 처리(silenced) 기록은 생기지 않았다. 실제 시동 끔에서 무음 입력이 오는지(C68)는 미판정.
+- 시계 점프(elapsedRealtime − uptimeMillis)는 이 흉내에서 재지 않았다(흉내가 CPU를 실제로 재우는지 모름).

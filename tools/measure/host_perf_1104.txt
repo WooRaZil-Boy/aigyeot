@@ -1,0 +1,28 @@
+# ui-store-host 성능 실측(11-04). AVD PleosProbe, user 10, 디버그 APK
+# 상태: 정차(P, 0km/h), 감시 서비스 + 마이크 서비스(감지 실행) 켜짐, 앱 화면 앞. exec·link·scenario는 0단계 빈 몸통이라 주행 장면은 미측정
+# 측정 시각: 2026-11-04 05:38
+
+## dumpsys cpuinfo(앱 줄)
+Load: 2.31 / 2.84 / 4.65
+CPU usage from 500748ms to 200732ms ago (2026-11-04 05:30:18.946 to 2026-11-04 05:35:18.962):
+  0% 27377/kr.aigyeot.app: 0% user + 0% kernel / faults: 1869 minor 1370 major
+31% TOTAL: 6.9% user + 16% kernel + 0.1% iowait + 7.7% irq + 0.1% softirq
+
+## top 5초 간격 6회(%CPU, 앱 pid)
+17609  7.6 206M kr.aigyeot.app
+17609  0.0 209M kr.aigyeot.app
+17609  4.0 204M kr.aigyeot.app
+17609  0.0 206M kr.aigyeot.app
+17609  0.0 208M kr.aigyeot.app
+17609  0.0 204M kr.aigyeot.app
+
+## dumpsys meminfo(요약)
+  Native Heap    22957    22936        8       19    23820    31984    25779     1893
+           Java Heap:    13348                          32972
+         Native Heap:    22936                          23820
+                Code:    59744                         139708
+            Graphics:        0                              0
+           TOTAL PSS:   116443            TOTAL RSS:   214932       TOTAL SWAP PSS:      137
+
+## 60초 평균 CPU(/proc/<pid>/stat utime+stime 차이, CLK_TCK=100)
+- 78 ticks / 60s = 코어 하나 기준 1.30%, 전체 4코어 기준 0.33%
