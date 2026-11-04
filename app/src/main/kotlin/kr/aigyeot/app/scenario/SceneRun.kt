@@ -24,6 +24,7 @@ import kr.aigyeot.engine.FirstTry
 import kr.aigyeot.engine.Gear
 import kr.aigyeot.engine.LogAlarm
 import kr.aigyeot.engine.LowerHvac
+import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.Phase
 import kr.aigyeot.engine.PlayKind
@@ -61,6 +62,8 @@ interface ScenePorts {
     fun phone(envelopeJson: String, done: (ok: Boolean, why: String) -> Unit)
     /** 바로 넣은 입력(녹음·누르기·말·휴대폰·주입)을 '시뮬레이션 입력'으로 화면·로그에 알린다(계약 7.1, 명세서 6장). */
     fun simulated(what: String) {}
+    /** 그 음원의 BS.1770 통합 크기(LUFS, 계약 7.4 lufs_violations). 잴 수 없으면 null(미측정). */
+    fun lufs(method: Method): Double? = null
 }
 
 /** 계약 7.4 칼럼 한 줄. null은 빈 칸(잴 것이 없음·미측정). */
@@ -128,6 +131,7 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
     private var ctlLastAt = 0L
     private var lastExecT = 0.0     // 지금까지 실행한 마지막 단계의 t
     private val pending = HashMap<Any, Pair<Double, String>>()   // 아직 done이 안 온 vc·phone 요청 → (그 단계 t, 종류)
+    private val drops0 = host.stepLogDrops.value                 // 반복 시작 때 stepLog 유실 수(startScenario보다 먼저 만든다)
 
     private fun ms(sec: Double) = Math.round(sec * 1000)
     private fun dueAt(c: Cue) = t0 + ms(c.t)
@@ -188,6 +192,12 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
     }
 
     private fun fail(t: Double, why: String) { failed += t to why }
+
+    /** 반복 끝(endScenario 전): 그사이 stepLog가 Step을 버렸으면 판정을 믿을 수 없어 실패로 남긴다(expectNone 창의 Step이 빠졌을 수 있다). */
+    @Synchronized fun checkStepLog() {
+        val lost = host.stepLogDrops.value - drops0
+        if (lost > 0) fail(lastExecT, "stepLog 유실 ${lost}개")
+    }
 
     /** 장면이 끝난 뒤 정리에서 생긴 실패(예: 마이크 서비스가 안 꺼짐)를 마지막 단계 t로 남긴다. */
     @Synchronized fun failEnd(why: String) = fail(scene.steps.maxOfOrNull { it.t } ?: 0.0, why)
@@ -332,7 +342,7 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
             gainViolations = gainViolations(gains.map { GainPoint(it.at, it.target, it.goal.toDoubleOrNull() ?: Double.NaN) },
                 cmds.mapNotNull { (at, c) -> (c as? AdjustPlayback)?.let { at to it } },
                 cmds.mapNotNull { it.second as? StartPlayback }.associateBy { it.playId }),
-            lufsViolations = null,   // 음원 크기는 exec 측정값을 쓸지 합칠 때 정한다(scenario.md 5)
+            lufsViolations = lufsViolations(cmds.mapNotNull { (it.second as? StartPlayback)?.method }.toSet(), lufs = ports::lufs),
             systemVolumeChanges = volumeChanges + control.count { it.api in VOLUME_APIS }, driverOps = driverOps,
             handoffMs = handoff?.let { it - alarm }, // handoff는 alarm이 있을 때만 있다
             controlOkRate = (others.size + missing).takeIf { it > 0 }?.let { others.count { it.ok }.toDouble() / it },
@@ -350,6 +360,25 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
 }
 
 // ---- 순수 계산(시험하기 쉽게 밖에 둔다) ----
+
+/** 계약 7.4 lufs_violations: 쓴 음원 중 −30 ±1 LUFS(Params) 밖의 수. 하나라도 못 재면 null(미측정, 0으로 쓰지 않는다). */
+fun lufsViolations(used: Set<Method>, p: Params = Params(), lufs: (Method) -> Double?): Int? {
+    val v = used.map(lufs)
+    return if (null in v) null else v.count { abs(it!! - p.targetLufs) > p.lufsTolerance }
+}
+
+/**
+ * stepLog에서 장면 Step만 넘긴다(계약 2.4·C92). 수집은 startScenario보다 먼저 붙어야 장면 첫 Step을 놓치지 않는데, 그 사이 앞서 큐에 든
+ * 실제 사건의 Step이 섞여 온다. 그래서 장면 첫 Step까지 버린다: 호스트가 `EngineState.fresh(seed)`로 만들어 rng = 그 반복 시드, 세션·할 일이 없다.
+ * 한 수집자(호스트 스레드)에서만 부른다.
+ */
+class SceneGate(private val seed: Long) {
+    private var begun = false
+    fun accept(step: Step): Boolean {
+        if (!begun) begun = step.state.rng == seed && step.state.session == null && step.commands.isEmpty()
+        return begun
+    }
+}
 
 fun stateMatches(step: Step, state: String?, attempt: Int?): Boolean {
     val s = step.state.session
@@ -460,7 +489,7 @@ fun csv(rows: List<RunRow>): String {
         "summary", "", "${rows.count { it.completed }}/${rows.size}", rows.mapNotNull { it.failedStep }.minOrNull(),
         rows.mapNotNull { it.alarmLatencyMs }.maxOrNull(), rows.mapNotNull { it.alarmToPlayMs }.maxOrNull(), "",
         rows.any { it.fallback }, rows.maxOf { it.maxAttempts }, rows.maxOf { it.maxEpisodePlayMs }, rows.maxOf { it.sessionPlayMs },
-        rows.maxOf { it.gainViolations }, rows.mapNotNull { it.lufsViolations }.maxOrNull(), rows.maxOf { it.systemVolumeChanges },
+        rows.maxOf { it.gainViolations }, if (rows.any { it.lufsViolations == null }) null else rows.maxOf { it.lufsViolations!! }, rows.maxOf { it.systemVolumeChanges },
         rows.maxOf { it.driverOps }, rows.mapNotNull { it.handoffMs }.maxOrNull(), rate(rows.mapNotNull { it.controlOkRate }.minOrNull()),
     ).joinToString(",") { f(it) }
     return (listOf(CSV_HEADER.joinToString(",")) + rows.map(::line) + sum).joinToString("\n", postfix = "\n")

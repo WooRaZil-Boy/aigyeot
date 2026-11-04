@@ -49,6 +49,7 @@ import kr.aigyeot.engine.Qa
 import kr.aigyeot.engine.QaReply
 import kr.aigyeot.engine.SendToPhone
 import kr.aigyeot.shared.Envelope
+import kr.aigyeot.shared.FeedingStartedBody
 import kr.aigyeot.shared.LlmRequest
 import kr.aigyeot.shared.LlmResponse
 import kr.aigyeot.shared.LlmState
@@ -649,11 +650,19 @@ class Link internal constructor(
         }
     }
 
-    /** 장면 'phone' 단계(계약 7.3): 중계 없이 받는 쪽(8.3)에 바로. ack는 없다. */
+    /**
+     * 장면 'phone' 단계(계약 7.3): 받는 type은 feeding_started뿐이다. Room·보낼 함은 쓰지 않고 FeedingStarted(PHONE) 사건 하나만 낸다.
+     * 장면 봉투는 seq가 비어 오고 장면은 실제 상태를 바꾸지 않아야 하므로 8.3 받기 길(seq·processed_message)을 타지 않는다.
+     */
     suspend fun receiveForScenario(envelopeJson: String) {
         val env = runCatching { ProtocolJson.decodeFromString(Envelope.serializer(), envelopeJson) }.getOrNull()
             ?: return Unit.also { Log.w(TAG, "장면 봉투를 읽지 못함") }
-        withContext(Dispatchers.IO) { receive(env) }
+        val at: Long? = if (env.type != "feeding_started") null else runCatching { instantOf(ProtocolJson.decodeFromJsonElement(FeedingStartedBody.serializer(), env.body).at) }.getOrNull()
+        if (at == null) {
+            Log.w(TAG, "장면 phone 봉투를 쓰지 않음 type=${env.type}")
+            return
+        }
+        post(FeedingStarted(clock(), at, FeedingFrom.PHONE, env.id))
     }
 
     private companion object {

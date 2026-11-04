@@ -86,6 +86,13 @@ class SceneFileTest {
         assertFailsWith<SceneError> { parseScene(scene("").replace("\"SUCCESS\"", "\"x\"").replace("\"FAIL\"", "\"UNJUDGED\"")) }
     }
 
+    @Test fun `P1 장면 phone은 feeding_started만 받는다(곡·선택·연결 메시지는 실제 Room을 바꾸므로 거절)`() {
+        parseScene(scene("""{"t":1,"phone":{"type":"feeding_started","body":{"atOffsetSec":-9}}}"""))
+        listOf("song_selected", "song_added", "song_removed", "paired", "unpaired", "state_request").forEach {
+            assertTrue(it, bad("""{"t":1,"phone":{"type":"$it","body":{}}}""").contains("feeding_started"))
+        }
+    }
+
     @Test fun `F9 타입이 틀린 값은 조용히 넘기지 않고 거절한다`() {
         assertTrue(bad("""{"t":1,"expect":{"command":"Speak","sid":123,"by":3}}""").contains("sid"))
         assertTrue(bad("""{"t":1,"expect":{"state":1,"by":3}}""").contains("state"))

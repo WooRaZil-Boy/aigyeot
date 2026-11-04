@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -54,6 +55,7 @@ import kr.aigyeot.app.common.CarPaths
 import kr.aigyeot.app.detect.MicService
 import kr.aigyeot.app.host.HostApi
 import kr.aigyeot.app.link.Link
+import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MicPath
 import kr.aigyeot.engine.Params
 import java.io.File
@@ -63,7 +65,7 @@ import java.util.Locale
 
 /**
  * 장면 재생기(F18, 계약 7장). 장면을 시간축대로 돌리고 기대값을 판정해 측정표를 쓴다.
- * 판단 코어 상태는 [HostApi.steps]로 읽기만 하고, 입력은 Virtual Console·녹음·사건 주입으로 넣는다(계약 1.1).
+ * 판단 코어 상태는 [HostApi.stepLog]로 읽기만 하고, 입력은 Virtual Console·녹음·사건 주입으로 넣는다(계약 1.1).
  * 마이크 서비스를 켜므로 장면 화면(앱 화면)이 떠 있을 때만 [run]한다(명세서 6장).
  */
 class Scenario(
@@ -79,6 +81,7 @@ class Scenario(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
     private val vc = VirtualConsole()
+    private val loudness = SourceLoudness { androidLufs(context, it) }   // 잰 음원은 반복마다 다시 재지 않는다
 
     fun ids(): List<String> = files().keys.sorted()          // assets/scenario + 흘려 넣은 장면
 
@@ -200,6 +203,7 @@ class Scenario(
                 }
             }
             override fun simulated(what: String) { Log.i(TAG, "시뮬레이션 입력 $what") }
+            override fun lufs(method: Method): Double? = loudness.lufs(method)
         }
         val volume = object : BroadcastReceiver() {   // 계약 7.4 system_volume_changes: STREAM_MUSIC 볼륨 변화 콜백을 센다
             override fun onReceive(c: Context, i: Intent) {
@@ -212,11 +216,11 @@ class Scenario(
         MicService.sourceFactory = { mix }   // BABY_ABOARD가 켜는 마이크 서비스가 장면 입력원을 쓴다
         try {
             ContextCompat.registerReceiver(context, volume, IntentFilter(VOLUME_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
-            val before = host.steps.value   // 장면 전 마지막 Step(같은 객체)은 버린다
+            // stepLog는 모든 Step을 버퍼에 담아 순서대로 낸다(느려도 중간 Step을 놓치지 않는다, 계약 2.4). startScenario보다 먼저 붙어(UNDISPATCHED:
+            // launch가 돌아올 때 이미 구독) 장면 첫 Step부터 받고, 그 앞에 큐에 들어 있던 실제 사건의 Step은 SceneGate가 버린다.
+            val gate = SceneGate(run.seed)
+            jobs += scope.launch(Dispatchers.Unconfined, CoroutineStart.UNDISPATCHED) { host.stepLog.collect { if (gate.accept(it)) run.onStep(it) } }
             host.startScenario(run.setup())
-            // startScenario 뒤에 붙는다: 그 전의 실제 Step이 측정에 섞이지 않게. 처음 받은 값이 startScenario 직전 값(같은 객체)이면 버린다.
-            // StateFlow는 느린 수집자에게 중간 값을 건너뛰므로 Unconfined로 보내는 스레드에서 바로 받는다(보고서: 호스트가 한 스레드에서 내야 한다).
-            jobs += scope.launch(Dispatchers.Unconfined) { host.steps.collect { if (it != null && it !== before) run.onStep(it) } }
             jobs += scope.launch(Dispatchers.Unconfined) { host.controlLog.collect { run.onControl(it) } }
             jobs += scope.launch(Dispatchers.IO) {   // 세션 신호: 실행 중 1초마다(계약 7.1)
                 while (isActive) { val r = vc.send("POST", VirtualConsole.SESSION); if (!r.ok) note = "VC 세션 실패 ${r.code} ${r.body.take(60)}"; delay(1_000) }
@@ -244,6 +248,7 @@ class Scenario(
             run.finish("오류: ${e.javaClass.simpleName} ${e.message}")
         } finally {
             withContext(NonCancellable) { try {
+                run.checkStepLog()   // 장면 Step이 버려졌으면 이 반복은 통과가 아니다(endScenario 복원의 Step은 세지 않게 먼저)
                 jobs.forEach { it.cancel() }
                 withTimeoutOrNull(6_000) { jobs.joinAll() }   // HttpURLConnection은 취소로 멈추지 않으니 endScenario 전에 끝나길 기다린다
                 vcQueue.close()

@@ -63,6 +63,8 @@ class FakeWorld(
     private val _steps = MutableStateFlow<Step?>(null)
     override val steps: StateFlow<Step?> = _steps
     override val controlLog = MutableSharedFlow<ControlLogEntity>()
+    override val stepLog = MutableSharedFlow<Step>()   // 가짜 세상은 run.onStep에 바로 넣는다
+    override val stepLogDrops = MutableStateFlow(0L)
     private var run: SceneRun? = null
     val commands = ArrayList<Pair<Long, Command>>()
     val events = ArrayList<Event>()

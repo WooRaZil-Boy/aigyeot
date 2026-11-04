@@ -341,6 +341,76 @@ class SceneRunTest {
         assertEquals(0.0, r.row().controlOkRate!!, 0.0)
     }
 
+    @Test fun `L1 lufs_violations는 쓴 음원 중 −30 ±1 LUFS 밖을 센다`() {
+        val wn = Method(MethodKind.WHITE_NOISE, null); val lu = Method(MethodKind.LULLABY, null); val song = Method(MethodKind.SONG, "s1")
+        assertEquals(0, lufsViolations(emptySet()) { null })                                         // 튼 음원이 없다
+        assertEquals(1, lufsViolations(setOf(wn, lu)) { if (it == lu) -32.0 else -30.4 })
+        assertEquals(0, lufsViolations(setOf(wn, song)) { if (it == song) -31.0 else -29.0 })       // 경계 ±1은 안
+        assertEquals(1, lufsViolations(setOf(song)) { -28.9 })
+        assertNull(lufsViolations(setOf(wn, song)) { if (it == song) null else -30.0 })             // 못 잰 음원이 있으면 미측정
+    }
+
+    @Test fun `L2 row의 lufs_violations는 그 장면 StartPlayback 음원을 포트로 잰다`() {
+        val base = openStep()
+        val asked = ArrayList<Method>()
+        val ports = object : ScenePorts by FakeWorld() {
+            override fun lufs(method: Method): Double? { asked += method; return if (method.kind == MethodKind.LULLABY) -33.0 else -30.0 }
+        }
+        val w = FakeWorld()
+        val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, ports, w.now)
+        r.onStep(base.copy(commands = listOf(StartPlayback("p1", PlayKind.AUTO, Method(MethodKind.WHITE_NOISE, null), 10_000, 2_000))))
+        r.onStep(base.copy(commands = listOf(StartPlayback("p2", PlayKind.AUTO, Method(MethodKind.LULLABY, null), 20_000, 2_000))))
+        r.onStep(base.copy(commands = listOf(StartPlayback("p3", PlayKind.AUTO, Method(MethodKind.LULLABY, null), 30_000, 2_000))))
+        assertEquals(1, r.row().lufsViolations)
+        assertEquals(setOf(Method(MethodKind.WHITE_NOISE, null), Method(MethodKind.LULLABY, null)), asked.toSet())
+    }
+
+    @Test fun `L3 control_ok_rate는 exec가 남기는 줄 중 차 제어 넷만 센다(C96)`() {
+        val w = FakeWorld()
+        val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
+        // exec가 실제로 남기는 재생·경유지·오류 줄(report-exec 3장): target이 영역 이름이 아니다
+        listOf("getDevices" to "bus100_audio_zone_1", "requestAudioFocus" to "p1", ROUTE_API to "p1", GAIN_API to "p1", "stopPlayback" to "p1",
+            "playback" to "p1", "addWaypoint" to "tbt:rest:안성(부산)", "handle" to "StartPlayback", "start" to "exec")
+            .forEach { (api, t) -> r.onControl(control(api, "x", ok = false, target = t)) }
+        assertNull(r.row().controlOkRate)
+        r.onControl(control("setHvacSeatTemperature", "0", target = "ROW_2_LEFT"))
+        r.onControl(control("setWindowLock", "0", ok = false, target = "ROW_2_RIGHT"))
+        r.onControl(control("setReadingLightSwitch", "0", target = "ROW_2_LEFT"))
+        r.onControl(control("setHvacTemperature", "24", target = "ROW_1_LEFT"))
+        assertEquals(0.75, r.row().controlOkRate!!, 0.0)
+    }
+
+    @Test fun `L4 CSV 요약의 lufs_violations는 반복 하나라도 미측정이면 빈 칸`() {
+        val a = RunRow(1, 1, true, null, 2_400, 300, "z", false, 1, 56_000, 56_000, 0, 0, 0, 0, null, 1.0, emptyList())
+        fun summaryLufs(vararg v: Int?) = csv(v.mapIndexed { i, x -> a.copy(run = i + 1, lufsViolations = x) }).trim().lines().last().split(",")[12]
+        assertEquals("2", summaryLufs(0, 2))
+        assertEquals("", summaryLufs(0, null))   // 0으로 쓰지 않는다
+        assertEquals("", summaryLufs(null, 3))
+    }
+
+    @Test fun `S1 stepLog 유실이 반복 중에 늘면 그 반복은 completed=false, 사유 stepLog 유실`() {
+        val w = FakeWorld()
+        val ok = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
+        ok.checkStepLog()
+        assertTrue(ok.row().completed)                          // 유실 없음
+        val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
+        w.stepLogDrops.value += 3                                // 반복 중 버퍼가 넘쳤다
+        r.checkStepLog()
+        val row = r.row()
+        assertFalse(row.completed)
+        assertTrue(row.failures.toString(), row.failures.any { it.contains("stepLog 유실 3") })
+    }
+
+    @Test fun `G1 SceneGate는 장면 첫 Step(시드 rng, 할 일 없음)부터 넘긴다`() {
+        val base = openStep()
+        val gate = SceneGate(13)
+        assertFalse(gate.accept(base))                                                           // 실제 세션 Step
+        assertFalse(gate.accept(base.copy(state = base.state.copy(rng = 13, session = null), commands = listOf(Speak("u", Sid.S16, emptyMap())))))   // 할 일이 있으면 시작 Step이 아니다
+        val start = base.copy(state = base.state.copy(rng = 13, session = null), commands = emptyList())
+        assertTrue(gate.accept(start))
+        assertTrue(gate.accept(base))                                                            // 그 뒤는 모두
+    }
+
     @Test fun `F8 SendToPhone body의 occurred_at 숫자(epoch ms)는 기대 RFC 3339와 2초까지 맞다`() {
         val at = Instant.parse("2026-11-05T00:00:00Z").toEpochMilli()
         fun c(ms: Long) = SendToPhone("handoff_alert", JsonObject(mapOf("occurred_at" to JsonPrimitive(ms))))

@@ -157,6 +157,35 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(SA, dao.selection()!!.songId)
     }
 
+    // 장면 'phone' 봉투는 seq가 비어 온다(계약 7.3, C96). seq 검사 없이 적용하고 실제 seq 기록과 섞지 않는다.
+    private fun scenarioRx(e: kr.aigyeot.shared.Envelope) = runBlocking { link.receiveForScenario(ProtocolJson.encodeToString(kr.aigyeot.shared.Envelope.serializer(), e)) }
+
+    @Test fun scenarioFeedingStarted_postsOneEvent_roomUntouched() {
+        profile(lastFeeding = at1Ms - 60_000); phone()
+        val e = env("feeding_started", null, """{"at":"$at1"}""")
+        scenarioRx(e)
+        assertEquals(FeedingStarted(T0, at1Ms, FeedingFrom.PHONE, e.id), events.single())
+        assertEquals(at1Ms - 60_000, lastFeeding())
+        assertFalse(dao.processed(e.id))
+        assertTrue(outbox().isEmpty())
+    }
+
+    @Test fun scenarioOtherTypes_ignored_roomUntouched_andRealRelayStillApplies() {
+        phone()
+        song(SA, ACTIVE, 10); song(SB, ACTIVE, 11)
+        rx(env("song_selected", 30, """{"song_id":"$SA"}"""))
+        val before = dao.selection()
+        val outboxBefore = outbox().size
+        scenarioRx(env("song_selected", null, """{"song_id":"$SB"}"""))
+        scenarioRx(env("song_removed", null, """{"song_id":"$SA"}"""))
+        assertEquals(before, dao.selection())
+        assertEquals(setOf(SA, SB), dao.songs().map { it.id }.toSet())
+        assertEquals(outboxBefore, outbox().size)
+        assertTrue(events.isEmpty())
+        rx(env("song_selected", 31, """{"song_id":"$SB"}"""))          // 장면 뒤 실제 메시지는 평소대로
+        assertEquals(SB, dao.selection()!!.songId)
+    }
+
     @Test fun songSelected_deletedSongKeepsSelectionRecord() {
         song(SA, ACTIVE, 10); song(SB, ACTIVE, 11)
         rx(env("song_selected", 30, """{"song_id":"$SA"}"""))

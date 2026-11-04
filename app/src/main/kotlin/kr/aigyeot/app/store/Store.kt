@@ -2,6 +2,7 @@ package kr.aigyeot.app.store
 
 import android.util.Log
 import kotlinx.serialization.json.Json
+import kr.aigyeot.app.link.candidateSong
 import kr.aigyeot.app.link.db.OutboxEntity
 import kr.aigyeot.app.store.db.AlarmLogEntity
 import kr.aigyeot.app.store.db.AppDatabase
@@ -119,14 +120,12 @@ class Store(
     }
 
     /**
-     * 다음 세션 음원(명세서 5장). 프로필에서 고른 종류 + 후보 ③(고른 곡이 ACTIVE면 그 곡, 아니면 ACTIVE 중 added_seq 최대).
+     * 다음 세션 음원(명세서 5장). 프로필에서 고른 종류 + 후보 ③. ③은 link와 같은 규칙 하나(`candidateSong`, contracts-link 8.4).
      * 프로필이 없으면 기본(백색소음·자장가·③).
      */
     fun methods(): List<Method> {
         val kinds = dao.profile()?.methods?.map { it.kind } ?: listOf(MethodKind.WHITE_NOISE, MethodKind.LULLABY, MethodKind.SONG)
-        val active = dao.activeSongs()
-        val chosen = dao.selection()?.songId?.let { id -> active.firstOrNull { it.id == id } }
-        val third = (chosen ?: active.firstOrNull())?.let { Method(MethodKind.SONG, it.id) }
+        val third = candidateSong(dao.activeSongs(), dao.selection())?.let { Method(MethodKind.SONG, it) }
         return kinds.distinct().mapNotNull { if (it == MethodKind.SONG) third else Method(it) }
     }
 

@@ -3,6 +3,7 @@ package kr.aigyeot.app.host
 import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,11 +19,8 @@ import kr.aigyeot.engine.EndReason
 import kr.aigyeot.engine.Engine
 import kr.aigyeot.engine.EngineState
 import kr.aigyeot.engine.Event
-import kr.aigyeot.engine.FeedingFrom
 import kr.aigyeot.engine.Gear
-import kr.aigyeot.engine.FeedingStarted
 import kr.aigyeot.engine.InputLost
-import kr.aigyeot.engine.LinkChanged
 import kr.aigyeot.engine.LogAlarm
 import kr.aigyeot.engine.MethodsChanged
 import kr.aigyeot.engine.MicService
@@ -55,9 +53,6 @@ import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
-
-/** 설계값 30초(계약 8.2 `snapshotIntervalMs`, C78). engine Params에 아직 없어 여기 둔다(보고서 '공용 파일 요청'). */
-const val SNAPSHOT_INTERVAL_MS = 30_000L
 
 /** 마이크 서비스와 맞추는 곳(2.4 ③, C82). 기본은 MicService companion, 시험은 가짜. */
 class MicPort(
@@ -97,6 +92,11 @@ class Host(
 
     private val _steps = MutableStateFlow<Step?>(null)
     override val steps: StateFlow<Step?> = _steps
+    // 버퍼 4096 Step(10Hz 표본이면 약 7분 밀림). 넘치면 그 Step은 버리고 수를 센다(호스트 스레드는 수집자를 기다리지 않는다)
+    private val _stepLog = MutableSharedFlow<Step>(extraBufferCapacity = 4096)
+    override val stepLog: SharedFlow<Step> = _stepLog
+    private val _drops = MutableStateFlow(0L)
+    override val stepLogDrops: StateFlow<Long> = _drops
     private val _control = MutableSharedFlow<ControlLogEntity>(extraBufferCapacity = 256)
     override val controlLog: SharedFlow<ControlLogEntity> = _control
 
@@ -157,8 +157,10 @@ class Host(
     /** Suspend 짐작(C67). 감시 서비스가 부른다. 이미 Suspend면 넣지 않는다. */
     fun suspend() = worker.execute { if (started && state.ign.suspendedAt == null) process(stamp(Suspend(0))) }
 
-    /** Resume 짐작(C67): Resume 뒤 8.3 대조('Suspend 뒤 재개 포함'). */
+    /** Resume 짐작(C67): Resume 뒤 8.3 대조('Suspend 뒤 재개 포함'). 화면 켜짐·전원 정책 켜짐마다 link를 바로 다시 확인시킨다(contracts-link 8.6). */
     fun resume() = worker.execute {
+        Log.i(TAG, "C67 link.wake: 화면·전원 켜짐")
+        targets.wake()
         if (!started) return@execute
         checkJump()   // 점프로 이미 Resume을 넣었으면 아래에서 다시 넣지 않는다
         if (state.ign.suspendedAt != null) { process(stamp(Resume(0))); reconcileLink() }
@@ -175,7 +177,7 @@ class Host(
         // 차 상태(기어·문·마이크)와 운전자는 실제 값을 이어받는다. 나머지는 장면 setup으로 처음부터
         val f = EngineState.fresh(setup.seed, setup.profile, setup.methods, setup.history, setup.feedingStart, setup.otherGuardians)
         state = f.copy(now = maxOf(clock(), r.now), car = r.car, ign = f.ign.copy(driverUserId = r.ign.driverUserId))
-        _steps.value = Step(state, emptyList(), null)
+        publish(Step(state, emptyList(), null))   // 장면 첫 Step(rng = 그 반복 시드, 할 일 없음). scenario의 SceneGate가 여기서부터 받는다
     }
 
     override fun endScenario() = worker.execute {
@@ -232,7 +234,8 @@ class Host(
         val jumped = now - lastSlept > JUMP_MS
         lastSlept = now
         if (!jumped) return
-        Log.i(TAG, "C67 시계 점프")
+        Log.i(TAG, "C67 시계 점프, link.wake")
+        targets.wake()   // contracts-link 8.6: 시계 점프도 바로 다시 확인
         if (state.ign.suspendedAt == null) run(Suspend(state.now))   // stamp하지 않는다: 잠든 시간을 quietMs에 세지 않게
         run(stamp(Resume(0)))
         reconcileLink()
@@ -245,7 +248,7 @@ class Host(
         val step = try { engine.step(old, e) } catch (x: Exception) { Log.e(TAG, "step 실패: $e", x); return }
         state = step.state
         store.observe(e, step.state)
-        _steps.value = step
+        publish(step)
         dispatch(old, step)
         scheduleTick(step.wakeAt)
     }
@@ -276,6 +279,12 @@ class Host(
         if (!saved && scenario == null && needsSnapshot(old, step)) snapshot(step.state)
     }
 
+    /** 모든 Step을 순서대로 낸다(steps는 마지막 값, stepLog는 손실 없는 흐름, 계약 2.4). */
+    private fun publish(step: Step) {
+        _steps.value = step
+        if (!_stepLog.tryEmit(step)) { _drops.value++; Log.w(TAG, "stepLog 버퍼가 넘쳐 Step 하나를 버림(누적 ${_drops.value})") }
+    }
+
     private fun snapshot(s: EngineState) { store.saveSnapshot(s); lastSnapshotAt = clock(); dirty = false }
 
     /** C78 (a) 바로 저장 / (b) 30초 묶음 / Tick으로 now만 바뀐 Step은 저장하지 않음. */
@@ -284,12 +293,12 @@ class Host(
         if (step.commands.any { it::class in IMMEDIATE }) return true
         if (key(old) != key(n)) return true
         if (old.copy(now = n.now) != n) dirty = true   // 건너뛴 변경은 그 뒤 Tick만 와도 30초 안에 저장한다
-        return dirty && clock() - lastSnapshotAt >= SNAPSHOT_INTERVAL_MS
+        return dirty && clock() - lastSnapshotAt >= p.snapshotIntervalMs
     }
 
     private fun scheduleTick(wakeAt: Long?) {
         tick?.cancel(false)
-        val snapAt = if (dirty && scenario == null) lastSnapshotAt + SNAPSHOT_INTERVAL_MS else null
+        val snapAt = if (dirty && scenario == null) lastSnapshotAt + p.snapshotIntervalMs else null
         val wake = listOfNotNull(wakeAt, snapAt).minOrNull() ?: return
         // 이미 지난 wakeAt이 같은 Step에서 풀리지 않았으면 1초 뒤에 다시 본다(빈 Tick으로 바쁘게 돌지 않게, 2.4 '1초마다 넣어도 된다')
         val d = (wake - clock()).let { if (it <= 0) 1_000 else it }
@@ -347,13 +356,16 @@ class Host(
         running?.let { r -> (r - unresolved).forEach { run(stamp(InputLost(now, it))) } }
     }
 
-    /** ⑤ contracts-link 8.3 '복원 뒤 대조': Room 값과 다르면 사건으로 맞춘다. 프로필도 같은 틈이 있어 함께 본다. */
+    /**
+     * ⑤ contracts-link 8.3 '복원 뒤 대조': Room 값과 다르면 사건으로 맞춘다. 수유·보호자는 link 몫(Link.restoreEvents), 후보 ③은 store 몫.
+     * 프로필도 같은 틈이 있어 함께 본다. restoreEvents는 IO에서 돌지만 첫 판단 전에 넣어야 해 호스트 스레드가 끝날 때까지 기다린다(큐 한 스레드 그대로).
+     */
     private fun reconcileLink() {
         if (!started) return
         val now = clock()
-        store.feedingStart()?.let { if (state.feedingStart == null || it > state.feedingStart!!) process(stamp(FeedingStarted(now, it, FeedingFrom.PHONE, null))) }
+        val fromLink = try { runBlocking { targets.restore(state, now) } } catch (x: Exception) { Log.e(TAG, "복원 뒤 대조(link) 실패", x); emptyList() }
+        fromLink.forEach { process(stamp(it)) }
         store.methods().let { if (it != state.methodsNext) process(stamp(MethodsChanged(now, it))) }
-        store.otherGuardians().let { if (it != state.otherGuardians) process(stamp(LinkChanged(now, it))) }
         store.profile().let { if (it != state.profile) process(stamp(ProfileChanged(now, it))) }
     }
 

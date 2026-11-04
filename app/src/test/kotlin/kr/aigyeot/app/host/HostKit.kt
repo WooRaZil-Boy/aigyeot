@@ -2,6 +2,13 @@ package kr.aigyeot.app.host
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kr.aigyeot.app.exec.LoudnessResult
+import kr.aigyeot.app.link.FakeCipher
+import kr.aigyeot.app.link.FakeRelay
+import kr.aigyeot.app.link.Link
 import kr.aigyeot.app.store.Store
 import kr.aigyeot.app.store.db.AppDatabase
 import kr.aigyeot.app.store.db.ChildProfileEntity
@@ -26,6 +33,11 @@ class Kit {
     var onStart: ((StartPlayback) -> Unit)? = null
     var slept = 0L                                  // 가짜 '기기가 잠든 누적 시간'(시계 점프 감지)
     var onRunningPauses: (() -> Unit)? = null       // runningPauses를 읽는 순간 끼어든다(그 직후 서비스가 시작한 경우)
+    var wakes = 0                                   // Link.wake 횟수(contracts-link 8.6 '바로 다시 확인')
+    /** 진짜 link(중계는 가짜). 복원 뒤 대조(8.3)는 이 link의 restoreEvents를 같은 DB로 부른다. */
+    val linkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val realLink = Link(ApplicationProvider.getApplicationContext(), db, clock, {}, { null }, FakeRelay(), FakeCipher, { null },
+        { _, _ -> LoudnessResult(true) }, linkScope)
     lateinit var host: Host
     lateinit var store: Store
 
@@ -39,11 +51,11 @@ class Kit {
     )
 
     /** 새 호스트(=새 프로세스). 복원을 끝낼 때까지 기다린다. */
-    fun boot(): Host {
+    fun boot(p: Params = Params()): Host {
         if (::host.isInitialized) host.close()
         val s = Store(db, clock, scenarioId = { host.scenarioId })
         store = s
-        host = Host(s, clock, mic = MicPort(
+        host = Host(s, clock, p = p, mic = MicPort(
             { val r = running; onRunningPauses?.invoke(); r },
             { if (running != null) assumed += it else pending = pending + it },   // 진짜처럼: 돌고 있으면 감지기에, 아니면 pendingPauses에
         ), userId = { 10 }, slept = { slept })
@@ -54,6 +66,8 @@ class Kit {
             },
             link = { link += it },
             notice = { notices += it },
+            wake = { wakes++ },
+            restore = realLink::restoreEvents,
         )
         host.start()
         host.awaitIdle()

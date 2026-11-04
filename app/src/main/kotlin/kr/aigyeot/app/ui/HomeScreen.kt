@@ -8,6 +8,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import kr.aigyeot.app.host.Graph
+import kr.aigyeot.app.link.LinkStatus
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kr.aigyeot.engine.EngineState
@@ -26,6 +31,7 @@ fun HomeScreen(
     s: EngineState?, now: Long,
     onBabyAboard: () -> Unit, onFeedingNow: () -> Unit, onAsk: () -> Unit, onFeedingConfirm: (Boolean) -> Unit,
     go: (String) -> Unit,
+    link: LinkStatus = graphLinkStatus(),
 ) = Page("아이곁", onBack = null) {
     Card(Modifier.fillMaxWidth()) {
         androidx.compose.foundation.layout.Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -33,6 +39,7 @@ fun HomeScreen(
             Body(if (s?.car?.micRunning == true) "듣기 켜짐" else "듣기 꺼짐")
             if (!s?.session?.pauses.isNullOrEmpty()) Body("입력이 끊겨 판정을 잠시 멈췄어요", MaterialTheme.colorScheme.error)
             Body(feedingText(s, now))
+            LinkLines(link)   // contracts-link 8.6 정차 화면 표시
         }
     }
     if (s?.session?.nursingStop?.confirmShown == true) {
@@ -51,6 +58,13 @@ fun HomeScreen(
     Body("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요")
     listOf("connect" to "휴대폰 연결", "songs" to "부모 노래", "report" to "주행 리포트", "setup" to "아기 설정", "demo" to "시연·측정")
         .forEach { (k, t) -> BigButton(t, primary = false) { go(k) } }
+}
+
+/** 프로세스에 하나인 link의 연결 상태(Graph). 화면 진입점이 넘기지 않으면 여기서 읽는다. */
+@Composable
+internal fun graphLinkStatus(): LinkStatus {
+    val ctx = LocalContext.current
+    return remember { Graph.get(ctx).link.status }.collectAsState().value
 }
 
 private fun statusText(s: EngineState?): String {

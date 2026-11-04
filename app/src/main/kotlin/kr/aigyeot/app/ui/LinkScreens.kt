@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,6 +26,8 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.delay
 import kr.aigyeot.app.link.Link
+import kr.aigyeot.app.link.LinkConn
+import kr.aigyeot.app.link.LinkStatus
 import kr.aigyeot.app.link.db.SongSelectionEntity
 import kr.aigyeot.app.store.db.SongEntity
 import kr.aigyeot.engine.Method
@@ -40,8 +43,7 @@ fun ConnectScreen(link: Link, clock: () -> Long, onBack: () -> Unit) = Page("휴
     val st by link.status.collectAsState()
     var now by remember { mutableLongStateOf(clock()) }
     LaunchedEffect(st.pairExpiresAt) { while (st.pairExpiresAt != null) { now = clock(); delay(1_000) } }
-    Body(if (st.online) "휴대폰 연결됨" else if (st.registered) "휴대폰 연결: 다시 붙는 중" else "휴대폰 연결: 붙는 중")
-    st.error?.let { Body(it, MaterialTheme.colorScheme.error) }
+    LinkLines(st)
     val code = st.pairCode
     if (code != null) {
         Body("휴대폰 앱에서 QR을 찍거나 코드를 넣어 주세요")
@@ -60,6 +62,43 @@ fun ConnectScreen(link: Link, clock: () -> Long, onBack: () -> Unit) = Page("휴
         }
     }
     BigButton("목록 새로 보기", primary = false) { link.refreshPhones() }
+}
+
+/** 정차 화면의 연결 상태 한 줄(contracts-link 8.6). NONE은 표시하지 않는다. */
+internal fun connText(c: LinkConn): String? = when (c) {
+    LinkConn.NONE -> null
+    LinkConn.CONNECTING -> "휴대폰 연결: 붙는 중"
+    LinkConn.CONNECTED -> "휴대폰 연결됨"
+    LinkConn.BACKOFF -> "휴대폰 연결: 다시 붙는 중"
+}
+
+/**
+ * "연결됐어요"를 마지막으로 보여 준 기기 id(8.4 '새 행이면 화면에 연결됐어요', 8.7 ③). 프로세스 수명이라 다른 화면에 있거나 주행 제한으로
+ * 가려진 동안 붙은 기기도 다음에 정차 화면을 그릴 때 한 번 보인다.
+ */
+internal class PairedNotice {
+    private var shown: String? = null
+    /** 정차 화면이 [now]를 실제로 그렸을 때 부른다. 아직 보여 주지 않은 기기면 true를 주고 보여 준 것으로 적는다. */
+    @Synchronized fun take(now: String?): Boolean = (now != null && now != shown).also { if (it) shown = now }
+}
+
+internal val pairedNotice = PairedNotice()
+
+internal class LinkLine(val text: String, val error: Boolean = false)
+
+/** 연결 상태·"연결됐어요"([paired])·오류 문장(link가 넣은 그대로, 8.6 '차 토큰 무효' 등) 순서. */
+internal fun linkLines(st: LinkStatus, paired: Boolean): List<LinkLine> = listOfNotNull(
+    connText(st.conn)?.let(::LinkLine),
+    if (paired) LinkLine("연결됐어요") else null,
+    st.error?.let { LinkLine(it, error = true) },
+)
+
+/** 홈·연결 화면이 같이 쓰는 연결 표시. "연결됐어요"는 보여 준 방문 동안(화면을 떠날 때까지) 남는다. */
+@Composable
+internal fun LinkLines(st: LinkStatus) {
+    var paired by remember { mutableStateOf(false) }
+    LaunchedEffect(st.justPaired) { if (pairedNotice.take(st.justPaired)) paired = true }   // 그린 뒤에만 본 것으로 적는다
+    linkLines(st, paired).forEach { Body(it.text, if (it.error) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified) }
 }
 
 /** 노래 고르기(G20, 명세서 5장): 받은 부모 노래 중 실험에 쓸 곡을 고른다. 후보 ③ 다시 계산은 store가 한다. */

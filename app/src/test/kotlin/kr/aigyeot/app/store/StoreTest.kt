@@ -187,6 +187,32 @@ class StoreTest {
         assertEquals(Method(MethodKind.SONG, "b"), store.methods().last(), "고른 곡이 지워지면 다시 가장 새 곡")
     }
 
+    @Test fun methods_thirdCandidate_sameRuleAsLink() {
+        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0))
+        fun song(id: String, seq: Long?, status: String = "ACTIVE") = sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, ${seq ?: "NULL"}, ${seq ?: 0})")
+        val link = db.linkDao()
+        fun third() = store.methods().firstOrNull { it.kind == MethodKind.SONG }?.songId
+        fun rule() = kr.aigyeot.app.link.candidateSong(link.songs(), link.selection())
+        song("n", null); song("a", -2); song("b", 3, "PENDING")
+        assertEquals(rule(), third()); assertEquals("a", third())
+        sql("INSERT INTO song_selection (song_id, seq) VALUES ('b', 9)")   // 고른 곡이 아직 쓸 수 없다
+        assertEquals(rule(), third()); assertEquals("a", third())
+        song("b", 3)
+        assertEquals(rule(), third()); assertEquals("b", third())
+    }
+
+    @Test fun report_carActions_countOnlySucceededControls() {
+        fullSession()   // 열선 성공 한 줄
+        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 11_000, api = "Seat.setHvacSeatTemperature", target = "ROW_2_RIGHT", goal = "0", actual = "3", ackMs = 120, appliedMs = null, ok = false, retries = 1))
+        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 12_000, api = "setWindowLock", target = "ROW_2_LEFT", goal = "1", actual = "0", ackMs = 120, appliedMs = null, ok = false, retries = 1))
+        val r = buildReport(dao, "S1", now)!!
+        val acts = r.carActions.associate { it.action to it.count }
+        assertEquals(1, acts[kr.aigyeot.shared.CarActionKind.SEAT_HEATER_OFF], "car_actions는 차가 대신 한 일: 실패 줄은 세지 않는다")
+        assertEquals(0, acts[kr.aigyeot.shared.CarActionKind.REAR_WINDOW_LOCK] ?: 0, "실패한 잠금만 있으면 항목 없음")
+        assertEquals(1, r.controls.single { it.target == "ROW_2_RIGHT" }.failed, "실패는 controls에 남는다")
+    }
+
     @Test fun contextRecorder_capturesMinus30ToPlus30_everySecond() {
         session(ended = null)
         dao.upsertEpisode(EpisodeEntity("E1", "S1", T0, null, "ALARM", T0 + 40_000, 1_000, null, null, null, null, null, null, null, null, null, null, false, false, 0, false, 0, emptyList()))

@@ -1,8 +1,19 @@
 package kr.aigyeot.app.host
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kr.aigyeot.app.scenario.FakeWorld
+import kr.aigyeot.app.scenario.SceneGate
+import kr.aigyeot.app.scenario.SceneRun
+import kr.aigyeot.app.scenario.parseScene
 import kr.aigyeot.app.store.db.PlayLogEntity
 import kr.aigyeot.engine.*
 import org.junit.After
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.concurrent.thread
@@ -19,7 +30,11 @@ class HostTest {
     private val k = Kit()
     private val dao get() = k.db.storeDao()
 
-    @After fun close() { k.host.close(); k.db.close() }
+    @After fun close() { k.host.close(); k.linkScope.cancel(); k.db.close() }
+
+    /** stepLog를 지금 이 스레드에서 구독한다(UNDISPATCHED: 돌아올 때 이미 붙어 있다). */
+    private fun collect(on: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Unconfined, f: (Step) -> Unit) =
+        CoroutineScope(on).also { it.launch(start = CoroutineStart.UNDISPATCHED) { k.host.stepLog.collect(f) } }
 
     private fun sql(q: String) = k.db.openHelper.writableDatabase.execSQL(q)
 
@@ -74,7 +89,7 @@ class HostTest {
         k.ev(VehicleSample(0, 50.0, false, 1.0, TurnSignal.NONE), k.now + 1_000)
         assertNotEquals(k.state(), k.store.loadSnapshot(), "상태는 바뀌었다(조향 누적)")
         assertEquals(s0, k.savedAt(), "30초 안에는 묶는다")
-        k.ev(VehicleSample(0, 50.0, false, 2.0, TurnSignal.NONE), k.now + SNAPSHOT_INTERVAL_MS)
+        k.ev(VehicleSample(0, 50.0, false, 2.0, TurnSignal.NONE), k.now + Params().snapshotIntervalMs)
         assertEquals(k.now, k.savedAt())
         assertEquals(k.state(), k.store.loadSnapshot())
     }
@@ -86,7 +101,7 @@ class HostTest {
         k.ev(RearDoor(0, Side.LEFT, true), k.now + 1_000)
         assertTrue(k.state().ign.doorOpenedSinceP, "묶음 저장이 건너뛴 변경")
         assertEquals(j0, k.snapshotJson(), "30초 안에는 저장하지 않는다")
-        k.ev(Tick(0), k.now + SNAPSHOT_INTERVAL_MS)
+        k.ev(Tick(0), k.now + Params().snapshotIntervalMs)
         assertTrue(k.store.loadSnapshot()!!.ign.doorOpenedSinceP, "Tick만 와도 건너뛴 변경을 저장한다")
     }
 
@@ -95,6 +110,87 @@ class HostTest {
         val s0 = k.savedAt()
         k.ev(Tick(0), k.now + 60_000)
         assertEquals(s0, k.savedAt())
+    }
+
+    @Test fun c78_batchInterval_fromParams() {
+        k.profile(); k.boot(Params(snapshotIntervalMs = 5_000)); k.open()
+        val s0 = k.savedAt()
+        k.ev(VehicleSample(0, 50.0, false, 1.0, TurnSignal.NONE), k.now + 4_000)
+        assertEquals(s0, k.savedAt(), "Params 간격(5초) 안에는 묶는다")
+        k.ev(VehicleSample(0, 50.0, false, 2.0, TurnSignal.NONE), k.now + 1_000)
+        assertEquals(k.now, k.savedAt(), "Params.snapshotIntervalMs가 지나면 저장(상수 30초가 아니다)")
+    }
+
+    // ---- Step 흐름(계약 2.4, 손실 없음) ----
+
+    @Test fun stepLog_slowCollector_getsEveryStepInOrder() {
+        k.profile(); k.boot()
+        val got = CopyOnWriteArrayList<Double?>()
+        val scope = collect(Dispatchers.Default) { Thread.sleep(2); got += it.state.car.cabinC }   // 느린 수집자
+        repeat(200) { k.host.post(CabinTemp(0, it.toDouble())) }
+        k.host.awaitIdle()
+        val until = System.currentTimeMillis() + 10_000
+        while (got.size < 200 && System.currentTimeMillis() < until) Thread.sleep(10)
+        scope.cancel()
+        assertEquals((0 until 200).map { it.toDouble() }, got.toList(), "중간 Step을 건너뛰지 않고 순서대로")
+    }
+
+    @Test fun stepLog_overflow_countedAndFailsSceneRun() {
+        k.profile(); k.boot()
+        val scene = parseScene("""{"format":1,"id":"T","title":"t","repeat":1,"setup":{"profile":{"birthYm":"2026-02","carseat":"RIGHT","feedingIntervalMin":null,"hasSibling":false},"methods":["WHITE_NOISE"],"history":[],"seed":1,"override":[],"otherGuardians":0},
+            "steps":[{"t":1,"tap":"BABY_ABOARD"}]}""")
+        val run = SceneRun(scene, 0, k.host, FakeWorld(), k.now)   // 반복 시작: 지금 유실 수를 기억한다
+        val gate = CountDownLatch(1)
+        val scope = collect(Dispatchers.Default) { gate.await() }   // 멈춘 수집자: 버퍼(4096)를 넘기면 버려진다
+        repeat(4_200) { k.host.post(CabinTemp(0, it.toDouble())) }
+        k.host.awaitIdle()
+        val lost = k.host.stepLogDrops.value
+        gate.countDown(); scope.cancel()
+        assertTrue(lost > 0, "버퍼가 넘친 수를 센다")
+        run.checkStepLog()
+        val row = run.row()
+        assertEquals(false, row.completed, "Step이 버려진 반복은 통과로 남지 않는다")
+        assertTrue(row.failures.any { "stepLog 유실 $lost" in it }, row.failures.toString())
+    }
+
+    // ---- 복원 뒤 대조(contracts-link 8.3)·바로 다시 확인(8.6, C67) ----
+
+    @Test fun restoreEvents_fromLink_afterBoot_beforeEarlyEvents() {
+        k.profile(); k.boot()
+        k.host.flush(); k.host.awaitIdle()                                   // 스냅숏이 있다(fresh면 Room에서 읽어 대조할 것이 없다)
+        sql("UPDATE child_profile SET last_feeding_start = ${T0 + 5_000}")   // ack 뒤 사건 전에 죽었다: Room만 새 값
+        k.host.close()
+        val h = Host(k.store, k.clock, mic = MicPort({ null }, {}), userId = { 10 })
+        val asked = mutableListOf<Long?>()
+        h.targets = Targets({}, {}, {}, restore = { s, at -> asked += s.feedingStart; k.realLink.restoreEvents(s, at) })
+        k.host = h
+        val seen = CopyOnWriteArrayList<Step>()
+        val scope = collect { seen += it }
+        h.post(CallMode(0, true))   // 복원 전에 온 사건(모듈이 시작하며 낸 지금 상태)
+        h.start(); h.awaitIdle()
+        scope.cancel()
+        assertEquals(1, asked.size, "link.restoreEvents를 한 번 부른다")
+        assertNotEquals(T0 + 5_000, asked.single(), "스냅숏(Boot 뒤) 값으로 견준다")
+        val fed = seen.indexOfFirst { it.state.feedingStart == T0 + 5_000 }
+        val call = seen.indexOfFirst { it.state.car.inCall }
+        assertTrue(fed > 0, "Boot 뒤에 FeedingStarted")
+        assertTrue(fed < call, "첫 판단(복원 전에 온 사건)보다 먼저")
+    }
+
+    @Test fun c67_screenOnAndResume_wakeLink() {
+        k.profile(); k.boot()
+        k.host.resume(); k.host.awaitIdle()
+        assertEquals(1, k.wakes, "화면 켜짐은 Suspend가 아니어도 바로 다시 확인")
+        k.host.suspend(); k.host.resume(); k.host.awaitIdle()
+        assertEquals(2, k.wakes, "Resume 짐작")
+    }
+
+    @Test fun c67_clockJump_wakesLink() {
+        k.profile(); k.boot()
+        assertEquals(0, k.wakes)
+        k.slept += 600_000
+        k.ev(Tick(0), k.now + 600_000)
+        assertEquals(1, k.wakes, "신호 없는 시계 점프")
     }
 
     // ---- 복원 ①~⑤ ----
@@ -374,6 +470,36 @@ class HostTest {
         k.host.startScenario(setup()); k.host.awaitIdle()
         k.host.endScenario(); k.host.awaitIdle()
         assertNull(k.state().speech.speaking, "콜백이 사라진 말하기는 복원처럼 비운다")
+    }
+
+    @Test fun c92_startScenario_inheritsRealCar_startStepInStepLog() {
+        k.profile(); k.boot(); k.open()   // 실제: 마이크 켜짐, 뒷문 닫힘, 기어 D, 세션 열림
+        val real = k.state()
+        val gate = SceneGate(7)
+        val got = CopyOnWriteArrayList<Step>()
+        val scope = collect { if (gate.accept(it)) got += it }
+        k.host.post(CabinTemp(0, 21.0))   // startScenario보다 먼저 큐에 든 실제 사건
+        k.host.startScenario(setup()); k.host.awaitIdle()
+        k.ev(Tick(0), k.now + 1_000)
+        scope.cancel()
+        val first = got.first()
+        assertTrue(first.commands.isEmpty() && first.state.session == null, "장면 첫 Step부터 받는다")
+        assertTrue(got.none { it.state.session?.id == real.session!!.id }, "그 앞 실제 Step은 버린다")
+        assertEquals(Gear.D, first.state.car.gear, "실제 기어를 이어받는다")
+        assertTrue(first.state.car.micRunning, "실제 마이크 상태")
+        assertEquals(emptySet(), first.state.car.rearDoorOpen, "실제 뒷문(닫힘)")
+        assertEquals(real.ign.driverUserId, first.state.ign.driverUserId)
+        assertEquals(2, got.size, "시작 Step과 그 뒤 Tick")
+    }
+
+    @Test fun c92_endScenario_restoresOverriddenGearAndDoor() {
+        k.profile(); k.boot(); k.open()
+        k.host.startScenario(setup(override = setOf("GearChanged", "RearDoor"))); k.host.awaitIdle()
+        k.ev(GearChanged(0, Gear.P)).ev(RearDoor(0, Side.LEFT, true))   // 장면 주입
+        assertEquals(Gear.P, k.state().car.gear)
+        k.host.endScenario(); k.host.awaitIdle()
+        assertEquals(Gear.D, k.state().car.gear, "실제 기어로 되돌린다")
+        assertEquals(emptySet(), k.state().car.rearDoorOpen, "실제 뒷문(닫힘)으로 되돌린다")
     }
 
     // ---- Suspend 짐작(C10·C67) ----

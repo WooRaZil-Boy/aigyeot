@@ -140,7 +140,10 @@ private fun cue(s: JsonObject, setup: Setup): Cue {
             only("phone", "type", "body")
             val body = obj("body") ?: JsonObject(emptyMap())
             body.num("atOffsetSec")
-            Phone(str("type") ?: throw SceneError("phone.type"), body)
+            val type = str("type") ?: throw SceneError("phone.type")
+            // 장면 phone은 feeding_started만(11-04 조율 결정): 곡·선택·연결 메시지는 실제 Room과 seq 기록을 바꾼다
+            if (type != "feeding_started") throw SceneError("phone.type '$type': 장면은 feeding_started만 받는다")
+            Phone(type, body)
         }
         "inject" -> v.objOr("inject").run {
             val ev = str("event") ?: throw SceneError("inject.event")

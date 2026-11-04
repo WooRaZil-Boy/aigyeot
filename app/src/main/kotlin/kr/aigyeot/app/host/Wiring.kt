@@ -1,10 +1,13 @@
 package kr.aigyeot.app.host
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kr.aigyeot.app.detect.MicService as MicFgs
 import kr.aigyeot.app.exec.Exec
@@ -29,8 +32,12 @@ fun route(c: Command): To = when (c) {
     is SaveSnapshot, is SaveFeedingStart, DeleteRecords, DeleteRelayRecords -> To.STORE   // DeleteRelayRecords는 store가 기록 지우기와 한 트랜잭션(C90)
 }
 
-/** 호스트가 할 일을 넘기는 함수들. store는 호스트가 직접 부른다. */
-class Targets(val exec: (Command) -> Unit, val link: (Command) -> Unit, val notice: (Notice) -> Unit)
+/** 호스트가 할 일을 넘기고 link를 부르는 함수들. store는 호스트가 직접 부른다. */
+class Targets(
+    val exec: (Command) -> Unit, val link: (Command) -> Unit, val notice: (Notice) -> Unit,
+    val wake: () -> Unit = {},                                                      // contracts-link 8.6 '바로 다시 확인'(Link.wake)
+    val restore: suspend (EngineState, Long) -> List<Event> = { _, _ -> emptyList() },   // 8.3 '복원 뒤 대조'의 수유·보호자(Link.restoreEvents)
+)
 
 /** 사건의 at만 바꾼 사본(2.4 'at 찍기'). */
 fun Event.withAt(t: Long): Event = if (at == t) this else when (this) {
@@ -62,12 +69,16 @@ class Graph private constructor(ctx: Context) {
     val scenario = Scenario(ctx, host, link)
 
     init {
-        host.targets = Targets(exec::handle, link::handle) { Notices.show(ctx, it) }
+        host.targets = Targets(exec::handle, link::handle, { Notices.show(ctx, it) }, link::wake, link::restoreEvents)
         MicFgs.clock = clock
         MicFgs.emit = host::post
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         // link가 곡 표를 고치면 store가 후보 ③을 다시 계산한다(명세서 5장, 계약 6.1 '③ 계산')
         db.invalidationTracker.createFlow("song", "song_selection", "child_profile")
-            .onEach { host.methodsMaybeChanged() }.launchIn(CoroutineScope(SupervisorJob() + Dispatchers.IO))
+            .onEach { host.methodsMaybeChanged() }.launchIn(scope)
+        // 세션·단계가 바뀔 때만 logcat 한 줄(tag host). 에뮬레이터 실측이 세션 열림을 본다
+        host.stepLog.map { it.state.session?.let { x -> "${x.id} ${x.phase}" } ?: "IDLE" }.distinctUntilChanged()
+            .onEach { Log.i("host", "stepLog 세션 $it") }.launchIn(scope)
         startModules()
         host.start()   // exec가 먼저 서야 복원이 내는 할 일(재잠금 등)이 받을 곳이 있다
     }
