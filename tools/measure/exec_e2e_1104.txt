@@ -1,0 +1,41 @@
+# 실행기(exec) 에뮬레이터 실측 — 합친 앱, 2026-11-04~05
+환경: AVD PleosProbe(android-34 pleos_car_emulator arm64-v8a), 운전자 사용자 10, kr.aigyeot.app debug(재생 경로 확인 3초 수정 포함).
+방법: 장면(공식 A~E·D2와 측정용 M-*, C-real) 안에서 실행기가 남긴 control_log(Room)와 플랫폼 logcat을 읽었다. 측정용 장면은 run-as로 흘려 넣은 것이다(APK에 없음).
+
+## 1. 뒷좌석 존 재생(계약 4.1, C74)
+- 16:02(수정본 설치) 뒤 재생 59회(백색소음·자장가): getRoutedDevice 59/59 = bus100_audio_zone_1, 포커스 요청 → 경로 확정 18~719ms(1초 넘음 0), routing unknown 0.
+  수정 전(15:39) 1회: 설치 직후 부하에서 MediaPlayer 경로가 1초 안에 안 정해져 ERROR(scenario_C_1104.txt, 보고서 '고친 버그').
+- 경보 → PlaybackStarted: 대부분 21~151ms. 설치 직후 첫 자장가 1,531ms(MediaPlayer prepare 동기 1초 + 생성 0.5초, 수정 전)·394ms(D 1회).
+- 이득: gain_violations 모든 장면 0. 마지막 2초 페이드는 50ms마다 setVolume 줄(선형).
+- 앞 폴백 이득 0.3(D12): **미판정** — 이 에뮬레이터는 bus100_audio_zone_1이 늘 있어 '뒷좌석 출력 없음'·'다른 곳으로 나감'을 만들 수 없었다(JVM 시험만).
+- LUFS: lufs_violations 0(백색소음 생성기 10초, 자장가 APK 사본을 MediaCodec으로 풀어 BS.1770). 부모 노래는 폰 종단에서(phone_e2e_1105.txt 3-3, M-SONG lufs_violations 0).
+
+## 2. TTS와 '응/아니' 듣기(F3)
+- 실제 Pleos TTS(on-device, speaker seoyoon, ko_KR)로 말함. 문장 길이(장면 C): S02 3.9초, S06 3.75초, S07 7.85초. 포커스 USAGE_NOTIFICATION + GAIN_TRANSIENT_MAY_DUCK.
+- M-YES(측정용, C-real 바탕): S07 질문 뒤 6초 듣기 창에 맥 say(Yuna) "응, 들러 줘."를 마이크 자리에 넣었다.
+  실제 STT 결과: "응 틀려줘", "응" → Answer(YES) → AddWaypoint 나옴. 1/1 통과(2회차는 1회차 경유지 요청으로 내비 앱이 앞으로 와 '아기 탔어요' 때 앱 화면이 없어 무효).
+  잘못 들은 "응 틀려줘"만 왔다면 규칙상 NONE(경유지 안 넣음)이다.
+- M-NO("아니, 괜찮아."): 11-05 02:07 1회(01:41 콜드 부팅 뒤, 맥 1분 평균 13~27·Blender 있음, 부하 중) — 장면 실패(t=60 Ask S07이 35초 안에 없음), 무부하 재측정 필요
+  - 원인: S06 TTS가 15.1초 걸렸다(02:08:18.08 onStart → 02:08:33.18 onDone, M-YES 00:38 때는 S06 → S07 11.8초).
+    그래서 장면이 t=93에 넣은 녹음이 S06 뒤 5초 듣기 창(02:08:33.28~)에 들어갔고, S07은 t=100(02:08:41)에야 나왔다
+  - STT 글자는 맞았다: "아니 괜찮아"(02:08:38.5), "아". AddWaypoint 없음(expectNone 통과)
+  - S07 듣기 창 안의 '아니' → Answer(NO) 처리는 이 회차로 확인하지 못했다
+- 안내 직후 5초 듣기(D1): 매 울음마다 열렸고(STT 세션 열림·completeAudioSend), 녹음이 울음뿐일 때 asrText ""(빈 글자).
+
+## 3. 차 제어 넷과 F19 다시 읽기(계약 4.2) — 11-04 16:00~11-05 00:35 전체 control_log(부하 시간대 포함)
+- setHvacSeatTemperature: 2줄, 성공 2, 쓰기 확인 6~15ms, 다시 읽어 반영 106~115ms, 다시 시도 0
+- setHvacTemperature: 8줄, 성공 6, 쓰기 확인 6~5010ms, 다시 읽어 반영 106~123ms, 다시 시도 2
+- setReadingLightSwitch: 4줄, 성공 4, 쓰기 확인 7~315ms, 다시 읽어 반영 106~391ms, 다시 시도 0
+- setWindowLock: 40줄, 성공 40, 쓰기 확인 5~533ms, 다시 읽어 반영 105~621ms, 다시 시도 0
+- 실패 줄은 장면 B 1차 4·5회의 setHvacTemperature 둘뿐이다: 설정 16℃에서 목표 14℃(HVAC_TEMPERATURE_SET 범위 15.0~30.0℃)라 쓰기 확인 5초 시간 초과, 다시 읽어도 16℃ → ok=0(scenario_B_1104.txt).
+- 열선(setHvacSeatTemperature)·독서등(setReadingLightSwitch)은 측정용 M-CTL에서 쟀다(SeatHeat 주입 → 끄기, 정차 경보 → 독서등 끄기). 원래 꺼져 있어 '0 쓰기 → 0 읽기'였다. 켜진 값을 끄는 변화는 미측정.
+
+## 4. 경유지 추가·휴게소 찾기(F5, C75·C95)
+- 장면 C(쉼터 이름 "○○휴게소"): 자료에 없어 addWaypoint actual=no_coords(보낼 좌표 없음).
+- C-real·M-YES("안성휴게소(부산방향)"): RestAreas가 '안성(부산)' 한 줄을 찾아 NaviHelper.addWaypoint(위도 37.013407, 경도 127.1448001, FIRST)를 보냈다.
+  내비 앱이 요청을 받아 앞으로 떴지만 안내 중인 경로가 없어 경유지 알림·목록이 오지 않았고 10초 뒤 actual=timeout. 그래서 S09는 나오지 않았다(C19).
+- 내비 경로 안내 중 경유지 결과·TBT 휴게소 이름 형식·남은 시간 필드: **미판정**(내비에 목적지를 잡는 일은 하지 않았다).
+
+## 5. CarService 재시작 뒤 다시 구독(C71)
+- 18:11:53 CarService가 VHAL heartbeat 시간 초과로 카 워치독에게 죽고 다시 떴을 때, 앱은 18:12:26·18:12:32에 차량 리스너 8개
+  (기어·뒷문 둘·열선 둘·실내 온도·조향·브레이크·방향지시등)를 removeListener → addListener로 다시 걸었다. 그 회차(장면 D 4회)는 끝까지 처리됐다.

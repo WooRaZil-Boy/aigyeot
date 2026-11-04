@@ -1,0 +1,39 @@
+# 장면 D2(D'. 도심: 인계인데 목적지까지 6분 → S15, 쉼터 제안 없음, handoff_alert) 에뮬레이터 종단 — 2026-11-04 18:42~19:33
+환경: AVD PleosProbe(android-34 pleos_car_emulator arm64-v8a), 운전자 사용자 10, kr.aigyeot.app debug(재생 경로 확인 3초 수정 포함).
+      18:20 에뮬레이터 재기동 뒤. 18:23:48 뒤로 CarService 재시작 없음. 맥 부하는 30초마다 기록(1분 평균).
+실행: 앱 화면 '시연·측정 → 장면 고르기·실행 → D2', repeat 5. 녹음 cont_long.pcm(cry_00125, 240초 되풀이), run-as로 넣음.
+
+## 5회
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,4,true,,1634,39,bus100_audio_zone_1,false,2,111928,111928,0,0,0,0,118948,
+2,5,true,,1608,34,bus100_audio_zone_1,false,2,111917,111917,0,0,0,0,118951,
+3,6,true,,1626,38,bus100_audio_zone_1,false,2,111926,111926,0,0,0,0,118950,
+4,7,true,,1596,40,bus100_audio_zone_1,false,2,111921,111921,0,0,0,0,118947,
+5,8,true,,1674,21,bus100_audio_zone_1,false,2,111950,111950,0,0,0,0,118947,
+summary,,5/5,,1674,40,,false,2,111950,111950,0,0,0,0,118951,
+run 1: 통과
+run 2: 통과
+run 3: 통과
+run 4: 통과
+run 5: 통과
+
+## 회차별 측정 조건(맥 부하 1분 평균, 기준: 12 미만·30% 넘는 Blender 없음)
+- 1회 18:42:41~18:52:44 조건 안 / 2회 18:52:44~19:02:48 19:01:02 표본 14.41(Blender 아님) — 조건 밖 표본 있음
+- 3회 19:02:48~19:12:51 19:05:33 표본 13.55 — 조건 밖 표본 있음 / 4회 19:12:51~19:22:54 조건 안 / 5회 19:22:54~19:32:57 조건 안
+- 2·3회는 기록에서 무효로 친다(값은 다른 회차와 같았다). 유효 3회: 1·4·5회
+
+## 15장 기준별(유효 1·4·5회)
+- 끝까지 처리율 3/3, 경보 지연 1,596~1,674ms(≤3초), 시도 최대 2, 에피소드 재생 최대 111,950ms(≤112,000), 이득·LUFS·시스템 볼륨 위반 0, 운전자 조작 0 — 통과
+- 첫 경보 → HANDOFF 118,947~118,948ms. 출력 장치 bus100_audio_zone_1, 폴백 없음
+- 5회차 결과 줄 끝의 "앱 화면이 없어 마이크를 다시 켜지 못함"은 장면 앞 원래 마이크를 되돌리지 못했다는 안내다(장면이 주행 중에 끝나 앱 화면이 플랫폼 주행 제한 화면에 가려짐). 측정 칼럼과 무관
+
+## 2차: 22:20:43~22:40:43, repeat 2(21:16 콜드 부팅 뒤, CarService 정상, 맥 1분 평균 최대 10.79)
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,4,true,,1585,34,bus100_audio_zone_1,false,2,111937,111937,0,0,0,0,118949,
+2,5,true,,1576,42,bus100_audio_zone_1,false,2,111933,111933,0,0,0,0,118950,
+summary,,2/2,,1585,42,,false,2,111937,111937,0,0,0,0,118950,
+run 1: 통과
+run 2: 통과
+## 유효 5회 합계(1차 1·4·5회 + 2차 1·2회)
+- 끝까지 처리율 5/5, 경보 지연 1,576~1,674ms, 시도 최대 2, 에피소드 재생 최대 111,950ms, 위반 0, 운전자 조작 0 — 통과
+- S15(6분 뒤 도착) 나옴, 쉼터 Ask·AddWaypoint 없음, handoff_alert 나옴. 첫 경보 → HANDOFF 118,947~118,950ms

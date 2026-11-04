@@ -1,0 +1,65 @@
+# 폰 종단: iOS 시뮬레이터 ↔ 로컬 중계 ↔ 차 에뮬레이터 — 2026-11-05 01:15~01:25
+구성: 중계 = relay/ wrangler dev(127.0.0.1:8787, 비밀값 없음: llm=false, push=false), 요청 줄마다 맥 시각을 붙여 기록.
+      차 = AVD PleosProbe user 10의 kr.aigyeot.app debug(10.0.2.2:8787). 폰 = iOS 시뮬레이터(iPhone, iOS 27.1)의 아이곁 iOS 앱 Debug 빌드(localhost:8787).
+      두 번째 폰(노래 받아들이기 확인용) = 맥의 HTTP 흉내(owner). 안드로이드 폰 앱은 폰용 AVD가 없어 미판정.
+**환경 주의:** 이 시간대 맥 부하(1분 평균)가 20~97로 높았다(다른 작업). 아래 지연 숫자는 '부하 중' 값이라 기준값으로 쓰지 않는다. 기능(도착·표시) 확인만 유효하다.
+연결 코드·토큰은 기록에 남기지 않았다(contracts-link 6.6).
+
+## 1. 연결(QR·코드)
+- 차 '휴대폰 연결' 화면: 차 등록 POST /v1/cars 201 → POST /v1/pair-codes 201 → GET /v1/ws 101. 화면에 6자리 코드와 QR.
+- QR: 차 화면 캡처를 macOS CoreImage(CIDetector)로 읽어 aigyeot://pair?code=…를 얻고 xcrun simctl openurl로 폰에 넘겼다
+  (시뮬레이터에 카메라가 없어 DataScanner 찍기는 미판정. QR 내용 → 링크 → 확인 화면 길만 확인).
+- 폰 확인 화면 "차 화면에 이 코드가 보이나요?"(G17)에 차와 같은 코드 → '연결하기' → POST /v1/pair 201(중계 처리 327ms).
+- 차: 115ms 뒤 새 연결 코드 POST /v1/pair-codes(G41), 121ms 뒤 feeding_state POST(G23), 연결 화면 "연결됐어요", 목록 "함께 타는 보호자 · 마지막 연락 01:18".
+- 차 정차 홈: "휴대폰 연결됨". 폰 홈: "연결됐어요" 띠, 차 타일 "연결됨", 마지막 수유 시작 = 차의 값(12:52 AM).
+- 참고: 폰이 붙기 전에도 소켓이 열리면 차 연결 화면 맨 위에 "휴대폰 연결됨"이 보인다(계약 8.6 CONNECTED 문구 그대로, 목록은 '아직 없어요').
+
+## 2. 폰 수유 탭 → 차 FeedingStarted → 차 feeding_state → 폰 표시
+- 폰 '수유 시작' → POST /v1/messages(feeding_started) 201 01:18:58.257(처리 173ms) → 차 processed_message 01:18:58.035(에뮬레이터 시계,
+  에뮬레이터 − 맥 = −255ms ±80ms 보정 시 맥 01:18:58.290) → 차 feeding_state POST 01:18:58.418 → 폰 ack 01:18:58.456.
+- 폰 메시지 ULID 시각(폰이 봉투를 만든 때) 01:18:57.080. 봉투 생성 → 중계 도착 약 1.0초, 중계 → 차 처리 약 30ms(±80), 차 처리 → feeding_state 송신 128ms.
+- 폰 화면: 최근 기록 "1:18 AM 차에 반영됨", 마지막 수유 시작 1:18 AM. 차 홈: "마지막 수유 01:18 (0시간 0분 전)", child_profile.last_feeding_start = 폰 at(초 단위).
+- 판정: 기능 통과. 지연은 부하 중이라 미판정(11-04 link 갈래 실측: 무부하 탭 → 차 20ms 안팎, link_e2e_1104.txt).
+
+## 3. 노래
+### 3-1. 폰 녹음 → 업로드 → 차 거절(조용한 녹음)
+- 폰 '우리 노래' → 녹음하기 → iOS 마이크 권한 묻기(시뮬레이터 안 시험 앱 권한, 허용) → 15초 녹음(밤이라 소리를 틀지 않아 거의 무음) → 이름 "자장" → 보내기.
+- PUT /v1/songs/{id} 201 → song_added POST 201 → 44ms 뒤 차 GET /v1/songs 200 → 1.5초 뒤 차 song_status POST(rejected, reason silent)
+  → 폰이 자동 song_removed POST(L48) → 차 song 행 DELETED·reject_reason silent(AAC 15.70초). 폰 목록은 다시 '아직 노래가 없어요'.
+### 3-2. 노래 받아들이기(맥 HTTP 흉내 owner, 맥 say(Yuna)로 만든 12.1초 AAC, −18.1 LUFS, 정점 −2.0dBFS)
+- PUT 201 → song_added 201 → 26ms 뒤 차 GET → 3.5초 뒤 차 song_status POST(accepted) → 차 song ACTIVE, 사본 files/songs/<id>.m4a 100,028바이트.
+- 차 사본 크기: ffmpeg ebur128(맥)으로 −30.1 LUFS, 표본 정점 −13.9dBFS, 12.07초 — 목표 −30 ±1 LUFS 안. 통과.
+### 3-3. 차 사본의 뒷좌석 재생·lufs_violations(부모 노래) — 01:45 콜드 부팅(01:41) 뒤 측정 장면 M-SONG 1회
+- 01:25에 처음 돌렸을 때는 에뮬레이터 안 CPU 압력 87%로 앱 ANR(main 스레드는 Looper 대기) → 01:29 system_server 재시작이라 결과가 없었다(환경 부하로 중단).
+- 다시 돌린 회차(01:45:11~01:46:19, 맥 1분 평균 12~25, 기능만 판정):
+  - 결과 줄: 1,11,true,,3588,121,bus100_audio_zone_1,false,1,47260,47260,0,0,0,0,,
+  - control_log: requestAudioFocus GRANTED → 뒷좌석 이득 1.000 → getRoutedDevice bus100_audio_zone_1 → stopPlayback released
+  - 장면 기대 'StartPlayback SONG:<그 노래 id> 4초 안'을 만족했다
+- 판정: 부모 노래 뒷좌석 재생·lufs_violations 0 통과(기능). 경보 지연 3,588ms는 부하 중 값이라 기준값으로 쓰지 않는다.
+
+## 4. 리포트·인계 알림
+### 4-1. 리포트(report_summary)를 폰에서 보기 — 실제 세션 1회(장면 아님, G44), 01:47~01:49, 맥 1분 평균 12~25
+- 차 홈 '아기 탔어요'를 누르고 VC로 D·시속 30을 주어 약 80초 달렸다(VC 세션은 3초 안에 다시 알려야 살아 있어 1초마다 갱신).
+  그 뒤 시속 0·브레이크 → P → 8초 뒤 VC `PUT /vehicle/body?door_rr=1`
+- 차: 01:47:53 LISTENING. 01:49:22.202 뒷문 사건 → 세션 IDLE(VC 뒷문 쓰기와 같은 초). 0.5초 뒤 중계 POST /v1/messages 201 두 번, 폰 ack 두 번
+- 폰(iOS) '리포트' 탭: 목록에 "Nov 5 at 1:47 AM · 기록된 에피소드가 없어요"
+  - 상세 화면: 시작 1:47 / 끝 1:49, 에피소드 '기록된 에피소드가 없어요', 울음 직전 주행 '없어요', 평소 대비 조향 보정 '울음이 없어 비교하지 않았어요', 차가 대신 한 일 '없어요', 제어 기록
+- 판정: 통과(기능). 이 세션에는 울음이 없어 빈 리포트다.
+- 덤(G42): VC 뒷문 쓰기(`door_rr=1`)가 앱의 뒷문 사건으로 들어오는 것을 확인했다. 장면이 `inject RearDoor` 대신 `vc`를 쓸 수 있다.
+### 4-2. 인계 알림(앱 안) — 01:52~02:04, 맥 1분 평균 25~56(부하 중, 기능만)
+- 준비: iOS가 owner(차 연결 코드로 붙음)라 인계 알림 대상이 아니었다(계약 4장: handoff_alerts가 참인 guardian만).
+  1. 맥 HTTP owner로 POST /v1/invites 201
+  2. 차 '휴대폰 연결' 목록에서 iOS 줄 '끊기' → DELETE /v1/devices/{iOS} 204
+     iOS는 "연결이 끊겼어요. 다시 연결해 주세요." 띠를 보이고 연결 화면으로 돌아갔다(4001 처리)
+  3. 초대 링크(aigyeot://pair?code=…)를 simctl openurl로 열기 → 확인 화면 → '연결하기' → POST /v1/pair 201
+     GET /v1/devices: iOS guardian, online, handoff_alerts true
+- 측정 장면 M-HO(D의 인계까지) 1회, 01:59:23~02:04:23
+  - 결과 줄: 1,4,true,,1667,103,bus100_audio_zone_1,false,2,111783,111783,0,0,0,0,118985,
+  - 시각: 차 HANDOFF 02:02:18.835(에뮬레이터 시계) → 중계 POST /v1/messages 201 02:02:19.495(맥) → 폰 ack 02:02:19.710
+  - iOS 홈 '인계 알림' 칸: "아기가 계속 울어서 □□휴게소에 들르자고 운전자에게 제안했어요. · 방금"
+  - 같은 때 iOS 시스템 알림 권한 창이 떴다(guardian이 되면 묻는다). 누르지 않았다
+- 판정: 통과(기능). 지연은 부하 중 값. 원격 푸시는 FCM·APNs 키가 없어 범위 밖.
+
+## 5. 폰 앱에서 본 표시 문제(고치지 않음, 보고만)
+- iOS 홈 '마지막 수유 시작' 칸에서 "12:52 AM"이 "12:52 A / M"으로 줄이 나뉜다(칸 폭보다 큰 글자).
+- iOS 노래 녹음 시트에서 노래 이름 칸·'보내기' 버튼이 화면 왼쪽으로 잘려 보인다(시트 내용이 왼쪽으로 밀림).

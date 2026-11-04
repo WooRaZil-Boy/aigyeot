@@ -1,0 +1,43 @@
+# 장면 A(등원 20분: 출발 5분 뒤 울음, 1차에 그침, 도착 S12, 뒷문 열면 IDLE) 에뮬레이터 종단 — 2026-11-04
+환경: AVD PleosProbe(android-34 pleos_car_emulator arm64-v8a), 운전자 사용자 10, kr.aigyeot.app debug(재생 경로 확인 3초 수정 포함).
+      18:20 에뮬레이터 재기동 뒤(18:23:48 뒤로 CarService 재시작 없음). 맥 부하는 30초마다 기록(1분 평균).
+실행: 앱 화면 '시연·측정 → 장면 고르기·실행 → A', repeat 5. 녹음 stop_40s.pcm(cry_00012 2~22초 + 0 20초), run-as로 넣음.
+
+## 1차: 19:33~21:16, repeat 5
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,1,true,,2199,57,bus100_audio_zone_1,false,1,55941,55941,0,0,0,0,,
+2,2,true,,3271,147,bus100_audio_zone_1,false,1,55853,55853,0,0,0,0,,
+3,3,true,,3131,28,bus100_audio_zone_1,false,1,55973,55973,0,0,0,0,,
+4,4,true,,3144,37,bus100_audio_zone_1,false,1,55964,55964,0,0,0,0,,
+5,5,true,,3167,28,bus100_audio_zone_1,false,1,55972,55972,0,0,0,0,,
+summary,,5/5,,3271,147,,false,1,55973,55973,0,0,0,0,,
+run 1: 통과
+run 2: 통과
+run 3: 통과
+run 4: 통과
+run 5: 통과
+
+## 회차별 측정 조건(기준: 맥 1분 평균 12 미만·30% 넘는 Blender 없음·회차 중 CarService 재시작 없음)
+- 1회 19:33:40~19:53:52 최대 54.7 — 무효 / 2회 19:54:11~20:14:23 최대 17.6 — 무효
+- 3회 20:14:41~20:34:53 최대 7.0 / 4회 20:35:12~20:55:42 최대 6.9 / 5회 20:55:42~21:16:14 최대 8.3 — 유효
+
+## 15장 기준별(유효 3·4·5회)
+- 끝까지 처리율 3/3(모든 expect 통과: 4초 안 StartPlayback LULLABY, S02, GAP·CONFIRM·LISTENING, 도착 S12, 뒷문 열면 IDLE) — 통과
+- 경보 지연: 3,131·3,144·3,167ms — **실패(3초 넘음 3/3)**. 원인은 녹음 a(cry_00012 2초부터)의 위상이다(alarm_phase_1104.txt):
+  '아기 탔어요' → 울음 투입 간격이 회차마다 같아 마이크 창 격자에 대한 위상도 거의 같고, 그 위상(약 0.8창)에서 경보 구간이 한 창 늦다(위상표 3.12초와 맞음).
+  부하가 큰 2회차도 3,271ms로 비슷해, 부하가 아니라 위상 탓이다. 1회차(2,199ms)는 마이크 서비스 시작 지연이 달라 위상이 달랐다.
+- 상한: 시도 최대 1, 에피소드 재생 최대 55,973ms, 세션 누적 55,973ms, 이득·LUFS·시스템 볼륨 위반 0 — 통과
+- 주행 중 운전자 조작 0 — 통과. 출력 장치 bus100_audio_zone_1, 폴백 없음, 경보 → PlaybackStarted 28~37ms
+
+## 2차: 21:28~22:09, repeat 2(에뮬레이터 21:16 콜드 부팅 뒤, CarService 정상 확인, 맥 1분 평균 최대 7.9)
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,1,true,,3144,50,bus100_audio_zone_1,false,1,55950,55950,0,0,0,0,,
+2,2,true,,3157,27,bus100_audio_zone_1,false,1,55972,55972,0,0,0,0,,
+summary,,2/2,,3157,50,,false,1,55972,55972,0,0,0,0,,
+run 1: 통과
+run 2: 통과
+
+## 유효 5회 합계(1차 3·4·5회 + 2차 1·2회)
+- 끝까지 처리율 5/5 — 통과
+- 경보 지연 3,131·3,144·3,167·3,144·3,157ms — 실패(3초 넘음 5/5, 원인은 위에 적은 녹음 a 위상)
+- 상한·운전자 조작·이득·LUFS·시스템 볼륨: 위반 0 — 통과

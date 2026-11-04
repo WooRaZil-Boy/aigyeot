@@ -1,0 +1,55 @@
+# 장면 B(장보기 40분: 실내 27℃ → 2차 시도 쾌적 조정 LowerHvac, 2차에 그침) 에뮬레이터 종단 — 2026-11-04
+환경: AVD PleosProbe(android-34 pleos_car_emulator arm64-v8a), 운전자 사용자 10, kr.aigyeot.app debug.
+      합친 앱(호스트·실행기·기록·화면·중계 연결 모두 진짜, 재생 경로 확인 3초 수정 포함). 임시 실측 화면 없음.
+실행: 앱 화면 '시연·측정 → 장면 고르기·실행 → B'(adb input으로 누름). Virtual Console은 앱 안에서 127.0.0.1:8088.
+녹음: cont_75s.pcm = AxonData cry_00125 전체(74.52초, 16 kHz 모노 s16le). run-as로 files/scenario/cry/에 넣음(APK에 넣지 않음).
+
+## 1차 측정: 16:56~17:34, repeat 5(장면 기본)
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,2,true,,1446,135,bus100_audio_zone_1,false,2,111827,111827,0,0,0,0,,1.000
+2,3,true,,2454,61,bus100_audio_zone_1,false,2,111911,111911,0,0,0,0,,1.000
+3,4,true,,2450,34,bus100_audio_zone_1,false,2,111929,111929,0,0,0,0,,1.000
+4,5,true,,2416,44,bus100_audio_zone_1,false,2,111923,111923,0,0,0,0,,0.000
+5,6,true,,2507,49,bus100_audio_zone_1,false,2,111912,111912,0,0,0,0,,0.000
+summary,,5/5,,2507,135,,false,2,111929,111929,0,0,0,0,,0.000
+run 1: 통과
+run 2: 통과
+run 3: 통과
+run 4: 통과
+run 5: 통과
+- 끝까지 처리율: 5/5 — 통과
+- 경보 지연 3초 이하: 1446~2507ms — 통과
+- 상한: 시도 최대 2(≤2), 에피소드 재생 최대(ms) 111929(≤112000), 세션 누적(ms) 111929(≤1200000), 이득 위반 0, LUFS 위반 0, 시스템 볼륨 변화 0 — 통과
+- 주행 중 운전자 조작: 0 — 통과
+- 주행 중 대상 제어(F19): control_ok_rate 최소 0.000 — 실패
+- 경보 → PlaybackStarted: 34~135ms, 출력 장치: bus100_audio_zone_1, 폴백: false
+
+## 4·5회차 control_ok_rate 0 원인(control_log setHvacTemperature, 운전석 ROW_1_LEFT)
+  17:02:50 goal 20 actual 20 ack 27ms applied 123ms ok
+  17:10:27 goal 18 actual 18 ack 12ms applied 110ms ok
+  17:18:04 goal 16 actual 16 ack 13ms applied 111ms ok
+  17:25:51 goal 14 actual 16 ack 5008ms(시간 초과) ok=0 retries 1
+  17:33:28 goal 14 actual 16 ack 5010ms ok=0 retries 1
+- 장면이 바꾼 실제 공조 설정을 장면 끝에 되돌리는 곳이 없어 반복마다 2℃씩 내려갔다(22 → 20 → 18 → 16, Virtual Console /vehicle/hvac driver.temp_c 16.0으로 확인).
+- 실행기는 계약 4.2대로 목표 = 지금 설정 온도 + deltaC(−2)를 쓴다. 이 에뮬레이터 HVAC_TEMPERATURE_SET 범위는 15.0~30.0℃(0.5 간격, dumpsys car_service --hal)라
+  16℃에서 14℃ 쓰기는 받아들여지지 않았다(쓰기 확인 시간 초과, 다시 읽어도 16℃). 15℃(하한)는 쓰지 않았다.
+- 판정: 1~3회차(설정 22·20·18℃에서 시작)는 공조 제어 성공. 4·5회차 실패는 장면이 남긴 실제 차 상태 때문이며, 실차에서도 운전자가 16.5℃ 이하로
+  맞춰 두었으면 같은 실패가 난다(보고서 '계약 변경 제안'). 아래 2차 측정은 회차마다 운전석 설정을 22℃로 되돌린 뒤 같은 장면 B를 다시 잰 것이다.
+
+## 유효 판정(11-04 저녁 정리)
+- 이 회차들은 18:11 CarService 재시작·Blender 일괄 작업보다 앞서 돌았다. 맥 부하 기록은 18:28부터라 이 시간대 값은 없다. 회차 중 CarService 재시작 없음 → 유효
+
+## 2차 측정: 회차마다 운전석 공조를 22℃로 되돌린 뒤 B 1회씩(21:16 콜드 부팅 뒤, CarService 정상)
+되돌리기: 맥에서 Virtual Console PUT /vehicle/hvac?driver_temp=22.0 → GET /vehicle/hvac driver.temp_c 22.0 확인. 각 1회라 시드는 모두 2다.
+- 1회 23:37:37~23:45:14(맥 1분 평균 최대 6.9): 1,2,true,,2403,40,bus100_audio_zone_1,false,2,111938,111938,0,0,0,0,,1.000
+  setHvacTemperature goal 20 actual 20 ack 18ms applied 111ms ok
+- 2회 23:46:12~23:53:47(최대 6.9): 1,2,true,,2411,36,bus100_audio_zone_1,false,2,111942,111942,0,0,0,0,,1.000
+  setHvacTemperature goal 18 actual 18 ack 6ms applied 106ms ok — 실행기가 읽은 지금 설정은 20℃였다. VC 쓰기(22.0)가 VC 상태에는 보였지만 VHAL에는 반영되지 않았다
+- 3회 23:54:44~00:02:18: 1,2,true,,2357,52,bus100_audio_zone_1,false,2,111918,111918,0,0,0,0,,1.000
+  setHvacTemperature goal 20 ok. 23:57 뒤 맥 부하 기록이 없고 00:02부터 Blender 일괄 작업(부하 64)이 돌아 무효로 친다
+
+## B 판정
+- 1차 5회(유효): 끝까지 처리율 5/5, 경보 지연 1,446~2,507ms, 시도 최대 2, 에피소드 재생 최대 111,929ms, 위반 0, 운전자 조작 0 — 통과
+- 주행 중 대상 제어 100%: **실패**(1차 4·5회 0%). 원인: 설정 16℃에서 목표 14℃(하한 15℃ 밖). 실차에서도 운전자가 16.5℃ 이하로 맞춰 두었으면 같다.
+  게다가 실패한 회차에도 S04 "실내가 27도예요. 2도 낮췄어요."를 말했다(TTS 로그). 설정 17℃ 이상에서 시작한 6회(1차 1~3회, 2차 1~3회)는 모두 성공
+- 계약 변경 제안(보고서): LowerHvac 목표의 하한 처리, S04를 결과 뒤에, 장면 B 첫 단계에서 공조 기준값 되돌리기

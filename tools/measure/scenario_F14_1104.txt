@@ -1,0 +1,38 @@
+# F14 자동 시작·종료 각본 20개(명세서 15장: 95% 이상) 에뮬레이터 종단 — 2026-11-04 22:41~23:37
+환경: AVD PleosProbe(android-34 pleos_car_emulator arm64-v8a), 운전자 사용자 10, kr.aigyeot.app debug(합친 앱, 재생 경로 확인 3초 수정 포함).
+      21:16 콜드 부팅 뒤, CarService 정상, 맥 1분 평균 최대 8.16, Blender 없음.
+실행: 앱 화면 '시연·측정 → 장면 고르기·실행 → F14-xx', 각 1회. 시작은 진행 글자의 장면 id로 확인했다.
+      F14-02는 22:43 첫 시도에서 목록 맨 아래 줄이 반복 줄에 가려 A가 대신 시작됐고(실행 보조 스크립트 문제, 앱 아님), 멈춘 뒤 22:59에 다시 쟀다.
+판정: 각본의 expect(세션 열림 LISTENING·닫힘 IDLE·SaveSession·CloseSession·S16·S17·SetWindowLock·feeding_state)와 expectNone(열리면 안 되는 SaveSession, 닫히면 안 되는 CloseSession, 짧은 주행 S12)이 모두 맞으면 정답.
+
+## 결과
+F14-01 F14-01-20261104-2241 completed=true ctl= run 1: 통과 
+F14-02 F14-02-20261104-2259 completed=true ctl= run 1: 통과 
+F14-03 F14-03-20261104-2301 completed=true ctl= run 1: 통과 
+F14-04 F14-04-20261104-2303 completed=true ctl= run 1: 통과 
+F14-05 F14-05-20261104-2304 completed=true ctl= run 1: 통과 
+F14-06 F14-06-20261104-2306 completed=true ctl= run 1: 통과 
+F14-07 F14-07-20261104-2308 completed=true ctl= run 1: 통과 
+F14-08 F14-08-20261104-2309 completed=true ctl= run 1: 통과 
+F14-09 F14-09-20261104-2311 completed=true ctl= run 1: 통과 
+F14-10 F14-10-20261104-2313 completed=true ctl= run 1: 통과 
+F14-11 F14-11-20261104-2315 completed=true ctl= run 1: 통과 
+F14-12 F14-12-20261104-2318 completed=true ctl= run 1: 통과 
+F14-13 F14-13-20261104-2321 completed=true ctl= run 1: 통과 
+F14-14 F14-14-20261104-2323 completed=true ctl= run 1: 통과 
+F14-15 F14-15-20261104-2324 completed=true ctl=1.000 run 1: 통과 
+F14-16 F14-16-20261104-2326 completed=true ctl= run 1: 통과 
+F14-17 F14-17-20261104-2329 completed=true ctl= run 1: 통과 
+F14-18 F14-18-20261104-2331 completed=true ctl= run 1: 통과 
+F14-19 F14-19-20261104-2333 completed=true ctl= run 1: 통과 
+F14-20 F14-20-20261104-2335 completed=true ctl= run 1: 통과 
+정확도 20/20
+
+## 각본(목록)
+01 왼쪽 뒷문 순환 뒤 D → 열림, P 뒤 뒷문 → 닫힘 / 02 오른쪽 / 03 뒷문 없이 '아기 탔어요'만 → D에서 열림 / 04 뒷문 + 누르기 → 한 번만 열림
+05 뒷문·누르기 없이 D → 안 열림 / 06 뒷문 열린 채 D, 주행 중 닫음 → 안 열림 / 07 프로필 없음 → 안 열림 / 08 주행 중 P만 → 유지, 뒷문 열면 닫힘
+09 D 중 뒷문 열림 → 유지 / 10 P 뒤 다시 D → 같은 세션 / 11 두 번 주행 → 세션 둘 / 12 닫힌 뒤 뒷문 열린 채 D → 새 세션 없음
+13 양쪽 뒷문 순환 → 열림 / 14 한쪽 열린 채 다른 쪽만 순환 → 안 열림 / 15 형제 → 뒷창 잠금·되돌림(control_ok_rate 1.000) / 16 P에서 마이크 꺼짐 → S16·알림, 누르고 D → 열림
+17 마이크 없이 D → 열림 + S17 / 18 10초 주행 → S12 없음 / 19 P 70초 → 유지 / 20 닫힐 때 CloseSession·feeding_state
+
+## 판정: 20/20(100%) — 통과(기준 95% 이상)

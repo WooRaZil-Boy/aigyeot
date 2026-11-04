@@ -1,0 +1,48 @@
+# 장면 D(계속 울음: 두 번 시도 뒤 인계, S08 쉼터 제안, 보호자 handoff_alert, 5분 조용하면 LISTENING) 에뮬레이터 종단 — 2026-11-04
+환경: AVD PleosProbe(android-34 pleos_car_emulator arm64-v8a), 운전자 사용자 10, kr.aigyeot.app debug.
+      합친 앱(호스트·실행기·기록·화면·중계 연결 모두 진짜, 재생 경로 확인 3초 수정 포함). 임시 실측 화면 없음.
+실행: 앱 화면 '시연·측정 → 장면 고르기·실행 → D'(adb input으로 누름). Virtual Console은 앱 안에서 127.0.0.1:8088.
+녹음: cont_long.pcm = AxonData cry_00125 전체(74.52초)를 durSec 240초로 되풀이(계약 7.3). run-as로 넣음(APK에 넣지 않음).
+
+## 1차: 17:35~18:18, repeat 5
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,4,true,,2483,394,bus100_audio_zone_1,false,2,111333,111333,0,0,0,0,118933,
+2,5,true,,1742,37,bus100_audio_zone_1,false,2,111911,111911,0,0,0,0,118950,
+3,6,true,,1848,65,bus100_audio_zone_1,false,2,111828,111828,0,0,0,0,118948,
+4,7,true,,1717,62,bus100_audio_zone_1,false,2,111874,111874,0,0,0,0,118965,
+summary,,4/4,,2483,394,,false,2,111911,111911,0,0,0,0,118965,
+run 1: 통과
+run 2: 통과
+run 3: 통과
+run 4: 통과
+- 5회차(18:15:50 시작)는 18:18:29에 에뮬레이터 프로세스가 외부 종료 요청으로 꺼져 결과가 없다(에뮬레이터 로그: 정상 종료 대기 20초 → 스냅숏 저장 → 종료). 앱·장면 재생기 오류가 아니다.
+- 4회차 도중 18:11:53에 플랫폼 VHAL heartbeat가 3초를 넘겨 카 워치독이 CarService(com.android.car)를 죽이고 다시 띄웠다.
+  앱은 18:12:26·18:12:32에 차량 리스너(기어·뒷문·열선·실내 온도·조향·브레이크·방향지시등)를 모두 다시 걸었고(C71 다시 구독), 4회차는 통과했다.
+  그 무렵 맥에서 다른 작업(Blender 여러 개)이 CPU를 크게 쓰고 있었다(18:23 부하 평균 62). VHAL 멈춤은 그 때문으로 보인다.
+- 끝까지 처리율: 4/4 — 통과
+- 경보 지연 3초 이하: 1717~2483ms — 통과
+- 상한: 시도 최대 2(≤2), 에피소드 재생 최대(ms) 111911(≤112000), 세션 누적(ms) 111911(≤1200000), 이득 위반 0, LUFS 위반 0, 시스템 볼륨 변화 0 — 통과
+- 주행 중 운전자 조작: 0 — 통과
+- 주행 중 대상 제어(F19): 해당 없음(차 제어 없음)
+- 첫 경보 → HANDOFF: 118933~118965ms
+- 경보 → PlaybackStarted: 37~394ms, 출력 장치: bus100_audio_zone_1, 폴백: false
+
+## 회차별 유효 판정(11-04 저녁 정리)
+- 1~3회(17:35~18:05): 유효. 맥 부하 기록은 18:28부터라 이 시간대 값은 없다. CarService 재시작 없음
+- 4회(18:05~18:15): 무효 — 18:11:53 CarService가 VHAL heartbeat 시간 초과로 재시작(환경 부하로 중단, 앱 버그 아님)
+- 5회: 18:18:29 에뮬레이터 외부 종료로 결과 없음
+- 18:29 실행(D-20261104-1829): 반복 수를 잘못 넣어 100초에 멈춤(측정 아님)
+
+## 추가 1회: 18:31:54~18:41:59(에뮬레이터 18:20 재기동 뒤, 맥 부하 1분 평균 12 미만)
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,4,true,,1565,50,bus100_audio_zone_1,false,2,111869,111869,0,0,0,0,118952,
+summary,,1/1,,1565,50,,false,2,111869,111869,0,0,0,0,118952,
+- 유효 4회(1~3회 + 추가 1회) 모두 통과. 5번째 유효 회차는 아래에 덧붙인다
+
+## 5번째 유효 회차: 22:09:55~22:19:55(21:16 콜드 부팅 뒤, CarService 정상, 맥 1분 평균 최대 10.79)
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,4,true,,1606,39,bus100_audio_zone_1,false,2,111936,111936,0,0,0,0,118953,
+summary,,1/1,,1606,39,,false,2,111936,111936,0,0,0,0,118953,
+## 유효 5회 합계(1~3회 + 18:31 1회 + 22:09 1회)
+- 끝까지 처리율 5/5, 경보 지연 1,565~2,483ms, 시도 최대 2, 에피소드 재생 최대 111,936ms, 이득·LUFS·시스템 볼륨 위반 0, 운전자 조작 0 — 통과
+- 첫 경보 → HANDOFF 118,933~118,965ms. S03·S08 질문·handoff_alert(SendToPhone) 나옴, 인계 뒤 300초 자동 재생 없음, 600초 근처 LISTENING 복귀
