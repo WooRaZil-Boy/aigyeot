@@ -75,6 +75,7 @@ class VoiceTest {
         t.advance(4_000)
         assertNull(tap.sink, "6초가 지나면 PCM을 그만 받는다"); assertEquals(1, stt.finished)
         stt.onText!!("응 들러", true)
+        t.advance(Voice.STT_FINAL_GRACE_MS)                // 유예가 끝날 때 낸다(C111)
         assertEquals(Answer(t.now, "s1-4", YesNo.YES), r.events.last())
     }
 
@@ -168,13 +169,67 @@ class VoiceTest {
         t.advance(6_000)
         assertEquals(1, stt.finished, "조건: 듣기 창이 닫혔다")
         stt.onText!!("", true)                            // 실제 연결부는 오류도 ("", true)로 넘긴다
+        t.advance(Voice.STT_FINAL_GRACE_MS)
         assertEquals(Answer(t.now, "s1-4", YesNo.NONE), r.events.last())
         assertEquals(0, stt.cancels, "정상 최종 결과로 끝나면 cancel하지 않는다")
         v.listen(Listen("s1-5", 5_000))
         stt.onText!!("다음 쉼터까지 얼마나 남았어", false)
         t.advance(5_000)
         stt.onText!!("", true)
+        t.advance(Voice.STT_FINAL_GRACE_MS)
         assertEquals(Heard(t.now, "s1-5", null), r.events.last())
+    }
+
+    @Test fun `한 창의 비지 않은 최종 결과는 온 순서대로 띄어 이어 하나로 낸다(C111)`() {
+        v.ask(Ask("s1-4", Sid.S08, emptyMap(), 6_000))
+        tts.done!!(true)
+        stt.onText!!("아니 괜찮아", true)
+        stt.onText!!("아", true)
+        t.advance(6_000 + Voice.STT_FINAL_GRACE_MS)
+        assertEquals(Answer(t.now, "s1-4", YesNo.NO), r.events.last(), "엔진 쪽 판정: '아니 괜찮아 아'는 NO")
+        assertEquals(YesNo.NO, Voice.yesNo("아니 괜찮아 아"))
+        v.listen(Listen("s1-5", 5_000))
+        stt.onText!!("다음 쉼터", true); stt.onText!!("얼마나 남았어", true)
+        t.advance(5_000 + Voice.STT_FINAL_GRACE_MS)
+        assertEquals(Heard(t.now, "s1-5", "다음 쉼터 얼마나 남았어"), r.events.last())
+    }
+
+    @Test fun `창이 닫힌 뒤 유예 중에 최종이 여럿 오면 유예가 끝날 때 이어 한 번에 낸다(C111)`() {
+        v.ask(Ask("s1-4", Sid.S08, emptyMap(), 6_000))
+        tts.done!!(true)
+        t.advance(6_000 + 100); stt.onText!!("응", true)
+        assertEquals(1, r.events.size, "첫 최종에서 바로 끝내지 않는다(SpeechDone만)")
+        t.advance(100); stt.onText!!("아니 괜찮아", true)
+        t.advance(Voice.STT_FINAL_GRACE_MS)
+        val a = r.events.last() as Answer
+        assertEquals(YesNo.NO, a.answer, "'응 아니 괜찮아'는 지금 yesNo 규칙의 결과")
+        assertEquals(Voice.yesNo("응 아니 괜찮아"), a.answer)
+        assertEquals(2, r.events.size, "답은 한 번만")
+    }
+
+    @Test fun `창이 닫힌 뒤 최종 하나만 와도 유예가 끝날 때 나간다(C111)`() {
+        v.listen(Listen("s1-5", 5_000))
+        t.advance(5_000 + 100); stt.onText!!("다음 쉼터", true)
+        assertTrue(r.events.isEmpty())
+        t.advance(Voice.STT_FINAL_GRACE_MS - 100)
+        assertEquals(Heard(t.now, "s1-5", "다음 쉼터"), r.events.last())
+        assertEquals(0, stt.cancels, "최종이 있었으니 cancel하지 않는다")
+    }
+
+    @Test fun `빈 최종 결과는 앞의 최종 결과를 지우지 않는다(C111)`() {
+        v.listen(Listen("s1-5", 5_000))
+        stt.onText!!("아니 괜찮아", true)
+        stt.onText!!("", true)
+        stt.onText!!("아", false)                          // 최종이 있으면 뒤의 부분 결과도 쓰지 않는다
+        t.advance(5_000 + Voice.STT_FINAL_GRACE_MS)
+        assertEquals(Heard(t.now, "s1-5", "아니 괜찮아"), r.events.last())
+    }
+
+    @Test fun `최종이 하나도 없으면 마지막 부분 결과를 쓴다(C111)`() {
+        v.listen(Listen("s1-5", 5_000))
+        stt.onText!!("다음", false); stt.onText!!("다음 쉼터", false)
+        t.advance(5_000 + Voice.STT_FINAL_GRACE_MS)
+        assertEquals(Heard(t.now, "s1-5", "다음 쉼터"), r.events.last())
     }
 
     @Test fun `최종 결과 없이 끝나면 마지막 부분 인식으로 답하고 묶음을 cancel로 닫는다`() {

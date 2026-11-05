@@ -31,6 +31,7 @@ internal class Voice(
         var text: String? = null
         var closed = false
         var gotFinal = false                       // STT 최종 결과(오류 포함)를 받았다
+        val finals = mutableListOf<String>()       // 비지 않은 최종 결과(온 순서, C111: 한 창의 최종 결과를 이어 하나로 낸다)
         val timers = mutableListOf<() -> Unit>()
     }
 
@@ -66,7 +67,10 @@ internal class Voice(
         try { tts.speak(text) { done(it) } } catch (e: Exception) { done(false) }
     }
 
-    /** [ms] 동안 PCM을 넣고 끝을 알린 뒤, 최종 결과가 오거나 [STT_FINAL_GRACE_MS]가 지나면 마지막 글을 넘긴다. */
+    /**
+     * [ms] 동안 PCM을 넣고 끝을 알린 뒤, 창이 닫혀도 바로 넘기지 않고 [STT_FINAL_GRACE_MS] 유예가 끝날 때 한 번 넘긴다.
+     * 넘기는 글은 비지 않은 최종 결과를 온 순서대로 띄어 이은 것이고, 최종이 없으면 마지막 부분 인식이다.
+     */
     private fun hear(ms: Long, deliver: (String?) -> Unit) {
         hearing?.let { old -> hearing = null; old.timers.forEach { it() }; tap.close(); stt.cancel(); old.deliver(null) }
         val h = Hearing(deliver).also { hearing = it }
@@ -80,9 +84,13 @@ internal class Voice(
         try {
             stt.begin { text, final ->
                 if (hearing !== h) return@begin
-                if (final) { h.gotFinal = true; h.text = text.takeIf { it.isNotBlank() } }   // 최종이 비거나 오류면 앞의 부분 인식도 버린다(4.3 '답이 없으면 아무것도 안 한다')
-                else if (text.isNotBlank()) h.text = text
-                if (final && h.closed) finish()
+                if (final) {   // 최종이 하나라도 왔으면 부분 인식은 버린다(4.3 '답이 없으면 아무것도 안 한다'). 빈 최종은 앞의 최종을 지우지 않는다
+                    h.gotFinal = true
+                    if (text.isNotBlank()) h.finals += text.trim()
+                    h.text = h.finals.joinToString(" ").takeIf { it.isNotEmpty() }
+                }
+                else if (text.isNotBlank() && !h.gotFinal) h.text = text
+                // 창이 닫힌 뒤에도 바로 끝내지 않는다: 유예 중 더 올 최종 결과까지 모아 유예가 끝날 때 한 번 낸다(C111)
             }
             tap.open { pcm -> if (hearing === h && !h.closed) stt.feed(pcm) }
         } catch (e: Exception) {                                   // 시작에서 던지면 그 듣기를 빈 결과로 끝낸다
