@@ -107,6 +107,19 @@ class LinkQaTest : LinkKit() {
         assertEquals("자장가를 틀었을 때 7번 중 6번 그쳤어요. 소리 덕분인지는 알 수 없어요.", (events[1] as QaReply).text)
     }
 
+    @Test fun stateClaim_offlineSentence_toolsStillPosted() {
+        engineState = crying()
+        // 숫자는 없지만 관찰하지 않은 상태를 단정한다(C108): 숫자 검사 탈락과 같은 오프라인 문장 경로
+        relay.llmRes = { Res.Ok(200, reply("아기가 잘 자고 있어요. 바꿀게요.", tool("switch_sound", "method" to "white_noise"))) }
+        ask("뭐가 잘 통해?")
+        assertEquals(SwitchSound(T0, Method(MethodKind.WHITE_NOISE), "L1"), events[0])
+        assertEquals("자장가를 틀었을 때 7번 중 6번 그쳤어요. 소리 덕분인지는 알 수 없어요.", (events[1] as QaReply).text)
+        events.clear()
+        relay.llmRes = { Res.Ok(200, reply("울음이 들리지 않아요.")) }   // 관찰한 사실만 말하면 그대로 나간다
+        ask("지금 울어?")
+        assertEquals(listOf<Event>(QaReply(T0, "L1", "울음이 들리지 않아요.")), events.toList())
+    }
+
     @Test fun toolOnly_fixedSentences_parentSongIsCandidate() {
         engineState = crying()
         relay.llmRes = { Res.Ok(200, reply("", tool("switch_sound", "method" to "parent_song"))) }

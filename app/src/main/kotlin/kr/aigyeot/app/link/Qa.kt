@@ -14,6 +14,7 @@ import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.Phase
 import kr.aigyeot.engine.SwitchSound
 import kr.aigyeot.engine.Via
+import kr.aigyeot.engine.noStateClaim
 import kr.aigyeot.engine.numbersGrounded
 import kr.aigyeot.engine.pickRest
 import kr.aigyeot.shared.LlmCry
@@ -96,7 +97,7 @@ internal fun qaEvents(
         methods.none { it.kind == MethodKind.SONG && it.songId != null }
     val text = when {
         noSong -> "지금은 소리를 틀 수 없어요."   // 명세서 8장 S20. 틀 곡이 없으니 LLM 글과 상관없이
-        r.text.isNotBlank() -> if (numbersGrounded(r.text, stateJson(state))) r.text else offlineReply(question, state)
+        r.text.isNotBlank() -> if (numbersGrounded(r.text, stateJson(state)) && noStateClaim(r.text)) r.text else offlineReply(question, state)   // 숫자 검사·상태 단정 검사(C108): 하나라도 걸리면 오프라인 문장
         else -> when (tools.firstOrNull()) {
             is SwitchSound -> "소리를 바꿀게요."
             is DriverStop -> "소리를 멈출게요."

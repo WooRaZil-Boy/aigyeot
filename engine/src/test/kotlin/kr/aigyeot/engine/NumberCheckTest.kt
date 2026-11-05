@@ -56,4 +56,25 @@ class NumberCheckTest {
         assertFalse(numbersGrounded("\uD804\uDC6F분째 울어요.", state))
         assertTrue(numbersGrounded("\uD804\uDC6C분째 울어요.", state))   // 6은 상태값에 있다
     }
+
+    // ---- C108 상태 단정 검사 ----
+    @Test fun stateClaim_listedExpressions_caught() {
+        listOf(
+            "아기가 잘 자고 있어요.", "배고파서 울어요.", "괜찮아요.", "숨을 잘 쉬고 있어요.", "잠들었어요.", "깼어요.", "깨어 있어요.",
+            "아파서 울어요.", "열이 있는 것 같아요.", "안전해요.", "안전하게 가고 있어요.", "괜찮습니다.", "호흡이 고르세요.", "기저귀 때문에 울어요.", "심심해서 울어요.", "푹 자는 중이에요.", "아픈 것 같아요.", "배고픈 것 같아요.", "졸린가 봐요.", "많이 졸려해요.",
+        ).forEach { assertFalse(noStateClaim(it), it) }
+    }
+
+    @Test fun stateClaim_observedFacts_pass() {
+        listOf("울음이 들리지 않아요.", "마지막 수유는 12시 10분이에요.", "백색소음을 틀었어요.", "지금 2분째 울고 있어요.", "소리를 바꿀게요.", "")
+            .forEach { assertTrue(noStateClaim(it), it) }
+    }
+
+    @Test fun stateClaim_spaceAndFullwidthVariants_caught() {
+        assertFalse(noStateClaim("아기가 잘  자고   있어요"))
+        assertFalse(noStateClaim("잘\n자고\t있어요"))
+        assertFalse(noStateClaim("괜\u3000찮\u00A0아 요"))                                  // 전각·줄 바꿈 없는 공백
+        assertFalse(noStateClaim(java.text.Normalizer.normalize("괜찮아요", java.text.Normalizer.Form.NFD)))  // 풀어 쓴 자모
+        assertFalse(noStateClaim("숨 을 쉬어요"))
+    }
 }
