@@ -372,6 +372,18 @@ class S58DriveTest {
         assertEquals(Phase.ATTEMPT, sim.ses.phase)
     }
 
+    @Test fun q4_stopWordWithYo_stops_butQuestionGoesToQ5() {                 // C109
+        for (word in listOf("그만요", "그만해요", "내가 할게요", "그만 틀어요", "그만해요.")) {
+            val s = session().attempt1()
+            s.ev(SpeechDone(s.t, s.s.speech.speaking!!, true)).ev(Heard(s.t + 2_000, s.qa.listenId, word))
+            assertEquals(Phase.WAIT, s.ses.phase, word)
+            assertEquals(Unjudged.DRIVER_STOP, s.ep.first!!.unjudged, word)
+            assertTrue(s.all<Qa>().isEmpty(), word)
+        }
+        val q = idle().asking("언제 그만 울까요")
+        assertEquals(Qa(q.qa.listenId, "언제 그만 울까요"), q.step<Qa>().single(), "멈춤이 아니라 Q5")
+    }
+
     @Test fun q5_question_callsQa() {
         val sim = idle().asking("언제 그만 울까?")
         assertEquals(Qa(sim.qa.listenId, "언제 그만 울까?"), sim.step<Qa>().single())

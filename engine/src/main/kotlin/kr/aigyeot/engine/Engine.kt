@@ -38,7 +38,7 @@ private val REAR = setOf(Area.ROW_2_LEFT, Area.ROW_2_RIGHT)
 private val DEFAULT_METHODS = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY))
 private val OFFER_SIDS = setOf(Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11)   // 휴식 기록에 남기는 제안 문장
 private val HOLDABLE = setOf(Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S10, Sid.S11)   // C107: 운전이 바쁘면 미루는 급하지 않은 문장
-private val STOP_WORDS = setOf("그만", "그만해", "그만틀어", "내가할게")   // Q4
+private val STOP_WORDS = setOf("그만", "그만해", "그만틀어", "내가할게")   // Q4: 글자·숫자만 남기고 끝의 '요' 한 글자를 뗀 뒤 비교(C109)
 
 /** step 한 번의 작업 공간. 상태는 불변 객체라 copy로 바꿔 끼운다. */
 private class Ctx(val p: Params, var s: EngineState) {
@@ -860,7 +860,7 @@ private class Ctx(val p: Params, var s: EngineState) {
         if (qa.listenId != e.listenId || qa.step != QaStep.HEARING) return                         // Q7
         val text = e.text
         if (text == null || text.count { !it.isWhitespace() } < 2) return speech { copy(qa = null) } // Q3
-        if (text.filter { it.isLetterOrDigit() } in STOP_WORDS) { speech { copy(qa = null) }; return driverStop() } // Q4
+        if (text.filter { it.isLetterOrDigit() }.removeSuffix("요") in STOP_WORDS) { speech { copy(qa = null) }; return driverStop() } // Q4
         if (qa.songHeard || ses?.play?.method.isSong()) return speech { copy(qa = null) }  // Q5d: 노래 가사를 질문으로 받지 않는다
         qa { copy(step = QaStep.THINKING, until = now + p.qaReplyWaitMs + 1_000) }                  // Q5
         out += Qa(e.listenId, text)
