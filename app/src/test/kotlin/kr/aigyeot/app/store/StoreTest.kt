@@ -15,6 +15,7 @@ import kr.aigyeot.app.store.db.PlayLogEntity
 import kr.aigyeot.app.store.db.SessionEntity
 import kr.aigyeot.app.store.db.SteerWindowEntity
 import kr.aigyeot.engine.*
+import kr.aigyeot.shared.SteeringUnavailableReason
 import org.junit.After
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -294,6 +295,33 @@ class StoreTest {
         val s = steering(listOf(before, cry, ok, otherBand), base)
         assertTrue(s.available && before.startAt < cry.startAt && otherBand.speedBand !in setOf(cry.speedBand))
         assertEquals(8.0, s.afterResponsePerMin, "울음 창 뒤, 같은 속도대 창만 센다")
+    }
+
+    @Test fun steering_reasonNoCry_onlyWhenSessionHasNoCryWindow() {                  // C112
+        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val noCry = SteerWindowEntity("S1", T0, 2, false, false, false, 4)
+        val excludedCry = SteerWindowEntity("S1", T0, 2, true, true, false, 6)
+        assertEquals(SteeringUnavailableReason.NO_CRY, steering(listOf(noCry), base).unavailableReason)
+        assertEquals(SteeringUnavailableReason.NO_CRY, steering(emptyList(), base).unavailableReason)
+        assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(excludedCry), base).unavailableReason, "울음 창이 있었지만 모두 제외")
+        assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(excludedCry, noCry), base).unavailableReason)
+        assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(excludedCry.copy(excluded = false, speedBand = 4)), base).unavailableReason, "기존: 평소 창 없는 속도대")
+    }
+
+    @Test fun round1_halfUp_toOneDecimal() {                                           // C112
+        assertEquals(80.0, round1(80.00000381469727))
+        assertEquals(58.3, round1(58.25))
+        assertEquals(58.2, round1(58.24))
+        assertEquals(0.1, round1(0.05))
+    }
+
+    @Test fun preCry_speedRoundedToOneDecimal() {                                      // C112
+        val alarm = T0 + 5_000
+        val ep = EpisodeEntity("E1", "S1", T0, null, "ALARM", alarm, 1_000, null, null, null, null, null, null, null, null, null, null, false, false, 0, false, 0, emptyList())
+        fun row(at: Long, v: Double) = ContextSampleEntity("E1", at, v, false, 0.0, "NONE", "D", 24.0, null, null, null)
+        val c = preCry(ep, listOf(row(alarm - 1_000, 80.00000381469727), row(alarm, 58.25)))!!
+        assertEquals(80.0, c.speedKmhMax)
+        assertEquals(69.1, c.speedKmhAvg)      // (80.0000038 + 58.25) / 2 = 69.125
     }
 
     @Test fun steering_comparesSameBandBaseline() {

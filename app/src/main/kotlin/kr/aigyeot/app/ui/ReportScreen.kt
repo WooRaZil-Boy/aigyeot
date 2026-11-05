@@ -78,7 +78,7 @@ fun ReportDetailScreen(id: String, build: (String) -> ReportSummaryBody?, onBack
     }
     Label("3. 평소 대비 조향")
     with(b.steering) {
-        Body(if (!available) (if (unavailableReason?.name == "NO_CRY") "울음이 없어 비교하지 않았어요" else "비교할 평소 기록이 아직 없어요")
+        Body(if (!available) (if (unavailableReason?.name == "NO_CRY") "울음이 없어 비교하지 않았어요" else "비교할 구간이 없어요")
              else "평소 분당 ${"%.1f".format(baselinePerMin)}번 · 울음 중 ${"%.1f".format(duringCryPerMin)}번" + (afterResponsePerMin?.let { " · 대응 뒤 ${"%.1f".format(it)}번" } ?: ""))
     }
     Label("4. 차가 대신 한 일")

@@ -1,5 +1,7 @@
 package kr.aigyeot.app.store
 
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlinx.serialization.json.Json
 import kr.aigyeot.app.store.db.ContextSampleEntity
 import kr.aigyeot.app.store.db.EpisodeEntity
@@ -156,8 +158,8 @@ internal fun preCry(e: EpisodeEntity, rows: List<ContextSampleEntity>, p: Params
     val atAlarm = w.lastOrNull() ?: return null
     return PreCryContext(
         episodeId = e.id, windowS = (p.contextHalfMs / 1000).toInt(),
-        speedKmhAvg = (w.map { it.speedKmh }.average() * 10).roundToInt() / 10.0,
-        speedKmhMax = w.maxOf { it.speedKmh },
+        speedKmhAvg = round1(w.map { it.speedKmh }.average()),
+        speedKmhMax = round1(w.maxOf { it.speedKmh }),
         brakePresses = w.zipWithNext().count { (a, b) -> !a.brake && b.brake },
         steeringReversals = reversals(w.map { it.steeringDeg }, p.steerReversalDeg),
         turnSignalUsed = w.any { it.turnSignal != "NONE" },
@@ -166,6 +168,9 @@ internal fun preCry(e: EpisodeEntity, rows: List<ContextSampleEntity>, p: Params
         playing = atAlarm.playback != null,
     )
 }
+
+/** 소수 첫째 자리 HALF_UP(C112). 80.00000381469727 → 80.0, 58.25 → 58.3. */
+internal fun round1(v: Double): Double = BigDecimal(v.toString()).setScale(1, RoundingMode.HALF_UP).toDouble()
 
 /** 큰 조향 반전 수: 마지막 극값에서 [deg] 이상 반대로 움직이면 한 번(1초 표본, 기준 문서 3.4의 문턱만 쓴 근사). */
 internal fun reversals(angles: List<Double>, deg: Double): Int {
@@ -187,7 +192,9 @@ internal fun reversals(angles: List<Double>, deg: Double): Int {
 internal fun steering(session: List<SteerWindowEntity>, baseline: List<SteerWindowEntity>): Steering {
     val usable = session.filter { !it.excluded }
     val cry = usable.filter { it.cryPresent }
-    if (cry.isEmpty()) return Steering(false, null, null, null, null, SteeringUnavailableReason.NO_CRY)
+    // 울음 창이 있었지만 모두 제외됐으면 NO_CRY가 아니라 비교할 창 없음(C112)
+    if (cry.isEmpty()) return Steering(false, null, null, null, null,
+        if (session.none { it.cryPresent }) SteeringUnavailableReason.NO_CRY else SteeringUnavailableReason.NO_COMPARABLE_WINDOW)
     // 같은 속도대 비교(G38): 평소 창이 있는 속도대의 울음 창만 쓴다
     val baseBands = baseline.map { it.speedBand }.toSet()
     val comparable = cry.filter { it.speedBand in baseBands }
