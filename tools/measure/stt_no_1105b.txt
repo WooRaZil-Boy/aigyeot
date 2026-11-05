@@ -1,0 +1,26 @@
+# '아니' 실제 STT(M-NO) 재측정 — 2026-11-05(1105b)
+환경: AVD PleosProbe user 10, kr.aigyeot.app debug(main 작업 트리, C107·C108 포함). 10:01 콜드 부팅 부팅, CarService는 10:57:38에 한 번 다시 떴고(장면 C 1회차, run_validity_1105b.txt) 그 뒤 그대로.
+장면: 측정용 M-NO(11-04에 run-as로 넣어 둔 것 그대로, APK에 없음). 장면 C 바탕(쉼터 '안성휴게소(부산방향)'), t=93에 맥 say(Yuna) "아니, 괜찮아."를 되풀이한 녹음
+      no_rep30.pcm(SHA-1 47387ed4…)을 14초 동안 마이크 자리에 넣는다. 기대: S07 질문 뒤 6초 듣기 창에서 Answer(NO), AddWaypoint 없음(expectNone 60초).
+실행: 반복 1로 두 번(회차마다 VC로 P로 세운 뒤 다시 시작).
+
+## 결과
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+NO1(11:39:23~11:41:27, 맥 최대 22.98 — 부하 중(최대 22.98)): 1,3,true,,2819,435,bus100_audio_zone_1,false,1,55566,55566,0,0,0,0,,
+NO2(11:42:27~11:44:30, 맥 최대 10.59): 1,3,true,,2812,52,bus100_audio_zone_1,false,1,55948,55948,0,0,0,0,,
+두 회차 모두 장면 통과(.txt "run 1: 통과"). 프로세스 재시작 없음(system_server 841, CarService 20791, 앱 14389).
+
+## 시각(TTS·STT 로그)
+| 회차 | S07 끝(UpdateTtsDone) | '아니' 녹음 투입(t=93) | STT 최종 결과(UpdateSttCompletedToAmbientAi) | 듣기 끝(completeAudioSend) | session.rest_log 답 |
+| --- | --- | --- | --- | --- | --- |
+| NO1 | 11:40:59.733 | 11:40:59.695 | 11:41:01.885 "아니 괜찮아", 11:41:05.751 "아니 괜찮아" | 11:41:05.736 | **NO** |
+| NO2 | 11:44:01.726 | 11:44:03.047 | 11:44:05.105 "아니 괜찮아", 11:44:07.751 "아" | 11:44:07.732 | **NONE** |
+- 두 회차 모두 S06 TTS는 정상 길이였다(NO1 11:40:43.3 시작, NO2 11:43:44.1 시작 → S07이 t≈88~90에 나와 녹음이 S07 듣기 창에 들어갔다). 11-05 02시 회차처럼 S06이 15초 걸리는 일은 없었다.
+- NO2의 답이 NONE인 까닭: 한 듣기 창 안에 STT 최종 결과가 두 번 왔고, 실행기(exec/Voice.kt hear)는 최종 결과마다 h.text를 덮어써 마지막 것("아")으로 판정했다.
+  "아"는 부정·긍정 조각이 없어 NONE이다. 녹음이 같은 문장을 되풀이해 창 끝에 다음 문장 앞부분이 걸린 탓이다(찾은 버그 3장 참고).
+- AddWaypoint는 두 회차 모두 없었다(NO·NONE 모두 아무것도 하지 않는 규칙, 계약 4.3).
+
+## 판정
+- 실제 STT 글자: "아니 괜찮아" 2/2 — 통과
+- S07 듣기 창 안의 '아니' → Answer(NO): 1/2(NO1 통과, NO2는 뒤따른 조각 "아"로 NONE) — 부분 통과. 경유지를 넣지 않는 결과는 2/2 같다
+- 경보 지연 2,819·2,812ms(측정용 장면이라 15장 합친 중앙값에는 넣지 않고 참고로 적는다)

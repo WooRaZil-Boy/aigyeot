@@ -1,0 +1,30 @@
+# 잠에서 깬 뒤 연결 깨우기(G, `Link.wake()`, C67) — 2026-11-05(1105b)
+환경: AVD PleosProbe user 10, kr.aigyeot.app debug(pid 10141), 로컬 중계 wrangler dev, iOS 앱 연결 중. 다른 항목 기록을 모두 저장한 뒤 마지막에 했다.
+앱이 남기는 로그: `monitor: C67 신호 …`(전원 정책·화면), `host: C67 link.wake: 화면·전원 켜짐`(Host.resume), `host: C67 시계 점프, link.wake`(checkJump: elapsedRealtime − uptimeMillis가 5초 넘게 늘었을 때).
+
+## 1. `cmd car_service suspend --real --skip-garagemode --wakeup-after 30`(13:57:28)
+- 결과: "Wake up by timer is available only with simulated suspend." — 실제 잠에는 타이머 깨우기를 쓸 수 없다. 아무것도 하지 않음
+
+## 2. 모의 잠 `suspend --simulate --skip-garagemode --wakeup-after 30`(13:57:44)
+- 13:57:53.527 monitor "C67 신호 policy:system_power_policy_no_user_interaction off=true" → 13:57:54.165 CPMS SUSPEND(4) → 13:58:02 SCREEN_OFF
+- 13:58:26.292 WAIT_FOR_VHAL → 13:58:26.548 "C67 신호 policy:system_power_policy_initial_on off=false" → **13:58:26.573 host "C67 link.wake: 화면·전원 켜짐"** → 13:58:27.055 ON
+- 중계: 차 소켓은 끊기지 않았다(GET /v1/ws 없음, lsof 차 qemu 연결 그대로). 시계 점프 로그 없음(모의 잠은 CPU를 재우지 않음)
+
+## 3. 실제 잠 `suspend --real --skip-garagemode`(13:58:48, 타이머 없음)
+- 13:58:48.744 SHUTDOWN_PREPARE → 13:58:49.537 SUSPEND(4) → 13:58:49.681 CarPowerManagementService "Entering Suspend-to-RAM"
+- 13:59:01.184 WAIT_FOR_VHAL, 13:59:01.399 PowerManagerService "Waking up from Dozing (reason=WAKE_REASON_APPLICATION, details=CAR.POWER:0)"(무엇이 깨웠는지는 로그로 알 수 없다. 이 사이 맥에서 adb shell을 한 번 보냈다)
+  → 13:59:02.851 "C67 신호 policy:system_power_policy_initial_on" → **13:59:02.874 host "C67 link.wake: 화면·전원 켜짐"** → 13:59:04.853 ON → 13:59:18 SCREEN_ON
+- 13:59:54 에뮬레이터 콘솔 전원 키(`adb emu event send EV_KEY:KEY_POWER:1 EV_KEY:KEY_POWER:0`)도 보냈지만 이미 깨어 있었다(mWakefulness=Awake)
+- 시계 점프: "C67 시계 점프" 로그가 없다. /proc/uptime(부팅 뒤 경과, 잠 포함) 14214.10(13:58:48) → 14265.43(13:59:40)로 벽시계와 같게 늘어,
+  커널이 5초 넘게 실제로 잠들었는지(elapsedRealtime − uptimeMillis 증가) 확인할 수 없었다. 에뮬레이터가 Suspend-to-RAM을 흉내만 냈을 가능성이 있다(추정)
+- 중계: 차 소켓 TCP 연결이 끊기지 않아(lsof 차 qemu 연결 그대로, GET /v1/ws 없음) 깬 뒤 다시 붙는 과정은 생기지 않았다
+- 에뮬레이터: 잃지 않았다. 앱·CarService·system_server pid 그대로(10141·9816·841). 다만 깬 뒤 맥 쪽 logcat 수집이 13:58:49에서 멈춰 다시 받았고(logcat -d로 메움),
+  맥의 `adb forward tcp:8088`이 사라져 있어 다시 걸었다(다른 세션의 adb 서버 재시작 탓일 수 있음, 원인 미확인)
+
+## 판정
+- 전원 켜짐 때 link.wake(Host.resume): 통과(모의 잠 1회, 실제 잠 1회 모두 깨어날 때 로그)
+- 시계 점프 때 link.wake(checkJump): 미판정 — 이 에뮬레이터에서 elapsedRealtime − uptimeMillis가 5초 넘게 느는 실제 깊은 잠을 만들었는지 확인하지 못했고, 점프 로그가 나오지 않았다
+- 깬 뒤 연결 다시 붙음: 소켓이 끊기지 않아 '다시 붙는' 경우가 생기지 않았다 — 미판정(끊김을 만들려면 중계 재시작 같은 별도 조작이 필요, E에서 401 경로는 확인)
+
+## 끝난 뒤 정리
+- 12:22에 C(주행 제한) 확인용으로 연 실제 세션을 14:01:47 VC `PUT /vehicle/body?door_rr=1`로 닫았다 → 14:01:52 세션 IDLE → 14:01:54 중계 POST /v1/messages 201 두 번(리포트), 폰 ack 두 번

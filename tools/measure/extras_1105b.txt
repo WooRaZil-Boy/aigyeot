@@ -1,0 +1,54 @@
+# 대장 2장 나머지(B: 백업·포커스·열선/독서등·TTS), 주행 제한(C), 감쇄 중 듣기(D) — 2026-11-05(1105b)
+환경: AVD PleosProbe user 10, kr.aigyeot.app debug(main 작업 트리). 측정용 장면은 run-as로 넣었다(APK에 없음). 맥 부하는 run_validity_1105b.txt.
+
+## B-1. 백업 제외(bmgr)
+- `adb -s emulator-5554 shell bmgr --user 10 enabled` / `list transports` / `bmgr --user 0 enabled` → 모두 "Error: Could not access the Backup Manager. Is the system running?"
+- `service list`에 backup 서비스가 없고 `dumpsys backup` → "Can't find service: backup". 이 Pleos 에뮬레이터 이미지에는 백업 관리자가 없다.
+- APK 확인(aapt2): allowBackup=false, fullBackupContent·dataExtractionRules가 들어 있고, data_extraction_rules의 cloud-backup·device-transfer 모두 aigyeot.db·-wal·-shm을 뺀다.
+- 판정: 미판정(에뮬레이터가 백업·기기 이전을 만들 수 없다 → 대장 3장으로 옮길 후보). 설정이 APK에 들어간 것까지만 확인
+
+## B-2. 뒷좌석 재생 중 포커스·존(C73)
+측정용 M-CTL2(정차 경보로 백색소음 재생) 재생 중 12:17:56에 `dumpsys audio`, `dumpsys car_service --services CarAudioService`.
+- 존: zone 0(primary), zone 1(rear seat zone 1: MUSIC → bus100_audio_zone_1, 안내·알림 → bus101_audio_zone_1), zone 2(rear seat zone 2: bus2xx).
+- 재생: CarAudioPlaybackCallback "Audio zone: 1 … bus100_audio_zone_1 … AudioTrack u/pid:1010175/10141 state:started usage=USAGE_MEDIA" → 우리 앱 재생은 뒷좌석 zone 1 장치로 나간다.
+- 포커스: CarZonesAudioFocus의 **Zone Id 0** CarAudioFocus "Current Focus Holders: kr.aigyeot.app…AndroidAudio usage=USAGE_MEDIA". zone 1·2의 포커스 보유자는 없음.
+  같은 zone 0 Focus Events에 TTS(PleosTts, GAIN_TRANSIENT_MAY_DUCK) 요청·반납이 함께 있다. `dumpsys audio` 포커스 스택 맨 위도 우리 앱 USAGE_MEDIA(GAIN).
+- 판정: C73 '운전자 zone에서 다뤄진다' — 맞다(포커스는 zone 0, 출력은 zone 1 장치). 포커스 매트릭스대로 거절이 오는지(통화·Gleo·내비와 겹칠 때)는 이번에 만들지 않아 미판정
+
+## B-3. 열선·독서등 '켜진 값을 끄는' 변화
+- 독서등: M-CTL2(M-CTL에 t=42 `PUT /vehicle/reading-lights?area=rear_right&value=true`, rear_left도 더함) 12:17:04 실행.
+  12:17:50.327 sdv_vhal_rust "Row2Right of room lamp state is ON". 정차 경보 뒤 실행기가 읽은 바꾸기 전 값 12:17:56.097 READING_LIGHTS_SWITCH areaId 64 = **1(켜짐)**
+  → 쓰기 → 12:17:56.204 다시 읽기 0. control_log setReadingLightSwitch ROW_2_RIGHT goal 0 actual 0 ack 227ms ok. → **켬 → 끄기 통과**(아기 자리 ROW_2_RIGHT만 끔. ROW_2_LEFT는 켜진 채 남음 = 계약대로 babyAreas만)
+- 열선: VC 카탈로그의 좌석 온도 쓰기는 운전석·조수석만 있다(`hvac-seat-temperature` areas driver·passenger). `PUT /vehicle/hvac?row2_right_seat=2`·`rear_right_seat=2`·`row2_right_seat_temp=2` → {"error":"no_hvac_value"}.
+  뒷좌석 열선을 켤 길이 없어 '켜진 값을 끄는' 변화는 미판정. M-CTL2의 SeatHeat 주입 → setHvacSeatTemperature ROW_2_RIGHT goal 0 actual 0 ok(0 쓰기 → 0 읽기)만 다시 확인
+- 뒷창 잠금 ROW_2_RIGHT: M-CTL2에서 setWindowLock ROW_2_RIGHT 1→(장면 끝)0, ack 53ms·40ms ok(측정됨)
+
+## B-4. TTS 첫 음절 잘림·예열
+- 첫 음절 녹음: 미판정. 이 맥의 출력·입력이 USB 헤드셋이라 에뮬레이터 출력을 녹음할 길이 없고, 가상 오디오 장치는 내려받아야 해서 쓰지 않았다. 에뮬레이터 gRPC 오디오 스트림은 인증 토큰을 다뤄야 해서 쓰지 않았다.
+- 예열(빈 문장 doSpeak → UpdateTtsStart): 콜드 부팅 뒤 첫 예열 10:04:57.419 → 10:04:58.893(1.47초). 앱 재설치 뒤 예열 11:45:49.046 → .114(68ms), 11:52:44.642 → .671(29ms)
+- 부팅 뒤 첫 실제 문장(S01) 10:07:55.844 doSpeak → 10:07:55.856 시작(12ms). 예열이 늘 먼저 돌아 '예열 신호 없을 때 최대 3초'는 만들지 못함 — 미판정
+
+## C. 주행 제한(driving_regulation)
+- `adb -s emulator-5554 shell cmd hmg_car_service --service drivingstate driving_regulation on` → "cmd: Can't find service: hmg_car_service", exit 20(이 이미지에 없음. pleos-app-reference 286행이 적은 다른 출품작 경우와 같음)
+- 대안 확인: `cmd car_service` 도움말에 `enable-uxr true|false`, `emulate-driving-state`가 있다. UX 제한은 이미 켜져 있었다
+  (CarUxRestrictionsManagerService: 주행 때 "No DO -> DO changed from 0 to 80", 정차 때 "DO -> No DO … 80 to 0"). 그래서 VC 주행으로 제한을 만들었다.
+- M-LUL(시속 50, 12:21:08): 12:21:40(UX 제한 DO 80 중) topResumedActivity = kr.aigyeot.app/.MainActivity(시스템 차단 화면 아님, 앱 자체 '차가 서 있을 때 쓸 수 있어요' 화면),
+  MicService·MonitorService isForeground=true, 자장가 MediaPlayer AudioPlaybackConfiguration state:started(bus100_audio_zone_1), S02 TTS 끝까지. 장면 통과(경보 2,661ms)
+- 실제 마이크(장면 입력원 아님): 정차 홈 '아기 탔어요'(12:22:2x) → AudioRecord "rec update riid:1311 uid:1010175 src:MIC not silenced" → VC 시속 60 주행 12:23:05~12:23:45
+  (UX 제한 DO 80) 동안 'rec stop' 없음, MicService 살아 있음. rms 값은 앱이 기록하지 않고 에뮬레이터를 -allow-host-audio 없이 띄워 마이크 입력은 0이다 — rms는 미측정
+- 판정: `driving_regulation` 명령은 없음(시도 기록). UX 제한이 걸린 주행 중 마이크 녹음 지속·뒷좌석 재생·TTS 계속 — 통과(rms 값 제외)
+
+## D. 감쇄(DUCK) 중 듣기: 자장가 재생 중 멈춤 말만 받는가(실제 STT)
+장면: M-LUL 바탕 M-DUCK-STOP·M-DUCK-OTHER(울음 6초 → 자장가·S02 → S02 뒤 5초 듣기 창에 맥 say(Yuna) 녹음 4초를 넣음). 녹음 stop_4s.pcm("그만.", SHA-1 c5be3538…), other_4s.pcm("언제 먹였지?", SHA-1 56d63640…).
+| 회차 | 시각 | 듣기 창 | STT 최종 | 결과 |
+| --- | --- | --- | --- | --- |
+| OTHER 1 | 12:28:25 | 12:28:53.48~12:28:58.50 | "언제 먹였지"(12:28:57.737) | StopPlayback 없음, 질문(Qa)으로도 넘기지 않음 — 통과 |
+| STOP 1 | 12:25:42 | (S02가 8초 늦어 녹음이 창 밖) | — | 무효(부하) |
+| STOP 2 | 12:32:45 | 12:33:22.86~ | (녹음이 S02 말하는 중에 들어가 창 밖) | 무효(부하로 S02 4.8초) |
+| STOP 3 | 12:37:18 | 열리지 않음(S02 TTS가 20초 동안 끝나지 않아 앱이 멈춤) | — | 무효(부하) |
+| STOP 4 | 12:40:54 | 12:41:25.06~12:41:30.07 | **"그만요"**(12:41:29.648) | **StopPlayback 없음 — 실패** |
+- STOP 4 원인: 판단 코어 Engine.kt heard()가 멈춤 말을 `text.filter{isLetterOrDigit} in STOP_WORDS`(그만·그만해·그만틀어·내가할게)로 **정확히 같을 때만** 받는다.
+  STT가 "그만."을 "그만요"로 냈고 끝의 '요'를 떼지 않아 멈춤 말로 보지 않았다. 재생이 계속돼 자장가가 끝까지 나갔다(찾은 버그, 보고서 3장)
+- 감쇄: 재생 중 TTS·듣기 창 동안 control_log에 AudioTrack.setVolume 변화가 없다(시작 1.000만). CAN_DUCK 신호가 오지 않아 앱이 0.5배로 줄인 적이 없다.
+  그래서 '0.5배 상태에서 듣기'는 이 에뮬레이터에서 만들어지지 않았다(재생은 뒷좌석 장치로 나가고 STT 입력은 장면 녹음이라 듣기에는 영향 없음)
+- 판정: 다른 말은 받지 않음 — 통과(1/1). 멈춤 말 받기 — 실패(1/1 유효 회차, "그만요" 미인식). 0.5배 감쇄 상태 — 미판정(감쇄가 일어나지 않음)

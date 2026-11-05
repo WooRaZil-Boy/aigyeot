@@ -1,0 +1,39 @@
+# 폰·중계 장시간 자원(A) — 2026-11-05(1105b)
+목적: 폰 앱·중계를 켜 둔 채 메모리와 WebSocket 유지의 추세(늘어나는지)를 본다. 폰·중계에는 공식 예산이 없어 판정 숫자를 만들지 않는다.
+대상: iOS 'iPhone Duo'의 아이곁 iOS Debug(pid 5627, 11:55 실행), 로컬 중계 wrangler dev(10:05 시작, 12:43 E 때문에 다시 시작: workerd pid 바뀜), 차 AVD PleosProbe(qemu pid 94447),
+      안드로이드 AVD AigyeotPhone 아이곁 폰 debug(12:45~13:17, 30분).
+방법: 15분마다 `ps` RSS(KB)·`lsof -iTCP:8787 -sTCP:ESTABLISHED`(프로세스별 연결 수)·그 구간 중계 로그의 GET /v1/ws 수. 13:18부터 macOS `footprint`의 phys_footprint(MB)를 더했다
+      (ps RSS는 메모리 압축 때문에 4~51MB로 크게 흔들려 추세 판단에 쓰기 어렵다). 안드로이드는 `dumpsys meminfo kr.aigyeot.phone` TOTAL PSS·스레드 수.
+주의: 같은 맥에서 다른 세션의 아이곁 iOS 앱(다른 시뮬레이터, pid 2971·28327)이 돌았다. ps 기록 13:32:47 줄의 pid 2971·411MB는 그 앱이라 버린다.
+      13:17·13:32 표본에 'Aigyeot' 연결이 2개였는데 둘 다 우리 pid인지 확인하지 못했다(그 시간대 중계에 낯선 등록·연결 요청은 없었다).
+
+## iOS 앱·중계(ps RSS, KB)
+time,ios_pid,ios_rss_kb,workerd_rss_kb(sum),node_wrangler_rss_kb(sum),conn_ios,conn_car,conn_android,ws101_since_last,ws_other_since_last
+12:11:08,5627,6960,23408,24560,1,1,0,0,0
+12:26:09,5627,3920,19904,18528,1,1,0,0,0
+12:41:11,5627,7264,17424,23232,1,1,0,0,0
+(12:43 중계 다시 시작 — E)
+12:47:46,5627,40432,43184,32176,1,1,1,0,0
+13:02:46,5627,8864,23168,32720,1,1,1,0,0
+13:17:47,5627,51136,41952,25392,2,1,1,0,0
+13:47:47,5627,42704,34560,18384,1,1,0,0,0
+## phys_footprint(MB)
+time,ios_app,workerd(each)
+13:18:03,39,48/83
+13:48:04,39,58/85
+13:56:26,39,60/86
+## 안드로이드 폰 앱(12:46:53 연결)
+time,pid,pss_kb,threads,conn_8787(netsimd)
+12:47:31,3432,100627,33,1
+13:02:36,3432,99727,33,1
+13:17:38,3432,99808,33,1
+
+## WebSocket 유지
+- 중계 로그의 GET /v1/ws: 12:47 뒤 13:56까지 한 줄도 없다(차·iOS·안드로이드 모두 처음 붙은 소켓을 끊김 없이 유지). 12:43 중계 재시작 때만 401 → 다시 연결(E)
+- 그동안 중계 요청: GET /v1/devices 95번(약 64초 간격), pair-codes 6, messages 3, ack 3
+  - 64초 간격 GET /v1/devices는 iOS owner 앱이 소켓이 붙어 있는 동안 60초마다 기기 목록을 다시 받는 설계(AppModel.swift devicePollInterval 60초, 주석 '설계값')다
+
+## 추세(판정 아님)
+- iOS 앱 phys_footprint 39MB → 39MB(38분), 안드로이드 폰 앱 PSS 100.6MB → 99.8MB(30분), 스레드 33 그대로 — 늘지 않음
+- 중계 workerd phys_footprint 48→60MB, 83→86MB(38분) — 조금 늘었다. 원인(로컬 개발 서버의 캐시·로그 등)은 보지 않았다. 배포 중계(Workers)와 같은 프로세스가 아니라 참고만
+- 폰 앱 CPU·배터리, iOS 녹음 중 배경 전환, 중계 동시 접속 부하는 이번에 재지 않았다 — 미측정
