@@ -30,13 +30,14 @@ fun EngineState.Companion.fresh(
     ign = Ignition(false, false, false, emptyList(), null, 0),
     session = null,
     speech = SpeechQueue(null, null, emptyList()),
-    steer = SteerState(null, null, null, 0, null),
+    steer = SteerState(null, null, null, null, 0, null),
 )
 
 private val AUTO_PHASES = setOf(Phase.ATTEMPT, Phase.GAP, Phase.CONFIRM)
 private val REAR = setOf(Area.ROW_2_LEFT, Area.ROW_2_RIGHT)
 private val DEFAULT_METHODS = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY))
 private val OFFER_SIDS = setOf(Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11)   // 휴식 기록에 남기는 제안 문장
+private val HOLDABLE = setOf(Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S10, Sid.S11)   // C107: 운전이 바쁘면 미루는 급하지 않은 문장
 private val STOP_WORDS = setOf("그만", "그만해", "그만틀어", "내가할게")   // Q4
 
 /** step 한 번의 작업 공간. 상태는 불변 객체라 copy로 바꿔 끼운다. */
@@ -454,7 +455,9 @@ private class Ctx(val p: Params, var s: EngineState) {
     fun vehicle(e: VehicleSample) {                                                                // V1·V2
         val x = ses ?: return
         val o = steer(s.steer, e, false, x.play?.startedAt != null, x.id, p)
-        s = s.copy(steer = o.state)
+        // S4(C107): 바쁨 시각. steer 안에 두어 스냅숏 저장 판단(C78 (b) 묶어 저장)에는 영향이 없다 — 저장 횟수를 늘리지 않는다
+        val busy = e.brake || e.turnSignal != TurnSignal.NONE || kotlin.math.abs(e.steeringDeg) >= p.steerHoldDeg
+        s = s.copy(steer = if (busy) o.state.copy(driveBusyAt = e.at) else o.state)
         o.closed?.let { rec(SaveSteerWindow(it)) }
     }
 
@@ -891,8 +894,9 @@ private class Ctx(val p: Params, var s: EngineState) {
     fun say(sid: Sid, vars: Map<String, String> = emptyMap()) = say(Line(sid, vars, null))
 
     /** 큐에 넣는다. 통화 중·Suspend 중이면 버린다(15d·14v). ④ 답은 맨 앞(말하는 문장 바로 뒤)에 넣는다. */
-    fun say(line: Line): Boolean {
+    fun say(l: Line): Boolean {
         if (s.car.inCall || suspended) return false
+        val line = if (l.queuedAt == null) l.copy(queuedAt = now) else l
         speech {
             val q = if (line.qaAnswer || line.sid == Sid.QA)
                 queue.toMutableList().apply { add(if (speaking != null && isNotEmpty()) 1 else 0, line) }
@@ -900,6 +904,22 @@ private class Ctx(val p: Params, var s: EngineState) {
             copy(queue = q)
         }
         return true
+    }
+
+    /** 최근 표본이 바쁨이다. 표본이 끊겨 `driveBusyAt`이 오래되면 거짓이라 미루지 않는다(S7). */
+    fun driveBusy() = s.steer.driveBusyAt?.let { now - it < p.holdStableMs } == true
+
+    /** 말하지 않고 버린 제안이 넣을 때 적은 10분 반복 금지 시각(`offer()`, 값 = `queuedAt`)을 지운다. 2시간 제안은 적지 않았으므로 해당 없음. */
+    fun forgetOffer(l: Line) {
+        if (l.queuedAt != null) ses { if (lastOffer[l.sid] == l.queuedAt) copy(lastOffer = lastOffer - l.sid) else this }
+    }
+
+    /** 꺼낼 때 쉼터 제안을 지금 경로로 갱신한다. 그 쉼터가 지금 `RouteState` 후보에 없으면 null(버림). 쉼터 없는 문장은 그대로. */
+    fun refreshed(l: Line): Line? {
+        if (l.sid !in HOLDABLE) return l        // S08 등 인계 제안은 이전과 똑같이 둔다
+        val id = l.askRestId ?: return l
+        val r = s.car.route?.rests?.firstOrNull { it.id == id } ?: return null
+        return l.copy(vars = l.vars + mapOf("distanceKm" to km(r.distanceKm), "restName" to r.name))
     }
 
     /** 꺼낼 때 문장이 아직 맞는지 다시 본다(G15·C15). */
@@ -916,11 +936,29 @@ private class Ctx(val p: Params, var s: EngineState) {
     fun drain() {
         val sq = s.speech
         if (s.car.inCall || suspended || sq.speaking != null || sq.qa != null) return
-        val q = sq.queue.dropWhile { !valid(it) }
+        // S6: 바쁨 때문에 너무 오래 미뤄진 급하지 않은 문장은 버린다(longDriveOffered는 말한 뒤에만 서므로 그대로다, C84).
+        // 큐에 든 뒤 바쁨이 한 번도 없었으면(driveBusyAt < queuedAt) 앞 문장 뒤에서 기다린 것이지 미뤄진 것이 아니므로 버리지 않는다
+        val busyAt = s.steer.driveBusyAt
+        val (expired, kept) = sq.queue.partition { it.sid in HOLDABLE && it.queuedAt != null && now - it.queuedAt > p.holdMaxMs && busyAt != null && busyAt >= it.queuedAt }
+        expired.forEach { forgetOffer(it) }
+        var q = kept.dropWhile { !valid(it) }
+        // S5: 바쁨 중이면 급하지 않은 문장을 건너뛰고 처음 나오는 급한 문장을 낸다. 건너뛴 문장은 자리를 지킨다.
+        // 고른 문장도 꺼낼 때 다시 본다: 무효(C15·G15)이거나 제안한 쉼터가 지금 경로에 없으면 버리고 다음 후보를 찾는다. 있으면 거리·이름을 지금 값으로 갱신한다
+        var i: Int
+        while (true) {
+            i = q.indexOfFirst { !(it.sid in HOLDABLE && driveBusy()) }
+            if (i < 0) break
+            val ok = valid(q[i])
+            val fresh = if (ok) refreshed(q[i]) else null
+            if (fresh == null && ok) forgetOffer(q[i])
+            if (fresh == null) q = q.filterIndexed { j, _ -> j != i } else { q = q.toMutableList().also { it[i] = fresh }; break }
+        }
         speech { copy(queue = q) }
-        val line = q.firstOrNull() ?: return
+        if (i < 0) return
+        val line = q[i]
         val last = sq.lastDoneAt
         if (!line.qaAnswer && line.sid != Sid.QA && last != null && now < last + p.speechGapMs) return   // S1
+        if (i > 0) speech { copy(queue = listOf(line) + q.filterIndexed { j, _ -> j != i }) }
         val id = newId()
         val restId = line.askRestId
         if (line.sid in OFFER_SIDS) ses { copy(restLog = restLog + RestLogEntry(now, line.sid, restId)) }
@@ -990,6 +1028,11 @@ private class Ctx(val p: Params, var s: EngineState) {
         val sq = s.speech
         sq.qa?.let { c += it.until }
         if (sq.queue.isNotEmpty() && sq.speaking == null && sq.qa == null) sq.lastDoneAt?.let { c += it + p.speechGapMs }
+        if (sq.queue.isNotEmpty() && sq.speaking == null && sq.qa == null) {
+            // C107: 미뤄진 문장은 잠잠해질 때와 버릴 때에 다시 본다(표본이 끊기거나 Tick뿐이어도 나간다)
+            s.steer.driveBusyAt?.let { c += it + p.holdStableMs }
+            sq.queue.forEach { l -> if (l.sid in HOLDABLE && l.queuedAt != null) c += l.queuedAt + p.holdMaxMs + 1 }
+        }
         val x = ses
         if (x != null) {
             x.play?.let { c += it.endAt }

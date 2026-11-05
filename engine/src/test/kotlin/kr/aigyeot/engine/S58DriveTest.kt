@@ -152,6 +152,155 @@ class S58DriveTest {
         assertEquals(Sid.S06, sim.step<Speak>().single().sid)
     }
 
+    // ---- C107: 운전이 바쁜 동안 급하지 않은 문장 미루기 ----
+
+    private fun Sim.busy(dt: Long = 0, brake: Boolean = true, deg: Double = 0.0, sig: TurnSignal = TurnSignal.NONE) =
+        ev(VehicleSample(t + dt, 60.0, brake, deg, sig))
+    private val Sim.busyAt get() = s.steer.driveBusyAt
+    /** S02가 끝나 S06이 8초 뒤를 기다리는 상태(큐 = [S06]). */
+    private fun waitingS06(withRest: Boolean = false): Sim {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN)
+        if (withRest) sim.route(rest("a", 5.0))       // 쉼터가 있으면 S06 뒤에 S08, 없으면 S10이 함께 큐에 선다
+        sim.attempt1().done()
+        assertEquals(if (withRest) listOf(Sid.S06, Sid.S08) else listOf(Sid.S06, Sid.S10), sim.s.speech.queue.map { it.sid })
+        return sim
+    }
+
+    @Test fun s4_busySampleMarksDriveBusy() {
+        val sim = session()
+        sim.busy(brake = false)                               // 바쁘지 않음
+        assertNull(sim.busyAt)
+        sim.busy(100, brake = true); assertEquals(sim.t, sim.busyAt)
+        sim.busy(100, brake = false, sig = TurnSignal.LEFT); assertEquals(sim.t, sim.busyAt)
+        sim.busy(100, brake = false, deg = -30.0); assertEquals(sim.t, sim.busyAt)   // |조향| ≥ 30° 경계
+        val at = sim.busyAt
+        sim.busy(100, brake = false, deg = 29.9); assertEquals(at, sim.busyAt)        // 바쁘지 않으면 그대로
+        assertTrue(sim.s.steer.filtered != null && sim.s.steer.window != null)        // 기존 조향 집계(V1·V2)는 그대로
+        // 필드가 없던 옛 스냅숏은 driveBusyAt = null로 읽힌다
+        val json = kotlinx.serialization.json.Json { encodeDefaults = true }
+        val old = json.encodeToString(sim.s).replace(Regex("\"driveBusyAt\":\\d+,?"), "")
+        assertFalse("driveBusyAt" in old)
+        assertNull(json.decodeFromString<EngineState>(old).steer.driveBusyAt)
+        val oldLine = json.encodeToString(waitingS06().s).replace(Regex(",?\"queuedAt\":\\d+"), "")
+        assertFalse("queuedAt" in oldLine)
+        assertNull(json.decodeFromString<EngineState>(oldLine).speech.queue.first().queuedAt)
+    }
+
+    @Test fun s5_holdableWaitsUntilCalm_urgentGoesFirst() {
+        val sim = waitingS06(withRest = true)
+        val doneAt = sim.t
+        assertNotNull(sim.s.speech.queue.first().queuedAt)              // 큐에 넣을 때 채운다
+        sim.busy(7_000)                                                  // 8초 간격이 끝나기 직전 브레이크
+        sim.ev(Tick(doneAt + 8_000))
+        assertTrue(sim.step<Speak>().none { it.sid == Sid.S06 })         // 바쁨 중 S06은 미뤄지고
+        assertEquals(Sid.S08, sim.step<Ask>().single().sid)              // 큐 뒤의 S08(인계 제안)이 먼저 나간다
+        assertEquals(listOf(Sid.S08, Sid.S06), sim.s.speech.queue.map { it.sid })   // S06은 자리를 지킨다
+        sim.done()
+        assertEquals(listOf(Sid.S06), sim.s.speech.queue.map { it.sid })
+        sim.busy(500)                                                    // 아직 바쁘다
+        val busyAt = sim.busyAt!!
+        assertNotNull(sim.last.wakeAt)                                   // 잠잠해지는 때를 깨움 시각으로 낸다
+        sim.clear()
+        sim.ev(Tick(busyAt + 2_999)); assertTrue(sim.log.none { it is Speak })   // 3초 직전까지는 아직
+        sim.ev(Tick(maxOf(busyAt + 3_000, sim.s.speech.lastDoneAt!! + P.speechGapMs)))   // 잠잠해지고 8초 간격도 지남: Tick만으로
+        assertEquals(Sid.S06, sim.step<Speak>().single().sid)
+    }
+
+    /** 120분 시점에 바쁨 때문에 미뤄진 S11(쉼터 a, 12km)이 큐에 있는 상태. 바쁨은 `at − 0.5초`가 마지막이다. */
+    private fun heldS11(): Pair<Sim, Long> {
+        val l = session().route(rest("a", 12.0)).ev(Tick(T0 + 119 * MIN + 30_000)).attempt1().done()
+        val at = T0 + 120 * MIN
+        l.ev(VehicleSample(at - 500, 60.0, true, 0.0, TurnSignal.NONE)).ev(Tick(at))
+        assertEquals(Sid.S11, l.s.speech.queue.single().sid)
+        assertTrue(l.step<Ask>().isEmpty())
+        return l to at
+    }
+
+    @Test fun s5_skippedThenInvalidLine_droppedNotSpoken() {
+        val sim = waitingS06(withRest = true)
+        val doneAt = sim.t
+        // 미뤄진 S06 뒤에 이미 끝난 재생의 알림(C15)이 있다
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(queue = listOf(sim.s.speech.queue.first(), Line(Sid.S02, emptyMap(), null, playId = "gone", queuedAt = doneAt))))
+        sim.busy(7_000).ev(Tick(doneAt + 8_000))
+        assertTrue(sim.step<Speak>().isEmpty())                          // 무효인 S02는 나가지 않는다
+        assertEquals(listOf(Sid.S06), sim.s.speech.queue.map { it.sid })  // 지워지고 S06은 자리를 지킨다
+    }
+
+    @Test fun s5_routeChangedWhileHeld_offerDroppedWhenRestGone() {
+        val (l, at) = heldS11()
+        l.ev(RouteState(at + 1_000, false, null, listOf(rest("b", 8.0))))   // a가 경로에서 사라졌다
+        l.ev(Tick(at + 4_000))                                              // 잠잠해짐
+        assertTrue(l.all<Ask>().none { it.vars["restName"] == "a 휴게소" })
+        assertTrue(l.s.speech.queue.none { it.askRestId == "a" })
+        assertFalse(l.ses.longDriveOffered)
+    }
+
+    @Test fun s5_routeChangedWhileHeld_offerRefreshedWhenRestStays() {
+        val (l, at) = heldS11()
+        l.ev(RouteState(at + 1_000, false, null, listOf(rest("a", 9.0))))   // 같은 쉼터, 거리가 줄었다
+        l.ev(Tick(at + 4_000))
+        val ask = l.step<Ask>().single()
+        assertEquals(Sid.S11, ask.sid); assertEquals("9", ask.vars["distanceKm"]); assertEquals("a 휴게소", ask.vars["restName"])
+    }
+
+    @Test fun s5_routeChanged_handoffOfferS08_stillSpoken() {
+        val sim = waitingS06(withRest = true)                                // 큐 [S06, S08(a)]
+        val doneAt = sim.t
+        sim.ev(RouteState(doneAt + 1_000, false, null, listOf(rest("b", 8.0))))
+        sim.busy(6_000).ev(Tick(doneAt + 8_000))                              // S06은 미뤄지고 S08이 나간다
+        assertEquals("a 휴게소", sim.step<Ask>().single { it.sid == Sid.S08 }.vars["restName"])   // 예전처럼 지우지 않고 그대로 묻는다
+    }
+
+    @Test fun s5_droppedOffer_notBlockedFor10min() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN).route(nurse).attempt1()   // 큐 [S06, S07(n)]
+        assertTrue(sim.s.speech.queue.any { it.sid == Sid.S07 })
+        sim.done()
+        assertTrue(Sid.S07 in sim.ses.lastOffer)
+        sim.ev(RouteState(sim.t, false, null, listOf(rest("b", 8.0, nursing = true))))   // n이 경로에서 사라짐
+        sim.ev(Tick(sim.s.speech.lastDoneAt!! + 8_000)).done()                            // S06을 말한다
+        sim.ev(Tick(sim.s.speech.lastDoneAt!! + 8_000))                                   // S07(n) 차례: 쉼터가 없어 말하지 않고 버린다
+        assertTrue(sim.s.speech.queue.isEmpty() && sim.log.none { it is Ask })
+        assertFalse(Sid.S07 in sim.ses.lastOffer)                                         // 말하지 않았으니 10분 금지를 되돌린다
+        assertNotNull(offerRest(false, sim.s.car.gear, sim.s.car.route, sim.ses.lastOffer, sim.t, sim.ses.driveFrom))   // 다음 제안 조건이 오면 b를 바로 제안할 수 있다
+    }
+
+    @Test fun s6_heldTooLongDropped() {
+        val sim = waitingS06()
+        val queuedAt = sim.s.speech.queue.first().queuedAt!!
+        var t = sim.t
+        while (t < queuedAt + P.holdMaxMs) { t += 100; sim.busy(t - sim.t) }   // 계속 바쁘다(10Hz)
+        assertEquals(listOf(Sid.S06, Sid.S10), sim.s.speech.queue.map { it.sid })  // 30초까지는 남는다
+        sim.busy(1_000)                                                         // 30초를 넘김
+        assertTrue(sim.s.speech.queue.isEmpty())
+        assertFalse(Sid.S10 in sim.ses.lastOffer)                               // 말하지 않고 버린 제안은 10분 금지를 남기지 않는다
+        assertTrue(sim.log.none { it is Speak && it.sid == Sid.S06 } && sim.log.none { it is Ask })
+        // 장시간 제안은 버려도 longDriveOffered가 서지 않는다(C84)
+        val l = session().route(rest("a", 12.0)).ev(Tick(T0 + 119 * MIN + 30_000)).attempt1().done()
+        val at = T0 + 120 * MIN
+        l.ev(VehicleSample(at - 500, 60.0, true, 0.0, TurnSignal.NONE)).ev(Tick(at))
+        assertEquals(Sid.S11, l.s.speech.queue.single().sid)
+        assertTrue(l.step<Ask>().isEmpty())                                      // 바쁜 동안 안 나간다
+        for (k in 1..31) l.ev(VehicleSample(at + k * 1_000L, 60.0, true, 0.0, TurnSignal.NONE))
+        assertTrue(l.s.speech.queue.none { it.queuedAt == at })                  // 30초를 넘겨 버려졌다(다시 제안은 새 줄)
+        assertTrue(l.all<Ask>().isEmpty())
+        assertFalse(l.ses.longDriveOffered)
+        // 바쁨 없이 순서만 30초 넘게 기다린 문장은 버리지 않는다
+        val calm = waitingS06()
+        calm.ev(Tick(calm.s.speech.queue.first().queuedAt!! + P.holdMaxMs + 1_000))
+        assertEquals(Sid.S06, calm.step<Speak>().single().sid)
+    }
+
+    @Test fun s7_noSamplesNoHold() {
+        val sim = waitingS06()
+        val doneAt = sim.t
+        sim.busy(7_000)                                                          // 마지막 바쁨, 그 뒤 표본이 끊김
+        sim.ev(Tick(doneAt + 8_000)); assertTrue(sim.step<Speak>().isEmpty())    // 방금 바빴으니 아직 미룬다
+        sim.ev(Tick(doneAt + 10_000))                                            // holdStableMs(3초)가 지남, 표본은 계속 없다
+        assertEquals(Sid.S06, sim.step<Speak>().single().sid)                    // 오래된 driveBusyAt는 잠잠으로 본다
+        val none = waitingS06()                                                  // 표본이 한 번도 없으면 지금과 같다
+        none.ev(Tick(none.t + 8_000)); assertEquals(Sid.S06, none.step<Speak>().single().sid)
+    }
+
     @Test fun s2_attemptAndS18_alwaysSpoken() {
         val sim = session().attempt1().toConfirm().closeQuiet().flush().attempt1().flush()
         assertEquals(2, sim.all<Speak>().count { it.sid == Sid.S02 })
@@ -233,7 +382,7 @@ class S58DriveTest {
         val h = session().handoff().flush().gear(Gear.P, MIN).asking()
         h.ev(SwitchSound(h.t, LL, h.qa.listenId))
         assertTrue(h.qa.ruleSaid)
-        assertEquals(Line(Sid.S18, emptyMap(), null, qaAnswer = true), h.s.speech.queue.first())
+        assertEquals(Line(Sid.S18, emptyMap(), null, qaAnswer = true), h.s.speech.queue.first().copy(queuedAt = null))
         val i = idle().asking()
         i.ev(SwitchSound(i.t, LL, i.qa.listenId))
         assertEquals(Sid.S20, i.s.speech.queue.single().sid); assertTrue(i.qa.ruleSaid)
@@ -252,7 +401,7 @@ class S58DriveTest {
         assertTrue(sim.qa.ruleSaid)
         assertEquals(NursingStop("n", null, null, false), sim.ses.nursingStop)
         sim.ev(WaypointResult(sim.t, add.cmdId, "n", true))
-        assertEquals(Line(Sid.S09, mapOf("restName" to "n 휴게소"), null, qaAnswer = true), sim.s.speech.queue.first())
+        assertEquals(Line(Sid.S09, mapOf("restName" to "n 휴게소"), null, qaAnswer = true), sim.s.speech.queue.first().copy(queuedAt = null))
     }
 
     @Test fun q5c_qaWaypointRejected_saysS19() {
@@ -260,7 +409,7 @@ class S58DriveTest {
         sim.ev(DriverAddWaypoint(sim.t, "n", sim.qa.listenId))       // P에서는 넣지 않는다
         assertTrue(sim.step<AddWaypoint>().isEmpty())
         assertTrue(sim.qa.ruleSaid)
-        assertEquals(Line(Sid.S19, emptyMap(), null, qaAnswer = true), sim.s.speech.queue.single())
+        assertEquals(Line(Sid.S19, emptyMap(), null, qaAnswer = true), sim.s.speech.queue.single().copy(queuedAt = null))
     }
 
     @Test fun q6_reply_spokenFirst() {
@@ -344,7 +493,7 @@ class S58DriveTest {
 
     @Test fun v1_steerReversal_definedSignal() {
         // 사인파 ±10°, 주기 10초, 10 Hz 표본, 60초. 극값 12개(2.5초, 7.5초, …, 57.5초) → 반전 기대 12.
-        var st = SteerState(null, null, null, 0, null)
+        var st = SteerState(null, null, null, null, 0, null)
         var closed: SteerWindowRecord? = null
         for (i in 0..600) {
             val at = i * 100L
@@ -357,7 +506,7 @@ class S58DriveTest {
         assertTrue(abs(err) <= 1)
         assertEquals(2, rec.speedBand)
         // 계단(0° → 20°)은 반전 0, 방향지시등이 켜진 창은 뺀다
-        var s2 = SteerState(null, null, null, 0, null)
+        var s2 = SteerState(null, null, null, null, 0, null)
         var c2: SteerWindowRecord? = null
         for (i in 0..600) {
             val o = steer(s2, VehicleSample(i * 100L, 30.0, false, if (i < 300) 0.0 else 20.0, if (i == 10) TurnSignal.LEFT else TurnSignal.NONE), false, false, "s")
@@ -457,7 +606,7 @@ class S58DriveTest {
     @Test fun v1_smallSineFromZero_countsReversals() {
         // 0°에서 시작하는 ±2° 사인파(주기 10초, 10 Hz, 60초). 필터 뒤 극값 차이 ≈ 3.9° ≥ 3°라 반이 돌 때마다 반전이다.
         // 극값 12개(2.5초, …, 57.5초) 중 마지막은 3° 되돌아오기 전에 창이 닫혀 기대 11.
-        var st = SteerState(null, null, null, 0, null)
+        var st = SteerState(null, null, null, null, 0, null)
         var closed: SteerWindowRecord? = null
         for (i in 0..600) {
             val at = i * 100L
@@ -469,7 +618,7 @@ class S58DriveTest {
         assertTrue(abs(n - 11) <= 1, "반전 $n")
         assertTrue(st.dir != 0)
         // 잡음 수준(±0.2°)만 있으면 방향도 반전도 생기지 않는다
-        var q = SteerState(null, null, null, 0, null)
+        var q = SteerState(null, null, null, null, 0, null)
         var qc: SteerWindowRecord? = null
         for (i in 0..600) {
             val o = steer(q, VehicleSample(i * 100L, 50.0, false, if (i % 2 == 0) 0.2 else -0.2, TurnSignal.NONE), false, false, "s")

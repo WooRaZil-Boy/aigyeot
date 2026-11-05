@@ -21,7 +21,7 @@ class ContractTypesTest {
         ign = Ignition(false, false, false, emptyList(), null, 10),
         session = null,
         speech = SpeechQueue(null, null, emptyList()),
-        steer = SteerState(null, null, null, 0, null),
+        steer = SteerState(null, null, null, null, 0, null),
     )
 
     @Test fun stateRoundTrip() {

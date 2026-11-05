@@ -27,6 +27,7 @@ data class EngineState(
 data class SteerState(
     val filtered: Double?,
     val lastSampleAt: Long?,
+    val driveBusyAt: Long? = null,        // 마지막으로 '바쁨'이던 표본 시각(C107). 스냅숏 호환 기본값 null
     val extremumDeg: Double?,
     val dir: Int,                         // −1 · 0 · +1
     val window: SteerWindowAcc?,
@@ -195,6 +196,7 @@ data class HandoffRecord(
     val qaAnswer: Boolean = false,
     val longDrive: Boolean = false,       // 2시간 제안(S11, 쉼터 없으면 S10). 말하기가 끝나야 longDriveOffered가 선다(L1, C84)
     val playId: String? = null,           // S02~S04: 이 알림을 낸 재생. 그 재생이 계속될 때만 말한다(C15)
+    val queuedAt: Long? = null,           // 큐에 넣은 시각. 미룰 수 있는 문장이 holdMaxMs를 넘으면 버린다(C107). 기본값 null = 버리지 않음(스냅숏 호환)
 )
 /** 휴식 기록 한 줄. sid는 제안 문장(S07·S07_DEPART·S08·S10·S11) 또는 ④ 경유지 요청이면 QA. */
 @Serializable data class RestLogEntry(

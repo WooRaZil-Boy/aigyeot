@@ -141,7 +141,7 @@ fun steer(
         reversals = acc.reversals + rev, excluded = acc.excluded || sample.turnSignal != TurnSignal.NONE,
         cryPresent = acc.cryPresent || cryPresent, playing = acc.playing || playing,
     )
-    return SteerOut(SteerState(f, sample.at, ext, dir, next), closed)
+    return SteerOut(st.copy(filtered = f, lastSampleAt = sample.at, extremumDeg = ext, dir = dir, window = next), closed)
 }
 
 // ---- 문장 채울 값(C29) ----

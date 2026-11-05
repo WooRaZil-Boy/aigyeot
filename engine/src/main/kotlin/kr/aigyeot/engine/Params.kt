@@ -65,5 +65,8 @@ data class Params(
     val snapshotIntervalMs: Long = 30_000, // 2.4 스냅숏 묶어 저장 간격(C78). 설계값·근거 없음
     val steerDirMinDeg: Double = 0.5,      // 첫 방향을 정하는 최소 움직임(잡음 위). 설계값·근거 없음, 첫날 센서 잡음으로 조정
     val steerWindowMs: Long = 60_000,
+    val holdStableMs: Long = 3_000,       // C107: 바쁨이 끝난 뒤 미룬 문장을 낼 때까지 잠잠해야 하는 시간. 설계값·근거 없음
+    val holdMaxMs: Long = 30_000,         // C107: 미룰 수 있는 문장을 큐에 둘 수 있는 최대 시간(8초 간격+긴 문장 8초+3초 잠잠=19초 > 15초). 설계값
+    val steerHoldDeg: Double = 30.0,      // C107: 이 이상이면 조향이 큰 것으로 본다. 설계값
     val yamnetHopMs: Long = 975,
 )
