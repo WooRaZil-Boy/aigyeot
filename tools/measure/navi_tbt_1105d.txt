@@ -1,0 +1,128 @@
+# 내비 경로 안내 중 앱이 받는 TBT·경로 값(C75: 휴게소 이름 방향, 남은 시간 필드, TBT 거리 뜻) — 2026-11-05(1105d)
+환경: AVD PleosProbe(emulator-5560, user 10), kr.aigyeot.app debug(main 작업 트리 빌드). 내비 ai.umos.maps.android.navigation.app.
+      맥 부하·회차 유효성은 run_validity_1105d.txt. 코드는 고치지 않았다.
+보는 곳(코드 변경 없이):
+  - 내비가 모든 NaviHelper 수신자에게 같은 값을 보낸다. 다른 수신자가 남기는 logcat 줄로 값을 읽었다:
+    CAP 서비스 `NavigationEventListener: onTBTInfo: [...]`·`onDrivingInfo: ...`, DRIVING_VIEW `onTBTInfo`, 내비 `DrivingViewModel notifyDrivingInfo`.
+    (우리 앱 프로세스에는 SDK가 onRouteStarted·onRouteEnded·onNavigationStatus·onRouteStateInfo 이름만 남기고 값은 남기지 않는다.)
+  - 우리 앱이 실제로 만든 RouteState: Room engine_snapshot(30초 안 저장, C78)을 run-as로 읽어 Mac sqlite3로 열었다(car.route).
+방법: VC로 정지·P → 내비 검색칸 → `input text busan` → 'busanstation' → '부산역 KTX 309km' 길안내 화살표 → 경로 3개 화면 → 카운트다운 뒤
+      '① 추천'(중부내륙, 378km, 4시간 30분)으로 안내 시작(17:21:58). '② 경부고속도로'를 고르려 했으나 카운트다운이 먼저 끝났다(안성휴게소는 이 경로에 없음).
+      출발 위치는 내비 기준 판교(37.4127212, 127.094681, 1105c와 같음).
+
+## 1. 내비가 보낸 값(17:21:59~17:22:00)
+- DrivingInfo(17:21:59.589): destination=DrivingState(name=부산역 KTX, duration=16200, distance=378000, …), waypoints=[]
+  화면: "4시간 30분 · 378km"(screens_1105d/car_navi_guidance_on.png) → duration은 초(16200 = 4시간 30분), distance는 미터. 화면과 같다.
+- 17:27:00 주기 재탐색 뒤 DrivingInfo duration=16260, distance=378000 → 화면 "4시간 31분 · 378km"(car_navi_remaining_4h31m_378km.png). 화면과 같다.
+- RouteStateInfo 필드(navi-data 3.0.4): termsAgreement, naviMode, isRouting, routeOption, remainDestinationChargingInt, remainWaypointChargingInt, trafficStatus.
+  남은 시간 필드는 없다. DestinationInfo.remainTime은 앱이 요청하지 않아 이번에 오지 않았다.
+- NavigationStatus: 내비가 "Notify Navigation Status Change: NavigationStatus.ROUTE_DRIVE"(17:21:58.892), GAA 수신 "status:ROUTE_DRIVE".
+- TBT(17:22:00.222, CAP 서비스 줄): 목록이 길어 logcat 한 줄이 49번째 항목에서 잘렸다(아래 표). 이후 17:23:35·17:27:01·17:27:50·17:28:22에 같은 목록이 다시 왔다.
+
+| 순서 | type | distance(m) | 앞 항목부터 더한 값(km) | description |
+| --- | --- | --- | --- | --- |
+| 1 | TURN_LEFT | 80 | 0.1 | 기업지원허브 방면 |
+| 2 | TURN_RIGHT | 380 | 0.5 | 판교IC 방면 |
+| 3 | TURN_AVOID_UNDER_R | 730 | 1.2 | 판교IC 방면 |
+| 4 | TURN_ENTER_IC_R | 1700 | 2.9 | 판교IC - 부산 방면 |
+| 5 | TURN_ENTER_SERVICEAREA | 2600 | 5.5 | 하이패스센터 |
+| 6 | TURN_TOLL | 1000 | 6.5 | 서울톨게이트 |
+| 7 | TURN_KEEP_R | 7700 | 14.2 | 원주,인천 방면 |
+| 8 | TURN_KEEP_L | 140 | 14.3 | 원주 방면 |
+| 9 | TURN_RESTAREA | 3800 | 18.1 | 용인졸음쉼터 |
+| 10 | TURN_DEVIDE_MERGE | 2200 | 20.3 | 영동고속도로 |
+| 11 | TURN_ENTER_SERVICEAREA | 8200 | 28.5 | 용인휴게소 |
+| 12 | TURN_DEVIDE_MERGE | 11000 | 39.5 | 영동고속도로 |
+| 13 | TURN_ENTER_SERVICEAREA | 1700 | 41.2 | 덕평휴게소 |
+| 14 | TURN_DEVIDE_MERGE | 3600 | 44.8 | 영동고속도로 |
+| 15 | TURN_RESTAREA | 3900 | 48.7 | 이천졸음쉼터 |
+| 16 | TURN_ENTER_SERVICEAREA | 9200 | 57.9 | 여주휴게소 |
+| 17 | TURN_KEEP_R | 1600 | 59.5 | 충주,양평 방면 |
+| 18 | TURN_KEEP_R | 440 | 60.0 | 충주 방면 |
+| 19 | TURN_RESTAREA | 8100 | 68.1 | 가남졸음쉼터 |
+| 20 | TURN_RESTAREA | 21000 | 89.1 | 노은졸음쉼터 |
+| 21 | TURN_ENTER_SERVICEAREA | 6300 | 95.4 | 충주휴게소 |
+| 22 | TURN_ENTER_SERVICEAREA | 26000 | 121.4 | 괴산휴게소 |
+| 23 | TURN_RESTAREA | 15000 | 136.4 | 문경졸음쉼터 |
+| 24 | TURN_ENTER_SERVICEAREA | 16000 | 152.4 | 문경휴게소 |
+| 25 | TURN_RESTAREA | 20000 | 172.4 | 사벌졸음쉼터 |
+| 26 | TURN_ENTER_SERVICEAREA | 23000 | 195.4 | 선산휴게소 |
+| 27 | TURN_RESTAREA | 9100 | 204.5 | 아포졸음쉼터 |
+| 28 | TURN_KEEP_R | 3800 | 208.3 | 대전,대구 방면 |
+| 29 | TURN_KEEP_L | 120 | 208.4 | 대구 방면 |
+| 30 | TURN_RESTAREA | 5800 | 214.2 | 선기졸음쉼터 |
+| 31 | TURN_ENTER_SERVICEAREA | 19000 | 233.2 | 칠곡휴게소 |
+| 32 | TURN_RESTAREA | 11000 | 244.2 | 하빈졸음쉼터 |
+| 33 | TURN_RESTAREA | 15000 | 259.2 | 검단졸음쉼터 |
+| 34 | TURN_KEEP_R | 8400 | 267.6 | 밀양,(서)부산 방면 |
+| 35 | TURN_RESTAREA | 16000 | 283.6 | 남천졸음쉼터 |
+| 36 | TURN_ENTER_SERVICEAREA | 18000 | 301.6 | 청도새마을휴게소 |
+| 37 | TURN_RESTAREA | 19000 | 320.6 | 상남(하)졸음쉼터 |
+| 38 | TURN_TOLL | 24000 | 344.6 | 김해부산톨게이트 |
+| 39 | TURN_RESTAREA | 200 | 344.8 | 덕산졸음쉼터 |
+| 40 | TURN_KEEP_L | 2000 | 346.8 | 대감분기점,부산 방면 |
+| 41 | TURN_KEEP_L | 1400 | 348.2 | 부산 방면 |
+| 42 | TURN_TOLL | 2100 | 350.3 | 대동톨게이트 |
+| 43 | TURN_KEEP_L | 4400 | 354.7 | 수정터널,백양터널,부산역 방면 |
+| 44 | TURN_KEEP_L | 2400 | 357.1 | 수정터널,시청,태종대 방면 |
+| 45 | TURN_ENTER_OVER_L | 5700 | 362.8 | 부두,용당,수정터널,태종대 방면 |
+| 46 | TURN_TOLL | 1900 | 364.7 | 수정터널톨게이트 |
+| 47 | TURN_EXIT_IC_C | 2400 | 367.1 | 좌천삼거리 - 부산세관,부산항국제여객터미널 방면 |
+| 48 | TURN_RIGHT | 800 | 367.9 | 부산세관 방면 |
+| 49 | TURN_AVOID_UNDER_R | 680 | 368.6 | 충장지하차도(로그 줄이 여기서 잘림) |
+
+## 2. 판정 — 휴게소 이름 형식(방향)
+- TBT description에 방향이 붙지 않는다. 이 경로의 휴게소 11곳 모두 'OO휴게소'(용인휴게소, 덕평휴게소, 여주휴게소, 충주휴게소, 괴산휴게소, 문경휴게소,
+  선산휴게소, 칠곡휴게소, 청도새마을휴게소 등), 졸음쉼터는 'OO졸음쉼터'(상남(하)졸음쉼터처럼 괄호가 이름 일부인 것은 있음).
+- 공공데이터가 양방향 두 줄인 곳(용인(강릉)/용인(인천), 여주(강릉)/여주(인천))도 TBT 이름에는 방향이 없다. → 방향은 내비 이름에서 얻을 수 없다(C75·C95 확정 자료).
+- TURN_ENTER_SERVICEAREA에는 휴게소가 아닌 '하이패스센터'(5번, 내비 목록 아이콘은 휴게소와 같은 포크·나이프)도 들어온다. 앱은 이를 REST_AREA로 받는다(4절).
+
+## 3. 판정 — TBT 거리의 뜻: 앞 TBT 지점부터의 구간 거리(지금 위치부터의 거리가 아님)
+근거
+- 목록은 경로 순서인데 거리가 늘지 않는다: 용인휴게소 8,200 → 영동고속도로 11,000 → 덕평휴게소 1,700 → … 덕산졸음쉼터 200(김해부산톨게이트 뒤, 부산 근처).
+- 49개 항목을 더하면 368.6km. 로그가 잘린 뒤 항목(충장지하차도 이후 부산역까지)을 빼면 경로 길이 378km와 맞는다. 지금 위치부터의 거리라면 합이 경로 길이와 맞을 까닭이 없다.
+- 내비 화면의 회전 목록도 같은 값을 '그 지점까지 남은 칸 거리'로 보여 준다: 80m 기업지원허브 → 380m 판교IC → 730m → 1.7km 판교IC-부산 → 2.6km 하이패스센터
+  → 1.0km 서울톨게이트 → 7.7km 원주,인천 → 140m → 3.8km 용인졸음쉼터 → … 8.2km 용인휴게소 → 11km 영동고속도로 → 1.7km 덕평휴게소 → 3.6km 영동고속도로
+  (car_navi_turnlist_top.png, car_navi_turnlist_2.png, car_navi_turnlist_rests.png).
+- 실제 거리 맞대기(출발점 판교에서 앱 휴게소 자료 RestAreaData.kt 좌표까지의 곧은 거리, 하버사인):
+  | 휴게소 | TBT 값 | 앞에서부터 더한 값 | 곧은 거리 | 더한 값/곧은 거리 |
+  | --- | --- | --- | --- | --- |
+  | 용인휴게소(용인(강릉) 37.245583,127.2419801) | 8.2km | 28.5km | 22.7km | 1.26 |
+  | 덕평휴게소(덕평 37.241456,127.390189) | 1.7km | 41.2km | 32.3km | 1.28 |
+  | 여주휴게소(여주(강릉) 37.238022,127.568892) | 9.2km | 57.9km | 46.2km | 1.25 |
+  TBT 값은 곧은 거리보다 짧아 '지금 위치부터의 도로 거리'일 수 없다. 더한 값은 곧은 거리의 1.25~1.28배로 도로 거리로 맞는다.
+- 한계: 이 에뮬레이터 내비는 위치가 움직이지 않는다. VC 시속 100(17:25:08~17:26:40)과 `emu geo fix`(용인휴게소 좌표, 17:26:45) 모두 내비 위치·첫 항목 80m를
+  바꾸지 않았다(17:26:58 주기 재탐색도 판교에서 다시 짬). 그래서 '주행하며 첫 항목만 줄어드는지'는 재지 못했다. geo fix는 17:27에 원래 GPS 값(37.409998,127.18)으로 되돌렸다.
+
+## 4. 우리 앱이 만든 RouteState(engine_snapshot car.route)
+- 17:22:28 저장(route.at 17:22:00.299): hasDestination=false, remainingSec=null, rests 23개(아래). 내비는 ROUTE_DRIVE로 안내 중이었다.
+- 앱 SDK 로그 순서(17:21:58.932~17:21:59.026): onRouteStarted, onRouteEnded(다른 binder 스레드, 같은 ms), onNavigationStatus, onRouteStateInfo.
+  앱은 onRouteEnded·onNavigationStatus(ROUTE_DRIVE→참)·onRouteStateInfo(isRouting) 순으로 routing을 덮어쓴다(exec/Android.kt:570-573).
+- 재시작 확인(17:23:33 force-stop → 17:23:35 시작, 안내는 계속): 앱 init이 getRouteStateInfo·getTBTInfo만 부르고 onRouteStateInfo 하나만 받았다(17:23:35.923).
+  17:23:36 스냅숏도 hasDestination=false, remainingSec=null, rests 23개 → 안내 중 RouteStateInfo.isRouting이 false다(경로 '탐색 중' 뜻으로 보임).
+- rests(앱 restsOf가 TBT distance/1000을 그대로 distanceKm로 씀):
+  하이패스센터 REST_AREA 2.6 · 용인졸음쉼터 3.8 · 용인휴게소 8.2(수유실 참) · 덕평휴게소 1.7(참) · 이천졸음쉼터 3.9 · 여주휴게소 9.2(참) · 가남졸음쉼터 8.1 ·
+  노은졸음쉼터 21.0 · 충주휴게소 6.3(참) · 괴산휴게소 26.0(참) · 문경졸음쉼터 15.0 · 문경휴게소 16.0(참) · 사벌졸음쉼터 20.0 · 선산휴게소 23.0 · 아포졸음쉼터 9.1 ·
+  선기졸음쉼터 5.8 · 칠곡휴게소 19.0(참) · 하빈졸음쉼터 11.0 · 검단졸음쉼터 15.0 · 남천졸음쉼터 16.0 · 청도새마을휴게소 18.0 · 상남(하)졸음쉼터 19.0 · 덕산졸음쉼터 0.2
+- 이 값으로 Calc.kt pickRest(30km 안 가장 가까운 곳, 그 +5km 안 수유실 휴게소)를 손으로 따라가면: 가장 가까운 곳 = 덕산졸음쉼터 0.2km(실제 약 345km 뒤),
+  수유실 후보 = 덕평휴게소 1.7km(실제 약 41km 앞) → "1.7킬로미터 앞 덕평휴게소에 수유실이 있어요"가 된다(장면으로 재생해 보지는 않음, 코드 읽기).
+
+## 5. 정리(C75 세 물음)
+| 물음 | 결과 | 판정 |
+| --- | --- | --- |
+| 휴게소 이름에 방향이 붙는가 | 붙지 않는다('용인휴게소' 등). 양방향 두 줄 휴게소도 같음 | 확인 |
+| 남은 시간 필드 | DrivingInfo.destination.duration(초)이 화면 남은 시간과 같다(16200=4시간30분, 16260=4시간31분). distance(m)도 화면 378km와 같다. RouteStateInfo에는 남은 시간이 없다 | 확인(앱이 쓰는 필드가 맞음). 주행 중 갱신 주기는 위치가 안 움직여 미판정 |
+| TBT 거리의 뜻 | 앞 TBT 지점부터의 구간 거리. 지금 위치부터의 거리는 앞 항목을 모두 더해야 한다 | 확인(주행 중 변화는 미판정) |
+
+## 6. 찾은 버그(재현·추정 원인, 고치지 않음)
+- B1 쉼터 거리 잘못(심각): exec/Feeds.kt:48 restsOf가 TBT distance를 지금 위치부터의 거리로 쓴다. 실제는 구간 거리라 먼 쉼터가 가깝게(덕산졸음쉼터 0.2km, 덕평휴게소 1.7km) 들어간다.
+  재현: 위 방법으로 부산역 안내를 켜면 engine_snapshot rests에 바로 보인다. 고칠 방향(제안): 목록 순서대로 누적한 값을 distanceKm로.
+- B2 안내 중 hasDestination=false·remainingSec=null: exec/Android.kt:571 onRouteStateInfo가 isRouting으로 routing을 덮어쓴다. 안내 중 isRouting은 false.
+  재현: 안내 중 앱을 다시 띄우거나 안내를 시작하면 스냅숏이 false. 영향: 도착 10분 전 안내(Calc.kt:82)·인계 '남은 시간 먼저'가 실제 내비로는 안 나옴.
+  고칠 방향(제안): 목적지 여부는 NavigationStatus(ROUTE_DRIVE)나 DrivingInfo.destination 유무로 보고, init 때도 상태를 읽는다.
+- B3 하이패스센터가 휴게소 후보: TURN_ENTER_SERVICEAREA를 모두 REST_AREA로 본다(Feeds.kt:43). 휴게소 자료와 못 맞춘 이름은 후보에서 빼는 것을 검토.
+- 관찰: 안내 시작 때 onRouteStarted와 onRouteEnded가 서로 다른 binder 스레드로 같은 ms에 온다(onRouteEnded가 이전 탐색의 끝으로 보임).
+
+## 캡처(screens_1105d/)
+car_navi_guidance_on.png(안내 시작, 4시간 30분·378km), car_navi_turnlist_top.png·car_navi_turnlist_2.png·car_navi_turnlist_rests.png(내비 회전 목록, 구간 거리),
+car_navi_remaining_4h31m_378km.png(재탐색 뒤 4시간 31분)

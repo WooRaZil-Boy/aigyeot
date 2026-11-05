@@ -1,0 +1,36 @@
+# 회차 유효성·맥 부하·준비·정리 — 2026-11-05(1105d) 남은 확인 4건
+규칙: 맥 부하를 기다리지 않고 잰다. CarService·system_server가 회차 중 다시 뜨면 그 회차는 무효로 치고 다시 돈다.
+맥 부하: 30초마다 1분 평균(sysctl vm.loadavg). 16:58:50~17:43:53 표본 91개, 최소 4.01(17:24:52), 최대 90.84(17:07:22). 다른 세션의 에뮬레이터(CarePhone, emulator-5554)가 함께 돌았다.
+확인 방법: 회차 시작·끝에 `ps -A -o PID,STIME,NAME`(system_server·com.android.car·kr.aigyeot.app), logcat의 carwatchdog·'has died' 줄.
+
+## 준비
+- 잠금: /tmp/aigyeot-emulator.lock(16:58:47 잡음, 정리 끝에 풂)
+- 기기: emulator-5554는 다른 세션의 CarePhone이라 건드리지 않았다. 차 AVD PleosProbe를 `-port 5560 -no-snapshot-load -no-boot-anim`으로 16:58:52 콜드 부팅,
+  모든 adb 명령에 `-s emulator-5560`. system_server 764(16:58:57), CarService 1009·1311(16:59:00).
+- 빌드: main 작업 트리(커밋 51136d3 + 커밋 안 된 수정)에서 `./gradlew :app:assembleDebug`(16:58 산출물) → 17:04:32 `install -r`, user 10 installed=true, RECORD_AUDIO·CAR_SPEED·CAR_CLIMATE granted.
+  프로브 dev.probe.pleos는 깔려 있지 않았다. 측정용 장면 파일·녹음은 run-as files/scenario/에 남아 있던 것을 썼다(장면 B는 assets B.json, 녹음 cry/cont_75s.pcm).
+- iOS: 'iPhone Duo'만 켰다(17:06:21 부팅, xcodebuild Debug 설치). 'iPhone Care' 등 다른 시뮬레이터, 사용자 실기기, CarePhone, AigyeotPhone은 건드리지 않았다.
+- 중계: 8787이 비어 있어 relay/에서 `wrangler dev --port 8787`을 띄웠다(17:05:53 첫 실행은 로그 시각을 ms로 남기려고 바로 끄고 17:06:11에 다시 띄움).
+- VC: `adb -s emulator-5560 forward tcp:8088 tcp:8088`. 장면 B 동안은 앱 신호만, 내비 확인 때(17:20~17:43)는 측정 쪽 1초 세션 신호를 따로 보냈다.
+
+## 회차 밖 재시작
+- 17:06:52 CarWatchdogService "about to be killed by car watchdog daemon" → 17:06:56 com.android.car(1009) 죽음 → 26643(17:06:55)로 다시 뜸.
+  iOS 시뮬레이터 부팅과 겹친 부하 구간(17:06:50 71.47, 17:07:22 90.84)이다. 어떤 회차도 돌기 전이라 무효 회차는 없다.
+
+## 회차별
+| 항목·회차 | 시각 | 맥 1분 평균 최대 | 프로세스 | 판정에 씀 |
+| --- | --- | --- | --- | --- |
+| 3 시스템 볼륨(dumpsys·run-as 시도) | 17:04~17:06 | 7.48 | system_server 764, CarService 1009 그대로 | 예 |
+| 1 iOS 429 1회차 | 17:07:59~17:19:46 | 35.69 — 부하 중(17:08:52) | 차와 무관 | 예 |
+| 4 장면 B 1회 | 17:12:24~17:20:04 | 11.76 | system_server 764, CarService 26643·1311, 앱 15254 시작·끝 같음 | 예 |
+| 2 내비 TBT | 17:21:26~17:28:30 | 7.10 | system_server 764, CarService 26643, 앱 15254 → 17:23:33 측정자가 다시 띄움(7763) | 예 |
+| 1 iOS 429 2회차 | 17:29:15~17:40:27 | 9.51 | 차와 무관 | 예 |
+- 끝(17:42:45) 확인: system_server 764, CarService 1311·26643, 앱 7763 그대로.
+
+## 정리
+- 내비 안내 종료(17:43:27 onRouteCancelled), VC 정지·P, 측정 쪽 VC 세션 신호 끔, `forward --remove tcp:8088`(forward 목록 비어 있음).
+- 측정 중 `emu geo fix`로 바꾼 GPS는 17:27에 원래 값(37.409998, 127.18)으로 되돌렸다.
+- 이 측정이 띄운 중계(wrangler dev) 끔(8787 비어 있음), `emu kill`로 emulator-5560 끔, iPhone Duo shutdown. emulator-5554(다른 세션)는 그대로.
+- 잠금 파일 지움.
+- 부수 동작: 17:42:52 정리 중 잘못 누른 탭으로 차 앱 '휴대폰 연결' 화면이 열려 로컬 중계에 연결 코드 하나가 만들어졌고(POST /v1/pair-codes 201),
+  17:43:17 '뒤로'로 닫아 지웠다(DELETE /v1/pair-codes 204). 캡처로 남기지 않았다.

@@ -1,0 +1,40 @@
+# 공조 최솟값 출처: checkHvacTemperatureCapabilities 콜백 값인가, 대체값 Params.hvacMinC인가(C101) — 2026-11-05(1105d)
+환경: AVD PleosProbe(emulator-5560, user 10), kr.aigyeot.app debug(main 작업 트리 빌드, 17:04:32 install -r). 앱 pid 15254(17:11:18 시작).
+      16:58:52 콜드 부팅. 장면 B 1회. 맥 부하·유효성은 run_validity_1105d.txt. 코드는 고치지 않았다.
+실행: '시연·측정 → 장면 고르기·실행 → B', 반복 1(− 다섯 번으로 5→1). 17:12:24 시작 → 17:20:04 결과.
+
+## 1. 장면 결과
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+1,2,true,,2427,80,bus100_audio_zone_1,false,2,111894,111894,0,0,0,0,,1.000
+- control_log(Room, run-as로 읽음): 17:18:26.838 setHvacTemperature ROW_1_LEFT goal 20 actual 20 ack 24ms 반영 115ms ok 1 retries 0
+- S04 17:18:26.841 doSpeak "실내가 27도예요. 2도 낮췄어요." (공조 성공 뒤 3ms)
+- t=350 VC 22℃ 되돌리기 17:18:14.785 → 200. 바꾸기 전 값 22.0(17:18:26.727 getProperty_onResult HVAC_TEMPERATURE_SET area 1 = 22.0)
+
+## 2. logcat에 남은 것(17:18:26)
+| 시각 | 프로세스 | 줄(요지) |
+| --- | --- | --- |
+| .725 | 차량 서비스(3095) | getPropertyValue HVAC_TEMPERATURE_SET area 1(바꾸기 전 값 읽기) |
+| .727 | 앱(15254) | `[Pleos][SDK]b: [host]getCapabilityConfig instance …HVACImpl… , propId HVAC_TEMPERATURE_SET` |
+| .727 | 앱 | getProperty_onResult HVAC_TEMPERATURE_SET area 1 = 22.0 |
+| .728 | 앱 | `getCapabilityConfig request` → `getCapabilityConfig propId HVAC_TEMPERATURE_SET` |
+| .728 | 차량 서비스 | `getCapabilityConfigByKey() called with: propKey HVAC_TEMPERATURE_SET` |
+| .729 | 차량 서비스 | `getCapabilityConfigByKey propKey HVAC_TEMPERATURE_SET, dataString {"access":3,"areaType":3,"changeMode":1,"configArray":[150,300,5,580,880,10],…,"supportedAreas":{"1":{"maxValue":30.0,"minValue":15.0,…},"4":{"maxValue":30.0,"minValue":15.0,…}},"type":"java.lang.Float"}` |
+| .734 | 차량 서비스 | setPropertyAsyncValue HVAC_TEMPERATURE_SET area 1 value 20.0 |
+| .738 | 차량 서비스 | validatePermission kr.aigyeot.app … pleos.car.permission.CONTROL_CAR_CLIMATE(통과) |
+| .743 | VHAL | set temperature area: Row1Left value: 20 |
+| .747 | 앱 | onResult HVAC_TEMPERATURE_SET area 1 result = true |
+- 앱 쪽에 SDK 오류 줄(SecurityException·onFailed)은 없다. 즉 CAR_CLIMATE 권한으로 capability 호출이 통과했고, 차는 운전석(area 1 = ROW_1_LEFT) 최솟값 15.0을 돌려줬다.
+- 쓰기(.734)는 최솟값 응답(.729) 5ms 뒤다. 실행기는 바꾸기 전 값과 최솟값이 둘 다 와야(또는 verifyTimeoutMs 뒤) 쓴다(Controls.kt verify go()). 시간 초과 경로가 아니라 콜백이 온 뒤 쓴 것이다.
+
+## 3. SDK 정적 확인(Vehicle 2.3.2 classes.jar, javap)
+- HVACImpl.checkHvacTemperatureCapabilities → service.b.b(…, PleosPropertyIds, …)가 위 로그("getCapabilityConfig instance/request/propId")를 남기고 서비스에 묻는다.
+- 결과 map의 키: supportedAreas의 area id마다 `SeatValue.values()` 중 (areaId & id) == id인 값으로 SeatArea(...)를 만든다. area 1 → SeatArea([ROW_1_LEFT]).
+- SeatArea.equals·hashCode는 Arrays.equals·Arrays.hashCode(내용 비교). 앱의 `m[seat(area)]`(Android.kt:365 seat = SeatArea(SeatValue.valueOf(a.name)))는 같은 키로 찾힌다.
+  → 코드 읽기로는 콜백 m[ROW_1_LEFT]?.minValue = 15.0이 앱에 들어간다.
+
+## 판정
+- `checkHvacTemperatureCapabilities`가 차 앱 권한으로 동작하고 차가 최솟값 15.0을 준다 — 확인(logcat).
+- 앱이 그 콜백 값을 썼는지, 대체값 Params.hvacMinC(15.0)를 썼는지 — **미판정**. 두 값이 같고 목표가 max(22−2, 15) = 20이라 결과(goal 20)로 가를 수 없다.
+  앱은 받은 최솟값을 남기지 않는다. 위 로그 시각(콜백 뒤 5ms에 쓰기)과 SDK 정적 확인은 '콜백 값 사용'을 강하게 가리키지만 직접 증거는 아니다.
+- 가리려면 더할 것(코드 변경, 이번에는 하지 않음): control_log setHvacTemperature 줄에 최솟값과 출처(car|fallback)를 남기거나(예: actual 칸 옆 이유), minTemp 콜백에서 Log.i 한 줄.
+  또는 시험용으로 Params.hvacMinC를 15.0이 아닌 값(예: 16.0)으로 둔 빌드에서 바꾸기 전 값을 16.5로 두고 LowerHvac을 돌리면 목표(15 대 16)로 갈린다.

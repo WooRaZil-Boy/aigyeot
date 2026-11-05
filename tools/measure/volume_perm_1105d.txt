@@ -1,0 +1,51 @@
+# 시스템 볼륨(CarAudio 그룹)을 앱이 바꿀 수 없는가 — 2026-11-05(1105d)
+환경: AVD PleosProbe(emulator-5560, user 10), kr.aigyeot.app debug(main 작업 트리 빌드, 16:58 산출물, 17:04:32 install -r).
+      16:58:52 콜드 부팅. 맥 부하·회차 유효성은 run_validity_1105d.txt.
+방법: 코드 변경 없이 ① 앱 코드 grep ② APK 권한(aapt2) ③ user 10 부여 권한(dumpsys package) ④ 권한 보호 수준(pm list permissions -f -g)
+      ⑤ 차 오디오 설정(dumpsys audio·car_service CarAudioService) ⑥ 앱 uid로 볼륨 바꾸기 시도(run-as … cmd media_session volume).
+
+## 1. 코드(grep, app·engine·shared의 src/main)
+- 볼륨을 바꾸는 호출(setStreamVolume·adjustStreamVolume·adjustVolume·adjustSuggestedStreamVolume·setGroupVolume·CarAudioManager·setMasterMute·setVolumeIndex) 없음.
+- 있는 것은 재생 트랙 자기 이득뿐: exec/Android.kt:206·214 AudioTrack.setVolume, :239·246 MediaPlayer.setVolume(Player.gain, control_log 'AudioTrack.setVolume').
+- 볼륨 이름이 나오는 곳은 측정용 감시뿐: scenario/SceneRun.kt:93 VOLUME_APIS(감시 대상 이름), scenario/Scenario.kt:210 VOLUME_CHANGED_ACTION 수신(STREAM_MUSIC 바뀜을 세는 쪽).
+
+## 2. APK가 요구하는 권한(aapt2 dump permissions, 병합된 매니페스트)
+- 볼륨·오디오 설정 권한 없음: android.car.permission.CAR_CONTROL_AUDIO_VOLUME·CAR_CONTROL_AUDIO_SETTINGS, android.permission.MODIFY_AUDIO_SETTINGS·MODIFY_AUDIO_ROUTING 모두 요구하지 않는다.
+- 오디오 관련은 android.permission.RECORD_AUDIO 하나. 나머지는 pleos.car.permission.*(공조·좌석·창·등·문·주행·안전·내비·STT·TTS), CAR_SPEED, READ_CAR_POWER_POLICY 등.
+
+## 3. user 10 부여 권한(dumpsys package kr.aigyeot.app, 17:04)
+- runtime: POST_NOTIFICATIONS·CAR_SPEED·RECORD_AUDIO granted=true
+- install: pleos.car.permission.* 15개, VEHICLE_BINDING, FOREGROUND_SERVICE(·SPECIAL_USE·MICROPHONE), RECEIVE_BOOT_COMPLETED, INTERNET, ACCESS_NETWORK_STATE, READ_CAR_POWER_POLICY 등 granted=true
+- 볼륨 권한(CAR_CONTROL_AUDIO_VOLUME, MODIFY_AUDIO_SETTINGS 등)은 부여 목록에 없다(요구하지 않았으므로).
+
+## 4. 권한 보호 수준(pm list permissions -f -g, 이 이미지)
+| 권한 | 정의 패키지 | protectionLevel | 앱이 얻을 수 있나 |
+| --- | --- | --- | --- |
+| android.car.permission.CAR_CONTROL_AUDIO_VOLUME | com.android.car.updatable | signature\|privileged | 아니오(플랫폼 서명·priv-app만) |
+| android.car.permission.CAR_CONTROL_AUDIO_SETTINGS | com.android.car.updatable | signature\|privileged | 아니오 |
+| android.permission.MODIFY_AUDIO_SETTINGS | android | normal | 선언하면 설치 때 받음(지금은 선언 안 함) |
+| android.permission.MODIFY_AUDIO_SETTINGS_PRIVILEGED | android | signature\|privileged | 아니오 |
+| android.permission.MODIFY_AUDIO_ROUTING | android | signature\|privileged\|role | 아니오 |
+| ai.pleos.multimedia.permission.CONTROL_AUDIO_EFFECT | ai.pleos.multimedia.mediabridge | signature\|privileged | 아니오 |
+- pleos.car.permission.* 목록(56개)에 볼륨·오디오 권한은 없다.
+
+## 5. 차 오디오 설정(dumpsys)
+- dumpsys audio: mUseFixedVolume=true, mFixedVolumeDevices=0x800,0x200000. STREAM_MUSIC Current bus 15(0..15).
+  → AudioService가 고정 볼륨 모드라 setStreamVolume·adjustStreamVolume은 실제 볼륨을 바꾸지 않는다(AOSP 동작).
+- CarAudioService: "Rely on core audio for volume(false)", Volume Group Mute Enabled true. 그룹 볼륨은 CarVolumeGroup 이득(인덱스 0~45, 대부분 기본 20·현재 20, 한 그룹 35·35)으로 다뤄진다.
+  CarAudioManager.setGroupVolume은 CAR_CONTROL_AUDIO_VOLUME을 요구한다(위 표: signature|privileged).
+
+## 6. 앱 uid로 바꾸기 시도(17:05:24, 코드 변경 없음)
+- `run-as kr.aigyeot.app --user 10` → uid=1010175(u10_a175), context runas_app(앱과 같은 uid).
+- `cmd media_session volume --stream 3 --set 5`, `--adj lower` 실행. dumpsys audio 사건 기록에
+  "17:05:24:119 setStreamVolume(stream:STREAM_MUSIC index:5 …) from com.android.server.media", "17:05:24:153 adjustStreamVolume(… ADJUST_LOWER …)"가 남았다.
+- 직후 STREAM_MUSIC streamVolume 15 그대로(--get "volume is 15 in range [0..15]"), CarAudioService 그룹 이득 인덱스 바뀜 없음(20·20 14줄, 35·35 1줄 그대로).
+- 한계: 이 명령은 system_server 안 MediaSessionService가 대신 부르므로 AudioService가 본 호출자가 앱 uid인지는 로그로 확정하지 못했다.
+  다만 고정 볼륨 모드(5절)에서는 호출자가 누구든 STREAM 볼륨이 바뀌지 않는다는 것과 맞는다.
+- `run-as … cmd car_service help` → SecurityException "The command 'help' requires non-user build"(셸 경로로 그룹 볼륨을 만질 수도 없음).
+
+## 판정
+- '앱은 시스템 볼륨(CarAudio 그룹)을 바꿀 수 없다' — 확인(통과).
+  근거: 그룹 볼륨 권한 CAR_CONTROL_AUDIO_VOLUME이 signature|privileged라 서드파티 앱이 받을 수 없고, 앱은 요구하지도 않는다.
+  STREAM 볼륨 API는 고정 볼륨 모드라 효과가 없고(시도해도 15 그대로), 앱 코드에는 볼륨 호출이 없다(자기 트랙 이득만).
+- 남는 것: 앱 프로세스 안에서 AudioManager.setStreamVolume을 직접 부르는 시험은 코드를 고쳐야 해서 하지 않았다(6절은 셸 경로).

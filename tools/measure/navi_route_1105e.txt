@@ -1,0 +1,128 @@
+# 내비 경로 값 수정 확인(C113 쉼터 누적 거리, C114 목적지 있음, C115 하이패스센터 거름) — 2026-11-05(1105e)
+환경: AVD PleosProbe(emulator-5560, user 10), kr.aigyeot.app debug. 내비 ai.umos.maps.android.navigation.app.
+빌드: main 작업 트리(커밋 51136d3 + 커밋 안 된 수정)에서 `./gradlew :app:assembleDebug`. 산출물(17:47:57)이 소스(Feeds.kt·Android.kt 17:47:49)보다 새로워
+      up-to-date로 끝났고, dex에 RouteFeed.alive가 들어 있음을 확인했다. 17:50:53 `install -r`, user 10 installed=true, RECORD_AUDIO·CAR_SPEED granted.
+코드는 고치지 않았다. 폰·중계는 쓰지 않았다. 프로브(dev.probe.pleos)는 깔려 있지 않았다.
+보는 곳(1105d와 같음):
+  - 내비가 보낸 값: CAP 서비스 `NavigationEventListener: onTBTInfo/onDrivingInfo/onRouteCancelled` 줄, 내비 `Notify Navigation Status Change: NavigationStatus.<값>`,
+    GAA `[naviConnect] onNavigationStatus: status:<새 값>, <앞 값>`.
+  - 우리 앱이 받은 콜백 이름: 앱 프로세스의 `[NaviHelper][SDK]b: ... on<이름>`(값은 남기지 않는다. onTBTInfo·onDrivingInfo는 이름도 남기지 않는다).
+  - 앱이 만든 RouteState: Room engine_snapshot(car.route)을 run-as(user 10)로 꺼내 Mac sqlite3로 읽었다. 스냅숏 저장은 바뀐 뒤 30초 안.
+방법: VC로 정지·P → 내비 검색칸 → `input text busan` → 'busanstation' → '부산역 KTX 309km' 길안내 화살표 → '① 추천'(중부내륙, 378km)으로 안내.
+      1105d와 같은 경로다(출발 판교 37.4127212, 127.094681, 내비 기준). 경유지는 안내 화면 검색 → `suwon` → '수원메쎄' 화살표 → '경유지로'.
+      GPS(geo fix)는 바꾸지 않았다.
+
+## 판정표
+| 항목 | 결과 | 판정 |
+| --- | --- | --- |
+| 1 안내 시작: hasDestination | 17:52:27.710 ROUTE_DRIVE → 스냅숏 hasDestination=true(route.at 17:52:29.194) | 통과 |
+| 1 remainingSec = DrivingInfo duration | DrivingInfo destination duration=16560(17:52:28.553) = 스냅숏 remainingSec 16560. 화면 '4시간 36분 · 378km'(16560초=4시간 36분) | 통과 |
+| 1 rests 누적 거리(C113) | 22곳 모두 TBT 목록 앞에서부터 모든 항목 distance를 더한 값과 같다(차이 0, 3자리). 용인졸음쉼터 18.13·용인휴게소 28.53·덕평휴게소 41.23km 등 1105d 표와 같다 | 통과 |
+| 1 하이패스센터 거름(C115) | TBT 5번 TURN_ENTER_SERVICEAREA '하이패스센터'(2600m)는 rests에 없고(1105d 23곳 → 22곳), 그 거리는 뒤 항목 누적에 들어 있다 | 통과 |
+| 2 안내 중 앱 재시작 | 17:53:42 force-stop → 17:53:44 시작. 스냅숏 hasDestination=true, rests 22(같은 값), remainingSec=null(다음 DrivingInfo 17:57:29까지 3분 44초) | hasDestination 통과. remainingSec 빈 시간은 관찰 B3 |
+| 3 경유지 추가로 경로 다시 짜기 | 내비가 FREE_DRIVE+onRouteCancelled 뒤 경로 선택(5초) → ROUTE_DRIVE. 다시 시작 뒤 스냅숏 hasDestination=true, remainingSec=20160(DrivingInfo와 같음), rests 23(새 경로, 누적 확인). 2회(18:00:58, 18:12:27) | 통과(사이 약 8.9초는 내비가 FREE_DRIVE라 거짓, 아래 3절) |
+| 4 안내 끝: 30초 뒤 스냅숏 | 3회 모두 hasDestination=false, remainingSec=null, rests 0(route.at = 앱 onNavigationStatus 시각) | 통과 |
+| 4 안내 끝 뒤 앱 재시작 | 경유지 없던 안내(2회차) 뒤: false(통과, 1/1). **경유지가 있던 안내(1·3회차) 뒤: hasDestination=true, rests 23(끝난 경로) — 2/2 재현, 5분 넘게 그대로** | **실패(B1)** |
+| 4 NavigationStatus 값 목록 | navi-data 3.0.4: INACTIVE, INITIALIZING, FREE_DRIVE, ROUTE_DRIVE(Gradle 캐시 api jar를 javap) | 확인 |
+
+## 1. 안내 시작(17:52)
+- 17:52:18 길안내 화살표 → 17:52:27.710 내비 `Notify Navigation Status Change: NavigationStatus.ROUTE_DRIVE`, GAA `status:ROUTE_DRIVE, FREE_DRIVE`.
+- 앱 콜백(17:52:27.757~.776): onRouteStarted·onRouteEnded(다른 binder 스레드, 같은 ms) → onNavigationStatus → onRouteStateInfo. 1105d와 같은 순서다.
+- DrivingInfo(17:52:28.553): destination=DrivingState(name=부산역 KTX, duration=16560, distance=378000, …). 화면 '4시간 36분 · 378km'(screens_1105e/car_navi_guidance_on.png).
+- TBT(17:52:29.133, CAP 줄): 1105d와 같은 목록(logcat 한 줄이 49번째 '충장지하차도'에서 잘림). 5번이 TURN_ENTER_SERVICEAREA 2600 '하이패스센터'.
+- 스냅숏(saved_at 17:52:57.765, route.at 17:52:29.194): hasDestination=true, remainingSec=16560, rests 22.
+  TBT 줄을 `), TBTInfo(`로 나눠 49항목을 읽고 앞에서부터 더한 값(TURN_RESTAREA 전부, TURN_ENTER_SERVICEAREA 중 이름에 '휴게소')과 앱 값을 맞대면 22곳 모두 같다.
+  용인졸음쉼터 18.13 · 용인휴게소 28.53(수유실 참) · 덕평휴게소 41.23(참) · 이천졸음쉼터 48.73 · 여주휴게소 57.93(참) · 가남졸음쉼터 68.07 · 노은졸음쉼터 89.07 ·
+  충주휴게소 95.37(참) · 괴산휴게소 121.37(참) · 문경졸음쉼터 136.37 · 문경휴게소 152.37(참) · 사벌졸음쉼터 172.37 · 선산휴게소 195.37 · 아포졸음쉼터 204.47 ·
+  선기졸음쉼터 214.19 · 칠곡휴게소 233.19(참) · 하빈졸음쉼터 244.19 · 검단졸음쉼터 259.19 · 남천졸음쉼터 283.59 · 청도새마을휴게소 301.59 · 상남(하)졸음쉼터 320.59 · 덕산졸음쉼터 344.79
+  (1105d의 잘못된 값: 덕산졸음쉼터 0.2, 덕평휴게소 1.7, 하이패스센터 2.6 → 고쳐짐. 용인졸음쉼터 18.13 = 80+380+730+1700+2600+1000+7700+140+3800m로 하이패스센터 거리 포함)
+- 이 rests로 Calc.kt pickRest(30km 안 가장 가까운 곳, 그 +5km 안 수유실 휴게소)를 손으로 따라가면 용인졸음쉼터 18.13 → +5km 안 수유실 휴게소 없음 → 용인졸음쉼터(코드 읽기, 장면 재생 안 함).
+
+## 2. 안내 중 앱 재시작(17:53)
+- 17:53:42.394 `am force-stop --user 10` → 17:53:44.484 Start proc(새 pid, top-activity). 앱 init: getRouteStateInfo·getTBTInfo(17:53:45.461) → onRouteStateInfo(17:53:45.784).
+  상태 알림(onNavigationStatus)은 오지 않았다(NaviHelper 3.0.5에는 상태 조회·DrivingInfo 조회가 없다. 조회는 getRouteStateInfo·getCurrentLocationInfo·getDestinationInfo·
+  getWaypointInfo·getTBTInfo·getBookmarkInfo·getRecentDestinationInfo·getChargerOperatorInfo).
+- 스냅숏(saved_at 17:53:46.738, route.at 17:53:45.778): hasDestination=true, rests 22(같은 값), remainingSec=null → TBT로 alive()가 참을 냈다.
+- 17:57:29.701 주기 DrivingInfo(duration=16560) → 스냅숏(17:58:09 읽음) route.at 17:57:29.707 remainingSec=16560. 재시작 뒤 남은 시간이 비어 있던 시간 3분 44초.
+
+## 3. 경유지 추가·목적지 바꾸기(17:58~18:01, 18:12)
+- 첫 시도(17:58:48): '목적지 또는 경유지로 설정하시겠습니까?' 창의 '목적지로' 3초 카운트다운이 먼저 끝나 목적지가 수원메쎄로 바뀌었다(17:58:51.321 FREE_DRIVE).
+  앱 콜백: onRouteCancelled(17:58:51.330) → onNavigationStatus(.344) → onWayPointInfo·onRouteStateInfo·onDestinationInfo. 내비는 경로 선택 화면에서 멈췄다(카운트다운 없음).
+  스냅숏(17:59:30 읽음): route.at 17:58:51.344 hasDestination=false, remainingSec=null, rests 0(screens_1105e/car_navi_dest_replaced_route_options.png). 닫기(17:59:36 FREE_DRIVE 다시 알림).
+- 다시 부산역 안내(18:00:17 ROUTE_DRIVE) 뒤 경유지 추가(18:00:48 화살표 → 1초 뒤 '경유지로'):
+  | 시각 | 신호 |
+  | --- | --- |
+  | 18:00:49.423 | 내비 Notify NavigationStatus.FREE_DRIVE |
+  | 18:00:49.425 | 앱 onRouteCancelled |
+  | 18:00:49.429 | 앱 onNavigationStatus(GAA: FREE_DRIVE, ROUTE_DRIVE) |
+  | 18:00:49.433 | DrivingInfo destination=부산역 KTX duration=0 distance=0 |
+  | 18:00:49.446~.466 | 앱 onWayPointInfo·onDestinationInfo·onRouteStateInfo |
+  | (화면) | '경유지 1개 포함' 경로 3개, '⑤ 안내 시작' 카운트다운(screens_1105e/car_navi_waypoint_route_options.png) |
+  | 18:00:58.246 | 내비 Notify NavigationStatus.ROUTE_DRIVE |
+  | 18:00:58.291~.292 | 앱 onWaypointChanged → onRouteEnded → onNavigationStatus(onRouteStarted는 오지 않음) |
+  | 18:00:58.974 | DrivingInfo destination duration=20160 distance=395000, waypoints=[수원메쎄 duration=5040 distance=24000] |
+- 스냅숏(18:01:42 읽음, route.at 18:00:59.446): hasDestination=true, remainingSec=20160(=최종 목적지까지, 화면 '5시간 36분'), rests 23(경부 경로: 오산졸음쉼터 41.42 · 안성휴게소 58.42 …).
+  새 TBT(18:00:59.396, 50항목 읽힘, TURN_WAY 경유지 항목 포함)의 누적 값과 앱 값이 겹치는 13곳 모두 같다. 휴게소가 아닌 TURN_ENTER_SERVICEAREA는 이 경로에 없었다.
+- 3회차(18:12:18.647 FREE_DRIVE → 18:12:27.525 ROUTE_DRIVE, DrivingInfo duration=20040)도 같은 순서, 스냅숏 hasDestination=true·remainingSec=20040·rests 23.
+- 경유지를 넣는 동안 내비가 실제로 FREE_DRIVE라 앱은 그 사이(약 8.9초) hasDestination=false·rests 비움이 된다(routing(false)). 직접 스냅숏으로 본 것은 목적지 바꾸기 때의 false이고,
+  경유지 때의 8.9초 거짓은 같은 콜백과 코드로 추정(스냅숏 저장 간격 때문에 못 잡음). 앱이 직접 addWaypoint(F19)로 넣을 때도 같은 화면·같은 거짓 구간이 생기는지는 재지 않았다(미판정).
+
+## 4. 안내 끝(가장 중요) — '안내 종료' 버튼, 확인 창 없이 바로 끝남
+| 회차 | 누름 | CAP onTBTInfo [] | DrivingInfo(destination) | 내비 Notify | 앱 onRouteCancelled | 앱 onNavigationStatus | 그 뒤 앱 콜백 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1(경유지 있음) | 18:02:14.498 | .586, .617, 15.429 | .587 부산역 KTX duration=0 distance=0, waypoints=[수원메쎄…] | .610 FREE_DRIVE | .611 | .617(GAA: FREE_DRIVE, ROUTE_DRIVE) | onDestinationInfo .623(모두 0), onRouteStateInfo .691, onWayPointInfo .693 |
+| 2(경유지 없음) | 18:10:00.544 | .606, .653, .686 | .612 부산역 KTX duration=0 distance=0 | .635 FREE_DRIVE | .642 | .646 | onDestinationInfo .704, onWayPointInfo .713, onRouteStateInfo .716 |
+| 3(경유지 있음) | 18:13:07.534 | .589, .616, .838 | .595 부산역 KTX duration=0 | .610 FREE_DRIVE | .620 | .621 | onWayPointInfo·onDestinationInfo .643, onRouteStateInfo .682 |
+- 순서: (빈 TBT·duration 0 DrivingInfo) → 내비 상태 FREE_DRIVE → 앱 onRouteCancelled → 앱 onNavigationStatus → DestinationInfo(위도·경도 0, name 빈칸, remainTime 0)·WayPointInfo·RouteStateInfo.
+  **onRouteEnded는 세 번 모두 오지 않았다.** onRouteEnded는 안내 시작(onRouteStarted와 같은 ms)과 경유지 뒤 다시 시작(onWaypointChanged 바로 뒤) 때만 왔다.
+- DrivingInfo.destination은 끝난 뒤에도 null이 아니다(이름은 남고 duration·distance가 0). 상태 알림보다 약 23~30ms 먼저 온다(CAP 기준).
+- 30초 넘게 기다린 스냅숏: 1회차 18:02:46 읽음(route.at 18:02:14.617), 2회차 18:10:39(18:10:00.646), 3회차 18:13:45(18:13:07.621) 모두 hasDestination=false, remainingSec=null, rests 0.
+  화면: screens_1105e/car_navi_guidance_with_waypoint.png(끝내기 전), car_navi_guidance_ended.png(끝낸 뒤 검색 화면).
+- 끝난 뒤 앱 재시작(30초 뒤 force-stop → am start, user 10):
+  | 회차 | 시작 | getTBTInfo 응답(CAP 줄) | 스냅숏 |
+  | --- | --- | --- | --- |
+  | 1(경유지 있음) | 18:02:55.638 | 18:02:56.601 끝난 경로의 전체 목록(TURN_LEFT 80 기업지원허브 방면 …) | route.at 18:02:56.831 **hasDestination=true**, remainingSec=null, rests 23(오산졸음쉼터 41.42 …) |
+  | 1 다시(5분 뒤) | 18:08:11 | 18:08:12.703 같은 전체 목록 | route.at 18:08:13.166 **true**, rests 23 |
+  | 2(경유지 없음) | 18:10:41 | 18:10:42.157 `[]` | route.at 18:10:42.212 false, rests 0 |
+  | 3(경유지 있음) | 18:13:46.122(프로세스), 18:13:48 init | 18:13:48.691 끝난 경로의 전체 목록 | route.at 18:13:48.935 **true**, rests 23 |
+  1회차 재시작 뒤 18:02:57~18:07:55 사이 내비는 앱에 아무 알림도 보내지 않았고 스냅숏은 계속 true였다.
+
+## 5. 찾은 버그·관찰(고치지 않음)
+- B1 경유지가 있던 안내를 끝낸 뒤 앱을 다시 띄우면 목적지 있음이 참으로 남는다(심각).
+  재현: 판교 → 부산역 안내 → 수원메쎄 경유지 추가 → '안내 종료' → 앱 force-stop·am start(user 10) → engine_snapshot car.route hasDestination=true, rests 23. 2/2(경유지 없던 안내는 1/1 정상).
+  로그: 끝날 때 내비는 빈 TBT를 2~3번 보냈지만, FREE_DRIVE에서 받은 getTBTInfo 요청에는 끝난 경유지 경로의 목록 전체를 돌려준다(18:02:56.601, 18:08:12.703, 18:13:48.691).
+  추정 원인: exec/Android.kt:573 onTBTInfo가 목록이 비어 있지 않으면 route.alive()를 부르고, exec/Feeds.kt RouteFeed.alive()는 상태를 받은 적이 없으면(재시작 직후) 참으로 둔다.
+  재시작 때는 상태 알림이 오지 않아 다음 안내 시작 전까지 참이 바뀌지 않는다.
+  영향: 목적지가 없는데 hasDestination=true, rests에 끝난 경로의 쉼터 23곳 → 쉼터 제안·인계 '남은 시간 먼저'·경유지 넣기가 끝난 경로를 바탕으로 될 수 있다(이번 경로는 30km 안 쉼터가 없어 후보 없음).
+  고칠 방향(제안): 재시작 때 TBT만으로는 참으로 보지 않는다. getDestinationInfo를 init에서 함께 부르고 remainTime·name이 있을 때만 참으로 보는 방법을 검토
+  (끝·취소 때 DestinationInfo가 모두 0인 것은 봤지만, 안내 중 getDestinationInfo 응답 값은 이번에 보지 못함 — 미판정).
+- B2 DrivingInfo.destination은 안내가 끝난 뒤에도 null이 아니다(duration=0). exec/Android.kt:572는 destination이 있으면 alive()를 부르므로, 재시작 뒤 상태를 받기 전에
+  이런 DrivingInfo가 오면 B1과 같이 참이 된다(이번 재시작 뒤에는 DrivingInfo가 오지 않아 재현하지 못함, 코드 읽기). duration>0일 때만 보는 것을 검토.
+  또 끝날 때 duration 0 DrivingInfo·빈 TBT가 상태 알림보다 23~30ms 먼저 와, 그 사이 앱은 hasDestination=true·remainingSec=0·rests 비움을 낼 수 있다(추정, 앱 로그 없음).
+  remainingSec=0은 nearDestination(Calc.kt:82)을 참으로 만들어 그 순간 쉼터 제안을 막을 뿐이고, 이번에 말하기는 나오지 않았다(18:02:14~ 앱 TTS 로그 없음).
+- B3(관찰) 안내 중 앱을 다시 띄우면 remainingSec이 다음 DrivingInfo(주기 재탐색 약 5분)까지 null이다(이번 3분 44초). NaviHelper에 DrivingInfo 조회가 없다.
+- 관찰: 경유지 추가·목적지 바꾸기 모두 내비가 안내를 끊고(FREE_DRIVE + onRouteCancelled) 다시 시작한다. 내비의 '목적지로' 버튼에 3초 카운트다운이 먼저 걸려 있어 늦게 누르면 목적지가 바뀐다.
+
+## 6. 회차 유효성·맥 부하
+맥 부하: 30초마다 1분 평균(sysctl vm.loadavg), 17:50:22~18:14:22 표본 49개, 최소 3.30(17:55:52), 최대 9.82(18:11:52). 부하를 기다리지 않았다.
+확인: 회차 앞뒤 `ps -A -o PID,STIME,NAME`, logcat 'has died'·carwatchdog 줄. system_server 752(17:50:25)·CarService 1014·1261(17:50:26~27)·내비 3410은 끝(18:14)까지 그대로.
+'has died' 줄은 부팅 직후(17:50:28~17:50:36, 다른 시스템 앱)뿐이고 회차 중에는 없다. carwatchdog 종료 줄 없음. 무효 회차 없음.
+| 회차 | 시각 | 맥 1분 평균 최대 | 판정에 씀 |
+| --- | --- | --- | --- |
+| 1 안내 시작·스냅숏 | 17:52:18~17:53:09 | 4.54 | 예 |
+| 2 안내 중 재시작 | 17:53:42~17:58:09 | 5.06 | 예 |
+| 3 목적지 바뀜·경유지 추가 | 17:58:40~18:01:42 | 7.54 | 예 |
+| 4-1 끝(경유지 있음)·재시작 2번 | 18:02:14~18:08:47 | 7.37 | 예 |
+| 4-2 끝(경유지 없음)·재시작 | 18:09:00~18:11:16 | 6.05 | 예 |
+| 3·4-3 경유지 추가·끝·재시작 | 18:11:30~18:14:23 | 9.82 | 예 |
+
+## 7. 준비·정리
+- 잠금 파일을 17:50:17에 잡고 18:15에 지웠다. emulator-5554(다른 세션의 CarePhone)와 사용자 실기기는 건드리지 않았다. PleosProbe를 `-port 5560 -no-snapshot-load -no-boot-anim`으로 콜드 부팅,
+  모든 adb 명령에 `-s emulator-5560`.
+- VC: `adb -s emulator-5560 forward tcp:8088 tcp:8088`, 1초 세션 신호, 정지·P. 정리 때 세션 신호 끔, `forward --remove tcp:8088`(forward 목록 비어 있음).
+- GPS는 바꾸지 않았다. 마지막 상태는 안내 없음(3회차 끝). `emu kill`로 emulator-5560 끔(18:14:55). 맥 부하 기록·logcat 수집 끔.
+
+## 캡처(screens_1105e/)
+car_navi_guidance_on.png(17:52 안내 시작, 4시간 36분·378km), car_navi_dest_replaced_route_options.png(17:59 '목적지로' 카운트다운으로 목적지가 수원메쎄로 바뀐 경로 선택 화면),
+car_navi_waypoint_route_options.png(18:00:50 '경유지 1개 포함' 경로 선택, 5초 카운트다운), car_navi_guidance_with_waypoint.png(18:02 수원메쎄 경유 안내 중),
+car_navi_guidance_ended.png(18:02:16 안내 종료 뒤)
