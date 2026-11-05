@@ -4,7 +4,11 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kr.aigyeot.phone.core.CareFile
+import kr.aigyeot.phone.core.CareJson
 import kr.aigyeot.phone.core.PhoneState
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
@@ -63,12 +67,18 @@ class SecretStore(context: Context) {
     }
 }
 
+/** 폰 상태(`PhoneState`) 파일. */
+fun StateStore(file: File) = FileStore(file, PhoneState.serializer(), ProtocolJson) { PhoneState() }
+
+/** 돌봄 기록(`care.json`, phone-care-plan 6장). 키는 iOS와 같은 camelCase다. */
+fun CareStore(file: File) = FileStore(file, CareFile.serializer(), CareJson) { CareFile() }
+
 /**
- * 폰 상태 한 파일. 임시 파일에 쓰고 fsync한 뒤 이름을 바꾼다. 어느 단계든 실패하면 IOException을 던져,
+ * JSON 한 파일. 임시 파일에 쓰고 fsync한 뒤 이름을 바꾼다. 어느 단계든 실패하면 IOException을 던져,
  * 부르는 쪽이 메모리 상태를 바꾸거나 ack하지 않게 한다(계약 1.4 'ack는 처리를 저장한 뒤').
  * `AtomicFile.finishWrite`는 동기화·이름 바꾸기 실패를 기록만 하고 돌아올 수 있어 쓰지 않는다.
  */
-class StateStore(private val file: File) {
+class FileStore<T>(private val file: File, private val serializer: KSerializer<T>, private val json: Json, private val empty: () -> T) {
     private val temp = File(file.path + ".new")
 
     /** 읽지 못한 상태 파일을 옮겨 둔 곳. 있으면 녹음 파일 정리를 하지 않는다(그 파일이 아는 녹음일 수 있다). */
@@ -86,15 +96,15 @@ class StateStore(private val file: File) {
      * 옛 판 파일은 새 필드의 기본값과 `ignoreUnknownKeys`로 읽힌다. 파일이 없으면 빈 상태.
      * 있는데 읽지 못하면 원본을 [backup]으로 옮겨(안 되면 복사해) 두고 빈 상태를 돌려준다. 백업이 확인되지 않으면 [unsafe].
      */
-    fun load(): PhoneState {
-        if (!file.exists()) return PhoneState()
-        return runCatching { ProtocolJson.decodeFromString(PhoneState.serializer(), file.readText()) }.getOrElse {
+    fun load(): T {
+        if (!file.exists()) return empty()
+        return runCatching { json.decodeFromString(serializer, file.readText()) }.getOrElse {
             val size = file.length()
             runCatching { backup.delete() }
             val moved = file.renameTo(backup)
             val copied = !moved && runCatching { file.copyTo(backup, overwrite = true) }.isSuccess
             unsafe = !((moved || copied) && backup.isFile && backup.length() == size)
-            PhoneState()
+            empty()
         }
     }
 
@@ -107,10 +117,10 @@ class StateStore(private val file: File) {
         unsafe = false
     }
 
-    fun save(s: PhoneState) {
+    fun save(s: T) {
         if (unsafe) throw IOException("백업하지 못한 상태 파일을 덮어쓰지 않는다")
         FileOutputStream(temp).use { out ->
-            out.write(ProtocolJson.encodeToString(PhoneState.serializer(), s).encodeToByteArray())
+            out.write(json.encodeToString(serializer, s).encodeToByteArray())
             out.flush()
             out.fd.sync()
         }

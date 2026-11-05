@@ -49,26 +49,23 @@ import kr.aigyeot.phone.AigyeotApp
 import kr.aigyeot.phone.AppModel
 import kr.aigyeot.phone.BuildConfig
 import kr.aigyeot.phone.core.PhoneState
-import kr.aigyeot.phone.core.lastFeedingStart
+import kr.aigyeot.phone.core.CareKind
+import kr.aigyeot.phone.core.lastFeedingAt
 import kr.aigyeot.shared.InviteResponse
 import kr.aigyeot.shared.Role
 
 @Composable
-private fun Nav(vararg items: Pair<String, () -> Unit>) = Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-    for ((label, go) in items) OutlinedButton(onClick = go) { Text(label) }
-}
-
-@Composable
-internal fun StatusBands(model: AppModel) {
+internal fun StatusBands(model: AppModel, connected: Boolean = true) {
     val ui by model.ui.collectAsState()
-    if (!ui.online) Band("오프라인이에요. 누른 것은 연결되면 차로 가요.", "다시 시도") { model.pumpOutbox() }
+    // 연결 안 됨이면 차와 관계된 띠(오프라인·시계)는 뜻이 없고, 저장 실패 같은 안내만 보인다(U7).
+    if (connected && !ui.online) Band("오프라인이에요. 누른 것은 연결되면 차로 가요.", "다시 시도") { model.pumpOutbox() }
     ui.notice?.let { Band(it, "닫기") { model.clearNotice() } }
-    ui.clockSkewMin?.takeIf { kotlin.math.abs(it) >= 2 }?.let { Band("휴대폰 시계가 ${kotlin.math.abs(it)}분 달라요. 수유 시각이 어긋날 수 있어요.") }
+    if (connected) ui.clockSkewMin?.takeIf { kotlin.math.abs(it) >= 2 }?.let { Band("휴대폰 시계가 ${kotlin.math.abs(it)}분 달라요. 수유 시각이 어긋날 수 있어요.") }
 }
 
 /** 홈 차 타일(7.2): 오프라인이면 알 수 없음, 아니면 연결됨 또는 차 꺼짐 · 마지막 연락 n분 전. */
 @Composable
-private fun CarTile(s: PhoneState, online: Boolean) {
+internal fun CarTile(s: PhoneState, online: Boolean) {
     val car = s.devices.find { it.role == Role.CAR }
     val text = when {
         !online -> "알 수 없음"
@@ -84,41 +81,6 @@ private fun CarTile(s: PhoneState, online: Boolean) {
     }
 }
 
-/** owner 홈: 큰 숫자 두 개, 화면 폭 '수유 시작', 최근 기록(구현 계획 8장). */
-@Composable
-fun OwnerHome(model: AppModel, go: (String) -> Unit) {
-    val s by model.state.collectAsState()
-    val ui by model.ui.collectAsState()
-    Page("아이곁") {
-        StatusBands(model)
-        CarTile(s, ui.online)
-        val last = s.lastFeedingStart()
-        if (last == null) {
-            Muted("아직 수유 기록이 없어요")
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column { Muted("마지막 수유 시작"); Text(clock(last), style = MaterialTheme.typography.displaySmall) }
-                Column { Muted("다음 수유 예상"); Text(clock(s.feeding?.value?.windowStartExpected), style = MaterialTheme.typography.displaySmall) }
-            }
-        }
-        Button(onClick = model::startFeeding, modifier = Modifier.fillMaxWidth().height(72.dp)) {
-            Text("수유 시작", style = MaterialTheme.typography.titleLarge)
-        }
-        for (r in s.feedings.asReversed().take(5)) {
-            val status = when {
-                r.failed != null -> r.failed
-                r.reflected -> "차에 반영됨"
-                r.sentAt != null -> "보냄 ${clock(r.sentAt)}"
-                else -> "보내는 중"
-            }
-            Row { Text(clock(r.at), Modifier.weight(1f)); Muted(status) }
-        }
-        HorizontalDivider()
-        Nav("우리 노래" to { go("songs") }, "리포트" to { go("reports") })
-        Nav("보호자" to { go("guardians") }, "설정" to { go("settings") })
-    }
-}
-
 /** 앱 알림 전체(33+는 POST_NOTIFICATIONS 포함) 또는 인계 알림 채널이 꺼졌는지. */
 private fun isNotifOff(context: Context): Boolean {
     val nm = NotificationManagerCompat.from(context)
@@ -126,32 +88,28 @@ private fun isNotifOff(context: Context): Boolean {
         nm.getNotificationChannel(AigyeotApp.CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE
 }
 
-/** guardian 홈: 받은 리포트·인계 알림(7.2). 알림 권한이 꺼져 있으면 띠. */
+/** guardian 오늘 탭 위쪽: 상태 띠, 알림 권한 띠, 받은 인계 알림(7.2). */
 @Composable
-fun GuardianHome(model: AppModel, go: (String) -> Unit) {
+internal fun GuardianAlerts(model: AppModel, go: (String) -> Unit) {
     val s by model.state.collectAsState()
     val context = LocalContext.current
     var notifOff by remember { mutableStateOf(isNotifOff(context)) }
     // 설정에서 알림을 켜거나 끄고 돌아오면 다시 본다.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { notifOff = isNotifOff(context) }
-    Page("아이곁") {
-        StatusBands(model)
-        if (notifOff) {
-            Band("알림이 꺼져 있어 인계 알림을 못 받아요", "설정 열기") {
-                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+    StatusBands(model)
+    if (notifOff) {
+        Band("알림이 꺼져 있어 인계 알림을 못 받아요", "설정 열기") {
+            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+        }
+    }
+    if (s.alerts.isEmpty() && s.reports.isEmpty()) Muted("아직 받은 리포트·인계 알림이 없어요")
+    for (a in s.alerts.asReversed().take(5)) { // U39: 머리 없이 최근 5개
+        Card(onClick = { go("alert/${a.id}") }, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text(a.body.text)
+                Muted(kr.aigyeot.phone.core.agoText(kr.aigyeot.phone.core.instantOf(a.body.occurredAt) ?: a.receivedAt, System.currentTimeMillis())) // U20 '~ 전'
             }
         }
-        if (s.alerts.isEmpty() && s.reports.isEmpty()) Muted("아직 받은 리포트·인계 알림이 없어요")
-        for (a in s.alerts.asReversed().take(10)) {
-            Card(onClick = { go("alert/${a.id}") }, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(a.body.text)
-                    Muted("${minutesAgo(kr.aigyeot.phone.core.instantOf(a.body.occurredAt) ?: a.receivedAt)}분 전")
-                }
-            }
-        }
-        HorizontalDivider()
-        Nav("리포트" to { go("reports") }, "인계 알림 받기" to { go("guardians") }, "설정" to { go("settings") })
     }
 }
 
@@ -167,7 +125,7 @@ fun AlertScreen(model: AppModel, id: String, onBack: () -> Unit) {
             Text(a.body.text, style = MaterialTheme.typography.titleMedium)
             a.body.restName?.let { Text("쉼터: $it") }
             a.body.minutesToArrival?.let { Text("도착까지 ${it}분") }
-            Muted("${dateTime(a.body.occurredAt)} · ${minutesAgo(kr.aigyeot.phone.core.instantOf(a.body.occurredAt) ?: a.receivedAt)}분 전")
+            Muted("${dateTime(a.body.occurredAt)} · ${kr.aigyeot.phone.core.agoText(kr.aigyeot.phone.core.instantOf(a.body.occurredAt) ?: a.receivedAt, System.currentTimeMillis())}")
         }
     }
 }
@@ -244,45 +202,5 @@ fun GuardiansScreen(model: AppModel, onBack: () -> Unit) {
             }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    }
-}
-
-/** 설정: 연결 끊기, 이 휴대폰의 기록 지우기(구현 계획 3장). */
-@Composable
-fun SettingsScreen(model: AppModel, onBack: () -> Unit, onDisconnected: () -> Unit) {
-    // 끊기는 모델이 끝까지 한다. 화면이 다시 만들어져도 진행·결과를 모델 상태에서 읽는다.
-    val run by model.disconnectRun.collectAsState()
-    val busy = run?.busy == true
-    val error = run?.takeIf { !it.busy }?.error
-    LaunchedEffect(run) {
-        val r = run ?: return@LaunchedEffect
-        if (!r.busy && r.error == null) {
-            model.clearDisconnectRun()
-            if (model.creds.value == null) onDisconnected() // 지금 자격이 없을 때만(그사이 새로 연결했으면 지난 결과다)
-        }
-    }
-    var confirm by remember { mutableStateOf<String?>(null) }
-    Page("설정", onBack) {
-        StatusBands(model)
-        if (busy) Muted("끊고 있어요")
-        Button(enabled = !busy, onClick = { confirm = "disconnect" }, modifier = Modifier.fillMaxWidth()) { Text("연결 끊기") }
-        OutlinedButton(onClick = { confirm = "clear" }, modifier = Modifier.fillMaxWidth()) { Text("이 휴대폰의 기록 지우기") }
-        Muted("기록을 지워도 연결은 그대로예요. 차에 남은 기록은 차 화면에서 지워요.")
-        error?.let { Band(it) }
-        Muted("판 ${BuildConfig.VERSION_NAME}")
-    }
-    confirm?.let { what ->
-        AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text(if (what == "clear") "이 휴대폰의 기록을 지울까요?" else "연결을 끊을까요?") },
-            text = { Text(if (what == "clear") "리포트·인계 알림·노래 녹음·수유 기록을 지워요." else "다시 연결하려면 차 화면의 새 코드가 필요해요.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = null
-                    if (what == "clear") model.clearRecords() else model.startDisconnect()
-                }) { Text("지우기".takeIf { what == "clear" } ?: "끊기") }
-            },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("취소") } },
-        )
     }
 }

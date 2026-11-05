@@ -20,17 +20,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kr.aigyeot.phone.core.instantOf
+import kr.aigyeot.phone.core.koClock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private val hm = DateTimeFormatter.ofPattern("HH:mm")
-private val mdhm = DateTimeFormatter.ofPattern("M월 d일 HH:mm")
+private val md = DateTimeFormatter.ofPattern("M월 d일")
 
-/** RFC 3339 → 이 폰 시간대의 "08:12". */
+/** RFC 3339 → 이 폰 시간대의 "오전 8:12"(U20·7.1 시각 형식, 기기 언어와 무관). */
 fun clock(s: String?): String = instantOf(s)?.let { clock(it) } ?: "—"
-fun clock(ms: Long): String = hm.format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
-fun dateTime(s: String?): String = instantOf(s)?.let { mdhm.format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())) } ?: "—"
+fun clock(ms: Long): String = koClock(ms, ZoneId.systemDefault())
+fun dateTime(s: String?): String = instantOf(s)?.let { "${md.format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))} ${clock(it)}" } ?: "—"
 fun minutesAgo(ms: Long, now: Long = System.currentTimeMillis()) = ((now - ms) / 60_000).coerceAtLeast(0)
 fun seconds(s: Int) = if (s >= 60) "${s / 60}분 ${s % 60}초" else "${s}초"
 

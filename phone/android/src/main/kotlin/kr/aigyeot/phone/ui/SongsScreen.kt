@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -72,9 +73,16 @@ private fun statusText(e: SongEntry) = e.error ?: when (e.phase) {
 }
 
 /** 우리 노래(owner): 1~3곡 녹음·다시 듣기·지우기·고르기, 차로 보낸 상태. */
+@Composable
+fun SongsScreen(model: AppModel, onBack: () -> Unit) = Page("우리 노래", onBack) {
+    StatusBands(model)
+    SongsSection(model)
+}
+
+/** 우리 노래 내용(지금 화면). 차 탭 '우리 노래' 섹션(U39)과 노래 화면이 함께 쓴다. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SongsScreen(model: AppModel, onBack: () -> Unit) {
+fun ColumnScope.SongsSection(model: AppModel) {
     val s by model.state.collectAsState()
     val context = LocalContext.current
     val recorder = remember { Recorder(context) }
@@ -82,8 +90,7 @@ fun SongsScreen(model: AppModel, onBack: () -> Unit) {
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { recorder.stopPlaying() }
     var sheet by remember { mutableStateOf(false) }
     val songs = s.visibleSongs
-    Page("우리 노래", onBack) {
-        StatusBands(model)
+    run {
         if (songs.isEmpty()) Muted("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요")
         for (e in songs) {
             Card(Modifier.fillMaxWidth()) {

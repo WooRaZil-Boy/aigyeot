@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,12 +47,13 @@ import kr.aigyeot.shared.Role
 
 /** 첫 실행: 무엇이 오가는지 한 화면(G31). */
 @Composable
-fun IntroScreen(onNext: () -> Unit) = Page("아이곁") {
+fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) = Page("아이곁") {
     Text("차의 아이곁과 이 휴대폰을 연결해요.", style = MaterialTheme.typography.titleMedium)
     Text("주고받는 것: 수유 시작 시각, 우리 노래 녹음, 주행 리포트, 인계 알림 문장.")
     Text("보내지 않는 것: 아기 울음 소리, 차 안 마이크 소리, 차의 위치.")
     Muted("인계 알림은 Google·Apple 알림 서버를 거쳐 알림 문장만 갑니다.")
-    Button(onClick = onNext, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("연결하기") }
+    Button(onClick = onConnect, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("차와 연결하기") }
+    OutlinedButton(onClick = onRecordsOnly, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("먼저 기록만 쓸게요") }
 }
 
 /** 429 잠금이 남았는가. 시각은 모델이 들고 있고, 끝나는 때에 다시 그린다(화면을 옮겨도 풀리지 않는다, 9장). */
@@ -73,7 +75,7 @@ private fun rememberPairLocked(model: AppModel): Boolean {
  * 다만 이미 연결된 폰이면 확인 화면의 교체 확인(G16)을 먼저 거친다.
  */
 @Composable
-fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) -> Unit) {
+fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) -> Unit, onCancel: (() -> Unit)? = null) {
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -102,6 +104,7 @@ fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) ->
         }
     }
     Page("차와 연결") {
+        onCancel?.let { TextButton(enabled = !busy, onClick = it) { Text("취소") } } // U39: 탭에서 열었을 때 닫기. 연결 중에는 잠근다(7.2 버튼 잠금)
         Text("차 화면의 QR을 비춰 주세요", style = MaterialTheme.typography.titleMedium)
         Button(
             enabled = !busy,
@@ -205,7 +208,8 @@ fun DoneScreen(role: Role, onNext: () -> Unit) {
 
 /** 401·닫기 4001(9장). */
 @Composable
-fun GoneScreen(onReconnect: () -> Unit) = Page("연결이 끊겼어요") {
+fun GoneScreen(onReconnect: () -> Unit, onRecordsOnly: () -> Unit) = Page("연결이 끊겼어요") {
     Text("연결이 끊겼어요. 다시 연결해 주세요.")
     Button(onClick = onReconnect, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("다시 연결하기") }
+    OutlinedButton(onClick = onRecordsOnly, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("기록만 계속 쓸게요") }
 }

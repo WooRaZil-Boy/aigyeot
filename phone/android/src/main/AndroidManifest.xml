@@ -31,6 +31,22 @@
             </intent-filter>
         </activity>
 
+        <!-- 내 기록 내보내기(C7): 캐시 export/ 파일 하나를 공유 시트로 넘긴다. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- 진행 중 알림의 '끝내기'(C6). 이 앱의 PendingIntent만 보낸다. -->
+        <receiver
+            android:name=".CareNotify$CareEndReceiver"
+            android:exported="false" />
+
         <service
             android:name=".PushService"
             android:exported="false">

@@ -42,14 +42,17 @@ fun ReportsScreen(model: AppModel, onBack: () -> Unit, open: (String) -> Unit) {
         StatusBands(model)
         val list = s.reports.values.sortedByDescending { instantOf(it.body.startedAt) ?: 0 }
         if (list.isEmpty()) Muted("주행이 끝나면 여기에 리포트가 와요")
-        for (r in list) {
-            val b = r.body
-            Card(onClick = { open(b.sessionId) }, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("${dateTime(b.startedAt)} – ${clock(b.endedAt)}", style = MaterialTheme.typography.titleMedium)
-                    Muted("에피소드 ${b.timeline.size}개" + if (b.simulated) " · 시뮬레이션" else "")
-                }
-            }
+        for (r in list) ReportCard(r.body, open)
+    }
+}
+
+/** 리포트 목록 한 줄(guardian 오늘의 '최근 리포트'도 같은 줄을 쓴다). */
+@Composable
+internal fun ReportCard(b: ReportSummaryBody, open: (String) -> Unit) {
+    Card(onClick = { open(b.sessionId) }, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("${dateTime(b.startedAt)} – ${clock(b.endedAt)}", style = MaterialTheme.typography.titleMedium)
+            Muted("에피소드 ${b.timeline.size}개" + if (b.simulated) " · 시뮬레이션" else "")
         }
     }
 }

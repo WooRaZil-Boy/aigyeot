@@ -16,6 +16,19 @@ class AigyeotApp : Application() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL, "인계 알림", NotificationManager.IMPORTANCE_HIGH),
         )
+        // 진행 중 수유·잠(C6). LOW(무음 분류)는 기본 설정에서 잠금 화면에 안 보여(11-05 에뮬레이터 확인) DEFAULT로 두고 소리·진동을 끈다.
+        // 채널 중요도는 만든 뒤 바뀌지 않아 옛 id(LOW로 만든 개발판)는 지운다.
+        getSystemService(NotificationManager::class.java).apply {
+            deleteNotificationChannel("care_ongoing")
+            createNotificationChannel(
+                NotificationChannel(CareNotify.CHANNEL, "진행 중 기록", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    setSound(null, null)
+                    enableVibration(false)
+                    setShowBadge(false)
+                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                },
+            )
+        }
         model = AppModel(this)
     }
 

@@ -29,7 +29,27 @@ import kr.aigyeot.phone.core.OutboxItem
 import kr.aigyeot.phone.core.PhoneState
 import kr.aigyeot.phone.core.SendResult
 import kr.aigyeot.phone.core.StoredAlert
+import kr.aigyeot.phone.core.CareEvent
+import kr.aigyeot.phone.core.CareFile
+import kr.aigyeot.phone.core.CareKind
+import kr.aigyeot.phone.core.FeedSide
+import kr.aigyeot.phone.core.FeedTrigger
 import kr.aigyeot.phone.core.addSong
+import kr.aigyeot.phone.core.cleared
+import kr.aigyeot.phone.core.delete
+import kr.aigyeot.phone.core.editOngoing
+import kr.aigyeot.phone.core.endNow
+import kr.aigyeot.phone.core.endUnknown
+import kr.aigyeot.phone.core.exportFileName
+import kr.aigyeot.phone.core.toCsv
+import kr.aigyeot.phone.core.markedMigratedFeedings
+import kr.aigyeot.phone.core.restartNotice
+import kr.aigyeot.phone.core.migrated
+import kr.aigyeot.phone.core.purged
+import kr.aigyeot.phone.core.reconciledFeeding
+import kr.aigyeot.phone.core.start
+import kr.aigyeot.phone.core.undoDelete
+import kr.aigyeot.phone.core.upsert
 import kr.aigyeot.phone.core.afterSend
 import kr.aigyeot.phone.core.backoffMs
 import kr.aigyeot.phone.core.isPairLocked
@@ -49,9 +69,9 @@ import kr.aigyeot.phone.core.shouldRequestState
 import kr.aigyeot.phone.core.isUlid
 import kr.aigyeot.phone.core.songFiles
 import kr.aigyeot.phone.core.songId
-import kr.aigyeot.phone.core.startFeeding
 import kr.aigyeot.phone.core.stateRequestDone
 import kr.aigyeot.phone.core.ulid
+import kr.aigyeot.phone.data.CareStore
 import kr.aigyeot.phone.data.Credentials
 import kr.aigyeot.phone.data.RelayClient
 import kr.aigyeot.phone.data.RelayClient.Res
@@ -91,6 +111,10 @@ class AppModel(private val app: Application) {
         val clockSkewMin: Long? = null,
         /** 버려진 노래 삭제·선택 같은 영구 실패 안내. 닫을 때까지 보인다. */
         val notice: String? = null,
+        /** 돌봄 기록 알림 띠("앞 수유를 끝냈어요", 7장). 닫을 때까지 보인다. */
+        val careNotice: String? = null,
+        /** 방금 지운 손 기록 id. 탭 화면이 "지웠어요 · 되돌리기"를 5초 보인다(7장). */
+        val undoCareId: String? = null,
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -121,6 +145,12 @@ class AppModel(private val app: Application) {
     private val _state = MutableStateFlow(recovered ?: loaded)
     val state: StateFlow<PhoneState> = _state
     val ui = MutableStateFlow(Ui())
+
+    // 돌봄 기록(phone-care-plan 6장). 연결과 상관없이 쓴다(U7). 끊어도 지우지 않는다(U6·R9).
+    private val careStore = CareStore(File(app.filesDir, "care.json"))
+    private val _care = MutableStateFlow(careStore.load())
+    val care: StateFlow<CareFile> = _care
+    private val careLock = Mutex()
 
     /** 링크·QR로 받은 코드. 확인 화면을 거친 뒤에만 쓴다(G17). */
     val pendingCode = MutableStateFlow<String?>(null)
@@ -197,7 +227,137 @@ class AppModel(private val app: Application) {
             // 복구한 상태(요청 필요 표시 포함)를 바로 저장한다. 백업하지 못했으면 저장은 거부된다(다음 실행이 다시 복구한다).
             if (recovered != null) lock.withLock { if (_state.value === recovered) withContext(Dispatchers.IO) { saved(recovered) } }
             cleanSongFiles()
+            // 앱을 열 때: 30일 지난 지운 기록 정리(R8), 지금 수유 기록 한 번 옮기기(R11). 그 뒤 차로 보낼지 본다(R6).
+            // U22: 옮기기 전에 state.json의 보낸 표시를 먼저 채운다. 저장하지 못했으면 이번에는 옮기지 않는다(다음 실행이 다시 한다).
+            val marked = _care.value.migratedFeedings || (creds.value?.let { c -> commit(c) { it.markedMigratedFeedings() } } ?: true)
+            saveCare { f -> f.purged(now()).let { if (marked) it.migrated(state.value.feedings, zone()) else it } }
+            reconcileFeeding(FeedTrigger.APP_START)
         }
+        // 진행 중 기록이 바뀔 때만 잠금 화면 알림을 고친다(R15: 매초 갱신 없음).
+        scope.launch { care.collect { CareNotify.update(app, it) } }
+    }
+
+    // ---------------------------------------------------------------- 돌봄 기록(phone-care-plan 6장)
+
+    private fun zone() = java.time.ZoneId.systemDefault().id
+
+    /** 돌봄 기록을 바꾸고 저장한다. 저장이 확인됐을 때만 메모리를 바꾼다. `f`가 null이면(규칙 위반) 바꾸지 않는다. */
+    private suspend fun saveCare(f: (CareFile) -> CareFile?): Boolean = careLock.withLock {
+        val next = f(_care.value) ?: return@withLock false
+        if (next == _care.value) return@withLock true
+        val ok = withContext(Dispatchers.IO) {
+            runCatching { careStore.save(next) }.onFailure { Log.e(TAG, "돌봄 기록 저장 실패", it) }.isSuccess
+        }
+        if (!ok) {
+            ui.update { it.copy(notice = "저장하지 못했어요. 저장 공간을 확인해 주세요.") }
+            return@withLock false
+        }
+        _care.value = next
+        true
+    }
+
+    /** 사용자가 돌봄 기록을 바꿨다: 저장한 뒤 차로 보낼지 본다(R6 '돌봄 기록 저장·고치기 뒤'). */
+    private suspend fun careCommit(f: (CareFile) -> CareFile?): Boolean {
+        if (!saveCare(f)) return false
+        reconcileFeeding(FeedTrigger.CARE_SAVED)
+        return true
+    }
+
+    /**
+     * R5: 차로 보낼 수유가 있으면 보낼 함에 넣고 보낸 표시를 같은 state.json 저장에서 올린다. 저장에 실패하면 아무것도 바뀌지 않는다.
+     * 부르는 곳은 정해진 네 계기뿐이다(R6, [FeedTrigger]). 연결이 없거나 owner가 아니면 하지 않는다.
+     */
+    private fun reconcileFeeding(why: FeedTrigger) {
+        scope.launch {
+            val c = creds.value ?: return@launch
+            if (commit(c) { it.reconciledFeeding(care.value.events, now()) } && state.value.outbox.isNotEmpty()) pumpOutbox()
+            Log.d(TAG, "수유 보내기 확인: $why")
+        }
+    }
+
+    /** 빠른 버튼·타이머 시작(R1·R2·U21). 앞 기록을 닫았으면 띠를 띄운다. */
+    fun startCare(kind: CareKind, side: FeedSide? = null) {
+        scope.launch {
+            var closed: CareEvent? = null
+            val ok = careCommit { f -> f.start(kind, now(), zone(), side).also { closed = it.closedPrevious }.file }
+            closed?.takeIf { ok }?.let { c -> ui.update { it.copy(careNotice = restartNotice(c)) } }
+        }
+    }
+
+    /** 타이머·잠금 화면 '끝내기'. 최대 길이를 넘었으면 끝 모름으로 닫힌다(U14). */
+    fun endCare(id: String) {
+        endCareJob(id)
+    }
+
+    /** 알림 수신기가 저장이 끝날 때까지 기다리게 작업을 돌려준다. */
+    fun endCareJob(id: String): Job = scope.launch { careCommit { it.endNow(id, now()) } }
+
+    /** 타이머 '끝 시각 모름으로 닫기'(U14). */
+    fun endCareUnknown(id: String) {
+        scope.launch { careCommit { it.endUnknown(id, now()) } }
+    }
+
+    /** 빠른 기록·고치기 저장. 규칙(R3)에 맞지 않으면 거짓(화면이 먼저 [kr.aigyeot.phone.core.problem]으로 안내한다). */
+    suspend fun saveCareEvent(e: CareEvent): Boolean = scope.async { careCommit { it.upsert(e, now()) } }.await()
+
+    /** 타이머: 저장 잠금 안에서 지금 진행 중인 그 기록에만 바꿀 것을 얹는다. */
+    suspend fun editOngoing(id: String, f: (CareEvent) -> CareEvent): Boolean = scope.async { careCommit { it.editOngoing(id, now(), f) } }.await()
+
+    fun deleteCare(id: String) {
+        scope.launch { if (careCommit { it.delete(id, now()) }) ui.update { it.copy(undoCareId = id) } }
+    }
+
+    fun clearUndoCare() = ui.update { it.copy(undoCareId = null) }
+
+    /** 내 기록 내보내기(C7, U29): 캐시 export/에 CSV를 쓰고 그 파일을 돌려준다. 실패하면 null. */
+    suspend fun exportCare(): File? = withContext(Dispatchers.IO) {
+        careLock.withLock { exportCareLocked() }
+    }
+
+    // 기록 지우기와 같은 잠금 안에서: 지운 뒤에 지운 기록이 담긴 사본이 다시 생기지 않는다.
+    private fun exportCareLocked(): File? = runCatching {
+        val dir = File(app.cacheDir, "export").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() } // 지난 내보내기 파일은 남기지 않는다
+        File(dir, exportFileName(now(), java.time.ZoneId.systemDefault())).apply {
+            writeText(care.value.toCsv(java.time.ZoneId.systemDefault()), Charsets.UTF_8)
+        }
+    }.onFailure { Log.e(TAG, "내보내기 실패", it) }.getOrNull()
+
+    fun undoDeleteCare(id: String) {
+        scope.launch { careCommit { it.undoDelete(id) } }
+    }
+
+    fun setChildNickname(name: String?) {
+        scope.launch { saveCare { it.copy(childNickname = name?.trim()?.takeIf(String::isNotEmpty)) } }
+    }
+
+    fun setSleepDiaper(on: Boolean) {
+        scope.launch { saveCare { it.copy(sleepDiaperEnabled = on) } }
+    }
+
+    fun clearCareNotice() = ui.update { it.copy(careNotice = null) }
+
+    private val prefs get() = app.getSharedPreferences("install", Context.MODE_PRIVATE)
+
+    /** 첫 화면에서 '먼저 기록만 쓸게요'를 골랐거나 끊긴 뒤 기록만 쓰기로 했다(U7·U25). 다음 실행부터 바로 탭으로 간다. */
+    val recordsOnly: Boolean get() = prefs.getBoolean("records_only", false)
+
+    fun chooseRecordsOnly() = prefs.edit().putBoolean("records_only", true).apply()
+
+    /** 알림 권한은 처음 타이머를 시작할 때 한 번만 묻는다(9장). 처음이면 참을 돌려주고 물었다고 적는다. */
+    fun takeNotificationAsk(): Boolean {
+        if (prefs.getBoolean("asked_notifications", false)) return false
+        prefs.edit().putBoolean("asked_notifications", true).apply()
+        return true
+    }
+
+    /** 권한을 받은 뒤 진행 중 알림을 다시 그린다. */
+    fun refreshCareNotice() = CareNotify.update(app, care.value)
+
+    /** 설정에서 직접 끊은 뒤(U25 b): 탭(연결 안 됨)의 오늘로 가고 띠를 보인다. */
+    fun afterUserDisconnect() {
+        chooseRecordsOnly()
+        ui.update { it.copy(careNotice = "연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요") }
     }
 
     // ---------------------------------------------------------------- 앞·뒤
@@ -219,6 +379,9 @@ class AppModel(private val app: Application) {
     fun onForeground() {
         visible = true
         startConnection()
+        reconcileFeeding(FeedTrigger.FOREGROUND)
+        scope.launch { saveCare { it.purged(now()) } } // R8 '앱을 열 때': 프로세스가 살아 있는 채 다시 열어도 정리한다
+        refreshCareNotice() // 시스템 설정에서 알림을 켜고 돌아왔을 수 있다(기록은 그대로라 흐름으로는 다시 뜨지 않는다)
     }
 
     /** 생명주기: 화면이 뒤로 갔다. 끊고 멈춘다. */
@@ -528,8 +691,6 @@ class AppModel(private val app: Application) {
 
     // ---------------------------------------------------------------- 사용자 동작
 
-    fun startFeeding() = act { c -> commit(c) { it.startFeeding(now()) } }
-
     /**
      * 녹음을 보낼 함에 넣는다. 원본은 복사본이 목록·보낼 함에 커밋된 뒤에만 지운다.
      * 실패하면 원본을 그대로 두고 문구를 돌려준다(화면은 성공했을 때만 시트를 닫는다). 화면이 사라져도 모델 범위에서 끝난다.
@@ -563,13 +724,29 @@ class AppModel(private val app: Application) {
 
     fun selectSong(songId: String) = act { c -> commit(c) { it.selectSong(songId, now()) } }
 
-    /** '이 휴대폰의 기록 지우기': 커밋 → 파일 정리 → 기기 목록 확인과 상태 요청 판단(7.4). */
-    fun clearRecords() = act { c ->
-        if (!commit(c) { it.clearedRecords() }) return@act
-        ui.update { it.copy(banner = null, bannerAlertId = null) } // 지운 알림 본문·상세로 가는 '보기'를 막는다
-        withContext(Dispatchers.IO) { store.backup.delete() } // 사용자가 기록을 지웠으니 옮겨 둔 상태도 지운다
-        cleanSongFiles()
-        refreshDevices(c)
+    /**
+     * '이 휴대폰의 기록 지우기': 커밋 → 파일 정리 → 기기 목록 확인과 상태 요청 판단(7.4). 돌봄 기록도 지운다(R10).
+     * 연결 상태를 먼저 지운다: 돌봄 기록만 지워진 채 죽으면 남은 수유 전송 기록이 다시 옮겨 올 수 있다. 연결이 없으면 돌봄 기록만.
+     */
+    fun clearRecords() {
+        scope.launch {
+            val c = creds.value
+            if (c != null) {
+                if (!commit(c) { it.clearedRecords() }) return@launch
+                ui.update { it.copy(banner = null, bannerAlertId = null) } // 지운 알림 본문·상세로 가는 '보기'를 막는다
+                withContext(Dispatchers.IO) { store.backup.delete() } // 사용자가 기록을 지웠으니 옮겨 둔 상태도 지운다
+                cleanSongFiles()
+            }
+            saveCare { it.cleared() }
+            withContext(Dispatchers.IO) {
+                careStore.backup.delete()
+                careLock.withLock { File(app.cacheDir, "export").deleteRecursively() } // 내보낸 CSV 사본도 지운다(계약 7.4 '캐시')
+            }
+            if (c != null) {
+                refreshDevices(c)
+                pumpOutbox()
+            }
+        }
     }
 
     private fun act(f: suspend (Credentials) -> Unit) {
@@ -626,6 +803,7 @@ class AppModel(private val app: Application) {
                 ui.update { Ui() }
                 clearDisconnectRun() // 지난 끊기 결과가 새 연결의 설정 화면을 닫지 않게
                 startConnection()
+                reconcileFeeding(FeedTrigger.PAIRED) // 새 차에는 24시간 안의 최신 수유가 다시 간다(U6)
                 null
             }
             is Res.Err -> when {
@@ -677,7 +855,11 @@ class AppModel(private val app: Application) {
     fun startDisconnect() {
         if (disconnectJob?.isActive == true) return
         disconnectRun.value = DisconnectRun(busy = true)
-        disconnectJob = scope.launch { disconnectRun.value = DisconnectRun(busy = false, error = disconnectNow()) }
+        disconnectJob = scope.launch {
+            val error = disconnectNow()
+            if (error == null && creds.value == null) afterUserDisconnect() // U25 b: 화면과 무관하게(설정 탭이 사라져도)
+            disconnectRun.value = DisconnectRun(busy = false, error = error)
+        }
     }
 
     fun clearDisconnectRun() {

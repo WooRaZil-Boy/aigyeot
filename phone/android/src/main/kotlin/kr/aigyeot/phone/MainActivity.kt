@@ -5,7 +5,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,8 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,14 +39,16 @@ import kr.aigyeot.phone.ui.ConfirmScreen
 import kr.aigyeot.phone.ui.ConnectScreen
 import kr.aigyeot.phone.ui.DoneScreen
 import kr.aigyeot.phone.ui.GoneScreen
-import kr.aigyeot.phone.ui.GuardianHome
+import kr.aigyeot.phone.ui.AboutScreen
+import kr.aigyeot.phone.ui.AigyeotTheme
+import kr.aigyeot.phone.ui.LicenseScreen
+import kr.aigyeot.phone.ui.CareTabs
 import kr.aigyeot.phone.ui.GuardiansScreen
 import kr.aigyeot.phone.ui.IntroScreen
-import kr.aigyeot.phone.ui.OwnerHome
 import kr.aigyeot.phone.ui.ReportDetailScreen
 import kr.aigyeot.phone.ui.ReportsScreen
-import kr.aigyeot.phone.ui.SettingsScreen
 import kr.aigyeot.phone.ui.SongsScreen
+import kr.aigyeot.phone.ui.TimerScreen
 import kr.aigyeot.shared.Role
 
 class MainActivity : ComponentActivity() {
@@ -66,7 +65,7 @@ class MainActivity : ComponentActivity() {
         // 화면을 다시 만들 때(회전 등)는 처음 받은 인텐트를 이미 처리했다(7.6).
         if (savedInstanceState == null) handle(intent)
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+            AigyeotTheme {
                 Surface(Modifier.fillMaxSize()) { Root(model) }
             }
         }
@@ -100,9 +99,13 @@ private fun Root(model: AppModel) {
     val openAlert by model.openAlert.collectAsState()
     // 시작 화면은 처음 한 번만 정한다. creds가 바뀔 때 그래프가 바뀌면 이력이 사라지고
     // 연결됨(guardian 알림 권한)·확인 화면의 코루틴이 끊긴다. 연결·해제 뒤 이동은 화면마다 명시한다.
-    val start = remember { if (model.creds.value == null) "intro" else "home" }
+    // 연결이 없어도 '먼저 기록만 쓸게요'를 골랐으면 바로 탭으로 간다(U7).
+    val start = remember { if (model.creds.value == null && !model.recordsOnly) "intro" else "home" }
 
     LaunchedEffect(ui.gone) { if (ui.gone) nav.reset("gone") }
+    // U25 b: 설정에서 끊기가 끝나면, 그사이 정보·보호자 같은 다른 화면을 열었어도 탭으로 돌아간다. 오늘 탭 고르기는 CareTabs가 한다.
+    val disconnect by model.disconnectRun.collectAsState()
+    LaunchedEffect(disconnect) { if (disconnect?.let { !it.busy && it.error == null } == true) nav.popBackStack("home", inclusive = false) }
     // 코드는 확인 화면 경로에 실렸으니 바로 비운다. 다시 그려도 확인 화면을 또 띄우지 않는다.
     LaunchedEffect(pending) {
         pending?.let {
@@ -120,34 +123,52 @@ private fun Root(model: AppModel) {
 
     Box(Modifier.fillMaxSize().safeDrawingPadding()) {
         NavHost(nav, startDestination = start) {
-            composable("intro") { IntroScreen { nav.navigate("connect") } }
-            composable("connect") { ConnectScreen(model, onCode = { code -> nav.navigate("confirm/$code") }, onPaired = { role -> nav.reset("done/${role.name}") }) }
+            composable("intro") {
+                IntroScreen(onConnect = { nav.navigate("connect") }, onRecordsOnly = { model.chooseRecordsOnly(); nav.reset("home") })
+            }
+            composable("connect") {
+                // 탭(연결 안 됨)에서 열었으면 '취소'로 돌아간다(U39). 첫 실행 흐름에서는 소개로 돌아가는 뒤로 가기만 있다.
+                val fromTabs = nav.previousBackStackEntry?.destination?.route == "home"
+                ConnectScreen(
+                    model,
+                    onCode = { code -> nav.navigate("confirm/$code") },
+                    onPaired = { role -> nav.reset("done/${role.name}") },
+                    onCancel = if (fromTabs) ({ nav.popBackStack() }) else null,
+                )
+            }
             composable("confirm/{code}") { e ->
                 val code = e.arguments?.getString("code").orEmpty()
                 ConfirmScreen(
                     model,
                     code,
                     onDone = { role -> nav.reset("done/${role.name}") },
-                    onRetry = { model.clearPairRun(); nav.navigate("connect") },
+                    onRetry = {
+                        model.clearPairRun()
+                        // 밑에 연결 화면이 있으면 그리로 돌아간다(탭에서 열었으면 '취소'가 남는다, U39). 링크로 바로 왔으면 확인 화면을 바꾼다.
+                        if (!nav.popBackStack("connect", inclusive = false)) nav.navigate("connect") { popUpTo(e.destination.id) { inclusive = true } }
+                    },
                 )
             }
             composable("done/{role}") { e ->
                 val role = if (e.arguments?.getString("role") == Role.GUARDIAN.name) Role.GUARDIAN else Role.OWNER
                 DoneScreen(role) { nav.reset("home") }
             }
-            composable("gone") { GoneScreen { model.acknowledgeGone(); nav.reset("connect") } }
-            composable("home") {
-                when (creds?.role) {
-                    Role.GUARDIAN -> GuardianHome(model) { nav.navigate(it) }
-                    null -> LaunchedEffect(Unit) { nav.reset("intro") }
-                    else -> OwnerHome(model) { nav.navigate(it) }
-                }
+            // U25 a: 차·중계 쪽에서 끊김. 다시 연결하거나 탭(연결 안 됨)에서 기록을 계속 쓴다.
+            composable("gone") {
+                GoneScreen(
+                    onReconnect = { model.acknowledgeGone(); nav.reset("connect") },
+                    onRecordsOnly = { model.acknowledgeGone(); model.chooseRecordsOnly(); nav.reset("home") },
+                )
             }
+            // 탭(5장): 연결 안 됨·owner·guardian이 같은 경로를 쓰고 탭 모양만 다르다.
+            composable("home") { CareTabs(model) { nav.navigate(it) } }
+            composable("timer/{id}") { e -> TimerScreen(model, e.arguments?.getString("id").orEmpty()) { nav.popBackStack() } }
+            composable("about") { AboutScreen({ nav.popBackStack() }) { nav.navigate("license/$it") } }
+            composable("license/{i}") { e -> LicenseScreen(e.arguments?.getString("i")?.toIntOrNull() ?: -1) { nav.popBackStack() } }
             composable("songs") { SongsScreen(model) { nav.popBackStack() } }
             composable("reports") { ReportsScreen(model, { nav.popBackStack() }) { nav.navigate("report/$it") } }
             composable("report/{id}") { e -> ReportDetailScreen(model, e.arguments?.getString("id").orEmpty()) { nav.popBackStack() } }
             composable("guardians") { GuardiansScreen(model) { nav.popBackStack() } }
-            composable("settings") { SettingsScreen(model, { nav.popBackStack() }) { nav.reset("intro") } }
             composable("alert/{id}") { e -> AlertScreen(model, e.arguments?.getString("id").orEmpty()) { nav.popBackStack() } }
         }
         // 앱 안 배너(5.6): 앞에 있을 때 온 인계 알림. 시스템 알림은 띄우지 않는다.

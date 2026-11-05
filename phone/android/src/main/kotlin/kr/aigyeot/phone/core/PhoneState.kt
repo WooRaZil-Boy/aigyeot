@@ -43,11 +43,9 @@ data class FeedingRecord(
     val sentAt: Long? = null,
     val reflected: Boolean = false,
     val failed: String? = null,
+    /** 보낸 돌봄 기록의 시작(ms). 중계가 `at`을 고쳐도 남아, 오늘 카드의 수유와 전송 상태를 맞춘다(계약 7.5). 옛 기록은 null. */
+    val startAt: Long? = null,
 )
-
-/** 마지막 수유 시작: 차가 보낸 값과 이 폰이 기록한 시각(`at`은 중계가 고친 값) 중 최신. 없으면 null. */
-fun PhoneState.lastFeedingStart(): Long? =
-    (listOf(instantOf(feeding?.value?.lastFeedingStart)) + feedings.map { instantOf(it.at) }).filterNotNull().maxOrNull()
 
 enum class SongPhase { UPLOADING, WAITING, ACCEPTED, REJECTED, REMOVED }
 
@@ -115,6 +113,8 @@ data class PhoneState(
     /** '상태 요청 필요'를 켤 때마다 1씩 는다. 앞선 요청의 늦은 201이 새로 켠 표시를 끄지 않게 한다(7.4). */
     val stateNeedGen: Int = 0,
     val lastStateRequestAt: Long? = null,
+    /** 차로 보낸 마지막 수유 시작(epoch ms). 보낼 함과 한 파일이라 한 번의 저장으로 함께 바뀐다(phone-care U3·R5). */
+    val lastSentFeedingAt: Long? = null,
 ) {
     companion object {
         /** 새로 연결했을 때. 다른 차의 seq 캐시는 모두 버린다(3.1). */
@@ -323,6 +323,7 @@ fun PhoneState.clearedRecords() = PhoneState(
     stateNeedGen = stateNeedGen + 1,
     lastMessageAt = lastMessageAt,
     lastStateRequestAt = lastStateRequestAt,
+    lastSentFeedingAt = lastSentFeedingAt, // 차에 이미 간 값이다. 지우면 더 이른 수유를 다시 보낸다(R7). 끊기(R9)에서만 사라진다
 )
 
 /** 이 상태가 쓰는 녹음 파일 이름(목록에 있는 곡, 아직 올리지 않은 곡). 나머지 파일은 지워도 된다. */
@@ -331,12 +332,37 @@ val PhoneState.songFiles: Set<String>
 
 // ---- 사용자 동작(보낼 함에 넣는다, 7.5) ----
 
-fun PhoneState.startFeeding(now: Long, id: String = ulid(now)): PhoneState {
-    val env = envelope("feeding_started", buildJsonObject { put("at", rfc3339(now)) }, now, id)
+/**
+ * 수유 시작 시각을 보낼 함에 넣고 전송 상태 기록을 남긴다. 앱에서는 [reconciledFeeding]만 부른다(R6, 시험이 소스를 검사한다).
+ * 시험이 지금 보내기 경로를 직접 보도록 internal로 둔다.
+ */
+internal fun PhoneState.startFeeding(now: Long, id: String = ulid(now), at: Long = now): PhoneState {
+    val env = envelope("feeding_started", buildJsonObject { put("at", rfc3339(at)) }, now, id)
     return copy(
-        feedings = (feedings + FeedingRecord(id, rfc3339(now))).takeLast(50),
+        feedings = (feedings + FeedingRecord(id, rfc3339(at), startAt = at)).takeLast(50),
         outbox = outbox + OutboxItem(now, env),
     )
+}
+
+/**
+ * U22: 옮기기(R11)와 같은 일에서, 옛 경로가 이미 보낼 함에 넣은 수유를 다시 보내지 않게
+ * [PhoneState.lastSentFeedingAt]을 지금 수유 기록 중 가장 늦은 시각으로 채운다. state.json을 care.json보다 먼저 저장한다.
+ */
+fun PhoneState.markedMigratedFeedings(): PhoneState {
+    val latest = feedings.mapNotNull { instantOf(it.at) }.maxOrNull() ?: return this
+    return if (latest <= (lastSentFeedingAt ?: Long.MIN_VALUE)) this else copy(lastSentFeedingAt = latest)
+}
+
+/**
+ * R5: owner이고 연결됐을 때, 지우지 않은 수유 중 가장 늦은 시작이 이미 보낸 것보다 늦고 24시간 안이면
+ * `feeding_started`(at = 그 시작)를 넣고 같은 상태에서 [PhoneState.lastSentFeedingAt]을 올린다. 아니면 그대로.
+ * 차는 더 늦은 `at`만 받으므로 더 이른 수유는 보내지 않는다(R7).
+ */
+fun PhoneState.reconciledFeeding(events: List<CareEvent>, now: Long, id: String = ulid(now)): PhoneState {
+    if (role != Role.OWNER || carId == null) return this
+    val latest = events.lastFeedStart() ?: return this
+    if (latest <= (lastSentFeedingAt ?: Long.MIN_VALUE) || latest < now - SEND_WINDOW_MS) return this
+    return startFeeding(now, id, at = latest).copy(lastSentFeedingAt = latest)
 }
 
 fun PhoneState.addSong(songId: String, name: String, durationS: Double, file: String, now: Long, id: String = ulid(now)): PhoneState {

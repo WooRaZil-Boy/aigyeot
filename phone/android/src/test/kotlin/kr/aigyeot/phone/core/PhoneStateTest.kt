@@ -471,19 +471,4 @@ class PhoneStateTest {
         assertEquals(true, snap.receive(offAlerts.copy(id = ulid(), seq = 90), now, live = true).state.devices.single { it.deviceId == g }.handoffAlerts)
         assertEquals(false, snap.receive(offAlerts.copy(id = ulid(), seq = 120), now, live = true).state.devices.single { it.deviceId == g }.handoffAlerts)
     }
-
-    @Test
-    fun 마지막_수유_시작은_차_값과_폰_기록_중_최신() {
-        val car = Versioned(1, kr.aigyeot.shared.FeedingStateBody("2026-11-04T08:00:00+09:00", null))
-        val t08 = instantOf("2026-11-04T08:00:00+09:00")
-        assertNull(owner.lastFeedingStart())
-        assertEquals(t08, owner.copy(feeding = car).lastFeedingStart()) // 차 값만
-        val phone = FeedingRecord("m1", "2026-11-04T09:00:00+09:00")
-        assertEquals(instantOf(phone.at), owner.copy(feedings = listOf(phone)).lastFeedingStart()) // 폰 기록만
-        assertEquals(instantOf(phone.at), owner.copy(feeding = car, feedings = listOf(phone)).lastFeedingStart()) // 폰이 최신
-        val old = FeedingRecord("m2", "2026-11-04T07:00:00+09:00")
-        assertEquals(t08, owner.copy(feeding = car, feedings = listOf(old)).lastFeedingStart()) // 차가 최신
-        val fixed = old.copy(at = "2026-11-04T10:00:00+09:00") // 중계가 고친 시각
-        assertEquals(instantOf(fixed.at), owner.copy(feeding = car, feedings = listOf(fixed)).lastFeedingStart())
-    }
 }
