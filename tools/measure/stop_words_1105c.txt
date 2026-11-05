@@ -1,0 +1,22 @@
+# 멈춤 말 다시 확인(C109: 끝의 '요' 떼기) — 2026-11-05(1105c)
+환경: AVD PleosProbe(emulator-5560, user 10), kr.aigyeot.app debug(main 작업 트리, C109 포함). 회차 유효성·부하는 run_validity_1105c.txt.
+방법: extras_1105b.txt D의 M-DUCK-STOP과 같다. 측정용 장면 두 개를 M-DUCK-STOP에서 녹음 파일만 바꿔 run-as로 넣었다(APK에 없음).
+  - M-STOP-YO: t=29에 stopyo_4s.pcm(맥 say -v Yuna "그만요.", 16kHz 모노 s16le, 4초로 0 채움, SHA-1 963143d3…)
+  - M-STOP-HAEYO: t=29에 stophaeyo_4s.pcm(say -v Yuna "그만해요.", SHA-1 a203d484…)
+  - 공통: 시속 50 주행, t=20 울음 6초(stop_40s.pcm) → 자장가·S02 → S02 뒤 5초 듣기 창에 녹음 4초. 기대 StopPlayback(t=29부터 10초 안)
+실행: 반복 1, 회차마다 한 번.
+
+## 결과
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+| 회차 | 시각 | 맥 1분 평균 최대 | 결과 줄 | S02 끝(UpdateTtsDone) | 녹음 투입(t=29) | 듣기 창 닫힘(completeAudioSend) | STT 최종 | 재생 멈춤(stepLog WAIT·MediaPlayer 해제) | 판정 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| YO | 15:20:48~15:21:59 | 32.52 — 부하 중 | 1,11,true,,2645,61,bus100_audio_zone_1,false,1,8912,8912,0,0,0,0,, | 15:21:14.124 | 15:21:17.304 | 15:21:19.127 | **"그만요"** 15:21:18.840 | 15:21:19.930 | **통과** |
+| HAEYO | 15:24:53~15:26:06 | 71.92 — 부하 중 | 1,11,true,,2735,271,bus100_audio_zone_1,false,1,9002,9002,0,0,0,0,, | 15:25:20.912 | 15:25:23.664 | 15:25:25.914 | **"그만해요"** 15:25:25.918(창 닫힌 뒤 4ms, 유예 안) | 15:25:26.716 | **통과** |
+- 두 회차 모두 .txt "run 1: 통과"(StopPlayback 기대 충족). 자장가 재생은 8.9초·9.0초에서 끝났다(1105b STOP 4는 자장가가 끝까지 나감).
+- 멈춤은 STT 최종 뒤 1.09초(YO)·0.80초(HAEYO). 듣기 창이 닫히고 유예 0.8초가 끝난 때 Heard가 나가므로(C111) 그만큼 늦다.
+- HAEYO는 STT 최종이 창이 닫힌 뒤 4ms에 왔지만 유예 안이라 받았다.
+
+## 판정
+- C109 "그만요" → 멈춤: 1/1 통과
+- C109 "그만해요" → 멈춤: 1/1 통과
+- 0.5배 감쇄 상태에서 듣기: 미판정(1105b와 같다. 이 에뮬레이터에서 CAN_DUCK이 오지 않음)

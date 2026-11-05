@@ -1,0 +1,25 @@
+# '아니' 실제 STT(M-NO) 다시 확인(C111: 한 창의 최종 결과 잇기) — 2026-11-05(1105c)
+환경: AVD PleosProbe(emulator-5560, user 10), kr.aigyeot.app debug(main 작업 트리, C111 포함). 회차 유효성·부하는 run_validity_1105c.txt.
+장면: 측정용 M-NO(1105b와 같은 파일, run-as로 넣어 둔 것). t=93에 no_rep30.pcm(SHA-1 47387ed4…, 맥 say Yuna "아니, 괜찮아." 되풀이)을 14초 넣는다.
+      기대: S07 질문 뒤 6초 듣기 창에서 Answer(NO), AddWaypoint 없음(expectNone 60초).
+실행: 반복 1로 세 번(회차마다 VC로 정지·P 뒤 다시 시작).
+
+## 결과
+run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,routed_device,fallback,max_attempts,max_episode_play_ms,session_play_ms,gain_violations,lufs_violations,system_volume_changes,driver_ops,handoff_ms,control_ok_rate
+| 회차 | 시각 | 맥 1분 평균 최대 | 결과 줄 | S07 끝 | 듣기 창 닫힘(completeAudioSend) | STT 최종 결과(UpdateSttCompleted) | session.rest_log 답 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| NO1 | 15:28:02~15:30:02 | 12.00 | 1,3,true,,2583,40,bus100_audio_zone_1,false,1,55960,55960,0,0,0,0,, | 15:29:32.620 | 15:29:38.622 | "아니 괜찮아" 15:29:37.720 (하나) | **NO** |
+| NO2 | 15:32:19~15:34:20 | 68.09 — 부하 중 | 1,3,true,,2818,330,bus100_audio_zone_1,false,1,55669,55669,0,0,0,0,, | 15:33:54.924 | 15:34:00.991 | "아니 괜찮아" 15:33:58.924, "아니" 15:34:02.515(창 닫힌 뒤 1.52초 = 유예 0.8초 밖) | **NO** |
+| NO3 | 15:36:55~15:38:55 | 40.25 — 부하 중 | 1,3,true,,2696,74,bus100_audio_zone_1,false,1,55926,55926,0,0,0,0,, | 15:38:34.467 | 15:38:40.480 | "아니 괜찮아" 15:38:37.851, "아니 괜찮" 15:38:40.502(창 닫힌 뒤 22ms = 유예 안) | **NO** |
+- 세 회차 모두 .txt "run 1: 통과", AddWaypoint 없음.
+- NO1과 NO2 사이(15:34:48~15:35:13) VHAL heartbeat 시간 초과로 CarService가 다시 떴다(회차 밖, 맥 부하 78~112). NO3은 재시작 뒤 새로 시작했다(run_validity_1105c.txt).
+- NO2의 두 번째 최종 "아니"는 창이 닫히고 1.52초 뒤에 왔다. 그 전에 듣기가 끝나(유예 800ms) 받지 않았다. 앞의 "아니 괜찮아"로 이미 NO라 결과는 같다.
+- NO3은 한 창에서 최종 결과가 둘 왔다(두 번째는 유예 안). C111 잇기가 쓰이는 경우다.
+
+## 판정
+- 판정 NO: 3/3 — 통과(1105b는 1/2)
+- 최종 결과가 여럿일 때 이어진 글이 Heard에 들어갔는가: **미판정**. 앱이 Heard 글을 로그·DB 어디에도 남기지 않는다.
+  NO3은 두 조각("아니 괜찮아", "아니 괜찮")이 모두 '아니'를 담아, 잇든 마지막 것만 쓰든 NO다. 그래서 결과로도 구별할 수 없다.
+  1105b NO2처럼 마지막 조각이 "아"인 경우는 이번에 나오지 않았다.
+- 참고: STT 최종이 창이 닫힌 뒤 0.8초 넘어 오는 일이 있다(NO2 1.52초). 그 조각은 버려진다.
+- 경보 지연 2,583·2,818·2,696ms(측정용 장면이라 15장 합친 중앙값에는 넣지 않음)
