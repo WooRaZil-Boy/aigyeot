@@ -194,8 +194,8 @@ class ExecTest {
     }
 
     @Test fun `이름이 같은 졸음쉼터와 휴게소 중 제안한 휴게소의 후보를 내비에 넘긴다`() {
-        val shelter = restsOf(listOf(TBTInfo(TurnType.TURN_RESTAREA, 5_000.0, "오창(하남)"))) { false }.single()
-        val rest = restsOf(listOf(TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 8_500.0, "오창(하남)"))) { true }.single()
+        val shelter = restsOf(listOf(TBTInfo(TurnType.TURN_RESTAREA, 5_000.0, "오창(하남)휴게소"))) { false }.single()
+        val rest = restsOf(listOf(TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 8_500.0, "오창(하남)휴게소"))) { true }.single()
         assertTrue(shelter.name == rest.name && shelter.kind != rest.kind, "조건: 같은 이름, 다른 종류")
         st = st!!.copy(car = st!!.car.copy(route = RouteView(t.now, true, 900, listOf(shelter, rest))))
         exec.handle(AddWaypoint("s1-4", rest.id))

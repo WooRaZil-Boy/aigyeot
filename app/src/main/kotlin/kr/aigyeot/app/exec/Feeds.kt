@@ -35,17 +35,23 @@ internal fun inCall(mode: Int) = mode == android.media.AudioManager.MODE_IN_CALL
 internal fun restId(kind: RestKind, name: String) = "tbt:" + (if (kind == RestKind.DROWSY_SHELTER) "shelter" else "rest") + ":" + name.filterNot(Char::isWhitespace)
 
 /**
- * TBT의 휴게소(TURN_ENTER_SERVICEAREA)·졸음쉼터(TURN_RESTAREA)를 쉼터 후보로. 거리는 m로 보고 km로 바꾼다
- * (TBT 거리·유형의 뜻은 첫날 실제 값으로 정한다, C75 미판정). 수유실은 [nursing](공공데이터, G21)이 정하고 모르면 없음.
+ * TBT의 휴게소(TURN_ENTER_SERVICEAREA)·졸음쉼터(TURN_RESTAREA)를 쉼터 후보로. TBT distance(m)는 앞 지점부터의 구간 거리라
+ * 모든 항목(회전·톨게이트 포함)을 순서대로 더해 km로 쓴다(C113). 휴게소는 이름에 '휴게소'가 든 것만 받고 '하이패스센터'는 뺀다(C115,
+ * 뺀 항목의 거리는 누적에 든다). 수유실은 [nursing](공공데이터, G21)이 정하고 모르면 없음.
  */
-internal fun restsOf(tbt: List<TBTInfo>, nursing: (String) -> Boolean): List<RestCandidate> = tbt.mapNotNull { t ->
-    val kind = when (t.type) {
-        TurnType.TURN_ENTER_SERVICEAREA -> RestKind.REST_AREA
-        TurnType.TURN_RESTAREA -> RestKind.DROWSY_SHELTER
-        else -> return@mapNotNull null
+internal fun restsOf(tbt: List<TBTInfo>, nursing: (String) -> Boolean): List<RestCandidate> {
+    var sumM = 0.0
+    return tbt.mapNotNull { t ->
+        sumM += t.distance
+        val name = t.description.trim()
+        val kind = when (t.type) {
+            TurnType.TURN_ENTER_SERVICEAREA -> if ("휴게소" in name) RestKind.REST_AREA else return@mapNotNull null
+            TurnType.TURN_RESTAREA -> RestKind.DROWSY_SHELTER
+            else -> return@mapNotNull null
+        }
+        if (name.isEmpty()) return@mapNotNull null
+        RestCandidate(restId(kind, name), name, kind, sumM / 1000.0, kind == RestKind.REST_AREA && nursing(name))
     }
-    val name = t.description.trim().ifEmpty { return@mapNotNull null }
-    RestCandidate(restId(kind, name), name, kind, t.distance / 1000.0, kind == RestKind.REST_AREA && nursing(name))
 }
 
 /** 내비 신호를 모아 RouteState 하나로. 바뀐 것이 있을 때만 낸다(at 제외). 받은 적이 없으면 내지 않는다(C22: 판단 코어가 '없음'으로 본다). */
@@ -55,13 +61,23 @@ internal class RouteFeed(private val clock: () -> Long, private val post: (Event
     private var rests: List<RestCandidate> = emptyList()
     private var last: RouteState? = null
 
-    fun routing(on: Boolean) { routing = on; if (!on) { remainSec = null; rests = emptyList() }; emit() }   // 끝난 안내의 쉼터를 남기지 않는다(새 TBT가 오면 다시 찬다)
-    fun remain(sec: Int?) { remainSec = sec; emit() }
+    /** NavigationStatus == ROUTE_DRIVE 여부(C114). isRouting·끝·취소 알림은 넘기지 않는다: 시작과 섞여 와 안내 중 상태를 덮는다. 거짓이 오면 받아 둔 쉼터를 비운다(그 뒤 온 TBT는 저장해 안내 중이 되면 낸다). 쉼터는 안내 중일 때만 낸다. */
+    fun routing(on: Boolean) { routing = on; if (!on) { remainSec = null; rests = emptyList() }; emit() }
+    /** 새 구독 회차(PleosNavi.start): 앞 회차의 상태를 잊어 재시작 복원(initial)이 막히지 않게 한다. 이미 낸 값은 새 값이 오면 바뀐다. */
+    fun forget() { routing = null }
+    /** DrivingInfo 남은 시간(초). 0 이하는 끝난 경로(duration=0)라 안내 중으로 보지 않는다. 상태를 받은 적이 없을 때만 안내 중으로 본다. */
+    fun driving(sec: Int?) {
+        val s = sec?.takeIf { it > 0 }
+        if (s != null && routing == null) routing = true
+        remainSec = s; emit()
+    }
+    /** 재시작 때 getDestinationInfo의 remainTime(초, 같은 쪽 WaypointInfo 값으로 본 단위). 상태를 받은 적이 없고 0보다 클 때만 안내 중과 남은 시간으로 넣는다. */
+    fun initial(sec: Int) { if (routing == null && sec > 0) { routing = true; remainSec = sec; emit() } }
     fun rests(list: List<RestCandidate>) { rests = list; emit() }
 
     private fun emit() {
         val on = routing == true
-        val e = RouteState(clock(), on, if (on) remainSec else null, rests)
+        val e = RouteState(clock(), on, if (on) remainSec else null, if (on) rests else emptyList())
         if (last?.copy(at = e.at) == e) return
         last = e
         post(e)

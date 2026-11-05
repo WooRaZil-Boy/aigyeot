@@ -5,9 +5,9 @@ import ai.pleos.playground.navi.constants.NavigationStatus
 import ai.pleos.playground.navi.constants.WaypointCmdType
 import ai.pleos.playground.navi.constants.WaypointIndex
 import ai.pleos.playground.navi.data.CurrentLocationInfo
+import ai.pleos.playground.navi.data.DestinationInfo
 import ai.pleos.playground.navi.data.DrivingInfo
 import ai.pleos.playground.navi.data.RequestWaypointInfo
-import ai.pleos.playground.navi.data.RouteStateInfo
 import ai.pleos.playground.navi.data.TBTInfo
 import ai.pleos.playground.navi.data.WaypointChangedInfo
 import ai.pleos.playground.navi.data.WaypointInfo
@@ -547,7 +547,7 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
 // ---- 내비 ----
 
 /**
- * RouteState(계약 3.3)와 addWaypoint. 남은 시간은 DrivingInfo.destination.duration(초)으로 본다(C75, 첫날 실제 값으로 확정, 미판정).
+ * RouteState(계약 3.3)와 addWaypoint. 남은 시간은 DrivingInfo.destination.duration(초)으로 본다(C75, 1105d 확정). 안내 중 여부는 NavigationStatus(ROUTE_DRIVE)로 정한다(C114, NaviHelper에 상태 조회가 없어 재시작·다시 구독 때 상태 알림을 받은 적이 없으면 남은 시간이 0보다 큰 목적지 정보(DrivingInfo.destination.duration, getDestinationInfo의 remainTime)로만 안내 중으로 본다. 끝난 경로의 TBT가 돌아오므로 TBT로는 판단하지 않는다, C116. 쉼터는 안내 중일 때만 낸다). TBT 쉼터 거리는 앞 항목을 모두 더한 값이다(C113).
  * TBT에는 좌표가 없어 경유지 좌표·수유실은 휴게소 공공데이터(RestAreas)에서 찾는다. 양방향 휴게소처럼 이름이 둘이면
  * 지금 위치를 한 번 받아 곧은 거리로 먼 쪽 줄을 빼고 하나가 남을 때만 고른다(RestAreas.place). 고를 수 없으면 넣지 않는다.
  * 보내기 전에 목록을 한 번 읽어(WaypointPrecheck, 2초) 이미 있으면 보내지 않고 성공(C110). 결과: ADD 알림 뒤 경유지 목록을 다시 읽어 보낸 좌표 300m 안의 경유지가 있을 때만 성공(F19 다시 읽기, waypointPresent).
@@ -568,10 +568,10 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
     private fun newListener(my: Int) = object : NaviHelperEventListener {
         private fun on(f: () -> Unit) = ex.guard { if (gen == my) f() }
         override fun onNavigationStatus(status: NavigationStatus) = on { route.routing(status == NavigationStatus.ROUTE_DRIVE) }
-        override fun onRouteStateInfo(info: RouteStateInfo) = on { route.routing(info.isRouting) }
-        override fun onRouteCancelled() = on { route.routing(false) }
-        override fun onRouteEnded() = on { route.routing(false) }
-        override fun onDrivingInfo(info: DrivingInfo) = on { route.remain(info.destination?.duration) }
+        // isRouting은 안내 중에도 거짓이고 onRouteEnded는 안내 시작과 섞여 온다(C114): 안내 여부는 NavigationStatus만 따른다
+        override fun onDrivingInfo(info: DrivingInfo) = on { route.driving(info.destination?.duration) }
+        // 끝난 경로의 TBT를 재시작 때 돌려주므로(1105e) TBT로는 안내 여부를 정하지 않는다
+        override fun onDestinationInfo(info: DestinationInfo) = on { route.initial(info.remainTime) }
         override fun onTBTInfo(list: List<TBTInfo>) = on { route.rests(restsOf(list) { RestAreas.nursing(it) }) }
         override fun onCurrentLocationInfo(info: CurrentLocationInfo) = on {
             awaitingHere?.let { (rest, done) -> awaitingHere = null; send(rest, Here(info.latitude, info.longitude), done) }
@@ -592,9 +592,10 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
 
     fun start() {
         val my = ++gen
+        route.forget()                                                // 새 구독 회차: 앞 회차의 상태가 복원을 막지 않게
         val l = newListener(my).also { listener = it }
         helper = NaviHelper(ctx).also { h ->
-            h.initialize({ ex.guard { if (gen == my) { h.addListener(l); h.getRouteStateInfo(); h.getTBTInfo() } } }, { e -> Log.w(TAG, "navi init", e) })
+            h.initialize({ ex.guard { if (gen == my) { h.addListener(l); h.getRouteStateInfo(); h.getTBTInfo(); h.getDestinationInfo() } } }, { e -> Log.w(TAG, "navi init", e) })
         }
     }
 
