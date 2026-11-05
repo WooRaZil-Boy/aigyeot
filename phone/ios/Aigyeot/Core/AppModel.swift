@@ -43,6 +43,8 @@ enum SongError: Error, Equatable {
 final class AppModel {
     // MARK: 화면이 보는 값
     private(set) var state: PhoneState
+    /// 돌봄 기록(`care.json`). 연결과 따로 저장한다(phone-care-plan U3·U6).
+    private(set) var care: CareFile
     private(set) var credentials: Credentials?
     /// 기기가 인터넷에 닿는지(NWPathMonitor) 또는 마지막 호출이 네트워크 오류였는지.
     var offline = false
@@ -65,14 +67,21 @@ final class AppModel {
     @ObservationIgnored var pendingOpenAlertId: String?
     /// 홈 위쪽 띠에 보이는 알림(보내지 못한 것 등).
     var notice: String?
+    /// 탭(연결 안 됨) 위에 연결 흐름을 띄웠는가(U7). 저장하지 않는다.
+    var connectShown = false
+    /// 방금 지운 돌봄 기록 id. 화면이 "지웠어요" + "되돌리기"(5초)를 보인다(U38). 저장하지 않는다.
+    var recentlyDeleted: String?
 
     // MARK: 의존
     @ObservationIgnored private let relay: RelayAPI
     @ObservationIgnored private let store: StateStore
+    @ObservationIgnored private let careStore: CareStore
     @ObservationIgnored private let credStore: CredentialStore
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let baseURL: URL?
     @ObservationIgnored var pushToken: PushTokenSource?
+    /// 돌봄 기록이 저장된 뒤 부른다. 앱은 여기서 잠금 화면 표시(Live Activity)를 맞춘다(C6). 시험에서는 비워 둔다.
+    @ObservationIgnored var onCareChange: (@MainActor (CareFile) -> Void)?
     /// 시험에서 끈다. 켜 두면 보낼 함에 넣을 때마다 바로 보낸다.
     @ObservationIgnored var autoFlush = true
     @ObservationIgnored private var socket: RelaySocket?
@@ -96,10 +105,12 @@ final class AppModel {
     /// 모델이 띄운 백그라운드 작업. 시험이 `settle()`로 끝나기를 기다린다.
     @ObservationIgnored private var pending: [UUID: Task<Void, Never>] = [:]
 
-    init(relay: RelayAPI, store: StateStore, credentials: CredentialStore,
+    init(relay: RelayAPI, store: StateStore, credentials: CredentialStore, careStore: CareStore = MemoryCareStore(),
          baseURL: URL? = nil, now: @escaping () -> Date = Date.init) {
         self.relay = relay
         self.store = store
+        self.careStore = careStore
+        self.care = careStore.load()
         self.credStore = credentials
         self.baseURL = baseURL
         self.now = now
@@ -119,6 +130,9 @@ final class AppModel {
         }
         purgeExpired()
         if !store.restoreFailed { cleanSongFiles() }   // 복원에 실패한 실행에서는 녹음 파일을 지우지 않는다
+        migrateFeedingsIfNeeded()
+        purgeCare()
+        enqueueLatestFeeding()   // 앱 시작(R6). 보내기는 앞으로 올 때의 갱신이 한다
     }
 
     // MARK: 파생 값
@@ -134,12 +148,20 @@ final class AppModel {
     var car: DeviceInfo? { state.devices.first { $0.role == .car } }
     var visibleSongs: [SongRow] { state.songs.filter { $0.state != .removed }.sorted { $0.addedAt < $1.addedAt } }
 
-    /// 홈에 보이는 마지막 수유 시작: 차가 알려 준 값과 방금 누른 값 중 나중 것.
+    /// 마지막 수유 시작: 지우지 않은 수유 기록 중 가장 늦은 것과 차의 `feeding_state` 값 중 늦은 것(R12).
     var lastFeedingStart: Date? {
-        [state.feeding.lastStart, state.feedingLog.first.map { $0.fixedAt ?? $0.at }].compactMap { $0 }.max()
+        [state.feeding.lastStart, CareRules.latestFeed(care.events).map(shownStart)].compactMap { $0 }.max()
     }
 
+    /// 화면에 보일 수유 시작. 중계가 미래 시각을 고쳐 저장했으면 그 시각이다(계약 3.3). 기록의 누른 시각은 고치지 않는다(G33).
+    func shownStart(_ e: CareEvent) -> Date { feedingRecord(for: e)?.fixedAt ?? CareTime.date(e.startAt) }
+
     func alert(_ id: String) -> StoredAlert? { state.alerts.first { $0.id == id } }
+
+    /// 이 수유를 보낸 기록(보내는 중·보냄·차에 반영됨). `state.json`은 초까지만 저장해(.iso8601) 1초 안이면 같은 수유로 본다(아래 반영 판정과 같다).
+    func feedingRecord(for e: CareEvent) -> FeedingRecord? {
+        state.feedingLog.first { abs(CareTime.ms($0.at) - e.startAt) < 1000 }
+    }
 
     // MARK: 저장
 
@@ -273,7 +295,9 @@ final class AppModel {
             }
             pendingCode = nil
             gone = false
+            connectShown = false   // 연결이 끝나면 오늘 탭으로 간다(5장)
             notice = "연결됐어요"
+            reconcileFeeding()   // 연결 직후(R6): 연결 전에 적은 24시간 안의 수유를 보낸다
             if appActive { didBecomeActive() }   // 연결 직후 받기·동기화를 바로 시작한다
             return nil
         } catch let e as RelayError {
@@ -309,8 +333,20 @@ final class AppModel {
             if e.isOffline { return "인터넷이 필요해요" }
             if !e.isUnauthorized { return "끊지 못했어요. 잠시 뒤에 다시 해 주세요." }
         } catch { return "끊지 못했어요. 잠시 뒤에 다시 해 주세요." }
-        if gen == generation { wipeAll() }
+        if gen == generation {
+            wipeAll()
+            notice = CareText.disconnected   // U25 b: 탭(연결 안 됨)의 오늘로 가고 띠를 보인다
+        }
         return nil
+    }
+
+    /// '연결이 끊겼어요' 화면의 '기록만 계속 쓸게요'(U25 a).
+    func continueWithoutCar() { gone = false }
+
+    /// '연결이 끊겼어요' 화면의 '다시 연결하기'(U25 a): 연결 흐름으로 간다.
+    func reconnectAfterGone() {
+        gone = false
+        connectShown = true
     }
 
     /// 어디서든 401 또는 닫기 코드 4001(계약 7.1 GONE). 호출한 쪽이 현재 연결의 응답인지 먼저 확인한다.
@@ -359,6 +395,8 @@ final class AppModel {
         clearCount += 1
         SongFiles.removeAll()   // 파일은 저장이 성공한 뒤에 지운다
         SongFiles.removeBrokenCopies()
+        // R10·U18: 돌봄 기록도 지운다. 설정은 남기고, 지운 수유를 다시 옮겨 오지 않게 옮기기 표시를 켠다.
+        if updateCare({ $0.events = []; $0.migratedFeedings = true }) { FileCareStore.removeBrokenCopies(); CareExport.removeCopies() }
         bannerAlertId = nil
         spawn { [self] in await requestStateAfterDevices() }
     }
@@ -367,8 +405,10 @@ final class AppModel {
 
     func didBecomeActive() {
         appActive = true
+        purgeCare()
         guard isPaired else { return }
         purgeExpired()
+        enqueueLatestFeeding()   // 앞으로 올 때(R6). 아래 갱신이 보낸다
         // 새 갱신을 실제로 시작할 때만 버퍼링을 켠다. 24시간 판단은 소켓·받은 함보다 먼저(7.4).
         let began = beginRefresh()
         startSocket()
@@ -769,19 +809,195 @@ final class AppModel {
         if autoFlush { spawn { [self] in await flushOutbox() } }
     }
 
-    /// '수유 시작'. 누른 시각 그대로 기록하고 보낼 함에 넣는다. 오프라인이어도 된다(G33).
-    /// 기록과 보낼 함 넣기는 한 번에 저장한다.
-    func startFeeding() {
-        guard role == .owner else { return }
-        let at = now()
-        let id = ULID.generate(date: at)
+    // MARK: 돌봄 기록(phone-care-plan 6장)
+
+    /// 돌봄 기록을 바꾸고 `care.json`에 저장한다. 저장하지 못하면 메모리 값도 바꾸지 않는다(`update`와 같다).
+    @discardableResult
+    private func updateCare(_ f: (inout CareFile) -> Void) -> Bool {
+        if careStore.writesRefused {
+            notice = "저장하지 못했어요. 저장 공간을 확인해 주세요."
+            return false
+        }
+        var copy = care
+        f(&copy)
+        if copy == care { return true }
+        do { try careStore.save(copy) }
+        catch {
+            notice = "저장하지 못했어요. 저장 공간을 확인해 주세요."
+            return false
+        }
+        care = copy
+        onCareChange?(copy)
+        return true
+    }
+
+    private var nowMs: Int64 { CareTime.ms(now()) }
+
+    /// 새 기록의 틀. 시간대는 지금 기기 시간대다(R13).
+    private func newEvent(_ kind: CareKind, at: Int64) -> CareEvent {
+        CareEvent(id: ULID.generate(date: CareTime.date(at)), kind: kind, startAt: at, zone: TimeZone.current.identifier,
+                  createdAt: at, updatedAt: at)
+    }
+
+    /// 빠른 길로 닫기(U14): 지금 시각으로 끝낸다. 이미 최대 길이를 넘었으면 끝 시각 모름으로 닫는다.
+    /// 끝 시각 모름으로 닫았으면 true.
+    @discardableResult
+    private static func closeQuickly(_ e: inout CareEvent, now t: Int64) -> Bool {
+        let unknown = CareRules.isOverLimit(e, now: t)
+        // 시작은 지금+1분까지 고칠 수 있어(R3) 끝이 시작보다 앞서지 않게 한다.
+        if unknown { e.endUnknown = true } else { e.endAt = max(t, e.startAt) }
+        e.updatedAt = t
+        return unknown
+    }
+
+    /// 수유·잠 시작. 같은 종류가 진행 중이면 그것을 빠른 길로 닫고 새로 시작한다(R1·R2·U14). 한 번에 저장한다.
+    @discardableResult
+    private func start(_ kind: CareKind, side: FeedSide? = nil) -> Bool {
+        let t = nowMs
+        var e = newEvent(kind, at: t)
+        e.feedSide = side
+        let previous = CareRules.inProgress(kind, in: care.events)
+        var closedUnknown = false
+        let ok = updateCare { c in
+            if let p = previous, let i = c.events.firstIndex(where: { $0.id == p.id }) {
+                closedUnknown = Self.closeQuickly(&c.events[i], now: t)
+            }
+            c.events.append(e)
+        }
+        guard ok else { return false }
+        if previous != nil {
+            switch kind {
+            case .feed: notice = closedUnknown ? CareText.previousFeedEndedUnknown : CareText.previousFeedEnded
+            case .sleep: notice = closedUnknown ? CareText.previousSleepEndedUnknown : CareText.previousSleepEnded   // U21
+            default: break
+            }
+        }
+        reconcileFeeding()
+        return true
+    }
+
+    /// 타이머·잠금 화면의 '끝내기'(U14 빠른 길, 띠 없음).
+    func endNow(_ id: String) {
+        let t = nowMs
+        let ok = updateCare { c in
+            if let i = c.events.firstIndex(where: { $0.id == id && $0.inProgress }) { Self.closeQuickly(&c.events[i], now: t) }
+        }
+        if ok { reconcileFeeding() }
+    }
+
+    /// 타이머가 최대 길이를 넘었을 때 '끝 시각 모름으로 닫기'(U14).
+    func closeEndUnknown(_ id: String) {
+        let t = nowMs
+        let ok = updateCare { c in
+            if let i = c.events.firstIndex(where: { $0.id == id && $0.inProgress }) { c.events[i].endUnknown = true; c.events[i].updatedAt = t }
+        }
+        if ok { reconcileFeeding() }
+    }
+
+    /// '수유 시작'. 기록을 만든 뒤 차로 보내기는 `reconcileFeeding()`이 한다(U4). guardian 기록은 이 폰에만 남는다(U23).
+    func startFeeding(side: FeedSide? = nil) { start(.feed, side: side) }
+
+    func startSleep() { start(.sleep) }
+
+    /// 빠른 기록·고치기 저장(R1·R3·R4). 겹치면 묻기 위해 저장하지 않고 `.overlap`을 돌려준다.
+    func saveEvent(_ event: CareEvent, allowOverlap: Bool = false) -> CareSaveResult {
+        let t = nowMs
+        if let p = CareRules.problem(event, now: t) { return .problem(p) }
+        if event.inProgress, let other = CareRules.inProgress(event.kind, in: care.events), other.id != event.id {
+            return .problem(.inProgressExists)
+        }
+        if !allowOverlap, CareRules.overlaps(event, in: care.events, now: t) { return .overlap }
+        var e = event
+        e.updatedAt = t
+        let ok = updateCare { c in
+            if let i = c.events.firstIndex(where: { $0.id == e.id }) {
+                e.createdAt = c.events[i].createdAt
+                c.events[i] = e
+            } else {
+                c.events.append(e)
+            }
+        }
+        guard ok else { return .notSaved }   // 문구는 위쪽 띠("저장하지 못했어요")가 보인다
+        reconcileFeeding()
+        return .saved
+    }
+
+    /// 지우기는 표시만 한다(R8). 차에는 알리지 않는다. 어느 길로 지워도 되돌리기를 보인다(U38).
+    func deleteEvent(_ id: String) {
+        let t = nowMs
+        let ok = updateCare { c in
+            if let i = c.events.firstIndex(where: { $0.id == id && $0.deletedAt == nil }) { c.events[i].deletedAt = t; c.events[i].updatedAt = t }
+        }
+        if ok { recentlyDeleted = id }
+    }
+
+    /// 지운 지 5초 안의 '되돌리기'.
+    func undoDelete(_ id: String) {
+        let t = nowMs
+        let ok = updateCare { c in
+            guard let i = c.events.firstIndex(where: { $0.id == id && $0.deletedAt != nil }) else { return }
+            c.events[i].deletedAt = nil; c.events[i].updatedAt = t
+            // U40: 지운 사이 같은 종류를 새로 시작했으면 되살린 기록은 끝 시각 모름으로 둔다(진행 중은 하나, R1).
+            let e = c.events[i]
+            if e.inProgress, c.events.contains(where: { $0.id != e.id && $0.kind == e.kind && $0.inProgress }) { c.events[i].endUnknown = true }
+        }
+        if ok {
+            if recentlyDeleted == id { recentlyDeleted = nil }
+            reconcileFeeding()
+        }
+    }
+
+    func setSleepDiaperEnabled(_ on: Bool) { updateCare { $0.sleepDiaperEnabled = on } }
+
+    /// 아이 별명은 폰 안에서만 쓴다(U8). 비우면 없앤다.
+    func setChildNickname(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        updateCare { $0.childNickname = n.isEmpty ? nil : n }
+    }
+
+    /// R8: 지운 지 30일 지난 기록을 실제로 지운다. 앱을 열 때 부른다.
+    private func purgeCare() {
+        let t = nowMs
+        let kept = CareRules.purged(care.events, now: t)
+        if kept.count != care.events.count { updateCare { $0.events = kept } }
+    }
+
+    /// R11: 처음 한 번 지금 수유 기록을 돌봄 기록으로 옮긴다. 원래 기록은 전송 상태 표시용으로 둔다(U5).
+    /// U22: 옛 경로가 이미 보낼 함에 넣은 수유를 다시 보내지 않게, `state.json`의 `lastSentFeedingAt`을 먼저 채우고 `care.json`을 쓴다.
+    /// 그사이 죽으면 다음 실행이 다시 옮기고 결과는 같다.
+    private func migrateFeedingsIfNeeded() {
+        guard !care.migratedFeedings else { return }
+        let t = nowMs
+        if let latest = state.feedingLog.map({ CareTime.ms($0.at) }).max() {
+            guard update({ $0.lastSentFeedingAt = max($0.lastSentFeedingAt ?? .min, latest) }) else { return }
+        }
+        updateCare { c in c = CareRules.migrated(c, from: state.feedingLog, zone: TimeZone.current.identifier, now: t) }
+    }
+
+    /// 차로 보내기는 이 함수로만 한다(U4·R5·R6). 보낼 함에 넣었으면 바로 보낸다.
+    func reconcileFeeding() {
+        if enqueueLatestFeeding() { kick() }
+    }
+
+    /// R5: owner이고 연결됐으며, 지우지 않은 수유 중 가장 늦은 시작이 `lastSentFeedingAt`보다 늦고 24시간 안이면
+    /// 지금의 수유 보내기 경로(보낼 함 + 전송 상태 기록)에 넣고 같은 저장에서 `lastSentFeedingAt`을 올린다.
+    /// 저장에 실패하면 아무것도 바뀌지 않는다. 다음 계기가 다시 본다.
+    @discardableResult
+    private func enqueueLatestFeeding() -> Bool {
+        // R11 이전을 못 끝냈으면 먼저 한다. 끝나기 전에 보내면 보낸 기록(feedingLog)이 다음 이전에서 다른 id의 수유로 또 옮겨진다.
+        migrateFeedingsIfNeeded()
+        guard care.migratedFeedings, role == .owner, let latest = CareRules.latestFeed(care.events) else { return false }
+        let t = now()
+        guard latest.startAt > (state.lastSentFeedingAt ?? .min), latest.startAt >= CareTime.ms(t) - CareRules.sendWindowMs else { return false }
+        let at = CareTime.date(latest.startAt)
+        let id = ULID.generate(date: t)   // 메시지 id는 보낼 때마다 새로 만든다(같은 수유를 더 늦게 고쳐도 다시 보낼 수 있게)
         let item = makeItem(type: MessageType.feedingStarted, body: FeedingStartedBody(at: Rfc3339.string(at)), id: id)
-        let ok = update { s in
+        return update { s in
             s.feedingLog.insert(FeedingRecord(id: id, at: at), at: 0)
             s.feedingLog = Array(s.feedingLog.prefix(30))
             s.outbox.append(item)
+            s.lastSentFeedingAt = latest.startAt
         }
-        if ok { kick() }
     }
 
     func addSong(name: String, recording: URL, durationS: Double) throws {

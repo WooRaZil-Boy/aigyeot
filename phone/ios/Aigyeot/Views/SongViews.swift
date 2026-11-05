@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 우리 노래(owner만): 1~3곡 녹음·다시 듣기·지우기, 실험에 쓸 한 곡 고르기, 차로 보낸 상태.
-struct SongsView: View {
+/// 차(5장): 연결 상태 → 우리 노래(owner, 지금 화면) → 리포트 목록·상세(지금 화면). 연결 안 됨이면 '차와 연결하기'만.
+struct CarView: View {
     @Environment(AppModel.self) private var model
     @State private var player = SongPlayer()
     @State private var recording = false
@@ -10,30 +10,52 @@ struct SongsView: View {
     var body: some View {
         NavigationStack {
             List {
-                if model.visibleSongs.isEmpty {
-                    Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.visibleSongs) { row in
-                    SongRowView(row: row, player: player)
-                        .swipeActions { Button("지우기", role: .destructive) { model.removeSong(row.id) } }
-                }
                 Section {
-                    Button { player.stop(); recording = true } label: { Label("녹음하기", systemImage: "mic.fill") }
-                        .disabled(model.visibleSongs.count >= 3)
-                    if model.visibleSongs.count >= 3 {
-                        Text("노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요.").font(.footnote).foregroundStyle(.secondary)
+                    if model.isPaired { CarTile() } else { ConnectCarTile() }
+                }
+                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                if model.role == .owner { songs }
+                if model.isPaired {
+                    Section("리포트") {   // 지금 화면 제목(7.1 표에 없음, 조율 세션 확인 중)
+                        if model.state.reports.isEmpty {
+                            Text("주행이 끝나면 여기에 리포트가 와요").foregroundStyle(.secondary)
+                        }
+                        ForEach(model.state.reports) { r in
+                            NavigationLink { ReportDetailView(report: r) } label: { ReportRow(report: r) }
+                        }
                     }
-                } footer: {
-                    Text("차에서는 다음 주행부터 써요.")
                 }
             }
-            .navigationTitle("우리 노래")
+            .navigationTitle(CareText.tabCar)
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
+            .refreshable { await model.refresh() }
             .sheet(isPresented: $recording) { RecordSheet() }
             .onDisappear { player.stop() }
             // 안드로이드 ON_STOP과 같다: 백그라운드로 가면 미리듣기를 멈춘다(오디오 세션이 .playback이라 이어질 수 있음).
             .onChange(of: scenePhase) { _, p in if p == .background { player.stop() } }
+        }
+    }
+
+    /// 우리 노래(owner만): 1~3곡 녹음·다시 듣기·지우기, 실험에 쓸 한 곡 고르기, 차로 보낸 상태.
+    private var songs: some View {
+        Section {
+            if model.visibleSongs.isEmpty {
+                Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(model.visibleSongs) { row in
+                SongRowView(row: row, player: player)
+                    .swipeActions { Button("지우기", role: .destructive) { model.removeSong(row.id) } }
+            }
+            Button { player.stop(); recording = true } label: { Label("녹음하기", systemImage: "mic.fill") }
+                .disabled(model.visibleSongs.count >= 3)
+            if model.visibleSongs.count >= 3 {
+                Text("노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요.").font(.footnote).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("우리 노래")   // 지금 화면 제목(7.1 표에 없음, 조율 세션 확인 중)
+        } footer: {
+            Text("차에서는 다음 주행부터 써요.")
         }
     }
 }
@@ -59,7 +81,7 @@ struct SongRowView: View {
             HStack {
                 Text(row.name).font(.headline)
                 if row.candidate { Text("실험에 쓰는 곡").font(.caption).padding(.horizontal, 8).padding(.vertical, 2)
-                    .background(Theme.accent.opacity(0.15), in: Capsule()) }
+                    .background(DesignSystem.accent.opacity(0.15), in: Capsule()) }
                 Spacer()
                 if let d = row.durationS { Text(Self.duration(d)).font(.footnote).foregroundStyle(.secondary) }
             }
@@ -169,7 +191,7 @@ struct Waveform: View {
     var body: some View {
         HStack(alignment: .center, spacing: 3) {
             ForEach(Array(levels.enumerated()), id: \.offset) { _, l in
-                Capsule().fill(Theme.accent).frame(width: 4, height: max(4, CGFloat(l) * 80))
+                Capsule().fill(DesignSystem.accent).frame(width: 4, height: max(4, CGFloat(l) * 80))
             }
             if levels.isEmpty { Capsule().fill(.quaternary).frame(height: 4) }
         }

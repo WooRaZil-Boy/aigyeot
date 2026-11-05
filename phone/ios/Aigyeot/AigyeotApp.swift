@@ -9,8 +9,9 @@ extension AppModel {
         let base = URL(string: raw) ?? URL(string: "http://localhost:8787")!
         let creds = KeychainCredentialStore()
         let client = RelayClient(baseURL: base, credentials: { creds.load() })
-        let model = AppModel(relay: client, store: FileStateStore(), credentials: creds, baseURL: base)
+        let model = AppModel(relay: client, store: FileStateStore(), credentials: creds, careStore: FileCareStore(), baseURL: base)
         client.onServerDate = { d in Task { @MainActor in model.noteServerDate(d) } }
+        model.onCareChange = { CareLiveActivities.sync($0) }   // 잠금 화면 '끝내기'로 앱이 뒤에서 떠도 이 고리가 걸린다
         return model
     }()
 }
@@ -84,13 +85,18 @@ struct AigyeotApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .tint(Theme.accent)
+                .tint(DesignSystem.accent)
                 .onOpenURL { model.receive(link: $0) }   // aigyeot://pair?code=… (7.6)
-                .onAppear { network.start(model) }
+                .onAppear {
+                    network.start(model)
+                    CareLiveActivities.sync(model.care)   // 앱이 꺼진 사이 바뀐 것을 맞춘다
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .active: model.didBecomeActive()
+            case .active:
+                model.didBecomeActive()
+                CareLiveActivities.sync(model.care)   // 설정에서 실시간 현황을 켜고 왔거나 시스템이 끝낸 표시를 되살린다
             case .background: model.didEnterBackground()
             default: break
             }

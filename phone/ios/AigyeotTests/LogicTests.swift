@@ -260,6 +260,8 @@ final class AppModelTests: XCTestCase {
         relay.sendBody = .object(["at": .string(Rfc3339.string(fixed))])
         await model.flushOutbox()
         XCTAssertEqual(model.state.feedingLog.first?.fixedAt, fixed)
+        XCTAssertEqual(model.lastFeedingStart, fixed)   // 화면의 '마지막 수유'도 고친 시각이다
+        XCTAssertEqual(model.care.events.first?.startAt, CareTime.ms(clock))   // 기록의 누른 시각은 고치지 않는다(G33)
     }
 
     func test_오프라인에서_누른_것은_보낼_함에_남고_기다림_뒤_다시_보낸다() async {

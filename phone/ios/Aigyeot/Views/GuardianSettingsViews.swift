@@ -1,18 +1,29 @@
 import SwiftUI
 import CoreImage.CIFilterBuiltins
+import UniformTypeIdentifiers
 
-/// 보호자: owner는 초대·목록, guardian은 인계 알림 받기.
+/// 공유 시트에 넘길 내보내기 파일. 공유할 때 임시 폴더에 `aigyeot-care-{YYYYMMDD}.csv`로 쓴다.
+struct CareExportFile: Transferable {
+    let events: [CareEvent]
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .commaSeparatedText) { item in
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(CareText.exportFileName(Date()))
+            try CareExport.csv(item.events).write(to: url, options: .atomic)
+            return SentTransferredFile(url)
+        }
+    }
+}
+
+/// 보호자(설정 안의 한 줄로 연다): owner는 초대·목록, guardian은 인계 알림 받기.
 struct GuardiansView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if model.role == .owner { OwnerGuardians() } else { GuardianToggle() }
-            }
-            .navigationTitle("보호자")
-            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
+        Group {
+            if model.role == .owner { OwnerGuardians() } else { GuardianToggle() }
         }
+        .navigationTitle(CareText.guardians)
+        .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
     }
 }
 
@@ -108,39 +119,74 @@ private struct GuardianToggle: View {
     }
 }
 
+/// 설정(5장 순서): 보호자 · 아이 별명 · 잠·기저귀도 기록하기 · (내 기록 내보내기, C7) · 이 휴대폰의 기록 지우기 · 연결 끊기 · 정보·라이선스.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmDisconnect = false
     @State private var confirmClear = false
     @State private var busy = false
     @State private var error: String?
+    @State private var nickname = ""
 
     var body: some View {
         NavigationStack {
             List {
-                Section("연결") {
-                    LabeledContent("역할", value: model.role == .owner ? "함께 타는 보호자" : "다른 보호자")
-                    if let c = model.credentials { LabeledContent("차", value: String(c.carId.prefix(8))) }
-                    Button("연결 끊기", role: .destructive) { confirmDisconnect = true }.disabled(busy)
-                    if busy { HStack { ProgressView(); Text("끊고 있어요") } }
-                    if let error { Text(error).font(.footnote).foregroundStyle(.red) }
+                if model.isPaired {
+                    Section { NavigationLink(CareText.guardians) { GuardiansView() } }
                 }
                 Section {
-                    Button("이 휴대폰의 기록 지우기", role: .destructive) { confirmClear = true }
+                    LabeledContent(CareText.nickname) {
+                        TextField(CareText.nicknamePlaceholder, text: $nickname)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityLabel(CareText.nickname)
+                            .onSubmit { model.setChildNickname(nickname) }
+                    }
+                    Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { model.care.sleepDiaperEnabled },
+                                                                    set: { model.setSleepDiaperEnabled($0) }))
                 } footer: {
-                    Text("리포트·인계 알림·녹음 파일을 이 휴대폰에서 지워요. 차와의 연결은 그대로예요. 차와 중계에 남은 기록은 차 화면에서 지워요.")
+                    Text(CareText.sleepDiaperToggleNote)
                 }
-                Section { LabeledContent("버전", value: RelayClient.appVersion) }
+                Section {
+                    // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다.
+                    ShareLink(item: CareExportFile(events: model.care.events),
+                              preview: SharePreview("")) { Text(CareText.export) }   // U33: 공유 시트 제목은 비운다
+                }
+                Section {
+                    Button(CareText.clear, role: .destructive) { confirmClear = true }
+                }
+                if model.isPaired {
+                    Section("연결") {
+                        LabeledContent("역할", value: model.role == .owner ? "함께 타는 보호자" : "다른 보호자")
+                        if let c = model.credentials { LabeledContent("차", value: String(c.carId.prefix(8))) }
+                        Button(CareText.disconnect, role: .destructive) { confirmDisconnect = true }.disabled(busy)
+                        if busy { HStack { ProgressView(); Text("끊고 있어요") } }
+                        if let error { Text(error).font(.footnote).foregroundStyle(.red) }
+                    }
+                }
+                Section {
+                    NavigationLink(CareText.about) {
+                        // U28: 판, 오픈소스 라이선스(iOS 앱은 외부 라이브러리가 없다).
+                        List {
+                            Text(CareText.version(RelayClient.appVersion))
+                            Section(CareText.oss) { Text(CareText.ossNone).foregroundStyle(.secondary) }
+                        }
+                        .navigationTitle(CareText.about)
+                    }
+                }
             }
             .navigationTitle("설정")
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
+            .onAppear { nickname = model.care.childNickname ?? "" }
+            .onDisappear { model.setChildNickname(nickname) }   // 칸을 벗어나도 남긴다(글자마다 저장하지 않는다)
             .confirmationDialog("차와의 연결을 끊을까요?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
                 Button("연결 끊기", role: .destructive) {
                     busy = true; error = nil
                     Task { error = await model.disconnect(); busy = false }
                 }
+            } message: {
+                Text(CareText.disconnectKeepsCare)   // R9
             }
-            .confirmationDialog("이 휴대폰의 기록을 지울까요?", isPresented: $confirmClear, titleVisibility: .visible) {
+            .confirmationDialog(CareText.clearConfirm, isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("기록 지우기", role: .destructive) { model.clearLocalRecords() }
             }
         }

@@ -8,27 +8,6 @@ private func clock(_ rfc: String) -> String { Rfc3339.parse(rfc)?.formatted(date
 
 private func minSec(_ s: Int) -> String { s >= 60 ? "\(s / 60)분 \(s % 60)초" : "\(s)초" }
 
-/// 리포트 목록: 주행마다 한 줄.
-struct ReportsView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if model.state.reports.isEmpty {
-                    Text("주행이 끝나면 여기에 리포트가 와요").foregroundStyle(.secondary)
-                }
-                ForEach(model.state.reports) { r in
-                    NavigationLink { ReportDetailView(report: r) } label: { ReportRow(report: r) }
-                }
-            }
-            .navigationTitle("리포트")
-            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
-            .refreshable { await model.refresh() }
-        }
-    }
-}
-
 struct ReportRow: View {
     let report: StoredReport
 

@@ -16,7 +16,9 @@ targets:
   Aigyeot:
     type: application
     platform: iOS
-    sources: [Aigyeot]
+    sources: [Aigyeot, Shared]
+    dependencies:
+      - target: AigyeotWidgets   # 잠금 화면 진행 표시(C6). 앱 안에 넣는다
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: kr.aigyeot.phone
@@ -52,6 +54,7 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSCameraUsageDescription: 차 화면의 QR을 찍어 차와 연결하는 데만 카메라를 써요.
         NSMicrophoneUsageDescription: 아기에게 불러 줄 노래를 녹음하는 데만 마이크를 써요.
+        NSSupportsLiveActivities: true
         CFBundleURLTypes:
           - CFBundleURLName: kr.aigyeot.pair
             CFBundleURLSchemes: [aigyeot]
@@ -65,6 +68,36 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: kr.aigyeot.phone.tests
+  # 잠금 화면·Dynamic Island의 진행 중 수유·잠(Live Activity). '끝내기'는 앱 프로세스에서 돈다(Shared/CareActivity.swift).
+  AigyeotWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [AigyeotWidgets, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: kr.aigyeot.phone.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
+    info:
+      path: AigyeotWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: 아이곁
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  # 화면 캡처 순회(시험이 아님). 기본 스킴의 시험에는 넣지 않는다.
+  AigyeotUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [AigyeotUITests]
+    dependencies:
+      - target: Aigyeot
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: kr.aigyeot.phone.uitests
+        TEST_TARGET_NAME: Aigyeot
 schemes:
   Aigyeot:
     build:
@@ -73,3 +106,10 @@ schemes:
         AigyeotTests: [test]
     test:
       targets: [AigyeotTests]
+  AigyeotScreens:
+    build:
+      targets:
+        Aigyeot: all
+        AigyeotUITests: [test]
+    test:
+      targets: [AigyeotUITests]

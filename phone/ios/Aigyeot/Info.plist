@@ -35,6 +35,8 @@
 	<string>차 화면의 QR을 찍어 차와 연결하는 데만 카메라를 써요.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>아기에게 불러 줄 노래를 녹음하는 데만 마이크를 써요.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>RelayBaseURL</key>
 	<string>$(RELAY_BASE_URL)</string>
 	<key>UILaunchScreen</key>

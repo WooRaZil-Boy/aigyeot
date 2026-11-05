@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "childNickname": "콩이",
+  "sleepDiaperEnabled": true,
+  "migratedFeedings": true,
+  "events": [
+    {"id": "01JC0000000000000000000001", "kind": "FEED", "startAt": 1793836800000, "endAt": 1793837700000, "endUnknown": false, "zone": "Asia/Seoul", "feedSide": "LEFT", "amountMl": null, "diaper": null, "note": null, "source": "PHONE", "createdAt": 1793836800000, "updatedAt": 1793837700000, "deletedAt": null},
+    {"id": "01JC0000000000000000000002", "kind": "FEED", "startAt": 1793847600000, "endAt": null, "endUnknown": true, "zone": "Asia/Seoul", "feedSide": null, "amountMl": null, "diaper": null, "note": null, "source": "PHONE", "createdAt": 1793847600000, "updatedAt": 1793847600000, "deletedAt": null},
+    {"id": "01JC0000000000000000000003", "kind": "FEED", "startAt": 1793858400000, "endAt": 1793858700000, "endUnknown": false, "zone": "Asia/Seoul", "feedSide": "BOTTLE", "amountMl": 120, "diaper": null, "note": null, "source": "PHONE", "createdAt": 1793858400000, "updatedAt": 1793858700000, "deletedAt": null},
+    {"id": "01JC0000000000000000000004", "kind": "SLEEP", "startAt": 1793862000000, "endAt": null, "endUnknown": false, "zone": "Asia/Seoul", "feedSide": null, "amountMl": null, "diaper": null, "note": null, "source": "PHONE", "createdAt": 1793862000000, "updatedAt": 1793862000000, "deletedAt": null},
+    {"id": "01JC0000000000000000000005", "kind": "DIAPER", "startAt": 1793859000000, "endAt": null, "endUnknown": false, "zone": "Asia/Seoul", "feedSide": null, "amountMl": null, "diaper": "WET", "note": null, "source": "PHONE", "createdAt": 1793859000000, "updatedAt": 1793859000000, "deletedAt": null},
+    {"id": "01JC0000000000000000000006", "kind": "NOTE", "startAt": 1793859600000, "endAt": null, "endUnknown": false, "zone": "Asia/Seoul", "feedSide": null, "amountMl": null, "diaper": null, "note": "트림 잘 함", "source": "PHONE", "createdAt": 1793859600000, "updatedAt": 1793859600000, "deletedAt": 1793860000000}
+  ]
+}

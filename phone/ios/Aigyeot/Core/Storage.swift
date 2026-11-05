@@ -158,6 +158,8 @@ struct PhoneState: Codable, Equatable {
     var lastReceivedAt: Date?
     var needsStateRequest = false
     var lastStateRequestAt: Date?
+    /// 차로 보낸 마지막 수유 시작 시각(epoch ms). 보낼 함과 같은 저장에서 올린다(phone-care-plan U3·R5).
+    var lastSentFeedingAt: Int64?
 }
 
 protocol StateStore {
@@ -321,6 +323,7 @@ extension PhoneState {
     enum CodingKeys: String, CodingKey {
         case introSeen, carId, processed, shown, outbox, reports, alerts, songs, selectedSongId, feeding, feedingLog
         case devices, deviceMarks, devicesSnapshotSeq, handoffAlerts, lastReceivedAt, needsStateRequest, lastStateRequestAt
+        case lastSentFeedingAt
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -342,5 +345,6 @@ extension PhoneState {
         lastReceivedAt = try c.decodeIfPresent(Date.self, forKey: .lastReceivedAt)
         needsStateRequest = try c.decodeIfPresent(Bool.self, forKey: .needsStateRequest) ?? false
         lastStateRequestAt = try c.decodeIfPresent(Date.self, forKey: .lastStateRequestAt)
+        lastSentFeedingAt = try c.decodeIfPresent(Int64.self, forKey: .lastSentFeedingAt)
     }
 }

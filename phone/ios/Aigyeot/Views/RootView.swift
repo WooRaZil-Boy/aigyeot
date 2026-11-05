@@ -1,10 +1,6 @@
 import SwiftUI
 
-enum Theme {
-    static let accent = Color(red: 0.09, green: 0.43, blue: 0.48)
-}
-
-/// 첫 실행 → 안내 → 연결 → 홈(계약 7.1).
+/// 첫 실행 → 안내 → (연결) → 탭(계약 7.1, phone-care-plan 5장·U7·U25).
 struct RootView: View {
     @Environment(AppModel.self) private var model
 
@@ -12,8 +8,9 @@ struct RootView: View {
         @Bindable var model = model
         Group {
             if !model.state.introSeen { IntroView() }
-            else if !model.isPaired { ConnectView() }
-            else { MainView() }
+            else if model.gone { GoneView() }
+            else if !model.isPaired && model.connectShown { ConnectView() }
+            else { MainView() }   // 연결 안 됨도 탭을 쓴다(U7)
         }
         .sheet(item: $model.pendingCode) { code in ConfirmView(code: code) }
         .alert("지금 연결된 차를 끊고 새 차에 연결할까요?", isPresented: Binding(
@@ -43,8 +40,32 @@ struct IntroView: View {
             }
             .font(.callout)
             Spacer()
-            Button { model.markIntroSeen() } label: { Text("시작하기").frame(maxWidth: .infinity) }
+            Button {
+                model.markIntroSeen()
+                model.connectShown = true
+            } label: { Text(CareText.connectCar).frame(maxWidth: .infinity) }
                 .buttonStyle(.borderedProminent).controlSize(.large)
+            Button { model.markIntroSeen() } label: { Text(CareText.recordOnly).frame(maxWidth: .infinity) }
+                .buttonStyle(.bordered).controlSize(.large)
+        }
+        .padding(24)
+    }
+}
+
+/// 차나 중계 쪽에서 끊겼을 때(401·4001, U25 a). 돌봄 기록은 남아 있어 기록만 계속 쓸 수 있다.
+struct GoneView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Spacer()
+            Label("연결이 끊겼어요. 다시 연결해 주세요.", systemImage: "exclamationmark.triangle")
+                .font(.title3.bold())
+            Spacer()
+            Button { model.reconnectAfterGone() } label: { Text(CareText.reconnect).frame(maxWidth: .infinity) }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+            Button { model.continueWithoutCar() } label: { Text(CareText.keepRecording).frame(maxWidth: .infinity) }
+                .buttonStyle(.bordered).controlSize(.large)
         }
         .padding(24)
     }
@@ -62,11 +83,6 @@ struct ConnectView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if model.gone {
-                        Label("연결이 끊겼어요. 다시 연결해 주세요.", systemImage: "exclamationmark.triangle")
-                            .padding().frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
-                    }
                     Text("차 화면의 QR을 찍거나 코드를 넣어 주세요").font(.title2.bold())
                     Button { scanning = true } label: {
                         Label("QR 찍기", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
@@ -95,6 +111,12 @@ struct ConnectView: View {
                 .padding(24)
             }
             .navigationTitle("연결")
+            .toolbar {
+                // 연결하지 않고 탭(연결 안 됨)으로 돌아간다(U7).
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(CareText.cancel) { model.connectShown = false }.disabled(connecting)
+                }
+            }
             .fullScreenCover(isPresented: $scanning) { ScanView(isPresented: $scanning) }
         }
     }
