@@ -550,7 +550,7 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
  * RouteState(계약 3.3)와 addWaypoint. 남은 시간은 DrivingInfo.destination.duration(초)으로 본다(C75, 첫날 실제 값으로 확정, 미판정).
  * TBT에는 좌표가 없어 경유지 좌표·수유실은 휴게소 공공데이터(RestAreas)에서 찾는다. 양방향 휴게소처럼 이름이 둘이면
  * 지금 위치를 한 번 받아 곧은 거리로 먼 쪽 줄을 빼고 하나가 남을 때만 고른다(RestAreas.place). 고를 수 없으면 넣지 않는다.
- * 결과: ADD 알림 뒤 경유지 목록을 다시 읽어 보낸 좌표 300m 안의 경유지가 있을 때만 성공(F19 다시 읽기, waypointPresent).
+ * 보내기 전에 목록을 한 번 읽어(WaypointPrecheck, 2초) 이미 있으면 보내지 않고 성공(C110). 결과: ADD 알림 뒤 경유지 목록을 다시 읽어 보낸 좌표 300m 안의 경유지가 있을 때만 성공(F19 다시 읽기, waypointPresent).
  * 앞 요청의 늦은 알림·응답은 Controls가 요청을 닫을 때 [cancelWaypoint]로 비워 다음 요청의 결과가 되지 않는다(C65·C95).
  */
 internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, clock: () -> Long, post: (Event) -> Unit) : NaviPort {
@@ -560,6 +560,7 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
     private var targetRows: List<RestArea> = RestAreas.all               // 대조에 쓸 자료(쉼터 종류에 맞춘다)
     private var target: RestArea? = null                              // 보낸 경유지 줄(대조 대상)
     private var awaitingHere: Pair<RestCandidate, (Boolean, String) -> Unit>? = null   // 위치를 받아야 고를 수 있음
+    private val precheck = WaypointPrecheck(ex, kr.aigyeot.engine.Params().waypointPrecheckMs)   // 보내기 전 목록 확인 중(C110). 끝나면 pending이 보낸 뒤 기다림
     private var listener: NaviHelperEventListener? = null
     private var gen = 0                                               // 시작 회차(start·stop마다 +1). 앞 회차의 늦은 콜백·응답을 버린다
 
@@ -581,9 +582,11 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
         }
         override fun onWayPointInfo(list: List<WaypointInfo>) = on {
             val t = target ?: return@on
-            if (waypointPresent(list.map { it.latitude to it.longitude }, t, targetRows)) pending?.let { pending = null; target = null; it(true, "added") }
+            val listed = waypointListed(list.map { Triple(it.name, it.latitude, it.longitude) }, t, targetRows)
+            if (precheck.onList(listed)) return@on                    // 보내기 전 응답
+            if (listed) pending?.let { pending = null; target = null; it(true, "added") }   // 보낸 뒤 응답
         }
-        // 어느 요청의 오류인지 알 수 없어 결과로 쓰지 않는다(실패는 Controls의 10초 시간 초과가 정한다)
+        // 어느 요청의 오류인지 알 수 없어 결과로 쓰지 않는다(실패는 Controls의 20초 시간 초과가 정한다)
         override fun onError(code: NaviErrorCode) = on { Log.w(TAG, "navi error ${code.name}") }
     }
 
@@ -614,15 +617,24 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
         }
     }
 
-    override fun cancelWaypoint() { pending = null; awaitingHere = null; target = null }
+    override fun cancelWaypoint() { precheck.cancel(); pending = null; awaitingHere = null; target = null }
 
     private fun send(rest: RestCandidate, here: Here?, done: (Boolean, String) -> Unit) {
         val h = helper ?: return done(false, "no_navi")
         val rows = RestAreas.rowsOf(rest.kind)
         val a = RestAreas.place(rest.name, rest.distanceKm, here, rows) ?: return done(false, "ambiguous")
-        pending = done
         target = a
         targetRows = rows
+        val my = gen
+        // 이미 같은 경유지가 경로에 있으면 내비는 다시 넣지 않고 알림도 주지 않는다: 먼저 목록을 읽어 있으면 보내지 않고 성공(C110)
+        precheck.start({ h.getWaypointInfo() }) { listed ->
+            if (gen != my || target !== a) return@start
+            if (listed) { target = null; done(true, "added") } else push(h, rest, a, done)
+        }
+    }
+
+    private fun push(h: NaviHelper, rest: RestCandidate, a: RestArea, done: (Boolean, String) -> Unit) {
+        pending = done
         try {
             h.addWaypoint(RequestWaypointInfo(latitude = a.lat, longitude = a.lon, poiName = rest.name, waypointIndex = WaypointIndex.FIRST,
                 poiId = "", address = "${a.route} ${a.name}", poiSubId = "0"))

@@ -130,11 +130,11 @@ internal class Controls(
     private inner class Wp(val c: AddWaypoint) { val t0 = clock(); var cancel: () -> Unit = {} }
     private var wp: Wp? = null
 
-    /** 계약 4.2 F19 예외(명세서 17장 C95): 결과 콜백으로만 확인, 다시 보내지 않음, 10초. */
+    /** 계약 4.2 F19 예외(명세서 17장 C95): 결과 콜백으로만 확인, 다시 보내지 않음, [Params.waypointTimeoutMs](20초, C110). */
     fun waypoint(c: AddWaypoint) {
         wp?.let { wpDone(it, false, "superseded") }
         val w = Wp(c).also { wp = it }
-        w.cancel = sched.after(p.verifyTimeoutMs * (p.verifyRetries + 1)) { wpDone(w, false, "timeout") }
+        w.cancel = sched.after(p.waypointTimeoutMs) { wpDone(w, false, "timeout") }
         try { navi.addWaypoint(c.restId, restOf(c.restId)) { ok, note -> wpDone(w, ok, note) } } catch (e: Exception) { wpDone(w, false, "error") }
     }
 

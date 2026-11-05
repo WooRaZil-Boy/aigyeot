@@ -198,9 +198,12 @@ class ControlsTest {
         assertEquals(1, r.events.size, "늦은 콜백은 버린다")
     }
 
-    @Test fun `경유지 콜백이 10초 안에 없으면 실패하고 다시 보내지 않는다`() {
+    @Test fun `경유지 콜백이 20초 안에 없으면 실패하고 다시 보내지 않는다`() {
         c.waypoint(AddWaypoint("s1-12", "tbt:안성"))
-        t.advance(10_000)
+        assertEquals(20_000L, Params().waypointTimeoutMs)
+        t.advance(19_999)
+        assertTrue(r.events.isEmpty(), "10초(옛 한도)가 지나도 기다린다")
+        t.advance(1)
         assertEquals(WaypointResult(t.now, "s1-12", "tbt:안성", false), r.events.single())
         assertEquals("timeout", r.rows.single().actual)
         assertEquals(1, navi.asked.size)
@@ -209,7 +212,7 @@ class ControlsTest {
     @Test fun `시간 초과로 닫으면 navi에 요청 취소를 알리고 늦은 콜백은 결과를 또 내지 않는다`() {
         c.waypoint(AddWaypoint("s1-12", "tbt:안성"))
         assertEquals(0, navi.cancels, "조건: 아직 열려 있다")
-        t.advance(9_999)
+        t.advance(19_999)
         assertTrue(r.events.isEmpty())
         t.advance(1)
         assertEquals(WaypointResult(t.now, "s1-12", "tbt:안성", false), r.events.single())

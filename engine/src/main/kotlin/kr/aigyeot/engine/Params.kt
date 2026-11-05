@@ -37,6 +37,8 @@ data class Params(
     val verifyIntervalMs: Long = 150,
     val verifyTimeoutMs: Long = 5_000,
     val verifyRetries: Int = 1,
+    val waypointPrecheckMs: Long = 2_000,   // 보내기 전 경유지 목록 응답을 기다리는 시간(C110)
+    val waypointTimeoutMs: Long = 20_000,   // 경유지 성공 판정 한도(C110)
     val touchTargetDp: Int = 56,
     val pairCodeDigits: Int = 6,
     val pairCodeTtlMs: Long = 300_000,

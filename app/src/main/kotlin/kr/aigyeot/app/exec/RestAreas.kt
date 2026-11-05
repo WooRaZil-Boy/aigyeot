@@ -71,6 +71,16 @@ internal object RestAreas {
 private const val TIE_M = 10.0
 
 /**
+ * 경유지 목록 판정(C110). 점은 (이름, 위도, 경도). 좌표가 0·0이면(실제 내비는 이름만 맞게 준다) 이름을 [rows]의 줄로 바꿔
+ * 한 줄로 정해지고 [target]과 같을 때만 성공이다(방향 없는 이름은 두 줄이라 아님). 좌표가 있으면 [waypointPresent]의 300m 규칙.
+ */
+internal fun waypointListed(points: List<Triple<String, Double, Double>>, target: RestArea, rows: List<RestArea> = RestAreas.all, radiusM: Double = 300.0): Boolean =
+    points.any { (name, la, lo) ->
+        if (la == 0.0 && lo == 0.0) RestAreas.match(name, rows).singleOrNull() == target
+        else waypointPresent(listOf(la to lo), target, rows, radiusM)
+    }
+
+/**
  * 경유지 목록([points], 위도·경도)에 요청한 줄 [target]이 들어 있는가. 점이 [target]에서 [radiusM](300m, 설계값·근거 없음) 안이면서
  * 그 점에서 가장 가까운 데이터 줄(같은 괄호 앞 이름의 줄들, 데이터 전체 [rows])이 [target]일 때만 있다고 본다.
  * 바로 옆 반대 방향 휴게소(건천 부산·서울 약 130m)를 요청한 쪽의 성공으로 보지 않으려고.
@@ -84,5 +94,32 @@ internal fun waypointPresent(points: List<Pair<Double, Double>>, target: RestAre
     fun apart(a: RestArea, b: RestArea) = hypot((a.lon - b.lon) * 111_320 * cos(a.lat * PI / 180), (a.lat - b.lat) * 110_574)
     return points.any { (la, lo) ->
         m(la, lo, target) <= radiusM && same.minBy { m(la, lo, it) }.let { it.name == target.name || apart(it, target) <= TIE_M }
+    }
+}
+
+/**
+ * 경유지를 보내기 전 사전 확인(C110): 목록을 한 번 묻고 응답 또는 [waitMs]가 지나면 [start]의 result를 한 번 부른다(이미 있음 = true).
+ * 끝난 뒤나 [cancel] 뒤에 오는 응답은 [onList]가 받지 않는다(false). 그 응답은 보낸 뒤 확인 쪽이 본다.
+ */
+internal class WaypointPrecheck(private val sched: Sched, private val waitMs: Long) {
+    private var result: ((Boolean) -> Unit)? = null
+    private var cancelTimer: () -> Unit = {}
+
+    fun start(ask: () -> Unit, result: (Boolean) -> Unit) {
+        cancel()
+        this.result = result
+        cancelTimer = sched.after(waitMs) { finish(false) }
+        try { ask() } catch (e: Exception) { finish(false) }
+    }
+
+    /** 사전 확인 중이면 결과를 내고 true. 아니면 false(소비하지 않음). */
+    fun onList(listed: Boolean): Boolean { if (result == null) return false; finish(listed); return true }
+
+    fun cancel() { cancelTimer(); cancelTimer = {}; result = null }
+
+    private fun finish(listed: Boolean) {
+        val r = result ?: return
+        cancelTimer(); cancelTimer = {}; result = null
+        r(listed)
     }
 }

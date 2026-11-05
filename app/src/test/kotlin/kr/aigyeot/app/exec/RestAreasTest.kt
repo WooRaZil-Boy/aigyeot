@@ -135,4 +135,18 @@ class RestAreasTest {
         val s = rows.first { it.name == "오창(하남)" }
         assertTrue(waypointPresent(listOf(s.lat to s.lon), s, rows), "쉼터 자료로 대조")
     }
+
+    // C110: 실제 내비는 목록 좌표를 0.0, 0.0으로 주고 이름만 맞게 준다
+    @Test fun `좌표가 0·0인 경유지는 이름을 자료 줄로 바꿔 보낸 줄과 같을 때만 성공이다`() {
+        val an = RestAreas.all.first { it.name == "안성(부산)" }
+        fun list(name: String, la: Double = 0.0, lo: Double = 0.0) = listOf(Triple(name, la, lo))
+        assertTrue(waypointListed(list("안성휴게소(부산방향)"), an), "0·0 + 맞는 이름")
+        assertFalse(waypointListed(list("안성휴게소(서울방향)"), an), "0·0 + 반대 방향 이름")
+        assertFalse(waypointListed(list("없는휴게소"), an), "0·0 + 모르는 이름")
+        assertFalse(waypointListed(list("안성휴게소"), an), "0·0 + 방향 없는 이름은 두 줄이라 보낸 줄이라 단정하지 않는다")
+        assertTrue(waypointListed(list("엉뚱", 37.0138, 127.1448), an), "좌표가 있으면 기존 300m 규칙(이름 무시)")
+        assertFalse(waypointListed(list("안성휴게소(부산방향)", 37.0767, 127.1325), an), "좌표가 있으면 이름이 맞아도 7km 밖은 실패")
+        assertFalse(waypointListed(emptyList(), an))
+        assertTrue(waypointListed(list("없는휴게소") + list("안성휴게소(부산방향)"), an), "여럿 중 하나")
+    }
 }
