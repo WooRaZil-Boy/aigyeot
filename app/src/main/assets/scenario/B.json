@@ -110,6 +110,10 @@
    }
   },
   {
+   "t": 350,
+   "vc": "PUT /vehicle/hvac?driver_temp=22.0"
+  },
+  {
    "t": 356,
    "expect": {
     "command": "LowerHvac",
