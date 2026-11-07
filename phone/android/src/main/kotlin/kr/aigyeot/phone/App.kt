@@ -5,9 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kr.aigyeot.phone.di.AppContainer
 
 class AigyeotApp : Application() {
-    lateinit var model: AppModel
+    lateinit var container: AppContainer
         private set
 
     override fun onCreate() {
@@ -29,7 +30,7 @@ class AigyeotApp : Application() {
                 },
             )
         }
-        model = AppModel(this)
+        container = AppContainer(this).also { it.lifecycle.start() }
     }
 
     companion object {
@@ -42,13 +43,13 @@ class AigyeotApp : Application() {
  * 앱이 닫혀 있으면 시스템이 `notification`으로 띄우고, 앞에 있으면 여기로 와서 앱 안 배너만 띄운다.
  */
 class PushService : FirebaseMessagingService() {
-    private val model get() = (application as AigyeotApp).model
+    private val container get() = (application as AigyeotApp).container
 
     // Firebase Messaging 26은 getToken·onNewToken을 지원 중단으로 표시했지만 계약 5.4대로 아직 쓴다(동작은 같다).
     @Deprecated("계약 5.4의 토큰 갱신 경로")
-    override fun onNewToken(token: String) = model.onPushToken(token)
+    override fun onNewToken(token: String) = container.push.onToken(token)
 
     override fun onMessageReceived(message: RemoteMessage) {
-        model.onPush(message.data["msg_id"] ?: return)
+        container.inbox.onPush(message.data["msg_id"] ?: return)
     }
 }

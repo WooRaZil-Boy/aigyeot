@@ -5,18 +5,19 @@ import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Build
+import kr.aigyeot.phone.domain.repository.SongRecorder
 import java.io.File
 
 /**
  * 우리 노래 녹음(구현 계획 4장): MPEG_4 + AAC, 44.1 kHz 모노 64 kbps, 3분에서 멈춘다(명세서 12장).
  * 파일 크기 상한은 중계의 2,000,000바이트보다 조금 작게 둔다(G30).
  */
-class Recorder(private val context: Context) {
+class Recorder(private val context: Context) : SongRecorder {
     private var recorder: MediaRecorder? = null
     private var player: MediaPlayer? = null
 
     /** 녹음을 시작한다. 마이크를 다른 앱이 쓰는 등으로 실패하면 녹음기를 해제하고 거짓. */
-    fun start(file: File, onLimit: () -> Unit): Boolean {
+    override fun start(file: File, onLimit: () -> Unit): Boolean {
         stopPlaying()
         @Suppress("DEPRECATION")
         val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
@@ -53,7 +54,7 @@ class Recorder(private val context: Context) {
     }
 
     /** 멈추고 파일이 쓸 만하면 참. 너무 짧으면 MediaRecorder가 예외를 던진다. */
-    fun stop(): Boolean {
+    override fun stop(): Boolean {
         val r = recorder ?: return false
         recorder = null
         return try {
@@ -67,7 +68,7 @@ class Recorder(private val context: Context) {
     }
 
     /** 재생을 시작했으면 참. 파일이 없거나 읽지 못하면 거짓(앱을 끝내지 않는다). */
-    fun play(file: File, onDone: () -> Unit): Boolean {
+    override fun play(file: File, onDone: () -> Unit): Boolean {
         stopPlaying()
         val p = MediaPlayer()
         return try {
@@ -86,10 +87,12 @@ class Recorder(private val context: Context) {
         }
     }
 
-    fun stopPlaying() {
+    override fun stopPlaying() {
         player?.release()
         player = null
     }
+
+    override fun durationS(file: File): Double? = Recorder.durationS(file)
 
     companion object {
         /** 화면 최대는 3:00이지만 AAC 프레임 경계로 파일이 조금 길어질 수 있어 1초 여유를 두고 멈춘다(iOS recordLimit=179와 같다). 차의 180초 제한을 넘기지 않기 위함. */

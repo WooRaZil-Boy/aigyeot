@@ -4,14 +4,17 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kr.aigyeot.phone.core.CareFile
-import kr.aigyeot.phone.core.CareJson
-import kr.aigyeot.phone.core.PhoneState
+import kr.aigyeot.phone.domain.model.CareFile
+import kr.aigyeot.phone.domain.model.CareJson
+import kr.aigyeot.phone.domain.model.Credentials
+import kr.aigyeot.phone.domain.model.PhoneState
+import kr.aigyeot.phone.domain.repository.CredentialRepository
+import kr.aigyeot.phone.domain.repository.Logger
 import kr.aigyeot.shared.ProtocolJson
-import kr.aigyeot.shared.Role
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -21,16 +24,20 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** 연결 비밀값(계약 7.4). 끊거나 401이면 지운다. */
-@Serializable
-data class Credentials(val carId: String, val deviceId: String, val token: String, val role: Role)
-
 /**
  * Android Keystore AES-GCM 키로 감싸 앱 전용 SharedPreferences에 둔다. 백업에서 뺀다(매니페스트).
  * 단순화: 계약 7.4는 DataStore지만 버전 목록에 없어 SharedPreferences를 쓴다. 감싸는 방식은 같다.
  */
-class SecretStore(context: Context) {
+class KeystoreCredentialRepository(context: Context) : CredentialRepository {
     private val prefs = context.getSharedPreferences("secret", Context.MODE_PRIVATE)
+
+    override fun loadBlocking(): Credentials? = read()
+
+    override suspend fun load(): Result<Credentials?> = withContext(Dispatchers.IO) { runCatching { read() } }
+
+    override suspend fun save(c: Credentials?): Boolean = withContext(Dispatchers.IO) { write(c) }
+
+    override suspend fun reset(): Boolean = withContext(Dispatchers.IO) { wipe() }
 
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -51,7 +58,7 @@ class SecretStore(context: Context) {
      * 읽지 못하면(Keystore 오류, 암호문이 키와 맞지 않거나 형식이 깨짐) 예외: 끊었다고 확정된 것이 아니므로 부르는 쪽은 '연결 없음'과 달리
      * 녹음 파일·보낼 함·옮길 수유를 지우지 않고, 거듭 실패하면 지우고 새로 연결할지 묻는다(11-07 사용자 결정).
      */
-    fun load(): Credentials? {
+    private fun read(): Credentials? {
         val stored = prefs.getString(VALUE, null) ?: return null
         val key = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.getKey(ALIAS, null) as? SecretKey ?: return null
         val raw = Base64.decode(stored, Base64.NO_WRAP)
@@ -60,7 +67,7 @@ class SecretStore(context: Context) {
     }
 
     /** 디스크에 쓴 것이 확인되면 참. `apply()`는 쓰기 실패를 알리지 않아 `commit()`을 쓴다. IO 스레드에서 부른다. */
-    fun save(c: Credentials?): Boolean = runCatching {
+    private fun write(c: Credentials?): Boolean = runCatching {
         if (c == null) return@runCatching prefs.edit().remove(VALUE).commit() || revokeKey()
         val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key()) }
         val sealed = cipher.iv + cipher.doFinal(ProtocolJson.encodeToString(Credentials.serializer(), c).encodeToByteArray())
@@ -71,7 +78,7 @@ class SecretStore(context: Context) {
      * 읽지 못하는 연결 정보를 버린다('지우고 연결하기', 11-07 사용자 결정): 암호문과 키를 둘 다 지운다.
      * 읽기 실패의 원인이 키 고장이면 키를 남겨서는 새 자격도 저장하지 못한다. 다음 [save]가 새 키를 만든다. IO 스레드에서 부른다.
      */
-    fun reset(): Boolean {
+    private fun wipe(): Boolean {
         val removed = runCatching { prefs.edit().remove(VALUE).commit() }.getOrDefault(false)
         return revokeKey() && removed
     }
@@ -155,4 +162,12 @@ class FileStore<T>(private val file: File, private val serializer: KSerializer<T
         }
         if (!temp.renameTo(file)) throw IOException("상태 파일 이름 바꾸기 실패")
     }
+
+    /**
+     * 저장 실패 처리 도우미 하나(arch-phone-android 6장): IO 스레드에서 저장하고 실패는 로그로 남긴다. 저장이 확인되면 참.
+     * `report`가 있으면(화면·일꾼이 부른 쓰기, U·W 범주) 실패를 띠로도 알린다. 연결 전환·시작 저장은 로그만(T·S 범주, 부른 쪽이 처리).
+     */
+    suspend fun saveLogged(s: T, log: Logger, what: String, report: (() -> Unit)? = null): Boolean =
+        withContext(Dispatchers.IO) { runCatching { save(s) }.onFailure { log.e(what, it) }.isSuccess }
+            .also { if (!it) report?.invoke() }
 }

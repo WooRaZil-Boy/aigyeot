@@ -39,6 +39,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.viewmodel.compose) // 화면마다 ViewModel(이미 navigation-compose가 끌어오는 판)
     implementation(libs.navigation.compose)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)

@@ -6,10 +6,10 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import kr.aigyeot.phone.core.CareFile
-import kr.aigyeot.phone.core.CareKind
-import kr.aigyeot.phone.core.ongoing
-import kr.aigyeot.phone.core.sideName
+import kr.aigyeot.phone.domain.model.CareFile
+import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.ongoing
+import kr.aigyeot.phone.domain.model.sideName
 
 /**
  * 잠금 화면 진행 표시(C6, phone-care-plan 9장). 진행 중 수유·잠마다 알림 하나: 경과는 시스템 시계(`setUsesChronometer`)가 그린다.
@@ -70,7 +70,7 @@ object CareNotify {
             if (intent.action != ACTION_END) return
             val id = intent.getStringExtra(EXTRA_ID) ?: return
             val pending = goAsync()
-            (context.applicationContext as AigyeotApp).model.endCareJob(id).invokeOnCompletion { pending.finish() }
+            (context.applicationContext as AigyeotApp).container.recordCare.end(id).invokeOnCompletion { pending.finish() }
         }
     }
 }

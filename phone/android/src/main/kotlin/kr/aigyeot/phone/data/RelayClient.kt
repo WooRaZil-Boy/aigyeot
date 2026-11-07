@@ -6,7 +6,13 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kr.aigyeot.phone.core.envelope
+import kr.aigyeot.phone.domain.model.envelope
+import kr.aigyeot.phone.domain.repository.RelayClient
+import kr.aigyeot.phone.domain.repository.RelayResult
+import kr.aigyeot.phone.domain.repository.RelaySocket
+import kr.aigyeot.phone.domain.repository.SocketHandle
+import kr.aigyeot.phone.domain.repository.SocketListener
+import okhttp3.Response
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.ErrorResponse
@@ -36,7 +42,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 /** 중계 HTTP API·WebSocket(계약 1·2장). 토큰은 `Authorization` 헤더로만 보낸다. 본문·토큰은 로그에 남기지 않는다. */
-class RelayClient(
+class OkHttpRelayClient(
     private val baseUrl: String,
     private val appVersion: String,
     http: OkHttpClient = OkHttpClient(),
@@ -44,18 +50,10 @@ class RelayClient(
     private val onUnauthorized: (token: String) -> Unit = {},
     /** 토큰을 실은 요청이 끝날 때마다 중계에 닿았는지(IO 스레드). `ticket`은 요청을 시작한 순번이다. */
     private val onObserved: (token: String, ticket: Long, up: Boolean) -> Unit = { _, _, _ -> },
-) {
-    sealed interface Res<out T> {
-        data class Ok<T>(val status: Int, val value: T) : Res<T>
-        data class Err(val status: Int, val code: String?, val retryAfterS: Long?) : Res<Nothing>
-        data object Offline : Res<Nothing>
-        /** 요청을 보내기 시작하기 전에 실패했다(이름 풀기·연결·연결 시간 초과·TLS 등): 중계에 닿지 않은 것이 확실하고 늦게 도착할 수 없다. 그 밖은 [Offline]과 같다. */
-        data object Unreached : Res<Nothing>
-    }
-
+) : RelayClient, RelaySocket {
     /** 중계 `Date` 헤더 − 폰 시계(ms). 2분 넘게 다르면 홈에 경고한다(9장). */
     @Volatile
-    var clockSkewMs: Long? = null
+    override var clockSkewMs: Long? = null
         private set
 
     /** 이 요청의 머리를 쓰기 시작했는가(OkHttp 다시 시도 포함). 실패 원인(예외 종류)이 아니라 실제로 보냈는지로 닿지 않음을 가린다. */
@@ -80,10 +78,9 @@ class RelayClient(
 
     private val tickets = java.util.concurrent.atomic.AtomicLong()
 
-    /** 지금까지 시작한 요청의 마지막 순번. 소켓 관찰이 그보다 먼저 시작한 요청의 늦은 결과를 이기게 한다. */
-    fun lastTicket(): Long = tickets.get()
+    override fun lastTicket(): Long = tickets.get()
 
-    private suspend fun <T> exec(req: Request, read: (String) -> T): Res<T> = withContext(Dispatchers.IO) {
+    private suspend fun <T> exec(req: Request, read: (String) -> T): RelayResult<T> = withContext(Dispatchers.IO) {
         // 토큰을 실은 요청은 중계에 닿았는지를 순번과 함께 넘긴다(9장 '중계 불통': 네트워크 실패·5xx면 닿지 않음).
         val ticket = tickets.incrementAndGet()
         val token = req.header("Authorization")?.removePrefix("Bearer ")
@@ -104,20 +101,20 @@ class RelayClient(
                 } catch (e: IOException) {
                     if (res.code != 401 && res.code != 429 && res.code < 500) throw e
                     up = res.code < 500
-                    return@use Res.Err(res.code, null, res.header("Retry-After")?.toLongOrNull())
+                    return@use RelayResult.Err(res.code, null, res.header("Retry-After")?.toLongOrNull())
                 }
                 up = res.code < 500
                 if (res.isSuccessful) {
                     // 성공 본문을 해석하지 못하면(형식이 다름) 앱을 끝내지 않고 오프라인처럼 다시 시도한다(같은 id라 중계는 한 번만 처리).
-                    val value = try { read(text) } catch (e: kotlinx.serialization.SerializationException) { return@use Res.Offline } catch (e: IllegalArgumentException) { return@use Res.Offline }
-                    Res.Ok(res.code, value)
+                    val value = try { read(text) } catch (e: kotlinx.serialization.SerializationException) { return@use RelayResult.Offline } catch (e: IllegalArgumentException) { return@use RelayResult.Offline }
+                    RelayResult.Ok(res.code, value)
                 } else {
                     val code = runCatching { ProtocolJson.decodeFromString(ErrorResponse.serializer(), text).error.code }.getOrNull()
-                    Res.Err(res.code, code, res.header("Retry-After")?.toLongOrNull())
+                    RelayResult.Err(res.code, code, res.header("Retry-After")?.toLongOrNull())
                 }
             }
         } catch (e: IOException) {
-            if (started.value) Res.Offline else Res.Unreached
+            if (started.value) RelayResult.Offline else RelayResult.Unreached
         } finally {
             token?.let { onObserved(it, ticket, up) }
         }
@@ -126,57 +123,76 @@ class RelayClient(
     private fun <T> parse(s: KSerializer<T>): (String) -> T = { ProtocolJson.decodeFromString(s, it) }
     private val nothing: (String) -> Unit = {}
 
-    suspend fun pair(code: String, pushToken: String?, installId: String) = exec(
+    override suspend fun pair(code: String, pushToken: String?, installId: String) = exec(
         request("/v1/pair", null).header("X-Install-Id", installId)
             .post(encode(PairRequest.serializer(), PairRequest(code, Platform.ANDROID, pushToken, appVersion))).build(),
         parse(PairResponse.serializer()),
     )
 
-    suspend fun devices(token: String) = exec(request("/v1/devices", token).get().build(), parse(DevicesResponse.serializer()))
+    override suspend fun devices(token: String) = exec(request("/v1/devices", token).get().build(), parse(DevicesResponse.serializer()))
 
-    suspend fun patchMe(token: String, body: PatchDeviceRequest) = exec(
+    override suspend fun patchMe(token: String, body: PatchDeviceRequest) = exec(
         request("/v1/devices/me", token).patch(encode(PatchDeviceRequest.serializer(), body)).build(),
         parse(PatchDeviceResponse.serializer()),
     )
 
-    suspend fun deleteMe(token: String) = exec(request("/v1/devices/me", token).delete().build(), nothing)
+    override suspend fun deleteMe(token: String) = exec(request("/v1/devices/me", token).delete().build(), nothing)
 
-    suspend fun invite(token: String) = exec(
+    override suspend fun invite(token: String) = exec(
         request("/v1/invites", token)
             .post(encode(Envelope.serializer(), envelope("invite_created", buildJsonObject {}, System.currentTimeMillis())))
             .build(),
         parse(InviteResponse.serializer()),
     )
 
-    suspend fun send(token: String, env: Envelope) = exec(
+    override suspend fun send(token: String, env: Envelope) = exec(
         request("/v1/messages", token).post(encode(Envelope.serializer(), env)).build(),
         parse(SendMessageResponse.serializer()),
     )
 
-    suspend fun inbox(token: String, afterSeq: Long) =
+    override suspend fun inbox(token: String, afterSeq: Long) =
         exec(request("/v1/inbox?after_seq=$afterSeq&limit=100", token).get().build(), parse(InboxResponse.serializer()))
 
-    suspend fun ack(token: String, ids: List<String>) = exec(
+    override suspend fun ack(token: String, ids: List<String>) = exec(
         request("/v1/ack", token).post(encode(Envelope.serializer(), ackEnvelope(ids))).build(),
         nothing,
     )
 
-    suspend fun putSong(token: String, songId: String, file: File) = exec(
+    override suspend fun putSong(token: String, songId: String, file: File) = exec(
         request("/v1/songs/$songId", token).put(file.asRequestBody("audio/mp4".toMediaType())).build(),
         parse(UploadSongResponse.serializer()),
     )
 
     /** `GET /v1/ws`. 업그레이드 요청에 Authorization 헤더를 싣는다. OkHttp `pingInterval`은 쓰지 않는다(2장). */
-    fun socket(token: String, listener: WebSocketListener): WebSocket =
-        http.newWebSocket(request("/v1/ws", token).url(baseUrl.replaceFirst("http", "ws") + "/v1/ws").build(), listener)
+    override fun open(token: String, listener: SocketListener): SocketHandle {
+        val ws = http.newWebSocket(
+            request("/v1/ws", token).url(baseUrl.replaceFirst("http", "ws") + "/v1/ws").build(),
+            object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: Response) = listener.onOpen()
+                override fun onMessage(webSocket: WebSocket, text: String) = listener.onMessage(text)
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    webSocket.close(code, null)
+                    listener.onClosing(code)
+                }
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = listener.onFailure(response?.code)
+            },
+        )
+        return object : SocketHandle {
+            override fun send(text: String) = ws.send(text)
+            override fun close(code: Int) {
+                ws.close(code, null)
+            }
+            override fun cancel() = ws.cancel()
+        }
+    }
 
-    companion object {
+    override fun ackFrame(ids: List<String>) = ProtocolJson.encodeToString(Envelope.serializer(), ackEnvelope(ids))
+
+    private companion object {
         fun ackEnvelope(ids: List<String>) = envelope(
             "ack",
             buildJsonObject { put("ids", JsonArray(ids.map { JsonPrimitive(it) })) },
             System.currentTimeMillis(),
         )
-
-        fun ackFrame(ids: List<String>) = ProtocolJson.encodeToString(Envelope.serializer(), ackEnvelope(ids))
     }
 }

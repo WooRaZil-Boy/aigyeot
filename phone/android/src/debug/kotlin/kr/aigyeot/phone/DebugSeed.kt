@@ -3,15 +3,15 @@ package kr.aigyeot.phone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import kr.aigyeot.phone.core.APP_ZONE
-import kr.aigyeot.phone.core.CareEvent
-import kr.aigyeot.phone.core.CareFile
-import kr.aigyeot.phone.core.CareKind
-import kr.aigyeot.phone.core.Diaper
-import kr.aigyeot.phone.core.FeedSide
-import kr.aigyeot.phone.core.MINUTE
-import kr.aigyeot.phone.core.onDate
-import kr.aigyeot.phone.core.ulid
+import kr.aigyeot.phone.domain.model.APP_ZONE
+import kr.aigyeot.phone.domain.model.CareEvent
+import kr.aigyeot.phone.domain.model.CareFile
+import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.Diaper
+import kr.aigyeot.phone.domain.model.FeedSide
+import kr.aigyeot.phone.domain.model.MINUTE
+import kr.aigyeot.phone.domain.model.onDate
+import kr.aigyeot.phone.domain.model.ulid
 import java.time.Instant
 import java.time.ZoneId
 
@@ -75,7 +75,7 @@ fun demoSeed(nowMs: Long, zone: ZoneId, keep: CareFile = CareFile()): CareFile {
 class DebugSeedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
-        val model = (context.applicationContext as AigyeotApp).model
-        model.replaceCareForDebug { demoSeed(System.currentTimeMillis(), APP_ZONE, it) }.invokeOnCompletion { pending.finish() }
+        val recordCare = (context.applicationContext as AigyeotApp).container.recordCare
+        recordCare.replaceForDebug { demoSeed(System.currentTimeMillis(), APP_ZONE, it) }.invokeOnCompletion { pending.finish() }
     }
 }
