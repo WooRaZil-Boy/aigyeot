@@ -101,7 +101,7 @@ final class RelaySocketOrderTests: XCTestCase {
         defer { server.stop() }
         let got = expectation(description: "unreachable")
         got.assertForOverFulfill = false
-        let s = RelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
+        let s = URLSessionRelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
             if case .unreachable = e { got.fulfill() }
         }
         s.start()
@@ -115,7 +115,7 @@ final class RelaySocketOrderTests: XCTestCase {
         let got = expectation(description: "unauthorized")
         got.assertForOverFulfill = false
         var unreachable = false
-        let s = RelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
+        let s = URLSessionRelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
             if case .unauthorized = e { got.fulfill() }
             if case .unreachable = e { unreachable = true }
         }
@@ -131,7 +131,7 @@ final class RelaySocketOrderTests: XCTestCase {
         var events: [String] = []
         let got = expectation(description: "unreachable")
         got.assertForOverFulfill = false
-        let s = RelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
+        let s = URLSessionRelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
             switch e {
             case .connected(true): events.append("connected")
             case .unreachable: events.append("unreachable"); got.fulfill()
@@ -151,7 +151,7 @@ final class RelaySocketOrderTests: XCTestCase {
         XCTAssertGreaterThan(server.port, 0)
         var events: [String] = []
         let got = expectation(description: "envelope")
-        let s = RelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
+        let s = URLSessionRelaySocket(baseURL: URL(string: "http://127.0.0.1:\(server.port)")!, token: { "t" }) { e in
             switch e {
             case .connected(let up): events.append("connected(\(up))")
             case .envelope: events.append("envelope"); got.fulfill()
@@ -169,7 +169,7 @@ final class RelaySocketOrderTests: XCTestCase {
 final class RelayClientInboxTests: XCTestCase {
     func test_읽지_못한_봉투는_id와_seq만_남겨_ack하고_넘어가게_한다() throws {
         let page = #"{"messages":[{"v":1,"id":"A","seq":1,"type":"feeding_state","car":"c_1","from":{"role":"car","device":"d"},"ts":"2026-11-05T08:00:00Z","body":{}},{"v":1,"id":"B","seq":2,"type":"feeding_state","car":"c_1","body":{}}],"more":false}"#
-        let r = try RelayClient.lenientInbox(Data(page.utf8), car: "c_1")
+        let r = try HTTPRelayClient.lenientInbox(Data(page.utf8), car: "c_1")
         XCTAssertEqual(r.messages.map(\.id), ["A", "B"])
         XCTAssertEqual(r.messages[0].v, 1)
         XCTAssertEqual(r.messages[1].v, 0)          // ts가 없어 읽지 못했다: 판 0(모델은 ack만 한다, 8.3 4번)
@@ -179,7 +179,7 @@ final class RelayClientInboxTests: XCTestCase {
 
     func test_Retry_After는_유한한_값만_받고_하루로_자른다() {
         func wait(_ v: String) -> TimeInterval? {
-            RelayClient.retryAfter(HTTPURLResponse(url: URL(string: "http://x")!, statusCode: 429, httpVersion: nil, headerFields: ["Retry-After": v])!)
+            HTTPRelayClient.retryAfter(HTTPURLResponse(url: URL(string: "http://x")!, statusCode: 429, httpVersion: nil, headerFields: ["Retry-After": v])!)
         }
         XCTAssertEqual(wait("30"), 30)
         XCTAssertEqual(wait("3600"), 3600)          // 노래 PUT의 한 시간은 그대로
@@ -231,7 +231,7 @@ final class OutboxPolicyTests: XCTestCase {
 
 // MARK: AppModel
 
-final class FakeRelay: RelayAPI {
+final class FakeRelay: RelayClient {
     var sent: [Envelope] = []
     var acked: [String] = []
     var uploaded: [String] = []
@@ -517,9 +517,9 @@ final class AppModelTests: XCTestCase {
     }
 
     func test_전송_취소는_망_실패와_가른다() {
-        XCTAssertEqual(RelayClient.transportError(URLError(.cancelled)), .cancelled)
-        XCTAssertEqual(RelayClient.transportError(CancellationError()), .cancelled)
-        XCTAssertEqual(RelayClient.transportError(URLError(.notConnectedToInternet)), .network)
+        XCTAssertEqual(HTTPRelayClient.transportError(URLError(.cancelled)), .cancelled)
+        XCTAssertEqual(HTTPRelayClient.transportError(CancellationError()), .cancelled)
+        XCTAssertEqual(HTTPRelayClient.transportError(URLError(.notConnectedToInternet)), .network)
     }
 
     func test_취소된_요청은_띠도_보낼_함도_바꾸지_않는다() async {
@@ -1560,7 +1560,7 @@ final class AppModelTests: XCTestCase {
         await model.settle()
         clock = clock.addingTimeInterval(11 * 60)
         XCTAssertTrue(model.state.needsStateRequest)
-        relay.sendHook = { [unowned self] in await self.model.clearLocalRecords() }   // 응답을 기다리는 사이 기록을 지운다
+        relay.sendHook = { [unowned self] in self.model.clearLocalRecords() }   // 응답을 기다리는 사이 기록을 지운다
         await model.sendStateRequestIfNeeded()
         relay.sendHook = nil
         await model.settle()
@@ -2647,7 +2647,7 @@ final class AppModelTests: XCTestCase {
         let late = expectation(description: "unreachable")
         late.isInverted = true
         var s: RelaySocket?
-        s = RelaySocket(baseURL: URL(string: "http://127.0.0.1:1")!, token: { "t" }) { e in
+        s = URLSessionRelaySocket(baseURL: URL(string: "http://127.0.0.1:1")!, token: { "t" }) { e in
             switch e {
             case .connected(false):
                 // 처음 한 번만 멈춘다(stop도 connected(false)를 낸다). s를 놓아 순환 참조도 끊는다.
@@ -2665,7 +2665,7 @@ final class AppModelTests: XCTestCase {
         // 127.0.0.1:1에는 듣는 곳이 없어 연결이 바로 거절된다(응답 없음).
         let got = expectation(description: "unreachable")
         got.assertForOverFulfill = false
-        let s = RelaySocket(baseURL: URL(string: "http://127.0.0.1:1")!, token: { "t" }) { e in if case .unreachable = e { got.fulfill() } }
+        let s = URLSessionRelaySocket(baseURL: URL(string: "http://127.0.0.1:1")!, token: { "t" }) { e in if case .unreachable = e { got.fulfill() } }
         s.start()
         await fulfillment(of: [got], timeout: 5)
         s.stop()
