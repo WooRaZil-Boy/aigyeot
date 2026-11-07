@@ -46,19 +46,42 @@ class SecretStore(context: Context) {
         }.generateKey()
     }
 
-    fun load(): Credentials? = runCatching {
-        val raw = Base64.decode(prefs.getString(VALUE, null) ?: return null, Base64.NO_WRAP)
-        val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, raw, 0, 12)) }
-        ProtocolJson.decodeFromString(Credentials.serializer(), cipher.doFinal(raw, 12, raw.size - 12).decodeToString())
-    }.getOrNull()
+    /**
+     * 저장된 자격. 없거나 키를 지웠으면([revokeKey], 끊기 확정. 백업은 꺼 두어 다른 기기로 암호문만 옮겨지지 않는다) null.
+     * 읽지 못하면(Keystore 오류, 암호문이 키와 맞지 않거나 형식이 깨짐) 예외: 끊었다고 확정된 것이 아니므로 부르는 쪽은 '연결 없음'과 달리
+     * 녹음 파일·보낼 함·옮길 수유를 지우지 않고, 거듭 실패하면 지우고 새로 연결할지 묻는다(11-07 사용자 결정).
+     */
+    fun load(): Credentials? {
+        val stored = prefs.getString(VALUE, null) ?: return null
+        val key = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.getKey(ALIAS, null) as? SecretKey ?: return null
+        val raw = Base64.decode(stored, Base64.NO_WRAP)
+        val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, raw, 0, 12)) }
+        return ProtocolJson.decodeFromString(Credentials.serializer(), cipher.doFinal(raw, 12, raw.size - 12).decodeToString())
+    }
 
     /** 디스크에 쓴 것이 확인되면 참. `apply()`는 쓰기 실패를 알리지 않아 `commit()`을 쓴다. IO 스레드에서 부른다. */
     fun save(c: Credentials?): Boolean = runCatching {
-        if (c == null) return@runCatching prefs.edit().remove(VALUE).commit()
+        if (c == null) return@runCatching prefs.edit().remove(VALUE).commit() || revokeKey()
         val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key()) }
         val sealed = cipher.iv + cipher.doFinal(ProtocolJson.encodeToString(Credentials.serializer(), c).encodeToByteArray())
         prefs.edit().putString(VALUE, Base64.encodeToString(sealed, Base64.NO_WRAP)).commit()
     }.getOrDefault(false)
+
+    /**
+     * 읽지 못하는 연결 정보를 버린다('지우고 연결하기', 11-07 사용자 결정): 암호문과 키를 둘 다 지운다.
+     * 읽기 실패의 원인이 키 고장이면 키를 남겨서는 새 자격도 저장하지 못한다. 다음 [save]가 새 키를 만든다. IO 스레드에서 부른다.
+     */
+    fun reset(): Boolean {
+        val removed = runCatching { prefs.edit().remove(VALUE).commit() }.getOrDefault(false)
+        return revokeKey() && removed
+    }
+
+    /**
+     * 연결 끊기·401에서 지우기를 디스크에 쓰지 못했다: 키를 지워 남은 암호문을 다시 못 읽게 한다(7.4).
+     * 다음 실행의 [load]는 키가 없어 null(연결 없음)이 되고, 다음 연결은 새 키로 덮어쓴다.
+     */
+    private fun revokeKey(): Boolean =
+        runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS) }.isSuccess
 
     private companion object {
         const val ALIAS = "aigyeot_link"
@@ -109,13 +132,19 @@ class FileStore<T>(private val file: File, private val serializer: KSerializer<T
     }
 
     /**
-     * 연결 끊기·401: 지킬 것이 없다. 옮겨 둔 백업과, 백업하지 못한 원본까지 지우고 [unsafe]를 푼다(7.4 '연결 끊기: 위 전부를 지운다').
+     * 연결 끊기·401: 지킬 것이 없다. 백업·원본을 모두 지우고 [unsafe]를 푼다(7.4 '연결 끊기: 위 전부를 지운다').
+     * 원본도 지우는 까닭: 빈 상태 저장이 실패했으면 옛 차의 상태가 파일에 남는다. 없는 파일은 빈 상태로 읽힌다.
+     * `keepFile`이면 원본은 남긴다(연결과 따로인 기록 지우기 표시를 담았다. 연결 없는 시작은 그 표시만 읽는다).
      */
-    fun discardRecovery() {
+    fun discardRecovery(keepFile: Boolean = false) {
         backup.delete()
-        if (unsafe) file.delete()
+        temp.delete() // 이름을 바꾸기 전에 죽어 남은 임시 파일
+        if (!keepFile) file.delete()
         unsafe = false
     }
+
+    /** 이름을 바꾸기 전에 죽어 남은 임시 파일을 지운다(기록 지우기). 지웠거나 없으면 참. 저장과 같은 잠금 안에서 부른다. */
+    fun discardTemp(): Boolean = !temp.exists() || temp.delete()
 
     fun save(s: T) {
         if (unsafe) throw IOException("백업하지 못한 상태 파일을 덮어쓰지 않는다")

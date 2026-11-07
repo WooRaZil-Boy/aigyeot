@@ -66,16 +66,23 @@ class Recorder(private val context: Context) {
         }
     }
 
-    fun play(file: File, onDone: () -> Unit) {
+    /** 재생을 시작했으면 참. 파일이 없거나 읽지 못하면 거짓(앱을 끝내지 않는다). */
+    fun play(file: File, onDone: () -> Unit): Boolean {
         stopPlaying()
-        player = MediaPlayer().apply {
-            setDataSource(file.path)
-            setOnCompletionListener {
+        val p = MediaPlayer()
+        return try {
+            p.setDataSource(file.path)
+            p.setOnCompletionListener {
                 stopPlaying()
                 onDone()
             }
-            prepare()
-            start()
+            p.prepare()
+            p.start()
+            player = p
+            true
+        } catch (e: Exception) {
+            p.release()
+            false
         }
     }
 

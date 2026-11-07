@@ -136,10 +136,12 @@ fun CareEvent.problem(now: Long): CareProblem? = when {
 }
 
 /** 새 기록을 넣거나 같은 id를 고친다. 규칙에 맞지 않거나 같은 종류의 진행 중이 둘이 되면 저장하지 않고 null(R3·R1). 겹침은 막지 않는다(R4, [overlaps]). */
-fun CareFile.upsert(e: CareEvent, now: Long): CareFile? {
+fun CareFile.upsert(e: CareEvent, now: Long, editing: Boolean = false): CareFile? {
     if (e.problem(now) != null) return null
     if (e.isOngoing && events.any { it.id != e.id && it.kind == e.kind && it.isOngoing }) return null
     val old = events.find { it.id == e.id }
+    // 고치기는 아직 있는 기록에만 얹는다: 시트를 연 사이 그 기록을 지웠으면(기록 지우기·밀어 지우기) 옛 사본으로 되살리지 않는다(R10).
+    if (editing && (old == null || old.deletedAt != null)) return null
     val next = e.copy(createdAt = old?.createdAt ?: e.createdAt, updatedAt = if (old == null) e.updatedAt else now)
     return copy(events = if (old == null) events + next else events.map { if (it.id == e.id) next else it })
 }
@@ -317,6 +319,28 @@ fun CarLine.text(zone: ZoneId): String =
     if (isDrive) "주행 · " + (endAt?.let { koSpan(startAt, it, zone) } ?: koClock(startAt, zone))
     else listOfNotNull("차에서 울음", koClock(startAt, zone), sound?.let(::methodName), result?.let(::resultText)).joinToString(" · ")
 
+// ---- 리포트 글자(U47): 시각·구간은 U20, 두 앱 같은 글자 ----
+
+/** 리포트·재생의 구간(U20). 끝을 읽지 못하면 시작 시각만, 시작도 못 읽으면 "—". */
+fun reportSpan(start: String?, end: String?, zone: ZoneId): String {
+    val s = instantOf(start) ?: return "—"
+    return instantOf(end)?.let { koSpan(s, it, zone) } ?: koClock(s, zone)
+}
+
+/** report.detail.title "11월 6일(금)": 주행을 시작한 날. 읽지 못하면 null. */
+fun reportDate(b: ReportSummaryBody, zone: ZoneId): String? =
+    instantOf(b.startedAt)?.let { koDate(Instant.ofEpochMilli(it).atZone(zone).toLocalDate()) }
+
+/** report.row.title "11월 6일(금) 오전 2:54–3:44". */
+fun reportRowTitle(b: ReportSummaryBody, zone: ZoneId): String =
+    listOfNotNull(reportDate(b, zone), reportSpan(b.startedAt, b.endedAt, zone)).joinToString(" ")
+
+/** report.row.sub "울음 {n}번". n은 울음 경보로 시작한 에피소드 수로, 차 기록 줄(R17)의 '차에서 울음' 줄 수와 같다. */
+fun reportRowSub(b: ReportSummaryBody): String {
+    val n = b.timeline.count { it.trigger == EpisodeTrigger.CRY_ALARM }
+    return (if (n == 0) "울음 기록 없음" else "울음 ${n}번") + if (b.simulated) " · 시뮬레이션" else ""
+}
+
 fun methodName(m: SoundMethod) = when (m) {
     SoundMethod.WHITE_NOISE -> "백색소음"
     SoundMethod.LULLABY -> "자장가"
@@ -396,6 +420,61 @@ fun sideName(s: FeedSide) = when (s) {
 fun ongoingText(e: CareEvent, now: Long): String = when (e.kind) {
     CareKind.SLEEP -> "자는 중 · ${elapsedText(e.elapsed(now))}"
     else -> listOfNotNull("수유 중", elapsedText(e.elapsed(now)), e.feedSide?.let(::sideName)).joinToString(" · ")
+}
+
+// ---- 돌봄 요약(U45, R18): 숫자와 시각만. 메모 글·기저귀 종류·젖병 양·수유 쪽·별명은 넣지 않는다 ----
+
+// shortcut: shared의 CareSummaryBody가 main에 들어오기 전이라 같은 칸·같은 이름으로 둔다. rebase 뒤 이것을 지우고 kr.aigyeot.shared.CareSummaryBody를 쓴다.
+@Serializable
+data class CareSummaryBody(
+    val asOf: String,
+    val zone: String,
+    val sleepDiaperEnabled: Boolean,
+    val lastSleepStartAt: String?,
+    val lastSleepEndAt: String?,
+    val sleepingSince: String?,
+    val todaySleepMin: Int?,
+    val nightWakeups: Int?,
+    val lastDiaperAt: String?,
+    val todayDiaperCount: Int?,
+    val todayFeedCount: Int,
+)
+
+/**
+ * U61: 기록에서 온 값이 하나도 없는 요약(오늘 수유 0회, 잠·기저귀 칸이 비었거나 0). 메모만·옛 기록만 있는 폰의 요약도 그렇다.
+ * 이 연결에서 요약을 넣은 적이 없으면 이런 요약은 보내지 않는다(같은 차의 다른 owner 폰 요약을 덮지 않게).
+ */
+val CareSummaryBody.empty: Boolean
+    get() = todayFeedCount == 0 && lastSleepStartAt == null && lastSleepEndAt == null && sleepingSince == null && (todaySleepMin ?: 0) == 0 &&
+        (nightWakeups ?: 0) == 0 && lastDiaperAt == null && (todayDiaperCount ?: 0) == 0
+
+/** R18: '오늘 0시'·'어제 22시'·'오늘 6시'는 `asOf`를 `zone` 벽시계로 본 날 기준이다. 시각은 그 순간의 `zone` 오프셋, 초까지. */
+fun careSummary(care: CareFile, asOf: Long, zone: ZoneId): CareSummaryBody {
+    val live = care.events.filter { it.deletedAt == null && it.startAt <= asOf }
+    val today = Instant.ofEpochMilli(asOf).atZone(zone).toLocalDate()
+    fun at(d: LocalDate, h: Int) = d.atTime(h, 0).atZone(zone).toInstant().toEpochMilli()
+    val midnight = at(today, 0)
+    val feeds = live.count { it.kind == CareKind.FEED && it.startAt >= midnight } // 끝 모름 수유도 센다
+    if (!care.sleepDiaperEnabled) return CareSummaryBody(rfc3339(asOf, zone), zone.id, false, null, null, null, null, null, null, null, feeds)
+    fun t(ms: Long?) = ms?.let { rfc3339(it, zone) }
+    val sleeps = live.filter { it.kind == CareKind.SLEEP && !it.endUnknown } // 끝 모름 잠은 모든 잠 칸에서 뺀다
+    val ended = sleeps.filter { it.endAt != null && it.endAt <= asOf }
+    val last = ended.maxWithOrNull(compareBy({ it.endAt }, { it.startAt }))
+    val sleepMs = sleeps.sumOf { (minOf(it.endAt ?: asOf, asOf) - maxOf(it.startAt, midnight)).coerceAtLeast(0) }
+    val diapers = live.filter { it.kind == CareKind.DIAPER }
+    return CareSummaryBody(
+        asOf = rfc3339(asOf, zone),
+        zone = zone.id,
+        sleepDiaperEnabled = true,
+        lastSleepStartAt = t(last?.startAt),
+        lastSleepEndAt = t(last?.endAt),
+        sleepingSince = t(sleeps.filter { it.endAt == null }.maxOfOrNull { it.startAt }),
+        todaySleepMin = (sleepMs / MINUTE).toInt(), // 합을 낸 뒤 내림
+        nightWakeups = ended.count { it.endAt!! >= at(today.minusDays(1), 22) && it.endAt < at(today, 6) },
+        lastDiaperAt = t(diapers.maxOfOrNull { it.startAt }),
+        todayDiaperCount = diapers.count { it.startAt >= midnight },
+        todayFeedCount = feeds,
+    )
 }
 
 /** 수유를 차로 보내는 계기(R6). 앱은 이 넷에서만 `reconcileFeeding`을 부른다. */

@@ -20,6 +20,8 @@ import kr.aigyeot.shared.Platform
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.SendMessageResponse
 import kr.aigyeot.shared.UploadSongResponse
+import okhttp3.Call
+import okhttp3.EventListener
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -34,17 +36,38 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 /** 중계 HTTP API·WebSocket(계약 1·2장). 토큰은 `Authorization` 헤더로만 보낸다. 본문·토큰은 로그에 남기지 않는다. */
-class RelayClient(private val baseUrl: String, private val appVersion: String, private val http: OkHttpClient = OkHttpClient()) {
+class RelayClient(
+    private val baseUrl: String,
+    private val appVersion: String,
+    http: OkHttpClient = OkHttpClient(),
+    /** 토큰을 실은 요청이 401을 받으면 그 토큰으로 바로 부른다(IO 스레드). 부른 쪽이 취소돼도 불린다. */
+    private val onUnauthorized: (token: String) -> Unit = {},
+    /** 토큰을 실은 요청이 끝날 때마다 중계에 닿았는지(IO 스레드). `ticket`은 요청을 시작한 순번이다. */
+    private val onObserved: (token: String, ticket: Long, up: Boolean) -> Unit = { _, _, _ -> },
+) {
     sealed interface Res<out T> {
         data class Ok<T>(val status: Int, val value: T) : Res<T>
         data class Err(val status: Int, val code: String?, val retryAfterS: Long?) : Res<Nothing>
         data object Offline : Res<Nothing>
+        /** 요청을 보내기 시작하기 전에 실패했다(이름 풀기·연결·연결 시간 초과·TLS 등): 중계에 닿지 않은 것이 확실하고 늦게 도착할 수 없다. 그 밖은 [Offline]과 같다. */
+        data object Unreached : Res<Nothing>
     }
 
     /** 중계 `Date` 헤더 − 폰 시계(ms). 2분 넘게 다르면 홈에 경고한다(9장). */
     @Volatile
     var clockSkewMs: Long? = null
         private set
+
+    /** 이 요청의 머리를 쓰기 시작했는가(OkHttp 다시 시도 포함). 실패 원인(예외 종류)이 아니라 실제로 보냈는지로 닿지 않음을 가린다. */
+    private class Started {
+        @Volatile var value = false
+    }
+
+    private val http: OkHttpClient = http.newBuilder().eventListener(object : EventListener() {
+        override fun requestHeadersStart(call: Call) {
+            call.request().tag(Started::class.java)?.value = true
+        }
+    }).build()
 
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
@@ -55,23 +78,48 @@ class RelayClient(private val baseUrl: String, private val appVersion: String, p
         .header("X-Client", "android/$appVersion")
         .apply { if (token != null) header("Authorization", "Bearer $token") }
 
+    private val tickets = java.util.concurrent.atomic.AtomicLong()
+
+    /** 지금까지 시작한 요청의 마지막 순번. 소켓 관찰이 그보다 먼저 시작한 요청의 늦은 결과를 이기게 한다. */
+    fun lastTicket(): Long = tickets.get()
+
     private suspend fun <T> exec(req: Request, read: (String) -> T): Res<T> = withContext(Dispatchers.IO) {
+        // 토큰을 실은 요청은 중계에 닿았는지를 순번과 함께 넘긴다(9장 '중계 불통': 네트워크 실패·5xx면 닿지 않음).
+        val ticket = tickets.incrementAndGet()
+        val token = req.header("Authorization")?.removePrefix("Bearer ")
+        var up = false // 본문까지 받은 최종 결과로 요청마다 한 번 알린다(헤더 뒤 본문이 끊기면 닿지 않음)
+        val started = Started()
         try {
-            http.newCall(req).execute().use { res ->
+            http.newCall(req.newBuilder().tag(Started::class.java, started).build()).execute().use { res ->
+                // 본문을 읽기 전에 넘긴다: 부른 코루틴이 취소되면 이 결과는 돌아가지 못한다(7.1 어디서든 401 → GONE).
+                if (res.code == 401) req.header("Authorization")?.removePrefix("Bearer ")?.let(onUnauthorized)
                 res.header("Date")?.let { d ->
                     runCatching { ZonedDateTime.parse(d, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() }
                         .getOrNull()?.let { clockSkewMs = it - System.currentTimeMillis() }
                 }
-                val text = res.body.string()
+                // 상태 줄을 받았는데 본문이 끊겼으면: 오류 코드 없이도 처리가 정해지는 401·429·5xx만 상태와 Retry-After로 돌려준다
+                // (429를 오프라인으로 잃지 않게, 1.1). 나머지(409 song_quota·422 song_blob_missing 등)와 성공 응답은 내용을 모르니 오프라인으로 보고 다시 보낸다.
+                val text = try {
+                    res.body.string()
+                } catch (e: IOException) {
+                    if (res.code != 401 && res.code != 429 && res.code < 500) throw e
+                    up = res.code < 500
+                    return@use Res.Err(res.code, null, res.header("Retry-After")?.toLongOrNull())
+                }
+                up = res.code < 500
                 if (res.isSuccessful) {
-                    Res.Ok(res.code, read(text))
+                    // 성공 본문을 해석하지 못하면(형식이 다름) 앱을 끝내지 않고 오프라인처럼 다시 시도한다(같은 id라 중계는 한 번만 처리).
+                    val value = try { read(text) } catch (e: kotlinx.serialization.SerializationException) { return@use Res.Offline } catch (e: IllegalArgumentException) { return@use Res.Offline }
+                    Res.Ok(res.code, value)
                 } else {
                     val code = runCatching { ProtocolJson.decodeFromString(ErrorResponse.serializer(), text).error.code }.getOrNull()
                     Res.Err(res.code, code, res.header("Retry-After")?.toLongOrNull())
                 }
             }
         } catch (e: IOException) {
-            Res.Offline
+            if (started.value) Res.Offline else Res.Unreached
+        } finally {
+            token?.let { onObserved(it, ticket, up) }
         }
     }
 

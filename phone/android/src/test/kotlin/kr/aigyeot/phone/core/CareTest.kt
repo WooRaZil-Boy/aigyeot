@@ -2,6 +2,7 @@ package kr.aigyeot.phone.core
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStateBody
@@ -67,6 +68,12 @@ class CareTest {
         assertNull(f.upsert(ev("other", CareKind.FEED, now - 5 * MINUTE), now))
         assertNotNull(f.upsert(running.copy(feedSide = FeedSide.LEFT), now))
         assertNotNull(f.upsert(feed("past", now - 2 * HOUR), now)) // 끝 모름은 진행 중이 아니다
+        // 고치기(시트의 옛 사본)는 아직 있는 기록에만 얹는다. 그사이 지웠으면 되살리지 않는다(R10).
+        val note = ev("n", CareKind.NOTE, now - HOUR, note = "x")
+        val withNote = f.upsert(note, now)!!
+        assertNotNull(withNote.upsert(note.copy(note = "y"), now, editing = true))
+        assertNull(f.upsert(note.copy(note = "y"), now, editing = true)) // 기록 지우기로 사라짐
+        assertNull(withNote.delete("n", now).upsert(note.copy(note = "y"), now, editing = true)) // 밀어 지움
         // 타이머의 쪽·양 고치기는 지금 진행 중인 그 기록에만 얹는다. 그사이 끝났으면 화면의 옛 사본으로 끝 시각을 덮지 않는다.
         val sided = f.editOngoing(running.id, now) { it.copy(feedSide = FeedSide.RIGHT) }!!
         assertEquals(FeedSide.RIGHT, sided.ongoing(CareKind.FEED)!!.feedSide)
@@ -284,6 +291,16 @@ class CareTest {
         val again = PhoneState.paired("c_NEW", "d_NEW", Role.OWNER, now + MINUTE).reconciledFeeding(care.load().events, now + MINUTE)
         assertEquals(now - HOUR, again.lastSentFeedingAt)
         dir.deleteRecursively()
+    }
+
+    @Test
+    fun `기록 지우기는 누를 때 있던 기록을 만든 시각과 상관없이 지운다`() {
+        // 시계가 10분 앞설 때 적은 기록(만든 시각이 누른 때보다 늦음), 누를 때 저장 중이던 기록, 누른 뒤 새로 적은 기록
+        val ahead = feed("ahead", now + 10 * MINUTE)
+        val saving = feed("saving", now - MINUTE)
+        val after = feed("after", now + MINUTE)
+        val file = CareFile(events = listOf(ahead, saving, after), migratedFeedings = true)
+        assertEquals(listOf("ahead", "saving"), file.idsToClear(shown = setOf("ahead"), pressedAt = now))
     }
 
     @Test
@@ -530,6 +547,14 @@ class CareTest {
         assertEquals(0, carePattern(CareFile(), listOf(switched), at(2026, 11, 4, 23, 59), seoul).carCryEpisodes) // 기기 기준 내일이면 7일에 넣지 않는다(R14)
         // 주행 끝 시각: 같은 오전·오후면 생략, 다르면 붙인다(11-05 결정).
         assertEquals("주행 · 오전 11:50–오후 12:20", CarLine("s", null, at(2026, 11, 5, 11, 50), at(2026, 11, 5, 12, 20), null, null).text(seoul))
+        // U47 리포트 글자: 목록 첫 줄 "{날짜} {구간}", 둘째 줄의 울음 수는 위 '차에서 울음' 줄 수와 같다(소리 바꾸기 요청은 세지 않는다).
+        assertEquals("11월 5일(목) 오전 8:00–8:42", reportRowTitle(report, seoul))
+        assertEquals("11월 5일(목)", reportDate(report, seoul))
+        assertEquals("울음 1번", reportRowSub(switched))
+        assertEquals("울음 기록 없음 · 시뮬레이션", reportRowSub(report.copy(timeline = emptyList(), simulated = true)))
+        assertEquals("11월 5일(목) 오후 11:50–오전 12:20", reportRowTitle(report.copy(startedAt = "2026-11-05T23:50:00+09:00", endedAt = "2026-11-06T00:20:00+09:00"), seoul))
+        assertEquals("오전 3:04–3:05", reportSpan("2026-11-06T03:04:10+09:00", "2026-11-06T03:05:00+09:00", seoul)) // 재생 줄
+        assertEquals("오전 3:04", reportSpan("2026-11-06T03:04:10+09:00", "bad", seoul))
     }
 
     @Test
@@ -568,6 +593,34 @@ class CareTest {
         assertEquals(file, store.load())
         val onDisk: JsonElement = Json.parseToJsonElement(File(dir, "care.json").readText())
         assertEquals(Json.parseToJsonElement(text), onDisk)
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `돌봄 요약은 표준 예제에서 기대 요약과 같다`() {
+        // 13장 표준 예제: 입력·기대 파일은 저장소 경로 그대로 읽는다(복사본 없음). 키 순서는 따지지 않고 null 키도 같아야 한다.
+        val input = CareJson.decodeFromString(CareFile.serializer(), File("../../shared/src/test/resources/care/summary_input.json").readText())
+        fun expected(name: String) = Json.parseToJsonElement(File("../../shared/src/test/resources/protocol/$name.json").readText()).jsonObject["body"]
+        fun body(f: CareFile) = ProtocolJson.encodeToJsonElement(CareSummaryBody.serializer(), careSummary(f, 1793944800000, seoul))
+        assertEquals(expected("care_summary"), body(input))
+        // 잠·기저귀 끔: 잠·기저귀 칸은 모두 null, 수유 수는 센다.
+        assertEquals(expected("care_summary_off"), body(input.copy(sleepDiaperEnabled = false)))
+    }
+
+    @Test
+    fun `지우지 않은 돌봄 기록은 오래돼도 남는다`() {
+        // U44: 기간으로 지우는 규칙이 없다. 앱을 열 때의 정리(R8)는 지운 표시가 30일 지난 것만 뺀다(리포트의 90일은 state.json에만).
+        val file = CareFile(
+            events = listOf(
+                feed("old", now - 400 * DAY, now - 400 * DAY + 10 * MINUTE),
+                ev("memo", CareKind.NOTE, now - 1000 * DAY, note = "첫 메모"),
+            ),
+        )
+        assertEquals(file, file.purged(now))
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        val store = kr.aigyeot.phone.data.CareStore(File(dir, "care.json"))
+        store.save(file.purged(now))
+        assertEquals(file, store.load())
         dir.deleteRecursively()
     }
 

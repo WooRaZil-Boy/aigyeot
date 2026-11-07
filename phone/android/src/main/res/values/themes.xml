@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 켜는 순간 창 배경을 화면 배경(Theme.kt Palette.bg)과 맞춘다. 어두운 화면에서 흰 화면이 번쩍이지 않게(iOS 시작 화면도 시스템 배경을 따른다). -->
+<resources>
+    <style name="Theme.Aigyeot" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F7F8FA</item>
+    </style>
+</resources>

@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.ui
 
+import androidx.compose.foundation.layout.heightIn
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
@@ -58,7 +59,7 @@ import kr.aigyeot.shared.Role
 internal fun StatusBands(model: AppModel, connected: Boolean = true) {
     val ui by model.ui.collectAsState()
     // 연결 안 됨이면 차와 관계된 띠(오프라인·시계)는 뜻이 없고, 저장 실패 같은 안내만 보인다(U7).
-    if (connected && !ui.online) Band("오프라인이에요. 누른 것은 연결되면 차로 가요.", "다시 시도") { model.pumpOutbox() }
+    if (connected && !ui.online) Band("오프라인이에요. 누른 것은 연결되면 차로 가요.", "다시 시도") { model.retryNow() }
     ui.notice?.let { Band(it, "닫기") { model.clearNotice() } }
     if (connected) ui.clockSkewMin?.takeIf { kotlin.math.abs(it) >= 2 }?.let { Band("휴대폰 시계가 ${kotlin.math.abs(it)}분 달라요. 수유 시각이 어긋날 수 있어요.") }
 }
@@ -102,7 +103,7 @@ internal fun GuardianAlerts(model: AppModel, go: (String) -> Unit) {
             context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
         }
     }
-    if (s.alerts.isEmpty() && s.reports.isEmpty()) Muted("아직 받은 리포트·인계 알림이 없어요")
+    if (s.alerts.isEmpty() && s.reports.isEmpty()) Muted("아직 받은 리포트·인계 알림이 없어요", Type.body)
     for (a in s.alerts.asReversed().take(5)) { // U39: 머리 없이 최근 5개
         Card(onClick = { go("alert/${a.id}") }, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
@@ -180,7 +181,7 @@ fun GuardiansScreen(model: AppModel, onBack: () -> Unit) {
                         busy = false
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             ) { Text("초대 코드 만들기") }
             if (!ui.online) Muted("인터넷이 필요해요")
             invite?.let { inv ->
@@ -197,7 +198,7 @@ fun GuardiansScreen(model: AppModel, onBack: () -> Unit) {
             for (d in s.devices.filter { it.role != Role.CAR }) {
                 Row {
                     Text(if (d.role == Role.OWNER) "함께 타는 보호자" else "다른 보호자", Modifier.weight(1f))
-                    Muted(if (d.deviceId == s.myDeviceId) "이 휴대폰" else d.platform.name.lowercase())
+                    Muted(if (d.deviceId == s.myDeviceId) "이 휴대폰" else d.platform.name.lowercase(), Type.body)
                 }
             }
         }

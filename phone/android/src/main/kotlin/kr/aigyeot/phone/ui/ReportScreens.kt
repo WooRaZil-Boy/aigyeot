@@ -15,8 +15,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kr.aigyeot.phone.AppModel
+import kr.aigyeot.phone.core.APP_ZONE
 import kr.aigyeot.phone.core.PhoneState
 import kr.aigyeot.phone.core.instantOf
+import kr.aigyeot.phone.core.reportDate
+import kr.aigyeot.phone.core.reportRowSub
+import kr.aigyeot.phone.core.reportRowTitle
+import kr.aigyeot.phone.core.reportSpan
 import kr.aigyeot.phone.core.steeringUnavailableText
 import kr.aigyeot.shared.CarActionKind
 import kr.aigyeot.shared.EpisodeResult
@@ -41,7 +46,7 @@ fun ReportsScreen(model: AppModel, onBack: () -> Unit, open: (String) -> Unit) {
     Page("리포트", onBack) {
         StatusBands(model)
         val list = s.reports.values.sortedByDescending { instantOf(it.body.startedAt) ?: 0 }
-        if (list.isEmpty()) Muted("주행이 끝나면 여기에 리포트가 와요")
+        if (list.isEmpty()) Muted("주행이 끝나면 여기에 리포트가 와요", Type.body)
         for (r in list) ReportCard(r.body, open)
     }
 }
@@ -51,8 +56,8 @@ fun ReportsScreen(model: AppModel, onBack: () -> Unit, open: (String) -> Unit) {
 internal fun ReportCard(b: ReportSummaryBody, open: (String) -> Unit) {
     Card(onClick = { open(b.sessionId) }, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("${dateTime(b.startedAt)} – ${clock(b.endedAt)}", style = MaterialTheme.typography.titleMedium)
-            Muted("에피소드 ${b.timeline.size}개" + if (b.simulated) " · 시뮬레이션" else "")
+            Text(reportRowTitle(b, APP_ZONE), style = MaterialTheme.typography.titleMedium)
+            Muted(reportRowSub(b))
         }
     }
 }
@@ -143,7 +148,9 @@ private fun action(a: CarActionKind) = when (a) {
 fun ReportDetailScreen(model: AppModel, sessionId: String, onBack: () -> Unit) {
     val s by model.state.collectAsState()
     val b: ReportSummaryBody = s.reports[sessionId]?.body ?: return Page("리포트", onBack) { Muted("리포트가 없어요") }
-    Page("주행 리포트", onBack) {
+    val zone = APP_ZONE
+    Page(reportDate(b, zone) ?: "리포트", onBack) {
+        Text(reportSpan(b.startedAt, b.endedAt, zone), style = MaterialTheme.typography.titleMedium)
         if (b.simulated) Muted("시뮬레이션")
         // 요약 타일 세 개(구현 계획 8장)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -160,7 +167,7 @@ fun ReportDetailScreen(model: AppModel, sessionId: String, onBack: () -> Unit) {
         if (b.truncated == true) Muted("오래된 에피소드는 줄였어요")
 
         Text("출발 ${clock(b.startedAt)}", style = MaterialTheme.typography.titleMedium)
-        if (b.timeline.isEmpty()) Muted("기록된 에피소드가 없어요")
+        if (b.timeline.isEmpty()) Muted("기록된 에피소드가 없어요", Type.body)
         for (e in b.timeline) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -169,7 +176,7 @@ fun ReportDetailScreen(model: AppModel, sessionId: String, onBack: () -> Unit) {
                     Text("음원: ${sound(s, e.sound, e.plays.firstOrNull()?.songId)} · 재생 ${seconds(e.playS)}")
                     for (p in e.plays) {
                         val name = if (p.method == SoundMethod.PARENT_SONG) s.songs.find { it.songId == p.songId }?.name?.let { "부모 노래($it)" } ?: "부모 노래" else method(p.method)
-                        Muted("· ${purpose(p.purpose)} $name ${clock(p.startedAt)}~${clock(p.endedAt)} ${seconds(p.playS)}")
+                        Muted("· ${purpose(p.purpose)} $name ${reportSpan(p.startedAt, p.endedAt, zone)} ${seconds(p.playS)}")
                     }
                     Text("판정: ${result(e.result)}" + (e.excludedReason?.let { " · 성적에서 뺌(${excluded(it)})" } ?: ""))
                     if (e.recried) Text("다시 울음")
@@ -197,12 +204,12 @@ fun ReportDetailScreen(model: AppModel, sessionId: String, onBack: () -> Unit) {
         Text("평소 대비 조향", style = MaterialTheme.typography.titleMedium)
         val st = b.steering
         if (!st.available) {
-            Muted(steeringUnavailableText(st.unavailableReason == SteeringUnavailableReason.NO_CRY))
+            Muted(steeringUnavailableText(st.unavailableReason == SteeringUnavailableReason.NO_CRY), Type.body)
         } else {
             Muted("평소 분당 ${st.baselinePerMin} · 울음 중 ${st.duringCryPerMin} · 대응 뒤 ${st.afterResponsePerMin}")
         }
         Text("차가 대신 한 일", style = MaterialTheme.typography.titleMedium)
-        if (b.carActions.isEmpty()) Muted("없어요")
+        if (b.carActions.isEmpty()) Muted("없어요", Type.body)
         for (a in b.carActions) Muted("${action(a.action)} ${a.count}번" + (a.totalS?.let { " · ${seconds(it)}" } ?: ""))
         if (b.controls.isNotEmpty()) {
             Text("제어 기록", style = MaterialTheme.typography.titleMedium)

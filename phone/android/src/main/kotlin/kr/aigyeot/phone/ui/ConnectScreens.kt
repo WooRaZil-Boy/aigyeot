@@ -1,5 +1,9 @@
 package kr.aigyeot.phone.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.foundation.layout.heightIn
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -35,7 +39,7 @@ import kr.aigyeot.phone.AppModel
 import kotlinx.coroutines.delay
 import kr.aigyeot.phone.core.CodeSource
 import kr.aigyeot.phone.core.TypedAction
-import kr.aigyeot.phone.core.canOpenConfirm
+import kr.aigyeot.phone.core.PAIR_BUSY
 import kr.aigyeot.phone.core.codeFromLink
 import kr.aigyeot.phone.core.isPairLocked
 import kr.aigyeot.phone.core.typedSubmitAction
@@ -45,15 +49,16 @@ import kr.aigyeot.phone.core.isInviteCode
 import kr.aigyeot.phone.core.normalizeCode
 import kr.aigyeot.shared.Role
 
-/** 첫 실행: 무엇이 오가는지 한 화면(G31). */
+/** 첫 실행: 무엇이 오가는지 한 화면(G31). 글자와 순서는 7.1 intro.*(U43, iOS와 같음). */
 @Composable
 fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) = Page("아이곁") {
     Text("차의 아이곁과 이 휴대폰을 연결해요.", style = MaterialTheme.typography.titleMedium)
-    Text("주고받는 것: 수유 시작 시각, 우리 노래 녹음, 주행 리포트, 인계 알림 문장.")
-    Text("보내지 않는 것: 아기 울음 소리, 차 안 마이크 소리, 차의 위치.")
-    Muted("인계 알림은 Google·Apple 알림 서버를 거쳐 알림 문장만 갑니다.")
-    Button(onClick = onConnect, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("차와 연결하기") }
-    OutlinedButton(onClick = onRecordsOnly, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("먼저 기록만 쓸게요") }
+    Text("주고받는 것: 수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장")
+    Text("보내지 않는 것: 아기 울음 소리, 차 안 마이크 소리, 차의 위치")
+    Muted("모두 아이곁 중계 서버를 거쳐 오가요. 인계 알림은 Google·Apple 알림 서버도 거쳐요.")
+    Muted("차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요.")
+    Button(onClick = onConnect, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("차와 연결하기") }
+    OutlinedButton(onClick = onRecordsOnly, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("먼저 기록만 쓸게요") }
 }
 
 /** 429 잠금이 남았는가. 시각은 모델이 들고 있고, 끝나는 때에 다시 그린다(화면을 옮겨도 풀리지 않는다, 9장). */
@@ -89,10 +94,7 @@ fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) ->
     BackHandler(enabled = busy) {}
     LaunchedEffect(mine) {
         val done = mine ?: return@LaunchedEffect
-        if (!done.busy && done.error == null && done.role != null) {
-            model.clearPairRun()
-            onPaired(done.role)
-        }
+        if (model.takePairDone(done)) onPaired(done.role!!)
     }
     fun submit(raw: String) {
         val code = normalizeCode(raw)
@@ -116,12 +118,12 @@ fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) ->
                         val code = b.rawValue?.let { codeFromLink(it) ?: normalizeCode(it) }
                         // 스캔 중에 직접 친 코드의 요청이 시작됐을 수 있다. 끝난 결과를 받을 화면이 사라지지 않게 간다.
                         if (code == null) error = "올바른 연결 링크가 아니에요"
-                        else if (!canOpenConfirm(model.pairRun.value?.busy == true)) error = "연결하고 있어요. 끝난 뒤에 다시 찍어 주세요."
+                        else if (!model.canTakeLink()) android.widget.Toast.makeText(context, PAIR_BUSY, android.widget.Toast.LENGTH_SHORT).show()
                         else if (needsConfirm(CodeSource.QR)) onCode(code)
                     }
                     .addOnFailureListener { error = "QR을 찍지 못했어요. 코드로 입력해 주세요." }
             },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         ) { Text("QR 찍기") }
         Text("코드로 입력", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
@@ -134,7 +136,7 @@ fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) ->
             },
             label = { Text("6자리 숫자 또는 초대 코드") },
             isError = (error ?: mine?.error) != null,
-            supportingText = { (error ?: mine?.error)?.let { Text(it) } },
+            supportingText = { (error ?: mine?.error)?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) } },
             enabled = !busy,
             singleLine = true,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
@@ -142,7 +144,7 @@ fun ConnectScreen(model: AppModel, onCode: (String) -> Unit, onPaired: (Role) ->
         )
         if (busy) Row { CircularProgressIndicator(); Text("  확인하고 있어요") }
         if (locked) Muted("잠시 뒤에 다시 해 주세요.")
-        Button(onClick = { submit(text) }, enabled = text.isNotBlank() && !busy && !locked, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("확인") }
+        Button(onClick = { submit(text) }, enabled = text.isNotBlank() && !busy && !locked, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("확인") }
         if (model.creds.value != null) Muted("이미 연결된 차가 있어요. 새로 연결하면 지금 연결을 끊어요.")
     }
 }
@@ -159,16 +161,15 @@ fun ConfirmScreen(model: AppModel, code: String, onDone: (Role) -> Unit, onRetry
     val creds by model.creds.collectAsState()
     val mine = run?.takeIf { it.code == code }
     val busy = mine?.busy == true
-    val replacing = creds != null && !busy
+    // U49: 도는 동안에는 누른 순간의 글자를 둔다(끊기가 끝나 자격이 비어도 "연결하기"로 바뀌지 않게).
+    var switching by rememberSaveable { mutableStateOf(false) }
+    val replacing = if (busy) switching else creds != null
     // iOS의 interactiveDismissDisabled(busy)와 같다: 연결 중 뒤로 가기를 막아 완료 처리가 끊기지 않게 한다.
     BackHandler(enabled = busy) {}
     LaunchedEffect(mine) {
         val done = mine ?: return@LaunchedEffect
-        // 기존 연결 끊기와 새 연결이 모두 성공했을 때만 완료 화면으로 간다.
-        if (!done.busy && done.error == null && done.role != null) {
-            model.clearPairRun()
-            onDone(done.role)
-        }
+        // 기존 연결 끊기와 새 연결이 모두 성공했고, 그사이 끊기지(GONE) 않았을 때만 완료 화면으로 간다.
+        if (model.takePairDone(done)) onDone(done.role!!)
     }
     // 429 뒤에는 Retry-After(없으면 10초)까지 연결 버튼을 잠근다(9장). 직접 입력 길과 같은 모델 값이다.
     val locked = rememberPairLocked(model)
@@ -181,12 +182,12 @@ fun ConfirmScreen(model: AppModel, code: String, onDone: (Role) -> Unit, onRetry
         if (busy) {
             Row { CircularProgressIndicator(); Text("  확인하고 있어요") }
         }
-        mine?.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        mine?.error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error) }
         Button(
             enabled = !busy && !locked,
-            onClick = { model.startPair(code) },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-        ) { Text(if (replacing) "끊고 연결할게요" else "네, 연결할게요") }
+            onClick = { switching = creds != null; model.startPair(code) },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        ) { Text(if (replacing) "끊고 연결하기" else "연결하기") } // U49 pair.confirmSwitch / pair.confirm
         OutlinedButton(enabled = !busy, onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("코드 다시 넣기") }
     }
 }
@@ -201,7 +202,7 @@ fun DoneScreen(role: Role, onNext: () -> Unit) {
             onClick = {
                 if (role == Role.GUARDIAN && Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS) else onNext()
             },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         ) { Text(if (role == Role.GUARDIAN) "알림 켜고 시작하기" else "시작하기") }
     }
 }
@@ -210,6 +211,6 @@ fun DoneScreen(role: Role, onNext: () -> Unit) {
 @Composable
 fun GoneScreen(onReconnect: () -> Unit, onRecordsOnly: () -> Unit) = Page("연결이 끊겼어요") {
     Text("연결이 끊겼어요. 다시 연결해 주세요.")
-    Button(onClick = onReconnect, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("다시 연결하기") }
-    OutlinedButton(onClick = onRecordsOnly, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("기록만 계속 쓸게요") }
+    Button(onClick = onReconnect, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("다시 연결하기") }
+    OutlinedButton(onClick = onRecordsOnly, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("기록만 계속 쓸게요") }
 }

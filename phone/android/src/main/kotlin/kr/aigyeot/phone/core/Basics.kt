@@ -2,6 +2,7 @@ package kr.aigyeot.phone.core
 
 import kotlinx.serialization.json.JsonObject
 import kr.aigyeot.shared.Envelope
+import kr.aigyeot.shared.Role
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -35,8 +36,11 @@ private val ULID_RE = Regex("[0-9A-HJKMNP-TV-Z]{26}")
 /** 메시지 id 형식 검사(계약 0장). 밖에서 온 값(인텐트·푸시)은 이것을 통과해야 쓴다. */
 fun isUlid(s: String) = ULID_RE.matches(s)
 
+/** 앱의 시간대. 한국 전용이라 기기 설정과 상관없이 고정한다(사용자 결정 11-07: 서머타임·날짜변경선·다른 시간대는 다루지 않는다). */
+val APP_ZONE: ZoneId = ZoneId.of("Asia/Seoul")
+
 /** RFC 3339(시차 포함, 초 단위). `OffsetDateTime.toString()`은 0초를 빼므로 쓰지 않는다. */
-fun rfc3339(now: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+fun rfc3339(now: Long, zone: ZoneId = APP_ZONE): String =
     DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(
         Instant.ofEpochMilli(now).atZone(zone).toOffsetDateTime().truncatedTo(ChronoUnit.SECONDS),
     )
@@ -89,8 +93,21 @@ fun typedSubmitAction(code: String?, connected: Boolean, busy: Boolean, lockUnti
 /** 429 잠금이 아직 남았는가. 시각은 화면이 아니라 모델이 들고 있다. */
 fun isPairLocked(lockUntil: Long?, now: Long) = lockUntil != null && lockUntil > now
 
-/** 직접 친 코드의 요청이 진행 중이면 QR·링크로 확인 화면에 가지 않는다(끝난 결과를 받을 화면이 사라진다). */
-fun canOpenConfirm(pairBusy: Boolean) = !pairBusy
+/**
+ * U52: 연결(직접 친 코드·'연결하기'·'끊고 연결하기'의 끊기까지)이 도는 동안 온 QR·링크로는 확인 화면에 가지 않는다.
+ * 성공했지만 화면이 아직 완료로 옮기지 않은 동안(`doneUnshown`)도 같다. 늦게 도는 완료 이동이 새 확인 화면을 지운다(iOS `confirming`과 같음).
+ * 화면의 코드와 도는 연결의 코드가 어긋나지 않게 하고, [PAIR_BUSY]를 짧게 보인다.
+ */
+fun canOpenConfirm(pairBusy: Boolean, doneUnshown: Boolean) = !pairBusy && !doneUnshown
+
+/** 끝난 연결 결과(`role`)로 완료 화면에 가도 되는가. 그사이 401·4001로 끊겼거나(GONE) 자격이 바뀌었으면 아니다(7.1, U25). */
+fun pairDoneValid(role: Role?, gone: Boolean, currentRole: Role?) = role != null && !gone && role == currentRole
+
+/** 저장 실패 띠. 버림 안내와 함께 떠도 서로 덮지 않는다([withNoticeLine]). */
+const val SAVE_FAILED = "저장하지 못했어요. 저장 공간을 확인해 주세요."
+
+/** 7.1 pair.busy. */
+const val PAIR_BUSY = "연결하는 중이에요. 끝난 뒤 링크를 다시 열어 주세요."
 
 /** 확인 화면 제목. 초대 코드에 "차 화면에…"라고 묻지 않는다(G17). */
 fun confirmTitle(code: String) = if (isInviteCode(code)) "받은 초대 코드가 이것과 같나요?" else "차 화면에 이 코드가 보이나요?"
@@ -103,3 +120,29 @@ fun pairLockUntil(now: Long, retryAfterS: Long?): Long = now + (retryAfterS?.tak
 
 /** 조향 비교 불가 사유 문구(7.2). */
 fun steeringUnavailableText(noCry: Boolean) = if (noCry) "울음이 없어 비교하지 않았어요" else "비교할 구간이 없어요"
+
+/**
+ * 사용자가 요청한 끊기(연결 7.1 "어디서든 401·4001 → GONE"). 그사이 온 401·4001은 끊기의 결과일 수 있어 바로 GONE으로 가지 않고 적어 둔다.
+ * 끊기가 성공하면 평소 끊기(GONE 안내 없음), 실패로 끝나면 적어 둔 것이 있을 때만 GONE으로 간다(iOS `lostWhileLeaving`).
+ */
+class LeaveWatch<C : Any> {
+    private var leaving: C? = null
+    private var lost = false
+
+    fun start(c: C) {
+        leaving = c
+        lost = false
+    }
+
+    /** 끊는 중인 `c`에 401·4001이 왔다(중계가 그 토큰을 지웠다). */
+    fun lostFor(c: C): Boolean = leaving == c && lost
+
+    /** `c`의 401·4001. 끊는 중인 자격이면 적어 두고 true(부르는 쪽은 아직 GONE으로 가지 않는다). */
+    fun absorb(c: C): Boolean = (leaving == c).also { if (it) lost = true }
+
+    /** 끊기가 끝났다. 실패했는데 그사이 그 자격의 401·4001이 왔으면 true(부르는 쪽이 GONE으로 간다). */
+    fun end(failed: Boolean): Boolean = (failed && lost).also {
+        leaving = null
+        lost = false
+    }
+}

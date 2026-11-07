@@ -2,6 +2,17 @@
 
 package kr.aigyeot.phone.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.cos
+import kotlin.math.sin
 import android.Manifest
 import android.content.Intent
 import android.os.Build
@@ -63,6 +74,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -73,12 +85,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -92,7 +107,9 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kr.aigyeot.phone.AppModel
+import kr.aigyeot.phone.core.APP_ZONE
 import kr.aigyeot.phone.core.CareEvent
+import kr.aigyeot.phone.core.SAVE_FAILED
 import kr.aigyeot.phone.core.CareFile
 import kr.aigyeot.phone.core.CareKind
 import kr.aigyeot.phone.core.CareProblem
@@ -140,6 +157,7 @@ import kr.aigyeot.shared.Role
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 // 돌봄 기록 화면(phone-care-plan 5·7·7.1장). 화면 글자는 7장·7.1 표 그대로이고, 표에 없는 글자는 만들지 않는다(U26).
 // 주석의 `tab.today` 같은 이름은 7.1 표의 ID다.
@@ -174,7 +192,7 @@ private fun rememberNow(periodMs: Long): Long {
     }.value
 }
 
-private val deviceZone: ZoneId get() = ZoneId.systemDefault()
+private val deviceZone: ZoneId get() = APP_ZONE
 
 private fun CareEvent.zoneOrDevice(): ZoneId = runCatching { ZoneId.of(zone) }.getOrDefault(deviceZone)
 
@@ -203,8 +221,11 @@ fun CareTabs(model: AppModel, go: (String) -> Unit) {
     val disconnect by model.disconnectRun.collectAsState()
     LaunchedEffect(disconnect) {
         if (disconnect?.let { !it.busy && it.error == null } == true) {
-            model.clearDisconnectRun()
             tab = "오늘"
+            // 오늘·띠를 한 번 그린 뒤 끊기 표시를 지운다: 그 전에 죽으면 다음 실행이 다시 보인다.
+            withFrameNanos { }
+            withFrameNanos { }
+            model.disconnectShown()
         }
     }
     // 7장 '기록 지우기 되돌리기': "지웠어요" + "되돌리기"(5초). 타이머에서 지운 것도 돌아와서 보인다(U38).
@@ -310,10 +331,12 @@ private fun QuickButtons(care: CareFile, start: (CareKind) -> Unit, sheet: (Care
                 k == CareKind.FEED -> "수유 중"
                 else -> "자는 중"
             }
+            // U51: 평소 surfaceRaised·종류 색 점·textPrimary, 진행 중 accent·onAccent. 종류 색을 바탕에 깔지 않는다.
+            val p = Tokens.colors
             Surface(
                 shape = Radius.rLarge,
-                color = Tokens.colors.accent,
-                contentColor = Tokens.colors.onAccent,
+                color = if (running == null) p.surfaceRaised else p.accent,
+                contentColor = if (running == null) p.textPrimary else p.onAccent,
                 modifier = Modifier.heightIn(min = 64.dp).width(150.dp).combinedClickable(
                     role = androidx.compose.ui.semantics.Role.Button,
                     onLongClick = { sheet(k, false) },
@@ -326,7 +349,11 @@ private fun QuickButtons(care: CareFile, start: (CareKind) -> Unit, sheet: (Care
                     },
                 ),
             ) {
-                Box(contentAlignment = Alignment.Center) { Text(label, style = Type.headline) }
+                Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    KindIcon(k, if (running == null) kindColor(k, p) else p.onAccent)
+                    Spacer(Modifier.width(Space.s2))
+                    Text(label, style = Type.headline)
+                }
             }
         }
         OutlinedButton(
@@ -359,7 +386,7 @@ fun TodayTab(model: AppModel, go: (String) -> Unit) {
     val guardian = creds?.role == Role.GUARDIAN
     val now = rememberNow(15_000)
     val start = rememberStarter(model)
-    var sheet by remember { mutableStateOf<Pair<CareKind, Boolean>?>(null) }
+    var sheet by rememberSaveable { mutableStateOf<Pair<CareKind, Boolean>?>(null) } // 회전·다시 그리기에도 시트를 둔다
     Page(care.childNickname?.let { "${it}의 오늘" } ?: "오늘") { // today.header(U34)
         if (guardian) GuardianAlerts(model, go) else StatusBands(model, connected = creds != null)
         ui.careNotice?.let { Band(it, "닫기") { model.clearCareNotice() } }
@@ -496,22 +523,23 @@ fun CareSheet(
     val scope = rememberCoroutineScope()
     val care by model.care.collectAsState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val opened = remember { System.currentTimeMillis() }
+    // 화면을 다시 만들어도(회전·글자 크기·어두운 화면) 적던 내용이 남게 저장 가능한 상태로 둔다.
+    val opened = rememberSaveable { System.currentTimeMillis() }
     val zone = initial?.zoneOrDevice() ?: deviceZone
-    var k by remember { mutableStateOf(initial?.kind ?: kind) }
-    var startAt by remember { mutableStateOf(initial?.startAt ?: baseDate?.let { onDate(it, 12, 0, zone) } ?: opened) }
-    var chip by remember { mutableStateOf(if (initial == null && baseDate == null) "지금" else "직접") }
-    var endAt by remember { mutableStateOf(initial?.endAt) }
-    var side by remember { mutableStateOf(initial?.feedSide) }
-    var ml by remember { mutableStateOf(initial?.amountMl) }
-    var diaper by remember { mutableStateOf(initial?.diaper ?: Diaper.WET) }
-    var note by remember { mutableStateOf(initial?.note.orEmpty()) }
-    var pick by remember { mutableStateOf<String?>(null) }
+    var k by rememberSaveable { mutableStateOf(initial?.kind ?: kind) }
+    var startAt by rememberSaveable { mutableStateOf(initial?.startAt ?: baseDate?.let { onDate(it, 12, 0, zone) } ?: opened) }
+    var chip by rememberSaveable { mutableStateOf(if (initial == null && baseDate == null) "지금" else "직접") }
+    var endAt by rememberSaveable { mutableStateOf(initial?.endAt) }
+    var side by rememberSaveable { mutableStateOf(initial?.feedSide) }
+    var ml by rememberSaveable { mutableStateOf(initial?.amountMl) }
+    var diaper by rememberSaveable { mutableStateOf(initial?.diaper ?: Diaper.WET) }
+    var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
+    var pick by rememberSaveable { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var overlap by remember { mutableStateOf<CareEvent?>(null) }
     val timed = k == CareKind.FEED || k == CareKind.SLEEP
 
-    val newId = remember { ulid(System.currentTimeMillis()) } // 시트 하나에 새 기록 하나(빠르게 두 번 눌러도 같은 id라 하나만 생긴다)
+    val newId = rememberSaveable { ulid(System.currentTimeMillis()) } // 시트 하나에 새 기록 하나(빠르게 두 번 눌러도 같은 id라 하나만 생긴다)
     var saving by remember { mutableStateOf(false) }
     fun build(now: Long): CareEvent {
         val base = initial ?: CareEvent(newId, k, startAt, zone = zone.id, source = CareSource.PHONE, createdAt = now, updatedAt = now)
@@ -531,7 +559,13 @@ fun CareSheet(
         if (saving) return
         saving = true
         scope.launch {
-            if (model.saveCareEvent(e)) onClose() else error = model.ui.value.notice // 저장 실패는 시트 안에서도 보인다
+            // 저장 실패는 시트 안에서도 보인다. 띠의 다른 줄(버림 안내)은 시트에 옮기지 않는다.
+            when {
+                model.saveCareEvent(e, editing = initial != null) -> onClose()
+                // 고치던 기록이 그사이 지워졌다: 저장하지 않고 닫는다(되살리지 않는다, R10).
+                initial != null && model.care.value.events.none { it.id == initial.id && it.deletedAt == null } -> onClose()
+                else -> error = SAVE_FAILED.takeIf { model.ui.value.notice?.lines()?.contains(it) == true }
+            }
             saving = false
         }
     }
@@ -641,8 +675,11 @@ fun RecordsTab(model: AppModel, go: (String) -> Unit) {
     var pattern by rememberSaveable { mutableStateOf(false) }
     val creds by model.creds.collectAsState()
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-        Spacer(Modifier.height(Space.s2))
-        StatusBands(model, connected = creds != null)
+        // 고정 영역이라 큰 글자로 띠가 쌓여 넘치면 묶음째 굴린다(8장 동적 글자 크기, iOS StatusBands와 같은 200).
+        Column(Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+            Spacer(Modifier.height(Space.s2))
+            StatusBands(model, connected = creds != null)
+        }
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) { // log.segment
             SegmentedButton(selected = !pattern, onClick = { pattern = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("하루") }
             SegmentedButton(selected = pattern, onClick = { pattern = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("패턴") }
@@ -668,28 +705,38 @@ private fun ColumnScope.DayView(model: AppModel, go: (String) -> Unit) {
     val today = Instant.ofEpochMilli(now).atZone(deviceZone).toLocalDate()
     var dayEpoch by rememberSaveable { mutableStateOf(today.toEpochDay()) }
     val day = LocalDate.ofEpochDay(dayEpoch)
-    var editing by remember { mutableStateOf<CareEvent?>(null) }
-    var adding by remember { mutableStateOf(false) }
-    val days = (29 downTo 0).map { today.minusDays(it.toLong()) }
-    val strip = rememberLazyListState(initialFirstVisibleItemIndex = days.size - 1)
+    // 고치는 기록은 id로 둔다(화면을 다시 만들어도 남고, 지금 기록에서 다시 찾는다).
+    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
+    val editing = editingId?.let { id -> care.events.firstOrNull { it.id == id && it.deletedAt == null } }
+    var adding by rememberSaveable { mutableStateOf(false) }
+    val allCars = carLines(s.reports.values.map { it.body })
+    // 지난 30일. 기록이 있는 날이 그 밖이면(더 오래됨) 그날까지 늘린다: 돌봄 기록은 기간으로 지우지 않으니(U44) 열 수 있어야 한다(iOS `DayStrip`과 같음).
+    val recordDays = care.events.filter { it.deletedAt == null }.map { Instant.ofEpochMilli(it.startAt).atZone(it.zoneOrDevice()).toLocalDate() } +
+        allCars.map { Instant.ofEpochMilli(it.startAt).atZone(deviceZone).toLocalDate() }
+    val first = minOf(today.minusDays(29), recordDays.minOrNull() ?: today)
+    val last = maxOf(today, recordDays.maxOrNull() ?: today)
+    // 날을 목록으로 만들지 않고 보이는 칸만 계산한다: 차 리포트의 날짜가 크게 어긋나도(먼 미래 등) 멈추지 않는다.
+    val span = ChronoUnit.DAYS.between(first, last).coerceAtMost(Int.MAX_VALUE - 1L).toInt() + 1
+    val strip = rememberLazyListState(initialFirstVisibleItemIndex = ChronoUnit.DAYS.between(first, today).coerceAtMost(span - 1L).toInt())
     LazyRow(state = strip, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-        items(days, key = { it.toEpochDay() }) { d ->
+        items(span, key = { first.toEpochDay() + it }) { i ->
+            val d = first.plusDays(i.toLong())
             FilterChip(selected = d == day, onClick = { dayEpoch = d.toEpochDay() }, label = { Text(dayLabel(d, today)) })
         }
     }
     val hand = care.dayEvents(day, deviceZone)
-    val cars = carLines(s.reports.values.map { it.body }).filter { Instant.ofEpochMilli(it.startAt).atZone(deviceZone).toLocalDate() == day }
+    val cars = allCars.filter { Instant.ofEpochMilli(it.startAt).atZone(deviceZone).toLocalDate() == day }
     val rows: List<Pair<Long, Any>> = (hand.map { it.startAt to it } + cars.map { it.startAt to it }).sortedBy { it.first }
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        if (rows.isEmpty()) Muted("이 날 기록이 없어요")
+        if (rows.isEmpty()) Muted("이 날 기록이 없어요", Type.body)
         for ((_, row) in rows) when (row) {
             is CareEvent -> key(row.id) {
-                HandRow(row, onOpen = { if (row.isOngoing) go("timer/${row.id}") else editing = row }, onDelete = { model.deleteCare(row.id) })
+                HandRow(row, onOpen = { if (row.isOngoing) go("timer/${row.id}") else editingId = row.id }, onDelete = { fail -> model.deleteCare(row.id, fail) })
             }
             is CarLine -> key(row.sessionId + (row.episodeId ?: "")) {
                 Card(onClick = { go("report/${row.sessionId}") }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(10.dp).background(Tokens.colors.car, CircleShape))
+                        KindIcon(null, Tokens.colors.car)
                         Spacer(Modifier.width(Space.s3))
                         Text(row.text(deviceZone))
                     }
@@ -703,7 +750,9 @@ private fun ColumnScope.DayView(model: AppModel, go: (String) -> Unit) {
         Spacer(Modifier.height(Space.s4))
     }
     val guardian = creds?.role == Role.GUARDIAN
-    editing?.let { e -> CareSheet(model, e.kind, initial = e, baseDate = null, guardian = guardian) { editing = null } }
+    // 고치던 기록이 지워지면(기록 지우기 등) 시트를 닫는다.
+    LaunchedEffect(care, editingId) { if (editingId != null && editing == null) editingId = null }
+    editing?.let { e -> CareSheet(model, e.kind, initial = e, baseDate = null, guardian = guardian) { editingId = null } }
     if (adding) CareSheet(model, CareKind.FEED, initial = null, baseDate = day.takeIf { it != today }, chooseKind = true, guardian = guardian) { adding = false }
 }
 
@@ -714,19 +763,60 @@ private fun kindColor(k: CareKind, p: Palette) = when (k) {
     CareKind.NOTE -> p.note
 }
 
-/** 손 기록 한 줄(log.row.*): 종류 점 + 7.1 줄 글자(색만으로 구분하지 않게 종류 이름이 글자에 있다, 8장). */
+/**
+ * 종류 아이콘(13장 '종류 색은 늘 아이콘과 함께', U51). iOS SF Symbol과 같은 모양을 그린다: 수유 물방울, 잠 달, 기저귀 점선 원,
+ * 메모 쪽지, `kind`가 null이면 차. 아이콘 묶음 의존성 없이 그린다. 옆 글자가 종류를 말하므로 화면 읽기에는 꾸밈이다.
+ */
 @Composable
-private fun HandRow(e: CareEvent, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun KindIcon(kind: CareKind?, color: Color, modifier: Modifier = Modifier.size(20.dp)) = Canvas(modifier) {
+    val w = size.width
+    val h = size.height
+    when (kind) {
+        CareKind.FEED -> {
+            drawCircle(color, radius = w * 0.3f, center = Offset(w / 2, h * 0.62f))
+            drawPath(Path().apply { moveTo(w / 2, h * 0.06f); lineTo(w * 0.24f, h * 0.5f); lineTo(w * 0.76f, h * 0.5f); close() }, color)
+        }
+        CareKind.SLEEP -> {
+            val moon = Path().apply { addOval(Rect(w * 0.1f, h * 0.1f, w * 0.9f, h * 0.9f)) }
+            val cut = Path().apply { addOval(Rect(w * 0.32f, h * 0.0f, w * 1.08f, h * 0.76f)) }
+            drawPath(Path().apply { op(moon, cut, PathOperation.Difference) }, color)
+        }
+        CareKind.DIAPER -> repeat(12) { i ->
+            val a = Math.toRadians(i * 30.0)
+            drawCircle(color, radius = w * 0.065f, center = Offset(w / 2 + w * 0.38f * cos(a).toFloat(), h / 2 + h * 0.38f * sin(a).toFloat()))
+        }
+        CareKind.NOTE -> {
+            val stroke = w * 0.09f
+            drawRoundRect(color, Offset(w * 0.16f, h * 0.1f), Size(w * 0.68f, h * 0.8f), CornerRadius(w * 0.12f), style = Stroke(stroke))
+            for (y in listOf(0.34f, 0.5f, 0.66f)) drawLine(color, Offset(w * 0.32f, h * y), Offset(w * 0.68f, h * y), stroke)
+        }
+        null -> {
+            drawPath(Path().apply { moveTo(w * 0.26f, h * 0.44f); lineTo(w * 0.36f, h * 0.2f); lineTo(w * 0.64f, h * 0.2f); lineTo(w * 0.74f, h * 0.44f); close() }, color)
+            drawRoundRect(color, Offset(w * 0.08f, h * 0.42f), Size(w * 0.84f, h * 0.3f), CornerRadius(w * 0.08f))
+            drawCircle(color, radius = w * 0.11f, center = Offset(w * 0.3f, h * 0.74f))
+            drawCircle(color, radius = w * 0.11f, center = Offset(w * 0.7f, h * 0.74f))
+        }
+    }
+}
+
+/** 손 기록 한 줄(log.row.*): 종류 아이콘 + 7.1 줄 글자(색만으로 구분하지 않게 종류 이름이 글자에 있다, 8장). */
+@Composable
+private fun HandRow(e: CareEvent, onOpen: () -> Unit, onDelete: (onFail: () -> Unit) -> Unit) {
     val swipe = rememberSwipeToDismissBoxState()
-    LaunchedEffect(swipe.currentValue) { if (swipe.currentValue == SwipeToDismissBoxValue.EndToStart) onDelete() }
+    val rowScope = rememberCoroutineScope()
+    // 지우기를 저장하지 못했으면 밀린 줄을 되돌린다(기록은 그대로 있다).
+    val restore: () -> Unit = { rowScope.launch { swipe.reset() } }
+    LaunchedEffect(swipe.currentValue) { if (swipe.currentValue == SwipeToDismissBoxValue.EndToStart) onDelete(restore) }
     SwipeToDismissBox(
         state = swipe,
         enableDismissFromStartToEnd = false,
-        backgroundContent = { Box(Modifier.fillMaxSize().background(Tokens.colors.danger, Radius.rMedium)) },
+        // 밀 때만 그린다(가만히 있을 때 카드 모서리 밖으로 빨간 테두리가 비치지 않게).
+        backgroundContent = { if (swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart) Box(Modifier.fillMaxSize().background(Tokens.colors.danger, Radius.rMedium)) },
     ) {
-        Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+        // 밀기를 못 쓰는 화면 읽기에도 같은 지우기(되돌리기 포함)를 준다(iOS swipeActions와 같음).
+        Card(onClick = onOpen, modifier = Modifier.fillMaxWidth().semantics { customActions = listOf(CustomAccessibilityAction("지우기") { onDelete(restore); true }) }) {
             Row(Modifier.padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).background(kindColor(e.kind, Tokens.colors), CircleShape))
+                KindIcon(e.kind, kindColor(e.kind, Tokens.colors))
                 Spacer(Modifier.width(Space.s3))
                 Column {
                     Text(logRowText(e, e.zoneOrDevice()))
@@ -802,7 +892,7 @@ fun CarTab(model: AppModel, go: (String) -> Unit) {
         }
         Text("리포트", style = Type.headline) // car.section.reports
         val list = s.reports.values.sortedByDescending { instantOf(it.body.startedAt) ?: 0 }
-        if (list.isEmpty()) Muted("주행이 끝나면 여기에 리포트가 와요")
+        if (list.isEmpty()) Muted("주행이 끝나면 여기에 리포트가 와요", Type.body)
         for (r in list) ReportCard(r.body) { id -> go("report/$id") }
     }
 }
@@ -817,6 +907,9 @@ fun SettingsTab(model: AppModel, go: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val busy = run?.busy == true
     val error = run?.takeIf { !it.busy }?.error
+    // 설정을 떠나면(회전은 빼고) 지난 끊기 실패 글을 걷는다: 인터넷이 돌아온 뒤 다시 와도 옛 '인터넷이 필요해요'가 남지 않게.
+    val activity = context.findActivity()
+    DisposableEffect(Unit) { onDispose { if (activity?.isChangingConfigurations != true) model.dismissDisconnectError() } }
     var confirm by remember { mutableStateOf<String?>(null) }
     var nickname by remember(care.childNickname) { mutableStateOf(care.childNickname.orEmpty()) }
     fun saveNickname() {
@@ -846,7 +939,8 @@ fun SettingsTab(model: AppModel, go: (String) -> Unit) {
         OutlinedButton(
             onClick = {
                 scope.launch {
-                    val file = model.exportCare() ?: return@launch
+                    // 사본을 쓰지 못했으면(저장 공간 등) 누른 것에 답한다(노래 '듣기' 실패와 같게 토스트)
+                    val file = model.exportCare() ?: return@launch Toast.makeText(context, SAVE_FAILED, Toast.LENGTH_SHORT).show()
                     val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
                     val send = Intent(Intent.ACTION_SEND).setType("text/csv").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     context.startActivity(Intent.createChooser(send, null))
