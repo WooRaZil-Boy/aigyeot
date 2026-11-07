@@ -1,26 +1,44 @@
 import SwiftUI
 
-private func when(_ rfc: String, _ style: Date.FormatStyle = .dateTime.month().day().hour().minute()) -> String {
-    Rfc3339.parse(rfc)?.formatted(style) ?? rfc
+/// 시각은 기기 언어와 관계없이 "오후 12:52", 구간은 "오전 3:04–3:05"(7.1 시각 형식, U20·U47).
+private func clock(_ rfc: String) -> String { Rfc3339.parse(rfc).map { CareFormat.clock($0) } ?? rfc }
+
+private func span(_ start: String, _ end: String) -> String {
+    guard let s = Rfc3339.parse(start), let e = Rfc3339.parse(end) else { return "\(start)–\(end)" }
+    return CareFormat.clockRange(s, e, .current)
 }
 
-private func clock(_ rfc: String) -> String { Rfc3339.parse(rfc)?.formatted(date: .omitted, time: .shortened) ?? rfc }
-
 private func minSec(_ s: Int) -> String { s >= 60 ? "\(s / 60)분 \(s % 60)초" : "\(s)초" }
+
+/// 리포트 목록(guardian 오늘 '최근 리포트'에서 연다. 안드로이드 `ReportsScreen`과 같다).
+struct ReportListView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        List {
+            if model.state.reports.isEmpty { Text("주행이 끝나면 여기에 리포트가 와요").foregroundStyle(DesignSystem.textSecondary) }
+            ForEach(model.state.reports) { r in
+                NavigationLink { ReportDetailView(report: r) } label: { ReportRow(report: r) }
+            }
+        }
+        .screenBackground()
+        .navigationTitle("리포트")
+        .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
+        .refreshable { await model.retryNow() }
+    }
+}
 
 struct ReportRow: View {
     let report: StoredReport
 
     var body: some View {
         let b = report.body
+        // U47: 차 탭·전체 목록·guardian '최근 리포트'가 모두 이 줄을 쓴다.
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(when(b.startedAt)).font(.headline)
-                if b.simulated { Text("시뮬레이션").font(.caption).padding(.horizontal, 6).background(.orange.opacity(0.2), in: Capsule()) }
-            }
-            Text(b.timeline.isEmpty ? "기록된 에피소드가 없어요"
-                 : "에피소드 \(b.timeline.count)번 · 울음 \(minSec(b.timeline.reduce(0) { $0 + $1.totalCryS }))")
-                .font(.footnote).foregroundStyle(.secondary)
+            Text(Rfc3339.parse(b.startedAt).flatMap { s in Rfc3339.parse(b.endedAt).map { CareText.reportTitle(start: s, end: $0) } } ?? b.startedAt)
+                .font(DesignSystem.headline)
+            Text(CareText.reportSub(cries: b.timeline.filter { $0.trigger == .cryAlarm }.count, simulated: b.simulated))
+                .font(DesignSystem.caption).foregroundStyle(DesignSystem.textSecondary)
         }
     }
 }
@@ -39,22 +57,21 @@ struct ReportDetailView: View {
         let b = report.body
         List {
             Section {
-                LabeledContent("시작", value: when(b.startedAt))
-                LabeledContent("끝", value: when(b.endedAt))
-                if b.simulated { Text("시뮬레이션으로 만든 리포트예요").foregroundStyle(.orange) }
+                Text(span(b.startedAt, b.endedAt)).font(DesignSystem.headline)   // U47: 제목은 날짜, 첫 줄은 구간
+                if b.simulated { Text("시뮬레이션으로 만든 리포트예요").foregroundStyle(DesignSystem.warning) }
                 // 재생이 한 번도 없으면 출력 경로 표시를 넣지 않는다.
                 if b.outputRoute == .rearZone { LabeledContent("소리 나간 곳", value: "뒷좌석") }
                 if b.outputRoute == .defaultZoneFallback { LabeledContent("소리 나간 곳", value: "앞에서도 들림") }
-                if b.truncated == true { Text("오래된 에피소드는 줄였어요").font(.footnote).foregroundStyle(.secondary) }
+                if b.truncated == true { Text("오래된 에피소드는 줄였어요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }
             }
 
-            Section("에피소드") {
-                if b.timeline.isEmpty { Text("기록된 에피소드가 없어요").foregroundStyle(.secondary) }   // 울음이 없었다고 단정하지 않는다
+            Section {
+                if b.timeline.isEmpty { Text("기록된 에피소드가 없어요").foregroundStyle(DesignSystem.textSecondary) }   // 울음이 없었다고 단정하지 않는다
                 ForEach(b.timeline, id: \.episodeId) { EpisodeView(episode: $0, songName: songName) }
-            }
+            } header: { SectionHeader("에피소드") }
 
-            Section("울음 직전 주행") {
-                if b.preCryContext.isEmpty { Text("없어요").foregroundStyle(.secondary) }
+            Section {
+                if b.preCryContext.isEmpty { Text("없어요").foregroundStyle(DesignSystem.textSecondary) }
                 ForEach(b.preCryContext, id: \.episodeId) { c in
                     VStack(alignment: .leading, spacing: 2) {
                         Text("울기 전 \(c.windowS)초").font(.subheadline.bold())
@@ -62,42 +79,44 @@ struct ReportDetailView: View {
                         Text("기어 \(c.gear.rawValue)" + (c.turnSignalUsed ? ", 방향지시등 씀" : "") + (c.playing ? ", 소리 재생 중" : "")
                              + (c.cabinTempC.map { String(format: ", 실내 %.1f℃", $0) } ?? "")
                              + (c.windowOpen == true ? ", 창 열림" : ""))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignSystem.textSecondary)
                     }
                     .font(.footnote)
                 }
-            }
+            } header: { SectionHeader("울음 직전 주행") }
 
-            Section("평소 대비 조향 보정") { SteeringView(s: b.steering) }
+            Section { SteeringView(s: b.steering) } header: { SectionHeader("평소 대비 조향 보정") }
 
-            Section("차가 대신 한 일") {
-                if b.carActions.isEmpty { Text("없어요").foregroundStyle(.secondary) }
+            Section {
+                if b.carActions.isEmpty { Text("없어요").foregroundStyle(DesignSystem.textSecondary) }
                 ForEach(b.carActions, id: \.action) { a in
                     LabeledContent(actionText(a.action), value: "\(a.count)번" + (a.totalS.map { " · \(minSec($0))" } ?? ""))
                 }
-            }
+            } header: { SectionHeader("차가 대신 한 일") }
 
-            Section("제어 기록") {
-                if b.controls.isEmpty { Text("없어요").foregroundStyle(.secondary) }
+            Section {
+                if b.controls.isEmpty { Text("없어요").foregroundStyle(DesignSystem.textSecondary) }
                 ForEach(Array(b.controls.enumerated()), id: \.offset) { _, c in
                     VStack(alignment: .leading) {
                         Text("\(c.api) · \(c.target)").font(.footnote.monospaced())
-                        Text("시도 \(c.attempts) · 성공 \(c.succeeded) · 실패 \(c.failed) · 다시 \(c.retries)").font(.footnote).foregroundStyle(.secondary)
+                        Text("시도 \(c.attempts) · 성공 \(c.succeeded) · 실패 \(c.failed) · 다시 \(c.retries)").font(.footnote).foregroundStyle(DesignSystem.textSecondary)
                     }
                 }
-            }
+            } header: { SectionHeader("제어 기록") }
 
             if let stats = b.methodStats, !stats.isEmpty {
                 Section {
                     ForEach(stats, id: \.method) { m in
                         LabeledContent(m.label, value: m.attempts < 3 ? "아직 모름" : "\(m.attempts)번 중 \(m.successes)번 그침")
                     }
-                } header: { Text("소리별 결과") } footer: {
-                    Text("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.")
+                } header: { SectionHeader("소리별 결과") } footer: {
+                    SectionHeader("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.")
                 }
             }
         }
-        .navigationTitle(when(b.startedAt, .dateTime.month().day()))
+        .screenBackground()
+        .labeledContentStyle(TokenLabeledContentStyle())   // 값 글자 대비 4.5:1(8장)
+        .navigationTitle(Rfc3339.parse(b.startedAt).map { CareFormat.day($0) } ?? b.startedAt)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -116,8 +135,8 @@ private struct EpisodeView: View {
             line("소리", e.sound?.label ?? "틀지 않았어요")
             line("재생", minSec(e.playS))
             ForEach(Array(e.plays.enumerated()), id: \.offset) { _, p in
-                Text("· \(purposeText(p.purpose)) \(methodName(p.method, songName(p.songId))) \(clock(p.startedAt))~\(clock(p.endedAt)) \(minSec(p.playS))")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("· \(purposeText(p.purpose)) \(methodName(p.method, songName(p.songId))) \(span(p.startedAt, p.endedAt)) \(minSec(p.playS))")
+                    .font(.caption).foregroundStyle(DesignSystem.textSecondary)
             }
             line("판정", resultText(e.result, excluded: e.excludedReason))
             line("다시 울었는지", e.recried ? "다시 울었어요" : "다시 울지 않았어요")
@@ -132,7 +151,7 @@ private struct EpisodeView: View {
     }
 
     private func line(_ k: String, _ v: String) -> some View {
-        HStack(alignment: .top) { Text(k).foregroundStyle(.secondary).frame(width: 84, alignment: .leading); Text(v) }
+        HStack(alignment: .top) { Text(k).foregroundStyle(DesignSystem.textSecondary).frame(width: 84, alignment: .leading); Text(v) }
     }
 }
 
@@ -140,7 +159,7 @@ private struct SteeringView: View {
     let s: Steering
     var body: some View {
         if !s.available {
-            Text(s.unavailableReason == .noCry ? "울음이 없어 비교하지 않았어요" : "비교할 구간이 없어요").foregroundStyle(.secondary)
+            Text(s.unavailableReason == .noCry ? "울음이 없어 비교하지 않았어요" : "비교할 구간이 없어요").foregroundStyle(DesignSystem.textSecondary)
         } else {
             if let v = s.baselinePerMin { LabeledContent("평소", value: String(format: "분당 %.1f번", v)) }
             if let v = s.duringCryPerMin { LabeledContent("울음 동안", value: String(format: "분당 %.1f번", v)) }

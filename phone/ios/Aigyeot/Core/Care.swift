@@ -68,14 +68,15 @@ extension CareEvent: Codable {
         startAt = try c.decode(Int64.self, forKey: .startAt)
         endAt = try c.decodeIfPresent(Int64.self, forKey: .endAt)
         endUnknown = try c.decodeIfPresent(Bool.self, forKey: .endUnknown) ?? false
-        zone = try c.decode(String.self, forKey: .zone)
+        // 없는 키는 기본값으로 읽는다(6장). 하나가 빠졌다고 파일 전체를 깨진 것으로 보지 않게. 안드로이드는 source만 기본값이 있고 zone·createdAt·updatedAt은 필수다(보고함)
+        zone = try c.decodeIfPresent(String.self, forKey: .zone) ?? TimeZone.current.identifier
         feedSide = try c.decodeIfPresent(FeedSide.self, forKey: .feedSide)
         amountMl = try c.decodeIfPresent(Int.self, forKey: .amountMl)
         diaper = try c.decodeIfPresent(DiaperKind.self, forKey: .diaper)
         note = try c.decodeIfPresent(String.self, forKey: .note)
-        source = try c.decode(CareSource.self, forKey: .source)
-        createdAt = try c.decode(Int64.self, forKey: .createdAt)
-        updatedAt = try c.decode(Int64.self, forKey: .updatedAt)
+        source = try c.decodeIfPresent(CareSource.self, forKey: .source) ?? .phone
+        createdAt = try c.decodeIfPresent(Int64.self, forKey: .createdAt) ?? startAt
+        updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? createdAt
         deletedAt = try c.decodeIfPresent(Int64.self, forKey: .deletedAt)
     }
 
@@ -147,8 +148,11 @@ final class MemoryCareStore: CareStore {
     private(set) var saves = 0
     init(_ value: CareFile = CareFile()) { self.value = value }
     func load() -> CareFile { value }
+    /// 다음 n번만 실패(시험).
+    var failNext = 0
     func save(_ c: CareFile) throws {
         if failing { throw StoreError() }
+        if failNext > 0 { failNext -= 1; throw StoreError() }
         value = c
         saves += 1
     }
@@ -320,9 +324,9 @@ enum CareRules {
         }
     }
 
-    /// R8: 지운 지 30일이 지난 기록을 실제로 지운다.
+    /// R8: 지운 지 30일이 된 기록을 실제로 지운다(안드로이드 `now - deletedAt < 30일`만 남김과 같은 경계).
     static func purged(_ events: [CareEvent], now: Int64) -> [CareEvent] {
-        events.filter { e in e.deletedAt.map { $0 >= now - purgeAfterMs } ?? true }
+        events.filter { e in e.deletedAt.map { now - $0 < purgeAfterMs } ?? true }
     }
 
     /// R11: 지금 수유 기록을 FEED로 옮긴다. 같은 id는 건너뛴다.
@@ -335,6 +339,36 @@ enum CareRules {
         }
         f.migratedFeedings = true
         return f
+    }
+
+    /// R18(U45): 차로 보낼 돌봄 요약. 시각·횟수와 오늘 잔 시간 합만 넣는다(메모·기저귀 종류·젖병 양·쪽·별명은 넣지 않는다, U60).
+    /// '오늘 0시'·'어제 22시'·'오늘 6시'는 `asOf`를 `zone` 벽시계로 본 날 기준이다.
+    static func careSummary(_ file: CareFile, asOf: Int64, zone: TimeZone) -> CareSummaryBody {
+        let cal = calendar(zone)
+        let today = cal.startOfDay(for: CareTime.date(asOf))
+        let today0 = CareTime.ms(today)
+        let night = cal.date(byAdding: .day, value: -1, to: today).flatMap { cal.date(bySettingHour: 22, minute: 0, second: 0, of: $0) }.map(CareTime.ms) ?? today0
+        let morning = cal.date(bySettingHour: 6, minute: 0, second: 0, of: today).map(CareTime.ms) ?? today0
+        let live = file.events.filter { $0.deletedAt == nil && $0.startAt <= asOf }
+        func at(_ ms: Int64?) -> String? { ms.map { Rfc3339.string(CareTime.date($0), timeZone: zone) } }
+
+        let feeds = live.filter { $0.kind == .feed && $0.startAt >= today0 }.count   // 끝 모름 수유도 센다
+        var body = CareSummaryBody(asOf: at(asOf)!, zone: zone.identifier, sleepDiaperEnabled: file.sleepDiaperEnabled, todayFeedCount: feeds)
+        guard file.sleepDiaperEnabled else { return body }
+
+        let sleeps = live.filter { $0.kind == .sleep && !$0.endUnknown }   // 끝 모름 잠은 모든 잠 칸에서 뺀다
+        let ended = sleeps.filter { ($0.endAt ?? .max) <= asOf }
+        let last = ended.max { ($0.endAt!, $0.startAt) < ($1.endAt!, $1.startAt) }
+        let todayMs = sleeps.reduce(Int64(0)) { sum, e in sum + max(0, min(e.endAt ?? asOf, asOf) - max(e.startAt, today0)) }
+        let diapers = live.filter { $0.kind == .diaper }
+        body.lastSleepStartAt = at(last?.startAt)
+        body.lastSleepEndAt = at(last?.endAt)
+        body.sleepingSince = at(sleeps.filter { $0.endAt == nil }.map(\.startAt).max())
+        body.todaySleepMin = Int(todayMs / 60_000)
+        body.nightWakeups = ended.filter { night <= $0.endAt! && $0.endAt! < morning }.count
+        body.lastDiaperAt = at(diapers.map(\.startAt).max())
+        body.todayDiaperCount = diapers.filter { $0.startAt >= today0 }.count
+        return body
     }
 
     /// 메모 입력칸: 코드 포인트 200개에서 더 받지 않는다(U17·U24).
@@ -361,13 +395,47 @@ enum CareRules {
         return String(format: "%04d-%02d-%02d", d.year!, d.month!, d.day!)
     }
 
-    /// 그날 0시부터 다음 날 0시 전까지(ms).
+    /// 그날 0시부터 다음 날 0시 전까지(ms). 0시가 없는 날(서머타임)은 그날 첫 시각부터다(안드로이드 `atStartOfDay`와 같다).
     static func dayRange(_ day: String, _ zone: TimeZone) -> (Int64, Int64)? {
         let p = day.split(separator: "-").compactMap { Int($0) }
         let cal = calendar(zone)
+        // 끝은 다음 날의 0시다. 시작(01:00일 수 있음)에 하루를 더하면 다음 날 01:00이 돼 한 시간을 겹쳐 센다.
         guard p.count == 3, let start = cal.date(from: DateComponents(year: p[0], month: p[1], day: p[2])),
-              let end = cal.date(byAdding: .day, value: 1, to: start) else { return nil }
-        return (CareTime.ms(start), CareTime.ms(end))
+              let next = cal.date(byAdding: .day, value: 1, to: start).map(cal.startOfDay) else { return nil }
+        return (CareTime.ms(start), CareTime.ms(next))
+    }
+
+    /// 날짜 키의 요일(일~토). 기기 달력·시간대와 상관없이 키(그레고리력)에서 구한다.
+    static func weekdayName(_ key: String) -> String {
+        let p = key.split(separator: "-").compactMap { Int($0) }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        guard p.count == 3, let d = cal.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 12)) else { return "" }
+        return ["일", "월", "화", "수", "목", "금", "토"][cal.component(.weekday, from: d) - 1]
+    }
+
+    /// 날짜 띠의 키: 기기 시간대의 날들에 기록이 있는 날을 더한다(기록은 자기 시간대의 날이다, R13).
+    /// 기기 시간대에 없는 날(날짜 변경선을 옮긴 사모아의 2011-12-30 등)의 기록도 열 수 있게.
+    static func stripKeys(_ days: [String], records: Set<String>) -> [String] { Array(Set(days).union(records)).sorted() }
+
+    /// 그날 벽시계 낮 12시(ms). 하루 시작 + 12시간이 아니다: 0시가 없는 날·서머타임이 바뀌는 날엔 11시나 13시가 된다(안드로이드 `onDate(day, 12, 0)`).
+    static func noon(_ day: String, _ zone: TimeZone) -> Int64? {
+        guard let r = dayRange(day, zone),
+              let d = calendar(zone).date(bySettingHour: 12, minute: 0, second: 0, of: CareTime.date(r.0)) else { return nil }
+        return CareTime.ms(d)
+    }
+
+    /// 날짜 띠의 날들(첫날~마지막 날, 둘 다 포함). 칸 수는 날짜 성분으로 센다. 시각 차이로 세면 첫날이 01:00에 시작하는 날(0시가 없는 날)에
+    /// 하루가 모자라 '오늘' 칸이 빠진다(안드로이드 `LocalDate.minusDays`와 같게).
+    static func days(from first: Date, through last: Date, zone: TimeZone) -> [(key: String, date: Date)] {
+        let cal = calendar(zone)
+        // 정오끼리 센다(정오는 늘 있다). 날짜 성분끼리 빼도 안에서 0시로 바꿔 세어 0시가 없는 날엔 하루가 모자랐다.
+        func noon(_ d: Date) -> Date { cal.date(bySettingHour: 12, minute: 0, second: 0, of: d)! }
+        let n = cal.dateComponents([.day], from: noon(first), to: noon(last)).day ?? 0
+        return (0...max(0, n)).map { i in
+            let d = cal.date(byAdding: .day, value: i, to: first)!
+            return (dayKey(CareTime.ms(d), zone), d)
+        }
     }
 
     /// 그날 목록: 그 기록의 시간대로 시작한 날이 이 날인 것(자정을 넘어도 시작한 날).
@@ -390,9 +458,9 @@ enum CareRules {
         let cal = calendar(zone)
         let today = cal.startOfDay(for: CareTime.date(now))
         let days = (0..<7).reversed().map { dayKey(CareTime.ms(cal.date(byAdding: .day, value: -$0, to: today)!), zone) }
-        let windowStart = CareTime.ms(cal.date(byAdding: .day, value: -6, to: today)!)
+        let windowStart = dayRange(days[0], zone)!.0   // 첫날의 0시(안드로이드 `days.first().atStartOfDay`)
         let alive = live(events)
-        let feeds = alive.filter { $0.kind == .feed && $0.startAt >= windowStart && $0.startAt <= now }.map(\.startAt).sorted()
+        let feeds = alive.filter { $0.kind == .feed && $0.startAt >= windowStart }.map(\.startAt).sorted()   // 횟수는 R3의 1분 여유 수유도 센다(기저귀·안드로이드 countPerDay와 같다)
         let episodes = reports.flatMap(\.body.timeline).filter { $0.trigger == .cryAlarm }.compactMap { Rfc3339.parse($0.startedAt).map(CareTime.ms) }
 
         let stats = days.map { day in
@@ -404,7 +472,8 @@ enum CareRules {
                         diapers: sleepDiaper ? alive.filter { $0.kind == .diaper && dayKey($0.startAt, zone) == day }.count : nil,
                         carEpisodes: episodes.filter { dayKey($0, zone) == day }.count)
         }
-        let gaps = zip(feeds, feeds.dropFirst()).map { $1 - $0 }.filter { $0 <= gapMaxMs }.sorted()
+        let past = feeds.filter { $0 <= now }   // 간격은 지난 수유만(안드로이드 intervals와 같다)
+        let gaps = zip(past, past.dropFirst()).map { $1 - $0 }.filter { $0 <= gapMaxMs }.sorted()
         let median: Int64? = gaps.count < minGaps ? nil
             : gaps.count % 2 == 1 ? gaps[gaps.count / 2] : (gaps[gaps.count / 2 - 1] + gaps[gaps.count / 2]) / 2
         return CarePattern(days: stats, feedIntervalMedianMs: median)
@@ -437,17 +506,29 @@ enum CareRules {
 enum CareFormat {
     private static let ko = Locale(identifier: "ko_KR")
 
+    // 포매터는 만들기가 비싸 문양·시간대마다 한 번만 만든다(기록 탭은 그릴 때마다 리포트 줄을 모두 포맷한다).
+    // DateFormatter는 읽기 전용으로 쓰면 스레드 안전하다. 사전만 잠근다.
+    nonisolated(unsafe) private static var cache: [String: DateFormatter] = [:]
+    private static let cacheLock = NSLock()
+
     private static func formatter(_ pattern: String, _ zone: TimeZone) -> DateFormatter {
+        let key = pattern + "|" + zone.identifier
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        if let f = cache[key] { return f }
         let f = DateFormatter()
         f.locale = ko
         f.calendar = Calendar(identifier: .gregorian)
         f.timeZone = zone
         f.dateFormat = pattern
+        cache[key] = f
         return f
     }
 
     /// "오후 12:52"
     static func clock(_ d: Date, _ zone: TimeZone = .current) -> String { formatter("a h:mm", zone).string(from: d) }
+
+    /// "11월 5일(수) 오후 12:52"(인계 알림 상세 시각, 기기 언어와 무관)
+    static func dateTime(_ d: Date, _ zone: TimeZone = .current) -> String { day(d, zone) + " " + clock(d, zone) }
 
     /// "오후 1:10–1:52". 끝이 같은 오전·오후면 끝의 오전·오후를 뺀다(7장 예). 같은 분(epoch 분)에 끝났으면 시각 하나(U41).
     static func clockRange(_ start: Date, _ end: Date?, _ zone: TimeZone) -> String {
@@ -499,6 +580,8 @@ enum CareText {
     static let guardianNote = "보호자 기록은 이 휴대폰에만 남아요"
     static let reconnect = "다시 연결하기", keepRecording = "기록만 계속 쓸게요"
     static let disconnected = "연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요"
+    /// 보낼 함이 버린 요약(7.5 '버리고 화면에 알린다', 7.1 `outbox.dropped`).
+    static let careSummaryDropped = "돌봄 기록 요약을 차로 보내지 못했어요."
     static let pickEnd = "끝 시각 고르기", closeEndUnknown = "끝 시각 모름으로 닫기"
     static let chipNow = "지금", chipCustom = "직접"
     static let chipMinutes = [5, 15, 30, 60]
@@ -532,6 +615,25 @@ enum CareText {
     static let export = "내 기록 내보내기", clear = "이 휴대폰의 기록 지우기", disconnect = "연결 끊기", about = "정보·라이선스"
     static let nicknamePlaceholder = "예: 콩이"                                           // settings.nickname.placeholder
     static let csvHeader = "kind,start,end,end_unknown,side,amount_ml,diaper,note"       // export.csvHeader
+    static let introTitle = "아이곁"                                                     // intro.*(U43, 이 순서로 보인다)
+    static let introLead = "차의 아이곁과 이 휴대폰을 연결해요."
+    static let introSends = "주고받는 것: 수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장"
+    static let introNotSent = "보내지 않는 것: 아기 울음 소리, 차 안 마이크 소리, 차의 위치"
+    static let introRelay = "모두 아이곁 중계 서버를 거쳐 오가요. 인계 알림은 Google·Apple 알림 서버도 거쳐요."
+    static let introAI = "차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요."
+    static let pairConfirm = "연결하기", pairConfirmSwitch = "끊고 연결하기"                // pair.confirm·confirmSwitch(U49)
+    static let pairBusy = "연결하는 중이에요. 끝난 뒤 링크를 다시 열어 주세요."           // pair.busy(U52)
+    static let bannerClose = "닫기"                                                      // banner.close(U48)
+
+    /// report.row.title "11월 6일(금) 오전 2:54–3:44"(U47). 상세 제목(report.detail.title)은 날짜만, 첫 줄은 구간이다.
+    static func reportTitle(start: Date, end: Date, zone: TimeZone = .current) -> String {
+        CareFormat.day(start, zone) + " " + CareFormat.clockRange(start, end, zone)
+    }
+
+    /// report.row.sub "울음 3번"(0번 "울음 기록 없음"), 시뮬레이션이면 " · 시뮬레이션"(U47).
+    static func reportSub(cries n: Int, simulated: Bool) -> String {
+        (n == 0 ? "울음 기록 없음" : "울음 \(n)번") + (simulated ? " · 시뮬레이션" : "")
+    }
 
     /// 오늘 탭 머리(U34): "{별명}의 오늘", 별명이 없으면 "오늘".
     static func todayTitle(nickname: String?) -> String { nickname.map { "\($0)의 오늘" } ?? tabToday }
@@ -577,7 +679,10 @@ enum CareText {
         let todayKey = CareRules.dayKey(CareTime.ms(now), zone)
         if day == todayKey { return today }
         if let (start, _) = CareRules.dayRange(todayKey, zone), CareRules.dayKey(start - 1, zone) == day { return yesterday }
-        return CareRules.dayRange(day, zone).map { CareFormat.day(CareTime.date($0.0), zone) } ?? day
+        // 키(그레고리력)에서 쓴다: 기기 시간대에 없는 날(사모아 2011-12-30)도 그날로 보인다(안드로이드 LocalDate)
+        let p = day.split(separator: "-").compactMap { Int($0) }
+        guard p.count == 3 else { return day }
+        return "\(p[1])월 \(p[2])일(\(CareRules.weekdayName(day)))"
     }
 
     /// log.row.*: 기록 탭 손 기록 한 줄(그 기록의 시간대로 보인다).
@@ -603,7 +708,14 @@ enum CareText {
     }
 
     /// pattern.value
-    static func avgCount(_ v: Double) -> String { String(format: "평균 %.1f회", v) }
+    static func avgCount(_ v: Double) -> String { "평균 \(oneDecimal(v))회" }
+
+    /// 소수 첫째 자리(안드로이드 `String.format("%.1f")`의 HALF_UP과 같게). printf는 정확히 반인 값을 짝수 쪽으로 보내
+    /// 2.25가 "2.2"(안드로이드 "2.3")였다. 평균의 분모는 1~7일이라 정확히 반인 평균은 4일의 .25·.75뿐이다(4배하면 홀수 정수).
+    static func oneDecimal(_ v: Double) -> String {
+        let q = v * 4
+        return String(format: "%.1f", q == q.rounded() && Int(q) % 2 != 0 ? v + 0.001 : v)
+    }
     static func median(_ ms: Int64) -> String { "중앙값 " + CareFormat.length(ms) }
     static func avgDuration(_ ms: Int64) -> String { "평균 " + CareFormat.length(ms) }
     static func times(_ n: Int) -> String { "\(n)번" }
@@ -612,7 +724,7 @@ enum CareText {
 
     // about.*(U28)
     static func version(_ v: String) -> String { "판 \(v)" }
-    static let oss = "오픈소스 라이선스", ossNone = "이 앱은 외부 오픈소스 라이브러리를 쓰지 않아요"
+    static let oss = "오픈소스 라이선스"   // 목록은 OssEntry.all(U63)
 
     /// export.fileName "aigyeot-care-{YYYYMMDD}.csv"
     static func exportFileName(_ d: Date, zone: TimeZone = .current) -> String {
@@ -661,14 +773,19 @@ enum CareExport {
 
     /// "2026-11-05T09:00:00+09:00"
     static func iso(_ ms: Int64, _ zone: TimeZone) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        f.timeZone = zone
-        return f.string(from: CareTime.date(ms))
+        Rfc3339.string(CareTime.date(ms), timeZone: zone)   // 같은 형식, 시간대마다 만든 포매터를 다시 쓴다
     }
 
     /// RFC 4180: 쉼표·따옴표·줄바꿈이 있으면 따옴표로 감싸고 안의 따옴표는 두 번 쓴다.
     static func quoted(_ s: String) -> String {
         s.unicodeScalars.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) ? "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" : s
+    }
+}
+
+/// U61: 기록에서 온 값이 하나도 없는 요약(오늘 수유 0회, 잠·기저귀 칸이 비었거나 0). 메모만·옛 기록만 있는 폰의 요약도 그렇다(안드로이드 `empty`와 같다).
+extension CareSummaryBody {
+    var isEmpty: Bool {
+        todayFeedCount == 0 && lastSleepStartAt == nil && lastSleepEndAt == nil && sleepingSince == nil && (todaySleepMin ?? 0) == 0
+            && (nightWakeups ?? 0) == 0 && lastDiaperAt == nil && (todayDiaperCount ?? 0) == 0
     }
 }

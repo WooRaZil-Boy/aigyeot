@@ -41,6 +41,7 @@ enum MessageType {
     static let feedingState = "feeding_state"
     static let reportSummary = "report_summary"
     static let handoffAlert = "handoff_alert"
+    static let careSummary = "care_summary"
     static let ack = "ack"
 }
 
@@ -98,6 +99,21 @@ struct SongStatusBody: Codable, Equatable {
 struct FeedingStateBody: Codable, Equatable {
     @NullEncoded var lastFeedingStart: String?
     @NullEncoded var windowStartExpected: String?
+}
+
+/// `care_summary`(3.3, L60). 숫자와 시각만 보낸다. `sleepDiaperEnabled`가 거짓이면 잠·기저귀 칸은 모두 null이다.
+struct CareSummaryBody: Codable, Equatable {
+    var asOf: String
+    var zone: String
+    var sleepDiaperEnabled: Bool
+    @NullEncoded var lastSleepStartAt: String?
+    @NullEncoded var lastSleepEndAt: String?
+    @NullEncoded var sleepingSince: String?
+    @NullEncoded var todaySleepMin: Int?
+    @NullEncoded var nightWakeups: Int?
+    @NullEncoded var lastDiaperAt: String?
+    @NullEncoded var todayDiaperCount: Int?
+    var todayFeedCount: Int
 }
 
 // ---- report_summary ----

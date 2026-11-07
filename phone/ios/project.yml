@@ -12,6 +12,11 @@ settings:
     # 서명은 비워 둔다. 기기 설치·TestFlight 때 Xcode에서 팀을 고른다.
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
+# 인계 알림 원격 푸시(계약 5.3·5.4: iOS도 FCM 토큰을 중계에 보낸다). 설정 파일 GoogleService-Info.plist는 공개하지 않는다(.gitignore).
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    exactVersion: 12.19.2
 targets:
   Aigyeot:
     type: application
@@ -19,6 +24,12 @@ targets:
     sources: [Aigyeot, Shared]
     dependencies:
       - target: AigyeotWidgets   # 잠금 화면 진행 표시(C6). 앱 안에 넣는다
+      - package: Firebase
+        product: FirebaseMessaging
+    entitlements:
+      path: Aigyeot/Aigyeot.entitlements
+      properties:
+        aps-environment: development   # 원격 푸시(5.3). 배포 서명 때 Xcode가 production으로 바꾼다
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: kr.aigyeot.phone

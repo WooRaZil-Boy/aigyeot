@@ -20,7 +20,7 @@ struct CareLiveActivity: Widget {
                 endButton(context)
             }
             .padding(16)
-            .activityBackgroundTint(Color(.systemBackground).opacity(0.8))
+            .activityBackgroundTint(DesignSystem.surface.opacity(0.8))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -33,7 +33,8 @@ struct CareLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: icon(context.attributes)).foregroundStyle(tint(context.attributes))
             } compactTrailing: {
-                timer(context).monospacedDigit().frame(maxWidth: 52)
+                // 사용자 결정(11-07): 압축 섬은 아이콘만. 좁은 섬(iPhone Care 약 30pt)에서 1시간 넘는 경과가 '1:00…'으로 잘렸다. 경과는 펼친 섬·잠금 화면에 시:분:초로 보인다
+                EmptyView()
             } minimal: {
                 Image(systemName: icon(context.attributes)).foregroundStyle(tint(context.attributes))
             }
@@ -54,9 +55,10 @@ struct CareLiveActivity: Widget {
     private func endButton(_ c: ActivityViewContext<CareActivityAttributes>) -> some View {
         Button(intent: EndCareIntent(eventId: c.attributes.eventId)) { Text(CareActivityText.end).bold() }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(DesignSystem.onAccent)   // 어둠의 밝은 종류 색 위 흰 글자는 대비 미달
             .tint(tint(c.attributes))
     }
 
     private func icon(_ a: CareActivityAttributes) -> String { a.sleep ? "moon.fill" : "drop.fill" }
-    private func tint(_ a: CareActivityAttributes) -> Color { a.sleep ? .indigo : .orange }   // 앱 DesignSystem의 sleep·feed와 같은 값
+    private func tint(_ a: CareActivityAttributes) -> Color { a.sleep ? DesignSystem.sleep : DesignSystem.feed }
 }

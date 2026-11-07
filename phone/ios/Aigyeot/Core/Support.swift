@@ -39,11 +39,18 @@ enum Rfc3339 {
 
     /// 보낼 때는 이 폰의 시차를 붙여 쓴다(`2026-11-05T08:12:21+09:00`).
     static func string(_ d: Date, timeZone: TimeZone = .current) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        f.timeZone = timeZone
+        lock.lock(); defer { lock.unlock() }
+        let f = writers[timeZone.identifier] ?? {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime]
+            f.timeZone = timeZone
+            writers[timeZone.identifier] = f
+            return f
+        }()
         return f.string(from: d)
     }
+    nonisolated(unsafe) private static var writers: [String: ISO8601DateFormatter] = [:]   // 시간대마다 한 번만 만든다
+    private static let lock = NSLock()
 }
 
 /// 연결 코드(6자리 숫자)와 초대 코드(10자 Crockford base32). QR·링크·입력 셋 다 같은 처리다(명세서 12장).

@@ -4,6 +4,8 @@ import Foundation
 enum RelayError: Error, Equatable {
     case http(status: Int, code: String?, retryAfter: TimeInterval?)
     case network
+    /// 화면을 떠나거나 뒤로 가 멈춘 요청. 중계 불통이 아니라 띠·재시도에 세지 않는다(9장)
+    case cancelled
     case invalidResponse
 
     var status: Int? { if case .http(let s, _, _) = self { return s } else { return nil } }
@@ -11,6 +13,8 @@ enum RelayError: Error, Equatable {
     var retryAfter: TimeInterval? { if case .http(_, _, let r) = self { return r } else { return nil } }
     var isUnauthorized: Bool { status == 401 }
     var isOffline: Bool { self == .network }
+    /// 중계에 닿지 않거나 중계가 고장(5xx): 오프라인 띠를 켠다(계약 9장 '중계 불통(네트워크·중계 장애)', 안드로이드와 같다).
+    var isRelayDown: Bool { self == .network || (status ?? 0) >= 500 }
 }
 
 /// 폰이 쓰는 중계 호출 전부. 시험에서는 가짜로 바꾼다.
@@ -19,6 +23,8 @@ protocol RelayAPI {
     func devices() async throws -> DevicesResponse
     func patchMe(_ request: PatchDeviceRequest) async throws -> PatchDeviceResponse
     func deleteMe() async throws
+    /// 저장하지 못한 연결을 되돌린다: Keychain이 아니라 연결 응답의 토큰을 쓴다.
+    func deleteMe(token: String) async throws
     func createInvite() async throws -> InviteResponse
     func send(_ envelope: Envelope) async throws -> SendMessageResponse
     func inbox(afterSeq: Int64?) async throws -> InboxResponse
@@ -34,6 +40,9 @@ struct Credentials: Codable, Equatable {
     var role: PhoneRole
 }
 
+/// 메인에서 돈다: 요청(토큰 헤더)은 부른 쪽이 세대를 확인한 그 차례에 만들어진다.
+/// 다른 실행기로 넘어가면 그사이 새 연결이 끝나 이전 연결의 메시지에 새 토큰이 붙을 수 있다(안드로이드는 토큰을 인자로 고정한다).
+@MainActor
 final class RelayClient: RelayAPI {
     let baseURL: URL
     private let session: URLSession
@@ -90,6 +99,18 @@ final class RelayClient: RelayAPI {
         return req
     }
 
+    /// 응답 전 실패. 취소(화면을 떠남·뒤로 감)는 망 실패와 가른다.
+    /// `Retry-After`(초, 1.1). 유한한 0 이상만 받고 하루로 자른다: 잘못된 헤더(inf·아주 큰 수)가 정수 변환에서 앱을 죽이지 않게.
+    nonisolated static func retryAfter(_ http: HTTPURLResponse) -> TimeInterval? {
+        guard let v = http.value(forHTTPHeaderField: "Retry-After").flatMap({ TimeInterval($0) }), v.isFinite, v >= 0 else { return nil }
+        return min(v, 86_400)
+    }
+
+    nonisolated static func transportError(_ e: Error) -> RelayError {
+        if e is CancellationError || (e as? URLError)?.code == .cancelled { return .cancelled }
+        return .network
+    }
+
     private func perform(_ req: URLRequest, upload: URL? = nil) async throws -> Data {
         let data: Data
         let response: URLResponse
@@ -97,16 +118,38 @@ final class RelayClient: RelayAPI {
             if let upload { (data, response) = try await session.upload(for: req, fromFile: upload) }
             else { (data, response) = try await session.data(for: req) }
         } catch {
-            throw RelayError.network
+            throw Self.transportError(error)
         }
         guard let http = response as? HTTPURLResponse else { throw RelayError.invalidResponse }
         if let date = http.value(forHTTPHeaderField: "Date"), let d = Self.httpDate.date(from: date) { onServerDate?(d) }
         guard (200..<300).contains(http.statusCode) else {
             let code = (try? ProtocolCoding.decoder.decode(ErrorResponse.self, from: data))?.error.code
-            let retry = http.value(forHTTPHeaderField: "Retry-After").flatMap { TimeInterval($0) }
-            throw RelayError.http(status: http.statusCode, code: code, retryAfter: retry)
+            throw RelayError.http(status: http.statusCode, code: code, retryAfter: Self.retryAfter(http))
         }
         return data
+    }
+
+    /// 받은 함 한 쪽을 봉투마다 읽는다. 읽지 못한 봉투는 쪽 전체를 막지 않게 id·seq만 남긴 판 0 봉투로 바꾼다:
+    /// 모델은 모르는 판을 ack만 하고 넘어가고, 다음 `after_seq`도 그 seq를 넘는다(8.3 4번). id도 없으면 ack할 수 없어 뺀다.
+    nonisolated static func lenientInbox(_ data: Data, car: String?) throws -> InboxResponse {
+        struct Item: Decodable {
+            let env: Envelope?, id: String?, seq: Int64?
+            enum K: String, CodingKey { case id, seq }
+            init(from d: Decoder) throws {
+                env = try? Envelope(from: d)
+                let c = try? d.container(keyedBy: K.self)
+                id = try? c?.decode(String.self, forKey: .id)
+                seq = try? c?.decode(Int64.self, forKey: .seq)
+            }
+        }
+        struct Page: Decodable { let messages: [Item]; let more: Bool }
+        guard let page = try? ProtocolCoding.decoder.decode(Page.self, from: data) else { throw RelayError.invalidResponse }
+        let messages: [Envelope] = page.messages.compactMap { i in
+            if let e = i.env { return e }
+            guard let id = i.id else { return nil }
+            return Envelope(v: 0, id: id, seq: i.seq, type: "", car: car, to: nil, from: nil, ts: "", body: .null)
+        }
+        return InboxResponse(messages: messages, more: page.more)
     }
 
     private func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
@@ -142,6 +185,12 @@ final class RelayClient: RelayAPI {
         _ = try await perform(request("DELETE", "v1/devices/me"))
     }
 
+    func deleteMe(token: String) async throws {
+        var req = try request("DELETE", "v1/devices/me", authorized: false)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")   // 헤더로만 보낸다(1.1)
+        _ = try await perform(req)
+    }
+
     func createInvite() async throws -> InviteResponse {
         let env = Envelope(id: ULID.generate(), type: MessageType.inviteCreated, ts: Rfc3339.string(Date()), body: .object([:]))
         return try decode(InviteResponse.self, try await perform(jsonRequest("POST", "v1/invites", body: env)))
@@ -154,7 +203,10 @@ final class RelayClient: RelayAPI {
     func inbox(afterSeq: Int64?) async throws -> InboxResponse {
         var q = [URLQueryItem(name: "limit", value: "100")]
         if let afterSeq { q.append(URLQueryItem(name: "after_seq", value: String(afterSeq))) }
-        return try decode(InboxResponse.self, try await perform(request("GET", "v1/inbox", query: q)))
+        let data = try await perform(request("GET", "v1/inbox", query: q))   // 요청(토큰)은 메인에서 만든다
+        let car = credentials()?.carId
+        // 한 쪽에 64KB 봉투가 100개까지 온다(1.4·3.3). 해석은 메인 밖에서 한다.
+        return try await Task.detached(priority: .userInitiated) { try Self.lenientInbox(data, car: car) }.value
     }
 
     func ack(ids: [String]) async throws {

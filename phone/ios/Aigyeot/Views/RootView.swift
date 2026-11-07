@@ -13,42 +13,37 @@ struct RootView: View {
             else { MainView() }   // 연결 안 됨도 탭을 쓴다(U7)
         }
         .sheet(item: $model.pendingCode) { code in ConfirmView(code: code) }
-        .alert("지금 연결된 차를 끊고 새 차에 연결할까요?", isPresented: Binding(
-            get: { model.replaceCandidate != nil }, set: { if !$0 { model.replaceCandidate = nil } })) {
-            Button("끊고 연결", role: .destructive) {
-                // 알림창이 닫히면 바인딩이 replaceCandidate를 지운다. 동기 클로저에서 코드를 먼저 복사해 넘긴다.
-                if let code = model.replaceCandidate { Task { await model.confirmReplace(code: code) } }
-            }
-            Button("취소", role: .cancel) {}
-        }
     }
 }
 
-/// 안내 한 화면: 무엇이 오가는지(G31).
+/// 안내 한 화면: 무엇이 오가는지(G31). 글과 순서는 7.1 `intro.*` 그대로다(U43).
 struct IntroView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Spacer()
-            Text("아이곁").font(.largeTitle.bold())
-            Text("차에서 아기가 울면 차가 한 일을 휴대폰에서 확인해요.").font(.title3)
-            VStack(alignment: .leading, spacing: 12) {
-                Label("차로 가는 것: 수유 시작 시각, 직접 녹음한 노래", systemImage: "arrow.up.circle")
-                Label("차에서 오는 것: 주행 리포트, 인계 알림", systemImage: "arrow.down.circle")
-                Label("위치 좌표와 울음 소리는 오가지 않아요", systemImage: "lock.circle")
+        VStack(alignment: .leading, spacing: DesignSystem.s3) {
+            ScrollView {   // 큰 글자에서도 버튼이 화면 밖으로 밀리지 않게 글만 굴린다
+                VStack(alignment: .leading, spacing: DesignSystem.s5) {
+                    Text(CareText.introTitle).font(DesignSystem.display)
+                    Text(CareText.introLead).font(DesignSystem.headline)
+                    VStack(alignment: .leading, spacing: DesignSystem.s3) {
+                        Label(CareText.introSends, systemImage: "arrow.left.arrow.right.circle")
+                        Label(CareText.introNotSent, systemImage: "lock.circle")
+                        Label(CareText.introRelay, systemImage: "server.rack")
+                        Label(CareText.introAI, systemImage: "sparkles")
+                    }
+                    .font(DesignSystem.body)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, DesignSystem.s6)
             }
-            .font(.callout)
-            Spacer()
-            Button {
-                model.markIntroSeen()
-                model.connectShown = true
-            } label: { Text(CareText.connectCar).frame(maxWidth: .infinity) }
-                .buttonStyle(.borderedProminent).controlSize(.large)
-            Button { model.markIntroSeen() } label: { Text(CareText.recordOnly).frame(maxWidth: .infinity) }
+            Button { model.connectFromIntro() } label: { Text(CareText.connectCar).frame(maxWidth: .infinity) }   // 안내에서 받은 링크가 있으면 그 확인 화면(U62)
+                .accentButton().controlSize(.large)
+            Button { model.recordsOnlyFromIntro() } label: { Text(CareText.recordOnly).frame(maxWidth: .infinity) }
                 .buttonStyle(.bordered).controlSize(.large)
         }
         .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
     }
 }
 
@@ -58,16 +53,21 @@ struct GoneView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Spacer()
-            Label("연결이 끊겼어요. 다시 연결해 주세요.", systemImage: "exclamationmark.triangle")
-                .font(.title3.bold())
-            Spacer()
+            // 가장 큰 글자에서는 두 버튼이 높이를 차지해 문장이 말줄임됐다. 문장 칸을 굴린다(8장 동적 글자 크기).
+            ScrollView {
+                Label("연결이 끊겼어요. 다시 연결해 주세요.", systemImage: "exclamationmark.triangle")
+                    .font(.title3.bold())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, DesignSystem.s6)
+            }
+            .scrollBounceBehavior(.basedOnSize)
             Button { model.reconnectAfterGone() } label: { Text(CareText.reconnect).frame(maxWidth: .infinity) }
-                .buttonStyle(.borderedProminent).controlSize(.large)
+                .accentButton().controlSize(.large)
             Button { model.continueWithoutCar() } label: { Text(CareText.keepRecording).frame(maxWidth: .infinity) }
                 .buttonStyle(.bordered).controlSize(.large)
         }
         .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
     }
 }
 
@@ -87,7 +87,7 @@ struct ConnectView: View {
                     Button { scanning = true } label: {
                         Label("QR 찍기", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large).disabled(connecting)
+                    .accentButton().controlSize(.large).disabled(connecting)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("코드로 입력").font(.headline)
@@ -101,15 +101,14 @@ struct ConnectView: View {
                                 // 6자리를 다 넣으면 바로 연결한다.
                                 if v.filter(\.isNumber).count == 6, v.allSatisfy({ $0.isNumber || $0 == " " || $0 == "-" }) { submit() }   // 잠금 중이면 submit이 막는다
                             }
-                        if let e = inputError ?? model.linkError { Text(e).font(.footnote).foregroundStyle(.red) }
+                        if let e = inputError ?? model.linkError { Text(e).font(.footnote).foregroundStyle(DesignSystem.danger) }
                         if connecting { HStack { ProgressView(); Text("확인하고 있어요") } }
-                        Button("확인") { submit() }.buttonStyle(.bordered).disabled(code.isEmpty || connecting || model.isPairLocked)
+                        Button { submit() } label: { Text("확인").frame(minWidth: 44, minHeight: 44) }.buttonStyle(.bordered).disabled(code.isEmpty || connecting || model.isPairLocked)   // 44pt
                     }
-                    Text("링크 aigyeot://pair?code=… 를 열어도 같은 화면으로 와요.")
-                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 .padding(24)
             }
+            .screenBackground()
             .navigationTitle("연결")
             .toolbar {
                 // 연결하지 않고 탭(연결 안 됨)으로 돌아간다(U7).
@@ -128,8 +127,10 @@ struct ConnectView: View {
         guard !model.isPairLocked else { inputError = ConnectFailure.rateLimited(nil).message; return }
         code = ""
         connecting = true
+        model.beginConfirm()   // Task가 돌기 전 틈에 온 링크가 확인 화면을 바꾸지 않게(U52)
         Task {
             let f = await model.connect(typed: c)
+            model.endConfirm()
             connecting = false
             if let f { inputError = f.message }
             else if model.role == .guardian { await NotificationAccess.request() }   // 받을 푸시가 있는 guardian만 묻는다(G13)
@@ -171,7 +172,7 @@ struct ScanView: View {
                 Text(invalid ? "올바른 연결 QR이 아니에요" : "차 화면의 QR을 비춰 주세요")
                     .font(.headline).foregroundStyle(.white).padding(.top, 60)
                 Spacer()
-                Button("코드로 입력") { isPresented = false }
+                Button { isPresented = false } label: { Text("코드로 입력").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 44pt(8장)
                     .foregroundStyle(.white).padding(.bottom, 40)
             }
         }
@@ -185,35 +186,50 @@ struct ScanView: View {
 /// 확인(QR·링크만): 남이 보낸 링크로 남의 차에 붙지 않도록 코드가 맞는지 묻는다(G17).
 /// 연결 코드는 차 화면, 초대 코드는 받은 초대 코드와 견준다.
 struct ConfirmView: View {
+    @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 44   // 대조할 코드도 동적 글자 크기를 따른다(8장)
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let code: PairCode
     @State private var busy = false
     @State private var failure: ConnectFailure?
+    /// 누른 순간의 교체 여부(안드로이드 `switching`과 같다). 끊고 연결하는 동안 글자가 '연결하기'로 바뀌지 않게 끝날 때까지 둔다.
+    @State private var switching: Bool?
+    /// 이미 연결된 폰. 확인하기 전에는 지금 연결을 지우지 않는다.
+    private var replacing: Bool { switching ?? model.isPaired }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Spacer()
-            Text(code.confirmTitle).font(.title2.bold())
-            Text(code.display).font(.system(size: 44, weight: .bold, design: .monospaced))
-            if case .invite = code { Text("다른 보호자가 보낸 초대 코드예요. 리포트와 인계 알림을 받게 돼요.").font(.callout) }
-            if let failure { Text(failure.message).foregroundStyle(.red) }
-            Spacer()
+            ScrollView {   // 큰 글자에서 안내·오류가 함께 있어도 버튼이 밀리지 않게 글만 굴린다(IntroView와 같다)
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(code.confirmTitle).font(.title2.bold())
+                    Text(code.display).font(.system(size: codeSize, weight: .bold, design: .monospaced)).minimumScaleFactor(0.5).lineLimit(1)
+                    if case .invite = code { Text("다른 보호자가 보낸 초대 코드예요. 리포트와 인계 알림을 받게 돼요.").font(.callout) }
+                    if replacing { Text("지금 연결된 차를 끊고 새 차에 연결할까요?").font(.callout) }   // G16
+                    if let failure { Text(failure.message).foregroundStyle(DesignSystem.danger) }
+                    if let e = model.linkError { Text(e).font(DesignSystem.caption).foregroundStyle(DesignSystem.textSecondary) }   // U52 pair.busy
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, DesignSystem.s6)
+            }
             if busy { HStack { ProgressView(); Text("확인하고 있어요") } }
-            Button { connect() } label: { Text("연결하기").frame(maxWidth: .infinity) }
-                .buttonStyle(.borderedProminent).controlSize(.large).disabled(busy || model.isPairLocked)
-            Button("아니에요") { dismiss() }.frame(maxWidth: .infinity).disabled(busy)
+            Button { connect() } label: { Text(replacing ? CareText.pairConfirmSwitch : CareText.pairConfirm).frame(maxWidth: .infinity) }   // U49
+                .accentButton().controlSize(.large).disabled(busy || model.isPairLocked)
+            Button { dismiss() } label: { Text("아니에요").frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle()) }.disabled(busy)   // 터치 영역 44pt(8장)
         }
         .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
         .interactiveDismissDisabled(busy)
     }
 
     private func connect() {
         busy = true
+        switching = model.isPaired
         failure = nil
+        model.beginConfirm()   // Task가 돌기 전 틈에 온 새 링크도 막는다(U52)
         Task {
-            let f = await model.pair(code)
+            let f = await model.confirmPair(code)
             busy = false
+            switching = nil
             if let f { failure = f }   // 429 잠금은 모델이 들고 있다
             else if model.role == .guardian { await NotificationAccess.request() }   // 받을 푸시가 있는 guardian만 묻는다(G13)
         }

@@ -16,19 +16,25 @@
 		2CA762AF927F21ACDC1485BF /* OutboxPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80B42DFE8AF09F6F531E1D3 /* OutboxPolicy.swift */; };
 		2FB6C05F858DC000D82783B8 /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594A1DD608CE67669A2ADA5D /* Support.swift */; };
 		3251FA80F2DA409746D91ACD /* GuardianSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D53E21E3250B660FEDCABB96 /* GuardianSettingsViews.swift */; };
+		3632CDBBB84E81998B94EEA0 /* Apache-2.0.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9424BB4CD2809AF82DF65A26 /* Apache-2.0.txt */; };
+		3A2F6ED20B74DFE59C5A956C /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B03B33A022B9C90C3A350F3 /* DesignTokens.swift */; };
 		43502AE87DFC460296F1DC24 /* SongViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A243CDD94E523959DDD7480F /* SongViews.swift */; };
 		532E2B33DE3F06EEF67837DE /* Coding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3587F9777E42D05E0656EB /* Coding.swift */; };
 		5A5122D6D82DA3AAB63B6151 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B23FF09E488317980ED7CB1 /* QRScanner.swift */; };
 		67081D8215C7C0F848B7E62E /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB49E41DCBEDA5556093FFD /* AppModel.swift */; };
 		70BAEA43A2F6206EA4D56502 /* CareActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2680AB71E01206F22D541F66 /* CareActivity.swift */; };
 		73FC55C39F7B8E56D76717E0 /* Storage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866ABA3D5BE34A5536656718 /* Storage.swift */; };
+		773F77F57BDB5FDC74851106 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = BEC85833CE2653EA17B8A847 /* FirebaseMessaging */; };
 		821611F966AE57E96B2DD1AA /* HomeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B54A9731120D736B665C291 /* HomeViews.swift */; };
 		8A5BD6532D71A6C301DDE8F9 /* Rfc3339Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49A4E607F02F9D570786FB71 /* Rfc3339Tests.swift */; };
 		8DB28BECC742F5540A6835C9 /* ReportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493FF9F3C06C1D8BA38DECF1 /* ReportViews.swift */; };
 		A07CCD0722021FB3AE7ABDEC /* CareLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C835320BB48ACC78DEFE771E /* CareLiveActivity.swift */; };
 		A302FDB0104E282B221A23CE /* RelaySocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFFB596FCF350CB541487CCB /* RelaySocket.swift */; };
 		AB78C3785DAADE1E4F7BBA3D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E07DDA0D3C02C11E94F611A /* RootView.swift */; };
+		AED5FF55A2F6AF317090CBC9 /* MIT-IsAppEncrypted.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4A93755305A566EBABD46E3E /* MIT-IsAppEncrypted.txt */; };
+		B01FBD51245EC44C47E5656D /* DemoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1406AECB4D168071774F3E /* DemoSeed.swift */; };
 		BCD4E08911F404977FC89F5C /* care-sample.json in Resources */ = {isa = PBXBuildFile; fileRef = 5508F4B4A8EB086E673E1E1A /* care-sample.json */; };
+		BCDF9BCB7F0CC5C964779A1D /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B03B33A022B9C90C3A350F3 /* DesignTokens.swift */; };
 		C317399057F0C5037609F5CB /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FBEF74ED6FD154573FDAE3 /* RelayClient.swift */; };
 		C5339ECFD3933B35820E225F /* Care.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A5848C571E94337B088EA6 /* Care.swift */; };
 		CF4ECC1E1D273F042A19C962 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6591B91036F66BC64B40A96 /* Messages.swift */; };
@@ -36,6 +42,7 @@
 		D6015FB736FE802F395DEA24 /* LogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A3D7C3A47BB50CC54256DC /* LogicTests.swift */; };
 		DCDCD008A6970D1EAD5E9464 /* RecordViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B12505CD38A8F84F02A9A67 /* RecordViews.swift */; };
 		E220175BA7A5E59AFDAE273C /* RelayTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D82A4388D7156E2D412416 /* RelayTypes.swift */; };
+		E27D89EFB4AD66C3159415A1 /* Zlib-nanopb.txt in Resources */ = {isa = PBXBuildFile; fileRef = BB1FE2AB948DDDC943EC7CC7 /* Zlib-nanopb.txt */; };
 		FCDD85CB7D884BF31DB95937 /* TodayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB55D96DB401316B062B46C /* TodayViews.swift */; };
 		FDBD7389826EA623D3EDB6B3 /* CareActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2680AB71E01206F22D541F66 /* CareActivity.swift */; };
 		FE8478255AB1EC6588644BB5 /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E90A3D914A3F62E8F4F0582 /* Recorder.swift */; };
@@ -90,8 +97,10 @@
 		26A3D7C3A47BB50CC54256DC /* LogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogicTests.swift; sourceTree = "<group>"; };
 		2AB55D96DB401316B062B46C /* TodayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayViews.swift; sourceTree = "<group>"; };
 		3E07DDA0D3C02C11E94F611A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		3E1406AECB4D168071774F3E /* DemoSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSeed.swift; sourceTree = "<group>"; };
 		493FF9F3C06C1D8BA38DECF1 /* ReportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportViews.swift; sourceTree = "<group>"; };
 		49A4E607F02F9D570786FB71 /* Rfc3339Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rfc3339Tests.swift; sourceTree = "<group>"; };
+		4A93755305A566EBABD46E3E /* MIT-IsAppEncrypted.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "MIT-IsAppEncrypted.txt"; sourceTree = "<group>"; };
 		4C8D29E1A45DB4A0EF884623 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
 		4E90A3D914A3F62E8F4F0582 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
 		5508F4B4A8EB086E673E1E1A /* care-sample.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "care-sample.json"; sourceTree = "<group>"; };
@@ -100,16 +109,20 @@
 		5E4DD343B055EEE1CCDB115D /* AigyeotWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AigyeotWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B12505CD38A8F84F02A9A67 /* RecordViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordViews.swift; sourceTree = "<group>"; };
 		6E31C46992EADD5886436204 /* Aigyeot.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Aigyeot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6E86A3808A7BF57989060239 /* Aigyeot.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Aigyeot.entitlements; sourceTree = "<group>"; };
+		7B03B33A022B9C90C3A350F3 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		7EE67FA58C0ED8D260F686ED /* AigyeotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AigyeotApp.swift; sourceTree = "<group>"; };
 		8561D8282396C1E254BE7B43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		866ABA3D5BE34A5536656718 /* Storage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Storage.swift; sourceTree = "<group>"; };
 		90027F0B17BDEBACB3982E54 /* CareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareTests.swift; sourceTree = "<group>"; };
+		9424BB4CD2809AF82DF65A26 /* Apache-2.0.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Apache-2.0.txt"; sourceTree = "<group>"; };
 		95A5848C571E94337B088EA6 /* Care.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Care.swift; sourceTree = "<group>"; };
 		A243CDD94E523959DDD7480F /* SongViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongViews.swift; sourceTree = "<group>"; };
 		A5FBEF74ED6FD154573FDAE3 /* RelayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayClient.swift; sourceTree = "<group>"; };
 		A7D82A4388D7156E2D412416 /* RelayTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayTypes.swift; sourceTree = "<group>"; };
 		A80B42DFE8AF09F6F531E1D3 /* OutboxPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxPolicy.swift; sourceTree = "<group>"; };
 		B6591B91036F66BC64B40A96 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
+		BB1FE2AB948DDDC943EC7CC7 /* Zlib-nanopb.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Zlib-nanopb.txt"; sourceTree = "<group>"; };
 		C835320BB48ACC78DEFE771E /* CareLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareLiveActivity.swift; sourceTree = "<group>"; };
 		CEF3FFA0A38AF33418438C74 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D53E21E3250B660FEDCABB96 /* GuardianSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardianSettingsViews.swift; sourceTree = "<group>"; };
@@ -117,6 +130,17 @@
 		FD24222842EA030EC3DD78BF /* ScreenTour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTour.swift; sourceTree = "<group>"; };
 		FFFB596FCF350CB541487CCB /* RelaySocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaySocket.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		663312FBFA689AB25B65D79C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				773F77F57BDB5FDC74851106 /* FirebaseMessaging in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		02FFAD098032D7F6BFD427B7 /* Protocol */ = {
@@ -127,6 +151,16 @@
 				A7D82A4388D7156E2D412416 /* RelayTypes.swift */,
 			);
 			path = Protocol;
+			sourceTree = "<group>";
+		};
+		0FFA18F9575B1E8E56C052B7 /* Licenses */ = {
+			isa = PBXGroup;
+			children = (
+				9424BB4CD2809AF82DF65A26 /* Apache-2.0.txt */,
+				4A93755305A566EBABD46E3E /* MIT-IsAppEncrypted.txt */,
+				BB1FE2AB948DDDC943EC7CC7 /* Zlib-nanopb.txt */,
+			);
+			path = Licenses;
 			sourceTree = "<group>";
 		};
 		185BE81A3F7EBC4FD9E3DE01 = {
@@ -167,6 +201,7 @@
 			children = (
 				1FB49E41DCBEDA5556093FFD /* AppModel.swift */,
 				95A5848C571E94337B088EA6 /* Care.swift */,
+				3E1406AECB4D168071774F3E /* DemoSeed.swift */,
 				4C8D29E1A45DB4A0EF884623 /* LiveActivities.swift */,
 				A80B42DFE8AF09F6F531E1D3 /* OutboxPolicy.swift */,
 				4E90A3D914A3F62E8F4F0582 /* Recorder.swift */,
@@ -207,9 +242,11 @@
 		A1E5C8F0CF77F03BD8D9E2EA /* Aigyeot */ = {
 			isa = PBXGroup;
 			children = (
+				6E86A3808A7BF57989060239 /* Aigyeot.entitlements */,
 				7EE67FA58C0ED8D260F686ED /* AigyeotApp.swift */,
 				CEF3FFA0A38AF33418438C74 /* Info.plist */,
 				50B9D3E610D3A8F94D123F9D /* Core */,
+				0FFA18F9575B1E8E56C052B7 /* Licenses */,
 				02FFAD098032D7F6BFD427B7 /* Protocol */,
 				6EEB38133AA542F9BA04B1AF /* Relay */,
 				C06309D023118EA821B9E21C /* Views */,
@@ -221,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				2680AB71E01206F22D541F66 /* CareActivity.swift */,
+				7B03B33A022B9C90C3A350F3 /* DesignTokens.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -293,6 +331,8 @@
 			buildPhases = (
 				2F03CFD799519A1F59630688 /* Debug용 Info.plist(로컬 평문 허용) */,
 				08E8D29AC9130E2FDAF6F2A5 /* Sources */,
+				511F180CA29EC13215308CBA /* Resources */,
+				663312FBFA689AB25B65D79C /* Frameworks */,
 				461DE9B130EBF26FB58FA188 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -302,6 +342,7 @@
 			);
 			name = Aigyeot;
 			packageProductDependencies = (
+				BEC85833CE2653EA17B8A847 /* FirebaseMessaging */,
 			);
 			productName = Aigyeot;
 			productReference = 6E31C46992EADD5886436204 /* Aigyeot.app */;
@@ -363,6 +404,9 @@
 			);
 			mainGroup = 185BE81A3F7EBC4FD9E3DE01;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				12A3B083DFACF14669117426 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 862D8CB38C8981070E511910 /* Products */;
 			projectDirPath = "";
@@ -382,6 +426,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				BCD4E08911F404977FC89F5C /* care-sample.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		511F180CA29EC13215308CBA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3632CDBBB84E81998B94EEA0 /* Apache-2.0.txt in Resources */,
+				AED5FF55A2F6AF317090CBC9 /* MIT-IsAppEncrypted.txt in Resources */,
+				E27D89EFB4AD66C3159415A1 /* Zlib-nanopb.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -420,7 +474,9 @@
 				C5339ECFD3933B35820E225F /* Care.swift in Sources */,
 				FDBD7389826EA623D3EDB6B3 /* CareActivity.swift in Sources */,
 				532E2B33DE3F06EEF67837DE /* Coding.swift in Sources */,
+				B01FBD51245EC44C47E5656D /* DemoSeed.swift in Sources */,
 				16F0613FD7357B6334034469 /* DesignSystem.swift in Sources */,
+				BCDF9BCB7F0CC5C964779A1D /* DesignTokens.swift in Sources */,
 				3251FA80F2DA409746D91ACD /* GuardianSettingsViews.swift in Sources */,
 				821611F966AE57E96B2DD1AA /* HomeViews.swift in Sources */,
 				17DB9CE45BE988C0972B5264 /* LiveActivities.swift in Sources */,
@@ -447,6 +503,7 @@
 			files = (
 				70BAEA43A2F6206EA4D56502 /* CareActivity.swift in Sources */,
 				A07CCD0722021FB3AE7ABDEC /* CareLiveActivity.swift in Sources */,
+				3A2F6ED20B74DFE59C5A956C /* DesignTokens.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -511,6 +568,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Aigyeot/Aigyeot.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -724,6 +782,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Aigyeot/Aigyeot.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Aigyeot/Info.plist;
@@ -803,6 +862,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		12A3B083DFACF14669117426 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = exactVersion;
+				version = 12.19.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BEC85833CE2653EA17B8A847 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 12A3B083DFACF14669117426 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A3F405FBD612B9EF9930FDC1 /* Project object */;
 }

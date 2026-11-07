@@ -8,26 +8,36 @@ struct RecordsView: View {
     @Environment(AppModel.self) private var model
     @State private var pattern = false
     @State private var sheet: CareSheet?
-    @State private var day = CareRules.dayKey(CareTime.ms(Date()), .current)
+    /// 사용자가 고른 날. 없으면 늘 오늘이다(화면을 연 채 자정을 넘기면 오늘을 따라간다. 옛 오늘에 머물면 '+'가 어제 낮 12시로 적었다)
+    @State private var picked: String?
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
+        // 가장 큰 글자에서는 세로 글자 버튼(나눈 선택은 커지지 않는다, 8장)
+        let choice = AdaptiveChoice(title: CareText.tabLog, options: [false, true], label: { $0 ? CareText.segmentPattern : CareText.segmentDay },
+                                    selection: Binding(get: { pattern }, set: { pattern = $0 ?? false }))
+            .padding(.horizontal, DS.s4).padding(.vertical, DS.s2)
+        // 가장 큰 글자에서는 전환·날짜 띠·날짜 제목도 목록 첫 줄로 함께 굴린다(고정하면 안내 띠까지 있을 때 목록 자리가 화면의 6%뿐이었다)
+        let top = size.isAccessibilitySize ? AnyView(choice) : nil
         NavigationStack {
             VStack(spacing: 0) {
-                Picker(CareText.tabLog, selection: $pattern) {
-                    Text(CareText.segmentDay).tag(false)
-                    Text(CareText.segmentPattern).tag(true)
+                if top == nil { choice }
+                // 자정을 넘기면 날짜 띠·제목·'지난 7일'이 바뀐다. 화면을 연 채 두어도 같은 기준 시각으로 매분 다시 그린다(안드로이드 rememberNow).
+                TimelineView(.everyMinute) { ctx in
+                    let today = CareRules.dayKey(CareTime.ms(ctx.date), .current)
+                    if pattern { PatternView(now: ctx.date, top: top) } else {
+                        DayView(sheet: $sheet, day: Binding(get: { picked ?? today }, set: { picked = $0 == today ? nil : $0 }), now: ctx.date, top: top)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, DS.s4).padding(.vertical, DS.s2)
-                if pattern { PatternView() } else { DayView(sheet: $sheet, day: $day) }
             }
+            .screenBackground()
             .navigationTitle(CareText.tabLog)
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }   // 지우기 실패 등 안내 띠(다른 탭과 같다)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         let today = CareRules.dayKey(CareTime.ms(Date()), .current)
-                        sheet = .quick(.feed, day: pattern || day == today ? nil : day)   // 고른 날에 적는다
+                        sheet = .quick(.feed, day: pattern || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금)
                     } label: { Image(systemName: "plus") }.accessibilityLabel(CareText.quickPast)
                 }
             }
@@ -41,6 +51,9 @@ private struct DayView: View {
     @Environment(AppModel.self) private var model
     @Binding var sheet: CareSheet?
     @Binding var day: String
+    let now: Date
+    /// 있으면(가장 큰 글자) 전환과 날짜 띠·제목을 목록 첫 줄로 굴린다.
+    let top: AnyView?
 
     private enum Item: Identifiable {
         case care(CareEvent)
@@ -49,40 +62,49 @@ private struct DayView: View {
         var at: Int64 { switch self { case .care(let e): e.startAt; case .car(let r): CareTime.ms(r.at) } }
     }
 
-    /// 기록이 있는 가장 이른 날과 늦은 날(목록과 같게 그 기록의 시간대로). 띠가 이 날들을 모두 담아야 열 수 있다.
-    private var recordDays: (first: String, last: String)? {
-        let keys = model.care.events.filter { $0.deletedAt == nil }.map { CareRules.dayKey($0.startAt, $0.timeZone) }
-            + CareRules.carRows(model.state.reports, zone: .current).map { CareRules.dayKey(CareTime.ms($0.at), .current) }
-        guard let first = keys.min(), let last = keys.max() else { return nil }
-        return (first, last)
+    /// 기록이 있는 날(목록과 같게 그 기록의 시간대로). 띠가 이 날들을 모두 담아야 열 수 있다.
+    private func recordKeys(_ car: [CarRow]) -> Set<String> {
+        Set(model.care.events.filter { $0.deletedAt == nil }.map { CareRules.dayKey($0.startAt, $0.timeZone) }
+            + car.map { CareRules.dayKey(CareTime.ms($0.at), .current) })
     }
 
-    private func items(_ day: String) -> [Item] {
+    private func items(_ day: String, _ car: [CarRow]) -> [Item] {
         let hand = CareRules.events(onDay: day, in: model.care.events).map(Item.care)
-        let car = CareRules.carRows(model.state.reports, zone: .current)
-            .filter { CareRules.dayKey(CareTime.ms($0.at), .current) == day }.map(Item.car)
-        return (hand + car).sorted { $0.at < $1.at }
+        let carItems = car.filter { CareRules.dayKey(CareTime.ms($0.at), .current) == day }.map(Item.car)
+        return (hand + carItems).sorted { $0.at < $1.at }
     }
 
     var body: some View {
+        // 차 기록 줄은 그릴 때마다 한 번만 만든다(날짜 띠·목록이 함께 쓴다. 리포트마다 시각을 포맷해 비싸다)
+        let car = CareRules.carRows(model.state.reports, zone: .current)
+        let keys = recordKeys(car)
         VStack(spacing: 0) {
-            DayStrip(selected: $day, span: recordDays)
-            Text(CareText.dayTitle(day, now: Date(), zone: .current))
-                .font(DS.headline).frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.s4).padding(.vertical, DS.s2)
-            let list = items(day)
+            if top == nil { header(keys) }
+            let list = items(day, car)
             List {
-                if list.isEmpty { Text(CareText.emptyDay).foregroundStyle(DS.textSecondary) }
+                if let top {
+                    VStack(spacing: 0) { top; header(keys) }
+                        .listRowInsets(EdgeInsets()).listRowBackground(DS.bg).listRowSeparator(.hidden)
+                }
+                if list.isEmpty { Text(CareText.emptyDay).foregroundStyle(DS.textSecondary).listRowBackground(DS.bg) }
                 ForEach(list) { item in
                     switch item {
                     case .care(let e): careRow(e)
                     case .car(let r): carRow(r)
                     }
                 }
+                .listRowBackground(DS.bg)   // 어둠에서 plain 목록 행이 순검정이었다(8장: 아주 어두운 회색)
             }
             .listStyle(.plain)
         }
         .overlay(alignment: .bottom) { UndoBar() }
+    }
+
+    @ViewBuilder private func header(_ keys: Set<String>) -> some View {
+        DayStrip(selected: $day, span: keys.min().flatMap { a in keys.max().map { (a, $0) } }, records: keys, now: now)
+        Text(CareText.dayTitle(day, now: now, zone: .current))
+            .font(DS.headline).frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DS.s4).padding(.vertical, DS.s2)
     }
 
     private func careRow(_ e: CareEvent) -> some View {
@@ -123,7 +145,7 @@ struct UndoBar: View {
             HStack {
                 Text(CareText.deleted)
                 Spacer()
-                Button(CareText.undo) { model.undoDelete(id) }.bold()
+                Button { model.undoDelete(id) } label: { Text(CareText.undo).bold().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
             }
             .foregroundStyle(DS.bg)   // 글자·바탕을 뒤집어 밝음·어둠 모두 읽힌다
             .padding(DS.s4)
@@ -144,64 +166,61 @@ struct UndoBar: View {
 private struct DayStrip: View {
     @Binding var selected: String
     let span: (first: String, last: String)?
+    let records: Set<String>
+    let now: Date
 
-    private var days: [(key: String, date: Date)] {
+    private var days: [String] {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = .current
-        let today = cal.startOfDay(for: Date())
+        let today = cal.startOfDay(for: now)
         let date = { (key: String) in CareRules.dayRange(key, .current).map { CareTime.date($0.0) } }
         let first = min(cal.date(byAdding: .day, value: -29, to: today)!, span.flatMap { date($0.first) } ?? today)
         let last = max(today, span.flatMap { date($0.last) } ?? today)
-        let n = cal.dateComponents([.day], from: first, to: last).day ?? 0
-        return (0...max(0, n)).map { i in
-            let d = cal.date(byAdding: .day, value: i, to: first)!
-            return (CareRules.dayKey(CareTime.ms(d), .current), d)
-        }
+        return CareRules.stripKeys(CareRules.days(from: first, through: last, zone: .current).map(\.key), records: records)
     }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: DS.s2) {   // 오래 쓰면 칸이 수백 개라 보이는 칸만 그린다
-                    ForEach(days, id: \.key) { d in
-                        let on = d.key == selected
-                        Button { selected = d.key } label: {
+                    ForEach(days, id: \.self) { key in
+                        let on = key == selected
+                        Button { selected = key } label: {
                             VStack(spacing: 2) {
-                                Text(weekday(d.date)).font(DS.caption)
-                                Text("\(Calendar.current.component(.day, from: d.date))").font(DS.headline.monospacedDigit())
+                                Text(CareRules.weekdayName(key)).font(DS.caption)
+                                Text(String(Int(key.suffix(2)) ?? 0)).font(DS.headline.monospacedDigit())   // 키(그레고리력)에서: 기기 달력이 달라도 칸과 날짜가 같다
                             }
                             .frame(minWidth: 44, minHeight: 52).padding(.horizontal, DS.s1)
                             .foregroundStyle(on ? DS.onAccent : DS.textPrimary)
                             .background(on ? DS.accent : DS.surface, in: RoundedRectangle(cornerRadius: DS.rSmall))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(CareText.dayTitle(d.key, now: Date(), zone: .current))
+                        .accessibilityLabel(CareText.dayTitle(key, now: now, zone: .current))
                         .accessibilityAddTraits(on ? .isSelected : [])
-                        .id(d.key)
+                        .id(key)
                     }
                 }
                 .padding(.horizontal, DS.s4)
             }
+            // 칸이 게을리 그려져 onAppear의 scrollTo만으로는 오늘(맨 끝)로 가지 않았다. 처음부터 끝에 붙여 연다.
+            .defaultScrollAnchor(.trailing)
+            .fixedSize(horizontal: false, vertical: true)   // 띠 높이를 칸에 맞춘다(위아래 빈 공간)
             .onAppear { proxy.scrollTo(selected, anchor: .trailing) }
         }
-    }
-
-    private func weekday(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "E"
-        return f.string(from: d)
     }
 }
 
 /// 패턴(C5, R14·R16): 지난 7일. 칸마다 이름 · 값, 아래에 날마다 막대.
 private struct PatternView: View {
     @Environment(AppModel.self) private var model
+    let now: Date
+    let top: AnyView?   // 가장 큰 글자: 전환을 목록 첫 줄로
 
     var body: some View {
         let on = model.care.sleepDiaperEnabled
-        let p = CareRules.pattern(model.care.events, reports: model.state.reports, now: CareTime.ms(Date()), zone: .current, sleepDiaper: on)
+        let p = CareRules.pattern(model.care.events, reports: model.state.reports, now: CareTime.ms(now), zone: .current, sleepDiaper: on)
         List {
+            if let top { top.listRowInsets(EdgeInsets()).listRowBackground(DS.bg) }
             Section {
                 cell(CareText.patternFeeds, p.feedsPerDay.map(CareText.avgCount), days: p.feedDays,
                      p.days.map { ($0.day, Double($0.feeds)) }, DS.feed, counts: true)
@@ -216,11 +235,12 @@ private struct PatternView: View {
                 cell(CareText.patternCarCries, CareText.times(p.carCries), days: nil,
                      p.days.map { ($0.day, Double($0.carEpisodes)) }, DS.car, counts: true)
             } header: {
-                Text(CareText.patternHeader)
+                SectionHeader(CareText.patternHeader)
             } footer: {
-                Text(CareText.patternFootnote)
+                SectionHeader(CareText.patternFootnote)
             }
         }
+        .labeledContentStyle(TokenLabeledContentStyle())   // 평균·기준 일수 글자 대비 4.5:1(8장)
     }
 
     /// 이름 · 값(평균이면 아래에 "{n}일 기준", 기록한 날이 없으면 "기록 없음") · 날마다 막대.
@@ -244,8 +264,10 @@ private struct PatternView: View {
             BarMark(x: .value("day", String(v.0.suffix(2))), y: .value("value", v.1)).foregroundStyle(color)
         }
         .chartYScale(domain: 0...top)
-        .chartYAxis { AxisMarks(values: ticks) }
+        .chartYAxis { AxisMarks(values: ticks) { AxisGridLine(); AxisValueLabel().foregroundStyle(DS.textSecondary) } }   // 축 글자 대비 4.5:1(8장)
+        .chartXAxis { AxisMarks { AxisValueLabel().foregroundStyle(DS.textSecondary) } }
         .frame(height: 100)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)   // 축 글자가 그래프 높이를 넘으면 날짜가 '…'로 뭉개진다. 값은 위 글줄이 큰 글자로 보인다
         .accessibilityHidden(true)   // 값은 위 칸 글자로 읽는다
     }
 }

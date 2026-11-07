@@ -35,6 +35,10 @@ final class RecorderModel: NSObject, AVAudioPlayerDelegate {
     @ObservationIgnored private var recorder: AVAudioRecorder?
     @ObservationIgnored private var player: AVAudioPlayer?
     @ObservationIgnored private var timer: Timer?
+    /// 버릴 때마다 올린다. 권한 창을 기다리는 사이 시트가 닫히면(버림) 늦게 온 허용으로 녹음기·타이머를 만들지 않는다.
+    @ObservationIgnored private var session = 0
+    /// 마이크 권한 요청(시험에서 바꾼다).
+    @ObservationIgnored var requestPermission: () async -> Bool = { await AVAudioApplication.requestRecordPermission() }
 
     static let settings: [String: Any] = [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -43,14 +47,29 @@ final class RecorderModel: NSObject, AVAudioPlayerDelegate {
         AVEncoderBitRateKey: 64000,
     ]
 
+    /// 녹음 시트를 열 때 한 번 묻는다(계약 7.3 마이크 '녹음 시트를 처음 열 때', 안드로이드와 같다). 이미 정했으면 상태만 읽는다.
+    func askPermissionIfNeeded() async {
+        guard AVAudioApplication.shared.recordPermission == .undetermined else { refreshPermission(); return }
+        permissionDenied = !(await requestPermission())
+    }
+
     /// 설정에서 마이크를 켜고 돌아왔을 때 거부 표시를 맞춘다. 권한 요청 창은 띄우지 않고 상태만 읽는다.
     func refreshPermission() {
         permissionDenied = AVAudioApplication.shared.recordPermission == .denied
     }
 
+    @ObservationIgnored private var starting = false
+
     func start() async {
+        // 권한 창을 기다리는 사이 또 누르면 무시한다. 둘 다 시작하면 뒤의 녹음기·타이머가 앞의 것을 덮어 앞 타이머를 멈출 수 없다.
+        guard !starting, phase == .idle else { return }
+        starting = true
+        defer { starting = false }
         error = nil
-        guard await AVAudioApplication.requestRecordPermission() else {
+        let mine = session
+        let granted = await requestPermission()
+        guard mine == session else { return }   // 기다리는 사이 버렸다(시트를 닫음·다시 녹음)
+        guard granted else {
             permissionDenied = true
             return
         }
@@ -137,8 +156,20 @@ final class RecorderModel: NSObject, AVAudioPlayerDelegate {
         }
     }
 
+    /// 임시 폴더의 녹음 원본(`recording-*.m4a`)을 지운다. 앱 시작과 기록 지우기에서 부른다.
+    nonisolated static func removeTempRecordings(in dir: URL = FileManager.default.temporaryDirectory) {
+        let fm = FileManager.default
+        for n in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] where n.hasPrefix("recording-") && n.hasSuffix(".m4a") {
+            try? fm.removeItem(at: dir.appendingPathComponent(n))
+        }
+    }
+
+    /// 권한 창을 기다리는 시작을 버린다(앱이 뒤로 감). 녹음 중·녹음 뒤 상태는 그대로 둔다.
+    func cancelPendingStart() { if phase == .idle { session += 1 } }
+
     /// 다시 녹음 또는 닫기.
     func discard() {
+        session += 1
         timer?.invalidate(); timer = nil
         let wasActive = recorder != nil || player != nil
         recorder?.stop(); recorder = nil

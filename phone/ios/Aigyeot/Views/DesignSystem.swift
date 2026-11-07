@@ -1,43 +1,61 @@
 import SwiftUI
 
-/// 디자인 토큰(phone-care-plan 13장 이름). 안드로이드 `ui/Theme`과 같은 이름이다.
-/// 값은 8장 디자인 방향이 정해지기 전이라 지금 앱 모양 그대로다. 값만 바꾸면 모든 화면이 따라간다.
-enum DesignSystem {
-    // 색(밝음·어둠은 시스템 색이 맞춘다)
-    static let bg = Color(.systemBackground)
-    static let surface = Color(.secondarySystemBackground)
-    static let surfaceRaised = Color(.tertiarySystemBackground)
-    static let textPrimary = Color.primary
-    static let textSecondary = Color.secondary
-    static let accent = Color(red: 0.09, green: 0.43, blue: 0.48)
-    static let onAccent = Color.white
-    static let feed = Color.orange
-    static let sleep = Color.indigo
-    static let diaper = Color.teal
-    static let note = Color.gray
-    static let car = accent
-    static let warning = Color.orange
-    static let danger = Color.red
-
-    // 글자(동적 글자 크기를 따른다)
-    static let display = Font.largeTitle.bold()
-    static let title = Font.title2.bold()
-    static let headline = Font.headline
-    static let body = Font.body
-    static let caption = Font.footnote
-    static let timer = Font.system(size: 64, weight: .semibold, design: .rounded).monospacedDigit()
-
-    // 간격(4의 배수)
-    static let s1: CGFloat = 4, s2: CGFloat = 8, s3: CGFloat = 12, s4: CGFloat = 16, s5: CGFloat = 24, s6: CGFloat = 32
-
-    // 모서리
-    static let rSmall: CGFloat = 10, rMedium: CGFloat = 14, rLarge: CGFloat = 20
-
+/// 토큰 값은 `Shared/DesignTokens.swift`(잠금 화면과 함께 쓴다). 여기는 앱에만 있는 종류별 색·아이콘이다.
+extension DesignSystem {
     static func color(_ kind: CareKind) -> Color {
         switch kind { case .feed: feed; case .sleep: sleep; case .diaper: diaper; case .note: note }
     }
 
     static func icon(_ kind: CareKind) -> String {
         switch kind { case .feed: "drop.fill"; case .sleep: "moon.fill"; case .diaper: "circle.dotted"; case .note: "note.text" }
+    }
+}
+
+/// 목록 섹션 머리·꼬리 글. 시스템 회색은 밝은 바탕에서 3.4:1이라 토큰 색을 쓴다(8장 4.5:1).
+struct SectionHeader: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View { Text(text).foregroundStyle(DesignSystem.textSecondary) }
+}
+
+/// 이름 · 값 줄. 값의 시스템 보조색은 밝은 바탕에서 3.4:1이라 토큰 색을 쓴다(8장 4.5:1). 읽어 주기는 한 덩어리로.
+struct TokenLabeledContentStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            configuration.label
+            Spacer(minLength: 8)
+            configuration.content.foregroundStyle(DesignSystem.textSecondary).multilineTextAlignment(.trailing)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 몇 개 중 하나 고르기. 나눈 선택(segmented)은 큰 글자를 따르지 않아(8장), 접근성 글자 크기에서는 글자 버튼을 세로로 놓는다(안드로이드 FlowRow).
+struct AdaptiveChoice<T: Hashable>: View {
+    let title: String
+    let options: [T]
+    let label: (T) -> String
+    @Binding var selection: T?
+    @Environment(\.dynamicTypeSize) private var size
+
+    var body: some View {
+        if size.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(options, id: \.self) { o in
+                    Button { selection = o } label: { Text(label(o)).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading) }
+                        .buttonStyle(.bordered)
+                        .tint(selection == o ? DesignSystem.accent : DesignSystem.textSecondary)
+                        .accessibilityAddTraits(selection == o ? .isSelected : [])
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(title)
+        } else {
+            Picker(title, selection: $selection) {
+                ForEach(options, id: \.self) { Text(label($0)).tag(Optional($0)) }
+            }
+            .pickerStyle(.segmented).labelsHidden()
+            .controlSize(.large)   // 기본 높이 32pt는 누르는 영역 44pt(8장)에 못 미친다
+        }
     }
 }

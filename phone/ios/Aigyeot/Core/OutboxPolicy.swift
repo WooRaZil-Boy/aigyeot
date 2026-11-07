@@ -20,7 +20,7 @@ enum OutboxPolicy {
 
     static func classify(_ error: RelayError, attempts: Int) -> SendOutcome {
         switch error {
-        case .network, .invalidResponse:
+        case .network, .invalidResponse, .cancelled:   // 취소는 보내기에서 먼저 걸러 여기 오지 않는다
             return .retry(backoff(attempts: attempts))
         case .http(let status, let code, let retryAfter):
             switch status {

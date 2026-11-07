@@ -15,7 +15,8 @@ struct MainView: View {
             }
             SettingsView().tabItem { Label(CareText.tabSettings, systemImage: "gearshape") }.tag(CareText.tabSettings)
         }
-        .onChange(of: model.isPaired) { _, paired in if !paired { tab = CareText.tabToday } }   // U25: 끊기면 연결 안 됨의 오늘로
+        // U25: 끊기면 연결 안 됨의 오늘로. 5장: 연결 흐름이 끝나도 오늘로(링크는 확인 시트만 띄워 이 화면과 탭이 그대로 남는다. 안드로이드는 nav.reset)
+        .onChange(of: model.isPaired) { _, _ in tab = CareText.tabToday }
         .overlay(alignment: .top) { AlertBanner().padding(.horizontal, 12) }
         .sheet(item: Binding(get: { model.openAlertId.map(IdBox.init) }, set: { _ in model.openAlertId = nil })) { box in
             NavigationStack { AlertDetailView(id: box.id) }
@@ -31,21 +32,27 @@ struct AlertBanner: View {
 
     var body: some View {
         if let id = model.bannerAlertId {
-            Button {
-                model.userOpenedAlert(id)   // 사용자가 직접 고른 알림: 대기하던 다른 알림 열기는 버린다
-                model.bannerAlertId = nil
-                model.openAlertId = id
-            } label: {
-                HStack {
-                    Image(systemName: "bell.badge.fill")
-                    Text(model.alert(id)?.body.text ?? "인계 알림이 왔어요").multilineTextAlignment(.leading)
-                    Spacer()
-                    Button { model.bannerAlertId = nil } label: { Image(systemName: "xmark") }
+            HStack(spacing: 0) {
+                Button {
+                    Task { await model.openBanner(id) }   // 본문이 없으면 받은 뒤 연다(이 연결에 없는 알림이면 빈 상세에 머물지 않는다)
+                } label: {
+                    HStack {
+                        Image(systemName: "bell.badge.fill")
+                        Text(model.alert(id)?.body.text ?? "인계 알림이 왔어요").multilineTextAlignment(.leading).lineLimit(3)   // 큰 글자에서 화면을 덮지 않게. 전체는 눌러서 본다
+                        Spacer(minLength: 0)
+                    }
+                    .padding([.vertical, .leading]).contentShape(Rectangle())
                 }
-                .padding().foregroundStyle(.white)
-                .background(DesignSystem.accent, in: RoundedRectangle(cornerRadius: 14))
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("handoffBanner")   // 목록의 같은 문장과 구별(투어)
+                // 닫기는 열기 버튼 밖의 형제다(안에 두면 닫기 누름이 바깥 열기와 겹칠 수 있다)
+                Button { model.bannerAlertId = nil } label: { Image(systemName: "xmark").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(CareText.bannerClose)
+                    .padding(.trailing, DesignSystem.s2)
             }
-            .buttonStyle(.plain)
+            .foregroundStyle(DesignSystem.onAccent)   // 어둠에서 흰 글자는 accent 위 대비 미달(13장)
+            .background(DesignSystem.accent, in: RoundedRectangle(cornerRadius: DesignSystem.rMedium))
             .task(id: id) {
                 try? await Task.sleep(nanoseconds: 8_000_000_000)
                 if model.bannerAlertId == id { model.bannerAlertId = nil }
@@ -59,38 +66,75 @@ struct StatusBands: View {
     @Environment(AppModel.self) private var model
     @State private var notificationsDenied = false
     @Environment(\.scenePhase) private var scenePhase
+    /// 오늘 탭은 화면 스크롤 안에 둔다. 나머지 탭은 고정 영역(safeAreaInset)이다.
+    var inScroll = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            if model.offline { band("오프라인이에요. 누른 것은 연결되면 차로 가요.", "wifi.slash", .orange) }
-            if let w = model.clockWarning { band(w, "clock.badge.exclamationmark", .orange) }
-            if model.role == .guardian, notificationsDenied {
-                HStack {
-                    Image(systemName: "bell.slash")
-                    Text("알림이 꺼져 있어 인계 알림을 못 받아요")
-                    Spacer()
-                    Button("설정 열기") { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
-                }
-                .font(.footnote).padding(10)
-                .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
-            }
-            if let n = model.notice {
-                HStack { Text(n); Spacer(); Button { model.notice = nil } label: { Image(systemName: "xmark") } }
-                    .font(.footnote).padding(10)
-                    .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        Group {
+            // 고정 영역: 띠 높이만큼만 차지하고(없으면 0), 큰 글자로 200pt를 넘으면 묶음째 그 안에서 굴린다(8장 동적 글자 크기).
+            // frame(maxHeight:)만 두면 제안 높이가 커서 띠가 없어도 늘 200pt 빈칸이 생겼다.
+            if inScroll { bands } else {
+                ScrollView { bands }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(maxHeight: 200)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("statusBands")
             }
         }
         .task { notificationsDenied = await NotificationAccess.isDenied() }
-        // 설정에서 돌아오거나 권한 요청 창이 닫히면 다시 확인
+        // 설정에서 돌아오면 다시 확인
         .onChange(of: scenePhase) { _, p in
             if p == .active { Task { notificationsDenied = await NotificationAccess.isDenied() } }
+        }
+        // 권한 창에 답하면 다시 확인(창이 닫혀도 scenePhase는 바뀌지 않았다)
+        .onReceive(NotificationCenter.default.publisher(for: NotificationAccess.answered)) { _ in
+            Task { notificationsDenied = await NotificationAccess.isDenied() }
+        }
+    }
+
+    private var bands: some View {
+        VStack(spacing: 8) {
+            if model.showsOfflineBand {
+                HStack {
+                    Label("오프라인이에요. 누른 것은 연결되면 차로 가요.", systemImage: "wifi.slash").padding(.vertical, 10)
+                    Spacer()
+                    // 7.2 '그 밖: 띠에 다시 시도'. 받은 함 429 기다림 중이면 갱신이 알아서 미룬다
+                    Button { Task { await model.retryNow() } } label: { Text("다시 시도").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+                }
+                .font(DesignSystem.caption).padding(.horizontal, 10)
+                .background(DesignSystem.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
+            }
+            if let w = model.clockWarning { band(w, "clock.badge.exclamationmark", DesignSystem.warning) }
+            if model.role == .guardian, notificationsDenied {
+                HStack {
+                    Image(systemName: "bell.slash")
+                    Text("알림이 꺼져 있어 인계 알림을 못 받아요").padding(.vertical, 10)
+                    Spacer()
+                    Button { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) } label: {
+                        Text("설정 열기").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())   // 터치 영역 44pt(8장). 위아래 여백은 글에만
+                    }
+                }
+                .font(DesignSystem.caption).padding(.horizontal, 10)
+                .background(DesignSystem.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
+            }
+            if let n = model.notice {
+                // U48: 닫기는 글자 버튼(두 앱 같은 글자)
+                // 터치 영역 44pt(8장): 글자 버튼 틀을 키우고 띠의 위아래 여백은 글에만 준다
+                HStack {
+                    Text(n).padding(.vertical, 10)
+                    Spacer()
+                    Button { model.dismissNotice() } label: { Text(CareText.bannerClose).bold().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+                }
+                    .font(DesignSystem.caption).padding(.horizontal, 10)
+                    .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
+            }
         }
     }
 
     private func band(_ text: String, _ icon: String, _ color: Color) -> some View {
-        Label(text, systemImage: icon).font(.footnote)
+        Label(text, systemImage: icon).font(DesignSystem.caption)
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
     }
 }
 
@@ -108,29 +152,29 @@ func feedStatusText(_ r: FeedingRecord) -> String {
 struct CarTile: View {
     @Environment(AppModel.self) private var model
 
-    private var text: String {
+    private func text(now: Date) -> String {
         if model.offline { return "알 수 없음" }
         guard let car = model.car else { return "차를 기다리고 있어요" }
         if car.online { return "연결됨" }
         guard let last = car.lastSeenAt.flatMap(Rfc3339.parse) else { return "차 꺼짐" }
-        return "차 꺼짐 · 마지막 연락 \(max(0, Int(Date().timeIntervalSince(last) / 60)))분 전"
+        return "차 꺼짐 · 마지막 연락 \(max(0, Int(now.timeIntervalSince(last) / 60)))분 전"
     }
 
     var body: some View {
         HStack {
             Image(systemName: "car.fill")
-            Text(text).font(.headline)
+            TimelineView(.everyMinute) { ctx in Text(text(now: ctx.date)).font(.headline).monospacedDigit() }   // '{n}분 전'은 화면을 연 채 두어도 바뀐다(7.2)
             Spacer()
         }
         .padding(14)
-        .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+        .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignSystem.rMedium))
     }
 }
 
-func ago(_ rfc: String) -> String {
+/// 인계 알림의 '~전'. 오늘 카드와 같은 U20 형식이다("2시간 10분 전").
+func ago(_ rfc: String, now: Date = Date()) -> String {
     guard let d = Rfc3339.parse(rfc) else { return "" }
-    let m = max(0, Int(Date().timeIntervalSince(d) / 60))
-    return m < 1 ? "방금" : m < 60 ? "\(m)분 전" : "\(m / 60)시간 전"
+    return CareText.ago(CareTime.ms(now) - CareTime.ms(d))
 }
 
 /// 인계 알림 상세(guardian). 알림 문장은 차가 만든 그대로 보인다.
@@ -142,12 +186,14 @@ struct AlertDetailView: View {
         if let a = model.alert(id) {
             List {
                 Section { Text(a.body.text).font(.title3) }
-                Section("자세히") {
-                    LabeledContent("시각", value: Rfc3339.parse(a.body.occurredAt)?.formatted(date: .abbreviated, time: .shortened) ?? a.body.occurredAt)
+                Section {
+                    LabeledContent("시각", value: Rfc3339.parse(a.body.occurredAt).map { CareFormat.dateTime($0) } ?? a.body.occurredAt)
                     if let rest = a.body.restName { LabeledContent("쉼터", value: rest) }
                     if let m = a.body.minutesToArrival { LabeledContent("도착까지", value: "\(m)분") }
-                }
+                } header: { SectionHeader("자세히") }
             }
+            .screenBackground()
+            .labeledContentStyle(TokenLabeledContentStyle())   // 값 글자 대비 4.5:1(8장)
             .navigationTitle("인계 알림")
         } else {
             ContentUnavailableView("알림을 불러오고 있어요", systemImage: "bell")

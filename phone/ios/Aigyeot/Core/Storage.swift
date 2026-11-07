@@ -123,6 +123,10 @@ struct OutboxItem: Codable, Equatable, Identifiable {
     var createdAt: Date
     var attempts = 0
     var nextTryAt: Date
+    /// 돌봄 요약을 보내기 직전에 저장하는 '보내 봄'(U57). 옛 상태 파일에는 없다(거짓으로 읽는다).
+    var sentOnce = false
+    /// 지금 기다림이 망 실패(응답 없음)에서 왔다. 인터넷 복구·'다시 시도'·앞으로 오기 때 당긴다(7.5). 중계가 준 기다림은 거짓
+    var networkWait = false
 }
 
 /// 기기별로 마지막에 적용한 연결 변경(`paired`·`unpaired`)의 seq와 삭제 표시(계약 8.4의 `phone_link_mark`와 같은 뜻).
@@ -160,6 +164,17 @@ struct PhoneState: Codable, Equatable {
     var lastStateRequestAt: Date?
     /// 차로 보낸 마지막 수유 시작 시각(epoch ms). 보낼 함과 같은 저장에서 올린다(phone-care-plan U3·R5).
     var lastSentFeedingAt: Int64?
+    /// 마지막으로 보낸 `care_summary` body에서 `as_of`를 뺀 것. 보낼 함과 같은 저장에서 바꾼다(phone-care-plan R19).
+    var lastSentCareSummary: JSONValue?
+    /// 마지막으로 보낸 요약의 `as_of`와 지금까지 보낸 가장 늦은 `as_of`(epoch ms, 초 단위로 내림). 같은 저장에서 바꾼다.
+    /// 시계가 뒤로 가 차가 무시했을 수 있는 요약을 다시 보내는 데 쓴다.
+    var lastSentCareAsOf: Int64?
+    var maxSentCareAsOf: Int64?
+    /// '기록 지우기'를 누른 순간의 돌봄 기록 id. 그 돌봄 기록 지우기를 아직 마치지 못했다(R10). 마칠 때까지 요약을 보내지 않는다.
+    /// id로 한정해, 그 뒤 저장한 새 기록은 지우지 않는다.
+    var clearingCareIds: [String]?
+    /// 버린 메시지 type 중 사용자가 아직 띠를 닫지 않은 것(U54). 보낼 함에서 뺄 때 같은 저장에 넣고 '닫기'에서 지운다.
+    var unseenDrops: [String] = []
 }
 
 protocol StateStore {
@@ -182,8 +197,19 @@ final class MemoryStateStore: StateStore {
     var writesRefused = false
     init(_ value: PhoneState = PhoneState()) { self.value = value }
     func load() -> PhoneState { value }
+    /// 다음 n번만 실패(시험).
+    var failNext = 0
+    /// 저장 횟수와, 그 횟수째에 한 번 실패(시험).
+    var saveCount = 0
+    var failAtSave: Int?
+    /// 이 횟수째부터 모두 실패(그사이 앱이 죽은 것과 같다, 시험).
+    var failFromSave: Int?
     func save(_ s: PhoneState) throws {
+        saveCount += 1
         if failing { throw StoreError() }
+        if failNext > 0 { failNext -= 1; throw StoreError() }
+        if failAtSave == saveCount { throw StoreError() }
+        if let f = failFromSave, saveCount >= f { throw StoreError() }
         value = s
     }
 }
@@ -304,7 +330,7 @@ extension FeedingState {
 }
 
 extension OutboxItem {
-    enum CodingKeys: String, CodingKey { case id, type, body, ts, songId, uploaded, createdAt, attempts, nextTryAt }
+    enum CodingKeys: String, CodingKey { case id, type, body, ts, songId, uploaded, createdAt, attempts, nextTryAt, sentOnce, networkWait }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -316,6 +342,8 @@ extension OutboxItem {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         attempts = try c.decodeIfPresent(Int.self, forKey: .attempts) ?? 0
         nextTryAt = try c.decode(Date.self, forKey: .nextTryAt)
+        sentOnce = try c.decodeIfPresent(Bool.self, forKey: .sentOnce) ?? false
+        networkWait = try c.decodeIfPresent(Bool.self, forKey: .networkWait) ?? false
     }
 }
 
@@ -323,7 +351,7 @@ extension PhoneState {
     enum CodingKeys: String, CodingKey {
         case introSeen, carId, processed, shown, outbox, reports, alerts, songs, selectedSongId, feeding, feedingLog
         case devices, deviceMarks, devicesSnapshotSeq, handoffAlerts, lastReceivedAt, needsStateRequest, lastStateRequestAt
-        case lastSentFeedingAt
+        case lastSentFeedingAt, lastSentCareSummary, lastSentCareAsOf, maxSentCareAsOf, clearingCareIds, unseenDrops
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -346,5 +374,10 @@ extension PhoneState {
         needsStateRequest = try c.decodeIfPresent(Bool.self, forKey: .needsStateRequest) ?? false
         lastStateRequestAt = try c.decodeIfPresent(Date.self, forKey: .lastStateRequestAt)
         lastSentFeedingAt = try c.decodeIfPresent(Int64.self, forKey: .lastSentFeedingAt)
+        lastSentCareSummary = try c.decodeIfPresent(JSONValue.self, forKey: .lastSentCareSummary)
+        lastSentCareAsOf = try c.decodeIfPresent(Int64.self, forKey: .lastSentCareAsOf)
+        maxSentCareAsOf = try c.decodeIfPresent(Int64.self, forKey: .maxSentCareAsOf)
+        clearingCareIds = try c.decodeIfPresent([String].self, forKey: .clearingCareIds)
+        unseenDrops = try c.decodeIfPresent([String].self, forKey: .unseenDrops) ?? []
     }
 }
