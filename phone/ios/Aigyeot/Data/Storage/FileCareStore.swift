@@ -32,6 +32,12 @@ final class FileCareStore: CareStore {
 
     func removeCopies() { Self.removeBrokenCopies(); CareExport.removeCopies() }
 
+    func writeExport(name: String, data: Data) -> URL? {
+        CareExport.removeCopies()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        return (try? data.write(to: url, options: .atomic)) == nil ? nil : url
+    }
+
     /// 깨진 사본을 지운다. '이 휴대폰의 기록 지우기'에서만 부른다(연결 끊기는 돌봄 기록을 남긴다, R9).
     static func removeBrokenCopies(in dir: URL = FileStateStore.supportDirectory) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []

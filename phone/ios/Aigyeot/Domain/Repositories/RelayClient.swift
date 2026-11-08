@@ -18,18 +18,19 @@ enum RelayError: Error, Equatable {
 }
 
 /// 폰이 쓰는 중계 HTTP 호출 전부(두 앱 같은 이름, phone-care-plan 9.1). 구현은 Data/Relay/HTTPRelayClient, 시험에서는 가짜로 바꾼다.
+/// 연결 요청 말고는 모두 `token`을 받는다: 부른 쪽이 일을 시작할 때 잡은 자격의 토큰이다(P5, 안드로이드와 같다).
 protocol RelayClient {
     func pair(code: String, pushToken: String?) async throws -> PairResponse
-    func devices() async throws -> DevicesResponse
-    func patchMe(_ request: PatchDeviceRequest) async throws -> PatchDeviceResponse
-    func deleteMe() async throws
-    /// 저장하지 못한 연결을 되돌린다: Keychain이 아니라 연결 응답의 토큰을 쓴다.
+    func devices(token: String) async throws -> DevicesResponse
+    func patchMe(token: String, _ request: PatchDeviceRequest) async throws -> PatchDeviceResponse
+    /// 끊기(설정), 그리고 저장하지 못한 연결 되돌리기(연결 응답의 토큰).
     func deleteMe(token: String) async throws
-    func createInvite() async throws -> InviteResponse
-    func send(_ envelope: Envelope) async throws -> SendMessageResponse
-    func inbox(afterSeq: Int64?) async throws -> InboxResponse
-    func ack(ids: [String]) async throws
-    func putSong(id: String, file: URL) async throws
+    func createInvite(token: String) async throws -> InviteResponse
+    func send(token: String, _ envelope: Envelope) async throws -> SendMessageResponse
+    /// `car`: 읽지 못한 봉투를 ack만 하게 남길 때 붙일 차 id(그 연결의 것).
+    func inbox(token: String, car: String, afterSeq: Int64?) async throws -> InboxResponse
+    func ack(token: String, ids: [String]) async throws
+    func putSong(token: String, id: String, file: URL) async throws
 }
 
 /// 중계 WebSocket 사건(계약 2장).
@@ -44,10 +45,13 @@ enum RelaySocketEvent {
 }
 
 /// 중계 WebSocket(두 앱 같은 이름, phone-care-plan 9.1). 폰은 앱이 앞에 있을 때만 붙는다. 구현은 Data/Relay/URLSessionRelaySocket.
-protocol RelaySocket: AnyObject {
+protocol RelaySocket {
+    /// 잡아 둔 자격의 토큰으로 소켓을 열고 붙기 시작한다(다시 붙을 때도 같은 토큰, P5). 사건은 메인에서 알린다.
+    func open(token: String, onEvent: @escaping @MainActor (RelaySocketEvent) -> Void) -> SocketHandle
+}
+
+/// 연 소켓(두 앱 같은 이름). 닫으면 다시 붙지 않는다.
+protocol SocketHandle: AnyObject {
     func start()
     func stop()
 }
-
-/// 소켓을 만드는 함수(합성 루트가 넘긴다, 시험에서는 없음). 토큰은 붙을 때마다 읽고, 사건은 메인에서 알린다.
-typealias RelaySocketMaker = (_ token: @escaping () -> String?, _ onEvent: @escaping @MainActor (RelaySocketEvent) -> Void) -> RelaySocket

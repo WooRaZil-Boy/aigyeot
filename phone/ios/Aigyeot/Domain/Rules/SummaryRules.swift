@@ -1,6 +1,6 @@
 import Foundation
 
-/// R19(U45·U57·U61): 돌봄 요약을 보낼 함에 넣을지 정하고 넣는 규칙. 요약 계산(R18)은 `CareRules.careSummary`(BuildCareSummary)다.
+/// R19(U45·U57·U61): 돌봄 요약을 보낼 함에 넣을지 정하고 넣는 규칙. 요약 계산(R18)은 `BuildCareSummary`다.
 /// `lastSentCareSummary`·`lastSentCareAsOf`·`maxSentCareAsOf`와 보낼 함의 요약 항목은 이 파일의 함수로만 고친다(P3).
 enum SummaryRules {
     enum Decision: Equatable {
@@ -16,7 +16,7 @@ enum SummaryRules {
         guard care.migratedFeedings,                 // 옮기기 전 수유가 빠진 요약을 보내지 않는다(R11)
               state.clearingCareIds == nil else { return .unchanged }   // 지우다 만 기록으로 보내지 않는다(R10)
         let asOf = t - ((t % 1000) + 1000) % 1000   // as_of는 초까지 쓴다
-        let body = CareRules.careSummary(care, asOf: t, zone: zone)
+        let body = BuildCareSummary()(care, asOf: t, zone: zone)
         // U61: 기록에서 온 값이 없는 요약이고 이 연결에서 요약을 넣은 적도 없으면 보내지 않는다(같은 차의 다른 owner 폰 요약을 빈 요약으로 덮지 않게).
         // '넣은 적'은 maxSentCareAsOf다: 기록 지우기에도 남아(빈 요약으로 차의 옛 요약을 바꾼다, R10) 연결 끊기(R9)에서만 사라진다(안드로이드와 같다)
         if state.maxSentCareAsOf == nil, body.isEmpty { return .unchanged }

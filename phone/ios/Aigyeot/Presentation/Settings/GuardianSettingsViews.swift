@@ -24,13 +24,13 @@ struct OssEntry: Identifiable {
     }
 }
 
-/// 공유 시트에 넘길 내보내기 파일. 공유할 때 임시 폴더에 `aigyeot-care-{YYYYMMDD}.csv`로 쓴다.
+/// 공유 시트에 넘길 내보내기 파일. 공유할 때 임시 폴더에 `aigyeot-care-{YYYYMMDD}.csv`로 쓴다(SettingsViewModel.export).
 struct CareExportFile: Transferable {
-    let events: [CareEvent]
+    let export: @MainActor () -> URL?
+    struct NotWritten: Error {}
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .commaSeparatedText) { item in
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(CareText.exportFileName(Date()))
-            try CareExport.csv(item.events).write(to: url, options: .atomic)
+            guard let url = await item.export() else { throw NotWritten() }
             return SentTransferredFile(url)
         }
     }
@@ -38,43 +38,38 @@ struct CareExportFile: Transferable {
 
 /// 보호자(설정 안의 한 줄로 연다): owner는 초대·목록, guardian은 인계 알림 받기.
 struct GuardiansView: View {
-    @Environment(SettingsViewModel.self) private var vm
-
     var body: some View {
-        Group {
-            if vm.state.role == .owner { OwnerGuardians() } else { GuardianToggle() }
+        Scoped({ $0.guardians() }) { vm in
+            Group {
+                if vm.ui.role == .owner { OwnerGuardians() } else { GuardianToggle() }
+            }
+            .screenBackground()
+            .navigationTitle(CareText.guardians)
+            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
         }
-        .screenBackground()
-        .navigationTitle(CareText.guardians)
-        .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
     }
 }
 
 private struct OwnerGuardians: View {
-    @Environment(SettingsViewModel.self) private var vm
-    @State private var invite: InviteResponse?
-    @State private var busy = false
-    @State private var error: String?
-
-    private var others: [DeviceInfo] { vm.state.devices.filter { $0.role == .owner || $0.role == .guardian } }
+    @Environment(GuardiansViewModel.self) private var vm
 
     var body: some View {
         List {
             Section {
                 Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요").font(.callout)
                 Text("초대 코드는 24시간 동안, 한 번만 쓸 수 있어요.").font(.footnote).foregroundStyle(DesignSystem.textSecondary)
-                if let invite { InviteCard(invite: invite) }
-                if busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요") } }
-                if let error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
-                Button { create() } label: { Label("초대 만들기", systemImage: "person.badge.plus") }.disabled(busy || vm.state.offline)
-                if vm.state.offline { Text("인터넷이 필요해요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }
+                if let invite = vm.ui.invite { InviteCard(invite: invite) }
+                if vm.ui.busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요") } }
+                if let error = vm.ui.error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
+                Button { Task { await vm.makeInvite() } } label: { Label("초대 만들기", systemImage: "person.badge.plus") }.disabled(vm.ui.busy || vm.ui.offline)
+                if vm.ui.offline { Text("인터넷이 필요해요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }
             }
             Section {
-                if others.isEmpty { Text("아직 없어요").foregroundStyle(DesignSystem.textSecondary) }
-                ForEach(others, id: \.deviceId) { d in
+                if vm.ui.phones.isEmpty { Text("아직 없어요").foregroundStyle(DesignSystem.textSecondary) }
+                ForEach(vm.ui.phones, id: \.deviceId) { d in
                     HStack {
                         Text(d.role == .owner ? "함께 타는 보호자" : "다른 보호자")
-                        if d.deviceId == vm.state.credentials?.deviceId { Text("(이 휴대폰)").foregroundStyle(DesignSystem.textSecondary) }
+                        if d.deviceId == vm.ui.myDeviceId { Text("(이 휴대폰)").foregroundStyle(DesignSystem.textSecondary) }
                         Spacer()
                         Text(d.platform == .ios ? "iPhone" : "Android").font(.footnote).foregroundStyle(DesignSystem.textSecondary)
                     }
@@ -82,16 +77,6 @@ private struct OwnerGuardians: View {
             } header: { SectionHeader("연결된 휴대폰") }
         }
         .task { await vm.refreshDevices() }
-    }
-
-    private func create() {
-        busy = true; error = nil
-        Task {
-            let (r, message) = await vm.createInvite()
-            if let r { invite = r }
-            error = message
-            busy = false
-        }
     }
 }
 
@@ -123,22 +108,20 @@ private struct InviteCard: View {
 }
 
 private struct GuardianToggle: View {
-    @Environment(SettingsViewModel.self) private var vm
-    @State private var error: String?
+    @Environment(GuardiansViewModel.self) private var vm
 
     var body: some View {
         List {
             Section {
                 Toggle("인계 알림 받기", isOn: Binding(
-                    get: { vm.state.handoffAlerts ?? true },
+                    get: { vm.ui.handoffAlerts },
                     set: { on in
                         Task {
-                            error = await vm.setHandoffAlerts(on)
-                            if on, error == nil { await NotificationAccess.request() }   // 켤 때 다시 묻는다(7.3)
+                            if await vm.setHandoff(on), on { await NotificationAccess.request() }   // 켤 때 다시 묻는다(7.3)
                         }
                     }))
-                .disabled(vm.state.handoffBusy)   // 요청이 겹치면 응답 순서에 따라 화면과 실제 설정이 달라진다(잠금은 모델에, 화면을 다시 열어도)
-                if let error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
+                .disabled(vm.ui.busy)   // 요청이 겹치면 응답 순서에 따라 화면과 실제 설정이 달라진다(요청 중은 뷰모델에, S17)
+                if let error = vm.ui.error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
             } footer: {
                 SectionHeader("아기가 계속 울어 차가 운전자에게 쉼터를 제안하거나 세우도록 안내하면 알려 드려요. 리포트는 알림 설정과 상관없이 받아요.")
             }
@@ -151,14 +134,15 @@ struct SettingsView: View {
     @Environment(SettingsViewModel.self) private var vm
     @State private var confirmDisconnect = false
     @State private var confirmClear = false
-    @State private var busy = false
-    @State private var error: String?
     @State private var nickname = ""
+
+    private var busy: Bool { vm.ui.disconnect == .running }
+    private var error: String? { if case .failed(let m) = vm.ui.disconnect { m } else { nil } }
 
     var body: some View {
         NavigationStack {
             List {
-                if vm.state.isPaired {
+                if vm.ui.connected {
                     Section { NavigationLink(CareText.guardians) { GuardiansView() } }
                 }
                 Section {
@@ -166,27 +150,27 @@ struct SettingsView: View {
                         TextField(CareText.nicknamePlaceholder, text: $nickname)
                             .multilineTextAlignment(.trailing)
                             .accessibilityLabel(CareText.nickname)
-                            .onSubmit { vm.setChildNickname(nickname) }
+                            .onSubmit { vm.setNickname(nickname) }
                     }
-                    Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { vm.state.care.sleepDiaperEnabled },
-                                                                    set: { vm.setSleepDiaperEnabled($0) }))
+                    Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { vm.ui.care.sleepDiaperEnabled },
+                                                                    set: { vm.setSleepDiaper($0) }))
                 } footer: {
                     SectionHeader(CareText.sleepDiaperToggleNote)
                 }
                 Section {
                     // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다.
-                    ShareLink(item: CareExportFile(events: vm.state.care.events),
+                    ShareLink(item: CareExportFile(export: { [vm] in vm.export() }),
                               preview: SharePreview("")) { Text(CareText.export) }   // U33: 공유 시트 제목은 비운다
                 }
                 Section {
                     Button(CareText.clear, role: .destructive) { confirmClear = true }.foregroundStyle(DesignSystem.danger)   // 시스템 빨강은 대비 미달(13장 danger)
                 }
-                if vm.state.isPaired {
+                if vm.ui.connected {
                     Section {
-                        LabeledContent("역할", value: vm.state.role == .owner ? "함께 타는 보호자" : "다른 보호자").labeledContentStyle(TokenLabeledContentStyle())
-                        if let c = vm.state.credentials { LabeledContent("차", value: String(c.carId.prefix(8))).labeledContentStyle(TokenLabeledContentStyle()) }
-                        Button(CareText.disconnect, role: .destructive) { confirmDisconnect = true }.foregroundStyle(DesignSystem.danger).disabled(busy || vm.state.offline)
-                        if vm.state.offline, !busy { Text("인터넷이 필요해요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }   // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서). 초대 만들기와 같다
+                        LabeledContent("역할", value: vm.ui.role == .owner ? "함께 타는 보호자" : "다른 보호자").labeledContentStyle(TokenLabeledContentStyle())
+                        if let carId = vm.ui.carId { LabeledContent("차", value: String(carId.prefix(8))).labeledContentStyle(TokenLabeledContentStyle()) }
+                        Button(CareText.disconnect, role: .destructive) { confirmDisconnect = true }.foregroundStyle(DesignSystem.danger).disabled(busy || vm.ui.offline)
+                        if vm.ui.offline, !busy { Text("인터넷이 필요해요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }   // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서). 초대 만들기와 같다
                         if busy { HStack { ProgressView(); Text("끊고 있어요") } }
                         if let error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
                     } header: { SectionHeader("연결") }
@@ -195,7 +179,7 @@ struct SettingsView: View {
                     NavigationLink(CareText.about) {
                         // U28·U63: 판, 오픈소스 라이선스(링크되는 라이브러리마다 이름·라이선스, 누르면 전문. 안드로이드와 같은 구조).
                         List {
-                            Text(CareText.version(AppInfo.version))
+                            Text(CareText.version(vm.ui.version))
                             Section {
                                 ForEach(OssEntry.all) { e in
                                     NavigationLink { LicenseView(entry: e) } label: {
@@ -215,18 +199,18 @@ struct SettingsView: View {
             .screenBackground()
             .navigationTitle("설정")
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
-            .onAppear { nickname = vm.state.care.childNickname ?? "" }
-            .onDisappear { vm.setChildNickname(nickname) }   // 칸을 벗어나도 남긴다(글자마다 저장하지 않는다)
+            .onAppear { nickname = vm.ui.care.childNickname ?? "" }
+            .onDisappear {
+                vm.setNickname(nickname)   // 칸을 벗어나도 남긴다(글자마다 저장하지 않는다)
+                vm.dismissDisconnectError()   // 설정을 떠나면 지난 끊기 실패 글을 걷는다(안드로이드와 같다)
+            }
             .confirmationDialog("차와의 연결을 끊을까요?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
-                Button("연결 끊기", role: .destructive) {
-                    busy = true; error = nil
-                    Task { error = await vm.disconnect(); busy = false }
-                }
+                Button("연결 끊기", role: .destructive) { vm.startDisconnect() }
             } message: {
                 Text(CareText.disconnectKeepsCare)   // R9
             }
             .confirmationDialog(CareText.clearConfirm, isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("기록 지우기", role: .destructive) { vm.clearLocalRecords() }
+                Button("기록 지우기", role: .destructive) { vm.clearRecords() }
             }
         }
     }

@@ -80,36 +80,6 @@ enum CareRules {
         return f
     }
 
-    /// R18(U45): 차로 보낼 돌봄 요약. 시각·횟수와 오늘 잔 시간 합만 넣는다(메모·기저귀 종류·젖병 양·쪽·별명은 넣지 않는다, U60).
-    /// '오늘 0시'·'어제 22시'·'오늘 6시'는 `asOf`를 `zone` 벽시계로 본 날 기준이다.
-    static func careSummary(_ file: CareFile, asOf: Int64, zone: TimeZone) -> CareSummaryBody {
-        let cal = calendar(zone)
-        let today = cal.startOfDay(for: CareTime.date(asOf))
-        let today0 = CareTime.ms(today)
-        let night = cal.date(byAdding: .day, value: -1, to: today).flatMap { cal.date(bySettingHour: 22, minute: 0, second: 0, of: $0) }.map(CareTime.ms) ?? today0
-        let morning = cal.date(bySettingHour: 6, minute: 0, second: 0, of: today).map(CareTime.ms) ?? today0
-        let live = file.events.filter { $0.deletedAt == nil && $0.startAt <= asOf }
-        func at(_ ms: Int64?) -> String? { ms.map { Rfc3339.string(CareTime.date($0), timeZone: zone) } }
-
-        let feeds = live.filter { $0.kind == .feed && $0.startAt >= today0 }.count   // 끝 모름 수유도 센다
-        var body = CareSummaryBody(asOf: at(asOf)!, zone: zone.identifier, sleepDiaperEnabled: file.sleepDiaperEnabled, todayFeedCount: feeds)
-        guard file.sleepDiaperEnabled else { return body }
-
-        let sleeps = live.filter { $0.kind == .sleep && !$0.endUnknown }   // 끝 모름 잠은 모든 잠 칸에서 뺀다
-        let ended = sleeps.filter { ($0.endAt ?? .max) <= asOf }
-        let last = ended.max { ($0.endAt!, $0.startAt) < ($1.endAt!, $1.startAt) }
-        let todayMs = sleeps.reduce(Int64(0)) { sum, e in sum + max(0, min(e.endAt ?? asOf, asOf) - max(e.startAt, today0)) }
-        let diapers = live.filter { $0.kind == .diaper }
-        body.lastSleepStartAt = at(last?.startAt)
-        body.lastSleepEndAt = at(last?.endAt)
-        body.sleepingSince = at(sleeps.filter { $0.endAt == nil }.map(\.startAt).max())
-        body.todaySleepMin = Int(todayMs / 60_000)
-        body.nightWakeups = ended.filter { night <= $0.endAt! && $0.endAt! < morning }.count
-        body.lastDiaperAt = at(diapers.map(\.startAt).max())
-        body.todayDiaperCount = diapers.filter { $0.startAt >= today0 }.count
-        return body
-    }
-
     /// 메모 입력칸: 코드 포인트 200개에서 더 받지 않는다(U17·U24).
     static func noteLimited(_ s: String) -> String {
         s.unicodeScalars.count <= noteMax ? s : String(String.UnicodeScalarView(s.unicodeScalars.prefix(noteMax)))
@@ -123,7 +93,7 @@ enum CareRules {
 
     // MARK: 날짜(R13)
 
-    private static func calendar(_ zone: TimeZone) -> Calendar {
+    static func calendar(_ zone: TimeZone) -> Calendar {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = zone
         return c

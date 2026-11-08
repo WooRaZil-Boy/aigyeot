@@ -1,37 +1,48 @@
 import Foundation
 import Observation
 
-/// 연결(POST /v1/pair, 계약 7.1·9장). 연결 화면의 흐름(확인 시트·링크 오류)은 Presentation의 RootViewModel이 갖는다.
+/// 코드로 연결하기(POST /v1/pair, 계약 7.1·9장, G16·G17·U52). 이미 연결된 차가 있으면 먼저 끊고, 둘 다 성공해야 새 자격이 켜진다.
+/// 작업은 앱 범위에서 끝나고 화면은 `run`만 본다(M2). 연결 화면의 흐름(확인 시트·링크 오류)은 Presentation의 AppViewModel이 갖는다.
 @MainActor
 @Observable
 final class Pair {
     @ObservationIgnored private let state: PhoneStateRepository
+    @ObservationIgnored private let secrets: CredentialRepository
+    @ObservationIgnored private let songFiles: SongFileStore
     @ObservationIgnored private let relay: RelayClient
-    @ObservationIgnored private let link: LinkObserver
-    @ObservationIgnored private let notices: NoticeBoard
+    @ObservationIgnored private let gate: RelayGate
+    @ObservationIgnored private let linkSwitch: LinkSwitch
+    @ObservationIgnored private let disconnect: Disconnect
+    @ObservationIgnored private let notices: Notices
     @ObservationIgnored private let visibility: AppVisibility
-    @ObservationIgnored private let lifecycle: Lifecycle
-    @ObservationIgnored private let feeding: ReconcileFeeding
-    @ObservationIgnored private let summary: ReconcileCareSummary
-    @ObservationIgnored private let pushToken: SyncPushToken
+    @ObservationIgnored private let lifecycle: AppLifecycle
+    @ObservationIgnored private let recordCare: RecordCare
+    @ObservationIgnored private let pushToken: RegisterPush
+    @ObservationIgnored private let tasks: TaskBag
     @ObservationIgnored private let now: () -> Date
+    /// 연결 작업의 결과(M2). 다음 연결을 시작하거나 화면이 걷을 때(`clear`)까지 남는다.
+    private(set) var run: PairRun?
     /// 연결 429 잠금이 끝나는 시각. 직접 입력·확인 화면이 같이 본다. 화면을 옮기거나 코드를 고쳐도 풀리지 않는다(계약 9장).
     private(set) var lockedUntil: Date?
-    /// 연결 요청이 진행 중이면 새 요청을 받지 않는다(안드로이드 startPair의 pairJob?.isActive와 같다). 늦게 온 옛 응답이 새 연결을 덮지 않게 한다.
-    @ObservationIgnored private(set) var pairing = false
+    /// 도는 연결 작업(시험이 끝을 기다린다).
+    @ObservationIgnored private(set) var job: Task<Void, Never>?
 
-    init(state: PhoneStateRepository, relay: RelayClient, link: LinkObserver, notices: NoticeBoard, visibility: AppVisibility,
-         lifecycle: Lifecycle, feeding: ReconcileFeeding, summary: ReconcileCareSummary, pushToken: SyncPushToken,
-         now: @escaping () -> Date) {
+    init(state: PhoneStateRepository, secrets: CredentialRepository, songFiles: SongFileStore, relay: RelayClient,
+         gate: RelayGate, linkSwitch: LinkSwitch, disconnect: Disconnect, notices: Notices, visibility: AppVisibility,
+         lifecycle: AppLifecycle, recordCare: RecordCare, pushToken: RegisterPush, tasks: TaskBag, now: @escaping () -> Date) {
         self.state = state
+        self.secrets = secrets
+        self.songFiles = songFiles
         self.relay = relay
-        self.link = link
+        self.gate = gate
+        self.linkSwitch = linkSwitch
+        self.disconnect = disconnect
         self.notices = notices
         self.visibility = visibility
         self.lifecycle = lifecycle
-        self.feeding = feeding
-        self.summary = summary
+        self.recordCare = recordCare
         self.pushToken = pushToken
+        self.tasks = tasks
         self.now = now
     }
 
@@ -39,37 +50,69 @@ final class Pair {
     var isLocked: Bool { lockedUntil.map { $0 > now() } ?? false }
 
     /// 첫 안내를 넘겼다(연결하기·기록만 쓰기, U62).
-    func markIntroSeen() { state.update { $0.introSeen = true } }
+    func markIntroSeen() { state.commitLocal { $0.introSeen = true } }
 
-    func run(_ code: PairCode) async -> ConnectFailure? {
-        guard !pairing else { return .busy }
-        if isLocked, let until = lockedUntil { return .rateLimited(until.timeIntervalSince(now())) }
-        pairing = true
-        defer { pairing = false }
+    /// U52: 지금 새 연결 링크·QR을 받을 수 있는가. 연결 작업(끊고 연결의 끊기 포함)이 도는 동안은 받지 않는다.
+    func canTakeLink() -> Bool { if case .running = run { false } else { true } }
+
+    /// 확인 화면의 '연결하기'·'끊고 연결하기'와 직접 친 코드(G16·G17). 도는 작업이 있으면 받지 않는다(늦게 온 옛 응답이 새 연결을 덮지 않게).
+    /// 결과를 `run`에 두고 `then`을 부른다(연결 흐름 화면을 닫는 쪽).
+    func start(_ code: PairCode, then: @escaping @MainActor (PairRun) -> Void = { _ in }) {
+        guard canTakeLink() else { return }
+        if isLocked, let until = lockedUntil { finish(.failed(code: code, .rateLimited(until.timeIntervalSince(now()))), then); return }
+        run = .running(code: code)   // 작업이 돌기 전 틈에 온 링크도 막는다(U52)
+        job = tasks.spawn { [self] in
+            // 확인하기 전에는 지금 연결을 지우지 않는다. 그사이 끊겼으면(401) 끊기를 거치지 않는다(U13 ②)
+            let failure: ConnectFailure?
+            if state.isPaired, let message = await disconnect.now() { failure = .disconnectFailed(message) }
+            else { failure = await request(code) }
+            finish(failure.map { .failed(code: code, $0) } ?? .done(code: code, role: state.role), then)
+        }
+    }
+
+    private func finish(_ r: PairRun, _ then: (PairRun) -> Void) {
+        run = r
+        then(r)
+    }
+
+    /// 끝난 결과를 걷는다(연결·확인 화면이 닫힐 때). 도는 작업은 둔다.
+    func clear() { if canTakeLink() { run = nil } }
+
+    private func request(_ code: PairCode) async -> ConnectFailure? {
         // 연결 요청의 결과도 띠에 반영한다(9장, 끊긴 동안 켜진 띠가 다시 연결한 뒤 남지 않게). 성공하면 세대가 바뀌어 observed 대신 직접 본다
-        let mark = link.mark()
+        let mark = gate.mark()
         do {
             let r = try await relay.pair(code: code.value, pushToken: pushToken.token)
-            link.observe(nil, since: mark)
+            gate.observe(nil, since: mark)
             guard let role = PhoneRole(rawValue: r.role.rawValue) else { return .other }
-            // 연결 세대가 바뀐다. 이전 연결의 응답은 이제 버려진다.
-            // 이전 상태·보낼 함을 지우는 저장과 Keychain 저장이 성공해야만 새 자격을 켠다(이전 차의 보낼 함이 새 차로 가지 않게).
+            // 연결 세대가 바뀐다(자격 값이 세대다). 이전 연결의 응답은 이제 버려진다.
+            // Keychain 저장과 이전 상태·보낼 함을 지운 새 상태의 저장이 성공해야만 새 자격을 켠다(이전 차의 보낼 함이 새 차로 가지 않게).
             let c = Credentials(carId: r.carId, deviceId: r.deviceId, token: r.deviceToken, role: role)
-            guard lifecycle.switchConnection(.connect(c)) == .done else { return await discard(c) }
             let t = now()
-            state.update { st in
-                st.introSeen = true   // 첫 안내를 넘기지 않고 링크로 연결해도 홈으로 간다(7.1 DONE → HOME, 안드로이드와 같다)
+            // 토큰을 Keychain에 쓴 것이 확인된 뒤에 상태를 커밋하고 자격을 공개한다(7.4, 안드로이드와 같은 순서). 실패 범주 T: 중계의 새 기기를 지운다
+            let prev = state.creds
+            do { try secrets.save(c) } catch { return await discard(c) }
+            let r2 = state.switchTo(c) { old in
+                var st = PhoneStateRepository.fresh(introSeen: true, keeping: old)   // 첫 안내를 넘기지 않고 링크로 연결해도 홈으로 간다(7.1 DONE → HOME, 안드로이드와 같다)
                 st.carId = r.carId
                 st.lastReceivedAt = t   // 연결 시각을 기준으로 둬 차 메시지를 한 번도 못 받아도 24시간 재요청이 걸린다(안드로이드 paired와 같다)
                 st.handoffAlerts = role == .guardian ? true : nil   // 기본값은 guardian 참, owner 거짓(G12)
+                return st
             }
-            notices.replace(with: NoticeRules.paired)
-            feeding.run()   // 연결 직후(R6): 연결 전에 적은 24시간 안의 수유를 보낸다
-            summary.run()   // 같은 계기(R19)
-            if visibility.active { lifecycle.didBecomeActive() }   // 연결 직후 받기·동기화를 바로 시작한다
+            guard r2.switched else {
+                if let prev { try? secrets.save(prev) } else { secrets.clear() }   // 옛 비밀값으로 되돌린다
+                return await discard(c)
+            }
+            songFiles.purge()   // 지난 연결의 녹음 파일(상태는 이미 비웠다)
+            linkSwitch.goneCleanup(.paired)   // D1: 남은 강제 끊김 기록을 걷는다
+            notices.clearForPair()   // 새 연결: 띠·배너·되돌리기를 처음으로(S9)
+            disconnect.clearRun()    // 지난 연결의 끊기 결과(실패 글·끝남)가 새 연결의 설정에 남지 않게(안드로이드 Pair와 같다)
+            notices.addLine(NoticeRules.paired)   // D3 a: iOS는 완료 화면 대신 '연결됐어요' 띠
+            recordCare.syncToCar(.paired)   // 연결 직후(R6·R19): 연결 전에 적은 24시간 안의 수유와 요약을 보낸다
+            if visibility.active { lifecycle.onForeground() }   // 연결 직후 받기·동기화를 바로 시작한다
             return nil
         } catch let e as RelayError {
-            link.observe(e, since: mark)
+            gate.observe(e, since: mark)
             switch (e.status, e.code) {
             case (404, _): return .codeInvalid
             case (429, _):
@@ -104,73 +147,4 @@ final class Pair {
         }
     }
     @ObservationIgnored private var unlockTask: Task<Void, Never>?
-}
-
-/// 설정의 '연결 끊기'와 '끊고 연결하기'의 끊기(U25 b, G16). 중계의 토큰을 지워야 해서 인터넷이 필요하다.
-@MainActor
-final class Disconnect {
-    private let state: PhoneStateRepository
-    private let relay: RelayClient
-    private let gate: RelayGate
-    private let notices: NoticeBoard
-    /// 연결을 비운다(Lifecycle.leaveConnection). Lifecycle이 이 클래스의 `absorbUnauthorized`를 써서 합성 루트가 잇는다.
-    private let leave: (PhoneStateRepository.Switch) -> Void
-    /// 끊기 중에 온 이 연결의 401·4001을 끊기가 끝난 뒤 처리한다(Lifecycle.handleUnauthorized).
-    private let lose: () -> Void
-    /// 사용자가 요청한 끊기 중(안드로이드 `leaving`과 같다). 그사이 온 4001·401은 강제 해제가 아니라 이 끊기의 결과다.
-    private var leaving = false
-    /// 끊기 중에 온 401·4001의 연결 세대.
-    private var lostWhileLeaving: Int?
-    private var leavingTask: Task<String?, Never>?
-
-    init(state: PhoneStateRepository, relay: RelayClient, gate: RelayGate, notices: NoticeBoard,
-         leave: @escaping (PhoneStateRepository.Switch) -> Void, lose: @escaping () -> Void) {
-        self.state = state
-        self.relay = relay
-        self.gate = gate
-        self.notices = notices
-        self.leave = leave
-        self.lose = lose
-    }
-
-    /// 실패하면 문구를 돌려준다.
-    func run() async -> String? {
-        // 설정의 끊기와 '끊고 연결하기'의 끊기가 겹치면 뒤에 온 쪽은 앞의 결과를 기다린다(끊기 중 받은 401·4001 표시를 지우지 않게).
-        if let running = leavingTask { return await running.value }
-        let task = Task { await perform() }
-        leavingTask = task
-        let result = await task.value
-        leavingTask = nil
-        return result
-    }
-
-    /// 끊는 중에 온 401·4001이면 기억하고 true(끊기가 끝날 때 GONE인지 본다).
-    func absorbUnauthorized() -> Bool {
-        guard leaving else { return false }
-        lostWhileLeaving = state.generation
-        return true
-    }
-
-    private func perform() async -> String? {
-        let gen = state.generation
-        leaving = true
-        lostWhileLeaving = nil
-        defer {
-            leaving = false
-            // 끊기가 실패로 끝났는데 그사이 이 연결의 401·4001이 왔다: 토큰은 이미 지워졌으니 그대로 GONE으로 간다(7.1).
-            let lost = lostWhileLeaving == state.generation
-            lostWhileLeaving = nil
-            if lost { lose() }
-        }
-        do { try await gate.observed { try await relay.deleteMe() } }   // 중계는 204보다 먼저 이 폰의 소켓을 4001로 닫는다(removeDevice)
-        catch let e as RelayError {
-            if e.isOffline { return "인터넷이 필요해요" }
-            if !e.isUnauthorized { return "끊지 못했어요. 잠시 뒤에 다시 해 주세요." }
-        } catch { return "끊지 못했어요. 잠시 뒤에 다시 해 주세요." }
-        if gen == state.generation {
-            leave(.disconnect)
-            notices.replace(with: CareText.disconnected)   // U25 b: 탭(연결 안 됨)의 오늘로 가고 띠를 보인다
-        }
-        return nil
-    }
 }

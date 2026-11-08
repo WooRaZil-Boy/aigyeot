@@ -63,16 +63,16 @@ struct FileSongStore: SongFileStore {
         try FileManager.default.copyItem(at: recording, to: dest)
     }
     func size(of url: URL) -> Int { (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0 }
-    func remove(_ songId: String) { SongFiles.remove(songId) }
-    func removeAll() { SongFiles.removeAll() }
+    func delete(_ songId: String) { SongFiles.remove(songId) }
+    func purge() { SongFiles.removeAll(); SongFiles.removeBrokenCopies() }
     func removeBrokenCopies() { SongFiles.removeBrokenCopies() }
-    func removeFiles(notIn keep: Set<String>) {
+    func clean(keep: Set<String>) {
         let files = (try? FileManager.default.contentsOfDirectory(at: SongFiles.directory, includingPropertiesForKeys: nil)) ?? []
         for f in files where f.pathExtension == "m4a" && !keep.contains(f.deletingPathExtension().lastPathComponent) {
             try? FileManager.default.removeItem(at: f)
         }
     }
-    func removeTempRecordings() { AudioRecorder.removeTempRecordings() }
+    func deleteLeftovers() { AudioRecorder.removeTempRecordings() }
 }
 
 /// 녹음 파일 폴더(Application Support/songs). 곡을 지울 때 함께 지운다(7.4).

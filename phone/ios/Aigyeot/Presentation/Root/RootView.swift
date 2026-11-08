@@ -2,25 +2,30 @@ import SwiftUI
 
 /// 첫 실행 → 안내 → (연결) → 탭(계약 7.1, phone-care-plan 5장·U7·U25).
 struct RootView: View {
-    @Environment(RootViewModel.self) private var vm
+    @Environment(AppViewModel.self) private var vm
 
     var body: some View {
         @Bindable var vm = vm
         Group {
-            switch vm.state.route {
+            switch vm.ui.route {
             case .intro: IntroView()
             case .gone: GoneView()
-            case .connect: ConnectView()
+            case .connect: Scoped({ $0.connect() }) { _ in ConnectView() }
             case .main: MainView()   // 연결 안 됨도 탭을 쓴다(U7)
             }
         }
-        .sheet(item: $vm.pendingCode) { code in ConfirmView(code: code) }
+        .sheet(item: $vm.pendingCode) { code in Scoped({ $0.connect() }) { _ in ConfirmView(code: code) } }
+        // 받을 푸시가 있는 guardian만 연결을 마친 뒤 알림 권한을 묻는다(G13).
+        // 묻기 직전에 지금 연결을 다시 본다: 마친 직후 401로 끊겼으면(GONE) 묻지 않는다(나누기 전과 같다)
+        .onChange(of: vm.ui.pairRun) { _, r in
+            if case .done(_, .guardian) = r { Task { if vm.ui.role == .guardian { await NotificationAccess.request() } } }
+        }
     }
 }
 
 /// 안내 한 화면: 무엇이 오가는지(G31). 글과 순서는 7.1 `intro.*` 그대로다(U43).
 struct IntroView: View {
-    @Environment(RootViewModel.self) private var vm
+    @Environment(AppViewModel.self) private var vm
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.s3) {
@@ -51,7 +56,7 @@ struct IntroView: View {
 
 /// 차나 중계 쪽에서 끊겼을 때(401·4001, U25 a). 돌봄 기록은 남아 있어 기록만 계속 쓸 수 있다.
 struct GoneView: View {
-    @Environment(RootViewModel.self) private var vm
+    @Environment(AppViewModel.self) private var vm
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -75,11 +80,14 @@ struct GoneView: View {
 
 /// 연결: QR 찍기 또는 코드 넣기(7.1). QR·링크는 확인 화면으로, 직접 친 코드는 확인 없이 바로 연결한다(G17).
 struct ConnectView: View {
-    @Environment(RootViewModel.self) private var vm
+    @Environment(AppViewModel.self) private var app
+    @Environment(ConnectViewModel.self) private var vm
     @State private var code = ""
     @State private var inputError: String?
     @State private var scanning = false
-    @State private var connecting = false
+
+    private var connecting: Bool { if case .running = vm.ui.run { true } else { false } }
+    private var failure: String? { if case .failed(_, let f) = vm.ui.run { f.message } else { nil } }
 
     var body: some View {
         NavigationStack {
@@ -100,12 +108,13 @@ struct ConnectView: View {
                             .autocorrectionDisabled()
                             .onChange(of: code) { _, v in
                                 inputError = nil
+                                vm.clear()   // 고치면 지난 연결 실패 글을 걷는다
                                 // 6자리를 다 넣으면 바로 연결한다.
                                 if v.filter(\.isNumber).count == 6, v.allSatisfy({ $0.isNumber || $0 == " " || $0 == "-" }) { submit() }   // 잠금 중이면 submit이 막는다
                             }
-                        if let e = inputError ?? vm.linkError { Text(e).font(.footnote).foregroundStyle(DesignSystem.danger) }
+                        if let e = inputError ?? failure ?? app.linkError { Text(e).font(.footnote).foregroundStyle(DesignSystem.danger) }
                         if connecting { HStack { ProgressView(); Text("확인하고 있어요") } }
-                        Button { submit() } label: { Text("확인").frame(minWidth: 44, minHeight: 44) }.buttonStyle(.bordered).disabled(code.isEmpty || connecting || vm.state.isPairLocked)   // 44pt
+                        Button { submit() } label: { Text("확인").frame(minWidth: 44, minHeight: 44) }.buttonStyle(.bordered).disabled(code.isEmpty || connecting || vm.ui.isLocked)   // 44pt
                     }
                 }
                 .padding(24)
@@ -115,34 +124,28 @@ struct ConnectView: View {
             .toolbar {
                 // 연결하지 않고 탭(연결 안 됨)으로 돌아간다(U7).
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(CareText.cancel) { vm.cancelConnect() }.disabled(connecting)
+                    Button(CareText.cancel) { app.cancelConnect() }.disabled(connecting)
                 }
             }
             .fullScreenCover(isPresented: $scanning) { ScanView(isPresented: $scanning) }
         }
+        .onDisappear { vm.clear() }
     }
 
     private func submit() {
         guard let c = PairCode.normalize(code) else { inputError = ConnectFailure.badCode.message; return }
-        // 429 잠금 중에는 요청하지 않고 입력도 지우지 않는다. 시각은 모델이 들고 있다(9장).
+        // 429 잠금 중에는 요청하지 않고 입력도 지우지 않는다. 시각은 Pair가 들고 있다(9장).
         guard !connecting else { return }
-        guard !vm.state.isPairLocked else { inputError = ConnectFailure.rateLimited(nil).message; return }
+        guard !vm.ui.isLocked else { inputError = ConnectFailure.rateLimited(nil).message; return }
         code = ""
-        connecting = true
-        vm.beginConfirm()   // Task가 돌기 전 틈에 온 링크가 확인 화면을 바꾸지 않게(U52)
-        Task {
-            let f = await vm.connect(typed: c)
-            vm.endConfirm()
-            connecting = false
-            if let f { inputError = f.message }
-            else if vm.state.role == .guardian { await NotificationAccess.request() }   // 받을 푸시가 있는 guardian만 묻는다(G13)
-        }
+        app.clearLinkError()
+        vm.start(c)   // 작업이 돌기 전 틈에 온 링크도 막는다(U52). 연결되면 연결 흐름이 닫힌다
     }
 }
 
 /// 어두운 전체 카메라 화면, 한 줄 안내, 아래에 '코드로 입력'(구현 계획 8장).
 struct ScanView: View {
-    @Environment(RootViewModel.self) private var vm
+    @Environment(AppViewModel.self) private var vm
     @Binding var isPresented: Bool
     @State private var allowed: Bool?
     @State private var invalid = false
@@ -189,15 +192,18 @@ struct ScanView: View {
 /// 연결 코드는 차 화면, 초대 코드는 받은 초대 코드와 견준다.
 struct ConfirmView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 44   // 대조할 코드도 동적 글자 크기를 따른다(8장)
-    @Environment(RootViewModel.self) private var vm
+    @Environment(AppViewModel.self) private var app
+    @Environment(ConnectViewModel.self) private var vm
     @Environment(\.dismiss) private var dismiss
     let code: PairCode
-    @State private var busy = false
-    @State private var failure: ConnectFailure?
     /// 누른 순간의 교체 여부(안드로이드 `switching`과 같다). 끊고 연결하는 동안 글자가 '연결하기'로 바뀌지 않게 끝날 때까지 둔다.
     @State private var switching: Bool?
+    /// 끊고 연결의 끊기와 연결 요청이 도는 동안.
+    private var busy: Bool { if case .running = vm.ui.run { true } else { false } }
+    /// 이 코드의 연결 실패(429 잠금은 Pair가 들고 있다).
+    private var failure: ConnectFailure? { if case .failed(let c, let f) = vm.ui.run, c == code { f } else { nil } }
     /// 이미 연결된 폰. 확인하기 전에는 지금 연결을 지우지 않는다.
-    private var replacing: Bool { switching ?? vm.state.isPaired }
+    private var replacing: Bool { switching ?? vm.ui.connected }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -208,32 +214,25 @@ struct ConfirmView: View {
                     if case .invite = code { Text("다른 보호자가 보낸 초대 코드예요. 리포트와 인계 알림을 받게 돼요.").font(.callout) }
                     if replacing { Text("지금 연결된 차를 끊고 새 차에 연결할까요?").font(.callout) }   // G16
                     if let failure { Text(failure.message).foregroundStyle(DesignSystem.danger) }
-                    if let e = vm.linkError { Text(e).font(DesignSystem.caption).foregroundStyle(DesignSystem.textSecondary) }   // U52 pair.busy
+                    if let e = app.linkError { Text(e).font(DesignSystem.caption).foregroundStyle(DesignSystem.textSecondary) }   // U52 pair.busy
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, DesignSystem.s6)
             }
             if busy { HStack { ProgressView(); Text("확인하고 있어요") } }
             Button { connect() } label: { Text(replacing ? CareText.pairConfirmSwitch : CareText.pairConfirm).frame(maxWidth: .infinity) }   // U49
-                .accentButton().controlSize(.large).disabled(busy || vm.state.isPairLocked)
+                .accentButton().controlSize(.large).disabled(busy || vm.ui.isLocked)
             Button { dismiss() } label: { Text("아니에요").frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle()) }.disabled(busy)   // 터치 영역 44pt(8장)
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
         .interactiveDismissDisabled(busy)
+        .onChange(of: busy) { _, b in if !b { switching = nil } }
+        .onDisappear { vm.clear() }
     }
 
     private func connect() {
-        busy = true
-        switching = vm.state.isPaired
-        failure = nil
-        vm.beginConfirm()   // Task가 돌기 전 틈에 온 새 링크도 막는다(U52)
-        Task {
-            let f = await vm.confirmPair(code)
-            busy = false
-            switching = nil
-            if let f { failure = f }   // 429 잠금은 모델이 들고 있다
-            else if vm.state.role == .guardian { await NotificationAccess.request() }   // 받을 푸시가 있는 guardian만 묻는다(G13)
-        }
+        switching = vm.ui.connected
+        vm.start(code)   // 작업이 돌기 전 틈에 온 새 링크도 막는다(U52). 연결되면 시트가 닫힌다
     }
 }

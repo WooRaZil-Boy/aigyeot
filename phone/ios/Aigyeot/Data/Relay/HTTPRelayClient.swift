@@ -1,22 +1,20 @@
 import Foundation
 
-/// 도메인과 같은 메인 액터에서 돈다: 요청(토큰 헤더)은 부른 쪽이 세대를 확인한 그 차례에 만들어진다.
-/// 다른 실행기로 넘어가면 그사이 새 연결이 끝나 이전 연결의 메시지에 새 토큰이 붙을 수 있다(안드로이드는 토큰을 인자로 고정한다).
+/// 도메인과 같은 메인 액터에서 돈다. 토큰은 요청마다 부른 쪽이 잡아 둔 자격의 것을 받는다(P5, 안드로이드와 같다):
+/// Keychain을 읽지 않으니 그사이 새 연결이 끝나도 이전 연결의 요청에 새 토큰이 붙지 않는다.
 @MainActor
 final class HTTPRelayClient: RelayClient {
     let baseURL: URL
     private let session: URLSession
-    private let credentials: () -> Credentials?
     /// 응답의 `Date` 헤더(시계 차이 확인용, 계약 9장).
     var onServerDate: ((Date) -> Void)?
 
     private let installId: String
     private let clientHeader: String
 
-    init(baseURL: URL, session: URLSession = .shared, credentials: @escaping () -> Credentials?) {
+    init(baseURL: URL, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
-        self.credentials = credentials
         let key = "install_id"
         if let v = UserDefaults.standard.string(forKey: key) {
             installId = v
@@ -32,18 +30,18 @@ final class HTTPRelayClient: RelayClient {
 
     // MARK: 요청
 
+    /// `token`이 없으면 연결 요청(설치 id 헤더)이다.
     private func request(_ method: String, _ path: String, query: [URLQueryItem] = [],
-                         authorized: Bool = true, contentType: String? = nil) throws -> URLRequest {
+                         token: String?, contentType: String? = nil) -> URLRequest {
         var comps = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { comps.queryItems = query }
         var req = URLRequest(url: comps.url!)
         req.httpMethod = method
         req.timeoutInterval = 20
         req.setValue(clientHeader, forHTTPHeaderField: "X-Client")
-        if authorized {
+        if let token {
             // 토큰은 헤더로만 보낸다. 경로·쿼리에는 넣지 않는다(1.1).
-            guard let c = credentials() else { throw RelayError.http(status: 401, code: "unauthorized", retryAfter: nil) }
-            req.setValue("Bearer \(c.token)", forHTTPHeaderField: "Authorization")
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         } else {
             req.setValue(installId, forHTTPHeaderField: "X-Install-Id")
         }
@@ -51,8 +49,8 @@ final class HTTPRelayClient: RelayClient {
         return req
     }
 
-    private func jsonRequest<B: Encodable>(_ method: String, _ path: String, body: B, authorized: Bool = true) throws -> URLRequest {
-        var req = try request(method, path, authorized: authorized, contentType: "application/json; charset=utf-8")
+    private func jsonRequest<B: Encodable>(_ method: String, _ path: String, body: B, token: String?) throws -> URLRequest {
+        var req = request(method, path, token: token, contentType: "application/json; charset=utf-8")
         req.httpBody = try ProtocolCoding.encoder.encode(body)
         return req
     }
@@ -128,41 +126,34 @@ final class HTTPRelayClient: RelayClient {
     func pair(code: String, pushToken: String?) async throws -> PairResponse {
         // 연결 코드는 URL이 아니라 본문으로 보낸다(1.1).
         let body = PairRequest(code: code, platform: .ios, pushToken: pushToken, appVersion: Self.appVersion)
-        return try decode(PairResponse.self, try await perform(jsonRequest("POST", "v1/pair", body: body, authorized: false)))
+        return try decode(PairResponse.self, try await perform(jsonRequest("POST", "v1/pair", body: body, token: nil)))
     }
 
-    func devices() async throws -> DevicesResponse {
-        try decode(DevicesResponse.self, try await perform(request("GET", "v1/devices")))
+    func devices(token: String) async throws -> DevicesResponse {
+        try decode(DevicesResponse.self, try await perform(request("GET", "v1/devices", token: token)))
     }
 
-    func patchMe(_ r: PatchDeviceRequest) async throws -> PatchDeviceResponse {
-        try decode(PatchDeviceResponse.self, try await perform(jsonRequest("PATCH", "v1/devices/me", body: r)))
-    }
-
-    func deleteMe() async throws {
-        _ = try await perform(request("DELETE", "v1/devices/me"))
+    func patchMe(token: String, _ r: PatchDeviceRequest) async throws -> PatchDeviceResponse {
+        try decode(PatchDeviceResponse.self, try await perform(jsonRequest("PATCH", "v1/devices/me", body: r, token: token)))
     }
 
     func deleteMe(token: String) async throws {
-        var req = try request("DELETE", "v1/devices/me", authorized: false)
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")   // 헤더로만 보낸다(1.1)
-        _ = try await perform(req)
+        _ = try await perform(request("DELETE", "v1/devices/me", token: token))
     }
 
-    func createInvite() async throws -> InviteResponse {
+    func createInvite(token: String) async throws -> InviteResponse {
         let env = Envelope(id: ULID.generate(), type: MessageType.inviteCreated, ts: Rfc3339.string(Date()), body: .object([:]))
-        return try decode(InviteResponse.self, try await perform(jsonRequest("POST", "v1/invites", body: env)))
+        return try decode(InviteResponse.self, try await perform(jsonRequest("POST", "v1/invites", body: env, token: token)))
     }
 
-    func send(_ envelope: Envelope) async throws -> SendMessageResponse {
-        try decode(SendMessageResponse.self, try await perform(jsonRequest("POST", "v1/messages", body: envelope)))
+    func send(token: String, _ envelope: Envelope) async throws -> SendMessageResponse {
+        try decode(SendMessageResponse.self, try await perform(jsonRequest("POST", "v1/messages", body: envelope, token: token)))
     }
 
-    func inbox(afterSeq: Int64?) async throws -> InboxResponse {
+    func inbox(token: String, car: String, afterSeq: Int64?) async throws -> InboxResponse {
         var q = [URLQueryItem(name: "limit", value: "100")]
         if let afterSeq { q.append(URLQueryItem(name: "after_seq", value: String(afterSeq))) }
-        let data = try await perform(request("GET", "v1/inbox", query: q))   // 요청(토큰)은 메인에서 만든다
-        let car = credentials()?.carId
+        let data = try await perform(request("GET", "v1/inbox", query: q, token: token))
         // 한 쪽에 64KB 봉투가 100개까지 온다(1.4·3.3). 해석은 메인 밖에서 한다.
         return try await Self.parseInbox(data, car: car)
     }
@@ -173,18 +164,18 @@ final class HTTPRelayClient: RelayClient {
         try lenientInbox(data, car: car)
     }
 
-    func ack(ids: [String]) async throws {
+    func ack(token: String, ids: [String]) async throws {
         guard !ids.isEmpty else { return }
         for chunk in stride(from: 0, to: ids.count, by: 100).map({ Array(ids[$0..<min($0 + 100, ids.count)]) }) {
             let body = try JSONValue(encoding: AckBody(ids: chunk))
             let env = Envelope(id: ULID.generate(), type: MessageType.ack, ts: Rfc3339.string(Date()), body: body)
-            _ = try await perform(jsonRequest("POST", "v1/ack", body: env))
+            _ = try await perform(jsonRequest("POST", "v1/ack", body: env, token: token))
         }
     }
 
     /// `PUT /v1/songs/{song_id}`. 같은 id 파일이 이미 있으면(409 `already_exists`) 성공으로 본다.
-    func putSong(id: String, file: URL) async throws {
-        let req = try request("PUT", "v1/songs/\(id)", contentType: "audio/mp4")
+    func putSong(token: String, id: String, file: URL) async throws {
+        let req = request("PUT", "v1/songs/\(id)", token: token, contentType: "audio/mp4")
         do { _ = try await perform(req, upload: file) }
         catch let e as RelayError where e.status == 409 && e.code == "already_exists" { return }
     }

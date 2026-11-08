@@ -359,7 +359,7 @@ final class ScreenTour: XCTestCase {
         shot("19c-owner-recorded")   // 멈춘 뒤: 이름·다시 듣기·보내기(가장 큰 글자에서는 시트 안에서 굴린다)
         // 이름을 넣어 보내고, 차가 받아들이면 목록에 '다시 듣기'·'실험에 쓰기'가 생긴다(둘 다 44pt 이상, 8장)
         let songName = app.textFields["노래 이름(30자까지)"]
-        songName.tap(); songName.typeText("song1")
+        songName.tap(); songName.typeText("song1\n")   // 키보드의 '완료'로 닫는다(키보드 추천 막대가 '보내기'를 덮는다)
         let send = app.buttons["보내기"]
         for _ in 0..<3 where !send.isHittable { app.scrollViews.firstMatch.swipeUp() }   // 큰 글자에서는 시트 안에서 굴린다
         send.tap()

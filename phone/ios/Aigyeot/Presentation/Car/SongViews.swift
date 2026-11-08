@@ -2,8 +2,18 @@ import SwiftUI
 
 /// 차(5장): 연결 상태 → 우리 노래(owner, 지금 화면) → 리포트 목록·상세(지금 화면). 연결 안 됨이면 '차와 연결하기'만.
 struct CarView: View {
-    @Environment(SongsViewModel.self) private var vm
-    @State private var player = SongPlayer()
+    var body: some View {
+        // 우리 노래(SongsViewModel)와 다시 듣기(SongPlayer)는 차 탭이 있는 동안 산다
+        Scoped({ $0.songs() }) { _ in
+            Scoped({ $0.songPlayer() }) { player in CarContent(player: player) }
+        }
+    }
+}
+
+private struct CarContent: View {
+    @Environment(CarViewModel.self) private var vm
+    @Environment(SongsViewModel.self) private var songsVM
+    let player: SongPlayer
     @State private var recording = false
     /// '다시 녹음'으로 바꿀 거절·실패 곡. 새 녹음을 보낼 때 이 곡을 지우고 넣는다(3곡 한도에 걸리지 않게).
     @State private var replacing: String?
@@ -13,17 +23,17 @@ struct CarView: View {
         NavigationStack {
             List {
                 Section {
-                    if vm.state.isPaired { CarTile() } else { ConnectCarTile() }
+                    if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: vm.ui.offline) } else { ConnectCarTile() }
                 }
                 .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                if vm.state.role == .owner { songs }
-                if vm.state.isPaired {
+                if vm.ui.owner { songs }
+                if vm.ui.isPaired {
                     Section {   // 7.1 car.section.songs / car.section.reports(U39)
-                        if vm.state.reports.isEmpty {
+                        if vm.ui.reports.isEmpty {
                             Text("주행이 끝나면 여기에 리포트가 와요").foregroundStyle(DesignSystem.textSecondary)
                         }
-                        ForEach(vm.state.reports) { r in
-                            NavigationLink { ReportDetailView(report: r) } label: { ReportRow(report: r) }
+                        ForEach(vm.ui.reports) { r in
+                            NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }
                         }
                     } header: { SectionHeader("리포트") }
                 }
@@ -32,7 +42,7 @@ struct CarView: View {
             .navigationTitle(CareText.tabCar)
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
             .refreshable { await vm.retryNow() }
-            .sheet(isPresented: $recording) { RecordSheet(replacing: replacing) }
+            .sheet(isPresented: $recording) { Scoped({ $0.recorder() }) { rec in RecordSheet(rec: rec, replacing: replacing) } }
             .onDisappear { player.stop() }
             // 안드로이드 ON_STOP과 같다: 백그라운드로 가면 미리듣기를 멈춘다(오디오 세션이 .playback이라 이어질 수 있음).
             .onChange(of: scenePhase) { _, p in if p == .background { player.stop() } }
@@ -42,17 +52,17 @@ struct CarView: View {
     /// 우리 노래(owner만): 1~3곡 녹음·다시 듣기·지우기, 실험에 쓸 한 곡 고르기, 차로 보낸 상태.
     private var songs: some View {
         Section {
-            if vm.state.visibleSongs.isEmpty {
+            if songsVM.ui.songs.isEmpty {
                 Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요")
                     .foregroundStyle(DesignSystem.textSecondary)
             }
-            ForEach(vm.state.visibleSongs) { row in
+            ForEach(songsVM.ui.songs) { row in
                 SongRowView(row: row, player: player, rerecord: { player.stop(); replacing = row.id; recording = true })
-                    .swipeActions { Button("지우기", role: .destructive) { vm.removeSong(row.id) } }
+                    .swipeActions { Button("지우기", role: .destructive) { songsVM.remove(row.id) } }
             }
             Button { player.stop(); replacing = nil; recording = true } label: { Label("녹음하기", systemImage: "mic.fill") }
-                .disabled(vm.state.songSlotsUsed >= 3)
-            if vm.state.songSlotsUsed >= 3 {
+                .disabled(songsVM.ui.slotsUsed >= 3)
+            if songsVM.ui.slotsUsed >= 3 {
                 Text("노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요.").font(.footnote).foregroundStyle(DesignSystem.textSecondary)
             }
         } header: {
@@ -60,7 +70,7 @@ struct CarView: View {
         } footer: {
             SectionHeader("차에서는 다음 주행부터 써요.")
         }
-        .onChange(of: vm.state.visibleSongs.map(\.id)) { _, ids in   // 듣던 곡이 지워지면(직접·다른 폰) 재생과 오디오 세션을 푼다
+        .onChange(of: songsVM.ui.songs.map(\.id)) { _, ids in   // 듣던 곡이 지워지면(직접·다른 폰) 재생과 오디오 세션을 푼다
             if let p = player.playingId, !ids.contains(p) { player.stop() }
         }
     }
@@ -75,7 +85,7 @@ struct SongRowView: View {
 
     private var statusText: String {
         switch row.state {
-        case .uploading: return vm.state.offline ? "연결되면 보내요" : "올리는 중"
+        case .uploading: return vm.ui.offline ? "연결되면 보내요" : "올리는 중"
         case .waiting: return "차가 받기를 기다려요"
         case .accepted: return "다음 주행부터 써요"
         case .rejected(let r): return rejectText(r)
@@ -106,7 +116,7 @@ struct SongRowView: View {
                     Button { rerecord() } label: { Text("다시 녹음").frame(minHeight: 44).contentShape(Rectangle()) }
                 }
                 if row.state == .accepted, !row.candidate {
-                    Button { vm.selectSong(row.id) } label: { Text("실험에 쓰기").frame(minHeight: 44).contentShape(Rectangle()) }
+                    Button { vm.select(row.id) } label: { Text("실험에 쓰기").frame(minHeight: 44).contentShape(Rectangle()) }
                 }
             }
             .font(.footnote).buttonStyle(.borderless)
@@ -137,10 +147,11 @@ func rejectText(_ r: SongRejectReason) -> String {
 /// 아래에서 올라오는 녹음 시트: 파형, 큰 녹음·멈춤 버튼, 경과 시간과 최대 시간. 멈춘 뒤 다시 듣기·다시 녹음·보내기.
 struct RecordSheet: View {
     @Environment(SongsViewModel.self) private var vm
+    /// 이 시트가 든 녹음기(시트가 닫히면 버린다).
+    let rec: RecorderViewModel
     var replacing: String? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @State private var rec = RecorderViewModel()
     @State private var name = ""
     @State private var sendError: String?
 
@@ -149,6 +160,7 @@ struct RecordSheet: View {
         ScrollView { content }
             .screenBackground()   // 어둠에서 시스템 순검정 대신 bg(8장)
             .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.immediately)   // 이름을 넣은 뒤 굴리면 키보드(추천 막대 포함)가 내려가 '보내기'가 가려지지 않는다
             .presentationDetents([.medium, .large])
             .task { await rec.askPermissionIfNeeded() }   // 시트를 처음 열 때 묻는다(7.3). 녹음 버튼은 정해진 권한으로 시작한다
             .onChange(of: scenePhase) { _, p in
@@ -187,6 +199,7 @@ struct RecordSheet: View {
                     .accessibilityLabel("녹음 멈추기")
                 case .recorded:
                     TextField("노래 이름(30자까지)", text: $name).textFieldStyle(.roundedBorder)
+                        .submitLabel(.done)   // 키보드의 '완료'로 닫는다
                         .onChange(of: name) { _, v in sendError = nil; if v.count > 30 { name = String(v.prefix(30)) } }   // 고치면 옛 오류를 지운다. 30에서 더 받지 않는다(3.3, 안드로이드 take(30)과 같다)
                     HStack(spacing: 24) {
                         Button { rec.togglePlay() } label: { Label(rec.isPlaying ? "멈추기" : "다시 듣기", systemImage: rec.isPlaying ? "stop.fill" : "play.fill").frame(minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
@@ -194,7 +207,7 @@ struct RecordSheet: View {
                     }
                     Button { send() } label: { Text("보내기").frame(maxWidth: .infinity) }
                         .accentButton().controlSize(.large)
-                    if vm.state.offline { Text("연결되면 보내요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }
+                    if vm.ui.offline { Text("연결되면 보내요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }
                 }
             }
             if let e = sendError ?? rec.error { Text(e).font(.footnote).foregroundStyle(DesignSystem.danger) }
@@ -205,7 +218,7 @@ struct RecordSheet: View {
     private func send() {
         guard let url = rec.fileURL else { return }
         do {
-            try vm.addSong(name: name, recording: url, durationS: rec.elapsed, replacing: replacing)   // '다시 녹음'이면 그 곡과 바꾼다
+            try vm.add(name: name, recording: url, durationS: rec.elapsed, replacing: replacing)   // '다시 녹음'이면 그 곡과 바꾼다
             dismiss()
         } catch let e as SongError { sendError = e.message }
         catch { sendError = "노래를 저장하지 못했어요." }

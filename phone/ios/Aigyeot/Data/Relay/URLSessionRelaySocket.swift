@@ -1,10 +1,20 @@
 import Foundation
 
+/// RelaySocket 구현: 그 주소로 URLSessionRelaySocket을 열어 붙기 시작한다. 토큰은 연 자격의 것을 다시 붙을 때도 쓴다(P5).
+struct URLSessionRelaySockets: RelaySocket {
+    let baseURL: URL
+    func open(token: String, onEvent: @escaping @MainActor (RelaySocketEvent) -> Void) -> SocketHandle {
+        let s = URLSessionRelaySocket(baseURL: baseURL, token: { token }, onEvent: onEvent)
+        s.start()
+        return s
+    }
+}
+
 /// 중계 WebSocket(계약 2장). 폰은 앱이 앞에 있을 때만 붙는다.
 /// - 인증은 업그레이드 요청의 `Authorization: Bearer`.
 /// - 25초마다 글자 `ping`, 10초 안에 `pong`이 없으면 끊고 다시 붙는다(`sendPing`은 쓰지 않는다).
 /// - 다시 붙기 1·2·4·8·16·32·60초. 열리면 1초로 되돌린다. 4001은 토큰 지워짐, 4002는 새 연결로 바뀜, 4008은 60초 뒤.
-final class URLSessionRelaySocket: RelaySocket {
+final class URLSessionRelaySocket: SocketHandle {
     typealias Event = RelaySocketEvent
 
     private let baseURL: URL

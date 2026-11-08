@@ -132,3 +132,31 @@ final class AudioPlayback: NSObject, AVAudioPlayerDelegate {
         }
     }
 }
+
+/// SongRecorder 구현(R10): 녹음기 하나와 플레이어 하나. 녹음 시트와 곡 목록이 하나씩 받는다(합성 루트가 만든다).
+@MainActor
+final class AudioSongRecorder: SongRecorder {
+    private let recorder = AudioRecorder()
+    private let playback = AudioPlayback()
+
+    var permissionUndetermined: Bool { recorder.permissionUndetermined }
+    var permissionDenied: Bool { recorder.permissionDenied }
+    func requestPermission() async -> Bool { await AudioRecorder.requestPermission() }
+    var isActive: Bool { recorder.isActive }
+    func start() throws -> URL { try recorder.start() }
+    func sample() -> (elapsed: TimeInterval, level: Float)? { recorder.sample() }
+    func stop(lastKnown: TimeInterval) -> TimeInterval { recorder.stop(lastKnown: lastKnown) }
+    func durationS(_ url: URL, lastKnown: TimeInterval) -> TimeInterval { recorder.finish(url, lastKnown: lastKnown) }
+
+    func play(_ url: URL, onEnded: @escaping () -> Void) -> Bool {
+        playback.onEnded = onEnded
+        return playback.play(url)   // 재생을 못 시작했어도 세션을 풀어 준다
+    }
+
+    func stopPlaying() { playback.stop() }
+
+    func cancel() {
+        let recording = recorder.cancel(), playing = playback.cancel()
+        if recording || playing { AudioSessionRelease.deactivate() }   // 객체를 먼저 멈춘 뒤 세션을 푼다
+    }
+}

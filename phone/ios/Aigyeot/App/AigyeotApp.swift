@@ -1,29 +1,10 @@
 import SwiftUI
-import Network
 import UserNotifications
 import FirebaseCore
 import FirebaseMessaging
 
-/// 인터넷 연결 여부. 돌아오면 받은 함·보낼 함을 다시 확인한다(7.5). 띠를 켜고 끄는 규칙은 도메인(LinkObserver·SyncInbox)이 정한다.
-@MainActor
-final class NetworkWatcher {
-    private let monitor = NWPathMonitor()
-    private var started = false
-
-    func start(_ inbox: SyncInbox) {
-        guard !started else { return }   // onAppear가 다시 불려도 한 번만 시작한다
-        started = true
-        monitor.pathUpdateHandler = { path in
-            let satisfied = path.status == .satisfied
-            Task { @MainActor in await inbox.networkPathChanged(satisfied: satisfied) }
-        }
-        // NWPathMonitor는 알림을 받을 큐를 인자로 요구한다(OS API). 알림은 바로 위에서 메인 액터로 넘긴다.
-        monitor.start(queue: .global(qos: .utility))
-    }
-}
-
 /// FCM 등록 토큰(5.4). Firebase 설정 파일이 없으면(공개 저장소·시험) 늘 nil이다.
-final class PushToken: PushTokenSource {
+final class PushToken: PushTokens {
     static let shared = PushToken()
     var token: String?
 }
@@ -74,17 +55,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// 5.4: FCM 토큰이 생기거나 바뀌면 중계에 알린다. 실행마다 한 번은 불린다(FIRMessaging.h).
     /// 새 `didReceiveRegistration`(설치 ID 방식)은 쓰지 않는다: 중계는 FCM 등록 토큰으로 보낸다(relay/src/push.ts).
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        Task { @MainActor in
-            PushToken.shared.token = fcmToken
-            AppContainer.shared.syncPushToken.tokenDidChange()
-        }
+        Task { @MainActor in AppContainer.shared.registerPush.onToken(fcmToken) }
     }
 
     /// 앞에 있을 때: 앱 안 표시 함수 `show(msg_id)`만 부르고 시스템 표시 옵션은 늘 `[]`로 돌려준다(5.3, 5.6).
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         if let id = notification.request.content.userInfo["msg_id"] as? String {
-            Task { @MainActor in AppContainer.shared.showAlert.show(id) }
+            Task { @MainActor in AppContainer.shared.syncInbox.onPush(id) }
         }
         completionHandler([])
     }
@@ -93,7 +71,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         if let id = response.notification.request.content.userInfo["msg_id"] as? String {
-            Task { @MainActor in await AppContainer.shared.showAlert.open(id) }
+            Task { @MainActor in await AppContainer.shared.appViewModel.onAlert(id) }
         }
         completionHandler()
     }
@@ -104,29 +82,27 @@ struct AigyeotApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var scenePhase
     private let app = AppContainer.shared
-    private let network = NetworkWatcher()
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                // 화면은 뷰모델만 본다(저장소·유스케이스에 직접 손대지 않는다)
-                .environment(app.root).environment(app.home).environment(app.today).environment(app.undo)
-                .environment(app.careSheet).environment(app.record).environment(app.songs).environment(app.report)
-                .environment(app.settings)
+                // 화면은 뷰모델만 본다(저장소·유스케이스에 직접 손대지 않는다). 앱 범위는 셋, 나머지는 화면이 공장으로 만든다(1.7)
+                .environment(app.appViewModel).environment(app.status).environment(app.careTabs)
+                .environment(\.viewModels, app)
                 .tint(DesignSystem.accent)
-                .onOpenURL { app.root.receive(link: $0) }   // aigyeot://pair?code=… (7.6)
+                .onOpenURL { app.appViewModel.receive(link: $0) }   // aigyeot://pair?code=… (7.6)
                 .onAppear {
-                    network.start(app.syncInbox)
+                    app.keepConnected.watchNetwork()   // 인터넷이 돌아오면 받은 함·보낼 함을 다시 확인한다(7.5)
                     app.syncLiveActivities()   // 앱이 꺼진 사이 바뀐 것을 맞춘다
                 }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
-                app.lifecycle.didBecomeActive()
+                app.lifecycle.onForeground()
                 Task { await NotificationAccess.registerIfAuthorized() }   // 설정 앱에서 알림을 켜고 돌아온 경우(같은 프로세스)
                 app.syncLiveActivities()   // 설정에서 실시간 현황을 켜고 왔거나 시스템이 끝낸 표시를 되살린다
-            case .background: app.lifecycle.didEnterBackground()
+            case .background: app.lifecycle.onBackground()
             default: break
             }
         }

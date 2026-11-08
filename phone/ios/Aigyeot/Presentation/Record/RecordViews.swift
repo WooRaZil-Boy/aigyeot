@@ -5,7 +5,6 @@ private typealias DS = DesignSystem
 
 /// 기록(C4·C5·C14): 위쪽 [하루] [패턴] 전환.
 struct RecordsView: View {
-    @Environment(RecordViewModel.self) private var vm
     @State private var pattern = false
     @State private var sheet: CareSheet?
     /// 사용자가 고른 날. 없으면 늘 오늘이다(화면을 연 채 자정을 넘기면 오늘을 따라간다. 옛 오늘에 머물면 '+'가 어제 낮 12시로 적었다)
@@ -48,7 +47,7 @@ struct RecordsView: View {
 
 /// 날짜 띠 + 하루 타임라인. 손 기록은 누르면 고치기, 밀면 지우기(5초 되돌리기). 차 기록은 누르면 리포트 상세.
 private struct DayView: View {
-    @Environment(RecordViewModel.self) private var vm
+    @Environment(RecordsViewModel.self) private var vm
     @Binding var sheet: CareSheet?
     @Binding var day: String
     let now: Date
@@ -64,19 +63,19 @@ private struct DayView: View {
 
     /// 기록이 있는 날(목록과 같게 그 기록의 시간대로). 띠가 이 날들을 모두 담아야 열 수 있다.
     private func recordKeys(_ car: [CarRow]) -> Set<String> {
-        Set(vm.state.care.events.filter { $0.deletedAt == nil }.map { CareRules.dayKey($0.startAt, $0.timeZone) }
+        Set(vm.ui.care.events.filter { $0.deletedAt == nil }.map { CareRules.dayKey($0.startAt, $0.timeZone) }
             + car.map { CareRules.dayKey(CareTime.ms($0.at), .current) })
     }
 
     private func items(_ day: String, _ car: [CarRow]) -> [Item] {
-        let hand = CareRules.events(onDay: day, in: vm.state.care.events).map(Item.care)
+        let hand = CareRules.events(onDay: day, in: vm.ui.care.events).map(Item.care)
         let carItems = car.filter { CareRules.dayKey(CareTime.ms($0.at), .current) == day }.map(Item.car)
         return (hand + carItems).sorted { $0.at < $1.at }
     }
 
     var body: some View {
         // 차 기록 줄은 그릴 때마다 한 번만 만든다(날짜 띠·목록이 함께 쓴다. 리포트마다 시각을 포맷해 비싸다)
-        let car = CareRules.carRows(vm.state.reports, zone: .current)
+        let car = CareRules.carRows(vm.ui.reports, zone: .current)
         let keys = recordKeys(car)
         VStack(spacing: 0) {
             if top == nil { header(keys) }
@@ -120,8 +119,8 @@ private struct DayView: View {
     }
 
     @ViewBuilder private func carRow(_ r: CarRow) -> some View {
-        if let report = vm.state.report(sessionId: r.sessionId) {
-            NavigationLink { ReportDetailView(report: report) } label: {
+        if vm.ui.report(sessionId: r.sessionId) != nil {
+            NavigationLink { ReportDetailView(sessionId: r.sessionId) } label: {
                 line(icon: "car.fill", color: DS.car) { Text(r.text) }
             }
         }
@@ -138,14 +137,14 @@ private struct DayView: View {
 
 /// "지웠어요" + "되돌리기"(5초). 기록 탭 밀기, 고치기 시트, 타이머 어디서 지워도 같다(U38).
 struct UndoBar: View {
-    @Environment(UndoViewModel.self) private var undo
+    @Environment(CareTabsViewModel.self) private var undo
 
     var body: some View {
-        if let id = undo.recentlyDeleted {
+        if let id = undo.undoCareId {
             HStack {
                 Text(CareText.deleted)
                 Spacer()
-                Button { undo.undo(id) } label: { Text(CareText.undo).bold().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
+                Button { undo.undoDelete(id) } label: { Text(CareText.undo).bold().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
             }
             .foregroundStyle(DS.bg)   // 글자·바탕을 뒤집어 밝음·어둠 모두 읽힌다
             .padding(DS.s4)
@@ -156,7 +155,7 @@ struct UndoBar: View {
                 let at = undo.deletedAt(id) ?? CareTime.ms(Date())
                 let left = UInt64(max(0, at + RetryPolicy.undoMs - CareTime.ms(Date())))
                 guard (try? await Task.sleep(nanoseconds: left * 1_000_000)) != nil else { return }
-                undo.expire(id)
+                undo.clearUndo(id)
             }
         }
     }
@@ -212,13 +211,13 @@ private struct DayStrip: View {
 
 /// 패턴(C5, R14·R16): 지난 7일. 칸마다 이름 · 값, 아래에 날마다 막대.
 private struct PatternView: View {
-    @Environment(RecordViewModel.self) private var vm
+    @Environment(RecordsViewModel.self) private var vm
     let now: Date
     let top: AnyView?   // 가장 큰 글자: 전환을 목록 첫 줄로
 
     var body: some View {
-        let on = vm.state.care.sleepDiaperEnabled
-        let p = CareRules.pattern(vm.state.care.events, reports: vm.state.reports, now: CareTime.ms(now), zone: .current, sleepDiaper: on)
+        let on = vm.ui.care.sleepDiaperEnabled
+        let p = CareRules.pattern(vm.ui.care.events, reports: vm.ui.reports, now: CareTime.ms(now), zone: .current, sleepDiaper: on)
         List {
             if let top { top.listRowInsets(EdgeInsets()).listRowBackground(DS.bg) }
             Section {

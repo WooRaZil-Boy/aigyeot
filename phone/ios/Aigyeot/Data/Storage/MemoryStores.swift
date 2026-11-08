@@ -58,4 +58,26 @@ final class MemoryCareStore: CareStore {
     }
     /// 메모리 저장도 앱처럼 실제 사본 파일을 지운다(나누기 전 시험이 보던 동작 그대로).
     func removeCopies() { FileCareStore.removeBrokenCopies(); CareExport.removeCopies() }
+
+    /// 쓴 내보내기(시험이 본다). 파일은 만들지 않는다.
+    private(set) var exported: (name: String, data: Data)?
+    func writeExport(name: String, data: Data) -> URL? {
+        exported = (name, data)
+        return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(name)
+    }
+}
+
+/// 시험·미리보기용 표시 저장. `failPut`이면 쓰지 못한 것으로 알린다(값은 그대로).
+@MainActor
+final class MemoryLinkMarks: LinkMarks {
+    var values: [Mark: String]
+    var failPut = false
+    init(_ values: [Mark: String] = [:]) { self.values = values }
+    func get(_ mark: Mark) -> String? { values[mark] }
+    @discardableResult
+    func put(_ mark: Mark, _ value: String?) -> Bool {
+        if failPut { return false }
+        values[mark] = value
+        return true
+    }
 }

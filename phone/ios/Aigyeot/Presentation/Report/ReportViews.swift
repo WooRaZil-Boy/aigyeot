@@ -12,19 +12,19 @@ private func minSec(_ s: Int) -> String { s >= 60 ? "\(s / 60)분 \(s % 60)초" 
 
 /// 리포트 목록(guardian 오늘 '최근 리포트'에서 연다. 안드로이드 `ReportsScreen`과 같다).
 struct ReportListView: View {
-    @Environment(ReportViewModel.self) private var vm
-
     var body: some View {
-        List {
-            if vm.state.reports.isEmpty { Text("주행이 끝나면 여기에 리포트가 와요").foregroundStyle(DesignSystem.textSecondary) }
-            ForEach(vm.state.reports) { r in
-                NavigationLink { ReportDetailView(report: r) } label: { ReportRow(report: r) }
+        Scoped({ $0.reports() }) { vm in
+            List {
+                if vm.reports.isEmpty { Text("주행이 끝나면 여기에 리포트가 와요").foregroundStyle(DesignSystem.textSecondary) }
+                ForEach(vm.reports) { r in
+                    NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }
+                }
             }
+            .screenBackground()
+            .navigationTitle("리포트")
+            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
+            .refreshable { await vm.retryNow() }
         }
-        .screenBackground()
-        .navigationTitle("리포트")
-        .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
-        .refreshable { await vm.retryNow() }
     }
 }
 
@@ -43,13 +43,22 @@ struct ReportRow: View {
     }
 }
 
-/// 리포트 상세: 명세서 11장의 다섯 항목을 같은 순서로 그린다(타임라인 → 직전 맥락 → 조향 → 차가 한 일 → 제어 기록).
+/// 리포트 상세(세션 id로 연다).
 struct ReportDetailView: View {
-    @Environment(ReportViewModel.self) private var vm
-    let report: StoredReport
+    let sessionId: String
 
+    var body: some View {
+        Scoped({ [sessionId] in $0.reportDetail(sessionId: sessionId) }) { vm in
+            if let r = vm.ui.report { ReportDetailContent(report: r, songName: vm.ui.songName) }
+        }
+    }
+}
+
+/// 리포트 상세: 명세서 11장의 다섯 항목을 같은 순서로 그린다(타임라인 → 직전 맥락 → 조향 → 차가 한 일 → 제어 기록).
+private struct ReportDetailContent: View {
+    let report: StoredReport
     /// `song_id`로 내 곡 목록에서 이름을 찾는다. 없으면 "부모 노래".
-    private func songName(_ id: String?) -> String? { vm.state.songName(id) }
+    let songName: (String?) -> String?
 
     var body: some View {
         let b = report.body

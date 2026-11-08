@@ -112,76 +112,83 @@ final class DomainRulesTests: XCTestCase {
 final class RepositoryTests: XCTestCase {
     private let creds = Credentials(carId: "c_1", deviceId: "d_1", token: "t", role: .owner)
 
-    func test_연결_바꾸기는_세대를_올리고_상태를_비운_저장이_성공해야_자격을_켠다() {
+    func test_연결_바꾸기는_상태를_저장해야_자격을_켜고_옛_자격의_쓰기는_버린다() {
         let before = Credentials(carId: "c_0", deviceId: "d_0", token: "t0", role: .owner)
         let store = MemoryStateStore(PhoneState(introSeen: true, carId: "c_0", needsStateRequest: true))
-        let keychain = MemoryCredentialStore(before)
-        let repo = PhoneStateRepository(store: store, credentials: before)
-        let secrets = CredentialRepository(store: keychain)
+        let repo = PhoneStateRepository(store: store, creds: before)
+        let fresh: (PhoneState) -> PhoneState = { PhoneStateRepository.fresh(introSeen: $0.introSeen, keeping: $0) }
         store.failNext = 1
-        XCTAssertEqual(repo.switchTo(.connect(creds), secrets: secrets), .stateNotSaved)
-        XCTAssertEqual(repo.connection, .connected(before))   // 지난 기록을 비우지 못하면 새 자격을 켜지 않는다
-        XCTAssertEqual(keychain.value, before)
-        XCTAssertEqual(repo.generation, 1)   // 연결은 그대로여도 세대는 올라 옛 연결의 늦은 결과를 버린다
-        keychain.failing = true
-        XCTAssertEqual(repo.switchTo(.connect(creds), secrets: secrets), .secretNotSaved)
-        XCTAssertEqual(repo.connection, .connected(before))
-        XCTAssertFalse(repo.value.needsStateRequest)   // 지난 기록은 비웠다
-        XCTAssertTrue(repo.value.introSeen)
-        keychain.failing = false
-        XCTAssertEqual(repo.switchTo(.connect(creds), secrets: secrets), .done)
-        XCTAssertEqual(repo.connection, .connected(creds))
-        XCTAssertEqual(repo.generation, 3)
-        XCTAssertEqual(keychain.value, creds)
+        XCTAssertFalse(repo.switchTo(creds, make: fresh).switched)
+        XCTAssertEqual(repo.connection, .paired(before))   // 지난 기록을 비운 상태를 저장하지 못하면 새 자격을 켜지 않는다
+        XCTAssertTrue(repo.state.needsStateRequest)
+        XCTAssertEqual(repo.switchTo(creds, make: fresh), .init(switched: true, saved: true))
+        XCTAssertEqual(repo.connection, .paired(creds))
+        XCTAssertFalse(repo.state.needsStateRequest)   // 지난 기록은 비웠다
+        XCTAssertTrue(repo.state.introSeen)
+        XCTAssertTrue(repo.isCurrent(creds))
+        XCTAssertFalse(repo.isCurrent(before))   // 옛 자격으로 시작한 결과는 버려진다(P5)
+        XCTAssertFalse(repo.commit(before) { $0.needsStateRequest = true })
+        XCTAssertFalse(repo.state.needsStateRequest)
+        XCTAssertFalse(repo.switchTo(nil, make: fresh, onlyIf: before).switched)   // 옛 자격의 늦은 끊기는 새 연결을 지우지 않는다
+        XCTAssertEqual(repo.connection, .paired(creds))
     }
 
-    func test_GONE은_자격을_지우고_끊김으로_두며_화면을_넘기면_연결_없음이다() {
-        let keychain = MemoryCredentialStore(creds)
-        let repo = PhoneStateRepository(store: MemoryStateStore(PhoneState(carId: "c_1")), credentials: creds)
-        XCTAssertEqual(repo.connection, .connected(creds))
-        XCTAssertEqual(repo.generation, 0)
-        XCTAssertEqual(repo.switchTo(.gone, secrets: CredentialRepository(store: keychain)), .done)
-        XCTAssertEqual(repo.connection, .gone)
-        XCTAssertNil(keychain.value)
-        XCTAssertNil(repo.connection.credentials)
-        repo.leaveGone()
+    func test_끊기는_저장이_실패해도_자격을_잊고_GONE은_연결이_없을_때만_켠다() {
+        let store = MemoryStateStore(PhoneState(carId: "c_1"))
+        let repo = PhoneStateRepository(store: store, creds: creds)
+        store.failNext = 1
+        XCTAssertEqual(repo.switchTo(nil, make: { PhoneStateRepository.fresh(introSeen: $0.introSeen, keeping: $0) }, onlyIf: creds),
+                       .init(switched: true, saved: false))
         XCTAssertEqual(repo.connection, .none)
-        XCTAssertEqual(repo.generation, 1)   // 화면을 넘겨도 세대는 그대로
+        repo.showGone(deviceId: "d_1")
+        XCTAssertEqual(repo.connection, .gone(deviceId: "d_1"))
+        XCTAssertNil(repo.connection.creds)
+        repo.hideGone(onlyDevice: "d_other")
+        XCTAssertEqual(repo.connection, .gone(deviceId: "d_1"))   // 다른 기기의 GONE이면 그대로
+        repo.hideGone()
+        XCTAssertEqual(repo.connection, .none)
+        _ = repo.switchTo(creds, make: { $0 })
+        repo.showGone(deviceId: "d_1")
+        XCTAssertEqual(repo.connection, .paired(creds))   // 그사이 새로 연결했으면 옛 끊김을 켜지 않는다
+    }
+
+    func test_강제_끊김_정리가_남은_기기는_자격이_없을_때만_GONE으로_시작한다() {
+        XCTAssertEqual(PhoneStateRepository(store: MemoryStateStore(), creds: nil, goneDevice: "d_1").connection, .gone(deviceId: "d_1"))
+        XCTAssertEqual(PhoneStateRepository(store: MemoryStateStore(), creds: creds, goneDevice: "d_1").connection, .paired(creds))
     }
 
     func test_자격이_없는데_차가_남은_상태는_메모리에서만_비운다() {
         let store = MemoryStateStore(PhoneState(introSeen: false, carId: "c_1", clearingCareIds: ["x"]))
-        let repo = PhoneStateRepository(store: store, credentials: nil)
-        XCTAssertNil(repo.value.carId)
-        XCTAssertTrue(repo.value.introSeen)
-        XCTAssertEqual(repo.value.clearingCareIds, ["x"])   // 지우다 만 기록 지우기는 남긴다(R10)
+        let repo = PhoneStateRepository(store: store, creds: nil)
+        XCTAssertNil(repo.state.carId)
+        XCTAssertTrue(repo.state.introSeen)
+        XCTAssertEqual(repo.state.clearingCareIds, ["x"])   // 지우다 만 기록 지우기는 남긴다(R10)
         XCTAssertEqual(store.value.carId, "c_1")              // 저장은 다음 쓰기에
     }
 
     func test_쓰기를_거부하는_실행은_같은_값이어도_실패로_알린다() {
         let store = MemoryStateStore()
         store.writesRefused = true
-        let repo = PhoneStateRepository(store: store, credentials: nil)
+        let repo = PhoneStateRepository(store: store, creds: nil)
         var failed = 0
         repo.onWriteFailed = { failed += 1 }
-        XCTAssertFalse(repo.update { _ in })
+        XCTAssertFalse(repo.commitLocal { _ in })
         XCTAssertEqual(failed, 1)
     }
 
-    func test_돌봄_저장은_지우다_만_id를_앞뒤로_빼고_결과를_셋으로_알린다() {
+    func test_돌봄_저장은_결과를_셋으로_알리고_실패하면_되돌린다() {
         var file = CareFile()
         file.events = [CareEvent(id: "old", kind: .note, startAt: 1, zone: "Asia/Seoul", createdAt: 1, updatedAt: 1)]
         let store = MemoryCareStore(file)
         let repo = CareRepository(store: store)
-        XCTAssertEqual(repo.update(wiping: nil) { _ in }, .unchanged)
-        XCTAssertEqual(repo.update(wiping: ["old"]) { f in f.events = file.events + [CareEvent(id: "new", kind: .note, startAt: 2, zone: "Asia/Seoul", createdAt: 2, updatedAt: 2)] }, .saved)
-        XCTAssertEqual(store.value.events.map(\.id), ["new"])   // 옛 배열로 다시 넣어도 뺀다
-        XCTAssertTrue(store.value.migratedFeedings)
+        XCTAssertEqual(repo.update { _ in }, .unchanged)
+        XCTAssertEqual(repo.update { $0.events.append(CareEvent(id: "new", kind: .note, startAt: 2, zone: "Asia/Seoul", createdAt: 2, updatedAt: 2)) }, .saved)
+        XCTAssertEqual(store.value.events.map(\.id), ["old", "new"])
         store.failing = true
         var failed = false
         repo.onWriteFailed = { failed = true }
-        XCTAssertEqual(repo.update(wiping: nil) { $0.childNickname = "콩이" }, .failed)
+        XCTAssertEqual(repo.update { $0.childNickname = "콩이" }, .failed)
         XCTAssertTrue(failed)
-        XCTAssertNil(repo.value.childNickname)   // 롤백
+        XCTAssertNil(repo.care.childNickname)   // 롤백
     }
 }

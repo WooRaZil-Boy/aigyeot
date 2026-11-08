@@ -1,8 +1,9 @@
 import Foundation
 import Observation
 
-/// 녹음 시트의 화면 상태(구현 계획 4장, 최대 3분). 하드웨어는 Data의 AudioRecorder·AudioPlayback이다.
+/// 녹음 시트의 화면 상태(구현 계획 4장, 최대 3분). 장치는 init으로 받은 SongRecorder다(R10).
 /// 녹음 단계는 연관값 enum이라 '녹음 파일 없는 녹음 중', '녹음 전 재생 중' 같은 조합을 만들 수 없다.
+/// 시트가 녹음기 수명을 갖는다(시트가 닫히면 버린다). 안드로이드는 SongsViewModel 하나에 둔다(관용 차이, arch-phone-ios).
 @MainActor
 @Observable
 final class RecorderViewModel {
@@ -21,17 +22,17 @@ final class RecorderViewModel {
     private(set) var permissionDenied = false
     private(set) var error: String?
 
-    @ObservationIgnored private let recorder = AudioRecorder()
-    @ObservationIgnored private let playback = AudioPlayback()
+    @ObservationIgnored private let recorder: SongRecorder
     @ObservationIgnored private var timer: Timer?
     /// 버릴 때마다 올린다. 권한 창을 기다리는 사이 시트가 닫히면(버림) 늦게 온 허용으로 녹음기·타이머를 만들지 않는다.
     @ObservationIgnored private var session = 0
     @ObservationIgnored private var starting = false
     /// 마이크 권한 요청(시험에서 바꾼다).
-    @ObservationIgnored var requestPermission: () async -> Bool = { await AudioRecorder.requestPermission() }
+    @ObservationIgnored var requestPermission: () async -> Bool
 
-    init() {
-        playback.onEnded = { [weak self] in self?.playbackEnded() }
+    init(recorder: SongRecorder) {
+        self.recorder = recorder
+        requestPermission = { [recorder] in await recorder.requestPermission() }
     }
 
     var phase: Phase {
@@ -99,13 +100,13 @@ final class RecorderViewModel {
     private func finish(lastKnown: TimeInterval) {
         timer?.invalidate(); timer = nil
         guard case .recording(let url, _) = state else { return }
-        state = .recorded(url: url, duration: recorder.finish(url, lastKnown: lastKnown), playing: false)
+        state = .recorded(url: url, duration: recorder.durationS(url, lastKnown: lastKnown), playing: false)
     }
 
     func togglePlay() {
         guard case .recorded(let url, let d, let playing) = state else { return }
-        if playing { playback.stop(); state = .recorded(url: url, duration: d, playing: false); return }
-        state = .recorded(url: url, duration: d, playing: playback.play(url))   // 재생을 못 시작했어도 세션을 풀어 준다
+        if playing { recorder.stopPlaying(); state = .recorded(url: url, duration: d, playing: false); return }
+        state = .recorded(url: url, duration: d, playing: recorder.play(url) { [weak self] in self?.playbackEnded() })   // 재생을 못 시작했어도 세션을 풀어 준다
     }
 
     private func playbackEnded() {
@@ -119,8 +120,7 @@ final class RecorderViewModel {
     func discard() {
         session += 1
         timer?.invalidate(); timer = nil
-        let recording = recorder.cancel(), playing = playback.cancel()
-        if recording || playing { AudioSessionRelease.deactivate() }   // 객체를 먼저 멈춘 뒤 세션을 푼다
+        recorder.cancel()
         if let url = fileURL { try? FileManager.default.removeItem(at: url) }
         levels = []
         state = .idle
@@ -132,21 +132,21 @@ final class RecorderViewModel {
 @Observable
 final class SongPlayer {
     private(set) var playingId: String?
-    @ObservationIgnored private let playback = AudioPlayback()
+    @ObservationIgnored private let recorder: SongRecorder
     @ObservationIgnored private let files: SongFileStore
 
-    init(files: SongFileStore = FileSongStore()) {
+    init(files: SongFileStore, recorder: SongRecorder) {
         self.files = files
-        playback.onEnded = { [weak self] in self?.playingId = nil }
+        self.recorder = recorder
     }
 
     func toggle(_ songId: String) {
         if playingId == songId { stopPlayback(); return }
-        playingId = playback.play(files.url(for: songId)) ? songId : nil
+        playingId = recorder.play(files.url(for: songId)) { [weak self] in self?.playingId = nil } ? songId : nil
     }
 
     private func stopPlayback() {
-        playback.stop()
+        recorder.stopPlaying()
         playingId = nil
     }
 

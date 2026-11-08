@@ -35,6 +35,11 @@ enum CareActivityPlan {
 }
 
 /// 돌봄 기록이 바뀔 때마다 잠금 화면 표시를 맞춘다. 시작은 앱이 앞에 있을 때만 된다(ActivityKit 규칙).
+/// OngoingNotice 구현(R9): 잠금 화면 Live Activity를 지금 돌봄 기록에 맞춘다.
+struct LiveActivityNotice: OngoingNotice {
+    func show(_ care: CareFile) { CareLiveActivities.sync(care) }
+}
+
 @MainActor
 enum CareLiveActivities {
     static func sync(_ care: CareFile) {
@@ -54,5 +59,5 @@ enum CareLiveActivities {
 
 /// 잠금 화면 '끝내기'(`EndCareIntent`)가 앱 프로세스에서 부른다. 닫기 규칙은 타이머와 같다(U14).
 enum CareIntentHandler {
-    @MainActor static func end(_ eventId: String) { AppContainer.shared.recordCare.endNow(eventId) }
+    @MainActor static func end(_ eventId: String) { AppContainer.shared.recordCare.end(eventId) }
 }
