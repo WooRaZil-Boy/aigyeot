@@ -3,7 +3,7 @@
 import numpy as np
 rng = np.random.default_rng(0)
 import sys
-N, T, K = 20000, int(sys.argv[1]) if len(sys.argv) > 1 else 20, 3
+N, T, K = 20000, int(sys.argv[1]) if len(sys.argv) > 1 else 20, int(sys.argv[2]) if len(sys.argv) > 2 else 3   # 둘째 인자 = 음원 수(기본 3, 뱃속 소리 더하면 4)
 if T <= 0: sys.exit('울음 횟수 T는 1 이상이어야 한다 (받은 값: %d)' % T)
 P_FALSE_STOP = 1 / 180; P_FALSE_CONT = 0 / 180
 def observe(true_ok):
@@ -16,8 +16,8 @@ def run(p, strategy):
         if strategy == "fixed": k = np.zeros(n, int)                      # 늘 첫 방법(예: 백색소음)
         elif strategy == "random": k = rng.integers(0, K, n)
         elif strategy == "rotate": k = np.full(n, t % K)
-        else:                                                              # 톰슨: 처음 6번 돌아가며, 이후 베타 표본 최대
-            k = np.full(n, t % K) if t < 6 else rng.beta(a, b).argmax(1)
+        else:                                                              # 톰슨: 처음 2K번 돌아가며(K=3이면 6번, K=4이면 8번), 이후 베타 표본 최대
+            k = np.full(n, t % K) if t < 2 * K else rng.beta(a, b).argmax(1)
         ok = rng.random(n) < p[np.arange(n), k]
         seen = observe(ok)
         a[np.arange(n), k] += seen; b[np.arange(n), k] += ~seen
