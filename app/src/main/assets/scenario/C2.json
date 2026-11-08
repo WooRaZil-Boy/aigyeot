@@ -1,0 +1,132 @@
+{
+ "format": 1,
+ "id": "C2",
+ "title": "출발: 수유 시간 전에 수유실 휴게소 제안, 응 뒤 경유지",
+ "repeat": 1,
+ "setup": {
+  "profile": {
+   "birthYm": "2026-08",
+   "carseat": "RIGHT",
+   "feedingIntervalMin": 180,
+   "hasSibling": false
+  },
+  "feedingStartOffsetSec": -7200,
+  "methods": [
+   "WHITE_NOISE",
+   "LULLABY"
+  ],
+  "history": [],
+  "seed": 5,
+  "override": [
+   "CabinTemp",
+   "RouteState",
+   "RearDoor"
+  ],
+  "otherGuardians": 1
+ },
+ "steps": [
+  {
+   "t": 0,
+   "vc": "PUT /vehicle/gear?gear=Park"
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "CabinTemp",
+    "celsius": 23
+   }
+  },
+  {
+   "t": 1,
+   "inject": {
+    "event": "RouteState",
+    "hasDestination": true,
+    "remainingSec": 9000,
+    "rests": [
+     {
+      "id": "tbt:rest:안성휴게소(부산방향)",
+      "name": "안성휴게소(부산방향)",
+      "kind": "REST_AREA",
+      "distanceKm": 30,
+      "hasNursingRoom": true
+     },
+     {
+      "id": "r2",
+      "name": "△△졸음쉼터",
+      "kind": "REST_AREA",
+      "distanceKm": 3,
+      "hasNursingRoom": false
+     },
+     {
+      "id": "tbt:rest:천안휴게소(부산방향)",
+      "name": "천안휴게소(부산방향)",
+      "kind": "REST_AREA",
+      "distanceKm": 80,
+      "hasNursingRoom": true
+     }
+    ],
+    "remainingKm": 150
+   }
+  },
+  {
+   "t": 2,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": true
+   }
+  },
+  {
+   "t": 5,
+   "inject": {
+    "event": "RearDoor",
+    "side": "RIGHT",
+    "open": false
+   }
+  },
+  {
+   "t": 6,
+   "tap": "BABY_ABOARD"
+  },
+  {
+   "t": 10,
+   "vc": "PUT /vehicle/gear?gear=Drive"
+  },
+  {
+   "t": 10,
+   "expect": {
+    "command": "Ask",
+    "sid": "S07_DEPART",
+    "by": 20
+   }
+  },
+  {
+   "t": 10,
+   "say": {
+    "intent": "YES",
+    "onAsk": "S07_DEPART",
+    "by": 30
+   }
+  },
+  {
+   "t": 10,
+   "expect": {
+    "command": "AddWaypoint",
+    "by": 35
+   }
+  },
+  {
+   "t": 10,
+   "expect": {
+    "command": "Speak",
+    "sid": "S09",
+    "by": 40
+   }
+  },
+  {
+   "t": 12,
+   "vc": "PUT /vehicle/controls?speed=90&accelerator=0&brake=0&steering=0"
+  }
+ ],
+ "note": "기능 A(C117): 세션이 열릴 때 경로(remainingKm)가 이미 있어 같은 Step에서 출발 제안. 수유 시작 2시간 전·간격 3시간이라 배고플 시각은 60분 뒤, 가장 늦게 닿는 안성(eta 30분 ≤ 40분)을 고른다. 천안(80km, eta 80분)은 늦어 뺀다"
+}

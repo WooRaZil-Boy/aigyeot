@@ -87,13 +87,249 @@ class S58DriveTest {
         assertFalse(feedingWindow(null, 120, 100 * MIN))
     }
 
+    // ---- F5·F5a~F5h 출발 수유실 제안(C117): 수유 시작 2시간 전·간격 3시간 → 배고플 시각 now + 60분, 남은 150분·150km ----
+    private fun departIdle(feedingStart: Long? = T0 - 120 * MIN, interval: Int? = 180) =
+        idle(prof = profile(interval = interval), feedingStart = feedingStart)
+    private fun Sim.depRoute(vararg r: RestCandidate, km: Double? = 150.0, sec: Int? = 9000) = route(*r, dest = true, remainingSec = sec, remainingKm = km)
+    private fun Sim.assertOpenDriving() { assertNotNull(s.session); assertEquals(Gear.D, s.car.gear) }
+    private fun Sim.noDepart() { assertTrue(all<Ask>().isEmpty()); assertTrue(Sid.S07_DEPART !in sids()); assertNull(ses.pendingAsk) }
+
     @Test fun f5_departure_offersNursingRest() {
-        // C31: 휴게소별 도착 예상을 못 얻으면 출발 제안을 뺀다. 지금 입력(RouteState)에는 도착 예상이 없다.
-        val sim = idle(prof = profile(interval = 180), feedingStart = T0 - 100 * MIN)   // 시간대는 44분 뒤
-            .route(rest("a", 5.0), nurse, dest = true, remainingSec = 2 * 3600).doorCycle().gear(Gear.D)
-        assertEquals(Phase.LISTENING, sim.ses.phase)
-        assertTrue(sim.all<Ask>().isEmpty()); assertTrue(Sid.S07_DEPART !in sim.sids())
-        assertNull(sim.ses.pendingAsk)
+        // 경로가 먼저 있고 GearChanged(D)가 세션을 여는 같은 Step에서 제안한다. eta 안성 30분·천안 80분 → h − 20분 = 40분 이하 중 가장 늦은 곳
+        val far = RestCandidate("f", "f 휴게소", RestKind.REST_AREA, 80.0, true)
+        val sim = departIdle().depRoute(rest("a", 5.0), rest("n", 30.0, nursing = true), far).doorCycle()
+        assertNull(sim.s.session)
+        sim.gear(Gear.D)
+        sim.assertOpenDriving(); assertTrue(sim.ses.departChecked)
+        val ask = sim.step<Ask>().single()
+        assertEquals(Sid.S07_DEPART, ask.sid)
+        assertEquals((T0 + 60 * MIN).toString(), ask.vars["hungryAt"]); assertEquals("30", ask.vars["distanceKm"]); assertEquals("n 휴게소", ask.vars["restName"])
+        assertTrue(sim.ses.pendingAsk!!.hasNursingRoom); assertEquals("n", sim.ses.pendingAsk!!.restId)
+        assertEquals(sim.t, sim.ses.lastOffer[Sid.S07_DEPART])
+        assertEquals(Sid.S07_DEPART, sim.ses.restLog.single().sid)
+    }
+
+    @Test fun f5_departure_routeArrivesAfterSessionOpens() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
+        sim.assertOpenDriving(); assertFalse(sim.ses.departChecked)
+        sim.depRoute(nurse)
+        assertEquals(Sid.S07_DEPART, sim.step<Ask>().single().sid)
+    }
+
+    @Test fun f5_departure_notWhileParked_offersAfterDrive() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN).gear(Gear.P)
+        assertNotNull(sim.s.session); assertEquals(Gear.P, sim.s.car.gear)
+        sim.depRoute(nurse)
+        assertFalse(sim.ses.departChecked); sim.noDepart()
+        sim.gear(Gear.D, 1_000)
+        assertTrue(sim.ses.departChecked); assertEquals(Sid.S07_DEPART, sim.step<Ask>().single().sid)
+    }
+
+    @Test fun f5j_reverseGear_waitsForDrive() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN).gear(Gear.P)
+        sim.depRoute(nurse).gear(Gear.R, 1_000)
+        assertFalse(sim.ses.departChecked); sim.noDepart()                          // 후진에서는 내지 않고 다음에 다시 본다
+        sim.gear(Gear.D, 1_000)
+        assertTrue(sim.ses.departChecked); assertEquals(Sid.S07_DEPART, sim.step<Ask>().single().sid)
+    }
+
+    // S3a: 출발 제안(S07_DEPART)에 아니로 답한 뒤 10분은 같은 수유실 제안(S07)도 내지 않는다
+    @Test fun s3a_departAnswerNo_blocksS07In10min() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN).depRoute(nurse)
+        val ask = sim.step<Ask>().single()
+        sim.done().ev(Answer(sim.t + 1_000, ask.askId, YesNo.NO))
+        sim.attempt1().toConfirm().closeQuiet().flush().attempt1().flush()   // s3_offerNotRepeatedIn10min과 같은 흐름
+        assertTrue(Sid.S07 !in sim.sids(), sim.sids().toString())
+    }
+
+    @Test fun f5j_heldDepartOffer_droppedIfNotDrive() {
+        for (g in listOf(Gear.R, Gear.N)) {
+            val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
+            sim.ev(VehicleSample(sim.t + 100, 60.0, true, 0.0, TurnSignal.NONE))      // 바쁨
+            sim.depRoute(nurse)
+            assertEquals(listOf(Sid.S07_DEPART), sim.s.speech.queue.map { it.sid }, "$g")
+            sim.gear(g, 200)
+            sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))
+            assertTrue(sim.all<Ask>().isEmpty(), "$g"); assertTrue(sim.s.speech.queue.none { it.sid == Sid.S07_DEPART }, "$g")
+            assertTrue(sim.ses.departChecked, "$g")
+        }
+    }
+
+    // S6a: 브레이크로 미뤄진(말하지 않은) 출발 질문이 통화로 버려지면 10분 금지 시각을 남기지 않는다
+    @Test fun s6a_callCancelledOffer_doesNotBlockRepeat() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN)
+        sim.ev(VehicleSample(sim.t + 100, 60.0, true, 0.0, TurnSignal.NONE))      // 바쁨
+        sim.depRoute(nurse)
+        assertEquals(listOf(Sid.S07_DEPART), sim.s.speech.queue.map { it.sid })
+        assertNotNull(sim.ses.lastOffer[Sid.S07_DEPART])
+        sim.ev(CallMode(sim.t + 100, true)).ev(CallMode(sim.t + 100, false))
+        assertTrue(sim.s.speech.queue.isEmpty()); assertNull(sim.ses.lastOffer[Sid.S07_DEPART])
+        sim.attempt1().toConfirm().closeQuiet().flush().attempt1().flush()
+        assertTrue(Sid.S07 in sim.sids(), sim.sids().toString())
+    }
+
+    // S6a 반대: 이미 말하던 맨 앞 문장의 금지 시각은 남는다
+    @Test fun s6a_callWhileSpeaking_keepsOfferTime() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN).depRoute(nurse)
+        sim.step<Ask>().single()
+        assertNotNull(sim.s.speech.speaking)
+        sim.ev(CallMode(sim.t + 100, true))
+        assertNotNull(sim.ses.lastOffer[Sid.S07_DEPART])
+    }
+
+    @Test fun f5j_droppedDepartOffer_doesNotBlockS07() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN)
+        sim.ev(VehicleSample(sim.t + 100, 60.0, true, 0.0, TurnSignal.NONE))      // 바쁨
+        sim.depRoute(nurse)
+        assertEquals(listOf(Sid.S07_DEPART), sim.s.speech.queue.map { it.sid })
+        sim.gear(Gear.R, 200)
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))                   // 꺼낼 때 무효라 버려진다
+        assertTrue(sim.s.speech.queue.isEmpty()); assertNull(sim.ses.lastOffer[Sid.S07_DEPART])
+        sim.gear(Gear.D, 1_000)
+        sim.attempt1().toConfirm().closeQuiet().flush().attempt1().flush()
+        assertTrue(Sid.S07 in sim.sids(), sim.sids().toString())                   // 묻지도 않은 출발 제안이 S07을 막지 않는다
+    }
+
+    @Test fun f5a_noFeeding_noOfferAndChecked() {
+        val sim = departIdle(feedingStart = null).depRoute(nurse).doorCycle().gear(Gear.D)
+        sim.assertOpenDriving(); assertNotNull(sim.s.car.route!!.remainingKm); assertNull(sim.s.feedingStart)
+        sim.noDepart(); assertTrue(sim.ses.departChecked)
+        sim.ev(FeedingStarted(sim.t, T0 - 120 * MIN, FeedingFrom.CAR_SCREEN, null)).depRoute(nurse)   // 그 뒤 수유 입력이 와도 다시 보지 않는다
+        assertNotNull(sim.s.feedingStart); sim.noDepart()
+    }
+
+    @Test fun f5b_noInterval_noOffer() {
+        val sim = departIdle(interval = null).depRoute(nurse).doorCycle().gear(Gear.D)
+        sim.assertOpenDriving(); assertNotNull(sim.s.feedingStart); assertNull(sim.s.profile!!.feedingIntervalMin)
+        sim.noDepart(); assertTrue(sim.ses.departChecked)
+    }
+
+    @Test fun f5c_noRemainingKm_waitsForRoute() {
+        val sim = departIdle().doorCycle().gear(Gear.D)
+        sim.assertOpenDriving(); assertNull(sim.s.car.route)
+        assertFalse(sim.ses.departChecked)
+        sim.depRoute(nurse, km = null)                                  // 남은 거리 없음
+        assertNull(sim.s.car.route!!.remainingKm); assertFalse(sim.ses.departChecked); sim.noDepart()
+        sim.depRoute(nurse, sec = null)                                 // 남은 시간 없음
+        assertNull(sim.s.car.route!!.remainingSec); assertFalse(sim.ses.departChecked); sim.noDepart()
+        sim.route(nurse, dest = false, remainingSec = 9000, remainingKm = 150.0)   // 안내 중 아님
+        assertFalse(sim.s.car.route!!.hasDestination); assertFalse(sim.ses.departChecked); sim.noDepart()
+        sim.depRoute(nurse)                                             // 다음 RouteState에서 다시 본다
+        assertTrue(sim.ses.departChecked); assertEquals(Sid.S07_DEPART, sim.step<Ask>().single().sid)
+    }
+
+    @Test fun f5c_drivingInfoBeforeTbt_offersWhenRestsArrive() {
+        val sim = departIdle().doorCycle().gear(Gear.D)
+        sim.assertOpenDriving()
+        sim.depRoute()                                                  // DrivingInfo만 먼저: 시간·거리 있고 rests 없음
+        assertTrue(sim.s.car.route!!.rests.isEmpty()); assertNotNull(sim.s.car.route!!.remainingKm)
+        assertFalse(sim.ses.departChecked); sim.noDepart()
+        sim.depRoute(nurse)                                             // TBT가 와서 rests가 참
+        assertTrue(sim.ses.departChecked); assertEquals(Sid.S07_DEPART, sim.step<Ask>().single().sid)
+    }
+
+    @Test fun f5i_otherOfferSameStep_waits() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
+        sim.route(nurse, dest = true, remainingSec = 9000, remainingKm = null)       // km 미수신: F5c로 기다림
+        sim.s = sim.s.copy(session = sim.ses.copy(playedMs = P.sessionPlayCapMs - 1_000))   // 남은 재생 예산 1초
+        sim.attempt1()
+        assertFalse(sim.ses.departChecked); assertNotNull(sim.s.car.route); assertNull(sim.s.car.route!!.remainingKm)
+        val endAt = sim.play().endAt
+        sim.ev(RouteState(endAt, true, 9000, listOf(nurse), 150.0))                  // 재생이 끝나는 시각에 km가 채워짐
+        assertEquals(Phase.HANDOFF, sim.ses.phase)
+        assertTrue(Sid.S07 in sim.s.speech.queue.map { it.sid })                     // 상한 인계 제안이 먼저 섰다
+        assertTrue(Sid.S07_DEPART !in sim.s.speech.queue.map { it.sid }); assertFalse(sim.ses.departChecked)
+        sim.ev(RouteState(endAt + 1_000, true, 9000, listOf(nurse), 150.0))          // 인계 S07이 큐에서 기다리는 중(앞 문장 뒤): 미룬다
+        assertTrue(Sid.S07 in sim.s.speech.queue.map { it.sid }); assertFalse(sim.ses.departChecked)
+        sim.done(); sim.ev(Tick(sim.t + P.speechGapMs))                              // 앞 문장이 끝나고 S07이 질문으로 나간다
+        val askId = sim.ses.pendingAsk!!.askId; assertEquals(Sid.S07, sim.ses.pendingAsk!!.sid)
+        sim.ev(RouteState(sim.t + 1_000, true, 9000, listOf(nurse), 150.0))          // 말하는 중: 미룬다
+        assertEquals(Sid.S07, sim.s.speech.queue.first().sid); assertFalse(sim.ses.departChecked)
+        sim.done()                                                                   // 문장은 끝났지만 질문(pendingAsk)이 남아 있다
+        assertTrue(sim.s.speech.queue.isEmpty()); assertNotNull(sim.ses.pendingAsk)
+        sim.ev(RouteState(sim.t + 1_000, true, 9000, listOf(nurse), 150.0))
+        assertFalse(sim.ses.departChecked); assertTrue(sim.s.speech.queue.none { it.sid == Sid.S07_DEPART })
+        sim.ev(Answer(sim.t + 1_000, askId, YesNo.NO)); assertNull(sim.ses.pendingAsk)
+        assertFalse(sim.ses.departChecked)
+        val offeredAt = sim.ses.lastOffer[Sid.S07]!!
+        sim.ev(RouteState(sim.t + 1_000, true, 9000, listOf(nurse), 150.0))          // NO 직후: 10분 금지 안이라 다시 묻지 않는다
+        assertTrue(sim.t - offeredAt < P.offerRepeatMs); assertNull(sim.ses.pendingAsk)
+        assertFalse(sim.ses.departChecked); assertTrue(sim.s.speech.queue.none { it.sid == Sid.S07_DEPART })
+        val at = offeredAt + P.offerRepeatMs
+        sim.assertOpenDriving(); assertTrue(sim.s.speech.queue.isEmpty()); assertNull(sim.ses.pendingAsk)   // 시간만 흐른다(5분 타이머는 에피소드를 닫을 뿐 F5 조건과 무관)
+        sim.ev(RouteState(at - 1, true, 9000, listOf(nurse), 150.0))                 // 10분에서 1ms 모자람
+        assertFalse(sim.ses.departChecked)
+        sim.ev(RouteState(at, true, 9000, listOf(nurse), 150.0))                     // 10분이 지난 뒤 비로소 본다
+        assertTrue(sim.ses.departChecked); assertTrue(sim.s.speech.queue.any { it.sid == Sid.S07_DEPART })
+    }
+
+    @Test fun f5d_hungryOutsideDrive_noOffer() {
+        val early = departIdle(feedingStart = T0 - 170 * MIN).depRoute(nurse).doorCycle().gear(Gear.D)   // h = now + 10분 < now + 20분
+        early.assertOpenDriving(); assertTrue(early.s.feedingStart!! + 180 * MIN < early.t + 20 * MIN)
+        early.noDepart(); assertTrue(early.ses.departChecked)
+        val late = departIdle(feedingStart = T0 - 10 * MIN).depRoute(nurse).doorCycle().gear(Gear.D)    // h = now + 170분 > now + 150분
+        late.assertOpenDriving(); assertTrue(late.s.feedingStart!! + 180 * MIN > late.t + 9000 * 1000L)
+        late.noDepart(); assertTrue(late.ses.departChecked)
+    }
+
+    @Test fun f5e_noNursingRestInTime_noOffer() {
+        val slow = RestCandidate("s", "s 휴게소", RestKind.REST_AREA, 80.0, true)       // eta 80분 > 40분
+        val sim = departIdle().depRoute(rest("a", 5.0), slow).doorCycle().gear(Gear.D)    // 수유실 없는 곳 a는 가까워도 안 된다
+        sim.assertOpenDriving(); assertTrue(sim.s.car.route!!.rests.any { it.hasNursingRoom })
+        sim.noDepart(); assertTrue(sim.ses.departChecked); assertTrue(Sid.S10 !in sim.sids())
+    }
+
+    @Test fun f5f_oncePerSession() {
+        val sim = departIdle().depRoute(nurse).doorCycle().gear(Gear.D)
+        val ask = sim.step<Ask>().single()
+        assertEquals(Sid.S07_DEPART, ask.sid); assertTrue(sim.ses.departChecked)
+        sim.done().ev(Answer(sim.t + 1_000, ask.askId, YesNo.NO))                 // 질문을 NO로 닫는다
+        assertNull(sim.ses.pendingAsk); assertTrue(sim.s.speech.queue.isEmpty())
+        sim.clear()
+        // 이 시각에도 F5 조건(수유·간격·경로·쉼터·시간대)이 모두 맞고, 다른 제안(S07·S08·S10·S11)의 10분 금지도 걸려 있지 않다
+        val now = sim.t + 2_000
+        assertTrue(OTHER_OFFERS_FOR_TEST.none { sim.ses.lastOffer[it] != null })
+        assertNotNull(pickDepartRest(RouteView(now, true, 9000, listOf(nurse), 150.0), sim.s.feedingStart, 180, now, P.departLeadMin))
+        sim.assertOpenDriving(); assertTrue(sim.ses.departChecked)
+        sim.ev(RouteState(now, true, 9000, listOf(nurse), 150.0))                 // 같은 세션의 다음 RouteState
+        assertTrue(sim.all<Ask>().none { it.sid == Sid.S07_DEPART }); assertTrue(sim.s.speech.queue.isEmpty())
+        assertEquals(1, sim.ses.restLog.count { it.sid == Sid.S07_DEPART })
+    }
+    private val OTHER_OFFERS_FOR_TEST = listOf(Sid.S07, Sid.S08, Sid.S10, Sid.S11)
+
+    @Test fun f5g_departAskHeldWhileBusy() {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
+        sim.ev(VehicleSample(sim.t + 100, 60.0, true, 0.0, TurnSignal.NONE))           // 바쁨(브레이크)
+        sim.assertOpenDriving(); assertNotNull(sim.s.steer.driveBusyAt)
+        sim.depRoute(nurse)
+        assertEquals(listOf(Sid.S07_DEPART), sim.s.speech.queue.map { it.sid })        // 큐에 서되
+        assertTrue(sim.all<Ask>().isEmpty())                                           // 바쁜 동안은 내지 않는다
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))
+        assertEquals(Sid.S07_DEPART, sim.step<Ask>().single().sid)
+    }
+
+    @Test fun f5h_departYes_addsWaypoint() {
+        val sim = departIdle().depRoute(nurse).doorCycle().gear(Gear.D)
+        val ask = sim.step<Ask>().single()
+        assertEquals(Sid.S07_DEPART, ask.sid); assertEquals(ask.askId, sim.ses.pendingAsk!!.askId)
+        sim.ev(Answer(sim.t + 1_000, ask.askId, YesNo.YES))
+        assertEquals("n", sim.step<AddWaypoint>().single().restId)
+        assertNotNull(sim.ses.nursingStop)
+    }
+
+    @Test fun pickDepartRest_bounds() {
+        fun pick(rests: List<RestCandidate>, h: Long, now: Long = 0, sec: Int = 7200, km: Double? = 120.0, iv: Int? = 180) =
+            pickDepartRest(RouteView(now, true, sec, rests, km), h - (iv ?: 0) * MIN, iv, now, 20)
+        fun at(id: String, d: Double) = RestCandidate(id, id, RestKind.REST_AREA, d, true)   // eta = 7200초 × d ÷ 120 = d × 1분
+        assertEquals("a", pick(listOf(at("a", 0.0)), h = 20 * MIN)?.id)          // h = now + lead 정확히, eta = now = h − lead
+        assertNull(pick(listOf(at("a", 0.0)), h = 20 * MIN - 1))                  // 1ms 이르다
+        assertEquals("a", pick(listOf(at("a", 0.0)), h = 7200_000L)?.id)          // h = now + 남은 시간 정확히
+        assertNull(pick(listOf(at("a", 0.0)), h = 7200_000L + 1))
+        assertEquals("a", pick(listOf(at("a", 40.0)), h = 60 * MIN)?.id)          // eta = h − lead 정확히
+        assertNull(pick(listOf(at("a", 40.1)), h = 60 * MIN))
+        assertEquals("b", pick(listOf(at("a", 10.0), at("b", 30.0)), h = 60 * MIN)?.id)   // 가장 늦은 eta
+        assertNull(pick(listOf(at("a", 10.0)), h = 60 * MIN, km = 0.0))
+        assertNull(pick(listOf(at("a", 10.0).copy(hasNursingRoom = false)), h = 60 * MIN))
     }
 
     @Test fun f6_confirmFeeding_updatesStart() {

@@ -146,7 +146,7 @@ internal object Lines {
             Sid.S04 -> "실내가 ${g("tempC")}도예요. ${g("loweredC")}도 낮췄어요."
             Sid.S06 -> "수유한 지 ${g("elapsed")}이에요. 배고플 수 있어요."
             Sid.S07 -> "$km 앞 ${rest}에 수유실이 있어요. 들를까요?"
-            Sid.S07_DEPART -> "${g("hungryAt")}쯤 배고플 시간이라, $km 앞 수유실 있는 $rest${eul(rest)} 경유지로 넣을까요?"
+            Sid.S07_DEPART -> "${clock(g("hungryAt"))}쯤 배고플 시간이라, $km 앞 수유실 있는 $rest${eul(rest)} 경유지로 넣을까요?"
             Sid.S08 -> "$km 앞 ${rest}에서 쉬어 갈까요?"
             Sid.S09 -> "$rest${eul(rest)} 경유지로 넣었어요."
             Sid.S10 -> "가까운 쉼터를 못 찾았어요. 안전한 곳에 세워서 돌봐 주세요."
@@ -160,6 +160,14 @@ internal object Lines {
             Sid.S20 -> "지금은 소리를 틀 수 없어요."
             Sid.QA -> g("text")
         }
+    }
+
+    /** epoch ms 문자열을 기기 시간대의 "오후 3시 10분"(분이 0이면 "오후 3시")으로. 숫자가 아니면 그대로. */
+    internal fun clock(ms: String): String {
+        val t = ms.toLongOrNull() ?: return ms
+        val c = java.util.Calendar.getInstance().apply { timeInMillis = t }
+        val h = c.get(java.util.Calendar.HOUR_OF_DAY); val m = c.get(java.util.Calendar.MINUTE)
+        return "${if (h < 12) "오전" else "오후"} ${if (h % 12 == 0) 12 else h % 12}시" + if (m == 0) "" else " ${m}분"
     }
 
     /** 마지막 글자의 받침(0 = 없음, 8 = ㄹ). 한글이 아니면 없음으로 본다. */

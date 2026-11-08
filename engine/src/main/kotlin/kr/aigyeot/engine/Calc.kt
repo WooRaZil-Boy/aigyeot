@@ -77,6 +77,22 @@ fun pickRest(route: RouteView?, p: Params = Params()): RestCandidate? {
     return near.firstOrNull { it.hasNursingRoom && it.distanceKm <= first.distanceKm + p.nursingExtraKm } ?: first
 }
 
+/**
+ * 10장 출발할 때(C117). 배고플 시각 h = 마지막 수유 시작 + 간격이 [now + lead, now + 남은 시간]에 들고,
+ * 휴게소 도착 예상 eta = now + 남은 시간 × (휴게소까지 km ÷ 남은 km)가 h − lead 이하인 수유실 휴게소 중 eta가 가장 늦은(같으면 가까운) 곳.
+ */
+fun pickDepartRest(route: RouteView?, feedingStart: Long?, intervalMin: Int?, now: Long, leadMin: Int): RestCandidate? {
+    val km = route?.remainingKm ?: return null
+    val sec = route.remainingSec ?: return null
+    if (feedingStart == null || intervalMin == null || km <= 0.0) return null
+    val h = feedingStart + intervalMin * 60_000L
+    val lead = leadMin * 60_000L
+    if (h < now + lead || h > now + sec * 1000L) return null
+    fun eta(r: RestCandidate) = now + (sec * 1000.0 * r.distanceKm / km).toLong()
+    return route.rests.filter { it.hasNursingRoom && eta(it) <= h - lead }
+        .sortedWith(compareByDescending<RestCandidate> { eta(it) }.thenBy { it.distanceKm }).firstOrNull()
+}
+
 /** 목적지가 있고 남은 시간이 10분 이하(4.3 '남은 시간 먼저'). */
 fun nearDestination(route: RouteView?, p: Params = Params()): Boolean =
     route?.hasDestination == true && route.remainingSec != null && route.remainingSec <= p.arrivalNoticeMaxSec
@@ -97,7 +113,8 @@ fun offerRest(
         if (longDrive) vars["drove"] = hm(now - (driveFrom ?: now))
         Line(sid, vars, rest.id, longDrive = longDrive)
     }
-    val last = lastOffer[line.sid]
+    // S3a: 출발 제안(S07_DEPART)을 낸 뒤에도 같은 10분 동안 S07을 내지 않는다
+    val last = if (line.sid == Sid.S07) listOfNotNull(lastOffer[Sid.S07], lastOffer[Sid.S07_DEPART]).maxOrNull() else lastOffer[line.sid]
     return if (last != null && now - last < p.offerRepeatMs) null else line
 }
 

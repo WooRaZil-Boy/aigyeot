@@ -69,4 +69,12 @@ class CalcTest {
         assertNull(offerRest(false, Gear.D, r, mapOf(Sid.S08 to 0L), 9 * MIN, null))
         assertNull(offerRest(false, Gear.D, RouteView(0, true, 600, r.rests), emptyMap(), 0, null))
     }
+
+    @Test fun s3a_s07WaitsAfterDepartOffer() {
+        val r = RouteView(0, false, null, listOf(rest("n", 10.0, true)))
+        assertEquals(Sid.S07, offerRest(false, Gear.D, r, emptyMap(), 0, null)!!.sid)
+        assertNull(offerRest(false, Gear.D, r, mapOf(Sid.S07_DEPART to 0L), 9 * MIN, null))
+        assertEquals(Sid.S07, offerRest(false, Gear.D, r, mapOf(Sid.S07_DEPART to 0L), 10 * MIN, null)!!.sid)
+        assertNull(offerRest(false, Gear.D, r, mapOf(Sid.S07 to 0L, Sid.S07_DEPART to 5 * MIN), 14 * MIN, null))   // 늦은 쪽 기준
+    }
 }

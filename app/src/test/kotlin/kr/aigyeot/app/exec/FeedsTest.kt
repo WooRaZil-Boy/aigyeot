@@ -181,6 +181,29 @@ class FeedsTest {
         assertEquals(600, (events.last() as RouteState).remainingSec, "상태를 받은 뒤에는 DrivingInfo 값이 남는다")
     }
 
+    @Test fun `남은 거리 m는 km로 바꿔 남은 시간과 함께 낸다`() {
+        val f = RouteFeed({ t.now }, { events += it })
+        f.driving(16_200, 378_000)             // 1105d 실측: duration 초, distance m
+        assertEquals(378.0, (events.last() as RouteState).remainingKm)
+        f.driving(0, 0)                        // 끝난 경로: 둘 다 null
+        (events.last() as RouteState).let { assertNull(it.remainingSec); assertNull(it.remainingKm) }
+        f.driving(900, 0)                      // 거리 0 이하는 null
+        assertNull((events.last() as RouteState).remainingKm)
+        f.driving(900, null)
+        assertNull((events.last() as RouteState).remainingKm)
+        f.routing(false)
+        assertNull((events.last() as RouteState).remainingKm)
+        val g = RouteFeed({ t.now }, { events += it })
+        g.initial(900, 24_000)                 // C116 복원 경로도 같은 값
+        assertEquals(24.0, (events.last() as RouteState).remainingKm)
+        g.routing(false); g.initial(900, 24_000)
+        assertNull((events.last() as RouteState).remainingKm)
+        val h = RouteFeed({ t.now }, { events += it })
+        h.driving(900, 24_000); assertEquals(24.0, (events.last() as RouteState).remainingKm)
+        h.routing(false); h.routing(true)
+        (events.last() as RouteState).let { assertTrue(it.hasDestination); assertNull(it.remainingKm, "새 거리 입력 없이 옛 km가 다시 나오면 안 된다") }
+    }
+
     @Test fun `VehicleSample은 m_s를 km_h로 바꾸고 최대 10Hz로 낸다`() {
         val s = Sampler({ t.now }, { events += it })
         s.steer(1.5f)

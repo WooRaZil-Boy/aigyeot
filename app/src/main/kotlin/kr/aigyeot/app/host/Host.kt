@@ -389,7 +389,7 @@ class Host(
             listOf(
                 x?.id, x?.phase, x?.attemptNo, x?.play, x?.episode, x?.pauses, x?.longDriveOffered, x?.capReached,
                 x?.pendingAsk, x?.waypointPending, x?.nursingStop, s.car.outPauses, s.ign.windowLockPending, s.ign.suspendedAt,
-                s.feedingStart, s.profile, s.methodsNext,
+                s.feedingStart, s.profile, s.methodsNext, x?.departChecked,
             )
         }
     }

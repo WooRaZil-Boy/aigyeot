@@ -37,6 +37,7 @@ private val AUTO_PHASES = setOf(Phase.ATTEMPT, Phase.GAP, Phase.CONFIRM)
 private val REAR = setOf(Area.ROW_2_LEFT, Area.ROW_2_RIGHT)
 private val DEFAULT_METHODS = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY))
 private val OFFER_SIDS = setOf(Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11)   // 휴식 기록에 남기는 제안 문장
+private val OTHER_OFFERS = setOf(Sid.S07, Sid.S08, Sid.S10, Sid.S11)   // F5i: 이 문장이 큐에 있거나 말하는 중이거나 10분(offerRepeatMs) 안에 냈으면 출발 제안을 미룬다
 private val HOLDABLE = setOf(Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S10, Sid.S11)   // C107: 운전이 바쁘면 미루는 급하지 않은 문장
 private val STOP_WORDS = setOf("그만", "그만해", "그만틀어", "내가할게")   // Q4: 글자·숫자만 남기고 끝의 '요' 한 글자를 뗀 뒤 비교(C109)
 
@@ -68,6 +69,7 @@ private class Ctx(val p: Params, var s: EngineState) {
         // 지금 재생의 PlaybackEnded는 그 사건이 끝을 정한다(복원 C58: endAt 뒤에 와도 시간 끝으로 보지 않는다).
         if (!rebase) timers(skipPlay = e is PlaybackEnded && e.playId == ses?.play?.id)
         handle(e)
+        if (!rebase && (e is GearChanged || e is RouteState)) departOffer()
         if (!rebase) { longDrive(); drain() }
         if (snapshot) out += SaveSnapshot(s)
         return Step(s, out, wakeAt())
@@ -125,7 +127,7 @@ private class Ctx(val p: Params, var s: EngineState) {
             }
             is CabinTemp -> car { copy(cabinC = e.celsius) }
             is VehicleSample -> vehicle(e)
-            is RouteState -> car { copy(route = RouteView(e.at, e.hasDestination, e.remainingSec, e.rests)) }
+            is RouteState -> car { copy(route = RouteView(e.at, e.hasDestination, e.remainingSec, e.rests, e.remainingKm)) }
             is CallMode -> call(e.inCall)
             is FocusChanged -> focus(e)
             is PlaybackStarted -> started(e)
@@ -178,6 +180,7 @@ private class Ctx(val p: Params, var s: EngineState) {
 
     fun cancelSpeech() {                                                                           // G30·Q8
         out += CancelSpeech
+        s.speech.queue.drop(if (s.speech.speaking != null) 1 else 0).forEach(::forgetOffer)         // S6a: 묻지 않은 제안의 10분 금지 시각을 지운다
         speech { copy(speaking = null, queue = emptyList(), qa = null) }
         ses { copy(pendingAsk = null) }
     }
@@ -251,7 +254,6 @@ private class Ctx(val p: Params, var s: EngineState) {
         if (heated.isNotEmpty()) out += SetSeatHeat(newId(), heated, 0)                            // 3a
         if (pr.hasSibling) lockWindows()                                                           // 3b
         if (!s.car.micRunning) { say(Sid.S17); ses { copy(s17Said = true, micNoticeArmed = true) } } // 1e
-        // F5 출발 수유 제안: 휴게소별 도착 예상이 입력에 없어 뺀다(C31). 도착 예상을 받게 되면 여기서 낸다.
     }
 
     fun closeSession() {                                                                           // 13a·13c·13d
@@ -710,24 +712,25 @@ private class Ctx(val p: Params, var s: EngineState) {
             HandoffKind.WAYPOINT_OFFER, HandoffKind.NO_REST -> offer(false)
             HandoffKind.PARKED -> {}
         }
+        val askedRest = if (kind == HandoffKind.WAYPOINT_OFFER) s.speech.queue.firstOrNull { it.sid in setOf(Sid.S07, Sid.S08) && it.askRestId != null }?.vars?.get("restName") else null  // H3: 실제로 물은 쉼터만 알린다
         val notify = s.otherGuardians > 0                                                           // H8
         ses { copy(phase = Phase.HANDOFF, quietMs = 0, judgeFrom = null, windowEnd = null, pendingAlarm = null) }
         ep { copy(handoff = HandoffRecord(cause, kind, false, notify)) }
-        if (notify) out += SendToPhone("handoff_alert", handoffBody(kind, rest, minutes))
+        if (notify) out += SendToPhone("handoff_alert", handoffBody(kind, askedRest, minutes))
         saveEpisode()
     }
 
-    fun handoffBody(kind: HandoffKind, rest: RestCandidate?, minutes: Int?): JsonObject {
+    fun handoffBody(kind: HandoffKind, restName: String?, minutes: Int?): JsonObject {
         val x = ses!!
         val (wire, text) = when (kind) {   // contracts-link 3.3 문장 표
-            HandoffKind.WAYPOINT_OFFER -> "rest_offer" to "아기가 계속 울어서 ${rest?.name}에 들르자고 운전자에게 제안했어요."
+            HandoffKind.WAYPOINT_OFFER -> "rest_offer" to if (restName != null) "아기가 계속 울어서 ${restName}에 들르자고 운전자에게 제안했어요." else "아기가 계속 울어요."
             HandoffKind.ARRIVAL_NOTICE -> "arrival_notice" to "아기가 계속 울어요. ${minutes}분 뒤 도착해요."
             HandoffKind.NO_REST -> "no_rest" to "아기가 계속 울어요. 가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요."
             HandoffKind.PARKED -> "parked" to "차가 선 채로 아기가 계속 울어요."
         }
         return buildJsonObject {
             put("text", text); put("kind", wire)
-            put("rest_name", if (kind == HandoffKind.WAYPOINT_OFFER) rest?.name else null)
+            put("rest_name", if (kind == HandoffKind.WAYPOINT_OFFER) restName else null)
             put("minutes_to_arrival", if (kind == HandoffKind.ARRIVAL_NOTICE) minutes else null)
             put("occurred_at", now); put("session_id", x.id); put("episode_id", x.episode?.id)
         }
@@ -741,6 +744,23 @@ private class Ctx(val p: Params, var s: EngineState) {
         if (s.speech.queue.any { it.sid == line.sid }) return       // 같은 문장이 큐에 있거나 말하는 중(큐 맨 앞): 10분 반복 금지 시각이 아직 없어도 겹쳐 내지 않는다(S3, C84)
         if (say(line)) {
             if (!line.longDrive) ses { copy(lastOffer = lastOffer + (line.sid to now)) }          // 2시간 제안의 시각은 말한 뒤 speechDone이 남긴다(C84)
+            offered = true
+        }
+    }
+
+    /** F5·F5a~F5e·F5j: 세션이 열렸고 기어가 D인 첫 경로에서 한 번만 본다. 세션을 연 GearChanged(D)와 같은 Step에서도 본다. */
+    fun departOffer() {
+        val x = ses ?: return
+        val r = s.car.route
+        // F5c: 경로가 오면 다시 본다. rests가 비면 DrivingInfo만 먼저 온 것일 수 있다(TBT가 늦다). F5i: 같은 Step에 다른 제안이 나갔으면(P1) 다음 RouteState로 미룬다
+        if (s.car.gear != Gear.D || offered || x.pendingAsk != null || s.speech.queue.any { it.sid in OTHER_OFFERS } || OTHER_OFFERS.any { sid -> x.lastOffer[sid]?.let { now - it < p.offerRepeatMs } == true } || x.departChecked || r?.hasDestination != true || r.remainingKm == null || r.remainingSec == null || r.rests.isEmpty()) return
+        ses { copy(departChecked = true) }
+        val fs = s.feedingStart ?: return
+        val rest = pickDepartRest(r, fs, s.profile?.feedingIntervalMin, now, p.departLeadMin) ?: return
+        if (!canAddWaypoint(rest.id) || s.speech.queue.any { it.sid == Sid.S07_DEPART }) return
+        val vars = mapOf("hungryAt" to (fs + s.profile!!.feedingIntervalMin!! * 60_000L).toString(), "distanceKm" to km(rest.distanceKm), "restName" to rest.name)
+        if (say(Line(Sid.S07_DEPART, vars, rest.id))) {
+            ses { copy(lastOffer = lastOffer + (Sid.S07_DEPART to now)) }
             offered = true
         }
     }
@@ -925,7 +945,8 @@ private class Ctx(val p: Params, var s: EngineState) {
     /** 꺼낼 때 문장이 아직 맞는지 다시 본다(G15·C15). */
     fun valid(l: Line) = when (l.sid) {
         Sid.S02, Sid.S03, Sid.S04 -> l.playId != null && ses?.play?.id == l.playId   // '그 재생'이 계속될 때만
-        Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11, Sid.S15 -> !gearP && (l.askRestId == null || canAddWaypoint(l.askRestId))
+        Sid.S07_DEPART -> s.car.gear == Gear.D && (l.askRestId == null || canAddWaypoint(l.askRestId))   // F5j: 후진·중립에서는 말하지 않고 버린다
+        Sid.S06, Sid.S07, Sid.S08, Sid.S10, Sid.S11, Sid.S15 -> !gearP && (l.askRestId == null || canAddWaypoint(l.askRestId))
         else -> true
     }
 
@@ -942,6 +963,7 @@ private class Ctx(val p: Params, var s: EngineState) {
         val (expired, kept) = sq.queue.partition { it.sid in HOLDABLE && it.queuedAt != null && now - it.queuedAt > p.holdMaxMs && busyAt != null && busyAt >= it.queuedAt }
         expired.forEach { forgetOffer(it) }
         var q = kept.dropWhile { !valid(it) }
+        kept.take(kept.size - q.size).forEach { if (it.sid == Sid.S07_DEPART) forgetOffer(it) }   // F5j: 묻지 않고 버린 출발 제안은 10분 금지(S3a)를 남기지 않는다
         // S5: 바쁨 중이면 급하지 않은 문장을 건너뛰고 처음 나오는 급한 문장을 낸다. 건너뛴 문장은 자리를 지킨다.
         // 고른 문장도 꺼낼 때 다시 본다: 무효(C15·G15)이거나 제안한 쉼터가 지금 경로에 없으면 버리고 다음 후보를 찾는다. 있으면 거리·이름을 지금 값으로 갱신한다
         var i: Int
@@ -950,7 +972,7 @@ private class Ctx(val p: Params, var s: EngineState) {
             if (i < 0) break
             val ok = valid(q[i])
             val fresh = if (ok) refreshed(q[i]) else null
-            if (fresh == null && ok) forgetOffer(q[i])
+            if (fresh == null && (ok || q[i].sid == Sid.S07_DEPART)) forgetOffer(q[i])
             if (fresh == null) q = q.filterIndexed { j, _ -> j != i } else { q = q.toMutableList().also { it[i] = fresh }; break }
         }
         speech { copy(queue = q) }

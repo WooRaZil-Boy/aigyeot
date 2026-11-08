@@ -32,6 +32,7 @@ sealed interface Event { val at: Long }
 ) : Event
 @Serializable data class RouteState(
     override val at: Long, val hasDestination: Boolean, val remainingSec: Int?, val rests: List<RestCandidate>,
+    val remainingKm: Double? = null,
 ) : Event
 
 // 3.4 오디오·음성

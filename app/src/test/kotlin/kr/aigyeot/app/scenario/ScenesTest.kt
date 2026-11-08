@@ -62,6 +62,14 @@ class ScenesTest {
         assertMeetsLimits("C", rows)   // 쉼터 '응'은 운전자 조작에서 뺀다
     }
 
+    @Test fun `장면 C2 출발 - 수유실 제안 응 뒤 경유지`() {
+        val rows = runAll("C2")
+        assertMeetsLimits("C2", rows, alarm = false)
+        val w = FakeWorld(cryLen); w.play(scene("C2"))
+        val ask = w.commands.map { it.second }.filterIsInstance<kr.aigyeot.engine.Ask>().single { it.sid == kr.aigyeot.engine.Sid.S07_DEPART }
+        assertEquals("안성휴게소(부산방향)", ask.vars["restName"]); assertEquals("30", ask.vars["distanceKm"])
+    }
+
     @Test fun `장면 D 계속 울음 - 두 번 뒤 인계`() {
         val rows = runAll("D")
         assertMeetsLimits("D", rows)

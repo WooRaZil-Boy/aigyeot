@@ -1,6 +1,7 @@
 package kr.aigyeot.engine
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
@@ -43,8 +44,21 @@ class S57HandoffTest {
         assertEquals(Sid.S07, ask.sid); assertEquals(6_000, ask.listenMs)
         assertEquals(PendingAsk(ask.askId, Sid.S07, "n", sim.ep.id, true), sim.ses.pendingAsk)
         assertEquals("rest_offer", sim.alert()["kind"]!!.jsonPrimitive.content)
+        assertEquals("n 휴게소", sim.alert()["rest_name"]!!.jsonPrimitive.content)
+        assertEquals("아기가 계속 울어서 n 휴게소에 들르자고 운전자에게 제안했어요.", sim.alert()["text"]!!.jsonPrimitive.content)
         val b = asked(rest("a", 10.0), rest("n", 15.5, nursing = true))
         assertEquals(Sid.S08, b.ask().sid); assertEquals("a", b.ses.pendingAsk!!.restId)
+    }
+
+    @Test fun h3_offerBlocked_alertWithoutRestName() {
+        val sim = session().route(rest("n", 14.0, nursing = true))
+        sim.s = sim.s.copy(session = sim.ses.copy(lastOffer = mapOf(Sid.S07_DEPART to sim.t)))   // 출발 제안 직후(S3a 10분 금지)
+        sim.handoff().flush()
+        assertTrue(sim.all<Ask>().none { it.sid == Sid.S07 })
+        val b = sim.alert()
+        assertEquals("rest_offer", b["kind"]!!.jsonPrimitive.content)
+        assertEquals(JsonNull, b["rest_name"])
+        assertEquals("아기가 계속 울어요.", b["text"]!!.jsonPrimitive.content)
     }
 
     @Test fun h4_yes_addsWaypoint() {

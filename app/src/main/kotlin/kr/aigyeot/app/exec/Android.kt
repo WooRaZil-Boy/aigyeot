@@ -569,9 +569,9 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
         private fun on(f: () -> Unit) = ex.guard { if (gen == my) f() }
         override fun onNavigationStatus(status: NavigationStatus) = on { route.routing(status == NavigationStatus.ROUTE_DRIVE) }
         // isRouting은 안내 중에도 거짓이고 onRouteEnded는 안내 시작과 섞여 온다(C114): 안내 여부는 NavigationStatus만 따른다
-        override fun onDrivingInfo(info: DrivingInfo) = on { route.driving(info.destination?.duration) }
+        override fun onDrivingInfo(info: DrivingInfo) = on { route.driving(info.destination?.duration, info.destination?.distance) }
         // 끝난 경로의 TBT를 재시작 때 돌려주므로(1105e) TBT로는 안내 여부를 정하지 않는다
-        override fun onDestinationInfo(info: DestinationInfo) = on { route.initial(info.remainTime) }
+        override fun onDestinationInfo(info: DestinationInfo) = on { route.initial(info.remainTime, info.remainDistance) }
         override fun onTBTInfo(list: List<TBTInfo>) = on { route.rests(restsOf(list) { RestAreas.nursing(it) }) }
         override fun onCurrentLocationInfo(info: CurrentLocationInfo) = on {
             awaitingHere?.let { (rest, done) -> awaitingHere = null; send(rest, Here(info.latitude, info.longitude), done) }

@@ -23,7 +23,7 @@ class SceneFileTest {
 
     @Test fun `assets의 장면 파일은 모두 읽힌다`() {
         val files = File("src/main/assets/scenario").listFiles { f -> f.extension == "json" }!!
-        assertEquals(26, files.size)   // A~E, D2, F14 20개
+        assertEquals(27, files.size)   // A~E, C2, D2, F14 20개
         files.forEach { f -> assertEquals(f.nameWithoutExtension, parseScene(f.readText()).id) }
     }
 

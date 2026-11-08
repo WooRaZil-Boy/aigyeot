@@ -98,6 +98,7 @@ data class SessionState(
     val pendingAlarm: PendingAlarm?,
     val restLog: List<RestLogEntry> = emptyList(),   // 휴식 기록(6.1 session.rest_log): 제안 시각·문장·쉼터·답·경유지
     val playStarted: Boolean = false,    // 이 세션에 PlaybackStarted가 한 번이라도 있었음(output_route null 판단, C85)
+    val departChecked: Boolean = false,  // 출발 수유실 제안(F5)을 이번 세션에 이미 봤음. 제안하지 않았어도 참(C117)
     val micPath: MicPath? = null,        // 세션을 열 때의 마이크 경로. 세션 중 바뀌어도 SaveSession 행은 이 값을 유지(C88)
 )
 
@@ -161,6 +162,7 @@ data class HandoffRecord(
 @Serializable data class RouteView(
     val at: Long, val hasDestination: Boolean,
     val remainingSec: Int?, val rests: List<RestCandidate>,
+    val remainingKm: Double? = null,   // 목적지까지 남은 거리(km). 출발 수유실 제안(F5)용. 스냅숏 호환 기본값 null
 )
 @Serializable data class RestCandidate(
     val id: String, val name: String, val kind: RestKind,

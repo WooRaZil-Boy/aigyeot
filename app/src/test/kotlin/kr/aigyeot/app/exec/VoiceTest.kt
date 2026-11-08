@@ -254,6 +254,16 @@ class VoiceTest {
     }
 
     @Test fun `문장 표의 조사는 받침에 맞춘다`() {
+        val tz = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Seoul"))
+        try {
+            fun at(h: Int, m: Int) = java.time.ZonedDateTime.of(2026, 11, 6, h, m, 0, 0, java.time.ZoneId.of("Asia/Seoul")).toInstant().toEpochMilli().toString()
+            fun dep(ms: String) = Lines.text(Sid.S07_DEPART, mapOf("hungryAt" to ms, "distanceKm" to "30", "restName" to "안성휴게소"))
+            assertEquals("오후 3시 10분쯤 배고플 시간이라, 30킬로미터 앞 수유실 있는 안성휴게소를 경유지로 넣을까요?", dep(at(15, 10)))
+            assertEquals("오후 3시쯤 배고플 시간이라, 30킬로미터 앞 수유실 있는 안성휴게소를 경유지로 넣을까요?", dep(at(15, 0)))
+            assertEquals("오전 12시 5분", Lines.clock(at(0, 5)))
+            assertEquals("오후 12시", Lines.clock(at(12, 0))); assertEquals("곧", Lines.clock("곧"))
+        } finally { java.util.TimeZone.setDefault(tz) }
         assertEquals("아직 울어요. 백색소음으로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "백색소음")))
         assertEquals("아직 울어요. 자장가로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "자장가")))
         assertEquals("아직 울어요. 우리 노래로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "우리 노래")))

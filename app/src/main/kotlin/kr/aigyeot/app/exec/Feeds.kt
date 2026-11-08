@@ -58,26 +58,29 @@ internal fun restsOf(tbt: List<TBTInfo>, nursing: (String) -> Boolean): List<Res
 internal class RouteFeed(private val clock: () -> Long, private val post: (Event) -> Unit) {
     private var routing: Boolean? = null
     private var remainSec: Int? = null
+    private var remainKm: Double? = null
     private var rests: List<RestCandidate> = emptyList()
     private var last: RouteState? = null
 
     /** NavigationStatus == ROUTE_DRIVE 여부(C114). isRouting·끝·취소 알림은 넘기지 않는다: 시작과 섞여 와 안내 중 상태를 덮는다. 거짓이 오면 받아 둔 쉼터를 비운다(그 뒤 온 TBT는 저장해 안내 중이 되면 낸다). 쉼터는 안내 중일 때만 낸다. */
-    fun routing(on: Boolean) { routing = on; if (!on) { remainSec = null; rests = emptyList() }; emit() }
+    fun routing(on: Boolean) { routing = on; if (!on) { remainSec = null; remainKm = null; rests = emptyList() }; emit() }
     /** 새 구독 회차(PleosNavi.start): 앞 회차의 상태를 잊어 재시작 복원(initial)이 막히지 않게 한다. 이미 낸 값은 새 값이 오면 바뀐다. */
     fun forget() { routing = null }
     /** DrivingInfo 남은 시간(초). 0 이하는 끝난 경로(duration=0)라 안내 중으로 보지 않는다. 상태를 받은 적이 없을 때만 안내 중으로 본다. */
-    fun driving(sec: Int?) {
+    fun driving(sec: Int?, distanceM: Number? = null) {
         val s = sec?.takeIf { it > 0 }
         if (s != null && routing == null) routing = true
-        remainSec = s; emit()
+        remainSec = s; remainKm = kmOf(s, distanceM); emit()
     }
     /** 재시작 때 getDestinationInfo의 remainTime(초, 같은 쪽 WaypointInfo 값으로 본 단위). 상태를 받은 적이 없고 0보다 클 때만 안내 중과 남은 시간으로 넣는다. */
-    fun initial(sec: Int) { if (routing == null && sec > 0) { routing = true; remainSec = sec; emit() } }
+    fun initial(sec: Int, distanceM: Number? = null) { if (routing == null && sec > 0) { routing = true; remainSec = sec; remainKm = kmOf(sec, distanceM); emit() } }
+    /** 남은 거리(m) → km. 남은 시간이 없거나 0 이하면 null(계약 3.3: remainingSec과 함께 낸다). */
+    private fun kmOf(sec: Int?, distanceM: Number?) = if (sec == null) null else distanceM?.toDouble()?.div(1000)?.takeIf { it > 0 }
     fun rests(list: List<RestCandidate>) { rests = list; emit() }
 
     private fun emit() {
         val on = routing == true
-        val e = RouteState(clock(), on, if (on) remainSec else null, if (on) rests else emptyList())
+        val e = RouteState(clock(), on, if (on) remainSec else null, if (on) rests else emptyList(), if (on) remainKm else null)
         if (last?.copy(at = e.at) == e) return
         last = e
         post(e)

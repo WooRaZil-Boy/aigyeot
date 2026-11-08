@@ -58,7 +58,7 @@ data class Params(
     val contextHalfMs: Long = 30_000,
     val contextStepMs: Long = 1_000,
     val songPeakMaxDbfs: Double = -1.0,
-    val departLeadMin: IntRange = 15..20, // G31
+    val departLeadMin: Int = 20, // G31, C117
     val feedingParkConfirmMs: Long = 900_000,
     val dedupDays: Int = 7,
     val reconnectMaxMs: Long = 60_000,

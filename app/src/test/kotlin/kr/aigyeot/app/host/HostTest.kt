@@ -83,6 +83,15 @@ class HostTest {
         assertEquals(k.state().session!!.id, snap.session?.id)
     }
 
+    @Test fun c78_departCheckedSavedImmediately() {
+        k.profile(); k.boot(); k.open()
+        val s0 = k.savedAt()
+        k.ev(RouteState(0, true, 9000, listOf(RestCandidate("n", "n 휴게소", RestKind.REST_AREA, 30.0, true)), 150.0), k.now + 1_000)
+        assertTrue(k.ses().departChecked)                    // 수유 시작이 없어 제안은 없고 확인만 됨(F5a)
+        assertNotEquals(s0, k.savedAt(), "30초를 기다리지 않고 바로 저장")
+        assertTrue(k.store.loadSnapshot()!!.session!!.departChecked)
+    }
+
     @Test fun c78_vehicleSampleBatched_every30s() {
         k.profile(); k.boot(); k.open()
         val s0 = k.savedAt()

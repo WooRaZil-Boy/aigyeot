@@ -57,8 +57,8 @@ fun idle(
 
 fun Sim.doorCycle(side: Side = Side.LEFT) = ev(RearDoor(t, side, true)).ev(RearDoor(t, side, false))
 fun Sim.gear(g: Gear, dt: Long = 0) = ev(GearChanged(t + dt, g))
-fun Sim.route(vararg rests: RestCandidate, dest: Boolean = false, remainingSec: Int? = null) =
-    ev(RouteState(t, dest, remainingSec, rests.toList()))
+fun Sim.route(vararg rests: RestCandidate, dest: Boolean = false, remainingSec: Int? = null, remainingKm: Double? = null) =
+    ev(RouteState(t, dest, remainingSec, rests.toList(), remainingKm))
 
 /** LISTENING인 세션. */
 fun session(
