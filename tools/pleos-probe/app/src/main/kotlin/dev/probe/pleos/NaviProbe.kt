@@ -47,6 +47,9 @@ class NaviProbe : Activity(), NaviHelperEventListener {
             "route" -> h.requestRoute(RouteInfo(latitude = lat, longitude = lon, poiId = "", poiName = name, poiSubId = "0", address = name,
                 routeOption = ai.pleos.playground.navi.constants.RouteOption.valueOf(i.getStringExtra("opt") ?: "RECOMMENDED")))
             "wp" -> h.addWaypoint(RequestWaypointInfo(latitude = lat, longitude = lon, waypointIndex = WaypointIndex.FIRST, poiId = "", poiName = name, poiSubId = "0", address = name))
+            "wp2" -> h.addWaypoint(RequestWaypointInfo(latitude = lat, longitude = lon, waypointIndex = WaypointIndex.SECOND, poiId = "", poiName = name, poiSubId = "0", address = name))
+            "wpinfo" -> h.getWaypointInfo()
+            "wprm" -> h.removeWaypoint(WaypointIndex.ALL)
             "state" -> { h.getRouteStateInfo(); h.getTBTInfo(); h.getCurrentLocationInfo() }
             "options" -> h.requestNavigationScreen(ai.pleos.playground.navi.data.NavigationScreenRequest.RouteOptionList) // 내비의 경로 옵션 목록 화면
             "opt" -> h.changeRouteOption(ai.pleos.playground.navi.constants.RouteOption.valueOf(i.getStringExtra("opt") ?: "COMFORTABLE")) // 아기 잠: '편한 길'로 재탐색
@@ -59,6 +62,7 @@ class NaviProbe : Activity(), NaviHelperEventListener {
     override fun onReRouteEnded() = log("EVT reRouteEnded")
     override fun onRouteCancelled() = log("EVT routeCancelled")
     override fun onWaypointChanged(info: WaypointChangedInfo) = log("EVT waypointChanged $info")
+    override fun onWayPointInfo(list: List<ai.pleos.playground.navi.data.WaypointInfo>) = log("EVT wpInfo n=${list.size} ${list.map { "${it.name}@${it.latitude},${it.longitude} ${it.remainDistance}m" }}")
     override fun onError(code: NaviErrorCode) = log("EVT error $code")
     override fun onNavigationStatus(status: NavigationStatus) = log("EVT status $status")
     override fun onCurrentLocationInfo(info: CurrentLocationInfo) = log("EVT location ${info.latitude},${info.longitude} heading=${info.heading} ${info.address}")

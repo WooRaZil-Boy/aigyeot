@@ -20,6 +20,7 @@
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_TOLL" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.car.permission.CAR_SPEED" />
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
     <uses-permission android:name="pleos.car.permission.NAVI_CUSTOM_MAP" />
@@ -46,6 +47,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".AudioProbe" android:exported="true" />
+        <activity android:name=".GearProbe" android:exported="true" />
+        <activity android:name=".AmbientProbe" android:exported="true" />
         <activity android:name=".ScenarioProbe" android:exported="true" />
         <activity android:name=".NaviProbe" android:exported="true" android:launchMode="singleTask" />
         <activity android:name=".SoundProbe" android:exported="true" />
