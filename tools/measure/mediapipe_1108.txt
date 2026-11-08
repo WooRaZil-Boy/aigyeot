@@ -1,0 +1,42 @@
+tasks-audio 0.10.14 -> 0.10.32 비교 확인 — 2026-11-08(mediapipe_1108)
+변경: gradle/libs.versions.toml `mediapipe = "0.10.14"` -> `"0.10.32"` 한 줄(명세서 17장 C327). 컴파일 오류 없음.
+환경: AVD PleosProbe(emulator-5560, arm64), 운전자 user 10, kr.aigyeot.app debug. 프로브(dev.probe.pleos)는 없었음. 잠금 파일 /tmp/aigyeot-emulator.lock 만들고 끝나면 지움. emulator-5554·실기기는 건드리지 않음.
+        old = 0.10.14로 빌드한 debug APK, new = 0.10.32로 다시 빌드한 debug APK(같은 작업 트리).
+
+== 1. APK ==
+| APK | 크기(바이트) | libmediapipe_tasks_audio_jni.so ABI(바이트) |
+| old 0.10.14 | 93762423  | arm64-v8a 7524376, armeabi-v7a 4626308, x86 8840992 (x86_64 없음) |
+| new 0.10.32 | 113484279 | arm64-v8a 6064960, armeabi-v7a 4068840, x86 9121944, x86_64 7997696 |
+-> x86_64가 처음 들어왔다. APK는 약 19.7MB(21%) 커졌다.
+
+== 2. 시험(tools/check.sh 쓰지 않음) ==
+`./gradlew :engine:test :shared:test :app:testDebugUnitTest :phone:testDebugUnitTest` BUILD SUCCESSFUL.
+| 모듈 | 시험 수 | 건너뜀 | 실패 |
+| engine | 561 | 1 | 0 |
+| shared | 4 | 0 | 0 |
+| app | 844 | 2 | 0 |
+| phone | 64 | 0 | 0 (phone 작업은 UP-TO-DATE, 앞 실행 결과를 재사용) |
+
+== 3. 같은 PCM 두 버전 비교(DetectReplayActivity, logcat -s DETECT:I) ==
+방법: old.apk 설치 -> PCM 3개를 run-as로 files에 넣고 실행 -> DETECT 줄 저장 -> new.apk를 install -r -> 같은 PCM으로 실행. 값은 구간별 울음 확률(소수 둘째 자리) 전부 비교.
+| 파일 | 구간 수 | 최대 차이 | 차이 0.01 이상인 구간 | 경보 old / new |
+| cont_75s | 75 | 0.00 | 없음 | true / true |
+| stop_40s | 19 | 0.00 | 없음 | true / true |
+| stop_50s | 19 | 0.00 | 없음 | true / true |
+처리 시간(참고, 10초 단위 아님): score 중앙값 old 4466/3570/3322us -> new 4003/3099/2839us(cont_75s/stop_40s/stop_50s). cont_75s p99는 12139us -> 25293us(한 번의 최댓값이라 판단하지 않음).
+한계: 두 쪽 모두 소수 둘째 자리로 찍히므로 0.01보다 작은 차이는 알 수 없다.
+
+== 4. 장면 A·B (new.apk, tools/demo/prepare.sh new.apk -> 장면 -> reset.sh) ==
+맥 1분 평균: 회차 구간 최대(30초 간격).
+| 회차 | 시각 | 맥 1분 평균 최대 | 결과 줄(run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,…) | 판정 |
+| A | 17:07:15~17:27:46 | 8.72 | 1,1,true,,3146,154,bus100_audio_zone_1,false,1,55846,55846,0,0,0,0,, | 통과 |
+| B | 17:28:28~17:36(끝 시각 미기록) | 7.41 | 1,2,true,,2433,38,bus100_audio_zone_1,false,2,111932,111932,0,0,0,0,,1.000 | 통과 |
+앞 기록(emulator_1108)과 비교: A 3,169ms -> 3,146ms, B 2,426~2,488ms -> 2,433ms. 같은 범위.
+B 시도 2의 17:34:31 HVAC_TEMPERATURE_SET 읽기 22.0 -> S04 "실내가 27도예요. 2도 낮췄어요." 발화 확인(앞 기록과 같은 문장).
+logcat에 UnsatisfiedLinkError·MIC_ERROR·MediaPipe 오류 줄 없음.
+참고: 장면 A는 처음 한 번 반복 기본값(5회)으로 잘못 시작해 멈췄고(A-20261108-1705.csv, 결과 아님), 반복 1로 다시 돌린 것이 위 A다.
+저장 위치 앱 files/scenario-results: A-20261108-1707, B-20261108-1728.
+
+== 5. 확인하지 못한 것 ==
+- x86_64 이미지 실행: 맥(Apple Silicon)에서 못 해 미판정. APK에 x86_64 .so가 들었다는 것까지만 확인.
+- 0.01 미만 차이, 실기기(5554 이미지·안드로이드 휴대폰) 확인은 하지 않음.

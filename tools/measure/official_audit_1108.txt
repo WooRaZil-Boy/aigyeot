@@ -1,0 +1,283 @@
+공식 문서 감사 후속 실측 (11-08) — Pleos 에뮬레이터 PleosProbe, 포트 5560, 프로브 dev.probe.pleos
+기기: Pleos/crp_avd_arm64 release_connect_v2.1.0, Vehicle 2.3.2, NaviHelper 3.0.5(navi-data 3.0.4). 모든 adb는 -s emulator-5560, 운전자 user 10.
+맥 1분 평균 부하 최대: 8.22 (측정 중 7.5~8.2 구간이 최대, 대부분 5.5~7). CarService·system_server 재시작 없음 -> 무효 회차 없음.
+프로브 추가 코드: GearProbe.kt(전체), AmbientProbe.kt(전체), NaviProbe.kt(wp2·wpinfo·wprm, onWayPointInfo), AndroidManifest.xml(CAR_POWERTRAIN, GearProbe, AmbientProbe).
+
+==================================================================
+1. 기어 공개 경로 (P2-2)
+==================================================================
+명령: adb shell pm list permissions -f -g | grep -A4 "permission:android.car.permission.CAR_POWERTRAIN"
+  + permission:android.car.permission.CAR_POWERTRAIN / package:com.android.car.updatable / label:차량 파워 트레인 정보 읽기 / protectionLevel:normal
+  (pm grant 시도 -> "not a changeable permission type" = 설치 때 자동 부여되는 normal 권한)
+  dumpsys package: android.car.permission.CAR_POWERTRAIN: granted=true ; 프로브 checkSelfPermission=0(GRANTED)
+방법: GearProbe — Car.createCar -> CarPropertyManager.registerCallback(VehiclePropertyIds.GEAR_SELECTION=289408000, ONCHANGE) + 1초마다 getIntProperty, 같은 시각 Vehicle.getGear().getCurrentGearSelectionState().
+VC: PUT /vehicle/gear?gear=Park -> Drive -> Reverse -> Neutral -> Drive -> Park (4초 간격)
+VCSET Park 11:00:35
+VCSET Drive 11:00:40
+VCSET Reverse 11:00:44
+VCSET Neutral 11:00:48
+VCSET Drive 11:00:52
+VCSET Park 11:00:56
+11-08 11:00:32.394 17960 17960 I GEAR    : PERM CAR_POWERTRAIN granted=0
+11-08 11:00:32.421 17960 17960 I GEAR    : CAR ready=true
+11-08 11:00:32.424 17960 17960 I GEAR    : PUB register=true propId=289408000
+11-08 11:00:32.685 17960 17960 I GEAR    : PUB onChange gear=4 areaId=0 status=0
+11-08 11:00:40.239 17960 17960 I GEAR    : PUB onChange gear=8 areaId=0 status=0
+11-08 11:00:44.259 17960 17960 I GEAR    : PUB onChange gear=2 areaId=0 status=0
+11-08 11:00:48.293 17960 17960 I GEAR    : PUB onChange gear=1 areaId=0 status=0
+11-08 11:00:52.316 17960 17960 I GEAR    : PUB onChange gear=8 areaId=0 status=0
+11-08 11:00:56.460 17960 17960 I GEAR    : PUB onChange gear=4 areaId=0 status=0
+-- PAIR 줄을 연속 중복 제거한 것(public=공개 경로 정수, pleos=Vehicle.getGear)
+   8 PAIR public=4 pleos=GEAR_PARK
+   4 PAIR public=8 pleos=GEAR_DRIVE
+   4 PAIR public=2 pleos=GEAR_REVERSE
+   4 PAIR public=1 pleos=GEAR_NEUTRAL
+   4 PAIR public=8 pleos=GEAR_DRIVE
+   4 PAIR public=4 pleos=GEAR_PARK
+VC 응답 actual.value: Park, Drive, Reverse, Neutral, Drive, Park (모두 source=web)
+값 대응(공개 정수 = VehicleGear 비트): 4=PARK=GEAR_PARK, 8=DRIVE=GEAR_DRIVE, 2=REVERSE=GEAR_REVERSE, 1=NEUTRAL=GEAR_NEUTRAL. 여섯 번 전이 모두 onChange가 왔고 Pleos 값과 항상 일치.
+판정: 바꿀 수 있음. 공개 AAOS 경로(CAR_POWERTRAIN, normal, 자동 부여)로 P/D/R/N이 온다. 이 에뮬레이터 한정(실차는 미확인).
+
+==================================================================
+2. 경유지 FIRST 덮어쓰기 (P2-5)
+==================================================================
+방법: NaviProbe route(서울권 출발 -> 대전 36.3504,127.3845) 뒤 wp(FIRST)/wp2(SECOND)/wpinfo(getWaypointInfo)/wprm(removeWaypoint(ALL)). 리스너: onWaypointChanged, onWayPointInfo(List<WaypointInfo>), onError.
+관찰: 경유지를 넣으면 먼저 routeCancelled->FREE_DRIVE가 오고 약 8~10초 뒤 waypointChanged+ROUTE_DRIVE가 온다. 그 사이 getWaypointInfo는 n=0을 돌려준다(재탐색 중). 대기를 20초로 늘려서 쟀다.
+onError는 어느 단계에서도 오지 않았다.
+
+회차 A (대기 짧아 해석 어려웠던 첫 회차 두 개는 참고만. 아래는 대기 20초 회차):
+-- 회차 A 로그(경유A 37.0,127.0 -> 경유B 36.8,127.15 -> SECOND C -> FIRST D)
+  CMD route 36.3504,127.3845 대전
+  INIT ok
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT routeStarted RouteStartInfo(duration=7500, distance=141000, tollFare=6190, name=대전, remainDestinationChargingValue=58018)
+  EVT status ROUTE_DRIVE
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=0 []
+  CMD wp 37.0,127.0 경유A
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT waypointChanged WaypointChangedInfo(index=FIRST, cmdType=ADD, routeStartInfo=RouteStartInfo(duration=3180, distance=58000, tollFare=15960, name=경유A, remainDestinationChargingValue=69567))
+  EVT status ROUTE_DRIVE
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=1 [경유A@0.0,0.0 58000m]
+  CMD wp 36.8,127.15 경유B
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT waypointChanged WaypointChangedInfo(index=FIRST, cmdType=ADD, routeStartInfo=RouteStartInfo(duration=3180, distance=58000, tollFare=11270, name=경유A, remainDestinationChargingValue=69566))
+  EVT status ROUTE_DRIVE
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=2 [경유A@0.0,0.0 58000m, 경유B@0.0,0.0 95000m]
+  CMD wp2 36.6,127.3 경유C
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=2 [경유A@0.0,0.0 58000m, 경유B@0.0,0.0 95000m]
+  CMD wp 36.9,127.05 경유D
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=2 [경유A@0.0,0.0 58000m, 경유B@0.0,0.0 95000m]
+
+회차 B (순서가 삽입순인지 거리순인지 가르려고 먼 곳을 먼저, 가까운 곳을 나중에 FIRST로 넣음)
+  CMD route 36.3504,127.3845 대전
+  INIT ok
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT routeStarted RouteStartInfo(duration=7500, distance=141000, tollFare=6190, name=대전, remainDestinationChargingValue=58017)
+  EVT status ROUTE_DRIVE
+  CMD wp 36.8,127.15 경유E먼
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT waypointChanged WaypointChangedInfo(index=FIRST, cmdType=ADD, routeStartInfo=RouteStartInfo(duration=4020, distance=74000, tollFare=7490, name=경유E먼, remainDestinationChargingValue=66977))
+  EVT status ROUTE_DRIVE
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=1 [경유E먼@0.0,0.0 74000m]
+  CMD wp 37.3,127.1 경유F가까움
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT waypointChanged WaypointChangedInfo(index=FIRST, cmdType=ADD, routeStartInfo=RouteStartInfo(duration=4020, distance=74000, tollFare=16620, name=경유E먼, remainDestinationChargingValue=66971))
+  EVT status ROUTE_DRIVE
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=2 [경유E먼@0.0,0.0 74000m, 경유F가까움@0.0,0.0 135000m]
+  CMD wp2 36.6,127.3 경유G
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=2 [경유E먼@0.0,0.0 74000m, 경유F가까움@0.0,0.0 135000m]
+  CMD wprm 0.0,0.0 test
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT waypointChanged WaypointChangedInfo(index=FIRST, cmdType=REMOVE, routeStartInfo=RouteStartInfo(duration=7500, distance=141000, tollFare=6190, name=대전, remainDestinationChargingValue=58011))
+  EVT status ROUTE_DRIVE
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=0 []
+  CMD wp2 36.8,127.15 경유H
+  EVT routeCancelled
+  EVT status FREE_DRIVE
+  EVT wpInfo n=0 []
+  EVT waypointChanged WaypointChangedInfo(index=FIRST, cmdType=ADD, routeStartInfo=RouteStartInfo(duration=4020, distance=74000, tollFare=7490, name=경유H, remainDestinationChargingValue=66964))
+  EVT status ROUTE_DRIVE
+  CMD wpinfo 0.0,0.0 test
+  EVT wpInfo n=1 [경유H@0.0,0.0 74000m]
+
+요약:
+ 1) FIRST로 A 추가 -> wpInfo [A].
+ 2) 이미 A가 있는데 FIRST로 B 추가 -> wpInfo [A, B]. A가 사라지지 않았고 B는 앞이 아니라 뒤(두 번째 칸)로 붙었다. 회차 B에서 먼 곳(E, 74km)을 FIRST, 가까운 곳(F)을 나중에 FIRST로 넣었는데 [E, F]로 나왔다. 거리순 정렬이 아니라 삽입순이다. 두 번째 추가의 waypointChanged도 index=FIRST로 온다(index 필드를 믿을 수 없다).
+ 3) 두 칸이 찬 상태에서 SECOND로 C, FIRST로 D -> 이벤트도 onError도 없고(20초 대기, 두 번 확인) wpInfo는 [A, B] 그대로. 조용히 무시된다.
+ 4) removeWaypoint(ALL) -> routeCancelled 뒤 waypointChanged(index=FIRST, cmdType=REMOVE), wpInfo n=0, 경로는 목적지만 남아 재개.
+ 5) 빈 상태에서 SECOND로 추가(wp2 H) -> waypointChanged index=FIRST, wpInfo [H]. 인덱스 인자는 무시되고 "다음 빈 칸에 붙이는 큐"로 동작한다.
+판정: 덮어쓰기 아님, 끼워 넣기도 아님. 인덱스 인자와 무관하게 빈 칸에 뒤로 붙고, 두 칸이 차면 응답 없이 무시. (이 에뮬레이터 내비 앱 한정.)
+앱 영향: 추가 뒤 onWaypointChanged(약 8~10초)와 getWaypointInfo 개수로 확인해야 하며, 두 칸이 찬 경우 onError가 없으므로 시간 초과를 실패로 다뤄야 한다. 휴게소 경유지를 바꾸려면 removeWaypoint 뒤 다시 추가.
+
+==================================================================
+3. 화면 방향과 창 경계 (프로브 MainActivity 대신 같은 매니페스트의 GearProbe를 썼다)
+   이유: MainActivity는 시작할 때 앰비언트·실내등·공조를 실제로 바꾸는 쓰기 시험이 들어 있어 상태를 오염시킨다. 방향은 액티비티 속성이라 같다.
+==================================================================
+디스플레이: wm size = 1920x1080, density 160.
+## (a) 지정 없음 GearProbe
+Physical size: 1920x1080
+  * Task{e3dd87 #1000339 type=standard A=1010174:dev.probe.pleos U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+    mBounds=Rect(640, 90 - 1896, 940)
+      rootOfTask=true task=Task{e3dd87 #1000339 type=standard A=1010174:dev.probe.pleos}
+      overrideOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+      requestedOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+  * Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+    mBounds=Rect(0, 0 - 640, 940)
+      rootOfTask=true task=Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview}
+      overrideOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+      requestedOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+    * Task{c85c301 #1000327 type=home A=1001000:ai.umos.homescreen U=10 rootTaskId=1 visible=true visibleRequested=true mode=fullscreen translucent=false sz=1}
+        rootOfTask=true task=Task{c85c301 #1000327 type=home A=1001000:ai.umos.homescreen}
+        overrideOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+        requestedOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+  * Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app U=10 visible=false visibleRequested=false mode=multi-window translucent=true sz=1}
+    mBounds=Rect(640, 90 - 1896, 940)
+      rootOfTask=true task=Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app}
+      overrideOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+      requestedOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+  topDisplayFocusedRootTask=Task{e3dd87 #1000339 type=standard A=1010174:dev.probe.pleos}
+      mPreferredTopFocusableRootTask=Task{e3dd87 #1000339 type=standard A=1010174:dev.probe.pleos}
+      mLastFocusedRootTask=Task{e3dd87 #1000339 type=standard A=1010174:dev.probe.pleos}
+      * Task{e3dd87 #1000339 type=standard A=1010174:dev.probe.pleos U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+      * Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+        * Task{c85c301 #1000327 type=home A=1001000:ai.umos.homescreen U=10 rootTaskId=1 visible=true visibleRequested=true mode=fullscreen translucent=false sz=1}
+      * Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app U=10 visible=false visibleRequested=false mode=multi-window translucent=true sz=1}
+        (multi-window) Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview}
+        (multi-window) Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app}
+        (multi-window) Task{e3dd87 #1000339 type=standard A=1010174:dev.probe.pleos}
+
+## (b) landscape GearProbe
+Physical size: 1920x1080
+  * Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+    mBounds=Rect(640, 90 - 1896, 940)
+      rootOfTask=true task=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+      overrideOrientation=SCREEN_ORIENTATION_LANDSCAPE
+      requestedOrientation=SCREEN_ORIENTATION_LANDSCAPE
+  * Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+    mBounds=Rect(0, 0 - 640, 940)
+      rootOfTask=true task=Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview}
+      overrideOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+      requestedOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+        overrideOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+        requestedOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+  * Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app U=10 visible=false visibleRequested=false mode=multi-window translucent=true sz=1}
+    mBounds=Rect(640, 90 - 1896, 940)
+      rootOfTask=true task=Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app}
+      overrideOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+      requestedOrientation=SCREEN_ORIENTATION_UNSPECIFIED
+  topDisplayFocusedRootTask=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+      mPreferredTopFocusableRootTask=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+      mLastFocusedRootTask=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+      * Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+      * Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+      * Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app U=10 visible=false visibleRequested=false mode=multi-window translucent=true sz=1}
+        (multi-window) Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview}
+        (multi-window) Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app}
+        (multi-window) Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+Requested w=1256 h=850
+Requested w=1256 h=850
+
+## (c) 내비 실행 뒤(프로브 landscape)
+  * Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+    mBounds=Rect(640, 90 - 1896, 940)
+      rootOfTask=true task=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+  * Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+    mBounds=Rect(0, 0 - 640, 940)
+      rootOfTask=true task=Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview}
+  * Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app U=10 visible=false visibleRequested=false mode=multi-window translucent=true sz=1}
+    mBounds=Rect(640, 90 - 1896, 940)
+      rootOfTask=true task=Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app}
+  topDisplayFocusedRootTask=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+      mPreferredTopFocusableRootTask=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+      mLastFocusedRootTask=Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+      * Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+      * Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview U=10 visible=true visibleRequested=true mode=multi-window translucent=true sz=1}
+      * Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app U=10 visible=false visibleRequested=false mode=multi-window translucent=true sz=1}
+        (multi-window) Task{e56f40b #1000329 type=standard A=1010149:ai.umos.drivingview}
+        (multi-window) Task{7090ddb #1000330 type=standard A=1010123:ai.umos.maps.android.navigation.app}
+        (multi-window) Task{aa92a75 #1000340 type=standard A=1010174:dev.probe.pleos}
+
+앱 창 구성(dumpsys window, GearProbe 창): mFullConfiguration ... sw1080dp w1256dp h850dp 160dpi land, mBounds=Rect(640, 90 - 1896, 940), mAppBounds 같음, mMaxBounds=Rect(0,0 - 1920,1080), mWindowingMode=multi-window. Requested w=1256 h=850. (a)(b) 둘 다 같다.
+같은 화면 왼쪽: ai.umos.drivingview 태스크 mBounds=Rect(0, 0 - 640, 940), w640dp h850dp 'port', multi-window. 내비 앱(ai.umos.maps.android.navigation.app)도 앱 영역이 똑같이 (640,90 - 1896,940)이고 visible=false로 대기하며 동시에 두 앱이 보이지는 않았다(앱 영역은 한 번에 한 앱, 왼쪽은 drivingview).
+판정:
+ (a) 방향 지정 없음: requestedOrientation=UNSPECIFIED, 창 1256x850(dp), 공식 설명의 'portrait·창 하나'와 달리 가로 구성의 앱 영역에 들어갔다. 에뮬레이터 멀티윈도우 한 칸.
+ (b) landscape 지정: requestedOrientation=LANDSCAPE, 창 경계·크기 (a)와 동일(1256x850).
+ -> 이 에뮬레이터에서는 landscape 지정 유무가 창 크기·경계를 바꾸지 않는다. 앱 영역은 1256x850dp 고정으로 설계 가능. 다른 앱과 나란히(내비+우리 앱 동시)는 재현하지 못함(미판정). 방향 지정 차이는 회전 시에만 나타날 수 있어 미확인.
+프로브 매니페스트는 원래대로(지정 없음) 되돌렸다.
+
+==================================================================
+4. 앰비언트 (기능 D 준비)
+==================================================================
+API: Vehicle 2.3.2 Light — checkAmbientLightBrightnessCapabilities(cfg, Map<SeatArea, AreaBounds<Int>>), checkAmbientLightBrightnessColorCapabilities(cfg, List<SeatArea>), checkAmbientColorAutoByDriveModeEnabledCapabilities(cfg), get/setAmbientColorAutoByDriveModeEnabled(Boolean).
+조건: 정차 = Park·0km/h, 주행 = VC Drive·speed=60 (state에서 speed_kph:60, gear Drive 확인). 시작 상태: 스위치 OFF, 색 ffffff, 밝기 70.
+-- 정차 로그(AmbientProbe --es phase stop)
+  INIT ok phase=stop
+  ERR capAuto a ERROR_NOT_SUPPORTED_PROPERTY
+  CAP color cfg=CapabilityConfig(accessType=READ_WRITE) areas=[ROW_1_LEFT, ROW_1_RIGHT, ROW_2_LEFT, ROW_2_CENTER, ROW_2_RIGHT]
+  CAP brightness cfg=CapabilityConfig(accessType=READ_WRITE)
+  CAP brightness area=ROW_1_LEFT, ROW_1_RIGHT, ROW_2_LEFT, ROW_2_CENTER, ROW_2_RIGHT bounds=AreaBounds(minValue=0, maxValue=100)
+  RANGE min=0 max=100
+  ERR getAuto Exception java.lang.IllegalArgumentException: property ID is not in carPropertyConfig list, and so it is not supported: 0x21200787
+  CAP switch cfg=CapabilityConfig(accessType=READ_WRITE) [ROW_1_LEFT, ROW_1_RIGHT, ROW_2_LEFT, ROW_2_CENTER, ROW_2_RIGHT=[AUTOMATIC, ON, OFF]]
+  READ switch=OFF
+  READ color=ffffff
+  READ brightness=70
+  SET#1 target=14 cb=14 readBack=14 OK
+  SET#2 target=28 cb=28 readBack=28 OK
+  SET#3 target=42 cb=42 readBack=42 OK
+  SET#4 target=57 cb=57 readBack=57 OK
+  SET#5 target=71 cb=71 readBack=71 OK
+  SET#6 target=85 cb=85 readBack=85 OK
+  RESULT phase=stop brightness applied 6/6
+  RESTORE brightness=70
+-- 주행 로그(phase drive, CAP 줄 생략)
+  INIT ok phase=drive
+  RANGE min=0 max=100
+  READ switch=OFF
+  READ color=ffffff
+  READ brightness=70
+  SET#1 target=14 cb=14 readBack=14 OK
+  SET#2 target=28 cb=28 readBack=28 OK
+  SET#3 target=42 cb=42 readBack=42 OK
+  SET#4 target=57 cb=57 readBack=57 OK
+  SET#5 target=71 cb=71 readBack=71 OK
+  SET#6 target=85 cb=85 readBack=85 OK
+  RESULT phase=drive brightness applied 6/6
+  RESTORE brightness=70
+
+판정:
+ 영역: SeatArea 한 객체 = [ROW_1_LEFT, ROW_1_RIGHT, ROW_2_LEFT, ROW_2_CENTER, ROW_2_RIGHT](5개 값이 묶인 실내 전체 한 영역). 운전석(ROW_1_LEFT)이 포함된다.
+ 밝기 범위: AreaBounds(minValue=0, maxValue=100). 접근 READ_WRITE. 스위치 지원 값 [AUTOMATIC, ON, OFF], 색 접근 READ_WRITE.
+ 읽기: 스위치 OFF, 색 0xffffff(알파 없이 24비트), 밝기 70.
+ 주행 모드 자동 색: 이 에뮬레이터는 지원하지 않는다. checkAmbientColorAutoByDriveModeEnabledCapabilities -> ERROR_NOT_SUPPORTED_PROPERTY, getAmbientColorAutoByDriveModeEnabled -> IllegalArgumentException "property ID is not in carPropertyConfig list ... 0x21200787". 기본값은 읽을 수 없음(미판정). 앱은 예외를 '꺼진 것으로 보지 않고 미지원'으로 다뤄야 한다.
+ 밝기 set: 정차 6/6, 주행(D, 60km/h) 6/6 (set 콜백 값 = 0.5초 뒤 되읽은 값). 색은 11-02에 6/6(tools/sim/babycare_Drive.txt).
+ 원래 값 복구: 각 회차 끝에 밝기 70으로 되돌렸고 주행 회차 시작 읽기가 70이어서 확인됨. 스위치·색은 set하지 않았다.
+ 권한: 프로브에 CAR_LIGHTS와 CONTROL_CAR_LIGHTS를 모두 선언한 상태에서 잼. 'CAR_LIGHTS만' 선언했을 때의 동작은 이번에도 미측정.
+
+==================================================================
+뒷정리
+==================================================================
+프로브 제거(adb -s emulator-5560 uninstall dev.probe.pleos -> Success), 잠금 파일 삭제, VC 세션 신호 프로세스 종료. 에뮬레이터 5560은 켜 둠. kr.aigyeot.app은 건드리지 않음.

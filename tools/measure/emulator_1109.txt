@@ -1,0 +1,63 @@
+# 장면 C2 D 전환 전 멈춤·장면 A 끝까지·리포트 steering 에뮬레이터 확인 — 2026-11-09(1109)
+환경: AVD PleosProbe(emulator-5560, Pleos), 운전자 user 10, kr.aigyeot.app debug(main 작업 트리, `./gradlew :app:assembleDebug` 새로 빌드 뒤 `adb install -r`, 앱 데이터는 지우지 않음).
+      tools/demo/prepare.sh(프로브 없음, user 10 설치·권한 3개·VC 세션 유지·기준값), 회차 앞 reset.sh, 끝에 stop.sh. 잠금 파일 /tmp/aigyeot-emulator.lock은 만들고 끝나서 지움.
+      emulator-5554·실기기는 건드리지 않음. 앱 프로세스 pid 6367은 처음부터 끝까지 그대로, FATAL·ANR 줄 0.
+      장면은 '시연·측정 → 장면 고르기·실행'에서 반복 1. 이번 VC 포트는 8088(prepare.sh 기본).
+      캡처·DB 사본은 작업용 폴더에 보관(저장소 밖).
+
+## 1. 장면 C2를 D 전환 전에 멈춤 — 통과
+장면 파일 C2.json: t=0 VC 기어 Park, t=10 VC 기어 Drive. 그 전에 멈추려고 실행 5초 뒤 '멈춤'을 눌렀다.
+(첫 시도는 멈춤 버튼 위치를 잘못 짚어 실행 10초 뒤에 눌렀다. 그 회차는 D 뒤에 멈춘 것이라 이 항목의 근거로 쓰지 않고 아래 참고에 따로 적는다.)
+회차: 실행 01:55:20.8 → 멈춤 01:55:26.05(장면 t≈5).
+- 앱이 죽지 않음: pid 6367 그대로, `FATAL`·`ANR in` 0줄. 통과.
+- 장면이 끝나고 원래 상태로: 01:55:26.027 `SCENARIO: 결과 …C2-20261109-0155.csv`, 줄 `1,5,false,2.0,…` / `summary,,0/1,2.0`(failed_step 2.0 = 멈춤으로 중단, 기대 미충족은 정상).
+  이어 01:55:26.07 마이크 입력 다시 시작(yamnet 로드). 화면은 장면 고르기 화면에 남았고 실행 버튼이 켜짐(홈으로 자동 이동은 하지 않음. 이 점이 '홈 화면으로 돌아감' 기대와 다르면 의도 확인 필요 — 미판정).
+- 장면 끝 뒤 새 알림 없음: 01:55:26 이후 `Notification posted … kr.aigyeot.app`은 id=2(마이크, 01:55:26.266)뿐. `dumpsys notification`의 notice(id=10·13)는 앞 회차 것. `doSpeak(kr.aigyeot.app)` 0줄. 통과.
+- 실제 기어 P 그대로: 멈춤 뒤 VC `GET /vehicle/state` → `actual.value":"Park"`(source web, timestamp 1794156921036 = 장면 t=0 Park). 장면의 D(t=10)는 일어나지 않음. 통과.
+- Boot 사건: 앱 로그에 Boot 관련 줄 없음(`Boot`·`stopEnded` 검색 0줄), stepLog도 이 회차 동안 0줄(세션 없음). 따라서 Boot의 stopEnded 값은 찍히지 않아 확인하지 못했다(미판정, 로그에 없다).
+- DB: 이 회차의 session 행 없음(D가 없어 세션이 열리지 않음).
+참고(D 뒤에 멈춘 첫 시도, 01:54:05 실행~01:54:18 멈춤): 01:54:15.057 VC 기어 Drive → 01:54:15.098 `stepLog 세션 01M6Y19ZSE… LISTENING`(session 표 scenario_id=C2). 멈춤 뒤에도 VC 실제 기어는 Drive·속도 90으로 남았고(장면이 올린 입력을 멈춤이 되돌리지 않음),
+  앱은 '차가 서 있을 때 쓸 수 있어요'(주행 제한 화면)였다. reset.sh로 P·정지로 되돌린 뒤 01:54:39 `stepLog 세션 IDLE`. 크래시 없음. 멈춤이 장면이 바꾼 VC 입력을 되돌리지 않는 것은 reset.sh가 맡는 현재 동작이다.
+
+## 2. 장면 A 끝까지 — 통과
+실행 01:56:08 → 끝 02:16:42.967(장면 1230초대).
+- 결과 줄: `1,1,true,,3148,288,bus100_audio_zone_1,false,1,55708,55708,0,0,0,0,,` / `summary,,1/1,,3148,288,…` → completed=true(모든 expect·expectNone 통과), 경보 지연 3148ms(알려진 값 3.13~3.17초대), 재생 시작까지 288ms, 시도 1회, 에피소드 재생 55,708ms, 이득·LUFS 위반 0, 시스템 볼륨 변화 0, 운전자 조작 0.
+- stepLog: 01:56:19.159 LISTENING → 02:01:22.321 ATTEMPT → 02:02:18.319 GAP → 02:02:26.666 CONFIRM → 02:02:56.890 LISTENING → 02:16:39.143 IDLE.
+- 장면 끝 뒤 거짓 알림 없음: IDLE(02:16:39) 이후 `doSpeak(kr.aigyeot.app)` 0줄(마지막 발화는 02:16:21.188 "도착했어요…", 각본 것). 끝 뒤 알림은 id=2 마이크(02:16:53.204)뿐. 새 notice 알림 0건.
+- FATAL 0줄. 실제 상태: VC 기어 Park, 홈 화면 '출발하면 듣기 시작해요'·듣기 켜짐(세션 없음 = IDLE).
+
+## 3. 장면 A 세션 DB·리포트 steering — 통과
+session 01M6Y1DRYK0000000000000001(run-as로 aigyeot.db 꺼내 sqlite3):
+- session: started_at 1794156979155 ~ ended_at 1794158199134, trigger DOOR_THEN_D, mic_path HOME_BUTTON, output_route REAR_ZONE, drive_min 20, played_ms 55708, cap_reached 0, report_pending 0, report_message_id 비어 있음, scenario_id A, driver_user_id 10.
+- episode 1행: trigger ALARM, alarm_at 1794157282313, alarm_delay_ms 3141, first_method LULLABY, first_result SUCCESS, second_action 없음, waypoint_added 0, guardian_notified 0, cry_ms 0, recried 0, played_ms 55708, exclude_reasons [].
+- play_log 1행: AUTO_FIRST, LULLABY, 1794157282605~1794157338313, played_ms 55708, end_reason DEADLINE.
+- alarm_log: 0행(기록만 한 경보 없음).
+- steer_window 20행(60초 창): excluded 0, speed_band 모두 2, reversals 합 0, observed 18·미관측 2.
+  울음 창(cry_present=1) 1개: start_at 1794157279470, playing 0, observed 0(울음 뒤 자동 시도 재생이 걸친 창). playing=1이고 observed=0인 창 1개: start_at 1794157339658.
+- outbox: 0행(표 전체). 장면 세션은 리포트를 중계로 보내지 않는다 — Store.kt:266 `reportPending = r.reportPending && scenario == null …`이라 scenario_id가 있는 세션은 report_pending=0이고 report_summary가 outbox에 만들어지지 않는다.
+  그래서 report_summary JSON의 steering 블록은 DB에서 꺼낼 수 없었다. 리포트 화면(주행 리포트, 장면 A 항목)이 같은 계산(Report.kt `steering()`)을 보여주므로 그 화면과 코드로 대신 확인했다.
+- steering 값(화면 '3. 평소 대비 조향' = '비교할 구간이 없어요'): available=false, baseline_per_min·during_cry_per_min·after_response_per_min·during_cry_z = null, unavailable_reason = no_comparable_window.
+  (JSON 직접 확인은 못 함. 화면 문구와 `steering()` 코드 분기로 추정 — 미판정에 가까운 대리 확인.)
+- 이유와 계약 대조(docs/contracts-link.md 3.3 `steering`): 이 세션에 울음 창이 1개 있고(cry 비어 있지 않음) 평소 창 기준선은 `baselineWindows()`가 `scenario_id IS NULL`인 실제 세션만 쓰는데, 실제 세션(01M6WGJDP3…, 11-08)의 steer_window는 0행이라
+  기준선 속도대가 비어 있다 → 'comparable' 비어 → `no_comparable_window`. 계약의 '같은 속도대 평소 창이 없으면 no_comparable_window(C112)'·'기준선은 실제 세션의 창만 쓴다(C97)'와 일치. `no_cry`가 아닌 이유도 맞다(울음 창이 있고 미관측 창도 있음).
+- 리포트 화면 나머지: '시뮬레이션 입력으로 만든 기록이에요', 02:01:22 울음 감지(지연 3.1초)·자장가 56초·결과 그쳤어요, 평균 50.0km/h·브레이크 0번·큰 조향 0번, 뒷자리 재생 1번 56초, 제어 기록 requestAudioFocus 성공 1.
+- 리포트 생성 예외: logcat에 앱 E 줄·예외 없음(W는 WindowOnBackDispatcher·Codec2Client·MediaCodec 일반 경고뿐).
+
+## 4. 정리
+tools/demo/stop.sh(세션 신호 유지·forward 8088 해제), 잠금 파일 삭제.
+
+## 확인하지 못한 것
+- Boot 사건의 stopEnded 값(로그에 Boot 줄이 없음).
+- report_summary JSON 원문의 steering 블록(장면 세션은 outbox에 리포트를 만들지 않음). 실제(장면 아닌) 세션의 steering 수치(기준선이 있는 경우)도 이번에 만들지 않았다.
+- '장면이 끝나고 홈 화면으로 돌아감': 멈춤 뒤 화면은 장면 고르기 화면에 남았다. 설계상 홈 이동이 기대인지는 확인하지 않았다.
+
+## 5. C348 장면 A 총 울음 시간 — 통과(결과 줄은 미판정)
+환경: 위와 같음(emulator-5560, user 10, main 작업 트리 새 빌드·설치, prepare.sh·reset.sh). 장면 A를 03:09에 실행했다. 반복 칸을 건드리지 않아 장면 파일 기본값(repeat 5)으로 돌았다(요청한 반복 1이 아니었다).
+1회차(03:09~03:29)와 2회차(03:30~)를 확인한 뒤 03:46에 앱을 force-stop하고 reset.sh로 되돌렸다. 3~5회차는 돌리지 않았다. 2회차 세션은 ended_at이 비어 있다(force-stop으로 끊김).
+- 결과 줄(completed true): 미판정. 결과 줄과 CSV는 반복이 모두 끝나야 써지는데 중간에 끊었고, 1회차 줄은 logcat 버퍼(2MiB)에서 밀려났다. FATAL·ANR 줄은 0(logcat에 남은 구간 기준). 경보 지연은 DB 값으로 대신 확인: 1회차 3212ms, 2회차 2431ms.
+- episode 행(run-as로 aigyeot.db·wal 꺼내 sqlite3, scenario_id A 두 세션): trigger ALARM, first_result SUCCESS.
+  1회차 alarm_delay_ms 3212, cry_ms 1950, played_ms 54911.
+  2회차 alarm_delay_ms 2431, cry_ms 1950, played_ms 55705.
+  C348 전(앞 절 02:02 회차) 같은 장면은 cry_ms 0이었다. 지금은 두 회차 모두 경보를 이룬 구간 2개 × 975ms = 1950ms. 통과.
+- 리포트 화면(주행 리포트 → 11.09 03:09~03:29 · 시뮬레이션): '03:14:31 울음 감지 (지연 3.2초)' 아래 '울음 2초'(1950ms 반올림). 0초 아님. 통과.
+- 참고: 총 울음 시간이 경보 구간 그대로(1950)라 장면 A의 40초 울음 뒤 더 이어진 울음이 더해지는지는 이 값으로 구분되지 않는다. 판정 대상 아님.

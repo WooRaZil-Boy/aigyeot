@@ -1,0 +1,114 @@
+# 새 설치 권한 흐름·기어·장면 A·B·C·장면 끝 거짓 알림·시연 화면·정차 화면 Back 에뮬레이터 확인 — 2026-11-08(1108)
+환경: AVD PleosProbe(emulator-5560, Pleos/crp_avd_arm64:14/RELEASE.release_connect_v2.1.0), 운전자 user 10, kr.aigyeot.app debug.
+      main 작업 트리(커밋 안 된 변경 전체, C319~C325 포함)를 `./gradlew :app:assembleDebug`로 새로 빌드해 `adb uninstall kr.aigyeot.app` 뒤 `-g` 없이 설치.
+      프로브(dev.probe.pleos)는 없었다(삭제 시도 → Failure[DELETE_FAILED_INTERNAL_ERROR] = 없음). 잠금 파일 /tmp/aigyeot-emulator.lock 만들고 끝나면 지움. emulator-5554·실기기는 건드리지 않음.
+녹음: stop_40s.pcm(A)·cont_75s.pcm(B)·stop_50s.pcm(C)·cont_long.pcm(D) — tools/demo/cry.sh로 넣음(1280000·2384640·1600000·2384640바이트 확인). 저장소에는 없음.
+실행: 장면은 '시연·측정 → 장면 고르기·실행'에서 반복 1로, 회차 앞에는 tools/demo/reset.sh. 부하는 맥 1분 평균(30초 간격 기록)의 회차 구간 최대.
+프로세스: system_server 769·com.android.car 1020(CarService)은 처음부터 끝까지 그대로. 앱은 27657(11:39~12:37) → 13823(12:37~)로 한 번 바뀌었다.
+          12:37:50쯤 내가 `am force-stop`으로 직접 죽인 것이고(장면 도중 아님), 이 전후 회차는 서로 다른 프로세스에서 끝까지 돌아 모두 유효.
+
+## 1. 새 설치 권한 흐름(C321 ①, C324) — 실패(속도 구독이 허용 뒤에 다시 붙지 않음)
+1) 설치 직후 `dumpsys package kr.aigyeot.app`(11:39:07):
+   install permissions: `android.car.permission.CAR_POWERTRAIN: granted=true` (설치 때 자동, C324 확인)
+   User 10 runtime permissions: `CAR_SPEED: granted=false`, `RECORD_AUDIO: granted=false`, `POST_NOTIFICATIONS: granted=false`
+2) `am start --user 10 -n kr.aigyeot.app/.MainActivity` → 권한 창 3개(위치 정보=CAR_SPEED → 오디오 녹음 → 알림)를 차례로 '허용'(앱 사용 중에만 허용 포함).
+   허용 뒤: `CAR_SPEED: granted=true, flags=[ USER_SET]`, `RECORD_AUDIO granted=true`, `POST_NOTIFICATIONS granted=true`. 이어 '아기 설정'(동의·별명·저장) 화면.
+3) 허용 전 로그(앱 pid 25756, 11:39:14.714): `E/CarPropertyManager: registerCallback:  propertyId is not in carPropertyConfig list:  PERF_VEHICLE_SPEED`
+   → 앱의 `Log.w("subscribe speed(CAR_SPEED 권한?)")` 줄은 로그에 없다. CarPropertyManager가 예외 대신 false를 돌려줬다는 뜻이다(Car.kt `subscribe`는 runCatching 안에서 예외가 없으면 `speedOn = true`).
+4) 허용 뒤 같은 프로세스에서 다시 구독됐는가: 아니오.
+   `dumpsys car_service`의 CarPropertyService 구독 수(propId별 'registered by N client(s)'):
+   | 시점 | 0x11400400 GEAR_SELECTION | 0x11600207 PERF_VEHICLE_SPEED |
+   | 허용 직후 같은 프로세스(11:40) | 10 | 3 |
+   | 앱 force-stop 직후 | 9 | 3 |
+   | 앱 다시 실행(권한은 이미 허용) | 10 | 4 |
+   → 허용 직후 프로세스는 속도에 안 붙어 있었고(3 → 3), 기어는 붙어 있었다(10 → 9). 허용된 상태에서 새로 뜬 프로세스는 속도에도 붙는다(3 → 4).
+   재현 순서(2차 확인, 11:41): `am force-stop` → `pm revoke --user 10 kr.aigyeot.app android.car.permission.CAR_SPEED` → 앱 실행 → 권한 창이 뜬 때 구독 수 속도 3(앱 pid 21698, 같은 시각 `E/CarPropertyManager … PERF_VEHICLE_SPEED` 다시 기록)
+   → '허용' 탭 → `CAR_SPEED granted=true`, 앱 pid 그대로 21698 → 5초 뒤에도 속도 구독 수 3 그대로.
+   원인 추정(코드 읽기, 계측 안 함): MainActivity의 권한 결과 콜백이 `g.exec.resubscribeSpeed()`를 부르지만(MainActivity.kt:46), `PleosCar.resubscribeSpeed()`는 `if (!speedOn) subscribe(c)`(Car.kt:150)라서
+   3)의 가짜 성공으로 `speedOn`이 이미 true이면 아무것도 하지 않는다. `registerCallback`의 반환값(Boolean)을 보지 않는 것이 원인으로 보인다. 코드는 고치지 않았다.
+5) VC로 속도를 바꾼 뒤 logcat에 속도 관련 앱 오류: 없음(속도 30·40·50 km/h 전달 뒤 `E`/`W` 앱 줄 없음). 다만 속도 구독이 안 붙은 프로세스에서 앱이 속도를 받았는지는 이 확인으로 판정하지 못했다(미판정).
+판정: 실패. CAR_POWERTRAIN 자동 허용은 통과, '새로 깔고 허용' 직후 같은 프로세스의 속도 재구독은 안 된다(앱을 다시 띄우면 붙는다). C321 ④의 목적(그 프로세스 동안 VehicleSample 없음 방지)이 이 경로에서는 이뤄지지 않았다.
+
+## 2. 기어 공개 경로(C324) — 통과
+- 구독 수: GEAR_SELECTION 10(앱 포함, force-stop 때 9로 줄고 다시 실행하면 10).
+- VC `PUT /vehicle/gear?gear=Drive`(11:42:10) → 시스템 쪽 `onChangeEvent(GEAR_SELECTION) >> 8`. 앱 쪽 확인은 장면 없이 실제 입구로: '아기 탔어요' 탭 → 뒷문 열고 닫기 → D(11:42:31.240)
+  → `I/host: stepLog 세션 01M6WGJDP3… LISTENING`(D가 앱에 들어와 세션이 열림). 이어 P(11:42:35) + 뒷문 열림(11:43:12.603) → `stepLog 세션 IDLE`(P와 뒷문이 앱에 들어와 세션이 닫힘).
+- 장면 A·B·C에서도 VC 기어 P → D → P가 매 회차 세션 LISTENING/IDLE로 이어짐(아래 3절).
+- 'gear read' 경고: 전 구간 0줄. 기어 구독 경고('subscribe gear') 0줄.
+
+## 3. 장면 A·B·C(새 설치에서) — A·B 통과, C는 내비 안내 없는 회차 실패(환경)·안내 있는 회차 통과
+| 회차 | 시각 | 맥 1분 평균 최대 | 결과 줄(run,seed,completed,failed_step,alarm_latency_ms,alarm_to_play_ms,…) | 판정 |
+| --- | --- | --- | --- | --- |
+| A | 11:44:26~12:04:59 | 6.60 | 1,1,true,,3169,169,bus100_audio_zone_1,false,1,55831,55831,0,0,0,0,, | 통과(유효) |
+| B1 | 12:06:15~12:13:52 | 4.98 | 1,2,true,,2441,39,bus100_audio_zone_1,false,2,111933,111933,0,0,0,0,,1.000 | 통과(유효) |
+| B2-1 | 12:14:47~12:22:25 | 6.40(B2 두 회차 합) | 1,2,true,,2488,44,bus100_audio_zone_1,false,2,111931,111931,0,0,0,0,,1.000 | 통과(유효) |
+| B2-2 | 12:22:27~12:30:02 | 같음 | 2,3,true,,2426,31,bus100_audio_zone_1,false,2,111939,111939,0,0,0,0,,1.000 | 통과(유효) |
+| C1 | 12:30:56~12:33:57 | 5.55 | 1,3,false,60.0,2632,52,bus100_audio_zone_1,false,1,55949,55949,0,0,0,0,, | 실패 — .txt: `run 1: t=60.0: expect Speak S09: 65.0초 안에 없음` |
+| C2 | 12:38:39~12:41:43 | 7.23 | 1,3,true,,3515,44,bus100_audio_zone_1,false,1,55956,55956,0,0,0,0,, | 통과(유효) |
+| B3(성능 재측정) | 12:43:34~12:51:12 | 6.83 | 1,2,true,,2440,42,bus100_audio_zone_1,false,2,111934,111934,0,0,0,0,,1.000 | 통과(유효) |
+무효 회차: 없음(CarService·system_server는 그대로, 앱 프로세스 교체는 회차 사이에만).
+기대 vs 결과(장면 파일 `expect`·`expectNone`, completed=true는 모든 기대를 만족한다는 뜻):
+- A: t=10 LISTENING ≤3초(12:44:36.268 stepLog LISTENING)·t=310 ATTEMPT 1·StartPlayback LULLABY·S02·GAP·CONFIRM·LISTENING·t=1212 S12·t=1230 뒷문 열림 → IDLE(12:04:56.246) 모두 통과. 울음 시작 12:49:36.263 → 시도 12:49:39.447.
+- B: ATTEMPT 1(12:11:17.999, 울음 입력 12:11:15.534), ATTEMPT 2(12:12:17.477)에서 LowerHvac(HVAC_TEMPERATURE_SET 22.0 → 20.0, setPropertyAsync onSuccess 12:12:17.527)·StartPlayback LULLABY·S04 "실내가 27도예요. 2도 낮췄어요."(12:12:17.626)·LISTENING 12:13:52.051 통과. 같은 문장이 모든 회차에서 나옴.
+- C(2회차): 12:39:43.941 "뒤에서 울어요. 뒷자리에 자장가 틀었어요."(S02) → 12:39:55.055 S06 "수유한 지 2시간 51분이에요. 배고플 수 있어요." → 12:40:06.791 S07 "7킬로미터 앞 안성휴게소(부산방향)에 수유실이 있어요. 들를까요?"
+  → 장면 YES → 내비 AddWaypoint(안성휴게소) → 12:40:21.942 S09 "안성휴게소(부산방향)를 경유지로 넣었어요." → expectNone StopPlayback·SendToPhone 위반 없음.
+- C1 실패 원인: 그 시점 내비에 목적지 안내가 없었다. 12:32:27.213 addWaypoint → 내비가 OnAddWaypointRequest(안성휴게소(부산방향))를 받았지만 경유지가 반영되지 않아 S09가 없었다.
+  1106a 기록(feature_ab_1106a.txt)과 같은 환경 조건 실패이며 코드 결함 단정은 아니다. 내비에서 '부산역 KTX'(378km)를 검색해 안내를 시작한 뒤(12:36) 다시 돌린 C2는 통과했다.
+  안내를 켜는 방법: 내비 검색칸 → `busan` → 'busanstation' → '부산역 KTX' 오른쪽 길안내 화살표 → 경로 미리보기의 '안내 시작'은 카운트다운이 끝나게 두어야 한다(탭하면 취소됨).
+- C1·C2 끝 로그에 '앱 화면이 없어 마이크를 다시 켜지 못함'이 붙는다(경유지를 넣으면 내비가 앞으로 와서 앱 화면이 없음. 알려진 조건, 1105c 기록과 같음).
+- 경보 지연: 위 표 값. 상한(시도 최대 A·C 1/B 2, 에피소드 재생 최대 111,939ms ≤ 112,000, 이득·LUFS 위반 0, 시스템 볼륨 변화 0, 운전자 조작 0, control_ok_rate B 1.000) 통과.
+  장면 A는 위상이 늘 같아 3.13~3.17초가 나오는 알려진 값(C100)이고 C2의 3,515ms는 회차마다 3.6초 이하 기준 안(명세서 15장). 유효 6회 중앙값 2,464ms.
+
+## 4. 장면 끝 거짓 알림 없음(C323 ②) — 통과
+장면 끝 7번(A 12:04:56, B1 12:13:52, B2-1 12:22:25, B2-2 12:30:02, C1 12:33:57, C2 12:41:40, B3 12:51:12) 모두, 끝(IDLE) 뒤에 logcat에
+- S16 발화(`doSpeak(kr.aigyeot.app)` 문장) 0줄. 끝 뒤 `Notification posted … kr.aigyeot.app`은 마이크 알림(id=2)뿐이다.
+- '아기가 탔나요?'(id=10, channel=notice)는 장면 t=5 뒷문 닫힘 단계에서만 올라온다(각본에 있는 ShowNotice·Speak, 12:06:20 등). 장면 끝에서 새로 올라온 것은 0건.
+- `dumpsys notification --noredact`(12:30, 두 번 연달아 B 뒤): 남은 알림은 아기가 탔나요?(id=10, t=5 단계 것)·듣기가 멈췄어요(id=13, 11:43 수동 확인 때 것)·마이크·모니터뿐.
+특히 B2는 B를 연달아 두 번(12:14:47~12:30:02, 반복 2) 돌린 구간이고 두 끝 모두 깨끗했다. 장면 끝 실제 상태는 P·IDLE·뒷문 닫힘.
+마이크 꺼짐 조건: C1·C2 끝은 앱 화면이 없어 마이크를 못 켠(꺼진) 상태였고 거짓 알림 없음. A·B 끝은 앱이 앞에 있어 마이크가 켜져 있었다(끝 직후 앱 화면이 '듣기 켜짐').
+  → B를 마이크 꺼진 상태로 연달아 두 번 돌린 조합은 확인하지 못했다(미판정, 위 C 두 번과 B 두 번으로 갈음).
+
+## 5. 시연 화면 '모든 기록 지우기'(C325 ②) — 통과
+장면 A 끝(12:05)과 C2 끝(12:42, 앱 프로세스 13823에서 장면 1번 돈 뒤) 두 번, uiautomator dump의 '모든 기록 지우기' 버튼 노드:
+`clickable="true" enabled="true" bounds="[848,339][1688,395]"` → 장면이 끝난 뒤 켜져 있다. (눌러 보지는 않았다. 기록이 지워지므로.)
+
+## 6. 정차 대기 화면 Back(C321) — 통과
+VC `gear=Drive`, `speed=40`(12:42) → 화면 '차가 서 있을 때 쓸 수 있어요'(앱) 위에 Pleos 오버레이 '주행 중에는 사용할 수 없습니다'. `adb shell input keyevent 4`(Back, 12:42:47):
+- `ActivityTaskManager: moveTaskToBack: Task{66a709c #1000346 … kr.aigyeot.app}` — finish가 아니라 뒤로 보냄.
+- Back 뒤 `dumpsys activity activities`: `Hist #0: ActivityRecord{7fa1e7a u10 kr.aigyeot.app/.MainActivity t1000346}` 그대로(끝나지 않음), ResumedActivity는 `ai.umos.drivingview/.DrivingViewActivity`(홈).
+
+## 7. 성능 — 별도 기록 perf_1108.txt
+
+## 확인하지 못한 것
+- 1절의 속도 구독이 안 붙은 프로세스에서 앱이 속도 값(VehicleSample)을 실제로 못 받았는지: 구독 수 3→3과 코드 읽기로 추정했을 뿐 계측하지 않았다(미판정).
+- 4절의 '마이크 꺼짐 상태에서 장면 B 연달아 두 번'(C 두 번·B 두 번으로 갈음).
+- 장면 D(cont_long)·C2·E·F14는 이번에 돌리지 않았다.
+- 실차 값(기어 4=P·8=D 등)은 에뮬레이터 값이다.
+
+## 1항 재확인(C326) — 통과
+환경: 같은 AVD(emulator-5560), 운전자 user 10. Car.kt `subscribe()`가 `registerCallback` 반환값으로 `speedOn`을 정한다(기어는 false면 경고 로그). 잠금 파일은 만들고 끝나서 지움.
+구독 수: `dumpsys car_service`에서 `propId: 0x11600207 is registered by N client(s).`(PERF_VEHICLE_SPEED=291504647), 기어는 `0x11400400`.
+순서: `install -r` → `am force-stop --user 10` → `pm revoke --user 10 kr.aigyeot.app android.car.permission.CAR_SPEED` → 구독 수 → `am start --user 10 -n kr.aigyeot.app/.MainActivity` → 권한 창 '허용'.
+| 시점 | 앱 pid | 속도 0x11600207 | 기어 0x11400400 |
+| revoke 뒤, 앱 시작 전 | (죽음) | 3 | 9 |
+| 앱 시작 뒤, 권한 창이 떠 있음 | 2405 | 3 | 10 |
+| '허용' 탭 5초 뒤 | 2405 | 4 | 10 |
+허용 전 로그(pid 2405, 12:57:09.272):
+  E/CarPropertyManager: registerCallback:  propertyId is not in carPropertyConfig list:  PERF_VEHICLE_SPEED
+  W/exec: subscribe speed(CAR_SPEED 권한?)
+허용 뒤: dumpsys package `CAR_SPEED: granted=true, flags=[ USER_SET]`. 같은 pid 2405에서 구독 수 3 → 4. `exec:W` 줄은 허용 뒤 로그에 없다(허용 전 줄은 로그 버퍼가 돌아 사라졌고, 위 두 줄은 허용 전에 따로 받아 둔 것). 기어 경고 없음.
+참고: 처음 '허용' 탭이 먹지 않았다. 앞선 장면이 속도 40·기어 D로 남아 있어 주행 제한 화면 뒤에 권한 창이 가려져 있었기 때문이다. VC로 `gear=Park`, `speed=0`을 보낸 뒤 탭이 먹었다(세션 신호를 포트 18560으로 보냄, 끝나고 forward 해제).
+판정: 통과(같은 프로세스에서 허용 직후 속도 구독이 붙음. 앞 기록은 3→3).
+확인하지 못한 것: 붙은 뒤 앱이 속도 값을 실제로 받는지(VehicleSample)는 이번에 보지 않았다.
+
+## C328 확인 — 통과(장면 끝 두 번)
+환경: 같은 AVD(emulator-5560), 운전자 user 10, debug APK(C328 고침 포함) install 뒤 tools/demo/prepare.sh, cry.sh로 장면 B 녹음(cont_75s.pcm) 넣음. VC 포트 18560. 잠금 파일은 만들고 끝나서 지움.
+순서: 기어 P에서 홈 '아기 탔어요'(예약: 홈 문구가 '출발하면 듣기 시작해요'로 바뀜) → 시연·측정 → 장면 고르기·실행에서 B, 반복은 장면 기본(3회 이상 돌아 두 번째 끝까지 봄) → 장면은 VC로 기어를 D로 남기고 끝남(`VC PUT /vehicle/gear?gear=Drive`).
+장면 끝 직후(반복 사이)의 실제 상태: 앱 로그 pid 20592
+  17:59:22.083 host: stepLog 세션 01M6X5PTHJ0000000000000001 LISTENING   (장면 세션)
+  17:59:22.672 host: stepLog 세션 IDLE                                  (장면 끝 복원 뒤 실제 상태: 세션 없음)
+  18:07:02.245 host: stepLog 세션 01M6X64VY30000000000000001 LISTENING   (두 번째 반복의 장면 세션)
+  18:07:02.846 host: stepLog 세션 IDLE
+Room session 표(run-as, user 10): 장면 B 세션 행(scenario_id=B)만 늘고, 시험 구간(17:51 이후) scenario_id가 비어 있는 실제 세션은 0건(`select count(*) from session where scenario_id is null and started_at>1794127000000` = 0). 크래시·FATAL 줄 없음.
+참고: 장면 끝~다음 반복 시작 사이가 3~10초라 '끝난 뒤 30초' 그대로는 재지 못했다. 반복이 이어지는 동안(두 번째 반복 시작 뒤 포함)에도 같은 쿼리 0건이었고, 마지막 반복은 앱을 force-stop해 끊었다(세 번째 반복의 끝은 보지 않음). reset.sh·stop.sh로 정리.
+고치기 전 코드로 같은 장면을 돌려 세션이 열리는 것은 이번에 다시 보지 않았다(단위 시험 c328_*가 고치기 전 실패함을 확인).
