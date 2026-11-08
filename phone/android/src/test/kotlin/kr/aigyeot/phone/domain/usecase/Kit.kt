@@ -10,9 +10,11 @@ import kotlinx.serialization.json.JsonObject
 import kr.aigyeot.phone.data.AppSongFileStore
 import kr.aigyeot.phone.data.FileCareRepository
 import kr.aigyeot.phone.data.FilePhoneStateRepository
+import kr.aigyeot.phone.data.inbound
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.CredentialRepository
+import kr.aigyeot.phone.domain.repository.InboxPage
 import kr.aigyeot.phone.domain.repository.LinkMarks
 import kr.aigyeot.phone.domain.repository.Logger
 import kr.aigyeot.phone.domain.repository.Mark
@@ -35,6 +37,7 @@ import kr.aigyeot.shared.PairResponse
 import kr.aigyeot.shared.PatchDeviceRequest
 import kr.aigyeot.shared.PatchDeviceResponse
 import kr.aigyeot.shared.Platform
+import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
 import kr.aigyeot.shared.SendMessageResponse
 import kr.aigyeot.shared.UploadSongResponse
@@ -57,9 +60,10 @@ class FakeRelay : RelayClient, RelaySocket {
     var deleteResult: RelayResult<Unit> = RelayResult.Ok(204, Unit)
     var inviteResult: RelayResult<InviteResponse> = RelayResult.Offline
     var sendResult: (Envelope) -> RelayResult<SendMessageResponse> = { RelayResult.Ok(201, SendMessageResponse(it.id, 1, 1, it.body)) }
-    var inboxResult: RelayResult<InboxResponse> = RelayResult.Ok(200, InboxResponse(emptyList(), false))
+    var inboxResult: (afterSeq: Long) -> RelayResult<InboxResponse> = { RelayResult.Ok(200, InboxResponse(emptyList(), false)) }
 
     val sent = mutableListOf<Envelope>()
+    val inboxAfter = mutableListOf<Long>()
     val acked = mutableListOf<List<String>>()
     val deleted = mutableListOf<String>()
     var listener: SocketListener? = null
@@ -71,7 +75,22 @@ class FakeRelay : RelayClient, RelaySocket {
     override suspend fun deleteMe(token: String) = deleteResult.also { deleted += token; ticket++ }
     override suspend fun invite(token: String) = inviteResult.also { ticket++ }
     override suspend fun send(token: String, env: Envelope) = sendResult(env).also { sent += env; ticket++ }
-    override suspend fun inbox(token: String, afterSeq: Long) = inboxResult.also { ticket++ }
+    /** 있으면 받은 함 요청이 이것이 끝날 때까지 답하지 않는다(도는 받기를 만든다). */
+    var inboxGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
+    /** 받은 함은 봉투(계약 DTO)로 정하고 진짜 바꾸기([inbound])를 거쳐 돌려준다. */
+    override suspend fun inbox(token: String, afterSeq: Long): RelayResult<InboxPage> {
+        inboxAfter += afterSeq
+        ticket++
+        val answer = inboxResult(afterSeq) // 중계는 요청을 받을 때 답을 정한다. 답이 늦게 올 뿐이다
+        inboxGate?.await()
+        return when (val r = answer) {
+            is RelayResult.Ok -> RelayResult.Ok(r.status, InboxPage(r.value.messages.map { it.inbound }, r.value.more))
+            is RelayResult.Err -> r
+            RelayResult.Offline -> RelayResult.Offline
+            RelayResult.Unreached -> RelayResult.Unreached
+        }
+    }
     override suspend fun ack(token: String, ids: List<String>): RelayResult<Unit> = RelayResult.Ok(200, Unit).also { acked += ids; ticket++ }
     override suspend fun putSong(token: String, songId: String, file: File): RelayResult<UploadSongResponse> = RelayResult.Ok(201, UploadSongResponse(songId, file.length()))
 
@@ -83,6 +102,8 @@ class FakeRelay : RelayClient, RelaySocket {
             override fun cancel() = Unit
         }
     }
+
+    override fun read(text: String) = runCatching { ProtocolJson.decodeFromString(Envelope.serializer(), text) }.getOrNull()?.inbound
 
     override fun ackFrame(ids: List<String>) = "ack:" + ids.joinToString(",")
 }
@@ -116,12 +137,19 @@ class MemoryCredentials(var stored: Credentials?) : CredentialRepository {
 
 class FakeNetwork : NetworkWatcher {
     var watching = false
+    private var onAvailable: () -> Unit = {}
     override fun watch(onAvailable: () -> Unit) {
         watching = true
+        this.onAvailable = onAvailable
     }
 
     override fun unwatch() {
         watching = false
+    }
+
+    /** 인터넷이 돌아왔다(보는 중일 때만 알린다). */
+    fun restore() {
+        if (watching) onAvailable()
     }
 }
 

@@ -6,7 +6,10 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kr.aigyeot.phone.domain.model.Inbound
+import kr.aigyeot.phone.domain.model.InboundMessage
 import kr.aigyeot.phone.domain.model.envelope
+import kr.aigyeot.phone.domain.repository.InboxPage
 import kr.aigyeot.phone.domain.repository.RelayClient
 import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.phone.domain.repository.RelaySocket
@@ -16,15 +19,22 @@ import okhttp3.Response
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.ErrorResponse
+import kr.aigyeot.shared.FeedingStateBody
+import kr.aigyeot.shared.HandoffAlertBody
 import kr.aigyeot.shared.InboxResponse
 import kr.aigyeot.shared.InviteResponse
 import kr.aigyeot.shared.PairRequest
 import kr.aigyeot.shared.PairResponse
+import kr.aigyeot.shared.PairedBody
 import kr.aigyeot.shared.PatchDeviceRequest
 import kr.aigyeot.shared.PatchDeviceResponse
 import kr.aigyeot.shared.Platform
 import kr.aigyeot.shared.ProtocolJson
+import kr.aigyeot.shared.ReportSummaryBody
+import kr.aigyeot.shared.Role
 import kr.aigyeot.shared.SendMessageResponse
+import kr.aigyeot.shared.SongStatusBody
+import kr.aigyeot.shared.UnpairedBody
 import kr.aigyeot.shared.UploadSongResponse
 import okhttp3.Call
 import okhttp3.EventListener
@@ -151,7 +161,9 @@ class OkHttpRelayClient(
     )
 
     override suspend fun inbox(token: String, afterSeq: Long) =
-        exec(request("/v1/inbox?after_seq=$afterSeq&limit=100", token).get().build(), parse(InboxResponse.serializer()))
+        exec(request("/v1/inbox?after_seq=$afterSeq&limit=100", token).get().build()) { text ->
+            parse(InboxResponse.serializer())(text).let { r -> InboxPage(r.messages.map { it.inbound }, r.more) }
+        }
 
     override suspend fun ack(token: String, ids: List<String>) = exec(
         request("/v1/ack", token).post(encode(Envelope.serializer(), ackEnvelope(ids))).build(),
@@ -186,6 +198,8 @@ class OkHttpRelayClient(
         }
     }
 
+    override fun read(text: String): Inbound? = runCatching { ProtocolJson.decodeFromString(Envelope.serializer(), text) }.getOrNull()?.inbound
+
     override fun ackFrame(ids: List<String>) = ProtocolJson.encodeToString(Envelope.serializer(), ackEnvelope(ids))
 
     private companion object {
@@ -194,5 +208,27 @@ class OkHttpRelayClient(
             buildJsonObject { put("ids", JsonArray(ids.map { JsonPrimitive(it) })) },
             System.currentTimeMillis(),
         )
+    }
+}
+
+/**
+ * 봉투(계약 DTO) → 도메인 [Inbound]. 받은 봉투를 바꾸는 곳은 여기 한 곳이다(iOS `Data/Protocol/EnvelopeMapping`의 `Envelope.inbound`).
+ * body를 type에 맞는 계약 값으로 읽는다. 모르는 판·type, 폰이 적용하지 않는 type(feeding_started 등), 읽지 못한 body는 Ignored(G19).
+ */
+internal val Envelope.inbound: Inbound
+    get() = Inbound(id, seq ?: 0, from?.role == Role.CAR, message(), car)
+
+private fun Envelope.message(): InboundMessage {
+    if (v != 1) return InboundMessage.Ignored
+    fun <B> read(s: KSerializer<B>, make: (B) -> InboundMessage): InboundMessage =
+        runCatching { ProtocolJson.decodeFromJsonElement(s, body) }.getOrNull()?.let(make) ?: InboundMessage.Ignored
+    return when (type) {
+        "paired" -> read(PairedBody.serializer(), InboundMessage::Paired)
+        "unpaired" -> read(UnpairedBody.serializer(), InboundMessage::Unpaired)
+        "feeding_state" -> read(FeedingStateBody.serializer(), InboundMessage::FeedingState)
+        "song_status" -> read(SongStatusBody.serializer(), InboundMessage::SongStatus)
+        "report_summary" -> read(ReportSummaryBody.serializer(), InboundMessage::Report)
+        "handoff_alert" -> read(HandoffAlertBody.serializer(), InboundMessage::HandoffAlert)
+        else -> InboundMessage.Ignored
     }
 }

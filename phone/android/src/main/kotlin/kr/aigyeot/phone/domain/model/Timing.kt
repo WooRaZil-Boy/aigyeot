@@ -17,8 +17,17 @@ const val STATE_REQUEST_GAP_MS = 10 * MINUTE
 /** 저장에 실패한 일꾼(보낼 함·연결 시작)이 다시 해 보기까지(iOS `retrySaveLater`와 같음, W 범주). */
 const val SAVE_RETRY_MS = 5_000L
 
-/** 소켓이 4008·429로 닫혔을 때 다시 붙기까지. */
+/** 소켓이 4008·429로 닫혔을 때 다시 붙기까지. 429에 Retry-After가 없을 때의 기다림도 이것이다(iOS `rateLimitDefault`). */
 const val RATE_LIMITED_WAIT_MS = 60_000L
+
+/**
+ * 429의 기다림(1.1): Retry-After, 없으면 60초, 1초보다 짧지 않게(받은 함·메시지·상태 요청·노래 PUT 한 곳, iOS `max(retryAfter ?? rateLimitDefault, 1)`).
+ * iOS는 받은 함·상태 요청에는 1초 하한이 없다(중계가 0을 보내지 않아 실제 차이는 없다).
+ */
+fun rateLimitWaitMs(retryAfterS: Long?): Long = maxOf(retryAfterS?.times(1000) ?: RATE_LIMITED_WAIT_MS, 1000L)
+
+/** 409 `song_quota`: 차가 켜져 파일을 처리한 뒤 다시(1.1, iOS `RetryPolicy.songQuota`). */
+const val SONG_QUOTA_WAIT_MS = 60_000L
 
 /** 앞에 있고 소켓이 붙어 있는 동안 기기 목록을 다시 받는 간격(설계값, 실측 아님). */
 const val DEVICE_POLL_MS = 60_000L

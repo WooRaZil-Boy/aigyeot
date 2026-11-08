@@ -28,6 +28,7 @@ import kr.aigyeot.phone.domain.model.creds
 import kr.aigyeot.phone.domain.model.envelope
 import kr.aigyeot.phone.domain.model.mergeDevices
 import kr.aigyeot.phone.domain.model.onAppOpen
+import kr.aigyeot.phone.domain.model.rateLimitWaitMs
 import kr.aigyeot.phone.domain.model.shouldRequestState
 import kr.aigyeot.phone.domain.model.stateRequestDone
 import kr.aigyeot.phone.domain.model.withMessageHold
@@ -40,8 +41,6 @@ import kr.aigyeot.phone.domain.repository.RelaySocket
 import kr.aigyeot.phone.domain.repository.SocketHandle
 import kr.aigyeot.phone.domain.repository.SocketListener
 import kr.aigyeot.phone.domain.state.AppVisibility
-import kr.aigyeot.shared.Envelope
-import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -98,8 +97,8 @@ class KeepConnected(
     fun start() {
         if (!visibility.visible.value || loop?.isActive == true || state.creds == null) return
         network.watch {
-            kick.trySend(Unit) // 기다림을 건너뛰고 바로 다시 붙고 보낼 함을 비운다
-            outbox.pump()
+            kick.trySend(Unit) // 기다림을 건너뛰고 바로 다시 붙고, 보낼 함의 망 실패 기다림도 당겨 비운다(7.5)
+            outbox.hurryNetworkWaits()
         }
         loop = scope.launch { connectLoop() }
     }
@@ -113,13 +112,13 @@ class KeepConnected(
     }
 
     /**
-     * 오프라인 띠의 '다시 시도'(7.2): 연결 반복의 기다림을 건너뛰어 다시 붙고, 중계에 한 번 물어 닿으면 띠를 끈다(iOS `refresh`와 같은 뜻).
-     * 보낼 함의 기다림(1·2·4…초, 429 Retry-After)은 건드리지 않는다.
+     * 오프라인 띠의 '다시 시도'(7.2): 연결 반복의 기다림을 건너뛰어 다시 붙고, 중계에 한 번 물어 닿으면 띠를 끈다(iOS `retryNow`와 같은 뜻).
+     * 보낼 함은 망 실패 기다림만 당긴다(7.5, 사용자 결정 11-07). 429 Retry-After·5xx 백오프와 받은 함 429 기다림은 지킨다.
      */
     fun retryNow() {
         kick.trySend(Unit)
         start()
-        outbox.pump()
+        outbox.hurryNetworkWaits()
         // 기기 목록은 owner만 볼 수 있다(guardian은 403): guardian은 다시 붙기(소켓이 열리면 온라인)에 맡긴다. 거듭 눌러도 한 번만 묻는다.
         val c = state.creds?.takeIf { it.role == Role.OWNER } ?: return
         if (retryCheck?.isActive == true) return
@@ -169,6 +168,13 @@ class KeepConnected(
         push.now(c)
         var attempts = 0
         while (state.isCurrent(c)) {
+            // 받은 함 429 기다림 중이면 기기 목록·소켓도 열지 않고 기한 뒤에 다시 한다(1.1, iOS `beginRefresh`와 같음). 깨워도 기한을 다시 본다.
+            inbox.inboxHoldUntil(c, clock.now())?.let { until ->
+                outbox.pump() // 보낼 함은 따로 보낸다(iOS와 같음)
+                kick.tryReceive()
+                withTimeoutOrNull(until - clock.now()) { kick.receive() }
+                continue
+            }
             // 붙을 때마다(통신이 돌아올 때 포함) 기기 목록을 다시 받고 상태 요청이 필요한지 다시 본다(7.4).
             if (!refreshDevices(c)) return
             val code = runSocket(c) { attempts = 0 }
@@ -262,7 +268,7 @@ class KeepConnected(
             is RelayResult.Err -> when (r.status) {
                 401 -> lose.lost(c)
                 // 상태 요청도 메시지 POST다: 같은 기다림에 넣어 보낼 함도 지키고, 끝나면 다시 판단한다(1.1). 옛 연결의 늦은 429는 새 연결을 멈추지 않는다.
-                429 -> if (state.isCurrent(c)) (r.retryAfterS?.times(1000) ?: backoffMs(0)).let { w ->
+                429 -> if (state.isCurrent(c)) rateLimitWaitMs(r.retryAfterS).let { w ->
                     outbox.holdInMemory(c, clock.now() + w)
                     state.commit(c) { it.withMessageHold(clock.now(), w) }
                     retryStateAt(c, clock.now() + w)
@@ -350,7 +356,8 @@ class KeepConnected(
                         _status.update { it.copy(socket = true) }
                         observedBySocket(c, true)
                         disconnect.stillPaired(c)
-                        if (inbox.sync(c) != SyncInbox.Sync.DONE) break // 실패하면 끊고 기다림 뒤 다시 붙는다
+                        // 도는 받기(푸시 등)는 이 접속 전 것이라 끝난 뒤 한 번 더 받는다. 실패하면 끊고 기다림 뒤 다시 붙는다
+                        if (inbox.sync(c, fresh = true) != SyncInbox.Sync.DONE) break
                         onOpen() // 받은 함까지 저장했을 때만 기다림을 처음으로(저장이 계속 실패하면 늘어난 간격으로 다시 붙는다, iOS와 같음)
                         outbox.pump()
                     }
@@ -376,9 +383,9 @@ class KeepConnected(
 
     /** 저장하지 못했으면 거짓: ack 없이 연결을 닫게 해, 재접속 뒤 받은 함에서 다시 받는다(5.6, 8.3). */
     private suspend fun handleFrame(c: Credentials, ws: SocketHandle, text: String): Boolean {
-        val env = runCatching { ProtocolJson.decodeFromString(Envelope.serializer(), text) }.getOrNull() ?: return true
-        if (!inbox.store(c, env, live = true)) return !state.isCurrent(c) // 세대가 바뀐 경우는 반복이 알아서 끝난다
-        ws.send(socket.ackFrame(listOf(env.id)))
+        val m = socket.read(text) ?: return true
+        if (!inbox.store(c, m, live = true)) return !state.isCurrent(c) // 세대가 바뀐 경우는 반복이 알아서 끝난다
+        ws.send(socket.ackFrame(listOf(m.id)))
         if (state.state.value.outbox.isNotEmpty()) outbox.pump()
         return true
     }

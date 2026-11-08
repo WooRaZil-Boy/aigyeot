@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.OutboxItem
+import kr.aigyeot.phone.domain.model.OutboxPayload
 import kr.aigyeot.phone.domain.model.SendResult
 import kr.aigyeot.phone.domain.model.SongSend
 import kr.aigyeot.phone.domain.model.removeSong
@@ -147,10 +148,10 @@ class RecordSong(
 class UploadSong(private val relay: RelayClient, private val songs: SongFileStore) {
     /** 아직 올리지 않은 노래 항목이면 올린 결과, 올릴 것이 없으면 null(이어서 봉투를 보낸다). */
     suspend operator fun invoke(c: Credentials, item: OutboxItem): SendResult? {
-        val name = item.songFile?.takeIf { !item.uploaded } ?: return null
-        val file = songs.file(name)
+        val song = (item.payload as? OutboxPayload.Song)?.takeIf { !it.uploaded } ?: return null
+        val file = songs.file(song.file)
         if (!file.exists()) return SendResult.Failed(415, "file_missing")
-        return when (val r = relay.putSong(c.token, item.songId!!, file)) {
+        return when (val r = relay.putSong(c.token, song.songId, file)) {
             is RelayResult.Ok -> SendResult.Uploaded
             is RelayResult.Err -> if (r.code == "already_exists") SendResult.Uploaded else SendResult.Failed(r.status, r.code, r.retryAfterS)
             RelayResult.Offline, RelayResult.Unreached -> SendResult.Offline

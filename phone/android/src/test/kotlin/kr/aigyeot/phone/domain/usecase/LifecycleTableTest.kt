@@ -6,8 +6,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.yield
 import kr.aigyeot.phone.domain.model.Banner
 import kr.aigyeot.phone.domain.model.Connection
+import kr.aigyeot.phone.domain.model.OutboxPayload
 import kr.aigyeot.phone.domain.model.PairRun
 import kr.aigyeot.phone.domain.model.SendResult
+import kr.aigyeot.phone.domain.model.outboxItem
+import kr.aigyeot.phone.domain.model.songRef
 import kr.aigyeot.phone.domain.repository.Mark
 import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.shared.PairResponse
@@ -46,7 +49,7 @@ class LifecycleTableTest {
         // 재시작: 파일에서 이어 보낸다.
         assertEquals(listOf("song_selected"), restart().state.state.value.outbox.map { it.envelope.type })
         // 기록 지우기: 녹음 파일이 필요한 노래 올리기만 뺀다.
-        state.commit(OWNER) { it.copy(outbox = it.outbox + it.outbox.first().copy(songFile = "x.m4a", envelope = it.outbox.first().envelope.copy(id = "01JXSONG00000000000000000A", type = "song_added"))) }
+        state.commit(OWNER) { it.copy(outbox = it.outbox + outboxItem(OutboxPayload.Song("s1", songRef("s1"), uploaded = false, file = "x.m4a"), now, "01JXSONG00000000000000000A")) }
         clearAndWait()
         assertEquals(listOf("song_selected"), state.state.value.outbox.map { it.envelope.type })
         // 연결 끊김: 상태와 함께 사라진다.
@@ -187,7 +190,10 @@ class LifecycleTableTest {
 
     @Test
     fun `보낼 함 업로드 결과는 SendResult로 바뀐다`() = kitTest {
-        val item = kr.aigyeot.phone.domain.model.OutboxItem(now, kr.aigyeot.phone.domain.model.envelope("song_added", kotlinx.serialization.json.buildJsonObject { put("song_id", kotlinx.serialization.json.JsonPrimitive("s1")) }, now), songFile = "none.m4a")
+        val item = outboxItem(OutboxPayload.Song("s1", songRef("s1"), uploaded = false, file = "none.m4a"), now)
         assertEquals(SendResult.Failed(415, "file_missing"), UploadSong(relay, songs)(OWNER, item))
+        // 파일을 올린 노래(재시작 뒤 저장에서 읽은 것 포함)와 노래가 아닌 항목은 PUT 없이 봉투로 간다(7.5 두 단계).
+        assertNull(UploadSong(relay, songs)(OWNER, item.markUploaded(true)))
+        assertNull(UploadSong(relay, songs)(OWNER, outboxItem(OutboxPayload.Message("song_selected", songRef("s1")), now)))
     }
 }

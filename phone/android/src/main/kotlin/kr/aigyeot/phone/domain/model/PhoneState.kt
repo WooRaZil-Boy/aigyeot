@@ -2,6 +2,9 @@ package kr.aigyeot.phone.domain.model
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -23,7 +26,6 @@ import kr.aigyeot.shared.SongRejectReason
 import kr.aigyeot.shared.SongStatusBody
 import kr.aigyeot.shared.SongStatusKind
 import kr.aigyeot.shared.UnpairedBody
-import kr.aigyeot.shared.bodySerializers
 import kr.aigyeot.phone.domain.usecase.BuildCareSummary
 import java.time.ZoneId
 
@@ -77,31 +79,165 @@ data class StoredReport(val seq: Long, val receivedAt: Long, val body: ReportSum
 @Serializable
 data class StoredAlert(val id: String, val seq: Long, val receivedAt: Long, val body: HandoffAlertBody)
 
-/** 보낼 함 한 줄(7.5). `songFile`이 있으면 먼저 `PUT /v1/songs/{song_id}` 뒤 봉투(song_added)를 보낸다. */
-@Serializable
+/** 보낼 함 항목의 종류(P2: 종류마다 필요한 칸만 둔다. iOS `OutboxPayload`와 같은 모양). */
+sealed interface OutboxPayload {
+    /**
+     * 한 번에 보내는 메시지(feeding_started·song_removed·song_selected).
+     * `reflected`는 수유(feeding_started)만 쓴다: 이 수유가 차에 반영됐다(`feeding_state`가 같은 시각, 7.5). 기록 지우기·50개 제한으로
+     * 기록 줄이 사라져도 버림 안내를 거르게 항목에 남긴다(iOS에는 없는 칸: iOS는 수유 기록 줄의 상태만 본다).
+     */
+    data class Message(val type: String, val body: JsonObject, val reflected: Boolean = false) : OutboxPayload
+
+    /**
+     * 노래 올리기(7.5 두 단계): 파일 `PUT /v1/songs/{song_id}`가 끝나면 `uploaded`가 참이 되고 그다음 `song_added`를 보낸다.
+     * `file`은 앱 폴더의 녹음 파일 이름이다(iOS에는 없는 칸: iOS는 곡 id로 파일 이름을 정한다. 안드로이드는 이름을 저장하고,
+     * 다른 폰이 그 곡을 지워 곡 줄이 지움이 돼도 올리기가 남아 있는 동안 파일을 지키는 데 쓴다).
+     */
+    data class Song(val songId: String, val body: JsonObject, val uploaded: Boolean, val file: String) : OutboxPayload
+
+    /** 돌봄 요약. `tried`: 보내기 직전에 저장하는 '보내 봄'(U57). 보내 본 요약은 바꾸지 않는다. */
+    data class CareSummary(val body: JsonObject, val tried: Boolean) : OutboxPayload
+}
+
+/**
+ * 보낼 함 한 줄(7.5, iOS `OutboxItem`과 같은 칸). 봉투는 보낼 때 [envelope]로 만든다.
+ * 저장 파일(`phone_state.json`)에는 옛 평평한 키 그대로 쓴다([OutboxItemSerializer], iOS도 저장 키가 같다).
+ */
+@Serializable(with = OutboxItemSerializer::class)
 data class OutboxItem(
+    /** 메시지 봉투 id(다시 보내도 같다). */
+    val id: String,
+    val payload: OutboxPayload,
+    val ts: String,
+    val createdAt: Long,
+    val attempts: Int = 0,
+    val nextTryAt: Long = 0,
+    /** 지금 기다림이 망 실패(응답 없음·닿지 않음)에서 왔다. 망 복구·'다시 시도'·앞으로 오기 때 당긴다(7.5, iOS와 같은 칸). 중계가 준 기다림은 거짓. */
+    val networkWait: Boolean = false,
+) {
+    /** 계약의 메시지 type·body(보낼 때 봉투에 싣는다). */
+    val type: String
+        get() = when (payload) {
+            is OutboxPayload.Message -> payload.type
+            is OutboxPayload.Song -> "song_added"
+            is OutboxPayload.CareSummary -> "care_summary"
+        }
+    val body: JsonObject
+        get() = when (payload) {
+            is OutboxPayload.Message -> payload.body
+            is OutboxPayload.Song -> payload.body
+            is OutboxPayload.CareSummary -> payload.body
+        }
+    val envelope: Envelope get() = Envelope(v = 1, id = id, type = type, ts = ts, body = body)
+
+    /** 노래면 파일을 올렸다. */
+    val uploaded: Boolean get() = (payload as? OutboxPayload.Song)?.uploaded == true
+
+    /** 요약이면 '보내 봄'(U57). */
+    val sentOnce: Boolean get() = (payload as? OutboxPayload.CareSummary)?.tried == true
+
+    /** 수유면 차에 반영됨. */
+    val reflected: Boolean get() = (payload as? OutboxPayload.Message)?.reflected == true
+
+    /** 노래 파일을 올렸다(또는 다시 올려야 한다). 노래가 아니면 그대로. */
+    fun markUploaded(v: Boolean) = (payload as? OutboxPayload.Song)?.let { copy(payload = it.copy(uploaded = v)) } ?: this
+
+    /** 요약의 '보내 봄'. 요약이 아니면 그대로. */
+    fun markTried(v: Boolean) = (payload as? OutboxPayload.CareSummary)?.let { copy(payload = it.copy(tried = v)) } ?: this
+
+    /** 수유가 차에 반영됐다. 메시지가 아니면 그대로. */
+    fun markReflected() = (payload as? OutboxPayload.Message)?.let { copy(payload = it.copy(reflected = true)) } ?: this
+}
+
+/** 새 보낼 함 항목(봉투 시각은 넣는 때). */
+fun outboxItem(payload: OutboxPayload, now: Long, id: String = ulid(now)) = OutboxItem(id, payload, rfc3339(now), now)
+
+/** 수유 시작 메시지인가(수유만 뜻이 있는 규칙의 분기 한 곳). */
+val OutboxItem.isFeeding: Boolean get() = payload is OutboxPayload.Message && payload.type == "feeding_started"
+
+/** 보낼 함 수유 항목의 시작 시각(`feeding_started` body의 `at`). */
+internal val OutboxItem.feedingAt: Long? get() = (body["at"] as? JsonPrimitive)?.contentOrNull?.let(::instantOf)
+
+/** 저장 파일의 보낼 함 한 줄: 옛 판과 같은 평평한 키에 `network_wait`(없으면 거짓)만 더했다. 종류는 [OutboxItemSerializer]가 정한다. */
+@Serializable
+private class OutboxItemFile(
     val createdAt: Long,
     val envelope: Envelope,
     val songFile: String? = null,
     val uploaded: Boolean = false,
     val attempts: Int = 0,
     val nextTryAt: Long = 0,
-    /** 한 번이라도 보내기 시작했다(응답을 못 받았어도). 보내기 전에 저장한다(U57: 보내 본 요약은 바꾸지 않는다). */
     val sentOnce: Boolean = false,
-    /** 이 수유가 차에 반영됐다(`feeding_state`가 같은 시각, 7.5). 기록 지우기·50개 제한으로 기록 줄이 사라져도 버림 안내를 거르게 남긴다. */
     val reflected: Boolean = false,
+    val networkWait: Boolean = false,
 )
 
-/** 보낼 함 수유 항목의 시작 시각(`feeding_started` body의 `at`). */
-internal val OutboxItem.feedingAt: Long? get() = (envelope.body["at"] as? JsonPrimitive)?.contentOrNull?.let(::instantOf)
+/** 저장 키(평평함) ↔ 종류([OutboxPayload]). 노래 파일이 있으면 노래, type이 돌봄 요약이면 요약, 나머지는 메시지(iOS `OutboxItem.init`과 같은 판단). */
+object OutboxItemSerializer : KSerializer<OutboxItem> {
+    override val descriptor: SerialDescriptor = SerialDescriptor("kr.aigyeot.phone.OutboxItem", OutboxItemFile.serializer().descriptor)
+
+    override fun serialize(encoder: Encoder, value: OutboxItem) {
+        val p = value.payload
+        encoder.encodeSerializableValue(
+            OutboxItemFile.serializer(),
+            OutboxItemFile(
+                createdAt = value.createdAt,
+                envelope = value.envelope,
+                songFile = (p as? OutboxPayload.Song)?.file,
+                uploaded = value.uploaded,
+                attempts = value.attempts,
+                nextTryAt = value.nextTryAt,
+                sentOnce = value.sentOnce,
+                reflected = value.reflected,
+                networkWait = value.networkWait,
+            ),
+        )
+    }
+
+    override fun deserialize(decoder: Decoder): OutboxItem {
+        val f = decoder.decodeSerializableValue(OutboxItemFile.serializer())
+        val env = f.envelope
+        val payload = when {
+            f.songFile != null -> OutboxPayload.Song((env.body["song_id"] as? JsonPrimitive)?.contentOrNull.orEmpty(), env.body, f.uploaded, f.songFile)
+            env.type == "care_summary" -> OutboxPayload.CareSummary(env.body, f.sentOnce)
+            else -> OutboxPayload.Message(env.type, env.body, f.reflected)
+        }
+        return OutboxItem(env.id, payload, env.ts, f.createdAt, f.attempts, f.nextTryAt, f.networkWait)
+    }
+}
 
 /**
  * 이 수유 항목은 차에 반영됐거나 보냈다: 버려도 실패로 알리지 않는다(7.5 '차에 반영됨', U54).
  * 넘겨받은 항목은 보내기 전 사본일 수 있다(보내는 사이 반영됨): 지금 보낼 함의 같은 id도 본다.
  */
 internal fun PhoneState.feedingDone(item: OutboxItem): Boolean =
-    item.reflected || outbox.any { it.envelope.id == item.envelope.id && it.reflected } ||
-        feedings.any { it.msgId == item.envelope.id && (it.reflected || it.sentAt != null) }
+    item.reflected || outbox.any { it.id == item.id && it.reflected } ||
+        feedings.any { it.msgId == item.id && (it.reflected || it.sentAt != null) }
+
+/**
+ * 받은 봉투를 도메인이 판단에 쓰는 꼴로 바꾼 것(계약 3.3, iOS `InboundMessage`와 같은 모양). 데이터 층 한 곳(`data/RelayClient.kt`의 `Envelope.inbound`)이 만든다.
+ * 본문은 차와 글자까지 같은 계약 값이라 그대로 담는다(복사 타입을 만들지 않는다).
+ */
+sealed interface InboundMessage {
+    data class Paired(val body: PairedBody) : InboundMessage
+    data class Unpaired(val body: UnpairedBody) : InboundMessage
+    data class FeedingState(val body: FeedingStateBody) : InboundMessage
+    data class SongStatus(val body: SongStatusBody) : InboundMessage
+    data class Report(val body: ReportSummaryBody) : InboundMessage
+    data class HandoffAlert(val body: HandoffAlertBody) : InboundMessage
+
+    /**
+     * 모르는 type·판, 폰이 적용하지 않는 type(feeding_started 등), 읽지 못한 body(필수 칸이 빠짐): 본문은 적용하지 않고 처리한 것으로 친다
+     * (처리한 id, 차가 보냈으면 마지막 수신 시각·차 타일. iOS `ignored`와 같다).
+     */
+    data object Ignored : InboundMessage
+}
+
+/**
+ * 받은 메시지 하나(봉투의 id·seq·보낸 쪽과 바꾼 본문, iOS `Inbound`와 같은 칸). `car`는 안드로이드에만 있는 칸이다:
+ * 상태의 차 id와 같은 저장 안에서 견주려고 둔다(iOS는 유스케이스가 자격의 차 id로 미리 거른다).
+ */
+data class Inbound(val id: String, val seq: Long, val fromCar: Boolean, val message: InboundMessage, val car: String?)
 
 @Serializable
 data class PhoneState(
@@ -191,27 +327,21 @@ data class PhoneState(
 /** 받은 메시지 처리 결과. ack는 저장한 뒤에 보낸다. `banner`는 앱 안 배너로 띄울 인계 알림. */
 data class Received(val state: PhoneState, val banner: StoredAlert? = null)
 
-@Suppress("UNCHECKED_CAST")
-private fun <T> decodeBody(env: Envelope): T? {
-    val s = bodySerializers[env.type] as KSerializer<T>? ?: return null
-    return runCatching { ProtocolJson.decodeFromJsonElement(s, env.body) }.getOrNull()
-}
-
-/**
- * 받은 봉투 하나를 적용한다(계약 3.2). 같은 id는 한 번만 처리하고, 늦게 온 것은 seq로 거른다(G19).
- * `live`는 WebSocket으로 바로 받은 것(배너를 띄울 수 있음), 거짓이면 앱을 열며 받은 함에서 꺼낸 것(목록에만, 5.6).
- */
 /** 인계 알림 배너는 방금 생긴 알림에만 띄운다(푸시 유효 시간 30분, G28). */
 private const val BANNER_WINDOW_MS = 30 * 60 * 1000L
 
-fun PhoneState.receive(env: Envelope, now: Long, live: Boolean, newId: () -> String = { ulid(now) }): Received {
-    if (env.v != 1 || env.type !in bodySerializers || env.id in processed) return Received(this)
-    if (carId == null || env.car != carId) return Received(this) // 다른 차 방(이전 연결)의 것은 적용하지 않는다(3.1)
-    val seq = env.seq ?: 0
+/**
+ * 받은 메시지 하나를 적용한다(계약 3.2). 같은 id는 한 번만 처리하고, 늦게 온 것은 seq로 거른다(G19).
+ * `live`는 WebSocket으로 바로 받은 것(배너를 띄울 수 있음), 거짓이면 앱을 열며 받은 함에서 꺼낸 것(목록에만, 5.6).
+ */
+fun PhoneState.receive(m: Inbound, now: Long, live: Boolean, newId: () -> String = { ulid(now) }): Received {
+    if (m.id in processed) return Received(this)
+    if (carId == null || m.car != carId) return Received(this) // 다른 차 방(이전 연결)의 것은 적용하지 않는다(3.1)
+    val seq = m.seq
     var s = this
     var banner: StoredAlert? = null
-    when (env.type) {
-        "feeding_state" -> decodeBody<FeedingStateBody>(env)?.let { b ->
+    when (val msg = m.message) {
+        is InboundMessage.FeedingState -> msg.body.let { b ->
             if (seq > (feeding?.seq ?: -1)) {
                 val last = instantOf(b.lastFeedingStart)
                 val nowReflected = feedings.filter { last != null && instantOf(it.at) == last }.map { it.msgId }
@@ -222,26 +352,26 @@ fun PhoneState.receive(env: Envelope, now: Long, live: Boolean, newId: () -> Str
                     unseenDrops = unseenDrops - nowReflected.toSet() - droppedFeedingAt.filterValues { it == last }.keys,
                     droppedFeedingAt = droppedFeedingAt - nowReflected.toSet() - droppedFeedingAt.filterValues { it == last }.keys,
                     // 보낼 함의 같은 수유(응답을 잃어 다시 보내는 중)에도 적는다: 기록 줄이 사라져도 반영을 안다.
-                    outbox = outbox.map { if (it.envelope.type == "feeding_started" && (it.envelope.id in nowReflected || (last != null && it.feedingAt == last))) it.copy(reflected = true) else it },
+                    outbox = outbox.map { if (it.isFeeding && (it.id in nowReflected || (last != null && it.feedingAt == last))) it.markReflected() else it },
                 )
             }
         }
-        "song_status" -> decodeBody<SongStatusBody>(env)?.let { b -> s = s.applySongStatus(b, seq, now, newId) }
-        "report_summary" -> decodeBody<ReportSummaryBody>(env)?.let { b ->
+        is InboundMessage.SongStatus -> s = s.applySongStatus(msg.body, seq, now, newId)
+        is InboundMessage.Report -> msg.body.let { b ->
             if (seq > (reports[b.sessionId]?.seq ?: -1)) s = s.copy(reports = reports + (b.sessionId to StoredReport(seq, now, b)))
         }
-        "handoff_alert" -> decodeBody<HandoffAlertBody>(env)?.let { b ->
-            val alert = StoredAlert(env.id, seq, now, b)
-            s = s.copy(alerts = (alerts.filter { it.id != env.id } + alert).sortedBy { it.seq })
+        is InboundMessage.HandoffAlert -> msg.body.let { b ->
+            val alert = StoredAlert(m.id, seq, now, b)
+            s = s.copy(alerts = (alerts.filter { it.id != m.id } + alert).sortedBy { it.seq })
             // 같은 id는 한 번만 띄운다. 받은 함에서 꺼낸 것은 시스템이 이미 띄웠으므로 '띄운 id'에만 넣는다.
-            if (env.id !in shown) {
-                s = s.copy(shown = s.shown + (env.id to now))
+            if (m.id !in shown) {
+                s = s.copy(shown = s.shown + (m.id to now))
                 val age = instantOf(b.occurredAt)?.let { now - it } ?: 0L // 발생 시각을 못 읽으면 방금 것으로 본다(iOS와 같다)
                 if (live && age <= BANNER_WINDOW_MS) banner = alert
             }
         }
         // 적용한 목록의 snapshot_seq 이하인 연결 변경은 이미 목록에 들어 있다(1.4). 다시 적용하지 않는다.
-        "paired" -> if (seq > (devicesSnapshotSeq ?: -1)) decodeBody<PairedBody>(env)?.let { b ->
+        is InboundMessage.Paired -> if (seq > (devicesSnapshotSeq ?: -1)) msg.body.let { b ->
             val mark = deviceMarks[b.deviceId]
             // 끊긴 기기는 되살리지 않고, 이미 적용한 것보다 작은 seq는 버린다.
             if (mark == null || (!mark.removed && seq > mark.seq)) {
@@ -251,17 +381,18 @@ fun PhoneState.receive(env: Envelope, now: Long, live: Boolean, newId: () -> Str
                 s = s.copy(devices = devices.filter { it.deviceId != b.deviceId } + d, deviceMarks = deviceMarks + (b.deviceId to DeviceMark(seq)))
             }
         }
-        "unpaired" -> if (seq > (devicesSnapshotSeq ?: -1)) decodeBody<UnpairedBody>(env)?.let { b ->
-            val m = DeviceMark(maxOf(seq, deviceMarks[b.deviceId]?.seq ?: 0), removed = true)
-            s = s.copy(devices = devices.filter { it.deviceId != b.deviceId }, deviceMarks = deviceMarks + (b.deviceId to m))
+        is InboundMessage.Unpaired -> if (seq > (devicesSnapshotSeq ?: -1)) msg.body.let { b ->
+            val mark = DeviceMark(maxOf(seq, deviceMarks[b.deviceId]?.seq ?: 0), removed = true)
+            s = s.copy(devices = devices.filter { it.deviceId != b.deviceId }, deviceMarks = deviceMarks + (b.deviceId to mark))
         }
+        InboundMessage.Ignored -> Unit
     }
     // '마지막으로 메시지를 받은 시각'은 차에서 온 메시지의 본문을 저장할 때 고친다(7.4).
-    val fromCar = env.from?.role == Role.CAR
+    val fromCar = m.fromCar
     // 차가 보낸 봉투를 받았으면 차는 지금 켜져 있다. 기기 목록(60초 간격)을 기다리지 않고 차 타일을 바로 맞춘다.
     // 실시간으로 받은 것만 본다. 받은 함에서 꺼낸 지난 봉투는 꺼진 차를 켜진 것으로 바꾸지 않는다.
     if (fromCar && live) s = s.copy(devices = s.devices.map { if (it.role == Role.CAR) it.copy(online = true, lastSeenAt = rfc3339(now)) else it })
-    return Received(s.copy(processed = s.processed + (env.id to now), lastMessageAt = if (fromCar) now else s.lastMessageAt), banner)
+    return Received(s.copy(processed = s.processed + (m.id to now), lastMessageAt = if (fromCar) now else s.lastMessageAt), banner)
 }
 
 /** song_status: song_id마다 큰 seq가 이긴다(G19). 거절이면 owner 폰이 곡을 지운다(L48). */
@@ -281,7 +412,7 @@ private fun PhoneState.applySongStatus(b: SongStatusBody, seq: Long, now: Long, 
         // 거절된 곡은 자리를 비우려고 같은 곡 id로 song_removed를 보낸다(7.4, 오프라인이면 보낼 함).
         s = s.copy(
             songs = s.songs.map { if (it.songId == b.songId) it.copy(removedByMe = true) else it },
-            outbox = s.outbox + OutboxItem(now, envelope("song_removed", songRef(b.songId), now, newId())),
+            outbox = s.outbox + outboxItem(OutboxPayload.Message("song_removed", songRef(b.songId)), now, newId()),
         )
     }
     return s
@@ -332,21 +463,21 @@ fun PhoneState.mergeDevices(snapshotSeq: Long, list: List<DeviceInfo>, now: Long
  */
 fun PhoneState.pruned(now: Long, sending: String? = null): PhoneState {
     // 보내는 중인 항목은 결과를 기다린다(그사이 7일을 넘겨도 성공했으면 실패로 적지 않게). 결과 뒤 다음 정리가 본다.
-    val (old, kept) = outbox.partition { now - it.createdAt >= KEEP_IDS_MS && it.envelope.id != sending }
+    val (old, kept) = outbox.partition { now - it.createdAt >= KEEP_IDS_MS && it.id != sending }
     var feedings = feedings
     var songs = songs
-    for (item in old) when (item.envelope.type) {
-        "feeding_started" -> feedings = feedings.map {
-            if (it.msgId == item.envelope.id && !it.reflected && it.failed == null && it.sentAt == null) it.copy(failed = "7일이 지나 보내지 못했어요") else it
+    for (item in old) when {
+        item.isFeeding -> feedings = feedings.map {
+            if (it.msgId == item.id && !it.reflected && it.failed == null && it.sentAt == null) it.copy(failed = "7일이 지나 보내지 못했어요") else it
         }
-        "song_added" -> songs = songs.map {
+        item.payload is OutboxPayload.Song -> songs = songs.map {
             if (it.songId == item.songId && (it.phase == SongPhase.UPLOADING || it.phase == SongPhase.WAITING) && it.error == null)
                 it.copy(error = "7일이 지나 보내지 못했어요. 다시 녹음해 주세요.") else it
         }
     }
-    val toNotify = old.filter { item -> item.envelope.type != "feeding_started" || !feedingDone(item) }
-    val newDrops = toNotify.fold(unseenDrops) { d, item -> d.withDrop(item.envelope.id, item.envelope.type) }
-    val newFeedingDrops = toNotify.filter { it.envelope.type == "feeding_started" }.mapNotNull { i -> i.feedingAt?.let { i.envelope.id to it } }
+    val toNotify = old.filter { item -> !item.isFeeding || !feedingDone(item) }
+    val newDrops = toNotify.fold(unseenDrops) { d, item -> d.withDrop(item.id, item.type) }
+    val newFeedingDrops = toNotify.filter { it.isFeeding }.mapNotNull { i -> i.feedingAt?.let { i.id to it } }
     return copy(
         processed = processed.filterValues { now - it < KEEP_IDS_MS },
         shown = shown.filterValues { now - it < KEEP_IDS_MS },
@@ -358,7 +489,7 @@ fun PhoneState.pruned(now: Long, sending: String? = null): PhoneState {
         droppedFeedingAt = (droppedFeedingAt + newFeedingDrops).filterKeys { it in newDrops },
         // 차에 닿지 못한 요약을 버렸다: 내용이 같아도 다음 계기에 다시 보낸다(iOS `expireOutbox`와 같음).
         // 뒤에 남은 요약이 있으면 표시는 그것을 가리키므로 둔다.
-        lastSentCareSummary = if (old.any { it.envelope.type == "care_summary" } && kept.none { it.envelope.type == "care_summary" }) null else lastSentCareSummary,
+        lastSentCareSummary = if (old.any { it.payload is OutboxPayload.CareSummary } && kept.none { it.payload is OutboxPayload.CareSummary }) null else lastSentCareSummary,
         reports = reports.filterValues { now - it.receivedAt < KEEP_RECORDS_MS },
         alerts = alerts.filter { now - it.receivedAt < KEEP_RECORDS_MS },
     )
@@ -394,26 +525,26 @@ fun PhoneState.keepingClear(from: PhoneState, migrating: Boolean = false) = copy
 
 /**
  * 보내 본 항목인가(U57): 중계에 닿았을 수 있다(보내기 시작을 적었고 결과가 '받지 않음 확정'이 아니다), 또는 지금 보내는 중이다.
- * 시도 횟수(`attempts`)는 다시 보낼 간격에만 쓴다: 429·연결 전 실패는 횟수를 올려도 중계에 없다.
+ * 시도 횟수(`attempts`)는 다시 보낼 간격에만 쓴다: 429는 횟수를 올려도 중계에 없다.
  */
-fun OutboxItem.tried(sending: String?) = sentOnce || envelope.id == sending
+fun OutboxItem.tried(sending: String?) = sentOnce || id == sending
 
 /** 보내기 직전에 '보내 봄'을 적는다(U57). 프로세스가 죽거나 결과 저장이 실패해도 바꿔치우지 않게 한다. */
-fun PhoneState.markSentOnce(id: String) = copy(outbox = outbox.map { if (it.envelope.id == id) it.copy(sentOnce = true) else it })
+fun PhoneState.markSentOnce(id: String) = copy(outbox = outbox.map { if (it.id == id) it.markTried(true) else it })
 
 /**
  * '보내 봄'을 걷는다(U57 '결과를 확정할 때까지'): 적었지만 보내지 않고 멈췄거나(429 기다림), 중계가 받지 않은 것이 확정됐다
- * (429: 중계는 같은 id를 한도 검사보다 먼저 본다, 연결 전 실패). 그사이 이 표시 때문에 남긴 것을 정리한다:
+ * (429: 중계는 같은 id를 한도 검사보다 먼저 본다, 연결 전 실패). 응답을 잃은 망 실패는 닿았을 수 있어 걷지 않는다. 그사이 이 표시 때문에 남긴 것을 정리한다:
  * 기록 지우기 중이면 보내지 않은 요약을 모두 빼고(R10, 빈 요약은 지우기를 마칠 때 들어간다), 아니면 보내지 않은 요약은 가장 뒤의 하나만 둔다(7.5).
  * 다시 보낼 기다림(`attempts`·`nextTryAt`·메시지 429 기다림)은 남긴다. 429는 앞 시도와 상관없이 확정이고, 연결 전 실패는 앞서 응답을 잃은 적이 없을 때만 확정이다.
  */
 fun PhoneState.untried(id: String): PhoneState {
-    if (outbox.none { it.envelope.id == id }) return this
-    val reverted = outbox.map { if (it.envelope.id == id) it.copy(sentOnce = false) else it }
-    val unsent = reverted.filter { it.envelope.type == "care_summary" && !it.tried(null) }.map { it.envelope.id }
+    if (outbox.none { it.id == id }) return this
+    val reverted = outbox.map { if (it.id == id) it.markTried(false) else it }
+    val unsent = reverted.filter { it.payload is OutboxPayload.CareSummary && !it.tried(null) }.map { it.id }
     val keep = if (clearingCareIds != null) emptyList() else unsent.takeLast(1)
-    val next = reverted.filter { it.envelope.id !in unsent || it.envelope.id in keep }
-    return copy(outbox = next, lastSentCareSummary = if (next.any { it.envelope.type == "care_summary" }) lastSentCareSummary else null)
+    val next = reverted.filter { it.id !in unsent || it.id in keep }
+    return copy(outbox = next, lastSentCareSummary = if (next.any { it.payload is OutboxPayload.CareSummary }) lastSentCareSummary else null)
 }
 
 fun PhoneState.clearedRecords(careIds: List<String> = emptyList(), at: Long? = null, sending: String? = null) = PhoneState(
@@ -426,7 +557,7 @@ fun PhoneState.clearedRecords(careIds: List<String> = emptyList(), at: Long? = n
     handoffAlerts = handoffAlerts,
     // 녹음 파일이 필요한 노래 올리기와, 지울 기록으로 만든 요약은 뺀다. 돌봄 기록을 다 지운 뒤 빈 요약을 새로 넣는다(R10·R19).
     // 보내 본 요약은 결과를 확정할 때까지 둔다(빈 요약이 그 뒤에 가서 이긴다).
-    outbox = outbox.filter { it.songFile == null && !(it.envelope.type == "care_summary" && !it.tried(sending)) },
+    outbox = outbox.filter { it.payload !is OutboxPayload.Song && !(it.payload is OutboxPayload.CareSummary && !it.tried(sending)) },
     processed = processed,
     shown = shown,
     stateRequestNeeded = true,
@@ -446,7 +577,7 @@ fun PhoneState.clearedRecords(careIds: List<String> = emptyList(), at: Long? = n
 
 /** 이 상태가 쓰는 녹음 파일 이름(목록에 있는 곡, 아직 올리지 않은 곡). 나머지 파일은 지워도 된다. */
 val PhoneState.songFiles: Set<String>
-    get() = (songs.filter { it.phase != SongPhase.REMOVED }.mapNotNull { it.file } + outbox.mapNotNull { it.songFile }).toSet()
+    get() = (songs.filter { it.phase != SongPhase.REMOVED }.mapNotNull { it.file } + outbox.mapNotNull { (it.payload as? OutboxPayload.Song)?.file }).toSet()
 
 // ---- 사용자 동작(보낼 함에 넣는다, 7.5) ----
 
@@ -458,7 +589,7 @@ internal fun PhoneState.startFeeding(now: Long, id: String = ulid(now), at: Long
     val env = envelope("feeding_started", buildJsonObject { put("at", rfc3339(at)) }, now, id)
     return copy(
         feedings = (feedings + FeedingRecord(id, rfc3339(at), startAt = at)).takeLast(50),
-        outbox = outbox + OutboxItem(now, env),
+        outbox = outbox + OutboxItem(env.id, OutboxPayload.Message(env.type, env.body), env.ts, now),
     )
 }
 
@@ -501,14 +632,14 @@ fun PhoneState.reconciledCareSummary(care: CareFile, now: Long, zone: ZoneId, id
     val key = JsonObject(body - "as_of")
     // '아직 안 보낸' 요약만 바꾼다(R19). 보내 본(보내는 중·실패해 기다리는) 요약은 같은 id로 결과를 확정할 때까지 두고 새것을 뒤에 둔다:
     // 바꿔치우면 같은 초의 옛 요약이 중계에 늦게 닿아 seq가 커져 새것을 덮을 수 있다(3.3·7.5).
-    val pending = outbox.indexOfFirst { it.envelope.type == "care_summary" && !it.tried(sending) }
+    val pending = outbox.indexOfFirst { it.payload is OutboxPayload.CareSummary && !it.tried(sending) }
     val last = lastSentCareAsOf
     // 같은 날이고 24시간 안이어야 한다: 날이 바뀌면 차는 앞 요약의 '오늘' 값을 빼고, 24시간이 지나면 요약을 쓰지 않는다(1.4, iOS와 같음).
     // 25시간인 날(서머타임)은 같은 날짜여도 24시간이 지날 수 있다.
     fun day(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
     if (pending >= 0) {
         // 안 보낸 요약이 같은 날 같은 내용이면 그대로 둔다: 같은 id로 다시 보내야 응답을 잃어도 중계가 한 번만 처리한다(7.5).
-        val p = outbox[pending].envelope.body
+        val p = outbox[pending].body
         val pAsOf = instantOf((p["as_of"] as? JsonPrimitive)?.contentOrNull)
         // 앞서 보낸 더 늦은 as_of보다 이르면(시계를 되돌린 사이 넣었다) 차가 무시하므로 지금 as_of로 바꾼다(3.3, iOS와 같음).
         if (pAsOf != null && JsonObject(p - "as_of") == key && pAsOf <= asOf && asOf - pAsOf < DAY && day(pAsOf) == day(asOf) &&
@@ -518,10 +649,10 @@ fun PhoneState.reconciledCareSummary(care: CareFile, now: Long, zone: ZoneId, id
         return this
     }
     // 같은 초에 또 바뀌어도 그대로 보낸다: 차는 as_of가 같으면 중계 seq가 큰 것을 받는다(iOS와 같음).
-    val fresh = OutboxItem(now, envelope("care_summary", body, now, id))
+    val fresh = outboxItem(OutboxPayload.CareSummary(body, tried = false), now, id)
     // 안 보낸 요약은 하나만(7.5). 줄의 자리와 재시도 대기(429 Retry-After·백오프)는 새것이 이어받는다.
     val next = if (pending < 0) outbox + fresh else outbox.mapIndexed { i, it ->
-        if (i == pending) fresh.copy(attempts = it.attempts, nextTryAt = maxOf(fresh.nextTryAt, it.nextTryAt)) else it
+        if (i == pending) fresh.copy(attempts = it.attempts, nextTryAt = maxOf(fresh.nextTryAt, it.nextTryAt), networkWait = it.networkWait) else it
     }
     return copy(outbox = next, lastSentCareSummary = key, lastSentCareAsOf = asOf, maxSentCareAsOf = maxOf(maxSentCareAsOf ?: asOf, asOf))
 }
@@ -555,15 +686,15 @@ fun PhoneState.addSong(songId: String, name: String, durationS: Double, file: St
     }
     return copy(
         songs = songs + SongEntry(songId, name, durationS, file, SongPhase.UPLOADING),
-        outbox = outbox + OutboxItem(now, envelope("song_added", body, now, id), songFile = file),
+        outbox = outbox + outboxItem(OutboxPayload.Song(songId, body, uploaded = false, file = file), now, id),
     )
 }
 
 /** 곡 지우기. 아직 보내지 않은 올리기는 빼고, song_removed는 늘 보낸다(차가 모르는 곡이어도 '지움'으로 남아 해가 없다). */
 fun PhoneState.removeSong(songId: String, now: Long, id: String = ulid(now)) = copy(
     songs = songs.map { if (it.songId == songId) it.copy(phase = SongPhase.REMOVED, removedByMe = true, candidate = false) else it },
-    outbox = outbox.filterNot { it.songFile != null && it.songId == songId } +
-        OutboxItem(now, envelope("song_removed", songRef(songId), now, id)),
+    outbox = outbox.filterNot { it.payload is OutboxPayload.Song && it.songId == songId } +
+        outboxItem(OutboxPayload.Message("song_removed", songRef(songId)), now, id),
 )
 
 /**
@@ -587,18 +718,19 @@ fun PhoneState.replaceable(songId: String?): String? = songId?.takeIf { id -> so
 /** 우리 노래 3곡이 찼다(바꿀 곡 `replacing`은 빼고 센다, G40). */
 fun PhoneState.songsFull(replacing: String? = null) = visibleSongs.count { it.songId != replacing } >= 3
 
-val OutboxItem.songId: String? get() = (envelope.body["song_id"] as? JsonPrimitive)?.contentOrNull
+/** 노래면 올릴 곡 id, 노래 지움·고르기면 body의 곡 id. */
+val OutboxItem.songId: String? get() = (payload as? OutboxPayload.Song)?.songId ?: (body["song_id"] as? JsonPrimitive)?.contentOrNull
 
 /**
  * 실험에 쓸 곡 고르기. 지금 후보는 차가 보내는 `song_status.candidate`가 원본이다(마지막 선택이 이긴다, 명세서 5장).
  * 이 폰이 고른 것을 따로 기억하지 않는다. 다른 폰·차에서 바꾼 선택이 그대로 보이게 한다.
  */
 fun PhoneState.selectSong(songId: String, now: Long, id: String = ulid(now)) = copy(
-    outbox = outbox + OutboxItem(now, envelope("song_selected", songRef(songId), now, id)),
+    outbox = outbox + outboxItem(OutboxPayload.Message("song_selected", songRef(songId)), now, id),
 )
 
 /** 이 곡의 song_selected가 아직 보낼 함에 있다(차가 후보로 반영하기 전). */
-fun PhoneState.selecting(songId: String) = outbox.any { it.envelope.type == "song_selected" && it.songId == songId }
+fun PhoneState.selecting(songId: String) = outbox.any { it.payload is OutboxPayload.Message && it.type == "song_selected" && it.songId == songId }
 
 /** 화면에 보일 곡(지운 곡은 뺀다). */
 val PhoneState.visibleSongs get() = songs.filter { it.phase != SongPhase.REMOVED }

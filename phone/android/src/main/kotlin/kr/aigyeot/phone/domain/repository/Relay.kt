@@ -1,8 +1,8 @@
 package kr.aigyeot.phone.domain.repository
 
+import kr.aigyeot.phone.domain.model.Inbound
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
-import kr.aigyeot.shared.InboxResponse
 import kr.aigyeot.shared.InviteResponse
 import kr.aigyeot.shared.PairResponse
 import kr.aigyeot.shared.PatchDeviceRequest
@@ -38,14 +38,20 @@ interface RelayClient {
     suspend fun deleteMe(token: String): RelayResult<Unit>
     suspend fun invite(token: String): RelayResult<InviteResponse>
     suspend fun send(token: String, env: Envelope): RelayResult<SendMessageResponse>
-    suspend fun inbox(token: String, afterSeq: Long): RelayResult<InboxResponse>
+    suspend fun inbox(token: String, afterSeq: Long): RelayResult<InboxPage>
     suspend fun ack(token: String, ids: List<String>): RelayResult<Unit>
     suspend fun putSong(token: String, songId: String, file: File): RelayResult<UploadSongResponse>
 }
 
+/** 받은 함 한 쪽(`GET /v1/inbox`). 봉투는 데이터 층이 [Inbound]로 바꿔 준다. */
+data class InboxPage(val messages: List<Inbound>, val more: Boolean)
+
 /** 중계 WebSocket(계약 2장, iOS와 같은 이름). */
 interface RelaySocket {
     fun open(token: String, listener: SocketListener): SocketHandle
+
+    /** 받은 프레임을 [Inbound]로 바꾼다. 봉투가 아니면 null(적용도 ack도 하지 않는다). */
+    fun read(text: String): Inbound?
 
     /** 받은 봉투의 ack 프레임. */
     fun ackFrame(ids: List<String>): String

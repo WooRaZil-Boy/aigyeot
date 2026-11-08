@@ -8,16 +8,19 @@ import kotlinx.coroutines.launch
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.OutboxItem
+import kr.aigyeot.phone.domain.model.OutboxPayload
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SAVE_RETRY_MS
 import kr.aigyeot.phone.domain.model.SendResult
 import kr.aigyeot.phone.domain.model.afterSend
-import kr.aigyeot.phone.domain.model.backoffMs
 import kr.aigyeot.phone.domain.model.frontExpired
+import kr.aigyeot.phone.domain.model.hasNetworkWait
+import kr.aigyeot.phone.domain.model.hurriedNetworkWaits
 import kr.aigyeot.phone.domain.model.markSentOnce
 import kr.aigyeot.phone.domain.model.nextToSend
 import kr.aigyeot.phone.domain.model.posting
 import kr.aigyeot.phone.domain.model.pruned
+import kr.aigyeot.phone.domain.model.rateLimitWaitMs
 import kr.aigyeot.phone.domain.model.reconciledSummary
 import kr.aigyeot.phone.domain.model.untried
 import kr.aigyeot.phone.domain.model.withMessageHold
@@ -65,6 +68,19 @@ class SendOutbox(
 
     fun pump() {
         signal.trySend(Unit)
+    }
+
+    /**
+     * 망 실패(응답 없음)로 생긴 보낼 함 기다림을 지금으로 당기고 보낸다(계약 7.5 '네트워크가 돌아올 때, 앱이 앞으로 올 때', iOS `hurryNetworkWaits`).
+     * 중계가 준 기다림(429 Retry-After·song_quota)과 5xx 백오프는 둔다. 저장하지 못하면 기다림 그대로 보낸다(다음 계기에 다시 당긴다).
+     */
+    fun hurryNetworkWaits() {
+        scope.launch {
+            val c = state.creds ?: return@launch
+            val t = clock.now()
+            if (state.state.value.hasNetworkWait(t)) state.commit(c) { it.hurriedNetworkWaits(t) }
+            pump()
+        }
     }
 
     /** 뒤로 갔다: 깨움 타이머를 걷는다. 앞으로 올 때(연결 반복) 이어 보낸다(7.5). */
@@ -125,37 +141,37 @@ class SendOutbox(
             // 메시지 429면 Retry-After까지 아무것도 보내지 않는다.
             holdUntil(clock.now())?.let { return wakeAt(it) }
             val item = state.state.value.nextToSend(clock.now())
-            if (item?.envelope?.type == "care_summary" && refreshed != item.envelope.id) {
+            if (item?.payload is OutboxPayload.CareSummary && refreshed != item.id) {
                 // 보내기 직전에 다시 계산한다: 오래 기다린 요약의 as_of·'오늘' 값이 낡지 않게(자정을 넘긴 복구, 그사이 지운 기록).
                 // 같은 날 같은 내용이면 그대로(같은 id). 바꿨으면 처음부터 다시 고른다. 저장하지 못하면 옛 요약을 보내지 않는다(iOS와 같음).
                 // 요약만 다시 계산한다: 수유 보내기는 정해진 네 계기에서만(R6).
                 if (!state.commit(c) { it.reconciledSummary(care.care.value, clock.now(), APP_ZONE, sending) }) return retrySaveLater()
-                refreshed = state.state.value.outbox.firstOrNull { it.envelope.type == "care_summary" }?.envelope?.id
-                if (refreshed != item.envelope.id) continue
+                refreshed = state.state.value.outbox.firstOrNull { it.payload is OutboxPayload.CareSummary }?.id
+                if (refreshed != item.id) continue
             }
             if (item == null) return wakeAt(state.state.value.outbox.firstOrNull()?.nextTryAt ?: return)
             // 요약은 보내기 전에 '보내 봄'을 저장한다(U57): 응답 전에 죽거나 결과 저장이 실패해도 바꿔치우지 않는다.
             var marked = false
-            if (item.envelope.type == "care_summary" && !item.sentOnce) {
+            if (item.payload is OutboxPayload.CareSummary && !item.sentOnce) {
                 var present = false
-                if (!state.commit(c) { s -> present = s.outbox.any { it.envelope.id == item.envelope.id }; s.markSentOnce(item.envelope.id) }) return retrySaveLater()
+                if (!state.commit(c) { s -> present = s.outbox.any { it.id == item.id }; s.markSentOnce(item.id) }) return retrySaveLater()
                 if (!present) continue // 그사이 지워졌다(기록 지우기 등): 다시 고른다
                 marked = true
             }
             // 위 저장을 기다리는 사이 다른 메시지(상태 요청 등)가 429를 받았을 수 있다: 보내기 바로 앞에서 다시 본다(1.1).
             // 방금 적은 '보내 봄'은 걷는다: 보내지 않았으니 기다리는 사이 기록을 지우면 이 요약도 빠져야 한다(R10).
             holdUntil(clock.now())?.let { h ->
-                if (marked && !state.commit(c) { it.untried(item.envelope.id) }) untryPending = item.envelope.id
+                if (marked && !state.commit(c) { it.untried(item.id) }) untryPending = item.id
                 return wakeAt(h)
             }
-            sending = item.envelope.id
+            sending = item.id
             try {
                 val r = sendItem(c, item)
                 if (!state.isCurrent(c)) return // 이전 연결의 응답은 버린다
                 if (r is SendResult.Failed && r.status == 401) return lose.lost(c)
                 // 메시지 POST의 429는 저장하지 못해도 Retry-After를 지킨다(상태에도 같은 저장으로 적는다).
                 if (r is SendResult.Failed && r.status == 429 && item.posting) {
-                    holdInMemory(c, clock.now() + (r.retryAfterS?.times(1000) ?: backoffMs(item.attempts)))
+                    holdInMemory(c, clock.now() + rateLimitWaitMs(r.retryAfterS))
                 }
                 // 저장하지 못했으면 잠시 뒤 다시 한다. 같은 id로 다시 보내므로 중계에서는 한 번만 처리된다.
                 if (!state.commit(c) { it.afterSend(item, r, clock.now(), aheadMs = -(relay.clockSkewMs ?: 0)) }) return retrySaveLater()

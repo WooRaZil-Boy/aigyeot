@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kr.aigyeot.phone.data.inbound
 import kr.aigyeot.shared.DeviceInfo
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.Platform
@@ -30,6 +31,10 @@ class PhoneStateTest {
 
     private fun fixture(name: String): Envelope =
         ProtocolJson.decodeFromString(Envelope.serializer(), File("../../shared/src/test/resources/protocol/$name.json").readText())
+
+    /** 받은 봉투는 데이터 층의 바꾸기([inbound])를 거쳐 적용한다(앱과 같은 길). */
+    private fun PhoneState.receive(env: Envelope, now: Long, live: Boolean, newId: () -> String = { ulid(now) }) =
+        receive(env.inbound, now, live, newId)
 
     /** 중계가 전달한 모양으로(seq·car를 채워서). 보내는 쪽 예제에는 car가 없다. */
     private fun Envelope.withSeq(seq: Long, id: String = ulid()) = copy(seq = seq, id = id, car = owner.carId)
@@ -233,11 +238,17 @@ class PhoneStateTest {
     @Test
     fun 다른_차_방의_메시지와_모르는_type은_적용하지_않는다() {
         val other = fixture("feeding_state").copy(car = "c_OTHER00000000000000000000")
-        assertNull(owner.receive(other, now, live = true).state.feeding)
+        assertEquals(owner, owner.receive(other, now, live = true).state) // 다른 방: 처리한 id도 남기지 않는다(iOS와 같다)
         assertNull(owner.receive(fixture("feeding_state").copy(car = null), now, live = true).state.feeding)
         assertNull(PhoneState().receive(fixture("feeding_state"), now, live = true).state.feeding) // 연결 전
-        val unknown = fixture("ack").copy(type = "future_type", seq = 1)
+        val unknown = fixture("ack").copy(type = "future_type", seq = 1) // car 없음: 다른 방과 같다
         assertEquals(owner, owner.receive(unknown, now, live = true).state)
+        // 우리 차 방의 모르는 type·폰이 적용하지 않는 type은 본문 없이 처리한 것으로 친다: 처리한 id, 차가 보냈으면 마지막 수신 시각(iOS `ignored`).
+        val later = now + 5_000
+        val fromCar = fixture("feeding_state").copy(type = "future_type").withSeq(1)
+        assertEquals(owner.copy(processed = mapOf(fromCar.id to later), lastMessageAt = later), owner.receive(fromCar, later, live = false).state)
+        val fromPhone = fixture("feeding_started").withSeq(2)
+        assertEquals(owner.copy(processed = mapOf(fromPhone.id to later)), owner.receive(fromPhone, later, live = true).state)
     }
 
     @Test
@@ -349,6 +360,105 @@ class PhoneStateTest {
         assertEquals("song_selected", picked.outbox.single().envelope.type)
         assertTrue(picked.selecting("01JC90A0Q4M8T1V6B5R3H2CD7F"))
         assertFalse(picked.selecting("01JC90B0Q4M8T1V6B5R3H2CD7F"))
+    }
+
+    @Test
+    fun 보낼_함은_종류마다_자기_칸만_바뀐다() {
+        // 노래: 파일을 올리면 Song.uploaded, 422 song_blob_missing면 다시 거짓.
+        val song = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now)
+        val up = song.afterSend(song.outbox.single(), SendResult.Uploaded, now).outbox.single()
+        assertEquals(OutboxPayload.Song("s_1", song.outbox.single().body, uploaded = true, file = "s_1.m4a"), up.payload)
+        assertEquals("song_added", up.type)
+        val again = song.copy(outbox = listOf(up)).afterSend(up, SendResult.Failed(422, "song_blob_missing"), now).outbox.single()
+        assertEquals(song.outbox.single().payload, again.payload)
+        // 수유: 같은 시각의 feeding_state를 받으면 보낼 함의 그 수유가 Message.reflected.
+        val feeding = owner.startFeeding(now, id = "01JC8Y2K6N3T5Q9W0ZB4H7X2DM", at = instantOf("2026-11-04T23:12:21Z")!!)
+        val reflected = feeding.receive(fixture("feeding_state"), now, live = true).state.outbox.single()
+        assertEquals(OutboxPayload.Message("feeding_started", feeding.outbox.single().body, reflected = true), reflected.payload)
+        // 다른 종류의 표시는 바꾸지 않는다(불가능한 조합을 만들지 않는다).
+        assertEquals(feeding.outbox.single(), feeding.outbox.single().markUploaded(true).markTried(true))
+        // 돌봄 요약: 보내기 전 '보내 봄' → CareSummary.tried. 429·연결 전 실패면 걷고(중계에 없다), 응답을 잃으면 둔다(닿았을 수 있다, U57).
+        val summary = outboxItem(OutboxPayload.CareSummary(buildJsonObject { put("as_of", "x") }, tried = false), now)
+        val queued = owner.copy(outbox = listOf(summary))
+        val marked = queued.markSentOnce(summary.id)
+        assertEquals(OutboxPayload.CareSummary(summary.body, tried = true), marked.outbox.single().payload)
+        assertEquals("care_summary", marked.outbox.single().type)
+        assertEquals(marked.outbox, marked.afterSend(summary, SendResult.Offline, now).outbox.map { it.copy(attempts = 0, nextTryAt = 0, networkWait = false) })
+        assertEquals(queued.outbox, marked.afterSend(summary, SendResult.Failed(429, "rate_limited", 5), now).outbox.map { it.copy(attempts = 0, nextTryAt = 0) })
+        assertEquals(queued.outbox, marked.afterSend(summary, SendResult.Unreached, now).outbox.map { it.copy(attempts = 0, nextTryAt = 0, networkWait = false) })
+        assertTrue(marked.afterSend(summary, SendResult.Sent(summary.body), now).outbox.isEmpty())
+    }
+
+    @Test
+    fun 재시도_기본값은_iOS와_같다() {
+        val s = owner.selectSong("a", now)
+        val item = s.outbox.single()
+        // 429에 Retry-After가 없으면 60초(메시지는 기기 기다림도), 0이어도 1초(iOS `max(retryAfter ?? 60, 1)`).
+        val held = s.afterSend(item, SendResult.Failed(429, "rate_limited"), now)
+        assertEquals(now + 60_000, held.outbox.single().nextTryAt)
+        assertEquals(now + 60_000, held.messageHoldUntil)
+        assertEquals(now + 1_000, s.afterSend(item, SendResult.Failed(429, "rate_limited", 0), now).outbox.single().nextTryAt)
+        // 노래 PUT 429도 60초(그 항목만).
+        val song = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now)
+        val put = song.afterSend(song.outbox.single(), SendResult.Failed(429, "rate_limited"), now)
+        assertEquals(now + 60_000, put.outbox.single().nextTryAt)
+        assertNull(put.messageHoldUntil)
+        // 409 song_quota: 차가 켜져 파일을 처리한 뒤 다시, 60초(iOS `songQuota`). 시도 횟수와 상관없다.
+        val up = song.afterSend(song.outbox.single(), SendResult.Uploaded, now)
+        val quota = up.afterSend(up.outbox.single(), SendResult.Failed(409, "song_quota"), now)
+        assertEquals(now + 60_000, quota.outbox.single().nextTryAt)
+        assertEquals(now + 60_000, quota.afterSend(quota.outbox.single(), SendResult.Failed(409, "song_quota"), now).outbox.single().nextTryAt)
+    }
+
+    @Test
+    fun 망_실패_기다림만_당길_수_있다() {
+        val s = owner.selectSong("a", now)
+        val item = s.outbox.single()
+        fun after(r: SendResult) = s.afterSend(item, r, now).outbox.single()
+        // 기다림 이유: 망 실패(응답 없음·닿지 않음)만 참. 중계가 준 기다림(429·song_quota)과 5xx는 거짓(iOS `scheduleRetry`).
+        assertTrue(after(SendResult.Offline).networkWait)
+        assertTrue(after(SendResult.Unreached).networkWait)
+        assertFalse(after(SendResult.Failed(503, "unavailable")).networkWait)
+        assertFalse(after(SendResult.Failed(429, "rate_limited", 30)).networkWait)
+        assertFalse(after(SendResult.Failed(409, "song_quota")).networkWait)
+        // 이유는 마지막 결과를 따른다.
+        val offline = s.afterSend(item, SendResult.Offline, now)
+        assertFalse(offline.afterSend(offline.outbox.single(), SendResult.Failed(503, "unavailable"), now).outbox.single().networkWait)
+        // 당기기: 망 실패 기다림만 지금으로, 5xx 백오프는 그대로.
+        val two = owner.selectSong("a", now, id = "01JC90A0Q4M8T1V6B5R3H2CD7A").selectSong("b", now, id = "01JC90A0Q4M8T1V6B5R3H2CD7B")
+        val waited = two.afterSend(two.outbox[0], SendResult.Offline, now).afterSend(two.outbox[1], SendResult.Failed(503, "unavailable"), now)
+        assertTrue(waited.hasNetworkWait(now))
+        val hurried = waited.hurriedNetworkWaits(now + 1)
+        assertEquals(now + 1, hurried.outbox[0].nextTryAt)
+        assertEquals(waited.outbox[1], hurried.outbox[1])
+        assertFalse(hurried.hasNetworkWait(now + 1))
+        assertEquals(waited, waited.hurriedNetworkWaits(now + 60_000)) // 이미 지난 기다림은 그대로
+    }
+
+    @Test
+    fun 보낼_함_저장_형식은_평평한_키_그대로다() {
+        val s = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now).startFeeding(now)
+            .let { it.copy(outbox = it.outbox + outboxItem(OutboxPayload.CareSummary(buildJsonObject { put("as_of", "x") }, tried = true), now)) }
+            .let { it.afterSend(it.outbox.first(), SendResult.Uploaded, now) }
+            .let { it.copy(outbox = it.outbox.map { o -> o.markReflected() }) } // 수유만 바뀐다
+            .let { it.afterSend(it.outbox.last(), SendResult.Offline, now) } // 요약: 망 실패 기다림
+        assertTrue(s.outbox.single { it.isFeeding }.reflected)
+        assertTrue(s.outbox.last().networkWait)
+        val text = ProtocolJson.encodeToString(PhoneState.serializer(), s)
+        assertEquals(s, ProtocolJson.decodeFromString(PhoneState.serializer(), text))
+        // 옛 판이 쓴 줄을 그대로 읽는다(형식이 바뀌지 않았다).
+        val env = """{"v":1,"id":"01JC90A0Q4M8T1V6B5R3H2CD7F","type":"%s","ts":"2026-11-05T08:00:00+09:00","body":{"song_id":"s_9"}}"""
+        val old = """[{"created_at":1,"envelope":${env.format("song_added")},"song_file":"s_9.m4a","uploaded":true,"attempts":2,"next_try_at":3},
+            {"created_at":1,"envelope":${env.format("care_summary")},"sent_once":true},
+            {"created_at":1,"envelope":${env.format("feeding_started")},"reflected":true}]"""
+        val items = ProtocolJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(OutboxItem.serializer()), old)
+        assertEquals(OutboxPayload.Song("s_9", items[0].body, uploaded = true, file = "s_9.m4a"), items[0].payload)
+        assertEquals(2 to 3L, items[0].attempts to items[0].nextTryAt)
+        assertEquals(OutboxPayload.CareSummary(items[1].body, tried = true), items[1].payload)
+        assertEquals(OutboxPayload.Message("feeding_started", items[2].body, reflected = true), items[2].payload)
+        assertTrue(text.contains("\"song_file\":\"s_1.m4a\"") && text.contains("\"sent_once\":true") && !text.contains("\"payload\""))
+        assertTrue(text.contains("\"network_wait\":true")) // iOS `networkWait`과 같은 칸. 옛 줄에 없으면 거짓
+        assertFalse(items.any { it.networkWait })
     }
 
     @Test
@@ -722,6 +832,11 @@ class PhoneStateTest {
         assertEquals(listOf("care_summary", "feeding_started"), types(replaced))
         assertNotEquals(s1.envelope.id, replaced.outbox.first().envelope.id)
         assertEquals(now + 60_000, replaced.outbox.first().nextTryAt)
+        assertFalse(replaced.outbox.first().networkWait)
+        // 보내 보지 않은 요약의 망 실패 기다림은 새것이 이유까지 이어받는다: 망이 돌아오면 당긴다(7.5, iOS `SummaryRules.enqueue`와 같다).
+        val swappedNet = queued.afterSend(s1, SendResult.Offline, now).reconciledCareSummary(care2, now + 10_000, seoul)
+        assertNotEquals(s1.envelope.id, swappedNet.outbox.first().envelope.id)
+        assertTrue(swappedNet.outbox.first().networkWait)
         // 날이 바뀌면 같은 내용이어도 새 as_of로 바꾼다(1.4 24시간·'오늘' 값).
         val nextDay = java.time.Instant.ofEpochMilli(now).atZone(seoul).toLocalDate().plusDays(1).atStartOfDay(seoul).toInstant().toEpochMilli()
         val quiet = oldOnly // 오늘 기록이 없는 폰(옛 기록만). 기록이 아예 없으면 보내지 않는다(U61)

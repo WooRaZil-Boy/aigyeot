@@ -4,10 +4,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonObject
+import kr.aigyeot.phone.domain.model.Inbound
+import kr.aigyeot.phone.domain.model.InboundMessage
 import kr.aigyeot.phone.domain.repository.RelayResult
+import kr.aigyeot.shared.Envelope
+import kr.aigyeot.shared.HandoffAlertBody
+import kr.aigyeot.shared.ProtocolJson
+import kr.aigyeot.shared.Role
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.util.concurrent.CopyOnWriteArrayList
@@ -116,5 +127,53 @@ class RelayClientTest {
             repeat(50) { if ("slow" !in got) delay(50) }
         }
         assertEquals(listOf("bad", "slow"), got)
+    }
+
+    private fun fixture(name: String): Envelope =
+        ProtocolJson.decodeFromString(Envelope.serializer(), File("../../shared/src/test/resources/protocol/$name.json").readText())
+
+    @Test
+    fun `받은 봉투는 종류마다 InboundMessage로 바뀌고 id·seq·보낸 쪽·차를 옮긴다`() {
+        val kinds = mapOf(
+            "paired" to InboundMessage.Paired::class,
+            "unpaired" to InboundMessage.Unpaired::class,
+            "feeding_state" to InboundMessage.FeedingState::class,
+            "song_status" to InboundMessage.SongStatus::class,
+            "report_summary" to InboundMessage.Report::class,
+            "handoff_alert" to InboundMessage.HandoffAlert::class,
+        )
+        for ((name, kind) in kinds) {
+            val env = fixture(name)
+            val m = env.inbound
+            assertEquals(name, kind, m.message::class)
+            assertEquals(Inbound(env.id, env.seq!!, env.from?.role == Role.CAR, m.message, env.car), m)
+        }
+        // 본문은 계약 값 그대로 담는다.
+        val alert = fixture("handoff_alert")
+        assertEquals(InboundMessage.HandoffAlert(ProtocolJson.decodeFromJsonElement(HandoffAlertBody.serializer(), alert.body)), alert.inbound.message)
+        assertTrue(alert.inbound.fromCar)
+        assertFalse(fixture("paired").inbound.fromCar) // 중계가 보낸 것
+        assertEquals(0L, alert.copy(seq = null).inbound.seq)
+    }
+
+    @Test
+    fun `모르는 type·판, 폰이 적용하지 않는 type, 필수 칸이 빠진 body는 Ignored다`() {
+        val state = fixture("feeding_state")
+        assertEquals(InboundMessage.Ignored, state.copy(type = "future_type").inbound.message)
+        assertEquals(InboundMessage.Ignored, state.copy(v = 2).inbound.message)
+        assertEquals(InboundMessage.Ignored, fixture("feeding_started").inbound.message)
+        assertEquals(InboundMessage.Ignored, fixture("ack").inbound.message)
+        val alert = fixture("handoff_alert")
+        assertEquals(InboundMessage.Ignored, alert.copy(body = JsonObject(alert.body - "text")).inbound.message)
+        val song = fixture("song_status")
+        assertEquals(InboundMessage.Ignored, song.copy(body = JsonObject(song.body - "song_id")).inbound.message)
+    }
+
+    @Test
+    fun `소켓 프레임은 봉투면 Inbound, 아니면 null이다`() {
+        val c = OkHttpRelayClient("http://127.0.0.1:${server.localPort}", "test")
+        val text = File("../../shared/src/test/resources/protocol/feeding_state.json").readText()
+        assertEquals(fixture("feeding_state").inbound, c.read(text))
+        assertNull(c.read("pong"))
     }
 }

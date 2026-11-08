@@ -56,6 +56,7 @@ class AppLifecycle(
     /** 화면이 앞에 왔다. */
     fun onForeground() {
         visibility.set(true)
+        outbox.hurryNetworkWaits() // 앞으로 올 때 망 실패 기다림 없이 보낸다(7.5, iOS `didBecomeActive`와 같음)
         connection.start()
         // 지우다 만 기록(R10)을 먼저 마친 뒤 수유·요약을 본다(시작·iOS `didBecomeActive`와 같은 순서): 지우는 사이 적은 수유도 이번에 간다.
         scope.launch {

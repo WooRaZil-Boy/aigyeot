@@ -10,13 +10,13 @@ import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.DisconnectRun
-import kr.aigyeot.phone.domain.model.OutboxItem
+import kr.aigyeot.phone.domain.model.OutboxPayload
 import kr.aigyeot.phone.domain.model.PAIR_BUSY
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.SongPhase
 import kr.aigyeot.phone.domain.model.SongSend
-import kr.aigyeot.phone.domain.model.envelope
+import kr.aigyeot.phone.domain.model.outboxItem
 import kr.aigyeot.phone.domain.model.songRef
 import kr.aigyeot.phone.domain.repository.Mark
 import kr.aigyeot.phone.domain.repository.SongRecorder
@@ -61,7 +61,7 @@ class ViewModelTest {
     fun `노래 목록은 지운 곡을 빼고 고르는 중인 곡을 표시한다`() {
         val kept = SongEntry("s1", "자장가", phase = SongPhase.ACCEPTED)
         val removed = SongEntry("s2", "옛 노래", phase = SongPhase.REMOVED)
-        val s = PhoneState(songs = listOf(kept, removed), outbox = listOf(OutboxItem(NOW, envelope("song_selected", songRef("s1"), NOW))))
+        val s = PhoneState(songs = listOf(kept, removed), outbox = listOf(outboxItem(OutboxPayload.Message("song_selected", songRef("s1")), NOW)))
         assertEquals(SongsUiState(listOf(kept), setOf("s1"), online = false), songsUi(s, online = false))
     }
 
