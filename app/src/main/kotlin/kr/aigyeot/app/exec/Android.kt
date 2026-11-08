@@ -135,7 +135,7 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
         val dev = if (rear) rear() else null
         when (method.kind) {
             MethodKind.WHITE_NOISE -> NoiseTrack(media, dev, ex, onRouted, onError)
-            MethodKind.LULLABY -> ctx.assets.openFd(LULLABY_ASSET).use { fd ->
+            MethodKind.WOMB, MethodKind.LULLABY -> ctx.assets.openFd(if (method.kind == MethodKind.WOMB) WOMB_ASSET else LULLABY_ASSET).use { fd ->
                 FileTrack(media, dev, ex, onRouted, onError) { it.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) }
             }
             MethodKind.SONG -> {
@@ -162,6 +162,12 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
          * 없으면 PlaybackRejected(ERROR).
          */
         const val LULLABY_ASSET = "sound/lullaby.m4a"
+
+        /**
+         * 음원 뱃속 소리(C118, 11-06): 외부 음원 없이 직접 합성(`tools/sound/womb.py`). 60초 이음새 없는 반복, AAC 64kbps 모노 44.1kHz,
+         * −30.0 LUFS, 정점 −13.2 dBFS. 자장가와 같은 FileTrack으로 반복 재생한다. 없으면 PlaybackRejected(ERROR).
+         */
+        const val WOMB_ASSET = "sound/womb.m4a"
     }
 }
 

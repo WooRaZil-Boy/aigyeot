@@ -92,6 +92,22 @@ class LinkQaTest : LinkKit() {
         assertNull(st.lastNightWakeups)
     }
 
+    @Test fun c118_switchSoundWomb_mapsToWombMethod() {
+        engineState = crying()
+        relay.llmRes = { Res.Ok(200, reply("", tool("switch_sound", "method" to "womb"))) }
+        ask("뱃속 소리 틀어줘")
+        assertEquals(SwitchSound(T0, Method(MethodKind.WOMB), "L1"), events[0])
+    }
+
+    @Test fun c118_methodStats_womb_labelAndMethod() {
+        engineState = crying().let { it.copy(session = it.session!!.copy(methods = it.session!!.methods + Method(MethodKind.WOMB)), history = it.history + List(3) { i -> FirstTry(T0 - 1_000_000, Method(MethodKind.WOMB), i < 2) }) }
+        relay.llmRes = { Res.Ok(200, reply("")) }
+        ask()
+        val w = relay.llmCalls.single().state.methodStats.single { it.label == "뱃속 소리" }
+        assertEquals(kr.aigyeot.shared.SoundMethod.WOMB, w.method)
+        assertEquals(2, w.successes); assertEquals(3, w.attempts)
+    }
+
     @Test fun groundedText_passesThrough() {
         engineState = crying()
         relay.llmRes = { Res.Ok(200, reply("자장가를 틀었을 때 7번 중 6번 그쳤어요. 소리 덕분인지는 알 수 없어요.")) }

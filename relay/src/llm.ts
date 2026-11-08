@@ -28,7 +28,7 @@ export const TOOLS = [
     description: "운전자가 뒷좌석 소리를 바꿔 달라고 분명히 말했을 때만 쓴다.",
     strict: true,
     input_schema: strictObject(
-      { method: { type: "string", enum: ["white_noise", "lullaby", "parent_song"] } },
+      { method: { type: "string", enum: ["white_noise", "womb", "lullaby", "parent_song"] } },
       ["method"],
     ),
   },

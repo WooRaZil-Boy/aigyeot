@@ -6,6 +6,7 @@ const val T0 = 1_800_000_000_000L
 const val MIN = 60_000L
 val P = Params()
 val WN = Method(MethodKind.WHITE_NOISE)
+val WB = Method(MethodKind.WOMB)
 val LL = Method(MethodKind.LULLABY)
 val SONG = Method(MethodKind.SONG, "s1")
 

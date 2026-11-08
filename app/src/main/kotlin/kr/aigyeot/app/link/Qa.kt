@@ -59,11 +59,13 @@ internal fun llmState(s: EngineState?, now: Long, alarmEpisodes: Int): LlmState 
 private fun tenth(x: Double) = (x * 10).roundToLong() / 10.0
 private fun sound(k: MethodKind) = when (k) {
     MethodKind.WHITE_NOISE -> SoundMethod.WHITE_NOISE
+    MethodKind.WOMB -> SoundMethod.WOMB
     MethodKind.LULLABY -> SoundMethod.LULLABY
     MethodKind.SONG -> SoundMethod.PARENT_SONG
 }
 private fun label(k: MethodKind) = when (k) {
     MethodKind.WHITE_NOISE -> "백색소음"
+    MethodKind.WOMB -> "뱃속 소리"
     MethodKind.LULLABY -> "자장가"
     MethodKind.SONG -> "부모 노래"
 }
@@ -84,6 +86,7 @@ internal fun qaEvents(
         when (t.name) {
             "switch_sound" -> when ((t.input["method"] as? JsonPrimitive)?.contentOrNull) {
                 "white_noise" -> Method(MethodKind.WHITE_NOISE)
+                "womb" -> Method(MethodKind.WOMB)
                 "lullaby" -> Method(MethodKind.LULLABY)
                 "parent_song" -> methods.firstOrNull { it.kind == MethodKind.SONG && it.songId != null }   // 후보 ③이 없으면 곡 id 없는 음원을 만들지 않는다
                 else -> null

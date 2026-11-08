@@ -227,7 +227,7 @@ data class HandoffRecord(
 @Serializable enum class EpisodeTrigger { ALARM, SWITCH_SOUND }       // 6.1 episode.trigger
 @Serializable enum class PlayKind { AUTO, REQUEST }                   // 2.2 Play.kind 주석
 @Serializable enum class PlayMode { NORMAL, PAUSE, DUCK }             // 2.2 Play.mode 주석
-@Serializable enum class MethodKind { WHITE_NOISE, LULLABY, SONG }
+@Serializable enum class MethodKind { WHITE_NOISE, WOMB, LULLABY, SONG }
 @Serializable enum class CarSeat { LEFT, RIGHT, CENTER }
 @Serializable enum class RestKind { REST_AREA, DROWSY_SHELTER }
 @Serializable enum class SecondAction { COMFORT, FEEDING, OTHER }     // 2.2 TryRecord.action

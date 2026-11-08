@@ -21,6 +21,12 @@ class SceneFileTest {
     private fun bad(steps: String, override: String = "\"CabinTemp\"", extra: String = "") =
         assertFailsWith<SceneError> { parseScene(scene(steps, override, extra)) }.message!!
 
+    @Test fun `c118 setup methods의 WOMB는 뱃속 소리로 읽고 되돌린다`() {
+        assertEquals(kr.aigyeot.engine.Method(MethodKind.WOMB), parseMethod("WOMB"))
+        assertEquals("WOMB", methodText(parseMethod("WOMB")))
+        assertFailsWith<SceneError> { parseMethod("WOMB2") }
+    }
+
     @Test fun `assets의 장면 파일은 모두 읽힌다`() {
         val files = File("src/main/assets/scenario").listFiles { f -> f.extension == "json" }!!
         assertEquals(27, files.size)   // A~E, C2, D2, F14 20개

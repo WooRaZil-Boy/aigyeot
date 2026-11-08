@@ -62,6 +62,7 @@ Pleos 공식 에뮬레이터에서 잰 것입니다.
 ## 출처 고지
 
 - **자장가:** 브람스 「자장가」 Op.49 No.4(퍼블릭 도메인). MIDI: Rabanus Flavus(Peter Gerloff), CC0, Wikimedia Commons. 음색: FluidR3_GM(Frank Wen, MIT). −30 LUFS로 맞춰 렌더링함.
+- **뱃속 소리:** 직접 합성한 소리(`tools/sound/womb.py`). 외부 음원을 쓰지 않았습니다. −30 LUFS로 맞춰 렌더링함.
 - **휴게소·졸음쉼터 정보:** 공공데이터포털 전국휴게소정보표준데이터(한국도로공사, 2026-09-21)·전국졸음쉼터표준데이터(한국도로공사, 2026-03-05). 졸음쉼터 데이터 번호는 15028203입니다.
 - **울음 판별 바탕 모델:** YAMNet(TensorFlow Model Garden, Apache 2.0)과 MediaPipe tasks-audio(Apache 2.0). Apache 2.0 전문은 [app/src/main/assets/licenses/Apache-2.0.txt](app/src/main/assets/licenses/Apache-2.0.txt)에 있습니다.
 - **AudioSet 온톨로지:** YAMNet 모델 파일에 들어 있는 클래스 이름은 AudioSet 온톨로지(CC BY-SA 4.0)에서 왔습니다.

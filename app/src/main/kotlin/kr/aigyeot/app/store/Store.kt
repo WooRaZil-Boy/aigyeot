@@ -120,13 +120,13 @@ class Store(
     }
 
     /**
-     * 다음 세션 음원(명세서 5장). 프로필에서 고른 종류 + 후보 ③. ③은 link와 같은 규칙 하나(`candidateSong`, contracts-link 8.4).
-     * 프로필이 없으면 기본(백색소음·자장가·③).
+     * 다음 세션 음원(명세서 5장). ①②(백색소음·뱃속 소리)와 자장가는 앱 기본이라 늘 넣고, 프로필에서는 부모 노래를 켰는지만 읽는다
+     * (11-06 전 프로필에 WOMB가 없어도 쓴다). ③은 link와 같은 규칙 하나(`candidateSong`, contracts-link 8.4). 프로필이 없으면 부모 노래 포함.
      */
     fun methods(): List<Method> {
-        val kinds = dao.profile()?.methods?.map { it.kind } ?: listOf(MethodKind.WHITE_NOISE, MethodKind.LULLABY, MethodKind.SONG)
-        val third = candidateSong(dao.activeSongs(), dao.selection())?.let { Method(MethodKind.SONG, it) }
-        return kinds.distinct().mapNotNull { if (it == MethodKind.SONG) third else Method(it) }
+        val songOn = dao.profile()?.methods?.any { it.kind == MethodKind.SONG } ?: true
+        val third = if (songOn) candidateSong(dao.activeSongs(), dao.selection())?.let { Method(MethodKind.SONG, it) } else null
+        return listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)) + listOfNotNull(third)
     }
 
     fun initialState(seed: Long): EngineState =

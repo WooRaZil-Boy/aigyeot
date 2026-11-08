@@ -98,11 +98,12 @@ private fun truncate(b: ReportSummaryBody): ReportSummaryBody {
 
 private fun sound(method: String, songId: String?, songName: (String?) -> String?): SoundRef = when (method) {
     "WHITE_NOISE" -> SoundRef(SoundMethod.WHITE_NOISE, "백색소음")
+    "WOMB" -> SoundRef(SoundMethod.WOMB, "뱃속 소리")
     "LULLABY" -> SoundRef(SoundMethod.LULLABY, "자장가")
     else -> SoundRef(SoundMethod.PARENT_SONG, songName(songId) ?: "부모 노래")
 }
 
-private fun soundMethod(m: String) = when (m) { "WHITE_NOISE" -> SoundMethod.WHITE_NOISE; "LULLABY" -> SoundMethod.LULLABY; else -> SoundMethod.PARENT_SONG }
+private fun soundMethod(m: String) = when (m) { "WHITE_NOISE" -> SoundMethod.WHITE_NOISE; "WOMB" -> SoundMethod.WOMB; "LULLABY" -> SoundMethod.LULLABY; else -> SoundMethod.PARENT_SONG }
 
 private fun result(r: String?) = when (r) { "SUCCESS" -> EpisodeResult.SUCCESS; "FAIL" -> EpisodeResult.FAILURE; "UNJUDGED" -> EpisodeResult.UNDETERMINED; else -> null }
 

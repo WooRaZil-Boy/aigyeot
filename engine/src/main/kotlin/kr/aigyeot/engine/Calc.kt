@@ -31,7 +31,7 @@ fun sampleBeta(a: Int, b: Int, rng: Long): Pair<Long, Double> {
     return r to if (ga + gb == 0.0) 0.5 else ga / (ga + gb)
 }
 
-/** 처음 순서(백색소음 → 자장가 → 부모 노래). 같은 종류는 받은 순서 그대로. */
+/** 처음 순서(백색소음 → 뱃속 소리 → 자장가 → 부모 노래, enum 선언 순서). 같은 종류는 받은 순서 그대로. */
 private fun ordered(methods: List<Method>) = methods.sortedBy { it.kind.ordinal }
 
 data class Pick(val method: Method, val rng: Long)
@@ -169,6 +169,7 @@ internal fun hm(ms: Long): String {
 }
 internal fun methodName(m: Method) = when (m.kind) {
     MethodKind.WHITE_NOISE -> "백색소음"
+    MethodKind.WOMB -> "뱃속 소리"
     MethodKind.LULLABY -> "자장가"
     MethodKind.SONG -> "우리 노래"
 }

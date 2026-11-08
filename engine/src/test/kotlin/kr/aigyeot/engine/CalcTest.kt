@@ -52,6 +52,30 @@ class CalcTest {
         assertEquals(WN, best(listOf(WN, LL), h, except = LL))
     }
 
+    @Test fun c118_pickFirst_roundRobinFourMethods() {
+        val ms = listOf(SONG, LL, WB, WN)   // 받은 순서와 무관하게 처음 순서로
+        var h = emptyList<FirstTry>()
+        val order = List(8) { i -> pickFirst(ms, h, 1).method.also { h = h + FirstTry(i.toLong(), it, true) } }
+        assertEquals(listOf(WN, WB, LL, SONG, WN, WB, LL, SONG), order)
+    }
+
+    @Test fun c118_pickFirst_threeMethodsWithoutSong() {
+        val ms = listOf(LL, WB, WN)
+        var h = emptyList<FirstTry>()
+        val order = List(6) { i -> pickFirst(ms, h, 1).method.also { h = h + FirstTry(i.toLong(), it, true) } }
+        assertEquals(listOf(WN, WB, LL, WN, WB, LL), order)
+    }
+
+    @Test fun c118_best_tieOrderIncludesWomb() {
+        val ms = listOf(LL, WB, WN, SONG)
+        assertEquals(WN, best(ms, emptyList()))
+        assertEquals(WB, best(ms, emptyList(), except = WN))                     // 2차 '다른 음원'이 뱃속 소리를 고른다
+        val h = listOf(FirstTry(1, WN, false), FirstTry(2, WB, true), FirstTry(3, LL, true))
+        assertEquals(WB, best(ms, h))                                           // 성적 같으면 처음 순서(뱃속 소리 먼저)
+        assertEquals(LL, best(ms, h, except = WB))
+        assertEquals(WB, best(listOf(WN, WB), h, except = WN))
+    }
+
     @Test fun pickRest_30kmAndNursingPlus5km() {
         assertNull(pickRest(null))
         assertNull(pickRest(RouteView(0, false, null, listOf(rest("far", 31.0)))))

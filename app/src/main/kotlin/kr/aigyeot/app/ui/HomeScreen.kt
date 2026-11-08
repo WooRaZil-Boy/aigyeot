@@ -93,11 +93,11 @@ private fun feedingText(s: EngineState?, now: Long): String {
 internal fun stats(h: List<FirstTry>, methods: List<Method>, now: Long): List<String> {
     val recent = h.filter { it.at >= now - 28 * 86_400_000L }
     val third = methods.firstOrNull { it.kind == MethodKind.SONG }
-    return listOf(MethodKind.WHITE_NOISE, MethodKind.LULLABY, MethodKind.SONG).mapNotNull { k ->
+    return listOf(MethodKind.WHITE_NOISE, MethodKind.WOMB, MethodKind.LULLABY, MethodKind.SONG).mapNotNull { k ->
         if (k == MethodKind.SONG && third == null) return@mapNotNull null
         val r = recent.filter { it.method.kind == k && (k != MethodKind.SONG || it.method.songId == third?.songId) }
         "${label(k)}: " + if (r.size < 3) "아직 모름" else "${r.size}번 중 ${r.count { it.success }}번"
     }
 }
 
-fun label(k: MethodKind) = when (k) { MethodKind.WHITE_NOISE -> "백색소음"; MethodKind.LULLABY -> "자장가"; MethodKind.SONG -> "부모 노래" }
+fun label(k: MethodKind) = when (k) { MethodKind.WHITE_NOISE -> "백색소음"; MethodKind.WOMB -> "뱃속 소리"; MethodKind.LULLABY -> "자장가"; MethodKind.SONG -> "부모 노래" }

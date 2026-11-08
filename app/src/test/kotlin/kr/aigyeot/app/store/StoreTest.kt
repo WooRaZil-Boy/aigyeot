@@ -64,6 +64,32 @@ class StoreTest {
         assertTrue(ours["started_at"].toString().endsWith("+09:00\""))
     }
 
+    @Test fun c118_reportSound_womb_mapsToWombNotParentSong() {
+        session()
+        dao.upsertEpisode(EpisodeEntity("E1", "S1", T0 + 60_000, T0 + 200_000, "ALARM", T0 + 60_000, 2_400, "WOMB", null, "SUCCESS", null,
+            null, null, null, null, null, null, false, false, 61_000, false, 56_000, emptyList()))
+        dao.upsertPlay(PlayLogEntity("P1", "S1", "E1", "AUTO_FIRST", "WOMB", null, T0 + 63_000, T0 + 119_000, 56_000, "DEADLINE"))
+        val body = encodeReport(buildReport(dao, "S1", now)!!)
+        assertTrue("\"sound\":{\"method\":\"womb\",\"label\":\"뱃속 소리\"}" in body, body)
+        assertTrue("\"method\":\"womb\",\"song_id\":null" in body, body)   // plays[] 항목
+        assertTrue("parent_song" !in body, body)
+    }
+
+    @Test fun c118_oldProfileWithoutWomb_stillUsesWomb() {
+        val fixed = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY))
+        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0))
+        sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('a', 'a', $T0, 'AAC', 60.0, -30.0, NULL, 'ACTIVE', NULL, 1, 1)")
+        assertEquals(fixed + Method(MethodKind.SONG, "a"), store.methods(), "옛 프로필(SONG 켬): 뱃속 소리가 둘째")
+        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)), false, false, T0))
+        assertEquals(fixed, store.methods(), "옛 프로필(SONG 끔): 곡이 있어도 ③ 없음")
+    }
+
+    @Test fun c118_methods_defaultWithoutProfileHasWombSecond() {
+        assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), store.methods(), "프로필 없음 + ③ 없음")
+    }
+
     /** 예제에 있는 키가 같은 순서로 모두 있는지(배열은 첫 원소끼리). 값의 null 여부는 보지 않는다. */
     private fun assertSameShape(want: JsonElement, got: JsonElement?, path: String) {
         when (want) {
@@ -178,7 +204,7 @@ class StoreTest {
     @Test fun methods_thirdCandidate_selectedElseNewest() {
         dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
             listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0))
-        assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)), store.methods(), "쓸 곡이 없으면 ③ 없음")
+        assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), store.methods(), "쓸 곡이 없으면 ③ 없음")
         fun song(id: String, seq: Long, status: String = "ACTIVE") = sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, $seq, $seq)")
         song("a", 1); song("b", 2)
         assertEquals(Method(MethodKind.SONG, "b"), store.methods().last(), "고른 적 없으면 added_seq가 가장 큰 곡")
@@ -335,7 +361,7 @@ class StoreTest {
 
     @Test fun stats_onlyCurrentSongAndLast28Days() {
         val third = Method(MethodKind.SONG, "b")
-        val methods = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), third)
+        val methods = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY), third)
         val d = Store.DAY
         val h = listOf(
             *Array(3) { FirstTry(T0 - it * d, Method(MethodKind.SONG, "a"), true) },          // 다른 곡의 성공
@@ -344,8 +370,8 @@ class StoreTest {
         )
         val out = kr.aigyeot.app.ui.stats(h, methods, T0)
         assertEquals("부모 노래: 아직 모름", out.last(), "다른 곡의 성공이 섞이지 않는다")
-        assertEquals("자장가: 아직 모름", out[1], "29일 전 시도는 세지 않는다")
-        assertEquals(2, kr.aigyeot.app.ui.stats(h, methods.dropLast(1), T0).size, "③이 없으면 부모 노래 줄을 뺀다")
+        assertEquals("자장가: 아직 모름", out[2], "29일 전 시도는 세지 않는다")
+        assertEquals(3, kr.aigyeot.app.ui.stats(h, methods.dropLast(1), T0).size, "③이 없으면 부모 노래 줄을 뺀다")
         val more = h + FirstTry(T0, third, true)
         assertEquals("부모 노래: 3번 중 1번", kr.aigyeot.app.ui.stats(more, methods, T0).last())
     }

@@ -71,14 +71,14 @@ fun SetupScreen(old: ChildProfileEntity?, now: Long, noRearOutput: Boolean, onBa
         if (age <= 1) Body("참고: 신생아 모유는 보통 2시간, 첫 몇 주는 2~4시간, 분유는 첫 달 말 3~4시간이에요")
         else if (age >= 6) Body("비워 두면 수유 시계가 꺼져요")
         Toggle("형제·자매가 함께 타요", sibling) { sibling = it }
-        Label("음원: 백색소음·자장가는 늘 써요")
+        Label("음원: 백색소음·뱃속 소리·자장가는 늘 써요")
         Toggle("휴대폰으로 받은 부모 노래도 써요", song) { song = it }
         if (noRearOutput) Toggle("뒷좌석 스피커가 없어 앞에서도 작게 틀어요", front) { front = it }
         BigButton("저장", enabled = consent && nickname.isNotBlank()) {
             onSave(ChildProfileEntity(
                 id = old?.id ?: "child", nickname = nickname.trim(), birthYm = YearMonth.of(year, month).toString(), carseat = seat,
                 feedingIntervalMin = interval, lastFeedingStart = old?.lastFeedingStart,
-                methods = listOfNotNull(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), if (song) Method(MethodKind.SONG) else null),
+                methods = listOfNotNull(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY), if (song) Method(MethodKind.SONG) else null),
                 hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now,
             ))
         }

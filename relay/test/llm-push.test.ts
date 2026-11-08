@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
+import { TOOLS } from "../src/llm";
 import { forgetAccessToken, retryAfterS } from "../src/push";
 import { ulid } from "../src/util";
 import { BASE, addGuardian, call, carWithOwner, newCar, send } from "./helpers";
@@ -73,6 +74,10 @@ describe("POST /v1/llm", () => {
     expect(s.body.messages[0].content).toMatch(/\n\n운전자 질문: 뭐가 제일 잘 통해\?$/);
   });
 
+  it("c118 switch_sound 도구 enum은 음원 넷(white_noise, womb, lullaby, parent_song)", () => {
+    const t = TOOLS.find((x) => x.name === "switch_sound")!;
+    expect((t.input_schema.properties as { method: { enum: string[] } }).method.enum).toEqual(["white_noise", "womb", "lullaby", "parent_song"]);
+  });
 
   it("도구만 온 답은 text가 빈 문자열", async () => {
     const car = await newCar();

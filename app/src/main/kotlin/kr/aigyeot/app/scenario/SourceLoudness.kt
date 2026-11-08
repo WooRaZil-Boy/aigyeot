@@ -36,7 +36,7 @@ internal class SourceLoudness(private val measure: (Method) -> Double?) {
 internal fun androidLufs(ctx: Context, m: Method): Double? = try {
     when (m.kind) {
         MethodKind.WHITE_NOISE -> whiteNoiseLufs()
-        MethodKind.LULLABY -> ctx.assets.openFd(AndroidAudio.LULLABY_ASSET).use { fd -> decodeLufs { it.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) } }
+        MethodKind.WOMB, MethodKind.LULLABY -> ctx.assets.openFd(if (m.kind == MethodKind.WOMB) AndroidAudio.WOMB_ASSET else AndroidAudio.LULLABY_ASSET).use { fd -> decodeLufs { it.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) } }
         MethodKind.SONG -> m.songId?.let { CarPaths.songFile(ctx, it) }?.takeIf { it.isFile }?.let { f -> decodeLufs { it.setDataSource(f.path) } }
     }
 } catch (e: Exception) { Log.w("SCENARIO", "음원 크기를 재지 못함 $m", e); null }

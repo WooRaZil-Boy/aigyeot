@@ -35,7 +35,7 @@ fun EngineState.Companion.fresh(
 
 private val AUTO_PHASES = setOf(Phase.ATTEMPT, Phase.GAP, Phase.CONFIRM)
 private val REAR = setOf(Area.ROW_2_LEFT, Area.ROW_2_RIGHT)
-private val DEFAULT_METHODS = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY))
+private val DEFAULT_METHODS = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY))
 private val OFFER_SIDS = setOf(Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11)   // 휴식 기록에 남기는 제안 문장
 private val OTHER_OFFERS = setOf(Sid.S07, Sid.S08, Sid.S10, Sid.S11)   // F5i: 이 문장이 큐에 있거나 말하는 중이거나 10분(offerRepeatMs) 안에 냈으면 출발 제안을 미룬다
 private val HOLDABLE = setOf(Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S10, Sid.S11)   // C107: 운전이 바쁘면 미루는 급하지 않은 문장

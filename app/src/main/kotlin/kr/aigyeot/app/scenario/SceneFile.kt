@@ -60,7 +60,7 @@ private val eventJson = Json { ignoreUnknownKeys = false }
 
 fun parseMethod(s: String): Method = when {
     s.startsWith("SONG:") && s.length > 5 -> Method(MethodKind.SONG, s.removePrefix("SONG:"))
-    s == "WHITE_NOISE" || s == "LULLABY" -> Method(MethodKind.valueOf(s))
+    s == "WHITE_NOISE" || s == "WOMB" || s == "LULLABY" -> Method(MethodKind.valueOf(s))
     else -> throw SceneError("음원 이름 '$s'")
 }
 
