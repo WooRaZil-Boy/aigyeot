@@ -12,11 +12,13 @@ import kr.aigyeot.app.link.db.SongSelectionEntity
 import kr.aigyeot.app.store.db.AppDatabase
 import kr.aigyeot.app.store.db.PhoneLinkEntity
 import kr.aigyeot.app.store.db.SongEntity
+import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.FeedingFrom
 import kr.aigyeot.engine.FeedingStarted
 import kr.aigyeot.engine.LinkChanged
 import kr.aigyeot.engine.Params
+import kr.aigyeot.shared.CareSummaryBody
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStartedBody
@@ -40,7 +42,7 @@ internal const val REJECTED = "REJECTED"
 internal const val DELETED = "DELETED"
 
 /** 차가 받아 처리하는 type(8.4). 나머지는 1단계에서 ack만 한다. */
-internal val RECEIVED_TYPES = setOf("feeding_started", "song_added", "song_removed", "song_selected", "paired", "unpaired", "state_request")
+internal val RECEIVED_TYPES = setOf("feeding_started", "song_added", "song_removed", "song_selected", "paired", "unpaired", "state_request", "care_summary")
 
 /**
  * 후보 ③(contracts-link 8.4, 명세서 5장). 고른 곡이 쓸 수 있으면 그 곡, 아니면 쓸 수 있는 곡 중 추가 순번이 가장 큰 곡.
@@ -60,9 +62,13 @@ internal class Applied {
     var phones = false
     var newOwner = false          // 연결 코드로 붙은 새 owner(G41: 연결 화면이 열려 있으면 새 코드)
     var justPaired: String? = null
+    var care: CareView? = null    // care_summary 요약(L60). 지금 값보다 늦은지는 커밋 뒤 link가 판단 코어 마지막 상태로 견준다
 }
 
 /** 8.3 3단계·8.4·8.5 넣기를 Room 트랜잭션 안에서 한다. 네트워크는 부르지 않는다. */
+/** 폰 시계 오차 허용(3.3 care_summary 받는 쪽). */
+private const val CLOCK_SKEW_MS = 5 * 60_000L
+
 internal class LinkRoom(private val db: AppDatabase, private val params: Params = Params()) {
     val dao = db.linkDao()
 
@@ -83,6 +89,20 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
     private class BadBody : Exception()
 
     private fun <T> Envelope.decode(s: KSerializer<T>): T = runCatching { ProtocolJson.decodeFromJsonElement(s, body) }.getOrElse { throw BadBody() }
+    /** 3.3: 시각을 읽지 못하거나 정수가 음수이거나, 끔인데 잠·기저귀 칸에 값이 있으면 버린다. */
+    private fun careView(b: CareSummaryBody, now: Long): CareView {
+        fun at(s: String?) = s?.let { instantOf(it) ?: throw BadBody() }
+        val ints = listOf(b.todaySleepMin, b.nightWakeups, b.todayDiaperCount, b.todayFeedCount)
+        if (ints.any { it != null && it < 0 }) throw BadBody()
+        val sd = listOf(b.lastSleepStartAt, b.lastSleepEndAt, b.sleepingSince, b.todaySleepMin, b.nightWakeups, b.lastDiaperAt, b.todayDiaperCount)
+        if (!b.sleepDiaperEnabled && sd.any { it != null }) throw BadBody()
+        val asOf = at(b.asOf) ?: throw BadBody()
+        if (asOf > now + CLOCK_SKEW_MS) throw BadBody()   // 폰 시계가 앞선 요약은 시계를 고친 뒤 새 요약을 막는다
+        return CareView(
+            asOf, b.sleepDiaperEnabled, at(b.lastSleepStartAt), at(b.lastSleepEndAt), at(b.sleepingSince),
+            b.todaySleepMin, b.nightWakeups, at(b.lastDiaperAt), b.todayDiaperCount, b.todayFeedCount,
+        )
+    }
     private fun songId(id: String) = id.takeIf(::isUlid) ?: throw BadBody()
 
     private fun apply(env: Envelope, seq: Long, now: Long, out: Applied) {
@@ -123,6 +143,7 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
                 old?.normalizedPath?.let { out.deleteFiles += it }
                 statuses(listOf(id) + moved(before), now, out)
             }
+            "care_summary" -> out.care = careView(env.decode(CareSummaryBody.serializer()), now)   // Room에는 두지 않는다(C119)
             "song_selected" -> select(songId(env.decode(SongRefBody.serializer()).songId), seq, now, out)
             "paired" -> {
                 val b = env.decode(PairedBody.serializer())

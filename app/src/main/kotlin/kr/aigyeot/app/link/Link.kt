@@ -43,6 +43,7 @@ import kr.aigyeot.engine.EpisodeTrigger
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.FeedingFrom
 import kr.aigyeot.engine.FeedingStarted
+import kr.aigyeot.engine.CareSummary
 import kr.aigyeot.engine.LinkChanged
 import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.Qa
@@ -75,12 +76,14 @@ class Link internal constructor(
     private val makeCopy: suspend (File, File) -> LoudnessResult,
     private val scope: CoroutineScope,
     private val qaWaitMs: Long = Params().qaReplyWaitMs,
+    private val postInjected: (Event) -> Unit = post,   // 장면 phone 단계가 주입한 사건(7.3): override로 막지 않는 길. [post]는 실제로 받은 사건
 ) {
     constructor(
-        context: Context, db: AppDatabase, clock: () -> Long, post: (Event) -> Unit, state: () -> EngineState?,
+        context: Context, db: AppDatabase, clock: () -> Long, post: (Event) -> Unit, state: () -> EngineState?, postInjected: (Event) -> Unit = post,
     ) : this(
         context, db, clock, post, state, OkRelay(RelayAddress.of(context)), KeystoreCipher(), ::probeSong,
         { i, o -> SongLoudness.makeCopy(i, o) }, CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.e(TAG, "link 코루틴 오류", e) }),   // 잡히지 않은 예외로 앱이 죽지 않게
+        postInjected = postInjected,
     )
 
     private val room = LinkRoom(db)
@@ -337,6 +340,7 @@ class Link internal constructor(
     private fun after(out: Applied) {
         out.deleteFiles.forEach { File(it).delete() }
         out.events.forEach(post)
+        out.care?.let { c -> if (state()?.care?.let { c.asOf > it.asOf } != false) post(CareSummary(clock(), c)) }   // L60: 지금 값보다 늦을 때만
         if (out.outbox) pumpSignal.trySend(Unit)
         if (out.download) songSignal.trySend(Unit)
         if (out.phones) { refreshStatus(); recheck() }
@@ -662,7 +666,7 @@ class Link internal constructor(
             Log.w(TAG, "장면 phone 봉투를 쓰지 않음 type=${env.type}")
             return
         }
-        post(FeedingStarted(clock(), at, FeedingFrom.PHONE, env.id))
+        postInjected(FeedingStarted(clock(), at, FeedingFrom.PHONE, env.id))
     }
 
     private companion object {

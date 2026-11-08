@@ -70,6 +70,15 @@ class ScenesTest {
         assertEquals("안성휴게소(부산방향)", ask.vars["restName"]); assertEquals("30", ask.vars["distanceKm"])
     }
 
+    @Test fun `장면 C2의 setup care는 장면 상태 care에 들어간다(C119)`() {
+        val w = FakeWorld(cryLen); w.play(scene("C2"))
+        val care = w.events.filterIsInstance<kr.aigyeot.engine.CareSummary>().single().summary
+        assertEquals(FakeWorld.T0 - 60_000, care.asOf)
+        assertEquals(FakeWorld.T0 - 12_600_000, care.lastSleepStartAt); assertEquals(FakeWorld.T0 - 3_600_000, care.lastDiaperAt)
+        assertEquals(2, care.todayFeedCount); assertEquals(null, care.sleepingSince)
+        assertEquals(care, w.steps.value!!.state.care)
+    }
+
     @Test fun `장면 D 계속 울음 - 두 번 뒤 인계`() {
         val rows = runAll("D")
         assertMeetsLimits("D", rows)

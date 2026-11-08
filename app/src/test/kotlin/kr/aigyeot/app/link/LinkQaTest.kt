@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kr.aigyeot.engine.Boot
+import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.CabinTemp
 import kr.aigyeot.engine.CarSeat
 import kr.aigyeot.engine.CrySegment
@@ -33,12 +34,16 @@ import kr.aigyeot.engine.Side
 import kr.aigyeot.engine.SwitchSound
 import kr.aigyeot.engine.Via
 import kr.aigyeot.engine.fresh
+import kr.aigyeot.shared.LlmDiaper
 import kr.aigyeot.shared.LlmResponse
+import kr.aigyeot.shared.LlmSleep
+import kr.aigyeot.shared.LlmState
 import kr.aigyeot.shared.LlmToolCall
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -136,6 +141,38 @@ class LinkQaTest : LinkKit() {
         assertEquals(listOf<Event>(QaReply(T0, "L1", "울음이 들리지 않아요.")), events.toList())
     }
 
+    @Test fun c108_recordClaim_offlineSentenceEvenWithSleepState() {
+        now = N                                                  // stateWith와 같은 시각이라 답의 숫자가 상태값과 맞는다
+        engineState = crying().copy(care = careNow(sleeping = false))
+        val st = stateWith(careNow(sleeping = false))
+        val llm = "기록상 ${st.sleep!!.wokeMinAgo}분 전에 깼어요."
+        assertTrue(kr.aigyeot.engine.numbersGrounded(llm, stateJson(st)))   // 숫자 검사는 통과하고 noStateClaim에서 걸린다
+        relay.llmRes = { Res.Ok(200, reply(llm)) }
+        ask("언제 깼어?")
+        val text = (events.single() as QaReply).text
+        assertEquals(offlineReply("언제 깼어?", st), text); assertTrue(text != llm, text)
+    }
+
+    @Test fun l61_summaryFromYesterday_dropsDayCounts() {
+        val seoul = java.time.ZoneId.of("Asia/Seoul")
+        val c = crying()
+        fun st(asOf: String, nowAt: String) = llmState(c.copy(care = careNow(asOf = instantOf(asOf)!!)), instantOf(nowAt)!!, 3, seoul)
+        val same = st("2025-11-05T23:50:00+09:00", "2025-11-05T23:59:00+09:00")
+        assertEquals(3, same.feedsToday); assertEquals(430, same.sleep!!.todaySleepMin); assertEquals(2, same.diaper!!.todayCount); assertEquals(2, same.lastNightWakeups)
+        val next = st("2025-11-05T23:55:00+09:00", "2025-11-06T00:05:00+09:00")
+        assertNull(next.feedsToday); assertNull(next.sleep!!.todaySleepMin); assertNull(next.diaper!!.todayCount); assertNull(next.lastNightWakeups)
+        assertEquals(10, next.careAsOfMinAgo); assertNotNull(next.diaper!!.minAgo); assertNotNull(next.sleep!!.sleepingSinceMin)   // 나머지 칸은 그대로
+    }
+
+    @Test fun offline_jamkkanIsNotSleep() {
+        val st = sleepSt(40, null, 35).copy(feeding = kr.aigyeot.shared.LlmFeeding(170, 180))
+        assertEquals("마지막 수유 시작부터 170분 지났어요.", offlineReply("잠깐, 수유 언제 했어?", st))
+        assertEquals("마지막 수유 시작부터 170분 지났어요.", offlineReply("잠시만 수유 언제야", st))
+        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았어요.", offlineReply("잠 언제 잤어?", st))
+        assertEquals(offlineReply("얼마나 울었어?", st), offlineReply("잠잠해지기 전까지 얼마나 울었어?", st))   // 잠잠은 잠 질문이 아니라 울음 행
+        assertTrue("잠 기록" !in offlineReply("잠잠해지기 전까지 얼마나 울었어?", st))
+    }
+
     @Test fun toolOnly_fixedSentences_parentSongIsCandidate() {
         engineState = crying()
         relay.llmRes = { Res.Ok(200, reply("", tool("switch_sound", "method" to "parent_song"))) }
@@ -219,5 +256,96 @@ class LinkQaTest : LinkKit() {
         relay.llmRes = { error("예상 못 한 오류") }
         ask("다음 수유실 어디야?")
         assertEquals(listOf<Event>(QaReply(T0, "L1", "○○휴게소까지 7.2km예요. 수유실이 있어요.")), events.toList())
+    }
+
+    // ---- 폰 돌봄 기록 요약(C119, L61) ----
+    private val N = T0 + 211_000                         // 경보 에피소드 시작(T0+121초)부터 90초 = 2분째
+    private fun careNow(asOfAgoMin: Long = 10, enabled: Boolean = true, sleeping: Boolean = true, asOf: Long = N - asOfAgoMin * MINUTE) = CareView(
+        asOf, enabled,
+        if (enabled) asOf - 160 * MINUTE else null, if (enabled) asOf - 160 * MINUTE + 35 * MINUTE + 30_000 else null,   // 35분 30초 잠
+        if (enabled && sleeping) asOf - 30 * MINUTE else null,
+        if (enabled) 430 else null, if (enabled) 2 else null, if (enabled) N - 235 * MINUTE else null, if (enabled) 2 else null, 3,
+    )
+    private fun stateWith(care: CareView?): LlmState {
+        val c = crying()
+        val ses = c.session!!.copy(methods = listOf(Method(MethodKind.LULLABY), Method(MethodKind.WHITE_NOISE)), carseatFrom = N - 52 * MINUTE)
+        val hist = List(7) { FirstTry(T0 - 1_000_000, Method(MethodKind.LULLABY), it < 6) } + List(6) { FirstTry(T0 - 1_000_000, Method(MethodKind.WHITE_NOISE), it < 2) }
+        return llmState(c.copy(session = ses, history = hist, feedingStart = N - 170 * MINUTE, care = care), N, 3)
+    }
+    private fun fixtureState() = kotlinx.serialization.json.Json.parseToJsonElement(java.io.File("../shared/src/test/resources/protocol/api_llm_request_care.json").readText())
+        .let { it as kotlinx.serialization.json.JsonObject }.getValue("state")
+
+    @Test fun l61_careState_equalsFixtureState() {
+        assertEquals(fixtureState(), stateJson(stateWith(careNow())))
+    }
+
+    @Test fun l61_summaryOlderThan24h_omittedAndWakeupsNull() {
+        val atEdge = stateWith(careNow(asOf = N - 24 * 60 * MINUTE))              // 정확히 24시간은 쓴다
+        assertEquals(1440, atEdge.careAsOfMinAgo); assertNotNull(atEdge.sleep)   // 어제 것이라 오늘·지난밤 값은 빠진다(l61_summaryFromYesterday)
+        val over = stateWith(careNow(asOf = N - 24 * 60 * MINUTE - 1))
+        assertNull(over.sleep); assertNull(over.diaper); assertNull(over.feedsToday); assertNull(over.careAsOfMinAgo); assertNull(over.lastNightWakeups)
+        val none = stateWith(null)
+        assertNull(none.sleep); assertNull(none.feedsToday); assertNull(none.careAsOfMinAgo)
+        val json = stateJson(over).toString()
+        listOf("\"sleep\"", "\"diaper\"", "feeds_today", "care_as_of_min_ago").forEach { assertTrue(it !in json, it) }   // 키 자체가 빠진다
+    }
+
+    @Test fun l61_sleepDiaperOff_dropsSleepDiaperKeepsFeeds() {
+        val st = stateWith(careNow(enabled = false))
+        assertNull(st.sleep); assertNull(st.diaper); assertNull(st.lastNightWakeups)
+        assertEquals(3, st.feedsToday); assertEquals(10, st.careAsOfMinAgo)
+    }
+
+    @Test fun l61_sleepInProgress_wokeMinAgoNull_endedSleep_hasWoke() {
+        val on = stateWith(careNow()).sleep!!
+        assertEquals(40, on.sleepingSinceMin); assertNull(on.wokeMinAgo); assertEquals(35, on.lastSleepMin)
+        val ended = stateWith(careNow(sleeping = false)).sleep!!
+        assertNull(ended.sleepingSinceMin); assertEquals(134, ended.wokeMinAgo); assertEquals(35, ended.lastSleepMin)
+    }
+
+    private fun sleepSt(sinceMin: Int?, woke: Int?, last: Int?, asOfAgo: Int = 10) =
+        stateWith(null).copy(sleep = LlmSleep(sinceMin, woke, last, 430), diaper = LlmDiaper(235, 2), feedsToday = 3, careAsOfMinAgo = asOfAgo)
+
+    @Test fun l61_offline_diaperRow() {
+        val st = sleepSt(40, null, 35)
+        assertEquals("기록상 마지막 기저귀는 235분 전이에요. 오늘 2번이에요.", offlineReply("기저귀 언제 갈았어?", st))
+        assertEquals("기저귀 기록이 없어요.", offlineReply("기저귀", st.copy(diaper = null)))
+        assertEquals("기저귀 기록이 없어요.", offlineReply("기저귀", st.copy(diaper = LlmDiaper(null, null))))
+    }
+
+    @Test fun l61_offline_sleepRow() {
+        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았어요.", offlineReply("언제 잤어?", sleepSt(40, null, 35)))
+        assertEquals("기록상 134분 전에 깼어요. 마지막 잠은 35분이었어요.", offlineReply("언제 깼어?", sleepSt(null, 134, 35)))
+        assertEquals("잠 기록이 없어요.", offlineReply("잠", sleepSt(null, null, null)))
+        assertEquals("잠 기록이 없어요.", offlineReply("잠", stateWith(null)))
+        assertEquals("기록상 134분 전에 깼어요. 마지막 잠은 35분이었어요.", offlineReply("얼마나 잤어?", sleepSt(null, 134, 35)))   // 4행(얼마나)보다 3행이 먼저
+    }
+
+    @Test fun l61_offline_whyRow_withWoke() {
+        assertEquals("마지막 수유 시작부터 170분, 카시트에 52분째이고, 기록상 134분 전에 깼어요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35)))
+        assertEquals("카시트에 52분째이고, 기록상 134분 전에 깼어요. 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35).copy(feeding = null)))
+        assertEquals("마지막 수유 시작부터 170분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(40, null, 35)))   // woke 없으면 그대로
+    }
+
+    @Test fun l61_offline_oldRecordPrefix_over60only() {
+        assertEquals("61분 전 기록 기준으로, 기록상 마지막 기저귀는 235분 전이에요. 오늘 2번이에요.", offlineReply("기저귀", sleepSt(40, null, 35, 61)))
+        assertEquals("기록상 마지막 기저귀는 235분 전이에요. 오늘 2번이에요.", offlineReply("기저귀", sleepSt(40, null, 35, 60)))
+        assertEquals("200분 전 기록 기준으로, 기록상 40분 전에 시작한 잠이 아직 끝나지 않았어요.", offlineReply("잠", sleepSt(40, null, 35, 200)))
+        assertTrue(offlineReply("왜 울어?", sleepSt(null, 134, 35, 90)).startsWith("90분 전 기록 기준으로, 마지막 수유"))
+        assertEquals("마지막 수유 시작부터 170분 지났어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300)))   // 돌봄 칸을 안 쓴 문장은 붙이지 않는다
+    }
+
+    @Test fun l61_offline_keywordOrder() {
+        val st = sleepSt(null, 134, 35)
+        assertTrue(offlineReply("수유실 기저귀 잠", st).startsWith("○○휴게소까지"))             // 1 수유실
+        assertTrue(offlineReply("기저귀 잠", st).startsWith("기록상 마지막 기저귀"))              // 2 기저귀
+        assertTrue(offlineReply("잠 얼마나", st).startsWith("기록상 134분 전에 깼어요"))         // 3 잠
+        assertTrue(offlineReply("얼마나 먹였어", st).startsWith("지금 "))                         // 4 얼마나
+        assertTrue(offlineReply("먹였어 왜", st).startsWith("마지막 수유 시작부터 170분 지났"))   // 5 먹였 > 7 왜
+    }
+
+    @Test fun l61_offline_numbersAreGrounded() {
+        val st = stateWith(careNow())
+        for (q in listOf("기저귀", "잠", "왜 울어")) assertTrue(kr.aigyeot.engine.numbersGrounded(offlineReply(q, st), stateJson(st)), q)
     }
 }

@@ -48,6 +48,7 @@ private fun collectNumbers(e: JsonElement, out: MutableSet<BigDecimal>) {
  * 지나치게 걸러도 오프라인 문장이 나갈 뿐이라 안전 쪽이다.
  */
 fun noStateClaim(text: String): Boolean {
+    // '기록상'이 있어도 깼·잠들었은 거른다(11-06, 예외를 좁힐 때마다 뚫려 없앴다). 줄바꿈·공백도 지워 표현을 끊어 우회하지 못한다.
     val t = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC).filterNot { it.isWhitespace() }
     return STATE_CLAIMS.none { it in t }
 }

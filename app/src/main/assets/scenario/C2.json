@@ -20,8 +20,21 @@
   "override": [
    "CabinTemp",
    "RouteState",
-   "RearDoor"
+   "RearDoor",
+   "CareSummary"
   ],
+  "care": {
+   "asOfSec": -60,
+   "sleepDiaperEnabled": true,
+   "lastSleepStartSec": -12600,
+   "lastSleepEndSec": -9000,
+   "sleepingSinceSec": null,
+   "todaySleepMin": 120,
+   "nightWakeups": 1,
+   "lastDiaperSec": -3600,
+   "todayDiaperCount": 2,
+   "todayFeedCount": 2
+  },
   "otherGuardians": 1
  },
  "steps": [

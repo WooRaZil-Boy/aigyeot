@@ -153,12 +153,13 @@ private class Ctx(val p: Params, var s: EngineState) {
             is FeedingConfirmed -> feedingConfirmed(e.yes)
             is ProfileChanged -> s = s.copy(profile = e.profile)
             is ClearRecords -> {                                                                  // C40a·C40b
-                s = s.copy(history = emptyList())
+                s = s.copy(history = emptyList(), care = null)   // C40e
                 ses { copy(recordsCleared = true) }
                 out += DeleteRecords; out += DeleteRelayRecords; snapshot = true
             }
             is MethodsChanged -> s = s.copy(methodsNext = e.methods)
             is LinkChanged -> s = s.copy(otherGuardians = e.otherGuardians)
+            is CareSummary -> if (s.care == null || e.summary.asOf > s.care!!.asOf) s = s.copy(care = e.summary)   // CS1·CS2
         }
     }
 

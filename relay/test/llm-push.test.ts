@@ -60,7 +60,7 @@ describe("POST /v1/llm", () => {
     const seen = fakeFetch(() => claude([{ type: "thinking", thinking: "" }, { type: "text", text: "자장가가 " }, { type: "text", text: "잘 통했어요." }]));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody() });
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-haiku-5-5", prompt_version: "p2" });
+    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-haiku-5-5", prompt_version: "p3" });
     expect(typeof r.json.latency_ms).toBe("number");
     const [s] = seen;
     expect(s.url).toBe("https://api.anthropic.com/v1/messages");
@@ -70,6 +70,9 @@ describe("POST /v1/llm", () => {
     for (const k of ["temperature", "top_p", "top_k", "thinking"]) expect(s.body).not.toHaveProperty(k);
     expect(s.body.tools.map((t: any) => [t.name, t.strict])).toEqual([["switch_sound", true], ["add_waypoint", true], ["stop_soothing", true]]);
     expect(s.body.messages).toHaveLength(1);
+    expect(s.body.system).toContain('- sleep·diaper·feeds_today·last_night_wakeups는 집에서 부모가 휴대폰에 적은 기록의 요약이다. 말할 때 "기록상"을 붙이고');   // p3 마지막 세 줄(L61)
+    expect(s.body.system).toContain("- 시각을 말하지 않는다. 상태값의 분 숫자를 그대로 쓰고 시간으로 바꾸지 않는다");
+    expect(s.body.system.endsWith('- care_as_of_min_ago가 60보다 크면 "그 기록은 n분 전 것"이라고 함께 말한다.')).toBe(true);
     expect(s.body.messages[0].content).toMatch(/^상태값\(JSON\):\n\{"cry"/);
     expect(s.body.messages[0].content).toMatch(/\n\n운전자 질문: 뭐가 제일 잘 통해\?$/);
   });

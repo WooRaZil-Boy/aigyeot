@@ -65,6 +65,21 @@ class NumberCheckTest {
         ).forEach { assertFalse(noStateClaim(it), it) }
     }
 
+    // 기록 예외는 없다(11-06): '기록상'이 있어도 깼·잠들었은 거른다
+    @Test fun c108_recordWordsStillFail() {
+        listOf("기록상 40분 전에 깼어요.", "기록상 40분 잤고 방금 깼어요.", "기록상 30분 전에 잠들었어요.").forEach { assertFalse(noStateClaim(it), it) }
+    }
+
+    @Test fun c108_newlineDoesNotBypassStateClaim() {
+        listOf("아기가 자고\n있어요.", "기저귀 때문에\n울어요.", "기록상 40분 전에 깼어요.\n아기가 푹\n자고 있어요.").forEach { assertFalse(noStateClaim(it), it) }
+    }
+
+    @Test fun c108_presentSleepStateFailsEvenWithRecord() {
+        listOf("기록상 지금 자고 있어요.", "기록상 자는 중이에요.", "기록상 아기가 깨어 있어요.", "기록상 잠들어 있어요.", "기록상 깼지만 배고파서 울어요.", "기록상 잘 자요.",
+            "기록상 40분 전에 깼고 지금 자고 있어요.", "기록상 30분 전에 잠들어 있어요.")
+            .forEach { assertFalse(noStateClaim(it), it) }
+    }
+
     @Test fun stateClaim_observedFacts_pass() {
         listOf("울음이 들리지 않아요.", "마지막 수유는 12시 10분이에요.", "백색소음을 틀었어요.", "지금 2분째 울고 있어요.", "소리를 바꿀게요.", "")
             .forEach { assertTrue(noStateClaim(it), it) }

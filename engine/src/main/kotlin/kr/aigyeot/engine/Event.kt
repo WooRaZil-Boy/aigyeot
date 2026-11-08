@@ -73,3 +73,4 @@ sealed interface Event { val at: Long }
 @Serializable data class ClearRecords(override val at: Long) : Event
 @Serializable data class MethodsChanged(override val at: Long, val methods: List<Method>) : Event
 @Serializable data class LinkChanged(override val at: Long, val otherGuardians: Int) : Event
+@Serializable data class CareSummary(override val at: Long, val summary: CareView) : Event   // C119

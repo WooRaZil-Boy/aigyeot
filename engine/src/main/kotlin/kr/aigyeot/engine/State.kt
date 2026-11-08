@@ -19,6 +19,7 @@ data class EngineState(
     val session: SessionState?,           // null = IDLE
     val speech: SpeechQueue,
     val steer: SteerState,
+    val care: CareView? = null,           // 폰 돌봄 기록 요약(C119). ④ 상태값·오프라인 문장만 읽고 판단에는 쓰지 않는다. 스냅숏 호환 기본값 null
 ) {
     companion object
 }
@@ -163,6 +164,15 @@ data class HandoffRecord(
     val at: Long, val hasDestination: Boolean,
     val remainingSec: Int?, val rests: List<RestCandidate>,
     val remainingKm: Double? = null,   // 목적지까지 남은 거리(km). 출발 수유실 제안(F5)용. 스냅숏 호환 기본값 null
+)
+@Serializable data class CareView(
+    val asOf: Long,                       // 폰이 요약을 계산한 시각(epoch ms). 더 늦은 것만 받는다
+    val sleepDiaperEnabled: Boolean,      // 거짓이면 잠·기저귀 칸은 모두 null
+    val lastSleepStartAt: Long?, val lastSleepEndAt: Long?,
+    val sleepingSince: Long?,
+    val todaySleepMin: Int?, val nightWakeups: Int?,
+    val lastDiaperAt: Long?, val todayDiaperCount: Int?,
+    val todayFeedCount: Int,
 )
 @Serializable data class RestCandidate(
     val id: String, val name: String, val kind: RestKind,

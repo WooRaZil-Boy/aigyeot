@@ -141,7 +141,7 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
         return scene.setup.run { ScenarioSetup(
             scene.id, runSeed, profile, methods,
             history.map { FirstTry(t0 - it.daysAgo * 86_400_000L, it.method, it.success) },
-            feedingStartOffsetSec?.let { t0 + it * 1000 }, otherGuardians, override,
+            feedingStartOffsetSec?.let { t0 + it * 1000 }, otherGuardians, override, care?.let { careView(it, t0) },
         ) }
     }
 
@@ -241,7 +241,7 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
                     synchronized(this) { if (pending.remove(tok) != null && !ok) fail(c.t, "phone ${a.type} 실패: $why") }
                 }
             }
-            is Inject -> post(injectEvent(a.event, a.fields, now))
+            is Inject -> post(injectEvent(a.event, a.fields, now, dueAt(c)))
             is Expect -> checks += ExpectCheck(c, a)
             is ExpectNone -> checks += NoneCheck(c, a)
         }

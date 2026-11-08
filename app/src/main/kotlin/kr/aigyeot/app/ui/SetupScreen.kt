@@ -47,6 +47,7 @@ fun SetupScreen(old: ChildProfileEntity?, now: Long, noRearOutput: Boolean, onBa
             Checkbox(consent, { consent = it }, Modifier.size(Touch))
             Body("아기의 보호자(법정대리인)로서 아이곁 사용에 동의해요")
         }
+        Body("질문하면 질문 글과 지금 상태 숫자(울음·수유·잠·기저귀 기록 요약, 카시트 시간, 실내 온도, 소리별 성적, 다음 쉼터 이름·거리)가 아이곁 중계 서버를 거쳐 AI 서버로 가요. 울음 소리와 차 위치 좌표는 보내지 않아요.")   // C119·C120
         OutlinedTextField(nickname, { nickname = it.take(20) }, label = { Text("아기 별명") }, singleLine = true,
             textStyle = MaterialTheme.typography.bodySmall)
         Label("태어난 해·달")

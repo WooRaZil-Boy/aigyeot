@@ -17,6 +17,8 @@ import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.engine.Phase
+import kr.aigyeot.engine.CareSummary
+import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.Profile
 import kr.aigyeot.engine.Sid
 
@@ -29,6 +31,7 @@ data class Scene(val id: String, val title: String, val repeat: Int, val setup: 
 data class Setup(
     val profile: Profile?, val feedingStartOffsetSec: Long?, val methods: List<Method>,
     val history: List<SeedTry>, val seed: Long, val override: Set<String>, val otherGuardians: Int,
+    val care: JsonObject? = null,   // 폰 돌봄 기록 요약 흉내(C119). 시각 칸은 장면 시작 기준 초. [careView]로 CareView가 된다
 )
 
 data class SeedTry(val method: Method, val success: Boolean, val daysAgo: Int)
@@ -67,10 +70,25 @@ fun parseMethod(s: String): Method = when {
 fun methodText(m: Method) = if (m.kind == MethodKind.SONG) "SONG:${m.songId}" else m.kind.name
 
 /** inject 사건 만들기. 필드는 3장 이름 그대로, at은 호스트 시계로 채운다. */
-fun injectEvent(name: String, fields: JsonObject, at: Long): Event = eventJson.decodeFromJsonElement(
-    Event.serializer(),
-    JsonObject(fields + mapOf("type" to JsonPrimitive("kr.aigyeot.engine.$name"), "at" to JsonPrimitive(at))),
-)
+fun injectEvent(name: String, fields: JsonObject, at: Long, base: Long = at): Event =
+    if (name == "CareSummary") CareSummary(at, careView(fields, base))   // 시각 칸은 그 단계 t 기준 초(7.3)
+    else eventJson.decodeFromJsonElement(
+        Event.serializer(),
+        JsonObject(fields + mapOf("type" to JsonPrimitive("kr.aigyeot.engine.$name"), "at" to JsonPrimitive(at))),
+    )
+
+/** `setup.care`·`inject CareSummary`의 초 오프셋 칸을 [base](epoch ms) 기준 CareView로(7.2). 없는 시각 칸은 null. */
+fun careView(f: JsonObject, base: Long): CareView {
+    f.only("care", "event", "asOfSec", "sleepDiaperEnabled", "lastSleepStartSec", "lastSleepEndSec", "sleepingSinceSec", "todaySleepMin", "nightWakeups", "lastDiaperSec", "todayDiaperCount", "todayFeedCount")
+    fun at(k: String) = f.long(k)?.let { base + it * 1000 }
+    return CareView(
+        base + (f.long("asOfSec") ?: throw SceneError("care.asOfSec")) * 1000,
+        f.bool("sleepDiaperEnabled") ?: throw SceneError("care.sleepDiaperEnabled"),
+        at("lastSleepStartSec"), at("lastSleepEndSec"), at("sleepingSinceSec"),
+        f.int("todaySleepMin"), f.int("nightWakeups"), at("lastDiaperSec"), f.int("todayDiaperCount"),
+        f.int("todayFeedCount") ?: throw SceneError("care.todayFeedCount"),
+    )
+}
 
 fun parseScene(text: String): Scene {
     val o = try { Json.parseToJsonElement(text) as? JsonObject } catch (e: Exception) { null } ?: throw SceneError("JSON 객체가 아니다")
@@ -87,7 +105,7 @@ fun parseScene(text: String): Scene {
 }
 
 private fun setup(s: JsonObject): Setup {
-    s.only("setup", "profile", "feedingStartOffsetSec", "methods", "history", "seed", "override", "otherGuardians")
+    s.only("setup", "profile", "feedingStartOffsetSec", "methods", "history", "seed", "override", "otherGuardians", "care")
     val profile = s.obj("profile")?.let { p ->
         p.only("profile", "birthYm", "carseat", "feedingIntervalMin", "hasSibling")
         Profile(
@@ -106,9 +124,13 @@ private fun setup(s: JsonObject): Setup {
     }
     val override = s.strings("override").toSet()
     override.forEach { if (it !in EVENTS) throw SceneError("override '$it'는 사건 이름이 아니다") }
+    val care = s.obj("care")?.also {
+        careView(it, 0)
+        if ("CareSummary" !in override) throw SceneError("setup.care를 쓰려면 override에 CareSummary가 있어야 한다")
+    }
     return Setup(
         profile, s.long("feedingStartOffsetSec"), s.strings("methods").map(::parseMethod), history,
-        s.long("seed") ?: throw SceneError("setup.seed"), override, s.int("otherGuardians") ?: 0,
+        s.long("seed") ?: throw SceneError("setup.seed"), override, s.int("otherGuardians") ?: 0, care,
     )
 }
 

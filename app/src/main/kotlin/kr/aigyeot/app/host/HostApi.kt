@@ -3,6 +3,7 @@ package kr.aigyeot.app.host
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kr.aigyeot.app.store.db.ControlLogEntity
+import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.FirstTry
 import kr.aigyeot.engine.Method
@@ -25,4 +26,5 @@ data class ScenarioSetup(
     val id: String, val seed: Long, val profile: Profile?, val methods: List<Method>,
     val history: List<FirstTry>, val feedingStart: Long?, val otherGuardians: Int,
     val override: Set<String>,                     // 진짜 신호를 막을 사건 이름(계약 7.2 setup.override)
+    val care: CareView? = null,                    // 폰 돌봄 기록 요약 흉내(C119). 장면 첫 Step 뒤 CareSummary로 넣는다
 )

@@ -7,6 +7,7 @@ import kr.aigyeot.app.host.HostApi
 import kr.aigyeot.app.host.ScenarioSetup
 import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.engine.AddWaypoint
+import kr.aigyeot.engine.CareSummary
 import kr.aigyeot.engine.Answer
 import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.Ask
@@ -92,6 +93,7 @@ class FakeWorld(
     override fun startScenario(setup: ScenarioSetup) {
         this.setup = setup
         state = EngineState.fresh(setup.seed, setup.profile, setup.methods, setup.history, setup.feedingStart, setup.otherGuardians)
+        setup.care?.let { post(CareSummary(now, it)) }   // C119: 호스트와 같게 첫 Step 뒤 요약 흉내
     }
     override fun endScenario() { ended = true }
 

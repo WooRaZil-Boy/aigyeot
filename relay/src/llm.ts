@@ -3,7 +3,7 @@
 import type { LlmRequest, LlmResponse } from "./protocol";
 import { HttpError } from "./util";
 
-export const PROMPT_VERSION = "p2";
+export const PROMPT_VERSION = "p3";
 const API_URL = "https://api.anthropic.com/v1/messages";
 const TIMEOUT_MS = 8000; // G6: 재시도 0회
 
@@ -13,7 +13,10 @@ export const SYSTEM_PROMPT = `너는 차 안 운전자에게 뒷좌석 아기 �
 - 원인은 단정하지 않고 "~일 수 있어요"처럼 추정으로 말한다.
 - "잠들었어요", "배고파서 울어요", "1분 안에 진정돼요"는 말하지 않는다. 울음이 그쳤는지 물으면 상태값 cry.current_min이 null일 때만 "울음이 들리지 않아요"라고 한다. cry.current_min이 숫자면 지금 울음이 이어지고 있다고 그 숫자와 함께 답하고, 그쳤다고 하지 않는다.
 - 뒤를 돌아보거나 손을 뻗으라고 하지 않는다. 차에서 더 재우라고 하지 않는다.
-- 소리 바꾸기는 운전자가 분명히 요청했을 때만 switch_sound로 한다.`;
+- 소리 바꾸기는 운전자가 분명히 요청했을 때만 switch_sound로 한다.
+- sleep·diaper·feeds_today·last_night_wakeups는 집에서 부모가 휴대폰에 적은 기록의 요약이다. 말할 때 "기록상"을 붙이고, 지금 자고 있다·깨어 있다·배고프다처럼 아기의 지금 상태를 단정하지 않는다.
+- 시각을 말하지 않는다. 상태값의 분 숫자를 그대로 쓰고 시간으로 바꾸지 않는다(예: "기록상 마지막 잠은 134분 전에 끝났어요"). "깼어요"·"잠들었어요" 대신 "잠이 끝났어요"·"잠이 시작됐어요"로 말한다.
+- care_as_of_min_ago가 60보다 크면 "그 기록은 n분 전 것"이라고 함께 말한다.`;
 
 const strictObject = (properties: object, required: string[]) => ({
   type: "object",

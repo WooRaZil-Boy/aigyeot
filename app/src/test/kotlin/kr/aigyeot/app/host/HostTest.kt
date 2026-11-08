@@ -11,6 +11,7 @@ import kr.aigyeot.app.scenario.SceneRun
 import kr.aigyeot.app.scenario.parseScene
 import kr.aigyeot.app.store.db.PlayLogEntity
 import kr.aigyeot.engine.*
+import kr.aigyeot.app.link.Link
 import org.junit.After
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -90,6 +91,20 @@ class HostTest {
         assertTrue(k.ses().departChecked)                    // 수유 시작이 없어 제안은 없고 확인만 됨(F5a)
         assertNotEquals(s0, k.savedAt(), "30초를 기다리지 않고 바로 저장")
         assertTrue(k.store.loadSnapshot()!!.session!!.departChecked)
+    }
+
+    @Test fun c119_careSummarySavedImmediately_andClearedByClearRecords() {
+        k.profile(); k.boot(); k.open()
+        val s0 = k.savedAt()
+        val c = CareView(k.now, true, null, null, null, null, null, null, null, 2)
+        k.ev(CareSummary(0, c), k.now + 1_000)
+        assertEquals(c, k.state().care)
+        assertNotEquals(s0, k.savedAt(), "30초를 기다리지 않고 바로 저장")
+        assertEquals(c, k.store.loadSnapshot()!!.care)
+        k.ev(CareSummary(0, c.copy(asOf = c.asOf - 1)), k.now + 1_000)    // 더 이른 것은 무시: 상태 그대로
+        assertEquals(c, k.state().care)
+        k.ev(ClearRecords(0), k.now + 1_000)
+        assertNull(k.state().care); assertNull(k.store.loadSnapshot()!!.care)
     }
 
     @Test fun c78_vehicleSampleBatched_every30s() {
@@ -461,6 +476,52 @@ class HostTest {
         k.host.endScenario(); k.host.awaitIdle()
         k.host.postReal(CabinTemp(0, 19.1)); k.host.awaitIdle()
         assertEquals(19.1, k.state().car.cabinC, "끝나면 다시 받는다")
+    }
+
+    @Test fun c119_scenarioCare_overridesRealSummary_andEndRestoresReal() {
+        k.profile(); k.boot()
+        val real = CareView(k.now, true, null, null, null, null, null, null, null, 5)
+        k.ev(CareSummary(0, real))
+        val fake = real.copy(asOf = real.asOf - 60_000, todayFeedCount = 2)
+        k.host.startScenario(setup(override = setOf("CareSummary")).copy(care = fake)); k.host.awaitIdle()
+        assertEquals(fake, k.state().care, "장면 setup.care가 첫 Step 뒤 들어간다")
+        val newer = real.copy(asOf = real.asOf + 1_000)
+        k.host.postReal(CareSummary(0, newer)); k.host.awaitIdle()
+        assertEquals(fake, k.state().care, "실제 link 요약은 막힌다")
+        k.host.endScenario(); k.host.awaitIdle()
+        assertEquals(newer, k.state().care, "끝나면 실제로 받은 가장 늦은 값")
+    }
+
+    private fun careEndsAs(override: Set<String>, during: CareView?): CareView? {
+        k.profile(); k.boot()
+        val c1 = CareView(k.now, true, null, null, null, null, null, null, null, 1)
+        k.ev(CareSummary(0, c1))
+        k.host.startScenario(setup(override = override)); k.host.awaitIdle()
+        during?.let { k.host.postReal(CareSummary(0, it)); k.host.awaitIdle() }
+        k.host.endScenario(); k.host.awaitIdle()
+        return k.state().care
+    }
+
+    @Test fun c119_realSummaryDuringScene_survivesSceneEnd() {
+        val c2 = CareView(T0 + 5_000, true, null, null, null, null, null, null, null, 9)
+        assertEquals(c2, careEndsAs(emptySet(), c2), "override 없는 장면: 장면 상태에 들어갔다가 끝나도 남는다")
+        assertEquals(c2, careEndsAs(setOf("CareSummary"), c2), "override 장면: 장면에는 안 들어가도 끝나면 실제 최신 값")
+        assertEquals(1, careEndsAs(setOf("CareSummary"), null)!!.todayFeedCount, "장면 전 값만 있으면 그대로")
+        assertEquals(1, careEndsAs(emptySet(), c2.copy(asOf = T0 - 5_000))!!.todayFeedCount, "장면 전 값보다 이른 요약은 이기지 못한다")
+    }
+
+    @Test fun scenarioPhoneStep_feedingStarted_notBlockedByOverride_viaWiringSinks() {
+        k.profile(); k.boot()
+        val (real, injected) = k.host.linkSinks()
+        val link = Link(androidx.test.core.app.ApplicationProvider.getApplicationContext(), k.db, k.clock, real, { null }, kr.aigyeot.app.link.FakeRelay(),
+            kr.aigyeot.app.link.FakeCipher, { null }, { _, _ -> kr.aigyeot.app.exec.LoudnessResult(true) }, k.linkScope, postInjected = injected)
+        k.host.startScenario(setup(override = setOf("FeedingStarted"))); k.host.awaitIdle()
+        val at = T0 - 600_000
+        val json = """{"v":1,"id":"01JC8Y2K6N3T5Q9W0ZB4H7X2D1","type":"feeding_started","ts":"2026-11-05T08:12:21+09:00","body":{"at":"${kr.aigyeot.app.link.rfc3339(at)}"}}"""
+        kotlinx.coroutines.runBlocking { link.receiveForScenario(json) }; k.host.awaitIdle()
+        assertEquals(at, k.state().feedingStart, "장면 phone 단계 주입은 override로 막히지 않는다(7.3)")
+        real(FeedingStarted(0, at + 1_000, FeedingFrom.PHONE, null)); k.host.awaitIdle()
+        assertEquals(at, k.state().feedingStart, "실제로 받은 사건은 override로 막힌다")
     }
 
     @Test fun scenario_endDoesNotKeepInjectedOverrideCar() {

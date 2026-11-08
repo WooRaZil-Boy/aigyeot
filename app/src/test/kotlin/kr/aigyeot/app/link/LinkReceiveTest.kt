@@ -1,7 +1,10 @@
 package kr.aigyeot.app.link
 
 import kotlinx.coroutines.runBlocking
+import kr.aigyeot.engine.CareSummary
+import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.FeedingFrom
+import kr.aigyeot.engine.fresh
 import kr.aigyeot.engine.FeedingStarted
 import kr.aigyeot.engine.LinkChanged
 import kr.aigyeot.shared.InboxResponse
@@ -61,6 +64,60 @@ class LinkReceiveTest : LinkKit() {
         rx(env("feeding_started", 412, """{"at":"$at1"}"""))
         assertEquals(1, events.filterIsInstance<FeedingStarted>().size)
         assertTrue(outbox().isEmpty())
+    }
+
+    // ---------------------------------------------------------------- care_summary(L60, 8.3·8.4)
+
+    private fun care(asOf: String = "2026-11-06T15:00:00+09:00", enabled: Boolean = true, sleepMin: String = "430", feeds: String = "3", sleepStart: String = "\"2026-11-06T12:20:00+09:00\"") =
+        env("care_summary", 430, """{"as_of":"$asOf","zone":"Asia/Seoul","sleep_diaper_enabled":$enabled,"last_sleep_start_at":$sleepStart,"last_sleep_end_at":null,"sleeping_since":null,"today_sleep_min":$sleepMin,"night_wakeups":null,"last_diaper_at":null,"today_diaper_count":null,"today_feed_count":$feeds}""")
+    private val careAt = instantOf("2026-11-06T15:00:00+09:00")!!
+
+    @Test fun l60_newerSummary_postsCareSummaryEvent_notInRoom() {
+        now = careAt                                                         // as_of가 미래면 버리므로(3.3) 시험 시계를 as_of에 맞춘다
+        val e = care()
+        assertTrue(rx(e))
+        assertEquals(CareSummary(careAt, CareView(careAt, true, instantOf("2026-11-06T12:20:00+09:00"), null, null, 430, null, null, null, 3)), events.single())
+        assertTrue(dao.processed(e.id))
+        assertTrue(outbox().isEmpty())
+    }
+
+    @Test fun l60_fixtures_apply_offAllNull() {
+        now = careAt
+        for (f in listOf("care_summary.json", "care_summary_off.json")) {
+            events.clear()
+            assertTrue(rx(ProtocolJson.decodeFromString(kr.aigyeot.shared.Envelope.serializer(), java.io.File("../shared/src/test/resources/protocol/$f").readText())), f)
+            assertEquals(1, events.size, f)
+        }
+        val off = events.single() as CareSummary
+        assertFalse(off.summary.sleepDiaperEnabled)
+        assertEquals(3, off.summary.todayFeedCount); assertNull(off.summary.todaySleepMin)
+    }
+
+    @Test fun l60_olderOrSameAsOf_ackedNoEvent() {
+        now = careAt
+        engineState = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0).copy(care = CareView(careAt, true, null, null, null, null, null, null, null, 9))
+        val e = care()                                                       // 같은 as_of
+        assertTrue(rx(e)); assertTrue(events.isEmpty()); assertTrue(dao.processed(e.id))
+        assertTrue(rx(care(asOf = "2026-11-06T14:59:59+09:00"))); assertTrue(events.isEmpty())
+        assertTrue(rx(care(asOf = "2026-11-06T15:00:01+09:00"))); assertEquals(1, events.size)   // 더 늦으면 낸다
+    }
+
+    private fun assertDropped(e: kr.aigyeot.shared.Envelope) {
+        now = careAt
+        assertTrue(rx(e)); assertTrue(events.isEmpty(), e.toString()); assertTrue(dao.processed(e.id))
+    }
+    @Test fun l60_unreadableTime_droppedAndAcked() = assertDropped(care(asOf = "어제 3시"))
+    @Test fun l60_negativeInt_droppedAndAcked() = assertDropped(care(feeds = "-1"))
+    @Test fun l60_disabledButSleepValue_droppedAndAcked() = assertDropped(care(enabled = false))
+    @Test fun l60_unreadableSleepTime_droppedAndAcked() = assertDropped(care(sleepStart = "\"abc\""))
+    @Test fun l60_invalidCalendarDate_droppedAndAcked() = assertDropped(care(asOf = "2026-02-30T15:00:00+09:00"))
+    @Test fun l60_intOverflow_droppedAndAcked() = assertDropped(care(feeds = "2147483648"))
+
+    @Test fun l60_futureAsOf_droppedAndAcked() {
+        now = careAt - 6 * 60_000                                            // as_of가 6분 미래: 폰 시계가 앞섰다
+        val e = care(); assertTrue(rx(e)); assertTrue(events.isEmpty()); assertTrue(dao.processed(e.id))
+        now = careAt - 4 * 60_000                                            // 4분은 오차로 받는다
+        assertTrue(rx(care())); assertEquals(1, events.size)
     }
 
     // ---------------------------------------------------------------- 1·2단계

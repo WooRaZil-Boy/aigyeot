@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kr.aigyeot.app.store.Store
 import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.engine.Boot
+import kr.aigyeot.engine.CareSummary
+import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.ClearRecords
 import kr.aigyeot.engine.CloseSession
 import kr.aigyeot.engine.Command
@@ -116,9 +118,13 @@ class Host(
 
     /** exec가 낸 진짜 신호. 장면이 `override`로 막은 이름이면 버린다(계약 7.2). */
     fun postReal(event: Event) {
+        if (event is CareSummary && scenario != null) noteRealCare(event.summary)   // 장면이 막았든 아니든 실제로 받은 요약은 장면 끝에 되돌려 준다
         if (scenario?.override?.contains(event::class.simpleName) == true) return
         post(event)
     }
+
+    @Volatile private var realCareDuringScene: CareView? = null   // 장면 중 실제로 받은 가장 늦은 요약(Room에 없어 호스트가 들고 있는다)
+    @Synchronized private fun noteRealCare(c: CareView) { if (realCareDuringScene.let { it == null || c.asOf > it.asOf }) realCareDuringScene = c }
 
     /** exec의 control_log 한 줄: store에 쓰고 장면 측정용 흐름에도 낸다. */
     fun logControl(row: ControlLogEntity) {
@@ -171,13 +177,14 @@ class Host(
 
     override fun startScenario(setup: ScenarioSetup) = worker.execute {
         if (!started) return@execute
-        if (scenario == null) { real = state; snapshot(state); store.resetContext() }   // 장면 표본이 실제 맥락에 섞이지 않게(C92). 실제 스냅숏은 장면 직전 값으로 둔다(장면 중 죽어도 실제로 복원)
+        if (scenario == null) { real = state; realCareDuringScene = null; snapshot(state); store.resetContext() }   // 장면 표본이 실제 맥락에 섞이지 않게(C92). 실제 스냅숏은 장면 직전 값으로 둔다(장면 중 죽어도 실제로 복원)
         scenario = setup
         val r = real!!
         // 차 상태(기어·문·마이크)와 운전자는 실제 값을 이어받는다. 나머지는 장면 setup으로 처음부터
         val f = EngineState.fresh(setup.seed, setup.profile, setup.methods, setup.history, setup.feedingStart, setup.otherGuardians)
         state = f.copy(now = maxOf(clock(), r.now), car = r.car, ign = f.ign.copy(driverUserId = r.ign.driverUserId))
         publish(Step(state, emptyList(), null))   // 장면 첫 Step(rng = 그 반복 시드, 할 일 없음). scenario의 SceneGate가 여기서부터 받는다
+        setup.care?.let { run(stamp(CareSummary(clock(), it))) }   // C119: 첫 Step 뒤 요약 흉내
     }
 
     override fun endScenario() = worker.execute {
@@ -198,7 +205,9 @@ class Host(
         real = null
         store.resetContext()
         // 실제 상태의 말하기·질문·재생·잠금 콜백은 장면 상태로 가서 사라졌다. 프로세스 복원과 같은 길로 비운다(H7: Tick도 다시 예약)
-        restore(r.copy(car = c), clock(), c.gear)
+        val care = listOfNotNull(r.care, realCareDuringScene).maxByOrNull { it.asOf }   // 장면 전 값과 장면 중 받은 값 중 가장 늦은 것
+        realCareDuringScene = null
+        restore(r.copy(car = c, care = care), clock(), c.gear)
     }
 
     /** 시험용: 큐에 쌓인 일을 모두 끝낼 때까지 기다린다. */
@@ -389,7 +398,7 @@ class Host(
             listOf(
                 x?.id, x?.phase, x?.attemptNo, x?.play, x?.episode, x?.pauses, x?.longDriveOffered, x?.capReached,
                 x?.pendingAsk, x?.waypointPending, x?.nursingStop, s.car.outPauses, s.ign.windowLockPending, s.ign.suspendedAt,
-                s.feedingStart, s.profile, s.methodsNext, x?.departChecked,
+                s.feedingStart, s.profile, s.methodsNext, x?.departChecked, s.care,
             )
         }
     }

@@ -50,8 +50,11 @@ fun Event.withAt(t: Long): Event = if (at == t) this else when (this) {
     is DriverStop -> copy(at = t); is SwitchSound -> copy(at = t); is DriverAddWaypoint -> copy(at = t); is AskButton -> copy(at = t)
     is Heard -> copy(at = t); is QaReply -> copy(at = t); is BabyAboard -> copy(at = t); is FeedingStarted -> copy(at = t)
     is FeedingConfirmed -> copy(at = t); is ProfileChanged -> copy(at = t); is ClearRecords -> copy(at = t)
-    is MethodsChanged -> copy(at = t); is LinkChanged -> copy(at = t)
+    is MethodsChanged -> copy(at = t); is LinkChanged -> copy(at = t); is CareSummary -> copy(at = t)
 }
+
+/** Link가 쓰는 사건 길: 첫째는 실제로 받은 사건(장면 override가 막는다), 둘째는 장면 phone 단계 주입(7.3, 막지 않는다). */
+internal fun Host.linkSinks(): Pair<(Event) -> Unit, (Event) -> Unit> = ::postReal to ::post
 
 /**
  * 프로세스에 하나인 모듈 묶음. 화면과 감시 서비스가 같은 것을 쓴다.
@@ -65,7 +68,8 @@ class Graph private constructor(ctx: Context) {
     val host = Host(store, clock).also { hostRef = it }
     private val latest = { host.steps.value?.state }
     val exec = Exec(ctx, clock, host::postReal, host::logControl, latest)
-    val link = Link(ctx, db, clock, host::post, latest)
+    private val sinks = host.linkSinks()
+    val link = Link(ctx, db, clock, sinks.first, latest, sinks.second)
     val scenario = Scenario(ctx, host, link)
 
     init {

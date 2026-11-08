@@ -28,6 +28,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.test.assertFailsWith
 import java.time.Instant
 import java.time.OffsetDateTime
 
@@ -532,5 +533,31 @@ class SceneRunTest {
         r.advance(w.now + 5_000)
         assertFalse(r.done(w.now + 46_999))   // 시작 5초 + 지연 2초 + 40초
         assertTrue(r.done(w.now + 47_000))
+    }
+
+    // ---- C119 setup.care·inject CareSummary ----
+    private val careFields = """"asOfSec":-60,"sleepDiaperEnabled":true,"lastSleepStartSec":-9000,"lastSleepEndSec":-6000,"sleepingSinceSec":null,"todaySleepMin":120,"nightWakeups":1,"lastDiaperSec":-3600,"todayDiaperCount":2,"todayFeedCount":2"""
+
+    @Test fun `setup care는 시작 기준 시각으로 바뀐다`() {
+        val s = parseScene("""{"format":1,"id":"T","title":"","repeat":1,"setup":{"seed":1,"override":["CareSummary"],"care":{$careFields}},"steps":[]}""")
+        val w = FakeWorld()
+        val care = SceneRun(s, 0, w, w, 1_000_000).setup().care!!
+        assertEquals(1_000_000L - 60_000, care.asOf)
+        assertEquals(1_000_000L - 9_000_000, care.lastSleepStartAt); assertNull(care.sleepingSince); assertEquals(2, care.todayDiaperCount)
+    }
+
+    @Test fun `setup care는 override CareSummary 없이는 거절, 모르는 칸도 거절`() {
+        assertFailsWith<SceneError> { parseScene("""{"format":1,"id":"T","title":"","repeat":1,"setup":{"seed":1,"override":[],"care":{$careFields}},"steps":[]}""") }
+        assertFailsWith<SceneError> { parseScene("""{"format":1,"id":"T","title":"","repeat":1,"setup":{"seed":1,"override":["CareSummary"],"care":{$careFields,"x":1}},"steps":[]}""") }
+        assertFailsWith<SceneError> { parseScene("""{"format":1,"id":"T","title":"","repeat":1,"setup":{"seed":1,"override":["CareSummary"],"care":{"asOfSec":-1}},"steps":[]}""") }
+    }
+
+    @Test fun `inject CareSummary의 시각 칸은 그 단계 t 기준 초`() {
+        val w = FakeWorld()
+        w.play(scene("""{"t":7,"inject":{"event":"CareSummary",$careFields}}""", override = "\"RearDoor\",\"CabinTemp\",\"CareSummary\""))
+        val c = w.events.filterIsInstance<kr.aigyeot.engine.CareSummary>().single().summary
+        assertEquals(FakeWorld.T0 + 7_000 - 60_000, c.asOf)
+        assertEquals(FakeWorld.T0 + 7_000 - 3_600_000, c.lastDiaperAt)
+        assertEquals(c, w.steps.value!!.state.care)
     }
 }
