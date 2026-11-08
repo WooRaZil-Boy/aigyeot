@@ -61,6 +61,335 @@ class S57HandoffTest {
         assertEquals("아기가 계속 울어요.", b["text"]!!.jsonPrimitive.content)
     }
 
+    // ---- H10: 인계 알림은 그 줄을 실제로 낼 때 보낸다 ----
+    private fun Sim.busyNow() = ev(VehicleSample(t, 60.0, true, 0.0, TurnSignal.NONE))
+    private fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }
+    /** 바쁨 중에 인계해 쉼터 질문 S07이 큐에서 미뤄진 상태. */
+    private fun heldOffer(): Sim {
+        val sim = session().route(rest("n", 14.0, nursing = true))
+        sim.attempt2().toGap().busyNow().recry()
+        assertEquals(Phase.HANDOFF, sim.ses.phase)
+        assertTrue(sim.all<Ask>().isEmpty())
+        assertNotNull(sim.ses.pendingHandoffAlert)
+        return sim
+    }
+
+    @Test fun h10_alertWaitsForAsk() {
+        val sim = heldOffer()
+        assertTrue(sim.alerts().isEmpty())
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))
+        if (sim.all<Ask>().isEmpty()) sim.flush()
+        assertEquals(Sid.S07, sim.all<Ask>().single().sid)
+        val b = sim.alerts().single().body                      // 바로 + 나중 두 번이 아니라 한 번
+        assertEquals("n 휴게소", b["rest_name"]!!.jsonPrimitive.content)
+        assertEquals("rest_offer", b["kind"]!!.jsonPrimitive.content)
+        assertNull(sim.ses.pendingHandoffAlert)
+        sim.flush(); sim.tick(60_000)
+        assertEquals(1, sim.alerts().size)
+    }
+
+    @Test fun h10_droppedOfferSendsPlainAlert() {
+        // 경로에서 그 쉼터가 빠져 refreshed가 null(drain의 버림 길)
+        val a = heldOffer()
+        a.ev(RouteState(a.t, false, null, emptyList()))
+        a.ev(Tick(a.s.steer.driveBusyAt!! + P.holdStableMs))
+        a.flush()
+        assertTrue(a.all<Ask>().isEmpty())
+        val b = a.alerts().single().body
+        assertEquals(JsonNull, b["rest_name"]); assertEquals("rest_offer", b["kind"]!!.jsonPrimitive.content)
+        assertEquals("아기가 계속 울어요.", b["text"]!!.jsonPrimitive.content)
+        assertEquals(a.ep.id, b["episode_id"]!!.jsonPrimitive.content)
+        // 통화로 버려짐(cancelSpeech) — 그 Step에 이름 없는 알림
+        val c = heldOffer()
+        c.ev(CallMode(c.t, true))
+        val b2 = c.alerts().single().body
+        assertEquals(JsonNull, b2["rest_name"]); assertEquals("아기가 계속 울어요.", b2["text"]!!.jsonPrimitive.content)
+        assertNull(c.ses.pendingHandoffAlert)
+        c.ev(CallMode(c.t, false)).flush()
+        assertEquals(1, c.alerts().size)
+    }
+
+    @Test fun h10_noQueuedOfferSendsPlainAlertNow() {
+        val sim = session().route(rest("n", 14.0, nursing = true))
+        sim.s = sim.s.copy(session = sim.ses.copy(lastOffer = mapOf(Sid.S07_DEPART to sim.t)))   // 10분 금지: 질문이 큐에 못 든다
+        sim.handoff()
+        assertNull(sim.ses.pendingHandoffAlert)
+        val b = sim.alerts().single().body
+        assertEquals(JsonNull, b["rest_name"]); assertEquals("아기가 계속 울어요.", b["text"]!!.jsonPrimitive.content)
+        sim.flush()
+        assertEquals(1, sim.alerts().size)
+    }
+
+    @Test fun h10_existingQueuedOffer_alertWaitsForIt() {
+        // 이미 큐에 같은 S07이 있어 offer()가 새 줄을 넣지 않아도, 알림은 그 줄에 묶인다
+        val sim = session().route(rest("n", 14.0, nursing = true))
+        sim.attempt2().toGap().busyNow()
+        val old = Line(Sid.S07, mapOf("restName" to "n 휴게소", "distanceKm" to "14"), "n", queuedAt = sim.t)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(queue = sim.s.speech.queue + old))
+        sim.recry()
+        assertTrue(sim.alerts().isEmpty())
+        assertEquals(old.queuedAt, sim.ses.pendingHandoffAlert!!.queuedAt)
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs)); sim.flush()
+        assertEquals(Sid.S07, sim.all<Ask>().single().sid)
+        assertEquals("n 휴게소", sim.alerts().single().body["rest_name"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun h10_noRest_droppedS10_sendsPlainNoRestAlert() {
+        val sim = session()
+        sim.attempt2().toGap().busyNow().recry()               // 쉼터 없음 H7: S10이 바쁨으로 미뤄짐
+        assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind)
+        assertTrue(sim.alerts().isEmpty()); assertNotNull(sim.ses.pendingHandoffAlert)
+        sim.ev(CallMode(sim.t, true))                          // 통화로 버려짐
+        val b = sim.alerts().single().body
+        assertEquals("no_rest", b["kind"]!!.jsonPrimitive.content)
+        assertEquals(JsonNull, b["rest_name"]); assertEquals("아기가 계속 울어요.", b["text"]!!.jsonPrimitive.content)
+        assertNull(sim.ses.pendingHandoffAlert)
+        // 말하게 되면 기존 no_rest 문장 한 번
+        val ok = session(); ok.attempt2().toGap().busyNow().recry()
+        ok.ev(Tick(ok.s.steer.driveBusyAt!! + P.holdStableMs)); ok.flush()
+        assertTrue(Sid.S10 in ok.sids())
+        assertEquals("아기가 계속 울어요. 가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요.", ok.alerts().single().body["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun h10_sessionClosedWithPending_sendsPlainAlert() {
+        val sim = heldOffer()
+        val sid = sim.ses.id
+        // P 처리 단계에서 큐 줄이 먼저 버려지지 않게 기어만 P로 둔 채 뒷문을 연다: closeSession()의 강제 처리만 알림을 보낼 수 있다
+        sim.s = sim.s.copy(car = sim.s.car.copy(gear = Gear.P))
+        assertNotNull(sim.ses.pendingHandoffAlert); assertTrue(sim.alerts().isEmpty())
+        sim.ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session)
+        val b = sim.alerts().single().body
+        assertEquals(JsonNull, b["rest_name"]); assertEquals("아기가 계속 울어요.", b["text"]!!.jsonPrimitive.content)
+        assertEquals(sid, b["session_id"]!!.jsonPrimitive.content)
+        sim.flush()
+        assertEquals(1, sim.alerts().size)
+    }
+
+    /** C140: 말하던 S12가 끝나기 전에 세션이 닫히면 대기 인계의 S07이 큐에 남아 다음 세션에서 나가면 안 된다. */
+    private fun closedWhileSpeaking(vararg extra: Line): Sim {
+        val sim = heldOffer()
+        val s12 = Line(Sid.S12, emptyMap(), null)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(s12) + sim.s.speech.queue + extra), car = sim.s.car.copy(gear = Gear.P))
+        sim.ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session)
+        return sim
+    }
+
+    @Test fun c140_closeSession_dropsBoundHandoffLine_keepsSpeaking() {
+        val sim = closedWhileSpeaking()
+        assertEquals(listOf(Sid.S12, Sid.S02, Sid.S03), sim.s.speech.queue.map { it.sid }, "말하던 S12와 세션 끝 안내만 남는다")
+        assertEquals("u1", sim.s.speech.speaking)
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true)); sim.ev(Tick(sim.t + 8_000)); sim.flush()
+        assertTrue(sim.all<Ask>().isEmpty(), "새 세션에서 Ask(S07)이 나가지 않는다")
+        assertEquals(1, sim.alerts().size)
+    }
+
+    @Test fun c140_closeSession_dropsPlainOffers_keepsUnrelated() {
+        val sim = closedWhileSpeaking(Line(Sid.S10, emptyMap(), null, queuedAt = 1), Line(Sid.S11, emptyMap(), null, queuedAt = 1), Line(Sid.S17, emptyMap(), null))
+        assertEquals(listOf(Sid.S12, Sid.S02, Sid.S03, Sid.S17), sim.s.speech.queue.map { it.sid })
+    }
+
+    @Test fun c140_closeSession_speakingOfferLine_keptAndToldRecorded() {
+        val (sim, _) = speakingOffer()   // C131: 말하는 중인 S07은 이미 told=true로 기록됐다
+        sim.s = sim.s.copy(car = sim.s.car.copy(gear = Gear.P))
+        sim.ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session)
+        assertEquals(listOf(Sid.S07, Sid.S02, Sid.S03), sim.s.speech.queue.map { it.sid }, "말하던 줄은 끝까지 둔다")
+        assertEquals(1, sim.alerts().size)
+    }
+
+    @Test fun h10_nullQueuedAtOldLine_boundAndToldDriverTrue() {
+        // C137: queuedAt이 없는 옛 S10이 큐에서 기다려도 같은 줄로 묶는다(null도 값). 말하면 toldDriver = true
+        val sim = session()
+        sim.attempt2().toGap().busyNow()
+        val old = Line(Sid.S10, emptyMap(), null, queuedAt = null)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(queue = sim.s.speech.queue + old))
+        sim.recry()
+        val pa = sim.ses.pendingHandoffAlert
+        assertNotNull(pa, "null 줄도 묶는다"); assertNull(pa!!.queuedAt)
+        assertNull(sim.ep.handoff!!.toldDriver); assertTrue(sim.alerts().isEmpty())
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs)); sim.flush()
+        assertTrue(Sid.S10 in sim.sids()); assertEquals(1, sim.alerts().size)
+        assertNull(sim.ses.pendingHandoffAlert)
+        assertEquals(true, sim.ep.handoff!!.toldDriver)
+    }
+
+    @Test fun h10_boundToReturnedLine_notOldQueued() {
+        // 수유 시간대 A(nursing) 질문 S07이 미뤄져 있고, 경로는 B 일반 쉼터만 남은 채 인계 → 새 S08(B)에 묶는다(C130)
+        val sim = session().route(rest("b", 10.0))
+        sim.attempt2().toGap().busyNow()
+        val old = Line(Sid.S07, mapOf("restName" to "a 휴게소", "distanceKm" to "14"), "a", queuedAt = sim.t)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(queue = sim.s.speech.queue + old))
+        sim.recry()
+        val pa = sim.ses.pendingHandoffAlert!!
+        assertEquals(Sid.S08, pa.sid); assertEquals("b", pa.askRestId)
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs)); sim.flush()
+        assertEquals(Sid.S08, sim.all<Ask>().single().sid)
+        assertEquals("b 휴게소", sim.alerts().single().body["rest_name"]!!.jsonPrimitive.content)
+    }
+
+    /** C131: 인계가 돌려받은 줄이 이미 말하는 중(큐 맨 앞)이면 묶지 않고 지금 알린다. */
+    private fun speakingOffer(notifyGuardians: Boolean = true, rests: Array<RestCandidate> = arrayOf(rest("n", 14.0, nursing = true))): Pair<Sim, Line> {
+        val sim = session().route(*rests)
+        sim.attempt2().toGap().busyNow()
+        if (!notifyGuardians) sim.s = sim.s.copy(otherGuardians = 0)
+        val sid = if (rests.isEmpty()) Sid.S10 else Sid.S07
+        val old = Line(sid, if (rests.isEmpty()) emptyMap() else mapOf("restName" to "n 휴게소", "distanceKm" to "14"), rests.firstOrNull()?.id, queuedAt = sim.t)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(old) + sim.s.speech.queue))
+        sim.recry()
+        return sim to old
+    }
+
+    @Test fun h10_returnedLineAlreadySpeaking_toldNow() {
+        val (sim, _) = speakingOffer()
+        assertNull(sim.ses.pendingHandoffAlert)
+        val b = sim.alerts().single().body
+        assertEquals("rest_offer", b["kind"]!!.jsonPrimitive.content)
+        assertEquals("n 휴게소", b["rest_name"]!!.jsonPrimitive.content)
+        assertEquals(true, sim.ep.handoff!!.toldDriver); assertEquals("n 휴게소", sim.ep.handoff!!.restName)
+        sim.doneMarks(sim.saved(), true, "n 휴게소")
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true)); sim.flush()
+        assertEquals(1, sim.alerts().size)
+        assertEquals(true, sim.ep.handoff!!.toldDriver)
+    }
+
+    /** C133 ①: 수유 시간대 S07이 이미 나가(`lastOffer` 기록) 상한 인계가 와도, 10분 금지로 놓치지 않고 그 줄에 묶거나(대기) 지금 알린다(말하는 중). */
+    private fun capAfterOffer(waitSpeech: Int): Sim {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN).route(rest("n", 14.0, nursing = true)).cap(35_000).alarm()
+        sim.started().tick(1_000)
+        assertEquals(listOf(Sid.S02, Sid.S06, Sid.S07), sim.sids())
+        assertNotNull(sim.ses.lastOffer[Sid.S07])
+        repeat(waitSpeech) { sim.done().tick(P.speechGapMs) }
+        sim.ev(Tick(sim.play().endAt))
+        assertEquals(HandoffCause.SESSION_CAP, sim.ep.handoff!!.cause)
+        return sim
+    }
+
+    @Test fun c133_lastOfferRecorded_queuedLine_boundNotMissed() {
+        val sim = capAfterOffer(0)
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        assertEquals(Sid.S07, sim.ses.pendingHandoffAlert!!.sid)
+        sim.flush()
+        assertEquals(true, sim.ep.handoff!!.toldDriver); assertEquals("n 휴게소", sim.ep.handoff!!.restName)
+        assertEquals("n 휴게소", sim.alert()["rest_name"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun c133_lastOfferRecorded_speakingLine_toldNow() {
+        val sim = capAfterOffer(2)
+        assertEquals("S07", sim.s.speech.queue.first().sid.name)
+        assertNull(sim.ses.pendingHandoffAlert)
+        assertEquals(true, sim.ep.handoff!!.toldDriver); assertEquals("n 휴게소", sim.ep.handoff!!.restName)
+        assertEquals("n 휴게소", sim.alerts().single().body["rest_name"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun h10_returnedLineAlreadySpeaking_noRestAndNoGuardian() {
+        val (h7, _) = speakingOffer(rests = emptyArray())
+        assertEquals(HandoffKind.NO_REST, h7.ep.handoff!!.kind)
+        assertEquals("아기가 계속 울어요. 가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요.", h7.alerts().single().body["text"]!!.jsonPrimitive.content)
+        assertEquals(true, h7.ep.handoff!!.toldDriver)
+        h7.ev(SpeechDone(h7.t + 1_000, "u1", true)); h7.flush()
+        assertEquals(1, h7.alerts().size)
+        val (h8, _) = speakingOffer(notifyGuardians = false)
+        assertTrue(h8.alerts().isEmpty())
+        assertEquals(true, h8.ep.handoff!!.toldDriver); assertEquals("n 휴게소", h8.ep.handoff!!.restName)
+        h8.doneMarks(h8.saved(), true, "n 휴게소")
+    }
+
+    // ---- H11: 인계 문장을 냈는지 기록 ----
+    private fun Sim.saved() = all<SaveEpisode>().last().record
+    private fun Sim.doneMarks(r: EpisodeRecord, told: Boolean?, name: String?) {
+        assertEquals(told, r.handoffToldDriver); assertEquals(name, r.handoffRestName)
+    }
+
+    @Test fun h11_toldDriverAndRestName_recorded() {
+        val a = asked(rest("n", 14.0, nursing = true))                       // H3 바로 냄
+        assertEquals(true, a.ep.handoff!!.toldDriver); assertEquals("n 휴게소", a.ep.handoff!!.restName)
+        a.doneMarks(a.saved(), true, "n 휴게소")
+        val b = heldOffer()                                                  // 미뤘다가 냄: 그때까지 기록은 null
+        b.doneMarks(b.saved(), null, null)
+        b.ev(Tick(b.s.steer.driveBusyAt!! + P.holdStableMs)); b.flush()
+        b.doneMarks(b.saved(), true, "n 휴게소")
+        val h2 = session().route(rest("a", 5.0), dest = true, remainingSec = 530).handoff().flush()
+        h2.doneMarks(h2.saved(), true, null)
+        val h7 = session(); h7.attempt2().toGap().busyNow().recry()          // H7 S10 미뤘다가 냄
+        h7.ev(Tick(h7.s.steer.driveBusyAt!! + P.holdStableMs)); h7.flush()
+        assertTrue(Sid.S10 in h7.sids()); h7.doneMarks(h7.saved(), true, null)
+        val h1 = session().route(rest("a", 5.0)).gear(Gear.P, MIN).handoff()
+        h1.doneMarks(h1.saved(), null, null)
+    }
+
+    @Test fun h11_droppedLine_toldDriverFalse() {
+        val call = heldOffer(); call.ev(CallMode(call.t, true))               // 통화로 버려짐
+        call.doneMarks(call.saved(), false, null)
+        val drop = heldOffer()                                                // 경로에서 빠져 버려짐
+        drop.ev(RouteState(drop.t, false, null, emptyList()))
+        drop.ev(Tick(drop.s.steer.driveBusyAt!! + P.holdStableMs)); drop.flush()
+        drop.doneMarks(drop.saved(), false, null)
+        val blocked = session().route(rest("n", 14.0, nursing = true))        // 10분 금지로 큐에 못 듦
+        blocked.s = blocked.s.copy(session = blocked.ses.copy(lastOffer = mapOf(Sid.S07_DEPART to blocked.t)))
+        blocked.handoff()
+        blocked.doneMarks(blocked.saved(), false, null); assertEquals(false, blocked.ep.handoff!!.toldDriver)
+        val h7 = session(); h7.attempt2().toGap().busyNow().recry(); h7.ev(CallMode(h7.t, true))   // S10 버려짐
+        h7.doneMarks(h7.saved(), false, null)
+        val noAlert = session().route(rest("a", 5.0), dest = true, remainingSec = 530)   // S15를 통화 중이라 못 냄
+        noAlert.attempt2().toGap(); noAlert.s = noAlert.s.copy(car = noAlert.s.car.copy(inCall = true)); noAlert.recry()
+        noAlert.doneMarks(noAlert.saved(), false, null)
+    }
+
+    @Test fun h11_sessionClosed_toldDriverFalse() {
+        val sim = heldOffer()
+        sim.s = sim.s.copy(car = sim.s.car.copy(gear = Gear.P))
+        sim.ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session)
+        sim.doneMarks(sim.saved(), false, null)
+    }
+
+    @Test fun h11_episodeAlreadyClosed_rowUpdated() {
+        val sim = heldOffer()
+        val epId = sim.ep.id
+        // 에피소드가 먼저 닫힘(운전자 정지 요청 등): 닫힌 행에는 아직 null
+        sim.ev(Tick(sim.t + 6 * MIN))
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs)); sim.flush()
+        val rows = sim.all<SaveEpisode>().map { it.record }.filter { it.id == epId }
+        assertEquals(true, rows.any { it.endedAt != null })
+        assertEquals(true, rows.last().endedAt != null && rows.last().handoffToldDriver != null, "닫힌 행이 갱신된다")
+    }
+
+    /** C135 ①: 지우기 뒤에는 삭제 전 인계의 대기 알림을 보내지도, 에피소드 행에 되쓰지도 않는다. */
+    @Test fun c135_clearRecords_dropsPendingHandoffAlert() {
+        val sim = heldOffer()
+        sim.ev(ClearRecords(sim.t))
+        assertNull(sim.ses.pendingHandoffAlert)
+        val saved = sim.all<SaveEpisode>().size
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs)); sim.flush()
+        assertTrue(sim.alerts().isEmpty())
+        assertEquals(saved, sim.all<SaveEpisode>().size)
+    }
+
+    @Test fun c135_clearRecords_thenSessionClosed_noAlert() {
+        val sim = heldOffer()
+        sim.ev(ClearRecords(sim.t))
+        val saved = sim.all<SaveEpisode>().size
+        sim.s = sim.s.copy(car = sim.s.car.copy(gear = Gear.P))
+        sim.ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session)
+        assertTrue(sim.alerts().isEmpty()); assertEquals(saved, sim.all<SaveEpisode>().size)
+    }
+
+    @Test fun c135_clearRecords_newHandoffAfterwardStillAlerts() {
+        val sim = heldOffer()
+        sim.ev(ClearRecords(sim.t))
+        sim.s = sim.s.copy(car = sim.s.car.copy(gear = Gear.P))
+        sim.ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session); assertTrue(sim.alerts().isEmpty())
+        sim.doorCycle().gear(Gear.D, 1_000).route(rest("n", 14.0, nursing = true))   // 지운 뒤 새 세션의 인계는 정상(H10·H11)
+        sim.attempt2().toGap().busyNow().recry()
+        assertNotNull(sim.ses.pendingHandoffAlert)
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs)); sim.flush()
+        assertEquals(1, sim.alerts().size)
+    }
+
     @Test fun h4_yes_addsWaypoint() {
         val sim = asked(rest("n", 12.0, nursing = true))
         sim.ev(Answer(sim.t, sim.ask().askId, YesNo.YES))
@@ -123,7 +452,7 @@ class S57HandoffTest {
     }
 
     @Test fun h7_noRest_saysS10() {
-        val sim = session().handoff()
+        val sim = session().handoff().flush()
         assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind)
         assertTrue(Sid.S10 in sim.sids())
         assertEquals("no_rest", sim.alert()["kind"]!!.jsonPrimitive.content)
@@ -149,7 +478,9 @@ class S57HandoffTest {
         assertEquals(Unjudged.SESSION_CAP, sim.ep.first!!.unjudged)
         assertEquals(HandoffCause.SESSION_CAP, sim.ep.handoff!!.cause)
         assertTrue(sim.step<StartPlayback>().isEmpty())
-        assertEquals("handoff_alert", sim.step<SendToPhone>().single().type)
+        assertTrue(sim.step<SendToPhone>().isEmpty())               // H10: S10을 낼 때 보낸다(앞 문장 S03이 말하는 중)
+        sim.flush()
+        assertEquals("handoff_alert", sim.all<SendToPhone>().single().type)
     }
 
     @Test fun r12b_shortBudget_attemptPlaysRemaining() {

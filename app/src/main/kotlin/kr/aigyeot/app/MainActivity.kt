@@ -43,6 +43,7 @@ import kr.aigyeot.app.ui.Page
 import kr.aigyeot.app.ui.ReportDetailScreen
 import kr.aigyeot.app.ui.ReportListScreen
 import kr.aigyeot.app.ui.SetupScreen
+import kr.aigyeot.app.store.db.needsSetup
 import kr.aigyeot.app.ui.SongsScreen
 import kr.aigyeot.engine.AskButton
 import kr.aigyeot.engine.BabyAboard
@@ -161,8 +162,8 @@ class MainActivity : ComponentActivity() {
         val now by produceState(g.clock()) { while (true) { value = g.clock(); delay(30_000) } }
         var screen by rememberSaveable { mutableStateOf("home") }
         val home = { screen = "home" }
-        BackHandler { if (screen == "home" || prof.p == null) moveTaskToBack(true) else home() }
-        if (prof.p == null) return SetupScreen(null, now, noRearOutput(), null) { saveProfile(it) }
+        BackHandler { if (screen == "home" || prof.p.needsSetup()) moveTaskToBack(true) else home() }
+        if (prof.p.needsSetup()) return SetupScreen(prof.p, now, noRearOutput(), null) { saveProfile(it) }
         when {
             screen == "home" -> HomeScreen(
                 s, now,

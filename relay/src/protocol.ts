@@ -163,6 +163,7 @@ const ReportSummaryBody = obj({
           rest_name: nullable(str),
           waypoint_added: bool,
           guardian_notified: bool,
+          told_driver: opt(bool),
         }),
       ),
       total_cry_s: int,

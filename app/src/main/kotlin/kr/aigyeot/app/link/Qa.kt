@@ -1,5 +1,6 @@
 package kr.aigyeot.app.link
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -16,6 +17,7 @@ import kr.aigyeot.engine.SwitchSound
 import kr.aigyeot.engine.Via
 import kr.aigyeot.engine.noStateClaim
 import kr.aigyeot.engine.numbersGrounded
+import kr.aigyeot.engine.numbersMatchCells
 import kr.aigyeot.engine.pickRest
 import kr.aigyeot.shared.LlmCry
 import kr.aigyeot.shared.LlmDiaper
@@ -51,7 +53,8 @@ internal fun llmState(s: EngineState?, now: Long, alarmEpisodes: Int, zone: Zone
     fun ago(at: Long) = ((now - at).coerceAtLeast(0) / MINUTE).toInt()
     val sd = c?.takeIf { it.sleepDiaperEnabled }
     // 요약 시각과 지금이 기기 시간대로 다른 날이면 '오늘·지난밤' 값은 어제 것이라 뺀다
-    val sameDay = c != null && Instant.ofEpochMilli(c.asOf).atZone(zone).toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val z = c?.zone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: zone   // 요약을 만든 폰의 시간대(C126 ③). 없거나 잘못되면 차 시간대
+    val sameDay = c != null && Instant.ofEpochMilli(c.asOf).atZone(z).toLocalDate() == Instant.ofEpochMilli(now).atZone(z).toLocalDate()
     return LlmState(
         cry = LlmCry(if (crying) ((now - ep.startedAt).coerceAtLeast(0) / MINUTE + 1).toInt() else null, alarmEpisodes),
         feeding = s.feedingStart?.takeIf { iv != null }?.let { LlmFeeding(((now - it).coerceAtLeast(0) / MINUTE).toInt(), iv!!) },
@@ -99,7 +102,7 @@ internal fun llmQuestion(text: String, nickname: String?): String =
 
 /**
  * 답을 판단 코어 사건으로(8.8 '판단 코어로 돌려주기'). 도구 사건을 먼저, 마지막에 QaReply 글.
- * 글은 숫자 검사를 통과한 LLM 글, 아니면 오프라인 문장. 글이 비면 도구에 맞는 고정 문장(add_waypoint는 글을 그대로 둔다).
+ * 글은 세 검사를 통과한 LLM 글, 아니면 주제 문장, 도구 고정 문장, 오프라인 문장 순(C129).
  * [methods]는 parent_song을 지금 후보 ③ 곡으로 옮기는 데 쓴다.
  */
 internal fun qaEvents(
@@ -121,13 +124,20 @@ internal fun qaEvents(
     }
     val noSong = r.toolCalls.any { t -> t.name == "switch_sound" && (t.input["method"] as? JsonPrimitive)?.contentOrNull == "parent_song" } &&
         methods.none { it.kind == MethodKind.SONG && it.songId != null }
+    val topics = r.toolCalls.filter { it.name == "answer" }.flatMap { t ->
+        ((t.input["topics"] as? JsonArray) ?: emptyList()).mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+    }.distinct().filter { it in TOPICS }.take(3)   // 모든 answer 호출을 응답 순서대로 합치고, 겹치거나 모르는 주제는 버리고 셋까지(C129)
+    // ① 세 검사(숫자·숫자-항목·상태 단정)를 모두 통과한 LLM 글만 말한다(C129). 걸리면 ② 주제 문장 ③ 도구 고정 문장 ④ 오프라인 문장
+    val sj = stateJson(state)
+    val llmText = r.text.trim().takeIf { it.isNotEmpty() && numbersGrounded(it, sj) && numbersMatchCells(it, sj) && noStateClaim(it) }
     val text = when {
-        noSong -> "지금은 소리를 틀 수 없어요."   // 명세서 8장 S20. 틀 곡이 없으니 LLM 글과 상관없이
-        r.text.isNotBlank() -> if (numbersGrounded(r.text, stateJson(state)) && noStateClaim(r.text)) r.text else offlineReply(question, state)   // 숫자 검사·상태 단정 검사(C108): 하나라도 걸리면 오프라인 문장
+        noSong -> "지금은 소리를 틀 수 없어요."   // 명세서 8장 S20. 틀 곡이 없으니 답 주제와 상관없이
+        llmText != null -> llmText
+        topics.isNotEmpty() -> topics.joinToString(" ") { topicSentence(it, state) }
         else -> when (tools.firstOrNull()) {
             is SwitchSound -> "소리를 바꿀게요."
             is DriverStop -> "소리를 멈출게요."
-            is DriverAddWaypoint -> r.text
+            is DriverAddWaypoint -> ""
             else -> offlineReply(question, state)
         }
     }
@@ -136,45 +146,77 @@ internal fun qaEvents(
 
 internal fun stateJson(s: LlmState): JsonElement = ProtocolJson.encodeToJsonElement(LlmState.serializer(), s)
 
-/**
- * 오프라인 문장(명세서 9장 키워드 다섯 가지, 17장 L54). LLM이 실패·늦음·숫자 검사 탈락일 때 쓴다.
- * 숫자는 모두 상태값에서 온다. 원인은 추정으로만 말하고 '잠들었어요'·'그쳤어요'를 먼저 말하지 않는다(기준 문서 6.1·6.4).
- */
-internal fun offlineReply(question: String, s: LlmState, p: Params = Params()): String {
-    val q = question.replace(" ", "").replace("잠깐", "").replace("잠잠", "").replace("잠시", "")   // "잠깐"은 잠 질문이 아니다
-    fun has(vararg w: String) = w.any { it in q }
+private val TOPICS = setOf("feeding", "sleep", "diaper", "cry", "carseat", "cabin_temp", "next_rest", "sound_stats", "why", "unknown")
+
+/** 주제 문장(8.8 '주제 문장' 표). `answer` 주제와 오프라인 키워드가 같은 문장을 쓴다. 숫자는 모두 상태값에서 온다. */
+internal fun topicSentence(topic: String, s: LlmState, p: Params = Params()): String {
     // 돌봄 기록 칸을 쓴 문장은 기록이 60분보다 오래됐으면 맨 앞에 그 사실을 붙인다(L61)
     fun care(text: String) = (s.careAsOfMinAgo?.takeIf { it > 60 }?.let { "${it}분 전 기록 기준으로, " } ?: "") + text
-    return when {
-        has("수유실", "휴게소", "쉼터") -> s.nextRest?.let {
-            "${it.name}까지 ${num(it.distanceKm)}km예요. 수유실이 ${if (it.nursingRoom) "있어요" else "없어요"}."
-        } ?: "가까운 쉼터 정보가 없어요."
-        has("기저귀") -> s.diaper?.minAgo?.let { m ->
-            care("기록상 마지막 기저귀는 ${m}분 전이에요." + (s.diaper!!.todayCount?.let { " 오늘 ${it}번이에요." } ?: ""))
-        } ?: "기저귀 기록이 없어요."
-        has("잤", "잠", "깼") -> s.sleep.let { z ->
+    return when (topic) {
+        "feeding" -> {
+            val feed = s.feeding?.let { "마지막 수유 시작부터 ${it.elapsedMin}분 지났어요." }
+            val today = s.feedsToday?.let { "기록상 오늘 ${it}번 먹었어요." }
             when {
-                z?.sleepingSinceMin != null -> care("기록상 ${z.sleepingSinceMin}분 전에 시작한 잠이 아직 끝나지 않았어요.")
-                z?.wokeMinAgo != null -> care("기록상 ${z.wokeMinAgo}분 전에 깼어요." + (z.lastSleepMin?.let { " 마지막 잠은 ${it}분이었어요." } ?: ""))
-                else -> "잠 기록이 없어요."
+                feed == null && today == null -> "수유 기록이 없어요."
+                today == null -> feed!!
+                else -> care(listOfNotNull(feed, today).joinToString(" "))
             }
         }
-        has("얼마나", "몇분", "오래") ->
-            (s.cry.currentMin?.let { "지금 ${it}분째 울고 있어요. " } ?: "지금은 울음이 들리지 않아요. ") +
-                "이번 주행에서 ${s.cry.countThisDrive}번 울었어요."
-        has("먹였", "먹은", "수유", "배고") -> s.feeding?.let { "마지막 수유 시작부터 ${it.elapsedMin}분 지났어요." } ?: "수유 기록이 없어요."
-        has("통해", "잘통", "효과", "뭐가좋") -> s.methodStats.filter { it.attempts >= p.statMinShown }
+        "sleep" -> {
+            val z = s.sleep
+            val base = when {
+                z?.sleepingSinceMin != null -> "기록상 ${z.sleepingSinceMin}분 전에 시작한 잠이 아직 끝나지 않았어요."
+                z?.wokeMinAgo != null -> "기록상 ${z.wokeMinAgo}분 전에 깼어요." + (z.lastSleepMin?.let { " 마지막 잠은 ${it}분이었어요." } ?: "")
+                else -> null
+            }
+            val parts = listOfNotNull(base, z?.todaySleepMin?.let { "오늘 잠은 모두 ${it}분이에요." }, s.lastNightWakeups?.let { "지난밤에 ${it}번 깼어요." })
+            if (parts.isEmpty()) "잠 기록이 없어요." else care(parts.joinToString(" "))
+        }
+        "diaper" -> s.diaper?.minAgo?.let { m ->
+            care("기록상 마지막 기저귀는 ${m}분 전이에요." + (s.diaper!!.todayCount?.let { " 오늘 ${it}번이에요." } ?: ""))
+        } ?: "기저귀 기록이 없어요."
+        "cry" -> (s.cry.currentMin?.let { "지금 ${it}분째 울고 있어요. " } ?: "지금은 울음이 들리지 않아요. ") +
+            "이번 주행에서 ${s.cry.countThisDrive}번 울었어요."
+        "carseat" -> "카시트에 ${s.carseatMin}분째예요."
+        "cabin_temp" -> s.cabinTemp?.let { "실내 온도는 ${num(it)}도예요." } ?: "실내 온도를 알 수 없어요."
+        "next_rest" -> s.nextRest?.let {
+            "${it.name}까지 ${num(it.distanceKm)}km예요. 수유실이 ${if (it.nursingRoom) "있어요" else "없어요"}."
+        } ?: "가까운 쉼터 정보가 없어요."
+        "sound_stats" -> s.methodStats.filter { it.attempts >= p.statMinShown }
             .maxByOrNull { (1.0 + it.successes) / (2.0 + it.attempts) }
             ?.let { "${it.label}${josa(it.label)} 틀었을 때 ${it.attempts}번 중 ${it.successes}번 그쳤어요. 소리 덕분인지는 알 수 없어요." }
             ?: "아직 기록이 적어서 몰라요."
-        has("왜") -> {
+        "why" -> {
             val woke = s.sleep?.wokeMinAgo
             val seat = if (woke != null) "카시트에 ${s.carseatMin}분째이고, 기록상 ${woke}분 전에 깼어요." else "카시트에 ${s.carseatMin}분째예요."
             val text = s.feeding?.let { "마지막 수유 시작부터 ${it.elapsedMin}분, $seat 배고프거나 불편할 수 있어요." } ?: "$seat 불편할 수 있어요."
             if (woke != null) care(text) else text
         }
+        "unknown" -> "그건 제가 알 수 없어요."
         else -> "지금은 답을 가져오지 못했어요."
     }
+}
+
+/**
+ * 오프라인 문장(명세서 9장 키워드, 17장 L54·C127). LLM이 실패·늦음·도구 없음일 때 쓴다. 키워드로 주제를 골라 주제 문장을 말한다.
+ * 원인은 추정으로만 말하고 '잠들었어요'·'그쳤어요'를 먼저 말하지 않는다(기준 문서 6.1·6.4).
+ */
+internal fun offlineReply(question: String, s: LlmState, p: Params = Params()): String {
+    val q = question.replace(" ", "").replace("잠깐", "").replace("잠잠", "").replace("잠시", "")   // "잠깐"은 잠 질문이 아니다
+    fun has(vararg w: String) = w.any { it in q }
+    val topic = when {
+        has("수유실", "휴게소", "쉼터") -> "next_rest"
+        has("기저귀") -> "diaper"
+        has("잤", "잠", "깼") -> "sleep"
+        has("카시트") -> "carseat"
+        has("온도", "덥", "춥", "추워") -> "cabin_temp"
+        has("먹였", "먹은", "먹었", "먹을", "수유", "배고", "분유", "젖") -> "feeding"
+        has("얼마나", "몇분", "오래") -> "cry"
+        has("통해", "잘통", "효과", "뭐가좋") -> "sound_stats"
+        has("왜") -> "why"
+        else -> return "지금은 답을 가져오지 못했어요."
+    }
+    return topicSentence(topic, s, p)
 }
 
 private fun num(x: Double) = if (x % 1.0 == 0.0) x.toLong().toString() else x.toString()

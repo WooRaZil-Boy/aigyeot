@@ -44,3 +44,28 @@ class LinkTextTest {
         assertEquals(emptyList<String>(), linkLines(LinkStatus(), paired = false).map { it.text })
     }
 }
+
+// C130 ⑦·C132 ④: 인계 문장을 못 말했으면(told_driver=false) 정차 문구에서 "했다"고 쓰지 않는다
+class StopTextToldDriverTest {
+    private fun st(mode: kr.aigyeot.shared.HandoffKind, told: Boolean?, rest: String? = null) =
+        kr.aigyeot.shared.StopInfo(true, kr.aigyeot.shared.StopReason.ATTEMPT_LIMIT, mode, rest, false, false, told)
+    private fun tail(s: kr.aigyeot.shared.StopInfo) = stopText(s).substringAfter(" · ")
+
+    @Test fun stopText_notTold_usesU53Phrases() {
+        assertEquals("쉼터는 묻지 못했어요", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, false)))
+        assertEquals("도착 안내는 하지 못했어요", tail(st(kr.aigyeot.shared.HandoffKind.ARRIVAL_NOTICE, false)))
+        assertEquals("가까운 쉼터가 없었어요", tail(st(kr.aigyeot.shared.HandoffKind.NO_REST, false)))
+    }
+
+    @Test fun stopText_toldOrNull_keepsOldPhrases() {
+        for (t in listOf(true, null)) {
+            assertEquals("쉼터 들르기 제안", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, t)))
+            assertEquals("도착 안내", tail(st(kr.aigyeot.shared.HandoffKind.ARRIVAL_NOTICE, t)))
+            assertEquals("안전한 곳에 세우기 안내", tail(st(kr.aigyeot.shared.HandoffKind.NO_REST, t)))
+        }
+    }
+
+    @Test fun stopText_namedRest_stillShownWhenTold() {
+        assertEquals("n 휴게소 들르기 제안", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, true, "n 휴게소")))
+    }
+}

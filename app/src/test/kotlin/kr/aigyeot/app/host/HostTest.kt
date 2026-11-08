@@ -186,7 +186,7 @@ class HostTest {
         k.host.close()
         val h = Host(k.store, k.clock, mic = MicPort({ null }, {}), userId = { 10 })
         val asked = mutableListOf<Long?>()
-        h.targets = Targets({}, {}, {}, restore = { s, at -> asked += s.feedingStart; k.realLink.restoreEvents(s, at) })
+        h.targets = Targets({}, {}, {}, restore = { s, at, refill -> asked += s.feedingStart; k.realLink.restoreEvents(s, at, refill) })
         k.host = h
         val seen = CopyOnWriteArrayList<Step>()
         val scope = collect { seen += it }
@@ -321,6 +321,121 @@ class HostTest {
         assertTrue(k.state().history.single().success)
     }
 
+    @Test fun c133_restoreRoomEndedEpisode_pendingHandoff_droppedLineSavesToldDriverFalse() {
+        k.profile(); k.boot(); k.open(); k.alarm(); k.toGap()
+        val s = k.state(); val ep = s.session!!.episode!!
+        // 인계 줄이 큐에 있던 스냅숏, 에피소드 끝(handoff 칸 포함)만 Room에 저장된 채 죽었다
+        k.store.saveSnapshot(s.copy(session = s.session!!.copy(pendingHandoffAlert = PendingHandoffAlert(
+            HandoffKind.WAYPOINT_OFFER, Sid.S07, "n", k.now, null, s.session!!.id, ep.id, k.now, alert = false))))
+        sql("UPDATE episode SET first_result = 'FAIL', handoff_cause = 'TWO_ATTEMPTS', handoff_kind = 'WAYPOINT_OFFER', ended_at = ${k.now} WHERE id = '${ep.id}'")
+        k.running = null
+        k.boot()   // 큐에 그 줄이 없다 → 버려짐
+        assertNull(k.state().session!!.pendingHandoffAlert)
+        val c = k.db.openHelper.readableDatabase.query("SELECT handoff_told_driver FROM episode WHERE id = '${ep.id}'")
+        c.moveToFirst(); assertTrue(!c.isNull(0), "Room에 null이 남지 않는다"); assertEquals(0, c.getInt(0)); c.close()
+        sql("UPDATE session SET ended_at = ${k.now} WHERE id = '${k.ses().id}'")
+        val r = kr.aigyeot.app.store.buildReport(k.db.storeDao(), k.ses().id, k.now)!!
+        assertEquals(false, r.timeline.single().stop!!.toldDriver)
+    }
+
+    /** C136: 에피소드 handoff가 TWO_ATTEMPTS/WAYPOINT_OFFER, S07이 큐에 묶인 스냅숏을 저장하고 죽은 상태를 만든다. */
+    private fun c136Snapshot(speaking: String? = null, extra: List<Line> = emptyList(), mk: (Long) -> Line = { Line(Sid.S07, mapOf("restName" to "n 휴게소"), "n", queuedAt = it) }, lastOffer: (Long) -> Map<Sid, Long> = { emptyMap() }): Pair<String, Line> {
+        k.profile(); k.boot(); k.open(); k.alarm(); k.toGap()
+        val s = k.state(); val ep = s.session!!.episode!!
+        val line = mk(k.now)
+        k.store.saveSnapshot(s.copy(
+            speech = s.speech.copy(speaking = speaking, queue = listOf(line) + extra),
+            session = s.session!!.copy(lastOffer = lastOffer(k.now),
+                episode = ep.copy(handoff = HandoffRecord(HandoffCause.TWO_ATTEMPTS, HandoffKind.WAYPOINT_OFFER, false, false)),
+                pendingHandoffAlert = PendingHandoffAlert(HandoffKind.WAYPOINT_OFFER, line.sid, line.askRestId, k.now, null, s.session!!.id, ep.id, k.now, alert = false))))
+        sql("UPDATE episode SET handoff_cause = 'TWO_ATTEMPTS', handoff_kind = 'WAYPOINT_OFFER' WHERE id = '${ep.id}'")
+        return ep.id to line
+    }
+    private fun toldDriverRow(id: String): Int? = k.db.openHelper.readableDatabase.query("SELECT handoff_told_driver FROM episode WHERE id = '$id'").use { it.moveToFirst(); if (it.isNull(0)) null else it.getInt(0) }
+
+    @Test fun c136_restoreRoomToldDriverWins_noReask() {
+        val (id, _) = c136Snapshot()
+        sql("UPDATE episode SET handoff_told_driver = 1, handoff_rest_name = 'n 휴게소' WHERE id = '$id'")   // 질문을 내며 저장했다
+        k.running = null; k.exec.clear()
+        k.boot()
+        val x = k.ses()
+        assertNull(x.pendingHandoffAlert); assertTrue(k.state().speech.queue.none { it.sid == Sid.S07 }, "묶인 줄을 지운다")
+        assertEquals(true, x.episode!!.handoff!!.toldDriver); assertEquals("n 휴게소", x.episode!!.handoff!!.restName)
+        assertTrue(k.exec.none { it is Ask || (it is SendToPhone) }, "다시 묻거나 알리지 않는다")
+        // (b) 내비 응답 전 D로 경로가 비어도 false로 덮지 않는다
+        k.ev(GearChanged(0, Gear.D), k.now + 1_000)
+        assertEquals(1, toldDriverRow(id)); assertEquals("n 휴게소", k.ses().episode?.handoff?.restName ?: "n 휴게소")
+    }
+
+    @Test fun c136_restoreToldTrue_longDriveLine_marksOffered() {
+        val (id, _) = c136Snapshot(mk = { Line(Sid.S10, emptyMap(), null, longDrive = true, queuedAt = it) })
+        sql("UPDATE episode SET handoff_told_driver = 1 WHERE id = '$id'")
+        k.running = null
+        k.boot()
+        assertTrue(k.ses().longDriveOffered, "말한 장시간 제안은 줄만 빼지 않고 longDriveOffered를 세운다(C84)")
+        assertNotNull(k.ses().lastOffer[Sid.S10])
+        assertTrue(k.state().speech.queue.none { it.sid == Sid.S10 })
+    }
+
+    @Test fun c136_restoreToldFalse_dropsLine_forgetsOffer() {
+        val (id, _) = c136Snapshot(lastOffer = { mapOf(Sid.S07 to it) })   // 넣을 때 적은 10분 금지(값 = queuedAt = 이 시각)
+        sql("UPDATE episode SET handoff_told_driver = 0 WHERE id = '$id'")
+        k.running = null
+        k.boot()
+        assertNull(k.ses().lastOffer[Sid.S07], "듣지 못한 제안의 금지를 지운다(forgetOffer)")
+        assertTrue(k.state().speech.queue.none { it.sid == Sid.S07 })
+    }
+
+    @Test fun c136_restoreToldTrue_otherSessionLine_keepsState() {
+        val (id, _) = c136Snapshot(mk = { Line(Sid.S10, emptyMap(), null, longDrive = true, queuedAt = it, sessionId = "other") })
+        sql("UPDATE episode SET handoff_told_driver = 1 WHERE id = '$id'")
+        k.running = null
+        k.boot()
+        assertEquals(false, k.ses().longDriveOffered, "C141: 다른 세션 줄은 지금 세션 상태를 바꾸지 않는다")
+        assertTrue(k.state().speech.queue.none { it.sid == Sid.S10 })
+    }
+
+    @Test fun c136_restoreRoomToldDriverNull_keepsPending() {
+        c136Snapshot()
+        k.running = null
+        k.boot()
+        assertNotNull(k.ses().pendingHandoffAlert, "Room 값이 null이면 지금처럼 대기")
+    }
+
+    @Test fun c136_restoreRoomEndedEpisode_toldDriverWins_closedRowKept() {
+        val (id, _) = c136Snapshot()
+        sql("UPDATE episode SET handoff_told_driver = 1, handoff_rest_name = 'n 휴게소', first_result = 'FAIL', ended_at = ${k.now} WHERE id = '$id'")
+        k.running = null
+        k.boot()
+        assertNull(k.ses().pendingHandoffAlert); assertTrue(k.state().speech.queue.none { it.sid == Sid.S07 })
+        assertEquals(1, toldDriverRow(id), "닫힌 행의 true를 false로 덮지 않는다")
+    }
+
+    @Test fun c136_restoreSpeakingFrontLine_handledOnceWithC123() {
+        val other = Line(Sid.S08, emptyMap(), null, queuedAt = 1)
+        val (id, _) = c136Snapshot(speaking = "u1", extra = listOf(other))
+        sql("UPDATE episode SET handoff_told_driver = 1, handoff_rest_name = 'n 휴게소' WHERE id = '$id'")
+        k.running = null
+        k.boot()
+        assertNull(k.ses().pendingHandoffAlert)
+        assertTrue(k.state().speech.queue.none { it.sid == Sid.S07 }, "말하던 줄은 한 번만 버린다")
+        assertEquals(1, toldDriverRow(id))
+    }
+
+    @Test fun c137_restoreRoomEndedSession_dropsPendingHandoffLine_keepsOthers() {
+        val other = Line(Sid.S12, emptyMap(), null, queuedAt = 1)   // 세션과 무관한 문장
+        val offer = Line(Sid.S08, emptyMap(), null, queuedAt = 1)   // C140: 일반 제안도 closeSession처럼 뺀다
+        val (id, _) = c136Snapshot(extra = listOf(offer, other))
+        sql("UPDATE session SET ended_at = ${k.now} WHERE id = '${k.ses().id}'")
+        k.running = null; k.exec.clear()
+        k.boot()
+        assertNull(k.state().session)
+        assertTrue(k.state().speech.queue.none { it.sid == Sid.S07 }, "묶인 줄을 지운다")
+        assertTrue(k.state().speech.queue.none { it.sid == Sid.S08 }, "C140: 일반 제안 줄도 closeSession처럼 뺀다")
+        assertTrue(k.state().speech.queue.any { it.sid == Sid.S12 }, "세션과 무관한 줄은 남는다")
+        assertTrue(k.exec.none { it is SendToPhone }, "알림을 내지 않는다")
+    }
+
     @Test fun restoreRoomEndedSession_toIdle_movesPausesToOutPauses() {
         k.profile(); k.boot(); k.open()
         k.ev(InputLost(0, PauseReason.SILENCED))
@@ -351,6 +466,160 @@ class HostTest {
         ))
         k.boot()
         assertNull(k.state().speech.speaking); assertNull(k.state().speech.qa); assertNull(k.ses().pendingAsk)
+    }
+
+    @Test fun r14x_restoreDropsSpeakingLine() {
+        k.profile(); k.boot(); k.open()
+        val s = k.state()
+        val line = Line(Sid.S07, mapOf("restName" to "n 휴게소"), "n")
+        k.store.saveSnapshot(s.copy(
+            speech = s.speech.copy(speaking = "u1", queue = listOf(line)),
+            session = s.session!!.copy(lastOffer = mapOf(Sid.S07 to k.now)),
+        ))
+        k.boot()
+        assertTrue(k.state().speech.queue.isEmpty(), "말하던 줄은 다시 말하지 않는다(C123)")
+        assertEquals(k.now, k.ses().lastOffer[Sid.S07], "10분 금지 시각은 남는다")
+        // 말하던 줄이 없었으면(speaking == null) 큐는 그대로
+        val s2 = k.state()
+        k.store.saveSnapshot(s2.copy(speech = s2.speech.copy(speaking = null, queue = listOf(line))))
+        k.boot()
+        assertTrue(k.state().speech.queue.isNotEmpty() || k.exec.any { it is Ask }, "speaking이 없으면 줄을 버리지 않는다")
+    }
+
+    @Test fun c128_clearRecordsQueued_oldGenSummaryDoesNotRevive() {
+        k.profile(); k.boot()
+        val c = CareView(k.now, true, null, null, null, null, null, null, null, 2)
+        val gen = k.state().careGen
+        k.host.post(ClearRecords(0))                           // 큐에 지우기가 먼저 대기하고
+        k.host.postReal(CareSummary(0, c, seq = 430, gen = gen))   // link가 지우기 전 세대로 만든 요약이 뒤에 선다
+        k.host.awaitIdle()
+        assertNull(k.state().care)
+        assertEquals(gen + 1, k.state().careGen)
+    }
+
+    @Test fun c132_sceneEnd_summaryHeldBeforeClear_notRestored() {   // 장면 중 큐에 묶여 있던 gen 0 요약이 지우기 뒤 되살아나지 않는다
+        k.profile(); k.boot()
+        val gen0 = k.state().careGen
+        k.ev(ClearRecords(0))
+        k.host.startScenario(setup(override = setOf("CareSummary"))); k.host.awaitIdle()
+        k.host.postReal(CareSummary(0, CareView(k.now, true, null, null, null, null, null, null, null, 2), seq = 430, gen = gen0)); k.host.awaitIdle()
+        k.host.endScenario(); k.host.awaitIdle()
+        assertNull(k.state().care); assertNull(k.store.loadSnapshot()!!.care)
+        assertEquals(gen0 + 1, k.state().careGen)
+    }
+
+    @Test fun c132_scene_carriesRealCareGen_andCurrentGenSummaryApplies() {   // 장면 진입이 세대를 0으로 되돌리지 않는다
+        k.profile(); k.boot()
+        k.ev(ClearRecords(0))
+        val gen = k.state().careGen
+        k.host.startScenario(setup()); k.host.awaitIdle()
+        assertEquals(gen, k.state().careGen)
+        val c = CareView(k.now, true, null, null, null, null, null, null, null, 3)
+        k.host.postReal(CareSummary(0, c, seq = 5, gen = gen)); k.host.awaitIdle()
+        assertEquals(c, k.state().care, "지금 세대의 실제 요약은 장면 안에서도 적용된다")
+    }
+
+    @Test fun c132_clearRecordsStep_publishedAfterLinkHandledDeleteRelay() {
+        k.profile(); k.boot()
+        val gen = k.state().careGen
+        var genWhenLinked: Int? = null
+        val t = k.host.targets
+        k.host.targets = Targets(t.exec, { c -> if (c is DeleteRelayRecords) genWhenLinked = k.host.steps.value!!.state.careGen; t.link(c) }, t.notice, t.wake, t.restore, t.routeAgain)
+        k.ev(ClearRecords(0))
+        assertEquals(gen, genWhenLinked, "link가 삭제 표시를 할 때 새 세대는 아직 공개되지 않았다")
+        assertEquals(gen + 1, k.host.steps.value!!.state.careGen)
+    }
+
+    @Test fun r14x_restoreDroppedLongDrive_notAskedAgain() {
+        k.profile(); k.boot(); k.open()
+        val s = k.state()
+        val line = Line(Sid.S11, mapOf("restName" to "n 휴게소"), "n", longDrive = true)
+        k.store.saveSnapshot(s.copy(
+            speech = s.speech.copy(speaking = "u1", queue = listOf(line)),
+            session = s.session!!.copy(pendingAsk = PendingAsk("a1", Sid.S11, "n", null, true), driveFrom = k.now - 7_300_000),
+        ))
+        k.boot()
+        assertTrue(k.ses().longDriveOffered, "버린 장시간 제안은 말한 것으로 친다(C128)")
+        assertEquals(k.now, k.ses().lastOffer[Sid.S11])
+        assertTrue(k.exec.none { it is Listen }, "듣기는 열지 않는다")
+        val before = k.exec.count { it is Ask && it.sid == Sid.S11 }
+        k.ev(RouteState(0, true, 9000, listOf(RestCandidate("n", "n 휴게소", RestKind.REST_AREA, 30.0, true)), 150.0), k.now + 1_000)
+        assertEquals(before, k.exec.count { it is Ask && it.sid == Sid.S11 }, "같은 질문을 다시 만들지 않는다")
+    }
+
+    private val rest10 = RouteState(0, true, 9000, listOf(RestCandidate("n", "n 휴게소", RestKind.REST_AREA, 10.0, true)), 150.0)
+
+    /** C138: 복원 큐에 말하지 않은 장시간 제안이 있다. 상태는 큐에 S10(longDrive)과 호출자가 고른 줄을 둔 채 복원한다. */
+    private fun restoreWithQueued(vararg lines: Line) {
+        k.profile(); k.boot(); k.open()
+        val s = k.state()
+        k.store.saveSnapshot(s.copy(speech = s.speech.copy(queue = lines.toList()), session = s.session!!.copy(driveFrom = k.now - 7_300_000), car = s.car.copy(gear = Gear.P)))
+        k.boot()
+    }
+    private val s10 = Line(Sid.S10, emptyMap(), null, longDrive = true)
+
+    @Test fun c138_restoreQueuedLongDrive_notSpokenBeforeRoute_thenJudgedByNewRoute() {
+        restoreWithQueued(s10)
+        assertTrue(k.state().speech.queue.none { it.longDrive }, "말하지 않은 장시간 줄은 복원 ③에서 뺀다")
+        assertEquals(false, k.ses().longDriveOffered)
+        k.ev(GearChanged(0, Gear.D), k.now + 5_000)
+        assertTrue(k.exec.none { it is Speak && it.sid == Sid.S10 }, "경로 응답 전에 옛 쉼터 없음 문장을 말하지 않는다")
+        k.ev(rest10, k.now + 1_000)
+        assertTrue(k.exec.none { it is Speak && it.sid == Sid.S10 }, "10km 앞 휴게소가 있으면 쉼터 없음이 아니다")
+        assertTrue(k.exec.any { (it is Ask && it.sid == Sid.S11) || (it is Speak && it.sid == Sid.S11) }, "새 경로로 S11을 판단한다")
+    }
+
+    @Test fun c138_restoreQueuedLongDrive_noRouteFor60s_judgedWithoutRoute() {
+        restoreWithQueued(s10)
+        k.ev(GearChanged(0, Gear.D), k.now + 5_000)
+        k.ev(Tick(0), k.now + Params().routeWaitMs + 1_000)
+        assertTrue(k.exec.any { it is Speak && it.sid == Sid.S10 }, "60초 뒤 경로 없이 판단해 말한다")
+    }
+
+    @Test fun c138_restoreQueued_nonLongDriveLineKept() {
+        val keep = Line(Sid.S06, emptyMap(), null)
+        restoreWithQueued(keep, s10)
+        assertEquals(listOf(keep.sid), k.state().speech.queue.map { it.sid }, "장시간이 아닌 줄은 그대로")
+    }
+
+    @Test fun c138_restoreSpeakingLongDrive_c123StillCountsAsSaid_andQueuedLongDriveDropped() {
+        k.profile(); k.boot(); k.open()
+        val s = k.state()
+        val speaking = Line(Sid.S10, emptyMap(), null, longDrive = true)
+        val queued = Line(Sid.S11, mapOf("restName" to "n 휴게소"), "n", longDrive = true)
+        k.store.saveSnapshot(s.copy(speech = s.speech.copy(speaking = "u1", queue = listOf(speaking, queued)), session = s.session!!.copy(driveFrom = k.now - 7_300_000)))
+        k.boot()
+        assertTrue(k.ses().longDriveOffered, "말하던 줄은 C123이 말한 것으로 친다")
+        assertTrue(k.state().speech.queue.isEmpty())
+    }
+
+    @Test fun r14y_restoreClearsRoute() {
+        k.profile(); k.boot(); k.open()
+        val s = k.state()
+        val route = RouteView(k.now, true, 9000, listOf(RestCandidate("n", "n 휴게소", RestKind.REST_AREA, 30.0, true)), 150.0)
+        k.store.saveSnapshot(s.copy(car = s.car.copy(route = route, gear = Gear.P)))
+        k.boot()
+        assertNull(k.state().car.route, "옛 경로로 판단하지 않는다(C125)")
+        k.ev(GearChanged(0, Gear.D), k.now + 1_000)
+        assertEquals(false, k.ses().departChecked, "내비 응답 전에는 출발 제안을 판단하지 않는다")
+        k.ev(RouteState(0, true, 9000, listOf(RestCandidate("n", "n 휴게소", RestKind.REST_AREA, 30.0, true)), 150.0), k.now + 1_000)
+        assertTrue(k.ses().departChecked)
+    }
+
+    @Test fun c121_pendingHandoffAlertChange_savedImmediately() {
+        k.profile(); k.boot(); k.open()
+        val old = k.state()
+        val alert = PendingHandoffAlert(HandoffKind.WAYPOINT_OFFER, Sid.S07, "n", k.now, null, old.session!!.id, null, k.now)
+        val withAlert = old.copy(session = old.session!!.copy(pendingHandoffAlert = alert))
+        assertTrue(k.host.needsSnapshot(old, Step(withAlert, emptyList(), null)), "두는 Step")
+        assertTrue(k.host.needsSnapshot(withAlert, Step(old, emptyList(), null)), "보내 지우는 Step")
+    }
+
+    @Test fun c123_speakOrAskSavedImmediately() {
+        k.profile(); k.boot(); k.open()
+        val s = k.state()
+        for (c in listOf<Command>(Speak("u1", Sid.S06, emptyMap()), Ask("u2", Sid.S07, emptyMap(), 5_000)))
+            assertTrue(k.host.needsSnapshot(s, Step(s, listOf(c), null)), "$c")
     }
 
     @Test fun restoreMicNotRunning_c69_inputLostAndNotice() {
@@ -494,10 +763,11 @@ class HostTest {
 
     private fun careEndsAs(override: Set<String>, during: CareView?): CareView? {
         k.profile(); k.boot()
+        k.ev(ClearRecords(0))   // 같은 kit으로 되풀이해 부른다. 앞 호출이 장면 끝에 바로 저장한 요약(C126 ④)이 다음 boot로 이어지지 않게
         val c1 = CareView(k.now, true, null, null, null, null, null, null, null, 1)
-        k.ev(CareSummary(0, c1))
+        k.ev(CareSummary(0, c1, gen = k.state().careGen))
         k.host.startScenario(setup(override = override)); k.host.awaitIdle()
-        during?.let { k.host.postReal(CareSummary(0, it)); k.host.awaitIdle() }
+        during?.let { k.host.postReal(CareSummary(0, it, gen = k.state().careGen)); k.host.awaitIdle() }
         k.host.endScenario(); k.host.awaitIdle()
         return k.state().care
     }
@@ -508,6 +778,92 @@ class HostTest {
         assertEquals(c2, careEndsAs(setOf("CareSummary"), c2), "override 장면: 장면에는 안 들어가도 끝나면 실제 최신 값")
         assertEquals(1, careEndsAs(setOf("CareSummary"), null)!!.todayFeedCount, "장면 전 값만 있으면 그대로")
         assertEquals(1, careEndsAs(emptySet(), c2.copy(asOf = T0 - 5_000))!!.todayFeedCount, "장면 전 값보다 이른 요약은 이기지 못한다")
+    }
+
+    @Test fun c126_sameSecondSeq_savedImmediately_evenWhenOnlySeqChanges() {
+        k.profile(); k.boot(); k.open()
+        val c = CareView(k.now, true, null, null, null, null, null, null, null, 2)
+        k.ev(CareSummary(0, c, seq = 5), k.now + 1_000)
+        val s0 = k.savedAt()
+        k.ev(CareSummary(0, c, seq = 6), k.now + 1_000)    // 같은 초·같은 내용, seq만 큼: careSeq가 key에 들어 있어야 바로 저장
+        assertEquals(6L, k.state().careSeq)
+        assertNotEquals(s0, k.savedAt())
+        assertEquals(6L, k.store.loadSnapshot()!!.careSeq)
+    }
+
+    @Test fun c126_realSummaryDuringScene_sameSecondLaterSeq_restoredAtEnd_andSavedNow() {
+        k.profile(); k.boot()
+        val c1 = CareView(k.now, true, null, null, null, null, null, null, null, 1)
+        k.ev(CareSummary(0, c1, seq = 5))
+        k.host.startScenario(setup(override = setOf("CareSummary")).copy(care = c1.copy(asOf = k.now + 60_000, todayFeedCount = 9))); k.host.awaitIdle()
+        val c2 = c1.copy(todayFeedCount = 2)                       // 장면 값보다 이르고 장면 전 실제 값과 같은 초지만 seq가 큰 실제 요약
+        k.host.postReal(CareSummary(0, c2, seq = 6)); k.host.awaitIdle()
+        assertEquals(9, k.state().care!!.todayFeedCount, "장면 중에는 장면 값")
+        assertEquals(1, k.store.loadSnapshot()!!.care!!.todayFeedCount, "장면 중 실제 스냅숏은 장면 직전 값")
+        k.host.endScenario(); k.host.awaitIdle()
+        assertEquals(c2, k.state().care); assertEquals(6L, k.state().careSeq)
+        assertEquals(c2, k.store.loadSnapshot()!!.care, "장면 끝에 실제 값으로 되돌린 상태는 바로 저장")
+        assertEquals(6L, k.store.loadSnapshot()!!.careSeq)
+    }
+
+    // ---- C130
+    @Test fun c130_realSummary_afterQueuedStartScenario_isKeptAndRestoredAtEnd() {
+        for (override in listOf(emptySet(), setOf("CareSummary"))) {
+            k.profile(); k.boot(); k.ev(ClearRecords(0))
+            val c1 = CareView(k.now, true, null, null, null, null, null, null, null, 1)
+            val gen = k.state().careGen
+            k.ev(CareSummary(0, c1, gen = gen))
+            val latch = java.util.concurrent.CountDownLatch(1)
+            val entered = java.util.concurrent.CountDownLatch(1)
+            val saved = k.host.targets
+            k.host.targets = Targets(saved.exec, saved.link, saved.notice, wake = { entered.countDown(); latch.await() })
+            k.host.resume()                                                  // 호스트 스레드를 붙잡는다(큐가 대기하는 동안)
+            entered.await()
+            k.host.startScenario(setup(override = override))                 // 큐에 장면 시작
+            val newer = c1.copy(asOf = c1.asOf + 1_000, todayFeedCount = 7)
+            k.host.postReal(CareSummary(0, newer, gen = gen))               // 실행 전에 새 실제 요약이 온다
+            latch.countDown(); k.host.awaitIdle()
+            k.host.targets = saved
+            k.host.endScenario(); k.host.awaitIdle()
+            assertEquals(newer, k.state().care, "override=$override: 장면 끝에 장면 전 값이 아니라 새 실제 요약")
+            assertEquals(newer, k.store.loadSnapshot()!!.care)
+        }
+    }
+
+    @Test fun c130_endScenario_callsRouteAgain_afterRestoreClearedRoute() {
+        k.profile(); k.boot()
+        val route = RouteState(0, true, 3_000, emptyList(), 80.0)
+        k.ev(route)
+        assertEquals(true, k.state().car.route != null)
+        val saved = k.host.targets
+        k.host.targets = Targets(saved.exec, saved.link, saved.notice, wake = {}, restore = saved.restore, routeAgain = { k.host.post(route) })   // exec가 최신 RouteState를 다시 낸다
+        k.host.startScenario(setup()); k.host.awaitIdle()
+        k.host.endScenario(); k.host.awaitIdle()
+        assertEquals(true, k.state().car.route != null, "복원 ③이 비운 경로가 돌아온다")
+    }
+
+    @Test fun c133_sceneResume_doesNotRefillRealCare_bootAndSceneEndDo() {   // 장면 중 Resume 대조는 실제 요약 기준을 다시 채우지 않는다
+        k.profile(); k.boot()
+        val flags = mutableListOf<Boolean>()
+        val saved = k.host.targets
+        k.host.targets = Targets(saved.exec, saved.link, saved.notice, wake = {}, restore = { st, at, refill -> flags += refill; saved.restore(st, at, refill) })
+        k.host.suspend(); k.host.resume(); k.host.awaitIdle()
+        assertEquals(listOf(true), flags, "장면 없는 Resume")
+        k.host.startScenario(setup()); k.host.awaitIdle()
+        flags.clear()
+        k.host.suspend(); k.host.resume(); k.host.awaitIdle()
+        assertEquals(listOf(false), flags, "장면 중 Resume")
+        flags.clear()
+        k.host.endScenario(); k.host.awaitIdle()
+        assertEquals(listOf(true), flags, "장면 끝 복원은 채운다")
+    }
+
+    @Test fun c130_snapshot_keepsCareRoom() {
+        k.profile(); k.boot()
+        val c = CareView(k.now, true, null, null, null, null, null, null, null, 1)
+        k.ev(CareSummary(0, c, seq = 5, gen = k.state().careGen, room = "c_A"))
+        k.boot()
+        assertEquals("c_A", k.state().careRoom); assertEquals(5L, k.state().careSeq)
     }
 
     @Test fun scenarioPhoneStep_feedingStarted_notBlockedByOverride_viaWiringSinks() {

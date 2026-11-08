@@ -8,6 +8,12 @@ import { forgetAccessToken, retryAfterS } from "../src/push";
 import { ulid } from "../src/util";
 import { BASE, addGuardian, call, carWithOwner, newCar, send } from "./helpers";
 
+// 계약 1.4의 도구 JSON·시스템 지시 코드 블록을 그대로 옮긴 예제 파일과 견준다(docs/는 공개되지 않는다).
+const fixtures = import.meta.glob("./fixtures/llm_*", { query: "?raw", import: "default", eager: true });
+const fixture = (name: string) => fixtures[`./fixtures/${name}`] as string;
+const contractTools = JSON.parse(fixture("llm_tools.json"));
+const contractPrompt = fixture("llm_p5.txt");
+
 type Seen = { url: string; headers: Headers; body: any };
 
 function fakeFetch(reply: (url: string) => Response | Promise<Response>) {
@@ -60,7 +66,7 @@ describe("POST /v1/llm", () => {
     const seen = fakeFetch(() => claude([{ type: "thinking", thinking: "" }, { type: "text", text: "자장가가 " }, { type: "text", text: "잘 통했어요." }]));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody() });
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-haiku-5-5", prompt_version: "p3" });
+    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-haiku-5-5", prompt_version: "p5" });
     expect(typeof r.json.latency_ms).toBe("number");
     const [s] = seen;
     expect(s.url).toBe("https://api.anthropic.com/v1/messages");
@@ -68,13 +74,19 @@ describe("POST /v1/llm", () => {
     expect(s.headers.get("x-api-key")).toBe("EXAMPLE-anthropic-api-key");
     expect(s.body).toMatchObject({ model: "claude-haiku-5-5", max_tokens: 1024, output_config: { effort: "low" }, tool_choice: { type: "auto" } });
     for (const k of ["temperature", "top_p", "top_k", "thinking"]) expect(s.body).not.toHaveProperty(k);
-    expect(s.body.tools.map((t: any) => [t.name, t.strict])).toEqual([["switch_sound", true], ["add_waypoint", true], ["stop_soothing", true]]);
+    expect(s.body.tools.map((t: any) => [t.name, t.strict])).toEqual([["switch_sound", true], ["add_waypoint", true], ["stop_soothing", true], ["answer", true]]);
     expect(s.body.messages).toHaveLength(1);
-    expect(s.body.system).toContain('- sleep·diaper·feeds_today·last_night_wakeups는 집에서 부모가 휴대폰에 적은 기록의 요약이다. 말할 때 "기록상"을 붙이고');   // p3 마지막 세 줄(L61)
-    expect(s.body.system).toContain("- 시각을 말하지 않는다. 상태값의 분 숫자를 그대로 쓰고 시간으로 바꾸지 않는다");
-    expect(s.body.system.endsWith('- care_as_of_min_ago가 60보다 크면 "그 기록은 n분 전 것"이라고 함께 말한다.')).toBe(true);
+    expect(s.body.system).toBe(contractPrompt);
+    expect(s.body.tools).toEqual(contractTools);
     expect(s.body.messages[0].content).toMatch(/^상태값\(JSON\):\n\{"cry"/);
     expect(s.body.messages[0].content).toMatch(/\n\n운전자 질문: 뭐가 제일 잘 통해\?$/);
+  });
+
+  it("p5 answer tool_use는 tool_calls로 그대로 넘긴다", async () => {
+    const car = await newCar();
+    fakeFetch(() => claude([{ type: "tool_use", id: "t1", name: "answer", input: { topics: ["feeding", "sleep"] } }], "tool_use"));
+    const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody("마지막 수유 언제야") });
+    expect(r.json).toMatchObject({ text: "", tool_calls: [{ name: "answer", input: { topics: ["feeding", "sleep"] } }], stop_reason: "tool_use" });
   });
 
   it("c118 switch_sound 도구 enum은 음원 넷(white_noise, womb, lullaby, parent_song)", () => {

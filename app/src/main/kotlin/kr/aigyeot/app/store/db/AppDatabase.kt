@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kr.aigyeot.app.link.db.LinkDao
 import kr.aigyeot.app.link.db.OutboxEntity
 import kr.aigyeot.app.link.db.PhoneLinkMarkEntity
@@ -25,7 +27,7 @@ import kr.aigyeot.app.link.db.SongSelectionEntity
         RelayCredentialEntity::class, OutboxEntity::class, ProcessedMessageEntity::class,
         SongDownloadEntity::class, SongSelectionEntity::class, PhoneLinkMarkEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -36,6 +38,15 @@ abstract class AppDatabase : RoomDatabase() {
     companion object
 }
 
+/** 1→2(C122): AI 전송 안내 판 칸만 더한다. 옛 행은 0이라 안내를 다시 보여 준다. 기록은 지우지 않는다. */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE child_profile ADD COLUMN ai_notice_version INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE episode ADD COLUMN handoff_rest_name TEXT")
+        db.execSQL("ALTER TABLE episode ADD COLUMN handoff_told_driver INTEGER")
+    }
+}
+
 /** 앱의 데이터베이스(aigyeot.db). 개발 중에는 버전이 바뀌면 지우고 다시 만든다. */
 fun AppDatabase.Companion.open(context: Context): AppDatabase =
-    Room.databaseBuilder(context, AppDatabase::class.java, "aigyeot.db").fallbackToDestructiveMigration(dropAllTables = true).build()
+    Room.databaseBuilder(context, AppDatabase::class.java, "aigyeot.db").addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration(dropAllTables = true).build()

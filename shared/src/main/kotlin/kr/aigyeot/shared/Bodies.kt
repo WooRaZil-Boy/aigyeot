@@ -226,6 +226,7 @@ data class StopInfo(
     val restName: String?,
     val waypointAdded: Boolean,
     val guardianNotified: Boolean,
+    @SerialName("told_driver") val toldDriver: Boolean? = null,   // C130: 인계 문장을 운전자에게 냈는가(없으면 참으로 읽는다)
 )
 
 /** 필드 순서는 계약 표의 순서(인코더도 이 순서로 쓴다). */

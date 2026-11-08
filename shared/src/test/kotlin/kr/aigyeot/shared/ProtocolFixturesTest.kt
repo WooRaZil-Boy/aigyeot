@@ -63,6 +63,7 @@ class ProtocolFixturesTest {
         "api_llm_request_care" to LlmRequest.serializer(),
         "api_llm_response" to LlmResponse.serializer(),
         "api_llm_response_tool" to LlmResponse.serializer(),
+        "api_llm_response_answer" to LlmResponse.serializer(),
     )
 
     private fun roundTrip(text: String, serializer: KSerializer<*>): Pair<JsonElement, JsonElement> {

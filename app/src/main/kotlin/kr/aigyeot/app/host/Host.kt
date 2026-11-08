@@ -9,9 +9,17 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kr.aigyeot.app.store.Store
 import kr.aigyeot.app.store.db.ControlLogEntity
+import kr.aigyeot.app.store.db.EpisodeEntity
+import kr.aigyeot.engine.EpisodeRecord
+import kr.aigyeot.engine.EpisodeTrigger
+import kr.aigyeot.engine.HandoffCause
+import kr.aigyeot.engine.withoutSessionOffers
+import kr.aigyeot.engine.HandoffKind
+import kr.aigyeot.engine.MethodKind
+import kr.aigyeot.engine.SecondAction
 import kr.aigyeot.engine.Boot
 import kr.aigyeot.engine.CareSummary
-import kr.aigyeot.engine.CareView
+import kr.aigyeot.engine.careReplaces
 import kr.aigyeot.engine.ClearRecords
 import kr.aigyeot.engine.CloseSession
 import kr.aigyeot.engine.Command
@@ -39,6 +47,8 @@ import kr.aigyeot.engine.SaveFeedingStart
 import kr.aigyeot.engine.SavePlay
 import kr.aigyeot.engine.SaveSession
 import kr.aigyeot.engine.SaveSnapshot
+import kr.aigyeot.engine.Speak
+import kr.aigyeot.engine.Ask
 import kr.aigyeot.engine.SaveSteerWindow
 import kr.aigyeot.engine.SetWindowLock
 import kr.aigyeot.engine.ShowNotice
@@ -118,13 +128,21 @@ class Host(
 
     /** exec가 낸 진짜 신호. 장면이 `override`로 막은 이름이면 버린다(계약 7.2). */
     fun postReal(event: Event) {
-        if (event is CareSummary && scenario != null) noteRealCare(event.summary)   // 장면이 막았든 아니든 실제로 받은 요약은 장면 끝에 되돌려 준다
+        if (event is CareSummary) {   // 보관·적용 판단은 큐에서 꺼낼 때 호스트 스레드에서: 장면 시작·끝과 같은 줄에서 차례로(C130)
+            val e = stamp(event) as CareSummary
+            worker.execute {
+                if (scenario != null) noteRealCare(e)   // 장면이 막았든 아니든 실제로 받은 요약은 장면 끝에 되돌려 준다
+                if (scenario?.override?.contains("CareSummary") == true) return@execute
+                process(e)
+            }
+            return
+        }
         if (scenario?.override?.contains(event::class.simpleName) == true) return
         post(event)
     }
 
-    @Volatile private var realCareDuringScene: CareView? = null   // 장면 중 실제로 받은 가장 늦은 요약(Room에 없어 호스트가 들고 있는다)
-    @Synchronized private fun noteRealCare(c: CareView) { if (realCareDuringScene.let { it == null || c.asOf > it.asOf }) realCareDuringScene = c }
+    @Volatile private var realCareDuringScene: CareSummary? = null   // 장면 중 실제로 받은 가장 늦은 요약(Room에 없어 호스트가 들고 있는다)
+    @Synchronized private fun noteRealCare(c: CareSummary) { if (c.gen == real?.careGen && realCareDuringScene.let { it == null || careReplaces(it.summary, it.seq, c.summary, c.seq, it.room, c.room) }) realCareDuringScene = c }
 
     /** exec의 control_log 한 줄: store에 쓰고 장면 측정용 흐름에도 낸다. */
     fun logControl(row: ControlLogEntity) {
@@ -182,7 +200,7 @@ class Host(
         val r = real!!
         // 차 상태(기어·문·마이크)와 운전자는 실제 값을 이어받는다. 나머지는 장면 setup으로 처음부터
         val f = EngineState.fresh(setup.seed, setup.profile, setup.methods, setup.history, setup.feedingStart, setup.otherGuardians)
-        state = f.copy(now = maxOf(clock(), r.now), car = r.car, ign = f.ign.copy(driverUserId = r.ign.driverUserId))
+        state = f.copy(now = maxOf(clock(), r.now), car = r.car, careGen = r.careGen, ign = f.ign.copy(driverUserId = r.ign.driverUserId))
         publish(Step(state, emptyList(), null))   // 장면 첫 Step(rng = 그 반복 시드, 할 일 없음). scenario의 SceneGate가 여기서부터 받는다
         setup.care?.let { run(stamp(CareSummary(clock(), it))) }   // C119: 첫 Step 뒤 요약 흉내
     }
@@ -205,9 +223,13 @@ class Host(
         real = null
         store.resetContext()
         // 실제 상태의 말하기·질문·재생·잠금 콜백은 장면 상태로 가서 사라졌다. 프로세스 복원과 같은 길로 비운다(H7: Tick도 다시 예약)
-        val care = listOfNotNull(r.care, realCareDuringScene).maxByOrNull { it.asOf }   // 장면 전 값과 장면 중 받은 값 중 가장 늦은 것
+        // 장면 전 값과 장면 중 받은 값 중 CS1이 이기는 것(C126 ④)
+        val d = realCareDuringScene?.takeIf { it.gen == r.careGen }   // 지우기 전 세대의 요약은 되살리지 않는다(C132)
+        val back = if (d != null && careReplaces(r.care, r.careSeq, d.summary, d.seq, r.careRoom, d.room)) r.copy(care = d.summary, careSeq = d.seq, careRoom = d.room) else r
         realCareDuringScene = null
-        restore(r.copy(car = c, care = care), clock(), c.gear)
+        restore(back.copy(car = c), clock(), c.gear)
+        targets.routeAgain()   // 복원 ③이 비운 경로를 내비의 최신 값으로 다시 채운다: 같은 값이라 억제되지 않게(C130)
+        if (back.care != r.care || back.careSeq != r.careSeq || back.careRoom != r.careRoom) snapshot(state)   // 실제 값으로 되돌린 요약은 바로 저장(Boot Step의 key는 이미 같은 값이라 못 본다)
     }
 
     /** 시험용: 큐에 쌓인 일을 모두 끝낼 때까지 기다린다. */
@@ -253,12 +275,15 @@ class Host(
     private fun run(raw: Event) {
         if (scenario != null && raw is ClearRecords) { Log.w(TAG, "장면 중에는 기록을 지우지 않는다"); return }
         val old = state
-        val e = if (raw.at < old.now) raw.withAt(old.now) else raw   // 2.4: at이 state.now보다 앞서면 올린다
+        val sceneCare = if (scenario != null && raw is CareSummary && raw.seq == null) raw.copy(gen = old.careGen) else raw   // 장면 주입은 지금 세대(C128)
+        val e = if (sceneCare.at < old.now) sceneCare.withAt(old.now) else sceneCare   // 2.4: at이 state.now보다 앞서면 올린다
         val step = try { engine.step(old, e) } catch (x: Exception) { Log.e(TAG, "step 실패: $e", x); return }
         state = step.state
         store.observe(e, step.state)
-        publish(step)
+        val relayClear = DeleteRelayRecords in step.commands
+        if (!relayClear) publish(step)
         dispatch(old, step)
+        if (relayClear) publish(step)   // 새 careGen은 link가 삭제 표시를 한 뒤에 보인다(C132)
         scheduleTick(step.wakeAt)
     }
 
@@ -276,7 +301,7 @@ class Host(
                     To.STORE -> when {
                         // 5.9·C90: 같은 Step의 DeleteRecords·SaveSnapshot·DeleteRelayRecords를 한 트랜잭션으로
                         c is DeleteRecords -> { store.clearRecords(cmds.filterIsInstance<SaveSnapshot>().lastOrNull()?.state ?: step.state); lastSnapshotAt = clock(); dirty = false; saved = true }
-                        c is DeleteRelayRecords -> {}
+                        c is DeleteRelayRecords -> targets.link(c)   // 중계 삭제는 store가 보낼 함에 넣었다. link는 그때까지 받은 seq를 남긴다(C126 ②)
                         c is SaveSnapshot -> if (!clearing) { if (scenario == null) snapshot(c.state); saved = true }
                         c is SaveFeedingStart && scenario != null -> {}   // 장면은 실제 마지막 수유를 바꾸지 않는다
                         else -> store.handle(c)
@@ -324,9 +349,12 @@ class Host(
         val x = snap.session ?: return snap
         val dao = store.dao
         val row = dao.session(x.id)
-        if (row?.endedAt != null)
-            return snap.copy(session = null, car = snap.car.copy(outPauses = snap.car.outPauses + x.pauses), steer = snap.steer.copy(window = null),
+        if (row?.endedAt != null) {
+            // C137·C140: closeSession과 같은 규칙(제안 문장을 큐에서 뺀다, 말하던 줄은 C123이 버린다). 알림·SaveEpisode 없음(closeSession이 이미 Room에 기록했다)
+            val sp = snap.speech.withoutSessionOffers()
+            return snap.copy(session = null, speech = sp, car = snap.car.copy(outPauses = snap.car.outPauses + x.pauses), steer = snap.steer.copy(window = null),
                 history = store.history(now))   // 세션 끝과 함께 커밋된 마지막 1차 결과가 성적에서 빠지지 않게 Room에서 다시 센다(5장, C56)
+        }
         val played = maxOf(x.playedMs, dao.sessionPlayedMs(x.id))
         var ses = x.copy(playedMs = played, capReached = x.capReached || played >= p.sessionPlayCapMs)
         var history = snap.history
@@ -334,7 +362,9 @@ class Host(
         if (ep != null) {
             val room = dao.episode(ep.id)
             if (room?.endedAt != null) {
-                ses = ses.copy(phase = Phase.LISTENING, attemptNo = 0, play = null, judgeFrom = null, windowEnd = null, episode = null, quietMs = 0, pendingAlarm = null)
+                // C133 ②: 대기 인계 줄이 이 에피소드의 것이면 Room의 닫힌 행을 closedRecord로 채운다(버려질 때 그 행에 toldDriver=false를 남긴다)
+                val pa = ses.pendingHandoffAlert?.takeIf { it.episodeId == ep.id }?.copy(closedRecord = room.toRecord()) ?: ses.pendingHandoffAlert
+                ses = ses.copy(phase = Phase.LISTENING, attemptNo = 0, play = null, judgeFrom = null, windowEnd = null, episode = null, quietMs = 0, pendingAlarm = null, pendingHandoffAlert = pa)
                 history = store.history(now)   // Room에서 다시 세어 같은 에피소드를 두 번 넣지 않는다
             } else {
                 val first = ep.first?.let { f ->
@@ -344,7 +374,26 @@ class Host(
                 ses = ses.copy(episode = ep.copy(playedMs = maxOf(ep.playedMs, dao.episodePlayedMs(ep.id)), first = first))
             }
         }
-        return snap.copy(session = ses, history = history)
+        // C136: 질문을 내며 Room에 handoff_told_driver를 저장한 뒤 스냅숏 전에 죽었다. Room 값이 앞서니 대기 줄과 큐 줄을 지우고 값만 옮긴다(알림·SaveEpisode 없음)
+        var speech = snap.speech
+        ses.pendingHandoffAlert?.let { a ->
+            val told = a.episodeId?.let { dao.episode(it) }?.takeIf { it.handoffToldDriver != null } ?: return@let
+            ses = ses.copy(pendingHandoffAlert = null, episode = ses.episode?.takeIf { it.id == a.episodeId }?.let { e ->
+                e.copy(handoff = e.handoff?.copy(toldDriver = told.handoffToldDriver, restName = told.handoffRestName))
+            } ?: ses.episode)
+            // 말하던 맨 앞 줄이면 ③의 dropSpeaking이 버린다(C123). 여기서 빼면 다음 줄이 버려진다
+            val keep = speech.speaking != null
+            val (goneIx, keptIx) = speech.queue.indices.partition { i -> speech.queue[i].let { l -> l.sid == a.sid && l.askRestId == a.askRestId && l.queuedAt == a.queuedAt } && !(keep && i == 0) }
+            val gone = goneIx.map { speech.queue[it] }
+            speech = speech.copy(queue = keptIx.map { speech.queue[it] })
+            // 빼는 줄에 엔진이 그때 했을 처리를 적용한다: 말했다면 speechDone과 같은 변화(C84·C66·C141), 아니면 forgetOffer
+            gone.forEach { l ->
+                val tmp = snap.copy(session = ses, speech = speech)
+                val r = if (told.handoffToldDriver == true) engine.markSpoken(tmp, l, now) else engine.markDropped(tmp, l)
+                ses = r.session!!
+            }
+        }
+        return snap.copy(session = ses, history = history, speech = speech)
     }
 
     /** ③ 복원 처리: 재생 이중 누적 방지(C58), GAP·CONFIRM 판정 멈춤(C59), 질문·듣기·말하기 비우기, 마이크 맞추기(C69·C82). */
@@ -357,7 +406,10 @@ class Host(
             else if (x.pauses.isEmpty())   // 장면 끝: 마이크가 살아 있다. 장면 동안 실제 상태가 관측하지 못한 창이라 입력이 돌아온 것처럼 지금부터 다시 잰다(C92)
                 state = state.copy(session = x.copy(judgeFrom = now, windowEnd = now + if (x.phase == Phase.GAP) p.gapMs else p.confirmMs))
         }
-        state = state.copy(session = state.session?.copy(pendingAsk = null), speech = state.speech.copy(qa = null, speaking = null))
+        // C123: 말하던 줄(큐 맨 앞)은 다시 말하지 않는다. C125: 옛 경로로 판단하지 않고 내비 응답을 기다린다
+        state = engine.dropSpeaking(state, now)   // C128 ④: 버리기 전에 말한 것으로 친다(longDriveOffered·s06Said)
+        state = state.copy(session = state.session?.copy(pendingAsk = null), car = state.car.copy(route = null), bootAt = now,
+            speech = state.speech.copy(qa = null, speaking = null, queue = state.speech.queue.filterNot { it.longDrive }))   // C138: 말하지 않은 장시간 제안은 새 경로로 L1이 다시 판단한다(인계 줄은 longDrive가 아니다, H7)
         if (state.car.micRunning && running == null) { run(stamp(MicService(now, false, null))); run(stamp(InputLost(now, PauseReason.MIC_ERROR))) }
         val unresolved = state.session?.pauses.orEmpty() + state.car.outPauses
         // 엔진에만 있는 사유는 늘 assumePausedNow로: 서비스가 그사이 시작해도 잠금 안에서 감지기·pendingPauses로 나뉜다(C82)
@@ -372,7 +424,7 @@ class Host(
     private fun reconcileLink() {
         if (!started) return
         val now = clock()
-        val fromLink = try { runBlocking { targets.restore(state, now) } } catch (x: Exception) { Log.e(TAG, "복원 뒤 대조(link) 실패", x); emptyList() }
+        val fromLink = try { runBlocking { targets.restore(state, now, scenario == null) } } catch (x: Exception) { Log.e(TAG, "복원 뒤 대조(link) 실패", x); emptyList() }
         fromLink.forEach { process(stamp(it)) }
         store.methods().let { if (it != state.methodsNext) process(stamp(MethodsChanged(now, it))) }
         store.profile().let { if (it != state.profile) process(stamp(ProfileChanged(now, it))) }
@@ -390,7 +442,7 @@ class Host(
         private const val JUMP_MS = 5_000L
         private val IMMEDIATE = setOf(
             SaveSession::class, SaveEpisode::class, SavePlay::class, SaveSteerWindow::class, SaveFeedingStart::class,
-            LogAlarm::class, CloseSession::class, DeleteRecords::class, SetWindowLock::class, StartPlayback::class, StopPlayback::class,
+            LogAlarm::class, CloseSession::class, DeleteRecords::class, SetWindowLock::class, StartPlayback::class, StopPlayback::class, Speak::class, Ask::class,   // C123: 말하기 시작
         )
 
         /** C78 (a)의 '바뀌면 바로 저장' 값들. */
@@ -398,8 +450,17 @@ class Host(
             listOf(
                 x?.id, x?.phase, x?.attemptNo, x?.play, x?.episode, x?.pauses, x?.longDriveOffered, x?.capReached,
                 x?.pendingAsk, x?.waypointPending, x?.nursingStop, s.car.outPauses, s.ign.windowLockPending, s.ign.suspendedAt,
-                s.feedingStart, s.profile, s.methodsNext, x?.departChecked, s.care,
+                s.feedingStart, s.profile, s.methodsNext, x?.departChecked, s.care, s.careSeq, s.careRoom, x?.pendingHandoffAlert,
             )
         }
     }
 }
+
+/** Room 행 → 판단 코어 기록(복원 대조에서 닫힌 에피소드를 closedRecord로 되살릴 때). */
+private fun EpisodeEntity.toRecord() = EpisodeRecord(
+    id, sessionId, startedAt, endedAt, EpisodeTrigger.valueOf(trigger), alarmAt, alarmDelayMs,
+    firstMethod?.let(MethodKind::valueOf), firstSongId, firstResult?.let(TryResult::valueOf), firstUnjudged?.let(Unjudged::valueOf),
+    secondAction?.let(SecondAction::valueOf), secondMethod?.let(MethodKind::valueOf), secondSongId, secondResult?.let(TryResult::valueOf),
+    handoffCause?.let(HandoffCause::valueOf), handoffKind?.let(HandoffKind::valueOf), waypointAdded, guardianNotified,
+    handoffRestName, handoffToldDriver, cryMs, recried, playedMs, excludeReasons,
+)

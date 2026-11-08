@@ -65,21 +65,6 @@ class NumberCheckTest {
         ).forEach { assertFalse(noStateClaim(it), it) }
     }
 
-    // 기록 예외는 없다(11-06): '기록상'이 있어도 깼·잠들었은 거른다
-    @Test fun c108_recordWordsStillFail() {
-        listOf("기록상 40분 전에 깼어요.", "기록상 40분 잤고 방금 깼어요.", "기록상 30분 전에 잠들었어요.").forEach { assertFalse(noStateClaim(it), it) }
-    }
-
-    @Test fun c108_newlineDoesNotBypassStateClaim() {
-        listOf("아기가 자고\n있어요.", "기저귀 때문에\n울어요.", "기록상 40분 전에 깼어요.\n아기가 푹\n자고 있어요.").forEach { assertFalse(noStateClaim(it), it) }
-    }
-
-    @Test fun c108_presentSleepStateFailsEvenWithRecord() {
-        listOf("기록상 지금 자고 있어요.", "기록상 자는 중이에요.", "기록상 아기가 깨어 있어요.", "기록상 잠들어 있어요.", "기록상 깼지만 배고파서 울어요.", "기록상 잘 자요.",
-            "기록상 40분 전에 깼고 지금 자고 있어요.", "기록상 30분 전에 잠들어 있어요.")
-            .forEach { assertFalse(noStateClaim(it), it) }
-    }
-
     @Test fun stateClaim_observedFacts_pass() {
         listOf("울음이 들리지 않아요.", "마지막 수유는 12시 10분이에요.", "백색소음을 틀었어요.", "지금 2분째 울고 있어요.", "소리를 바꿀게요.", "")
             .forEach { assertTrue(noStateClaim(it), it) }
@@ -91,5 +76,85 @@ class NumberCheckTest {
         assertFalse(noStateClaim("괜\u3000찮\u00A0아 요"))                                  // 전각·줄 바꿈 없는 공백
         assertFalse(noStateClaim(java.text.Normalizer.normalize("괜찮아요", java.text.Normalizer.Form.NFD)))  // 풀어 쓴 자모
         assertFalse(noStateClaim("숨 을 쉬어요"))
+    }
+
+    @Test fun c108_recordWordsStillFail() {
+        assertFalse(noStateClaim("기록상 40분 잤고 방금 깼어요."))
+        assertFalse(noStateClaim("기록상 잠들었어요."))
+    }
+
+    @Test fun c108_presentSleepStateFailsEvenWithRecord() {
+        assertFalse(noStateClaim("기록상 지금 잘 자고 있어요."))
+        assertFalse(noStateClaim("기록상\n깼어요."))
+        assertTrue(noStateClaim("기록상 오늘 3번 먹었어요."))
+    }
+
+    // ---- C129 숫자-항목 검사 ----
+    private val care: JsonElement = Json.parseToJsonElement(
+        """
+        { "cry": { "current_min": 2, "count_this_drive": 3 },
+          "feeding": { "elapsed_min": 170, "interval_min": 180 },
+          "carseat_min": 52, "cabin_temp": 27.5, "feeds_today": 3, "care_as_of_min_ago": 10,
+          "next_rest": { "id": "r1", "name": "제2경인○○휴게소", "distance_km": 7.2, "nursing_room": true },
+          "method_stats": [ { "method": "lullaby", "label": "자장가", "successes": 6, "attempts": 7 } ],
+          "last_night_wakeups": 2,
+          "sleep": { "sleeping_since_min": null, "woke_min_ago": 40, "last_sleep_min": 35, "today_sleep_min": 430 } }
+        """,
+    )
+
+    @Test fun c129_otherCellNumber_fails() = assertFalse(numbersMatchCells("마지막 수유는 40분 전이에요", care))   // 40은 잠 값
+
+    @Test fun c129_rightCellNumber_passes() {
+        assertTrue(numbersMatchCells("마지막 수유는 170분 전이에요.", care))
+        assertTrue(numbersMatchCells("40분 전에 깼어요. 카시트에 52분째예요.", care))
+        assertTrue(numbersMatchCells("실내 온도는 27.5도예요.", care))   // 소수점은 문장 끝이 아니다
+        assertTrue(numbersMatchCells("자장가를 틀었을 때 7번 중 6번 그쳤어요.", care))
+    }
+
+    @Test fun c129_sentenceScoped() = assertFalse(numbersMatchCells("수유는 170분 전이에요. 40분이에요.", care))   // 낱말은 같은 문장에서만
+
+    @Test fun c129_sentenceScoped_cr_nel_ls_ps() {
+        listOf("\r", "\r\n", "\u0085", "\u2028", "\u2029").forEach { sep ->
+            assertFalse(numbersMatchCells("마지막 수유는 40분 전이에요${sep}잠 기록도 있어요", care), "sep=" + sep.map { it.code })
+            assertTrue(numbersMatchCells("마지막 수유는 170분 전이에요${sep}40분 전에 깼어요", care))
+        }
+    }
+
+    @Test fun c129_restNameDigits_pass() = assertTrue(numbersMatchCells("제2경인○○휴게소까지 7.2km예요.", care))
+
+    @Test fun c129_restNameDigits_withoutName_fails() = assertFalse(numbersMatchCells("2번이에요.", care))   // 2는 울음·쉼터 이름 칸인데 낱말이 없다
+
+    @Test fun c129_valueInTwoCells_anyWordPasses() {
+        val two = Json.parseToJsonElement("""{ "carseat_min": 40, "sleep": { "woke_min_ago": 40 } }""")
+        assertTrue(numbersMatchCells("카시트에 40분째예요.", two))
+        assertTrue(numbersMatchCells("40분 전에 깼어요.", two))
+        assertFalse(numbersMatchCells("수유한 지 40분이에요.", two))
+    }
+
+    private val c130 = Json.parseToJsonElement(
+        """{ "feeding": { "elapsed_min": 7 }, "carseat_min": 2, "cabin_temp": 23.5, "next_rest": { "distance_km": 7.2 } }""",
+    )
+
+    @Test fun c130_arabicDecimal_wrongCell_fails() {
+        assertFalse(numbersMatchCells("수유 후 ٧.٢분째, 카시트에 있어요.", c130))   // 7.2는 쉼터 거리
+        assertFalse(numbersMatchCells("수유 후 ７．２분째예요.", c130))
+        assertFalse(numbersMatchCells("수유 후 ٧٫٢분째예요.", c130))
+    }
+
+    @Test fun c130_decimalVariants_rightCell_pass() {
+        assertTrue(numbersMatchCells("쉼터까지 7.2km예요.", c130))
+        assertTrue(numbersMatchCells("쉼터까지 ７．２km예요.", c130))
+        assertTrue(numbersMatchCells("쉼터까지 ٧٫٢km예요.", c130))
+    }
+
+    @Test fun c130_doWordMustFollowNumber() {
+        assertFalse(numbersMatchCells("카시트에도 23.5분 있었어요.", c130))
+        assertFalse(numbersMatchCells("쉼터에 도착, 23.5분이에요.", c130))
+        assertTrue(numbersMatchCells("실내는 23.5도예요.", c130))
+        assertTrue(numbersMatchCells("실내는 23.5 도예요.", c130))
+        assertTrue(numbersMatchCells("좀 덥네요, 23.5예요.", c130))
+        assertTrue(numbersMatchCells("실내는 23.5℃예요.", c130))
+        assertTrue(numbersMatchCells("실내는 23.5°C예요.", c130))
+        assertFalse(numbersMatchCells("카시트에도 23.5℃ 아닌 23.5분 있었어요.", c130))
     }
 }

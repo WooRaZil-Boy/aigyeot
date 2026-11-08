@@ -1,0 +1,1 @@
+{"text":"마지막 수유와 잠 기록을 알려 드릴게요.","tool_calls":[{"name":"answer","input":{"topics":["feeding","sleep"]}}],"stop_reason":"tool_use","model":"claude-haiku-5-5","prompt_version":"p5","latency_ms":900}

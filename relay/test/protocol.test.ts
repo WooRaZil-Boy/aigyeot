@@ -57,6 +57,7 @@ const table: Record<string, string | P.D<unknown>> = {
   api_llm_request_care: P.LlmRequest,
   api_llm_response: P.LlmResponse,
   api_llm_response_tool: P.LlmResponse,
+  api_llm_response_answer: P.LlmResponse,
 };
 
 const roundTrip = (d: P.D<unknown>, v: unknown) => JSON.parse(JSON.stringify(d(v, "$")));

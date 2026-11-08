@@ -17,6 +17,8 @@ import kr.aigyeot.app.store.db.AppDatabase
 import kr.aigyeot.app.store.db.PhoneLinkEntity
 import kr.aigyeot.app.store.db.SongEntity
 import kr.aigyeot.engine.EngineState
+import kr.aigyeot.engine.fresh
+import kotlinx.coroutines.flow.first
 import kr.aigyeot.engine.Event
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
@@ -71,6 +73,7 @@ class FakeRelay : Relay {
     var recordsCalls = 0
     var songRes: (String, File) -> Res<Long> = { _, f -> f.writeBytes(ByteArray(100)); Res.Ok(200, 100) }
     val songCalls = mutableListOf<String>()
+    var onInbox: suspend () -> Unit = {}   // 받은 함 요청을 보낸 직후(응답을 돌려주기 전)에 시험이 끼어든다
     var llmRes: suspend (LlmRequest) -> Res<LlmResponse> = { Res.Offline }
     val llmCalls = mutableListOf<LlmRequest>()
 
@@ -83,7 +86,11 @@ class FakeRelay : Relay {
     override suspend fun devices(token: String): Res<DevicesResponse> { devicesCalls++; onDevices(); return devicesRes }
     override suspend fun deleteDevice(token: String, deviceId: String) = deleteDeviceRes.also { deletedDevices += deviceId }
     override suspend fun send(token: String, env: Envelope) = sendResult(env).also { sent += env }
-    override suspend fun inbox(token: String, afterSeq: Long) = inboxPages.removeFirstOrNull().also { if (inboxCalls.isEmpty()) socketCallsAtFirstInbox = socketCalls; inboxCalls += afterSeq } ?: Res.Ok(200, InboxResponse(emptyList(), false))
+    override suspend fun inbox(token: String, afterSeq: Long): Res<InboxResponse> {
+        val page = inboxPages.removeFirstOrNull().also { if (inboxCalls.isEmpty()) socketCallsAtFirstInbox = socketCalls; inboxCalls += afterSeq }
+        onInbox()   // 서버가 응답을 만든 뒤 늦게 도착하는 것을 흉내 낸다
+        return page ?: Res.Ok(200, InboxResponse(emptyList(), false))
+    }
     override suspend fun ack(token: String, ids: List<String>): Res<Unit> = Res.Ok(204, Unit).also { acked.addAll(ids) }
     override suspend fun song(token: String, songId: String, dest: File, maxBytes: Long) = songRes(songId, dest).also { songCalls += songId }
     override suspend fun deleteRecords(token: String) = recordsRes.also { recordsCalls++ }
@@ -109,13 +116,15 @@ abstract class LinkKit {
     var now = T0
     val events = CopyOnWriteArrayList<Event>()
     val relay = FakeRelay()
-    var engineState: EngineState? = null
+    private val stateFlow = kotlinx.coroutines.flow.MutableStateFlow<EngineState?>(EngineState.fresh(1, null, emptyList(), emptyList(), null, 0))
+    var engineState: EngineState? get() = stateFlow.value; set(v) { stateFlow.value = v }   // 호스트 복원 뒤의 상태(C132). 복원 전은 null로 둔다
     var probeResult: SongProbe? = SongProbe(94.5, true)
     var copyResult: suspend (File, File) -> LoudnessResult = { i, o -> i.copyTo(o, overwrite = true); LoudnessResult(true) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     open val qaWaitMs = 3_000L
+    var onPost: (Event) -> Unit = {}   // 사건이 나간 직후(받기 잠금 안)에 시험이 끼어든다
     val link by lazy {
-        Link(ctx, db, { now }, { events += it }, { engineState }, relay, FakeCipher, { probeResult }, { i, o -> copyResult(i, o) }, scope, qaWaitMs)
+        Link(ctx, db, { now }, { events += it; onPost(it) }, { engineState }, relay, FakeCipher, { probeResult }, { i, o -> copyResult(i, o) }, scope, qaWaitMs, stateReady = { stateFlow.first { it != null } })
     }
 
     @AfterTest fun closeKit() { scope.cancel(); db.close() }
@@ -125,10 +134,10 @@ abstract class LinkKit {
 
     fun relayEnv(type: String, seq: Long, body: String) = env(type, seq, body, Sender(Role.RELAY, null))
 
-    fun profile(lastFeeding: Long? = null, interval: Int? = 180, nickname: String = "지우") = db.openHelper.writableDatabase.execSQL(
+    fun profile(lastFeeding: Long? = null, interval: Int? = 180, nickname: String = "지우", noticeVersion: Int = kr.aigyeot.app.store.db.AI_NOTICE_VERSION) = db.openHelper.writableDatabase.execSQL(
         "INSERT INTO child_profile (id, nickname, birth_ym, carseat, feeding_interval_min, last_feeding_start, methods, has_sibling, " +
-            "front_fallback_allowed, consent_at) VALUES ('p', ?, '2026-03', 'LEFT', ?, ?, '[]', 0, 0, 0)",
-        arrayOf<Any?>(nickname, interval, lastFeeding),
+            "front_fallback_allowed, consent_at, ai_notice_version) VALUES ('p', ?, '2026-03', 'LEFT', ?, ?, '[]', 0, 0, 0, ?)",
+        arrayOf<Any?>(nickname, interval, lastFeeding, noticeVersion),
     )
 
     fun lastFeeding(): Long? = dao.profile()?.lastFeedingStart

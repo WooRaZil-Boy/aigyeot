@@ -55,7 +55,7 @@ class LinkRelayLiveTest {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).build()
         db.openHelper.writableDatabase.execSQL(   // 첫 설정을 마친 차(아기 프로필 있음)
-            "INSERT INTO child_profile VALUES ('p', '지우', '2026-03', 'LEFT', 180, NULL, '[]', 0, 0, 0)",
+            "INSERT INTO child_profile VALUES ('p', '지우', '2026-03', 'LEFT', 180, NULL, '[]', 0, 0, 0, 1)",
         )
         val events = CopyOnWriteArrayList<Pair<Long, Event>>()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

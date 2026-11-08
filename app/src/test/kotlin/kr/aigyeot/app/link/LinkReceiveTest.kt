@@ -68,15 +68,15 @@ class LinkReceiveTest : LinkKit() {
 
     // ---------------------------------------------------------------- care_summary(L60, 8.3·8.4)
 
-    private fun care(asOf: String = "2026-11-06T15:00:00+09:00", enabled: Boolean = true, sleepMin: String = "430", feeds: String = "3", sleepStart: String = "\"2026-11-06T12:20:00+09:00\"") =
-        env("care_summary", 430, """{"as_of":"$asOf","zone":"Asia/Seoul","sleep_diaper_enabled":$enabled,"last_sleep_start_at":$sleepStart,"last_sleep_end_at":null,"sleeping_since":null,"today_sleep_min":$sleepMin,"night_wakeups":null,"last_diaper_at":null,"today_diaper_count":null,"today_feed_count":$feeds}""")
+    private fun care(asOf: String = "2026-11-06T15:00:00+09:00", enabled: Boolean = true, sleepMin: String = "430", feeds: String = "3", sleepStart: String = "\"2026-11-06T12:20:00+09:00\"", seq: Long = 430) =
+        env("care_summary", seq, """{"as_of":"$asOf","zone":"Asia/Seoul","sleep_diaper_enabled":$enabled,"last_sleep_start_at":$sleepStart,"last_sleep_end_at":null,"sleeping_since":null,"today_sleep_min":$sleepMin,"night_wakeups":null,"last_diaper_at":null,"today_diaper_count":null,"today_feed_count":$feeds}""")
     private val careAt = instantOf("2026-11-06T15:00:00+09:00")!!
 
     @Test fun l60_newerSummary_postsCareSummaryEvent_notInRoom() {
         now = careAt                                                         // as_of가 미래면 버리므로(3.3) 시험 시계를 as_of에 맞춘다
         val e = care()
         assertTrue(rx(e))
-        assertEquals(CareSummary(careAt, CareView(careAt, true, instantOf("2026-11-06T12:20:00+09:00"), null, null, 430, null, null, null, 3)), events.single())
+        assertEquals(CareSummary(careAt, CareView(careAt, true, instantOf("2026-11-06T12:20:00+09:00"), null, null, 430, null, null, null, 3, "Asia/Seoul"), seq = 430, room = "c_TESTCAR"), events.single())   // C126: 중계 seq와 요약 시간대를 싣는다
         assertTrue(dao.processed(e.id))
         assertTrue(outbox().isEmpty())
     }
@@ -85,6 +85,7 @@ class LinkReceiveTest : LinkKit() {
         now = careAt
         for (f in listOf("care_summary.json", "care_summary_off.json")) {
             events.clear()
+            runBlocking { link.restoreEvents(kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0), now) }   // 두 예제는 같은 as_of·seq라 따로 받는다
             assertTrue(rx(ProtocolJson.decodeFromString(kr.aigyeot.shared.Envelope.serializer(), java.io.File("../shared/src/test/resources/protocol/$f").readText())), f)
             assertEquals(1, events.size, f)
         }
@@ -100,6 +101,263 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(rx(e)); assertTrue(events.isEmpty()); assertTrue(dao.processed(e.id))
         assertTrue(rx(care(asOf = "2026-11-06T14:59:59+09:00"))); assertTrue(events.isEmpty())
         assertTrue(rx(care(asOf = "2026-11-06T15:00:01+09:00"))); assertEquals(1, events.size)   // 더 늦으면 낸다
+    }
+
+    @Test fun c126_sameSecond_largerRelaySeqReplaces() {
+        now = careAt
+        assertTrue(rx(care(feeds = "3", seq = 430))); assertTrue(rx(care(feeds = "4", seq = 431)))   // 같은 as_of, 더 큰 seq
+        assertEquals(listOf(430L, 431L), events.map { (it as CareSummary).seq })
+        assertEquals(4, (events.last() as CareSummary).summary.todayFeedCount)
+        assertTrue(rx(care(feeds = "5", seq = 429))); assertEquals(2, events.size)               // 작은 seq는 낸 것이 없다
+    }
+
+    @Test fun c126_sceneValueInState_doesNotBlockRealSummary() {
+        now = careAt
+        val fresh = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
+        val real = CareView(careAt - 60_000, true, null, null, null, null, null, null, null, 1)
+        runBlocking { link.restoreEvents(fresh.copy(care = real), now) }        // 장면 전 실제 값
+        engineState = fresh.copy(care = CareView(careAt + 60_000, true, null, null, null, null, null, null, null, 9))   // 장면이 넣은 더 늦은 값
+        assertTrue(rx(care(asOf = "2026-11-06T14:59:30+09:00")))                  // 장면 값보다 이르고 실제 값보다 늦은 실제 요약
+        assertEquals(1, events.size)
+    }
+
+    @Test fun c128_newRoom_resetsMaxSeenSeq() {
+        now = careAt
+        assertTrue(rx(care(seq = 9000))); events.clear()           // 옛 방에서 큰 seq를 받았다
+        runBlocking { link.invalidate(); link.credential() }       // 방이 바뀌고 새 방에 등록
+        link.handle(kr.aigyeot.engine.DeleteRelayRecords)          // 새 방에서 기록 지우기
+        assertTrue((dao.mark("care_clear")?.lastSeq ?: 0L) < 2L, "옛 방 seq가 남지 않는다")
+        events.clear(); assertTrue(rx(care(seq = 2))); assertEquals(1, events.size, "새 요약을 버리지 않는다")
+    }
+
+    @Test fun c128_noRealSummary_notComparedToSceneValue() {
+        now = careAt
+        val fresh = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
+        runBlocking { link.restoreEvents(fresh, now) }             // 실제 요약 없이 복원
+        engineState = fresh.copy(care = CareView(careAt + 60_000, true, null, null, null, null, null, null, null, 9))   // 장면 값
+        assertTrue(rx(care())); assertEquals(1, events.size, "장면 값이 아니라 실제 요약 없음(null)과 견준다")
+    }
+
+    @Test fun c128_event_carriesCareGen() {
+        now = careAt
+        engineState = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0).copy(careGen = 3)
+        assertTrue(rx(care())); assertEquals(3, (events.single() as CareSummary).gen)
+    }
+
+    // ---- C130 (연결 계약 8.4 care_summary 줄)
+    private fun freshState(gen: Int) = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0).copy(careGen = gen)
+
+    @Test fun c130_receiveInProgress_clearInBetween_oldSummaryNotRevivedInNewGen() {   // 수신 도중 지우기
+        now = careAt
+        engineState = freshState(0)
+        runBlocking { link.restoreEvents(engineState!!, now) }            // 실제 요약 없음으로 시작(restored)
+        val old = care(asOf = "2026-11-06T15:00:30+09:00", seq = 430)
+        engineState = freshState(1); link.handle(kr.aigyeot.engine.DeleteRelayRecords)   // 받기를 시작한 뒤 지우기가 끝났다
+        assertTrue(runBlocking { link.receive(old, null, gen = 0) })      // 받기를 시작할 때의 세대
+        assertTrue(events.isEmpty(), "새 세대로 되살리지 않는다"); assertTrue(dao.processed(old.id), "버려도 ack")
+        assertTrue(rx(care(asOf = "2026-11-06T15:00:00+09:00", seq = 431))); assertEquals(1, events.size, "옛 요약이 실제 값을 바꾸지 않았다")
+        assertEquals(1, (events.single() as CareSummary).gen)
+    }
+
+    @Test fun c130_inboxRequestStartedBeforeClear_lateResponseDropped() {   // 삭제 전에 시작한 받은 함 요청
+        now = careAt
+        engineState = freshState(0)
+        runBlocking { link.restoreEvents(engineState!!, now) }
+        relay.inboxPages += Res.Ok(200, InboxResponse(listOf(care(seq = 430)), false))
+        relay.onInbox = { engineState = freshState(1); link.handle(kr.aigyeot.engine.DeleteRelayRecords) }   // 응답이 오기 전에 지우고 삭제까지 끝났다
+        sync()
+        relay.onInbox = {}
+        assertTrue(events.none { it is CareSummary }); assertEquals(1, relay.acked.size, "버려도 ack")
+    }
+
+    @Test fun c130_socketFrame_usesGenAtArrival() {   // WebSocket 프레임도 받은 시점의 세대
+        now = careAt
+        profile(); phone()
+        engineState = freshState(0)
+        val f = care(seq = 430)
+        relay.onInbox = { engineState = freshState(1) }                   // 프레임은 먼저 도착했고(gen 0) 첫 동기화 중 지우기가 끝난다
+        relay.onSocket = { ev -> if (relay.socketCalls == 1) { ev.onOpen(); ev.onText(ProtocolJson.encodeToString(kr.aigyeot.shared.Envelope.serializer(), f)) } else ev.onClosed(-1) }
+        link.start()
+        val end = System.currentTimeMillis() + 5_000
+        while (!dao.processed(f.id) && System.currentTimeMillis() < end) Thread.sleep(20)
+        link.stop()
+        assertTrue(dao.processed(f.id)); assertTrue(events.none { it is CareSummary })
+    }
+
+    @Test fun c132_genUnknownBeforeRestore_linkDoesNotStartReceiving() {   // 복원 전에는 받지 않고, 복원 뒤 복원 세대로 받는다
+        now = careAt
+        profile(); phone()
+        engineState = null
+        relay.inboxPages += Res.Ok(200, InboxResponse(listOf(care(seq = 430)), false))
+        relay.onSocket = { ev -> ev.onClosed(-1) }
+        link.start()
+        Thread.sleep(400)
+        assertEquals(0, relay.socketCalls, "세대를 모르면 연결·받기를 시작하지 않는다"); assertTrue(relay.inboxCalls.isEmpty())
+        engineState = freshState(1)
+        val end = System.currentTimeMillis() + 5_000
+        while (events.none { it is CareSummary } && System.currentTimeMillis() < end) Thread.sleep(20)
+        link.stop()
+        assertEquals(1, (events.single { it is CareSummary } as CareSummary).gen, "복원 세대로 받는다")
+    }
+
+    @Test fun c130_newRoom_sameAsOf_smallerSeq_applies_sameRoom_stillComparesSeq() {
+        now = careAt
+        assertTrue(rx(care(feeds = "3", seq = 9000))); events.clear()     // 옛 방(c_TESTCAR)
+        assertTrue(rx(care(feeds = "4", seq = 2).copy(car = "c_NEWROOM")))   // 지우지 않고 방 재등록, 같은 asOf·내용이 바뀐 요약
+        assertEquals(4, (events.single() as CareSummary).summary.todayFeedCount); assertEquals("c_NEWROOM", (events.single() as CareSummary).room)
+        events.clear()
+        assertTrue(rx(care(feeds = "5", seq = 1).copy(car = "c_NEWROOM"))); assertTrue(events.isEmpty(), "같은 방은 seq로 견준다")
+    }
+
+    @Test fun c130_snapshotRestore_keepsCareRoom_forRealComparison() {
+        now = careAt
+        val c = CareView(careAt, true, null, null, null, null, null, null, null, 3)
+        runBlocking { link.restoreEvents(freshState(0).copy(care = c, careSeq = 9000, careRoom = "c_TESTCAR"), now) }
+        assertTrue(rx(care(feeds = "4", seq = 2))); assertTrue(events.isEmpty(), "같은 방이라 옛 seq 9000과 견줘 버린다")
+        assertTrue(rx(care(feeds = "4", seq = 2).copy(car = "c_B"))); assertEquals(1, events.size, "다른 방이면 나중에 받은 것")
+    }
+
+    private fun careView(at: Long) = CareView(at, true, null, null, null, null, null, null, null, 1)
+
+    @Test fun c133_sceneResume_noRefill_lateRealSummaryStillApplies() {   // 실제 14:50 -> 장면 14:59 -> 장면 중 Resume 대조 -> 지연된 실제 14:58
+        now = careAt
+        val real = freshState(0).copy(care = careView(careAt - 600_000))
+        runBlocking { link.restoreEvents(real, now) }
+        val scene = real.copy(care = careView(careAt - 60_000))
+        engineState = scene
+        runBlocking { link.restoreEvents(scene, now, refillCare = false) }
+        assertTrue(rx(care(asOf = "2026-11-06T14:58:00+09:00", seq = 430)))
+        assertEquals(1, events.size, "장면 값 14:59에 덮이지 않아 실제 14:50보다 늦은 14:58을 낸다")
+    }
+
+    @Test fun c133_clearBetweenRequestStartAndApply_oldSummaryNotRefilled_nextOneApplies() {   // 지우기 표시와 새 세대 공개 사이에 끝난 옛 수신
+        now = careAt
+        engineState = freshState(0)
+        runBlocking { link.restoreEvents(engineState!!, now) }
+        relay.inboxPages += Res.Ok(200, InboxResponse(listOf(care(asOf = "2026-11-06T15:00:30+09:00", seq = 430)), false))
+        relay.onInbox = { link.handle(kr.aigyeot.engine.DeleteRelayRecords) }   // 공개된 세대는 아직 0
+        sync(); relay.onInbox = {}
+        assertTrue(events.none { it is CareSummary }, "옛 요약은 실제 값에 들어가지 않는다")
+        assertTrue(rx(care(asOf = "2026-11-06T15:00:00+09:00", seq = 431))); assertEquals(1, events.count { it is CareSummary }, "삭제 뒤 새 요약은 받는다")
+    }
+
+    @Test fun c135_clearDoneBeforeNewGenPublished_oldGenSummary_doesNotBlockNewGenSummary() {   // 지우기 표시 뒤 새 세대 공개 전 요약(asOf 15:00:30) -> 새 세대 정상 요약(15:00)
+        now = careAt
+        engineState = freshState(0)
+        runBlocking { link.restoreEvents(engineState!!, now) }
+        link.handle(kr.aigyeot.engine.DeleteRelayRecords)
+        assertTrue(rx(care(asOf = "2026-11-06T15:00:30+09:00", seq = 430)))   // 옛 세대(0)로 실제 기준을 채운다
+        engineState = freshState(1); events.clear()                         // 새 세대 공개
+        assertTrue(rx(care(asOf = "2026-11-06T15:00:00+09:00", seq = 431)))
+        assertEquals(1, events.count { it is CareSummary }, "다른 세대의 기준과는 견주지 않는다")
+    }
+
+    @Test fun c133_clearThenNewSummary_noScene_applies_andSameAsOfSeqCompared() {
+        now = careAt
+        assertTrue(rx(care(feeds = "3", seq = 430))); events.clear()
+        link.handle(kr.aigyeot.engine.DeleteRelayRecords)
+        assertTrue(rx(care(feeds = "4", seq = 431))); assertEquals(1, events.size)
+        assertTrue(rx(care(feeds = "5", seq = 430))); assertEquals(1, events.size, "같은 방 같은 asOf는 seq로 견준다")
+    }
+
+    private fun clearRow() = kr.aigyeot.app.link.db.OutboxEntity(ulid(now), "records_clear", null, "", now, 0, now).also { dao.insertOutbox(it) }
+
+    @Test fun c126_clearPendingInOutbox_dropsCareSummaryUntilDeleteDone() {
+        now = careAt
+        val row = clearRow()                                                      // 지웠고 중계 삭제는 아직 보낼 함에 있다(오프라인 등)
+        val e = care(seq = 430); assertTrue(rx(e)); assertTrue(events.isEmpty()); assertTrue(dao.processed(e.id))   // 버리고 ack
+        dao.deleteOutbox(row.id)                                                  // 삭제가 끝난 뒤
+        assertTrue(rx(care(seq = 431))); assertEquals(1, events.size)             // 새 요약은 적용
+    }
+
+    @Test fun c126_fetchedBatch_processedAfterClear_dropped_thenNewSummaryApplies() {
+        now = careAt
+        profile(lastFeeding = at1Ms - 60_000)
+        relay.inboxPages += Res.Ok(200, InboxResponse(listOf(env("feeding_started", 429, """{"at":"$at1"}"""), care(seq = 430)), false))
+        onPost = { if (it is FeedingStarted) { val r = clearRow(); link.handle(kr.aigyeot.engine.DeleteRelayRecords); dao.deleteOutbox(r.id) } }   // 받아 온 묶음을 처리하는 중에 지우고 삭제까지 끝났다
+        sync()
+        onPost = {}
+        assertTrue(events.none { it is CareSummary }, "묶음 안 옛 요약은 버린다")
+        assertEquals(430L, dao.mark("care_clear")!!.lastSeq)
+        assertTrue(relay.acked.size == 2, "버려도 ack")
+        relay.inboxPages += Res.Ok(200, InboxResponse(listOf(care(seq = 431)), false)); sync()
+        assertEquals(1, events.filterIsInstance<CareSummary>().size)              // 지운 뒤 새 요약은 적용
+        assertEquals(431L, (events.last() as CareSummary).seq)
+    }
+
+    // ---- 삭제 완료(pumpOnce)도 지우기다: 완료 전에 시작한 요청·도착한 프레임의 옛 요약은 되살아나지 않는다(C134 ①)
+    private fun prepClearPending() {
+        now = careAt
+        engineState = freshState(0)
+        runBlocking { link.restoreEvents(engineState!!, now) }
+        link.handle(kr.aigyeot.engine.DeleteRelayRecords); clearRow().let { dao.deleteOutbox(it.id); dao.insertOutbox(it.copy(nextTryAt = now + 60_000)) }   // 지웠고 records_clear는 보낼 함에서 기다린다(백그라운드 펌프가 먼저 보내지 않게)
+    }
+
+    @Test fun c134_inboxRequestStartedWhileClearPending_deleteDoneBeforeResponse_oldSummaryDropped() {
+        prepClearPending()
+        relay.inboxPages += Res.Ok(200, InboxResponse(listOf(care(seq = 430)), false))
+        relay.onInbox = { now += 61_000; link.pumpOnce(); relay.onInbox = {} }                  // 응답이 늦는 사이 중계 삭제가 끝나 clearPending이 풀렸다
+        sync()
+        assertTrue(outbox("records_clear").isEmpty())
+        assertTrue(events.none { it is CareSummary }, "지운 요약이 되살아나지 않는다"); assertEquals(1, relay.acked.size, "버려도 ack")
+        assertTrue(rx(care(seq = 431))); assertEquals(1, events.count { it is CareSummary }, "삭제 완료 뒤 시작한 새 요약은 적용")
+    }
+
+    private fun frameText(e: kr.aigyeot.shared.Envelope) = ProtocolJson.encodeToString(kr.aigyeot.shared.Envelope.serializer(), e)
+
+    @Test fun c134_socketFrameQueuedWhileClearPending_deleteDone_oldSummaryDropped() {
+        prepClearPending(); profile(); phone()
+        val f = care(seq = 430)
+        relay.onInbox = { now += 61_000; link.pumpOnce(); relay.onInbox = {} }                  // 프레임은 삭제 대기 중 도착해 큐에서 기다리고, 첫 동기화 중 삭제가 끝난다
+        relay.onSocket = { ev -> if (relay.socketCalls == 1) { ev.onOpen(); ev.onText(frameText(f)) } else ev.onClosed(-1) }
+        link.start()
+        wakingUntil { relay.socketCalls >= 2 }                                                  // C139: 삭제 완료가 소켓을 닫아 대기 프레임을 버리고 다시 연결한다
+        link.stop()
+        assertFalse(dao.processed(f.id)); assertTrue(events.none { it is CareSummary })
+    }
+
+    private fun wakingUntil(cond: () -> Boolean) = eventually { link.wake(); cond() }
+
+    @Test fun c139_deleteDone_thenOldSocketFrameFirstArrives_ignored_newSocketSummaryApplies() {
+        prepClearPending(); profile(); phone()
+        val old = care(seq = 430); val fresh = care(seq = 431)
+        lateinit var ev1: kr.aigyeot.app.link.SocketEvents; lateinit var ev2: kr.aigyeot.app.link.SocketEvents
+        relay.onSocket = { ev -> if (relay.socketCalls == 1) ev1 = ev else ev2 = ev; ev.onOpen() }
+        link.start()
+        eventually { relay.socketCalls >= 1 && relay.inboxCalls.isNotEmpty() }
+        now += 61_000; runBlocking { link.pumpOnce() }                                          // 중계 삭제 204 처리(clearEpoch 올림): 프레임은 아직 안 왔다
+        ev1.onText(frameText(old))                                                              // 닫은 소켓의 늦은 프레임이 이제 처음 도착
+        eventually { relay.socketCalls >= 2 }
+        Thread.sleep(300)
+        assertFalse(dao.processed(old.id)); assertTrue(events.none { it is CareSummary }, "지운 기록이 복원되지 않는다")
+        assertEquals(2, relay.socketCalls)
+        ev2.onText(frameText(fresh))                                                            // 새 소켓의 정상 프레임은 소켓 세대 검사를 통과해 적용
+        eventually { dao.processed(fresh.id) && relay.socketSent.any { fresh.id in it } }   // ack는 처리 뒤 소켓 코루틴에서 나간다
+        assertEquals(1, events.count { it is CareSummary }, "삭제 완료 뒤 새 요약은 적용"); assertTrue(relay.socketSent.any { fresh.id in it }, "새 소켓으로 ack")
+        link.stop()
+    }
+
+    @Test fun c139_droppedFrame_otherMessage_redeliveredAfterReconnect_noLoss_socketReopenedOnce() {
+        prepClearPending(); profile(lastFeeding = at1Ms - 60_000); phone()
+        val care430 = care(seq = 430); val feed = env("feeding_started", 412, """{"at":"$at1"}""")
+        relay.onSocket = { ev -> if (relay.socketCalls == 1) { ev.onOpen(); ev.onText(frameText(care430)); ev.onText(frameText(feed)) } else ev.onOpen() }
+        relay.inboxPages += Res.Ok(200, InboxResponse(emptyList(), false))                     // 첫 동기화는 비어 있다
+        relay.inboxPages += Res.Ok(200, InboxResponse(listOf(feed), false))                    // 다시 연결 뒤 받은 함은 ack되지 않은 feed를 다시 준다
+        relay.onInbox = { now += 61_000; link.pumpOnce(); link.invalidate(); phone(); relay.onInbox = {} }   // 삭제 완료와 방 바뀜이 겹친다
+        link.start()
+        eventually { dao.processed(feed.id) }
+        Thread.sleep(300)
+        link.stop()
+        assertEquals(at1Ms, lastFeeding(), "버린 프레임의 다른 메시지는 다시 받아 적용")
+        assertFalse(dao.processed(care430.id)); assertTrue(events.none { it is CareSummary })
+        assertEquals(2, relay.socketCalls, "삭제 완료·invalidate가 겹쳐도 소켓은 한 번만 다시 열린다")
+    }
+
+    @Test fun c134_noScene_clearThenDeleteDone_newSummaryApplies_sameAsOfSeqCompared() {   // C126 ②·같은 방 같은 asOf
+        prepClearPending()
+        now += 61_000; runBlocking { link.credential(); link.pumpOnce() }; now = careAt
+        assertTrue(rx(care(feeds = "4", seq = 431))); assertEquals(1, events.count { it is CareSummary })
+        assertTrue(rx(care(feeds = "5", seq = 430))); assertEquals(1, events.count { it is CareSummary }, "같은 방 같은 asOf는 seq로 견준다")
     }
 
     private fun assertDropped(e: kr.aigyeot.shared.Envelope) {

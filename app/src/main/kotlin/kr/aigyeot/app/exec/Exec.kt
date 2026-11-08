@@ -84,6 +84,9 @@ class Exec internal constructor(
         runCatching { io.stop() }
     }
 
+    /** 장면 끝 복원이 경로를 비운 뒤 호스트가 부른다(C130). 내비의 최신 경로를 다시 낸다. */
+    fun reemitRoute(): Unit = synchronized(io.lock) { runCatching { io.navi.reemit() } }
+
     /** 계약 4장 '받는 곳'이 exec인 할 일. 그 밖(Qa·ShowNotice·저장)은 무시한다. */
     fun handle(cmd: Command): Unit = synchronized(io.lock) {
         try {

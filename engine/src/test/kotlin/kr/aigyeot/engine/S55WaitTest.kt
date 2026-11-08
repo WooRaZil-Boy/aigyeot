@@ -68,8 +68,10 @@ class S55WaitTest {
     @Test fun r14f_suspendWithoutPlay_cancelsSpeechReleasesSaves() {
         for (sim in listOf(idle(), session(), session().handoff())) {
             val phase = sim.s.session?.phase
+            // H10: 인계가 큐에 둔 S10이 버려지면 같은 Step에 이름 없는 알림이 나간다
+            val alert = if (sim.s.session?.pendingHandoffAlert != null) listOf("SendToPhone", "SaveEpisode") else emptyList()   // H11: 말하지 않은 인계 줄은 에피소드 행에 false를 남긴다
             sim.ev(Suspend(sim.t + 1_000))
-            assertEquals(listOf("CancelSpeech", "ReleaseAudio", "SaveSnapshot"), sim.cmds.map { it::class.simpleName })
+            assertEquals(listOf("CancelSpeech", "ReleaseAudio") + alert + "SaveSnapshot", sim.cmds.map { it::class.simpleName })
             assertEquals(phase, sim.s.session?.phase)
             assertEquals(sim.t, sim.s.ign.suspendedAt)
         }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -36,7 +37,9 @@ fun route(c: Command): To = when (c) {
 class Targets(
     val exec: (Command) -> Unit, val link: (Command) -> Unit, val notice: (Notice) -> Unit,
     val wake: () -> Unit = {},                                                      // contracts-link 8.6 '바로 다시 확인'(Link.wake)
-    val restore: suspend (EngineState, Long) -> List<Event> = { _, _ -> emptyList() },   // 8.3 '복원 뒤 대조'의 수유·보호자(Link.restoreEvents)
+    val restore: suspend (EngineState, Long, Boolean) -> List<Event> = { _, _, _ -> emptyList() },   // 3번째: 실제 요약 기준을 다시 채울지(장면 중이면 거짓)
+      // 8.3 '복원 뒤 대조'의 수유·보호자(Link.restoreEvents)
+    val routeAgain: () -> Unit = {},                                                // 복원 ③ 뒤 내비 최신 경로를 중복 억제 없이 다시 낸다(Exec.reemitRoute, C130)
 )
 
 /** 사건의 at만 바꾼 사본(2.4 'at 찍기'). */
@@ -69,11 +72,11 @@ class Graph private constructor(ctx: Context) {
     private val latest = { host.steps.value?.state }
     val exec = Exec(ctx, clock, host::postReal, host::logControl, latest)
     private val sinks = host.linkSinks()
-    val link = Link(ctx, db, clock, sinks.first, latest, sinks.second)
+    val link = Link(ctx, db, clock, sinks.first, latest, sinks.second, stateReady = { host.steps.first { it != null } })
     val scenario = Scenario(ctx, host, link)
 
     init {
-        host.targets = Targets(exec::handle, link::handle, { Notices.show(ctx, it) }, link::wake, link::restoreEvents)
+        host.targets = Targets(exec::handle, link::handle, { Notices.show(ctx, it) }, link::wake, link::restoreEvents, exec::reemitRoute)
         MicFgs.clock = clock
         MicFgs.emit = host::post
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -8,6 +8,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kr.aigyeot.app.store.db.AppDatabase
+import kr.aigyeot.app.store.db.consentChecked
+import kr.aigyeot.app.store.db.needsSetup
 import kr.aigyeot.app.store.db.ContextSampleEntity
 import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.app.store.db.EpisodeEntity
@@ -78,12 +80,79 @@ class StoreTest {
     @Test fun c118_oldProfileWithoutWomb_stillUsesWomb() {
         val fixed = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY))
         dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0))
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
         sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('a', 'a', $T0, 'AAC', 60.0, -30.0, NULL, 'ACTIVE', NULL, 1, 1)")
         assertEquals(fixed + Method(MethodKind.SONG, "a"), store.methods(), "옛 프로필(SONG 켬): 뱃속 소리가 둘째")
         dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)), false, false, T0))
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
         assertEquals(fixed, store.methods(), "옛 프로필(SONG 끔): 곡이 있어도 ③ 없음")
+    }
+
+    // C122: AI 전송 안내 판
+    @Test fun c122_needsSetup_andConsentInitial() {
+        val cur = profile(null)
+        val old = cur.copy(aiNoticeVersion = 0)
+        assertTrue(null.needsSetup() && old.needsSetup() && !cur.needsSetup(), "없음·판 0은 설정 화면, 지금 판은 홈")
+        assertTrue(!null.consentChecked() && !old.consentChecked() && cur.consentChecked(), "동의 체크 초기값은 지금 판만 참")
+    }
+
+    @Test fun c122_migration1to2_keepsRows_versionZero() {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        fun helper(version: Int, cb: androidx.sqlite.db.SupportSQLiteOpenHelper.Callback) = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory()
+            .create(androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(ctx).name("mig.db").callback(cb).build())
+        val v1 = helper(1, object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE child_profile (id TEXT NOT NULL PRIMARY KEY, nickname TEXT NOT NULL, consent_at INTEGER NOT NULL)")
+                db.execSQL("INSERT INTO child_profile VALUES ('c', '콩이', 5)")
+                db.execSQL("CREATE TABLE episode (id TEXT NOT NULL PRIMARY KEY)")
+                db.execSQL("INSERT INTO episode VALUES ('E1')")
+            }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, o: Int, n: Int) {}
+        })
+        v1.writableDatabase; v1.close()
+        val v2 = helper(2, object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(2) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {}
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, o: Int, n: Int) = kr.aigyeot.app.store.db.MIGRATION_1_2.migrate(db)
+        })
+        v2.writableDatabase.query("SELECT nickname, ai_notice_version FROM child_profile").use {
+            assertTrue(it.moveToFirst()); assertEquals("콩이", it.getString(0)); assertEquals(0, it.getInt(1))
+        }
+        // C130: episode 행이 남고 새 두 칸은 null
+        v2.writableDatabase.query("SELECT id, handoff_rest_name, handoff_told_driver FROM episode").use {
+            assertTrue(it.moveToFirst()); assertEquals("E1", it.getString(0)); assertTrue(it.isNull(1) && it.isNull(2))
+        }
+        v2.close()
+    }
+
+    @Test fun h11_handoffColumns_storedAndReportedInStop() {
+        session()
+        val rec = kr.aigyeot.engine.EpisodeRecord("E1", "S1", T0 + 60_000, T0 + 200_000, kr.aigyeot.engine.EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
+            null, null, null, null, null, null, null, null, kr.aigyeot.engine.HandoffCause.TWO_ATTEMPTS, kr.aigyeot.engine.HandoffKind.WAYPOINT_OFFER,
+            false, true, "n 휴게소", true, 61_000, false, 56_000, emptyList())
+        store.handle(kr.aigyeot.engine.SaveEpisode(rec))
+        assertEquals("n 휴게소", dao.episode("E1")!!.handoffRestName); assertEquals(true, dao.episode("E1")!!.handoffToldDriver)
+        var body = encodeReport(buildReport(dao, "S1", now)!!)
+        assertTrue("\"rest_name\":\"n 휴게소\"" in body && "\"told_driver\":true" in body, body)
+        store.handle(kr.aigyeot.engine.SaveEpisode(rec.copy(handoffRestName = null, handoffToldDriver = false)))   // 닫힌 뒤 갱신
+        body = encodeReport(buildReport(dao, "S1", now)!!)
+        assertTrue("\"told_driver\":false" in body && "\"rest_name\":\"n 휴게소\"" !in body, body)
+    }
+
+    @Test fun c132_arrivalNoticeCount_excludesToldDriverFalse() {
+        session()
+        fun ep(id: String, told: Boolean?) = store.handle(kr.aigyeot.engine.SaveEpisode(kr.aigyeot.engine.EpisodeRecord(id, "S1", T0 + 60_000, T0 + 200_000, kr.aigyeot.engine.EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
+            null, null, null, null, null, null, null, null, kr.aigyeot.engine.HandoffCause.TWO_ATTEMPTS, kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE,
+            false, false, null, told, 61_000, false, 56_000, emptyList())))
+        ep("E1", false); ep("E2", true); ep("E3", null)
+        val n = buildReport(dao, "S1", now)!!.carActions.first { it.action == kr.aigyeot.shared.CarActionKind.ARRIVAL_NOTICE }.count
+        assertEquals(2, n, "false는 세지 않고 true·null만 센다")
+    }
+
+    @Test fun c122_saveWritesCurrentVersion_dbDefaultIsCurrent() {
+        dao.upsertProfile(profile(null).copy(aiNoticeVersion = 0))
+        assertEquals(0, dao.profile()!!.aiNoticeVersion)
+        dao.upsertProfile(profile(null))
+        assertEquals(kr.aigyeot.app.store.db.AI_NOTICE_VERSION, dao.profile()!!.aiNoticeVersion)
     }
 
     @Test fun c118_methods_defaultWithoutProfileHasWombSecond() {
@@ -161,7 +230,7 @@ class StoreTest {
         assertEquals(2, count("SELECT COUNT(*) FROM alarm_log"), "세 걸음(2,925ms) 간격은 끊긴 경보라 새 줄")
     }
 
-    private fun profile(feeding: Long?) = kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, feeding, emptyList(), false, false, T0)
+    private fun profile(feeding: Long?) = kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, feeding, emptyList(), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION)
 
     @Test fun saveProfile_keepsLaterFeedingStart() {
         dao.upsertProfile(profile(T0 + 10))
@@ -194,7 +263,7 @@ class StoreTest {
     }
 
     @Test fun saveFeedingStart_onlyLater() {
-        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, T0, emptyList(), false, false, T0))
+        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, T0, emptyList(), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
         store.handle(SaveFeedingStart(T0 - 1))
         assertEquals(T0, store.feedingStart())
         store.handle(SaveFeedingStart(T0 + 1))
@@ -203,7 +272,7 @@ class StoreTest {
 
     @Test fun methods_thirdCandidate_selectedElseNewest() {
         dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0))
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
         assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), store.methods(), "쓸 곡이 없으면 ③ 없음")
         fun song(id: String, seq: Long, status: String = "ACTIVE") = sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, $seq, $seq)")
         song("a", 1); song("b", 2)
@@ -216,7 +285,7 @@ class StoreTest {
 
     @Test fun methods_thirdCandidate_sameRuleAsLink() {
         dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0))
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
         fun song(id: String, seq: Long?, status: String = "ACTIVE") = sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, ${seq ?: "NULL"}, ${seq ?: 0})")
         val link = db.linkDao()
         fun third() = store.methods().firstOrNull { it.kind == MethodKind.SONG }?.songId

@@ -199,7 +199,7 @@ fun ChildProfileEntity.toProfile() = Profile(birthYm, CarSeat.valueOf(carseat), 
 private fun kr.aigyeot.engine.EpisodeRecord.toEntity() = EpisodeEntity(
     id, sessionId, startedAt, endedAt, trigger.name, alarmAt, alarmDelayMs, firstMethod?.name, firstSongId,
     firstResult?.name, firstUnjudged?.name, secondAction?.name, secondMethod?.name, secondSongId, secondResult?.name,
-    handoffCause?.name, handoffKind?.name, waypointAdded, guardianNotified, cryMs, recried, playedMs, excludeReasons,
+    handoffCause?.name, handoffKind?.name, waypointAdded, guardianNotified, cryMs, recried, playedMs, excludeReasons, handoffRestName, handoffToldDriver,
 )
 
 private fun kr.aigyeot.engine.PlayRecord.toEntity() = PlayLogEntity(

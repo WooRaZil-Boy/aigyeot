@@ -64,7 +64,7 @@ export function bearer(header: string | null): { token: string; carId: string; d
 // ---- 시각 ----
 /** 중계가 쓰는 시각은 UTC(`Z`), 초 단위. */
 export const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
-const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
+const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;   // 차 OffsetDateTime.parse가 읽는 꼴의 부분집합(소수 초 1~9자리, T·Z 대문자)
 /** RFC 3339 문자열 → epoch ms. 형식이 아니면 null. */
 export function instant(s: unknown): number | null {
   if (typeof s !== "string" || !RFC3339.test(s)) return null;
@@ -72,7 +72,8 @@ export function instant(s: unknown): number | null {
   if (Number.isNaN(t)) return null;
   // Date.parse는 2월 30일 같은 날짜를 보정해 통과시키므로 실제 달력 날짜·시각 범위를 따로 본다(차의 OffsetDateTime.parse와 같게)
   const [y, mo, d, h, mi, sec] = s.match(/\d+/g)!.slice(0, 6).map(Number);
-  const cal = new Date(Date.UTC(y, mo - 1, d));
+  const cal = new Date(0);
+  cal.setUTCFullYear(y, mo - 1, d);   // Date.UTC는 0~99년을 1900년대로 보정한다
   if (cal.getUTCFullYear() !== y || cal.getUTCMonth() !== mo - 1 || cal.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return null;
   const off = /([+-])(\d{2}):(\d{2})$/.exec(s);   // Java OffsetDateTime은 ±18:00까지만 받는다
   if (off && (+off[2] > 18 || +off[3] > 59 || (+off[2] === 18 && +off[3] > 0))) return null;

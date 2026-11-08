@@ -76,6 +76,54 @@ class FeedsTest {
         assertEquals(57.9, got.getValue("여주휴게소"), 0.05)
     }
 
+    @Test fun `reemit은 같은 값이어도 마지막 경로를 다시 내고 낸 적이 없으면 내지 않는다`() {
+        val f = RouteFeed({ t.now }, { events += it })
+        f.reemit(); assertTrue(events.isEmpty())
+        f.driving(900); f.driving(900)
+        assertEquals(1, events.size, "같은 값은 억제된다")
+        f.reemit()
+        assertEquals(2, events.size); assertEquals(events[0], events[1])
+    }
+
+    @Test fun `재구독 뒤 새 값이 오기 전의 reemit은 옛 경로를 내지 않고 같은 구독 안에서는 마지막 값을 낸다`() {
+        val f = RouteFeed({ t.now }, { events += it })
+        f.driving(900)
+        f.forget(); events.clear()
+        f.reemit(); assertTrue(events.isEmpty(), "새 내비 응답 전에는 옛 경로를 내지 않는다")
+        f.driving(600); events.clear()
+        f.reemit()
+        assertEquals(600, (events.single() as RouteState).remainingSec)
+    }
+
+    private val restA = listOf(RestCandidate("tbt:rest:A휴게소", "A휴게소", RestKind.REST_AREA, 30.0, false))
+
+    @Test fun `재구독 뒤 DrivingInfo가 TBT보다 먼저 와도 옛 경로의 쉼터가 섞이지 않는다`() {
+        val f = RouteFeed({ t.now }, { events += it })
+        f.driving(600, 100000); f.rests(restA)
+        f.forget(); events.clear()
+        f.driving(9000, 150000)
+        val e = events.last() as RouteState
+        assertEquals(9000, e.remainingSec); assertTrue(e.rests.isEmpty(), "옛 쉼터 A가 B의 시간·거리와 합쳐지면 안 된다")
+    }
+
+    @Test fun `재구독 뒤 routing(true)만 와도 옛 시간·거리·쉼터가 나가지 않는다`() {
+        val f = RouteFeed({ t.now }, { events += it })
+        f.driving(600, 100000); f.rests(restA)
+        f.forget(); events.clear()
+        f.routing(true)
+        val e = events.last() as RouteState
+        assertNull(e.remainingSec); assertNull(e.remainingKm); assertTrue(e.rests.isEmpty())
+    }
+
+    @Test fun `재구독 뒤 initial은 값을 낸다`() {
+        val f = RouteFeed({ t.now }, { events += it })
+        f.driving(600, 100000); f.rests(restA)
+        f.forget(); events.clear()
+        f.initial(1200, 50000)
+        val e = events.single() as RouteState
+        assertEquals(1200, e.remainingSec); assertTrue(e.rests.isEmpty())
+    }
+
     @Test fun `안내 시작 때 끝 알림이 섞여도 ROUTE_DRIVE 상태가 남는다`() {
         val f = RouteFeed({ t.now }, { events += it })
         f.driving(16_200)                      // DrivingInfo. isRouting·끝 알림은 PleosNavi가 넘기지 않는다

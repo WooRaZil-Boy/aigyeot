@@ -39,6 +39,8 @@ data class EpisodeRecord(
     val handoffKind: HandoffKind?,
     val waypointAdded: Boolean,
     val guardianNotified: Boolean,
+    val handoffRestName: String? = null,
+    val handoffToldDriver: Boolean? = null,
     val cryMs: Long,
     val recried: Boolean,
     val playedMs: Long,

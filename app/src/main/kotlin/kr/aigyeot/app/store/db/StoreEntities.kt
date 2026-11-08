@@ -27,7 +27,17 @@ data class ChildProfileEntity(
     @ColumnInfo(name = "has_sibling") val hasSibling: Boolean,
     @ColumnInfo(name = "front_fallback_allowed") val frontFallbackAllowed: Boolean,
     @ColumnInfo(name = "consent_at") val consentAt: Long,
+    @ColumnInfo(name = "ai_notice_version") val aiNoticeVersion: Int,   // C122. 옛 DB 행은 이전에서 0
 )
+
+/** 지금 AI 전송 안내 판(C122). 안내 문구가 바뀌어 다시 동의받아야 하면 올린다. */
+const val AI_NOTICE_VERSION = 1
+
+/** 프로필이 없거나 지금 판 안내를 확인하지 않았으면 설정 화면부터 보인다(C122). */
+fun ChildProfileEntity?.needsSetup() = this == null || aiNoticeVersion < AI_NOTICE_VERSION
+
+/** 설정 화면 동의 체크 초기값: 지금 판 안내를 이미 확인한 프로필만 체크된 채다(C122). */
+fun ChildProfileEntity?.consentChecked() = this != null && !needsSetup()
 
 /** 13장 Session. */
 @Entity(tableName = "session", indices = [Index("started_at")])
@@ -79,6 +89,8 @@ data class EpisodeEntity(
     @ColumnInfo(name = "recried") val recried: Boolean,
     @ColumnInfo(name = "played_ms") val playedMs: Long,
     @ColumnInfo(name = "exclude_reasons") val excludeReasons: List<Unjudged>,
+    @ColumnInfo(name = "handoff_rest_name") val handoffRestName: String? = null,
+    @ColumnInfo(name = "handoff_told_driver") val handoffToldDriver: Boolean? = null,
 )
 
 /** 재생마다 한 줄. */

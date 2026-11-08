@@ -44,6 +44,10 @@ import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.FeedingFrom
 import kr.aigyeot.engine.FeedingStarted
 import kr.aigyeot.engine.CareSummary
+import kr.aigyeot.engine.CareView
+import kr.aigyeot.engine.DeleteRelayRecords
+import kr.aigyeot.engine.careReplaces
+import kr.aigyeot.app.link.db.PhoneLinkMarkEntity
 import kr.aigyeot.engine.LinkChanged
 import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.Qa
@@ -52,6 +56,7 @@ import kr.aigyeot.engine.SendToPhone
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStartedBody
 import kr.aigyeot.shared.LlmRequest
+import kr.aigyeot.app.store.db.needsSetup
 import kr.aigyeot.shared.LlmResponse
 import kr.aigyeot.shared.LlmState
 import kr.aigyeot.shared.ProtocolJson
@@ -76,14 +81,15 @@ class Link internal constructor(
     private val makeCopy: suspend (File, File) -> LoudnessResult,
     private val scope: CoroutineScope,
     private val qaWaitMs: Long = Params().qaReplyWaitMs,
+    private val stateReady: suspend () -> Unit = {},   // 호스트 복원 뒤 첫 상태가 공개될 때까지 기다린다(C132). 취소되면 함께 취소
     private val postInjected: (Event) -> Unit = post,   // 장면 phone 단계가 주입한 사건(7.3): override로 막지 않는 길. [post]는 실제로 받은 사건
 ) {
     constructor(
-        context: Context, db: AppDatabase, clock: () -> Long, post: (Event) -> Unit, state: () -> EngineState?, postInjected: (Event) -> Unit = post,
+        context: Context, db: AppDatabase, clock: () -> Long, post: (Event) -> Unit, state: () -> EngineState?, postInjected: (Event) -> Unit = post, stateReady: suspend () -> Unit = {},
     ) : this(
         context, db, clock, post, state, OkRelay(RelayAddress.of(context)), KeystoreCipher(), ::probeSong,
         { i, o -> SongLoudness.makeCopy(i, o) }, CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.e(TAG, "link 코루틴 오류", e) }),   // 잡히지 않은 예외로 앱이 죽지 않게
-        postInjected = postInjected,
+        stateReady = stateReady, postInjected = postInjected,
     )
 
     private val room = LinkRoom(db)
@@ -106,7 +112,8 @@ class Link internal constructor(
     private val pairLock = Mutex()                              // 연결 코드 받기·지우기를 차례로: DELETE는 차의 코드를 모두 지워 늦으면 새 코드까지 지운다
     @Volatile private var nextRegisterAt = 0L                   // 차 등록 간격(8.6 '차 토큰 무효'): 이 시각 전에는 등록하지 않는다
     @Volatile private var registerTries = 0
-    @Volatile private var live: Pair<RelaySocket, Channel<String>>? = null
+    @Volatile private var live: Pair<RelaySocket, Channel<Frame>>? = null
+    private class Frame(val text: String, val gen: Int, val epoch: Int)   // gen: 프레임을 받은 시점의 careGen(C130)
     @Volatile private var jobs: List<Job> = emptyList()
     @Volatile private var pairJob: Job? = null
     @Volatile private var pumpWake: Job? = null
@@ -125,7 +132,7 @@ class Link internal constructor(
         jobs = listOf(
             scope.launch {
                 while (true) {   // 연결 반복이 예외로 끝나도 60초 뒤 다시 돈다. 정상 반환(4002)이면 다시 돌지 않는다
-                    try { room.expire(clock()); refreshStatus(); connectLoop(); return@launch }
+                    try { room.expire(clock()); refreshStatus(); stateReady(); connectLoop(); return@launch }   // 호스트 복원 전에는 세대를 몰라 받기를 시작하지 않는다(C132)
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { Log.e(TAG, "연결 반복 오류", e); delay(backoffMs(6)) }
                 }
@@ -167,8 +174,27 @@ class Link internal constructor(
 
     // ---------------------------------------------------------------- 할 일
 
-    fun handle(cmd: Command) {                     // SendToPhone, Qa(상황판 호출). DeleteRelayRecords는 store가 한 트랜잭션으로 처리한다(5.9)
+    fun handle(cmd: Command) {                     // SendToPhone, Qa(상황판 호출). DeleteRelayRecords는 store가 보낼 함에 넣고, 여기서는 받은 seq만 남긴다(C126 ②)
+        if (cmd is DeleteRelayRecords) return markCareClear()
         cmds.trySend(cmd)
+    }
+
+    @Volatile private var maxSeenSeq = 0L                 // 받아 온 묶음까지 포함해 본 가장 큰 중계 seq
+    @Volatile private var realCare: CareView? = null                 // 실제로 받은 최신 요약(장면 값과 따로, C126 ④). restoreEvents가 복원 값으로 채운다
+    @Volatile private var realCareSeq: Long? = null
+    @Volatile private var realCareRoom: String? = null
+    @Volatile private var realCareGen: Int? = null                    // 실제 요약을 채운 세대: 다른 세대의 기준은 기준 없음으로 본다(C135)
+    @Volatile private var clearEpoch = 0                              // 지우기마다 올린다: 공개 세대가 바뀌기 전에 끝난 옛 수신이 실제 요약을 되살리지 못하게(C133)
+    private val careLock = Any()                                          // 세대 확인·실제 요약 갱신과 지우기 표시를 한 덩어리로(C130)
+    private fun curGen() = state()?.careGen ?: 0
+    private fun seen(seq: Long) { if (seq > maxSeenSeq) maxSeenSeq = seq }
+
+    /** '모든 기록 지우기'(C126 ②): 그때까지 받은 마지막 seq를 남겨, 지운 뒤 처리되는 그 이하 care_summary를 버린다. 프로세스가 죽어도 남는다. */
+    @Volatile private var restored = false                           // restoreEvents가 실제 요약을 채운 뒤에는 실제 요약끼리만 견준다(없으면 null과, C128 ③)
+    private fun markCareClear() { synchronized(careLock) { clearEpoch++; restored = true; realCare = null; realCareSeq = null; realCareRoom = null; realCareGen = null }; markCareSeq() }   // 판단 코어도 지웠다: 폰이 다음에 보내는 요약은 옛 asOf라도 받는다
+    private fun markCareSeq() = room.tx {
+        val old = dao.mark(CARE_CLEAR)?.lastSeq ?: 0
+        dao.putMark(PhoneLinkMarkEntity(CARE_CLEAR, maxOf(old, maxSeenSeq), false, clock()))
     }
 
     internal suspend fun exec(c: Command) {
@@ -190,7 +216,10 @@ class Link internal constructor(
 
     private fun wantSocket() = pairingOpen || dao.phoneLinks().isNotEmpty()
 
+    private val sockGen = AtomicInteger()   // 연결마다 올리는 소켓 세대: dropSocket 뒤 닫은 소켓의 늦은 프레임·ack은 무시한다(C139)
+
     private fun dropSocket() {
+        sockGen.incrementAndGet()
         live?.let { (ws, frames) -> ws.cancel(); frames.close() }
         live = null
     }
@@ -236,19 +265,20 @@ class Link internal constructor(
 
     /** WebSocket 하나를 닫힐 때까지 돈다. 닫기 코드(업그레이드 실패는 HTTP 코드, 네트워크는 -1). */
     private suspend fun runSocket(c: Cred, onOpen: () -> Unit): Int = coroutineScope {
-        val frames = Channel<String>(Channel.UNLIMITED)
+        val frames = Channel<Frame>(Channel.UNLIMITED)
         val closeCode = AtomicInteger(-1)
         val lastPong = AtomicLong(mono())
+        val myGen = sockGen.incrementAndGet()
         val ws = relay.socket(c.token, object : SocketEvents {
-            override fun onOpen() { frames.trySend(OPENED) }
+            override fun onOpen() { frames.trySend(Frame(OPENED, 0, 0)) }
             // pong은 프레임 루프가 첫 동기화에 묶여 있어도 바로 적는다(안 그러면 멀쩡한 소켓이 끊긴다)
-            override fun onText(text: String) { if (text == "pong") lastPong.set(mono()) else frames.trySend(text) }
+            override fun onText(text: String) { if (text == "pong") lastPong.set(mono()) else if (sockGen.get() == myGen) frames.trySend(Frame(text, curGen(), clearEpoch)) }
             override fun onClosed(code: Int) { closeCode.compareAndSet(-1, code); frames.close() }
         })
         live = ws to frames
         var pinger: Job? = null
         try {
-            for (text in frames) when (text) {
+            for (frame in frames) when (val text = if (sockGen.get() == myGen) frame.text else break) {   // 닫은 소켓의 대기 프레임은 버린다: ack하지 않았으니 다시 연결 뒤 받은 함에서 다시 온다(C139)
                 OPENED -> {
                     onOpen()
                     registerTries = 0
@@ -275,8 +305,8 @@ class Link internal constructor(
                 }
                 else -> {
                     val env = runCatching { parseEnvelope(ProtocolJson.parseToJsonElement(text)) }.getOrNull() ?: continue
-                    if (!receive(env, c)) break             // 저장 실패: ack 없이 닫는다. 다시 붙어 받은 함에서 다시 받는다(8.3 4단계)
-                    if (env.id.isNotEmpty()) ws.send(ackFrame(listOf(env.id), clock()))
+                    if (!receive(env, c, frame.gen, frame.epoch)) break             // 저장 실패: ack 없이 닫는다. 다시 붙어 받은 함에서 다시 받는다(8.3 4단계)
+                    if (env.id.isNotEmpty() && sockGen.get() == myGen) ws.send(ackFrame(listOf(env.id), clock()))
                 }
             }
         } finally {
@@ -296,12 +326,15 @@ class Link internal constructor(
         c ?: return Sync.FETCH_FAILED
         var after = 0L
         while (true) {
+            val gen = curGen(); val epoch = clearEpoch   // 요청을 시작할 때의 세대: 그사이 지우기가 있으면 이 응답의 요약은 버린다(C130)
             when (val r = relay.inbox(c.token, after)) {
                 is Res.Ok -> {
                     val msgs = r.value.messages.sortedBy { it.seq ?: 0 }
+                    // 방이 바뀌었으면 옛 방의 seq는 반영하지 않는다(C128 ①). 확인과 반영은 invalidate와 같은 잠금 안(C130)
+                    msgs.lastOrNull()?.seq?.let { sq -> rx.withLock { if (cred === c) seen(sq) } }
                     val done = mutableListOf<String>()
                     var failed = false
-                    for (env in msgs) if (receive(env, c)) { if (env.id.isNotEmpty()) done += env.id } else { failed = true; break }
+                    for (env in msgs) if (receive(env, c, gen, epoch)) { if (env.id.isNotEmpty()) done += env.id } else { failed = true; break }
                     for (ids in done.chunked(100)) {
                         val a = relay.ack(c.token, ids)
                         if (a is Res.Err && a.status == 401) return Sync.LOST.also { invalidate(c) }
@@ -320,27 +353,35 @@ class Link internal constructor(
      * 봉투 하나(8.3 1~3단계와 5단계). 참이면 ack해도 된다(처리를 커밋했거나 무시할 메시지). 저장에 실패하면 거짓.
      * [c]는 이 봉투를 받은 자격. 그사이 차 토큰 무효로 방이 바뀌었으면 옛 방의 seq를 새 방에 적용하지 않고 거짓(멈추고 다시 받는다).
      */
-    internal suspend fun receive(env: Envelope, c: Cred? = null): Boolean = rx.withLock {
+    internal suspend fun receive(env: Envelope, c: Cred? = null, gen: Int = curGen(), epoch: Int = clearEpoch): Boolean = rx.withLock {
         if (c != null && cred !== c) return false
         if (env.v != 1 || env.type !in RECEIVED_TYPES || !isUlid(env.id)) {
             Log.w(TAG, "받지 않는 메시지 type=${env.type} v=${env.v} seq=${env.seq}")
             return true
         }
+        env.seq?.let(::seen)
         val out = try {
             room.receive(env, clock())
         } catch (e: Exception) {
             Log.e(TAG, "받기 저장 실패 id=${env.id} type=${env.type}", e)
             return false
         }
-        if (out != null) after(out)
+        if (out != null) after(out, gen, (c ?: cred)?.carId ?: env.car, epoch)
         true
     }
 
     /** 커밋 뒤: 사건, 파일 정리, 일꾼 깨우기, 화면 상태(8.3 5단계). */
-    private fun after(out: Applied) {
+    private fun after(out: Applied, gen: Int = curGen(), carId: String? = null, epoch: Int = clearEpoch) {
         out.deleteFiles.forEach { File(it).delete() }
         out.events.forEach(post)
-        out.care?.let { c -> if (state()?.care?.let { c.asOf > it.asOf } != false) post(CareSummary(clock(), c)) }   // L60: 지금 값보다 늦을 때만
+        out.care?.let { c -> synchronized(careLock) {   // L60: 실제 최신 요약보다 늦을 때만(C126). 장면 값과는 견주지 않는다
+            if (curGen() != gen || clearEpoch != epoch) return@synchronized   // 받기 시작 뒤 지우기가 있었다: 사건도 실제 값도 건드리지 않고 ack(C130)
+            val (old, oldSeq, oldRoom) = if (restored) (if (realCareGen == gen) Triple(realCare, realCareSeq, realCareRoom) else Triple(null, null, null)) else state().let { Triple(it?.care, it?.careSeq, it?.careRoom) }   // 복원 전이면 마지막 상태
+            if (careReplaces(old, oldSeq, c, out.careSeq, oldRoom, carId)) {
+                restored = true; realCare = c; realCareSeq = out.careSeq; realCareRoom = carId; realCareGen = gen
+                post(CareSummary(clock(), c, out.careSeq, gen, carId))
+            }
+        } }
         if (out.outbox) pumpSignal.trySend(Unit)
         if (out.download) songSignal.trySend(Unit)
         if (out.phones) { refreshStatus(); recheck() }
@@ -401,6 +442,7 @@ class Link internal constructor(
         if (pairingOpen) { _status.update { it.copy(pairCode = null, pairUri = null, pairExpiresAt = null) }; pairKick.trySend(Unit) }
         val out = Applied()
         rx.withLock {
+            maxSeenSeq = 0   // 새 방은 seq를 다시 센다(C128 ①)
             room.resetForNewRoom(clock(), out).forEach { CarPaths.songDownload(context, it).delete(); CarPaths.songFile(context, it).delete() }
             after(out)
         }
@@ -429,6 +471,7 @@ class Link internal constructor(
                         if (cred !== c) return@withLock false   // 그사이 차 토큰 무효: 옛 방에 간 것이라 지우지 않고 새 방에 다시 보낸다(옛 seq도 쓰지 않는다)
                         room.tx {
                             dao.deleteOutbox(item.id)
+                            if (item.type == "records_clear") { synchronized(careLock) { clearEpoch++ }; markCareSeq(); dropSocket(); kick.trySend(Unit) }   // 완료 전에 시작한 요청·프레임의 옛 요약은 epoch가 달라 버린다(C134 ①). 삭제가 끝난 시점까지 본 seq도 남긴다(C126 ②)
                             // 정차 화면 선택은 돌려받은 seq로 적용한다(G20)
                             (r.value as? SendMessageResponse)?.takeIf { item.type == "song_selected" }?.let { res ->
                                 Json.parseToJsonElement(item.bodyJson).jsonObject["song_id"]?.jsonPrimitive?.content?.let { room.select(it, res.seq, now, out) }
@@ -609,12 +652,14 @@ class Link internal constructor(
             val saved = if (sid != null) dao.alarmEpisodeIds(sid) else emptyList()
             val unsaved = s?.session?.episode?.takeIf { it.trigger == EpisodeTrigger.ALARM && it.id !in saved }
             st = llmState(s, now, saved.size + if (unsaved != null) 1 else 0)
-            question = llmQuestion(cmd.text, dao.profile()?.nickname)
+            val prof = dao.profile()
+            question = llmQuestion(cmd.text, prof?.nickname)
             val methods = s?.session?.methods ?: s?.methodsNext.orEmpty()
-            val call = scope.async { ask(question, st) }
+            // 안내를 확인하지 않은 프로필은 AI에 묻지 않는다(C122)
+            val call = if (prof.needsSetup()) null else scope.async { ask(question, st) }
             // 3초 안에 답이 없으면 오프라인 문장. 늦은 답과 도구는 버린다(G5)
-            val r = withTimeoutOrNull(qaWaitMs) { call.await() }
-            if (r == null) call.cancel()
+            val r = call?.let { withTimeoutOrNull(qaWaitMs) { it.await() } }
+            if (r == null) call?.cancel()
             val (t, x) = r?.let { qaEvents(it, cmd.listenId, clock(), st, question, methods) } ?: (emptyList<Event>() to offlineReply(question, st))
             tools = t; text = x
         } catch (e: CancellationException) {
@@ -645,7 +690,9 @@ class Link internal constructor(
      * 복원 뒤 대조(8.3)의 수유·보호자 몫. 호스트가 스냅숏 복원 → Boot·Resume 뒤 첫 판단 전에 부르고, 돌려준 사건을 넣는다.
      * Room 값이 스냅숏과 다를 때만 만든다. 후보 ③(MethodsChanged)은 store 몫이다.
      */
-    suspend fun restoreEvents(snapshot: EngineState, at: Long): List<Event> = withContext(Dispatchers.IO) {
+    suspend fun restoreEvents(snapshot: EngineState, at: Long, refillCare: Boolean = true): List<Event> = withContext(Dispatchers.IO) {
+        // 프로세스 시작·장면 끝만 복원한 실제 값으로 채운다(C126 ④). 장면 중 Resume 대조는 장면 상태라 실제 기준을 그대로 둔다(C133)
+        if (refillCare) synchronized(careLock) { restored = true; realCare = snapshot.care; realCareSeq = snapshot.careSeq; realCareRoom = snapshot.careRoom; realCareGen = snapshot.careGen }
         val fed = dao.profile()?.lastFeedingStart
         val guardians = dao.otherGuardians()
         buildList {

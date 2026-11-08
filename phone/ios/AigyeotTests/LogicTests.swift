@@ -2715,3 +2715,42 @@ final class SoundLabelTests: XCTestCase {
 private extension Envelope {
     func with(id: String) -> Envelope { var e = self; e.id = id; return e }
 }
+
+final class StopTextTests: XCTestCase {
+    private func stop(_ mode: HandoffKind, told: Bool?) throws -> StopInfo {
+        let t = told.map { ",\"told_driver\":\($0)" } ?? ""
+        let json = "{\"handoff\":true,\"reason\":\"attempt_limit\",\"mode\":\"\(mode.rawValue)\",\"rest_name\":\"휴게소\",\"waypoint_added\":false,\"guardian_notified\":false\(t)}"
+        return try ProtocolCoding.decoder.decode(StopInfo.self, from: Data(json.utf8))
+    }
+
+    func test_운전자에게_말하지_못한_인계는_제안했다고_보이지_않는다() throws {
+        XCTAssertEqual(stopHandoffText(try stop(.restOffer, told: false)), "쉼터는 묻지 못했어요")
+        XCTAssertEqual(stopHandoffText(try stop(.arrivalNotice, told: false)), "도착 안내는 하지 못했어요")
+        XCTAssertEqual(stopHandoffText(try stop(.noRest, told: false)), "가까운 쉼터가 없었어요")
+        XCTAssertEqual(stopHandoffText(try stop(.restOffer, told: true)), "휴게소에 들르자고 제안했어요")
+        XCTAssertEqual(stopHandoffText(try stop(.restOffer, told: nil)), "휴게소에 들르자고 제안했어요")
+        XCTAssertEqual(stopHandoffText(try stop(.arrivalNotice, told: true)), "도착 안내를 했어요")
+        XCTAssertEqual(stopHandoffText(try stop(.noRest, told: nil)), "가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요")
+        XCTAssertEqual(stopHandoffText(try stop(.parked, told: nil)), "차가 선 채로 알렸어요")
+        let out = String(data: try ProtocolCoding.encoder.encode(try stop(.restOffer, told: nil)), encoding: .utf8)!
+        XCTAssertFalse(out.contains("told_driver"))
+    }
+
+    func test_뒤붙임까지_전체_줄이_안드로이드와_같다() throws {
+        let json = "{\"handoff\":true,\"reason\":\"session_cap\",\"mode\":\"rest_offer\",\"rest_name\":\"휴게소\",\"waypoint_added\":true,\"guardian_notified\":true,\"told_driver\":true}"
+        let s = try ProtocolCoding.decoder.decode(StopInfo.self, from: Data(json.utf8))
+        XCTAssertEqual(stopText(s), "세션 20분 상한 · 휴게소에 들르자고 제안했어요 · 경유지 추가 · 다른 보호자에게 알림")
+    }
+}
+
+final class MethodStatRowsTests: XCTestCase {
+    func test_모르는_소리_둘은_두_행() {
+        let rows = methodStatRows([
+            MethodStat(method: .unknown, label: "future_a", successes: 1, attempts: 3),
+            MethodStat(method: .unknown, label: "future_b", successes: 2, attempts: 2),
+        ])
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(Set(rows.map(\.id)).count, 2)
+        XCTAssertEqual(rows.map(\.value), ["3번 중 1번 그침", "아직 모름"])
+    }
+}

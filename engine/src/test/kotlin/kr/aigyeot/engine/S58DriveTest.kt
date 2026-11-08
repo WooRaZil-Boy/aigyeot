@@ -155,6 +155,31 @@ class S58DriveTest {
         }
     }
 
+    private fun heldDepart(): Sim {
+        val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
+        sim.ev(VehicleSample(sim.t + 100, 60.0, true, 0.0, TurnSignal.NONE))      // 바쁨
+        sim.depRoute(nurse)
+        assertEquals(listOf(Sid.S07_DEPART), sim.s.speech.queue.map { it.sid })
+        return sim
+    }
+
+    @Test fun f5k_heldDepartOffer_newFeeding_dropped() {
+        val sim = heldDepart()
+        sim.ev(FeedingStarted(sim.t + 100, sim.t, FeedingFrom.CAR_SCREEN, null))   // 방금 먹여 배고플 시각이 경로 끝 뒤
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))
+        assertTrue(sim.all<Ask>().isEmpty()); assertTrue(sim.s.speech.queue.isEmpty())
+        assertNull(sim.ses.lastOffer[Sid.S07_DEPART])                              // forgetOffer
+    }
+
+    @Test fun f5k_heldDepartOffer_sameRest_refreshedHungryAt() {
+        val sim = heldDepart()
+        sim.ev(FeedingStarted(sim.t + 100, T0 - 100 * MIN, FeedingFrom.CAR_SCREEN, null))
+        sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))
+        val ask = sim.step<Ask>().single()
+        assertEquals(Sid.S07_DEPART, ask.sid)
+        assertEquals((T0 + 80 * MIN).toString(), ask.vars["hungryAt"])
+    }
+
     // S6a: 브레이크로 미뤄진(말하지 않은) 출발 질문이 통화로 버려지면 10분 금지 시각을 남기지 않는다
     @Test fun s6a_callCancelledOffer_doesNotBlockRepeat() {
         val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN)
@@ -630,7 +655,7 @@ class S58DriveTest {
         val h = session().handoff().flush().gear(Gear.P, MIN).asking()
         h.ev(SwitchSound(h.t, LL, h.qa.listenId))
         assertTrue(h.qa.ruleSaid)
-        assertEquals(Line(Sid.S18, emptyMap(), null, qaAnswer = true), h.s.speech.queue.first().copy(queuedAt = null))
+        assertEquals(Line(Sid.S18, emptyMap(), null, qaAnswer = true), h.s.speech.queue.first().copy(queuedAt = null, sessionId = null))
         val i = idle().asking()
         i.ev(SwitchSound(i.t, LL, i.qa.listenId))
         assertEquals(Sid.S20, i.s.speech.queue.single().sid); assertTrue(i.qa.ruleSaid)
@@ -649,7 +674,7 @@ class S58DriveTest {
         assertTrue(sim.qa.ruleSaid)
         assertEquals(NursingStop("n", null, null, false), sim.ses.nursingStop)
         sim.ev(WaypointResult(sim.t, add.cmdId, "n", true))
-        assertEquals(Line(Sid.S09, mapOf("restName" to "n 휴게소"), null, qaAnswer = true), sim.s.speech.queue.first().copy(queuedAt = null))
+        assertEquals(Line(Sid.S09, mapOf("restName" to "n 휴게소"), null, qaAnswer = true), sim.s.speech.queue.first().copy(queuedAt = null, sessionId = null))
     }
 
     @Test fun q5c_qaWaypointRejected_saysS19() {
@@ -657,7 +682,7 @@ class S58DriveTest {
         sim.ev(DriverAddWaypoint(sim.t, "n", sim.qa.listenId))       // P에서는 넣지 않는다
         assertTrue(sim.step<AddWaypoint>().isEmpty())
         assertTrue(sim.qa.ruleSaid)
-        assertEquals(Line(Sid.S19, emptyMap(), null, qaAnswer = true), sim.s.speech.queue.single().copy(queuedAt = null))
+        assertEquals(Line(Sid.S19, emptyMap(), null, qaAnswer = true), sim.s.speech.queue.single().copy(queuedAt = null, sessionId = null))
     }
 
     @Test fun q6_reply_spokenFirst() {

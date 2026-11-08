@@ -89,6 +89,7 @@ final class ProtocolFixturesTests: XCTestCase {
         "api_llm_request_minimal": .api(rt(LlmRequest.self)),
         "api_llm_response": .api(rt(LlmResponse.self)),
         "api_llm_response_tool": .api(rt(LlmResponse.self)),
+        "api_llm_response_answer": .api(rt(LlmResponse.self)),
     ]
 
     func test_모든_예제가_왕복해도_같다() throws {

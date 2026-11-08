@@ -40,6 +40,8 @@ internal const val PENDING = "PENDING"
 internal const val ACTIVE = "ACTIVE"
 internal const val REJECTED = "REJECTED"
 internal const val DELETED = "DELETED"
+/** '모든 기록 지우기' 때 그때까지 받은 마지막 중계 seq를 `phone_link_mark.last_seq`에 둔 행의 id(C126 ②). shortcut: 표를 따로 만들지 않고 기존 표를 쓴다. 새 방이면 clearMarks가 함께 지운다 */
+internal const val CARE_CLEAR = "care_clear"
 
 /** 차가 받아 처리하는 type(8.4). 나머지는 1단계에서 ack만 한다. */
 internal val RECEIVED_TYPES = setOf("feeding_started", "song_added", "song_removed", "song_selected", "paired", "unpaired", "state_request", "care_summary")
@@ -62,7 +64,8 @@ internal class Applied {
     var phones = false
     var newOwner = false          // 연결 코드로 붙은 새 owner(G41: 연결 화면이 열려 있으면 새 코드)
     var justPaired: String? = null
-    var care: CareView? = null    // care_summary 요약(L60). 지금 값보다 늦은지는 커밋 뒤 link가 판단 코어 마지막 상태로 견준다
+    var care: CareView? = null    // care_summary 요약(L60). 지금 값보다 늦은지는 커밋 뒤 link가 든 실제 최신 요약과 견준다(C126 ④)
+    var careSeq: Long? = null     // 그 메시지의 중계 seq(C126 ①)
 }
 
 /** 8.3 3단계·8.4·8.5 넣기를 Room 트랜잭션 안에서 한다. 네트워크는 부르지 않는다. */
@@ -100,7 +103,7 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
         if (asOf > now + CLOCK_SKEW_MS) throw BadBody()   // 폰 시계가 앞선 요약은 시계를 고친 뒤 새 요약을 막는다
         return CareView(
             asOf, b.sleepDiaperEnabled, at(b.lastSleepStartAt), at(b.lastSleepEndAt), at(b.sleepingSince),
-            b.todaySleepMin, b.nightWakeups, at(b.lastDiaperAt), b.todayDiaperCount, b.todayFeedCount,
+            b.todaySleepMin, b.nightWakeups, at(b.lastDiaperAt), b.todayDiaperCount, b.todayFeedCount, b.zone,
         )
     }
     private fun songId(id: String) = id.takeIf(::isUlid) ?: throw BadBody()
@@ -143,7 +146,12 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
                 old?.normalizedPath?.let { out.deleteFiles += it }
                 statuses(listOf(id) + moved(before), now, out)
             }
-            "care_summary" -> out.care = careView(env.decode(CareSummaryBody.serializer()), now)   // Room에는 두지 않는다(C119)
+            "care_summary" -> {   // Room에는 두지 않는다(C119)
+                val c = careView(env.decode(CareSummaryBody.serializer()), now)
+                // C126 ②: 지우기 전에 중계에 들어온 요약은 버린다(삭제가 아직 보낼 함에 있거나, 지울 때 받은 마지막 seq 이하)
+                if (dao.clearPending() || seq <= (dao.mark(CARE_CLEAR)?.lastSeq ?: Long.MIN_VALUE)) return
+                out.care = c; out.careSeq = seq
+            }
             "song_selected" -> select(songId(env.decode(SongRefBody.serializer()).songId), seq, now, out)
             "paired" -> {
                 val b = env.decode(PairedBody.serializer())

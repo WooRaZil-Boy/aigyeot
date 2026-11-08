@@ -24,6 +24,7 @@ interface LinkDao {
     @Insert fun insertOutbox(o: OutboxEntity)
     @Query("SELECT * FROM outbox ORDER BY rowid LIMIT 1") fun outboxFront(): OutboxEntity?
     @Query("SELECT * FROM outbox ORDER BY rowid") fun outbox(): List<OutboxEntity>
+    @Query("SELECT EXISTS(SELECT 1 FROM outbox WHERE type = 'records_clear')") fun clearPending(): Boolean
     @Query("DELETE FROM outbox WHERE id = :id") fun deleteOutbox(id: String)
     @Query("UPDATE outbox SET attempts = attempts + 1, next_try_at = :at WHERE id = :id") fun retryOutbox(id: String, at: Long)
     @Query("DELETE FROM outbox WHERE created_at < :before") fun expireOutbox(before: Long)

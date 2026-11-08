@@ -73,4 +73,4 @@ sealed interface Event { val at: Long }
 @Serializable data class ClearRecords(override val at: Long) : Event
 @Serializable data class MethodsChanged(override val at: Long, val methods: List<Method>) : Event
 @Serializable data class LinkChanged(override val at: Long, val otherGuardians: Int) : Event
-@Serializable data class CareSummary(override val at: Long, val summary: CareView) : Event   // C119
+@Serializable data class CareSummary(override val at: Long, val summary: CareView, val seq: Long? = null, val gen: Int = 0, val room: String? = null) : Event   // C119. room: 중계 방(차 id). 같은 asOf의 seq는 같은 방일 때만 견준다(C130, 장면 주입은 null). seq: 그 메시지의 중계 seq(장면 주입은 null, C126 ①)

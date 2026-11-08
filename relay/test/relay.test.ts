@@ -329,6 +329,16 @@ describe("care_summary(L60)", () => {
     expect((await send(owner.device_token, "care_summary", cs({ as_of: "2028-02-29T23:59:59+09:00" }))).status).toBe(201);
     for (const as_of of ["2026-11-06T12:00:00+18:00", "2026-11-06T12:00:01-18:00"]) expect((await send(owner.device_token, "care_summary", cs({ as_of }))).status, as_of).toBe(201);
   });
+  it("care_summary 시각은 차 OffsetDateTime.parse가 읽는 꼴만 받는다(L62)", async () => {
+    const { owner } = await carWithOwner();
+    for (const as_of of ["2026-11-06T12:00:00.1234567890+09:00", "2026-11-06t12:00:00+09:00", "2026-11-06T12:00:00z", "2026-11-06T12:00+09:00"]) {
+      expect(await code(owner.device_token, cs({ as_of })), as_of).toBe("bad_request");
+    }
+    for (const as_of of ["2026-11-06T12:00:00.123456789+09:00", "0099-11-06T12:00:00+09:00", "2026-11-06T12:00:00Z"]) {
+      expect((await send(owner.device_token, "care_summary", cs({ as_of }))).status, as_of).toBe(201);
+    }
+  });
+
 
   it("care_summary는 Int 범위를 넘는 정수를 400으로 거절한다", async () => {
     const { owner } = await carWithOwner();

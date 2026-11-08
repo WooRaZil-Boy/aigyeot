@@ -89,7 +89,8 @@ fun excludedText(e: ExcludedReason) = when (e) {
 /** U58 자리: 재울음은 확인한 것만 쓴다(거짓이면 줄 없음). */
 fun recriedText(recried: Boolean): String? = if (recried) "다시 울음" else null
 
-fun stopText(reason: StopReason, mode: HandoffKind, rest: String?) = buildString {
+/** U53: 차가 운전자에게 말하지 못한 인계(toldDriver == false)는 제안했다고 보이지 않는다. */
+fun stopText(reason: StopReason, mode: HandoffKind, rest: String?, toldDriver: Boolean? = null, waypointAdded: Boolean = false, guardianNotified: Boolean = false) = buildString {
     append(
         when (reason) {
             StopReason.ATTEMPT_LIMIT -> "두 번 시도 뒤"
@@ -101,20 +102,22 @@ fun stopText(reason: StopReason, mode: HandoffKind, rest: String?) = buildString
     append(" · ")
     append(
         when (mode) {
-            HandoffKind.REST_OFFER -> "${rest ?: "쉼터"} 들르기 제안"
-            HandoffKind.ARRIVAL_NOTICE -> "도착 안내"
-            HandoffKind.NO_REST -> "안전한 곳에 세우기 안내"
-            HandoffKind.PARKED -> "정차 중 인계"
+            HandoffKind.REST_OFFER -> if (toldDriver == false) "쉼터는 묻지 못했어요" else "${rest ?: "쉼터"}에 들르자고 제안했어요"
+            HandoffKind.ARRIVAL_NOTICE -> if (toldDriver == false) "도착 안내는 하지 못했어요" else "도착 안내를 했어요"
+            HandoffKind.NO_REST -> if (toldDriver == false) "가까운 쉼터가 없었어요" else "가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요"
+            HandoffKind.PARKED -> "차가 선 채로 알렸어요"
         },
     )
+    if (waypointAdded) append(" · 경유지 추가")
+    if (guardianNotified) append(" · 다른 보호자에게 알림")
 }
 
 /** 정차 한 줄(뒤붙임 포함). */
 fun stopLine(st: StopInfo) =
-    "정차: ${stopText(st.reason, st.mode, st.restName)}" + (if (st.waypointAdded) " · 경유지 추가" else "") + if (st.guardianNotified) " · 다른 보호자에게 알림" else ""
+    "정차: ${stopText(st.reason, st.mode, st.restName, st.toldDriver, st.waypointAdded, st.guardianNotified)}"
 
-/** 리포트 위쪽 '정차 안내' 횟수: 정차 단계(쉼터 제안·도착 안내 등)가 있었던 에피소드 수. 실제 정차 횟수가 아니다. */
-fun stopNoticeCount(stops: List<StopInfo?>) = stops.count { it != null }
+/** U53: told_driver == false인 정차는 안내하지 못했으니 세지 않는다(null은 참). 실제 정차 횟수가 아니다. */
+fun stopNoticeCount(stops: List<StopInfo?>) = stops.count { it != null && it.toldDriver != false }
 
 fun actionText(a: CarActionKind) = when (a) {
     CarActionKind.REAR_PLAYBACK -> "뒷좌석 재생"

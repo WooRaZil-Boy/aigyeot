@@ -624,6 +624,8 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
         }
     }
 
+    override fun reemit() = route.reemit()
+
     override fun cancelWaypoint() { precheck.cancel(); pending = null; awaitingHere = null; target = null }
 
     private fun send(rest: RestCandidate, here: Here?, done: (Boolean, String) -> Unit) {

@@ -126,7 +126,7 @@ private fun secondText(sec: SecondAttempt): String {
     return what + (sec.result?.let { " · ${result(it)}" } ?: "")
 }
 
-private fun stopText(st: StopInfo) = buildString {
+internal fun stopText(st: StopInfo) = buildString {
     append(when (st.reason) {
         StopReason.ATTEMPT_LIMIT -> "두 번 시도 뒤"
         StopReason.SESSION_CAP -> "세션 20분 상한"
@@ -134,10 +134,11 @@ private fun stopText(st: StopInfo) = buildString {
         StopReason.NO_SOUND -> "뒷좌석 출력 없음"
     })
     append(" · ")
+    val told = st.toldDriver != false   // C130 ⑦: 인계 문장을 못 말했으면 "했다"고 쓰지 않는다(폰 U53과 같은 글)
     append(when (st.mode) {
-        HandoffKind.REST_OFFER -> "${st.restName ?: "쉼터"} 들르기 제안"
-        HandoffKind.ARRIVAL_NOTICE -> "도착 안내"
-        HandoffKind.NO_REST -> "안전한 곳에 세우기 안내"
+        HandoffKind.REST_OFFER -> if (told) "${st.restName ?: "쉼터"} 들르기 제안" else "쉼터는 묻지 못했어요"
+        HandoffKind.ARRIVAL_NOTICE -> if (told) "도착 안내" else "도착 안내는 하지 못했어요"
+        HandoffKind.NO_REST -> if (told) "안전한 곳에 세우기 안내" else "가까운 쉼터가 없었어요"
         HandoffKind.PARKED -> "정차 중 인계"
     })
     if (st.waypointAdded) append(" · 경유지 추가")

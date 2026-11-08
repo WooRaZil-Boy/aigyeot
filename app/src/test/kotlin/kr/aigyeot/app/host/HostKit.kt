@@ -43,7 +43,7 @@ class Kit {
 
     fun profile(sibling: Boolean = false, interval: Int? = null) = db.storeDao().upsertProfile(ChildProfileEntity(
         "child", "콩이", "2026-03", "LEFT", interval, null, listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)),
-        sibling, false, T0,
+        sibling, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION,
     ))
 
     fun phone(role: String = "owner", alerts: Boolean = false) = db.openHelper.writableDatabase.execSQL(

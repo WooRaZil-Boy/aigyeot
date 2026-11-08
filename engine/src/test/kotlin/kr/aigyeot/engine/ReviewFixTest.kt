@@ -270,4 +270,24 @@ class OutputRouteTest {
 
     @Test fun r13_frontFallback_defaultFallback() =
         assertEquals(OutputRoute.DEFAULT_FALLBACK, route(session().alarm().started(fallback = true)))
+
+    @Test fun r14y_longDriveWaitsForRouteAfterRestore() {
+        fun restored(): Sim {
+            val sim = session()
+            sim.s = sim.s.copy(bootAt = T0 + 120 * MIN + 30_000, car = sim.s.car.copy(route = null))
+            return sim
+        }
+        // 60초 안에 경로가 오면 그 경로로 판단한다: 도착 임박이라 제안하지 않는다
+        val a = restored()
+        a.ev(Tick(T0 + 121 * MIN))
+        assertTrue(a.sids().isEmpty(), "경로를 기다린다")
+        a.ev(RouteState(T0 + 121 * MIN + 5_000, true, 300, listOf(rest("a", 10.0)), 5.0))
+        assertTrue(a.sids().isEmpty(), "도착 임박 경로로 판단")
+        // 안 오면 60초 뒤 경로 없이 본다
+        val b = restored()
+        b.ev(Tick(T0 + 121 * MIN))
+        assertTrue(b.sids().isEmpty())
+        b.ev(Tick(T0 + 120 * MIN + 90_000))
+        assertTrue(Sid.S10 in b.sids(), "60초가 지나면 쉼터 없음 S10")
+    }
 }

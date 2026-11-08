@@ -113,8 +113,8 @@ private struct ReportDetailContent: View {
 
             if let stats = b.methodStats, !stats.isEmpty {
                 Section {
-                    ForEach(stats, id: \.method) { m in
-                        LabeledContent(soundLabel(m.method, m.label), value: m.attempts < 3 ? "아직 모름" : "\(m.attempts)번 중 \(m.successes)번 그침")
+                    ForEach(methodStatRows(stats), id: \.id) { r in
+                        LabeledContent(r.title, value: r.value)
                     }
                 } header: { SectionHeader("소리별 결과") } footer: {
                     SectionHeader("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.")
@@ -188,6 +188,19 @@ private func methodName(_ m: SoundMethod, _ song: String?) -> String {
     }
 }
 
+/// 방법별 성적 행. 모르는 소리가 둘이어도 두 행(method를 행 id로 쓰지 않는다).
+struct MethodStatRow: Identifiable {
+    let id: Int
+    let title: String
+    let value: String
+}
+
+func methodStatRows(_ stats: [MethodStat]) -> [MethodStatRow] {
+    stats.enumerated().map { i, s in
+        MethodStatRow(id: i, title: soundLabel(s.method, s.label), value: s.attempts < 3 ? "아직 모름" : "\(s.attempts)번 중 \(s.successes)번 그침")
+    }
+}
+
 /// 차가 보낸 label을 보이되, 모르는 method(U46)는 label 대신 "기타".
 func soundLabel(_ method: SoundMethod, _ label: String) -> String {
     method == .unknown ? methodName(method, nil) : label
@@ -236,8 +249,26 @@ private func secondText(_ s: SecondAttempt) -> String {
     return what + (s.result.map { " · " + resultText($0, excluded: nil) } ?? "")
 }
 
-private func stopText(_ s: StopInfo) -> String {
-    var t: String
+/// U53: 차가 운전자에게 말하지 못한 인계(toldDriver == false)는 제안했다고 보이지 않는다.
+func stopHandoffText(_ s: StopInfo) -> String {
+    if s.toldDriver == false {
+        switch s.mode {
+        case .restOffer: return "쉼터는 묻지 못했어요"
+        case .arrivalNotice: return "도착 안내는 하지 못했어요"
+        case .noRest: return "가까운 쉼터가 없었어요"
+        case .parked: break
+        }
+    }
+    switch s.mode {
+    case .restOffer: return s.restName.map { "\($0)에 들르자고 제안했어요" } ?? "쉼터에 들르자고 제안했어요"
+    case .arrivalNotice: return "도착 안내를 했어요"
+    case .noRest: return "가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요"
+    case .parked: return "차가 선 채로 알렸어요"
+    }
+}
+
+func stopText(_ s: StopInfo) -> String {
+    var t = stopHandoffText(s)
     let why: String
     switch s.reason {
     case .attemptLimit: why = "두 번 시도 뒤"
@@ -245,14 +276,8 @@ private func stopText(_ s: StopInfo) -> String {
     case .feedingWindow: why = "수유 시간대"
     case .noSound: why = "뒷좌석 출력 없음"
     }
-    switch s.mode {
-    case .restOffer: t = s.restName.map { "\($0)에 들르자고 제안했어요" } ?? "쉼터에 들르자고 제안했어요"
-    case .arrivalNotice: t = "도착 안내를 했어요"
-    case .noRest: t = "가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요"
-    case .parked: t = "차가 선 채로 알렸어요"
-    }
     if s.waypointAdded { t += " · 경유지 추가" }
-    if s.guardianNotified { t += " · 보호자에게 알림" }
+    if s.guardianNotified { t += " · 다른 보호자에게 알림" }
     return why + " · " + t
 }
 

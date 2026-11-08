@@ -1,0 +1,10 @@
+[
+  { "name": "switch_sound", "description": "운전자가 뒷좌석 소리를 바꿔 달라고 분명히 말했을 때만 쓴다.", "strict": true,
+    "input_schema": { "type": "object", "properties": { "method": { "type": "string", "enum": ["white_noise", "womb", "lullaby", "parent_song"] } }, "required": ["method"], "additionalProperties": false } },
+  { "name": "add_waypoint", "description": "운전자가 다음 쉼터에 들르자고 할 때만 쓴다. rest_id는 상태값 next_rest.id다.", "strict": true,
+    "input_schema": { "type": "object", "properties": { "rest_id": { "type": "string" } }, "required": ["rest_id"], "additionalProperties": false } },
+  { "name": "stop_soothing", "description": "운전자가 그만하라고 하거나 직접 하겠다고 할 때 쓴다.", "strict": true,
+    "input_schema": { "type": "object", "properties": {}, "required": [], "additionalProperties": false } },
+  { "name": "answer", "description": "아기·차 상황 질문에 글로 답할 때 같은 질문의 주제를 고른다. 차는 글이 검사를 통과하지 못하면 이 주제로 정해진 문장을 말한다.", "strict": true,
+    "input_schema": { "type": "object", "properties": { "topics": { "type": "array", "items": { "type": "string", "enum": ["feeding", "sleep", "diaper", "cry", "carseat", "cabin_temp", "next_rest", "sound_stats", "why", "unknown"] } } }, "required": ["topics"], "additionalProperties": false } }
+]

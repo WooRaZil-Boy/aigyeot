@@ -20,6 +20,10 @@ data class EngineState(
     val speech: SpeechQueue,
     val steer: SteerState,
     val care: CareView? = null,           // 폰 돌봄 기록 요약(C119). ④ 상태값·오프라인 문장만 읽고 판단에는 쓰지 않는다. 스냅숏 호환 기본값 null
+    val careGen: Int = 0,                 // '모든 기록 지우기' 세대. ClearRecords마다 +1. 사건의 gen이 이것과 다르면 그 요약은 지우기 전에 받은 것이라 버린다(C128). 스냅숏 호환 기본값 0
+    val bootAt: Long? = null,             // 복원 시각. 복원으로 경로를 비운 뒤 60초는 장시간 제안(L1)이 경로를 기다린다(C128). 스냅숏 호환 기본값 null
+    val careRoom: String? = null,         // 지금 `care`를 받은 중계 방. 방이 다르면 seq를 견주지 않는다(C130). 스냅숏 호환 기본값 null
+    val careSeq: Long? = null,            // 지금 `care`를 실어 온 중계 seq(장면 주입이면 null). 같은 asOf일 때 견준다(C126 ①). 스냅숏 호환 기본값 null
 ) {
     companion object
 }
@@ -100,6 +104,7 @@ data class SessionState(
     val restLog: List<RestLogEntry> = emptyList(),   // 휴식 기록(6.1 session.rest_log): 제안 시각·문장·쉼터·답·경유지
     val playStarted: Boolean = false,    // 이 세션에 PlaybackStarted가 한 번이라도 있었음(output_route null 판단, C85)
     val departChecked: Boolean = false,  // 출발 수유실 제안(F5)을 이번 세션에 이미 봤음. 제안하지 않았어도 참(C117)
+    val pendingHandoffAlert: PendingHandoffAlert? = null, // 인계 알림이 그 줄을 낼 때까지 기다리는 중(H10). 스냅숏 호환 기본값 null
     val micPath: MicPath? = null,        // 세션을 열 때의 마이크 경로. 세션 중 바뀌어도 SaveSession 행은 이 값을 유지(C88)
 )
 
@@ -143,6 +148,8 @@ data class HandoffRecord(
     val kind: HandoffKind?,
     val waypointAdded: Boolean,
     val guardianNotified: Boolean,
+    val toldDriver: Boolean? = null,      // H11(C130): 인계 문장(S07·S08·S10·S15)을 운전자에게 실제로 냈는가. H1은 null
+    val restName: String? = null,         // H11: 실제로 물은 쉼터 이름
 )
 
 @Serializable data class PendingAlarm(val alarmAt: Long, val delayFromAt: Long)   // C36
@@ -173,6 +180,7 @@ data class HandoffRecord(
     val todaySleepMin: Int?, val nightWakeups: Int?,
     val lastDiaperAt: Long?, val todayDiaperCount: Int?,
     val todayFeedCount: Int,
+    val zone: String? = null,             // 요약의 IANA 시간대. ④ '같은 날'을 이 시간대로 본다(C126 ③). 스냅숏 호환 기본값 null = 차 시간대
 )
 @Serializable data class RestCandidate(
     val id: String, val name: String, val kind: RestKind,
@@ -181,6 +189,12 @@ data class HandoffRecord(
 @Serializable data class PendingAsk(
     val askId: String, val sid: Sid, val restId: String, val episodeId: String?,
     val hasNursingRoom: Boolean,
+)
+@Serializable data class PendingHandoffAlert(
+    val kind: HandoffKind, val sid: Sid, val askRestId: String?, val queuedAt: Long?,   // null = 옛 줄(스냅숏 호환). null도 같은 줄을 가리키는 값이다
+    val minutes: Int?, val sessionId: String, val episodeId: String?, val occurredAt: Long,
+    val alert: Boolean = true,                 // false: 폰 알림은 따로 보냈거나 보내지 않고 줄을 냈는지만 따른다(H2·H8, H11)
+    val closedRecord: EpisodeRecord? = null,   // 에피소드가 먼저 닫히면 마지막으로 저장한 행(H11: 그 행을 갱신한다)
 )
 @Serializable data class WaypointPending(
     val cmdId: String, val restId: String, val sessionId: String, val episodeId: String?,
@@ -209,6 +223,7 @@ data class HandoffRecord(
     val longDrive: Boolean = false,       // 2시간 제안(S11, 쉼터 없으면 S10). 말하기가 끝나야 longDriveOffered가 선다(L1, C84)
     val playId: String? = null,           // S02~S04: 이 알림을 낸 재생. 그 재생이 계속될 때만 말한다(C15)
     val queuedAt: Long? = null,           // 큐에 넣은 시각. 미룰 수 있는 문장이 holdMaxMs를 넘으면 버린다(C107). 기본값 null = 버리지 않음(스냅숏 호환)
+    val sessionId: String? = null,        // 줄을 넣은 세션 id. 다른 세션의 줄이 끝나도 지금 세션 상태는 바꾸지 않는다(C141). null(옛 스냅숏)이면 지금 세션으로 본다
 )
 /** 휴식 기록 한 줄. sid는 제안 문장(S07·S07_DEPART·S08·S10·S11) 또는 ④ 경유지 요청이면 QA. */
 @Serializable data class RestLogEntry(
@@ -261,3 +276,8 @@ data class HandoffRecord(
 @Serializable enum class FeedingFrom { CAR_SCREEN, PHONE }
 @Serializable enum class TurnSignal { NONE, LEFT, RIGHT }             // 값은 계약에 없음
 @Serializable enum class Notice { BABY_ABOARD, FEEDING_CONFIRM, SAFETY_CONTROL_FAILED, MIC_STOPPED }  // 4.3
+
+/** CS1(C126 ①): 새 요약이 지금 값을 바꾸는가. asOf가 늦거나, 같은 초에 둘 다 중계 seq가 있고 새것이 크다. */
+fun careReplaces(old: CareView?, oldSeq: Long?, new: CareView, newSeq: Long?, oldRoom: String? = null, newRoom: String? = null): Boolean =
+    old == null || new.asOf > old.asOf ||
+        (new.asOf == old.asOf && ((oldRoom != null && newRoom != null && oldRoom != newRoom) || (oldSeq != null && newSeq != null && newSeq > oldSeq)))   // 둘 다 방을 알고 다르면 seq 비교가 뜻이 없어 나중에 받은 것(C130). 모르면(옛 스냅숏·장면) 같은 방으로 본다

@@ -234,6 +234,7 @@ struct StopInfo: Codable, Equatable {
     @NullEncoded var restName: String?
     var waypointAdded: Bool
     var guardianNotified: Bool
+    var toldDriver: Bool?
 }
 
 struct TimelineEpisode: Codable, Equatable {

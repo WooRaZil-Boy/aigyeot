@@ -134,8 +134,8 @@ private fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (St
         handoff = true,
         reason = when (e.handoffCause) { "SESSION_CAP" -> StopReason.SESSION_CAP; "NO_SOUND" -> StopReason.NO_SOUND; else -> StopReason.ATTEMPT_LIMIT },
         mode = when (e.handoffKind) { "WAYPOINT_OFFER" -> HandoffKind.REST_OFFER; "ARRIVAL_NOTICE" -> HandoffKind.ARRIVAL_NOTICE; "NO_REST" -> HandoffKind.NO_REST; else -> HandoffKind.PARKED },
-        restName = null,   // 에피소드 행에 쉼터 이름이 없다(6.1). 폰은 handoff_alert의 rest_name을 쓴다
-        waypointAdded = e.waypointAdded, guardianNotified = e.guardianNotified,
+        restName = e.handoffRestName,
+        waypointAdded = e.waypointAdded, guardianNotified = e.guardianNotified, toldDriver = e.handoffToldDriver,
     ) else null
     return TimelineEpisode(
         episodeId = e.id,
@@ -235,7 +235,7 @@ private fun carActions(route: String?, plays: List<PlayLogEntity>, eps: List<Epi
         CarAction(CarActionKind.CABIN_COOL, ctl("Hvac", "Seat"), null),
         CarAction(CarActionKind.READING_LIGHT_OFF, ctl("ReadingLight"), null),
         CarAction(CarActionKind.WAYPOINT_ADDED, waypoints, null),
-        CarAction(CarActionKind.ARRIVAL_NOTICE, eps.count { it.handoffKind == "ARRIVAL_NOTICE" }, null),
+        CarAction(CarActionKind.ARRIVAL_NOTICE, eps.count { it.handoffKind == "ARRIVAL_NOTICE" && it.handoffToldDriver != false }, null),
         CarAction(CarActionKind.GUARDIAN_ALERT, eps.count { it.guardianNotified }, null),
     ).filter { it.count > 0 }
 }

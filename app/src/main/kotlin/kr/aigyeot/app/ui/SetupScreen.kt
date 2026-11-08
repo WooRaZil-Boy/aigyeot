@@ -18,7 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kr.aigyeot.app.store.db.AI_NOTICE_VERSION
 import kr.aigyeot.app.store.db.ChildProfileEntity
+import kr.aigyeot.app.store.db.consentChecked
 import kr.aigyeot.engine.CarSeat
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
@@ -33,7 +35,7 @@ import java.time.temporal.ChronoUnit
 fun SetupScreen(old: ChildProfileEntity?, now: Long, noRearOutput: Boolean, onBack: (() -> Unit)?, onSave: (ChildProfileEntity) -> Unit) =
     Page("아기 설정", onBack) {
         val ym = old?.birthYm?.let { runCatching { YearMonth.parse(it) }.getOrNull() } ?: YearMonth.now()
-        var consent by rememberSaveable { mutableStateOf(old != null) }
+        var consent by rememberSaveable { mutableStateOf(old.consentChecked()) }
         var nickname by rememberSaveable { mutableStateOf(old?.nickname ?: "") }
         var year by rememberSaveable { mutableStateOf(ym.year) }
         var month by rememberSaveable { mutableStateOf(ym.monthValue) }
@@ -80,7 +82,7 @@ fun SetupScreen(old: ChildProfileEntity?, now: Long, noRearOutput: Boolean, onBa
                 id = old?.id ?: "child", nickname = nickname.trim(), birthYm = YearMonth.of(year, month).toString(), carseat = seat,
                 feedingIntervalMin = interval, lastFeedingStart = old?.lastFeedingStart,
                 methods = listOfNotNull(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY), if (song) Method(MethodKind.SONG) else null),
-                hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now,
+                hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now, aiNoticeVersion = AI_NOTICE_VERSION,
             ))
         }
     }

@@ -67,5 +67,9 @@ class LinkFixtureTest : LinkKit() {
         val (tools, text) = qaEvents(r, "L1", T0, st, "자장가 틀어줘", emptyList())
         assertEquals(listOf(SwitchSound(T0, Method(MethodKind.LULLABY), "L1")), tools)
         assertEquals("소리를 바꿀게요.", text)
+        val a = ProtocolJson.decodeFromString(LlmResponse.serializer(), fixture("api_llm_response_answer.json"))
+        assertEquals(a.text, qaEvents(a, "L1", T0, st, "q", emptyList()).second)   // C129: 예제 글은 숫자·상태 단정이 없어 세 검사를 통과해 그대로 말한다
+        val failing = a.copy(text = "40분 지났어요.")
+        assertEquals("수유 기록이 없어요. 잠 기록이 없어요.", qaEvents(failing, "L1", T0, st, "q", emptyList()).second)   // 검사에 걸리면 예제 주제 feeding·sleep 문장, 상태값이 비어 있다
     }
 }

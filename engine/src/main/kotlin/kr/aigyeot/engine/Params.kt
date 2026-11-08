@@ -15,6 +15,7 @@ data class Params(
     val restSearchKm: Double = 30.0,
     val nursingExtraKm: Double = 5.0,
     val longDriveMs: Long = 7_200_000,
+    val routeWaitMs: Long = 60_000,   // 복원 뒤 경로 응답을 기다리는 시간(L1, C128. 설계값)
     val speechGapMs: Long = 8_000,
     val offerRepeatMs: Long = 600_000,
     val comfortTempC: Double = 26.0,
