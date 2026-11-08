@@ -54,18 +54,30 @@ class StopTextToldDriverTest {
     @Test fun stopText_notTold_usesU53Phrases() {
         assertEquals("쉼터는 묻지 못했어요", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, false)))
         assertEquals("도착 안내는 하지 못했어요", tail(st(kr.aigyeot.shared.HandoffKind.ARRIVAL_NOTICE, false)))
-        assertEquals("가까운 쉼터가 없었어요", tail(st(kr.aigyeot.shared.HandoffKind.NO_REST, false)))
+        assertEquals("안전한 곳에 세우도록 안내하지 못했어요", tail(st(kr.aigyeot.shared.HandoffKind.NO_REST, false)))
+        assertEquals("차가 선 채로 달래기를 멈췄어요", tail(st(kr.aigyeot.shared.HandoffKind.PARKED, null)))
+    }
+
+    @Test fun stopText_parkedNoSound_saysCouldNotPlay() {   // U59
+        val s = kr.aigyeot.shared.StopInfo(true, kr.aigyeot.shared.StopReason.NO_SOUND, kr.aigyeot.shared.HandoffKind.PARKED, null, false, false, null)
+        assertEquals("뒷좌석 출력 없음 · 차가 선 채로 소리를 틀지 못했어요", stopText(s))
     }
 
     @Test fun stopText_toldOrNull_keepsOldPhrases() {
         for (t in listOf(true, null)) {
             assertEquals("쉼터 들르기 제안", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, t)))
             assertEquals("도착 안내", tail(st(kr.aigyeot.shared.HandoffKind.ARRIVAL_NOTICE, t)))
-            assertEquals("안전한 곳에 세우기 안내", tail(st(kr.aigyeot.shared.HandoffKind.NO_REST, t)))
+            assertEquals("경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요", tail(st(kr.aigyeot.shared.HandoffKind.NO_REST, t)))
         }
     }
 
     @Test fun stopText_namedRest_stillShownWhenTold() {
         assertEquals("n 휴게소 들르기 제안", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, true, "n 휴게소")))
+    }
+
+    @Test fun c185_pendingSessionShowsSettling_thenUpdates() {
+        val pendingLine = stopText(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, null), settling = true)   // 인계 TTS 도중: toldDriver 아직 null
+        assertEquals("정리하는 중이에요", pendingLine.substringAfter(" · "))
+        assertEquals("쉼터는 묻지 못했어요", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, false)))     // TTS 실패로 확정되면 바뀐다
     }
 }

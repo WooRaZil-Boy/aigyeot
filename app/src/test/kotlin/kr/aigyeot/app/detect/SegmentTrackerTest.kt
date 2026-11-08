@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 // 구간 나누기·경보 규칙. 판별층은 클래스 0의 3창 평균만 쓰는 작은 가짜다: p = sigmoid(-10 + 30 * mean). p ≥ 0.7 ⇔ mean ≥ 0.362
 class SegmentTrackerTest {
-    private val head = CryHead(intArrayOf(0), doubleArrayOf(30.0, 0.0), -10.0, 0.7)
+    private val head = CryHead(intArrayOf(0), doubleArrayOf(30.0, 0.0), -10.0)   // 문턱은 Params.alarmThreshold 0.7(C303 ④)
     private fun win(s: Float) = FloatArray(521).also { it[0] = s }
     private fun p(vararg w: Float) = 1 / (1 + exp(-(-10 + 30 * w.average())))
 

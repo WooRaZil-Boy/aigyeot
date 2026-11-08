@@ -1,7 +1,11 @@
 package kr.aigyeot.app.exec
 
+import kr.aigyeot.app.link.eul
+import kr.aigyeot.app.link.jong
 import kr.aigyeot.engine.Answer
 import kr.aigyeot.engine.Ask
+import kr.aigyeot.engine.heardText
+import kr.aigyeot.engine.plainWord
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.Heard
 import kr.aigyeot.engine.Listen
@@ -24,6 +28,7 @@ internal class Voice(
     private val micRunning: () -> Boolean,
 ) {
     private var speaking: String? = null
+    private var lastDone: Triple<String, Boolean, Long>? = null   // 마지막으로 끝난 발화·spoken·실제 완료 시각(C208·C212)
     private var watchdog: () -> Unit = {}
     private var hearing: Hearing? = null
 
@@ -44,7 +49,7 @@ internal class Voice(
 
     fun listen(c: Listen) {
         if (!micRunning()) return post(Heard(clock(), c.listenId, null))
-        hear(c.ms) { text -> post(Heard(clock(), c.listenId, text?.takeIf { s -> s.count { !it.isWhitespace() } >= 2 })) }
+        hear(c.ms) { text -> post(Heard(clock(), c.listenId, heardText(text))) }   // C303 A22: Q3 두 자 미만은 판단 코어와 같은 함수
     }
 
     /** CancelSpeech: 말하기와 듣기를 끊는다. 돌려줄 사건은 없다(계약 4.1). */
@@ -53,14 +58,22 @@ internal class Voice(
         hearing?.let { h -> hearing = null; h.timers.forEach { it() }; tap.close(); stt.cancel() }
     }
 
+    /** C208: [id]가 아직 말하는 중이면 끊고 null('끊음'), 이미 끝났으면 그 spoken(SpeechDone이 호스트 큐에 있다). done 콜백과 같은 잠금 안에서 부른다. */
+    fun cancelIfSpeaking(id: String): Pair<Boolean, Long>? {
+        if (speaking == id) { cancel(); return null }
+        return lastDone?.takeIf { it.first == id }?.let { it.second to it.third }   // C212: 완료 시각도 돌려준다
+    }
+
     private fun say(id: String, text: String, then: (Boolean) -> Unit) {
         if (speaking != null) { watchdog(); tts.stop() }          // 판단 코어는 하나씩 내지만, 남은 문장이 있으면 끊고 새 문장을 말한다
         speaking = id
         fun done(spoken: Boolean) {
             if (speaking != id) return
             speaking = null
+            val at = clock()
+            lastDone = Triple(id, spoken, at)
             watchdog()
-            post(SpeechDone(clock(), id, spoken))
+            post(SpeechDone(at, id, spoken))
             then(spoken)
         }
         watchdog = sched.after(SPEECH_TIMEOUT_MS) { if (speaking == id) { tts.stop(); done(false) } }
@@ -128,7 +141,7 @@ internal class Voice(
             if (text == null) return YesNo.NONE
             val all = text.filter { it.isLetterOrDigit() }
             if (NO.any { all.contains(it) }) return YesNo.NO
-            val words = text.split(Regex("\\s+")).map { w -> w.filter { it.isLetterOrDigit() }.removeSuffix("요") }.filter { it.isNotEmpty() }
+            val words = text.split(Regex("\\s+")).map(::plainWord).filter { it.isNotEmpty() }   // C303 B11: Q4 '그만'과 같은 정규화
             return if (words.isNotEmpty() && words.all { it in YES }) YesNo.YES else YesNo.NONE
         }
     }
@@ -149,7 +162,7 @@ internal object Lines {
             Sid.S07_DEPART -> "${clock(g("hungryAt"))}쯤 배고플 시간이라, $km 앞 수유실 있는 $rest${eul(rest)} 경유지로 넣을까요?"
             Sid.S08 -> "$km 앞 ${rest}에서 쉬어 갈까요?"
             Sid.S09 -> "$rest${eul(rest)} 경유지로 넣었어요."
-            Sid.S10 -> "가까운 쉼터를 못 찾았어요. 안전한 곳에 세워서 돌봐 주세요."
+            Sid.S10 -> "경유지로 넣을 수 있는 가까운 쉼터를 못 찾았어요. 안전한 곳에 세워서 돌봐 주세요."
             Sid.S11 -> "${g("drove")}째 달리고 있어요. $km 앞 ${rest}에서 쉬어 갈까요?"
             Sid.S12 -> "도착했어요. 자고 있어도 카시트에서 꺼내 눕혀 주세요."
             Sid.S15 -> "${g("minutes")}분 뒤 도착해요. 도착해서 돌봐 주세요."
@@ -170,8 +183,5 @@ internal object Lines {
         return "${if (h < 12) "오전" else "오후"} ${if (h % 12 == 0) 12 else h % 12}시" + if (m == 0) "" else " ${m}분"
     }
 
-    /** 마지막 글자의 받침(0 = 없음, 8 = ㄹ). 한글이 아니면 없음으로 본다. */
-    private fun jong(w: String): Int { val c = w.lastOrNull() ?: return 0; return if (c in '가'..'힣') (c - '가') % 28 else 0 }
-    private fun ro(w: String) = jong(w).let { if (it == 0 || it == 8) "로" else "으로" }
-    private fun eul(w: String) = if (jong(w) == 0) "를" else "을"
+    private fun ro(w: String) = jong(w).let { if (it == 0 || it == 8) "로" else "으로" }   // 받침·을/를은 Wire 한 곳(C303 A24)
 }

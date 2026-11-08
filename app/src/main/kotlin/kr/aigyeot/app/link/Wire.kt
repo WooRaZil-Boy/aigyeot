@@ -4,7 +4,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kr.aigyeot.engine.DAY_MS
+import kr.aigyeot.engine.MINUTE_MS
+import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.shared.Envelope
+import kr.aigyeot.shared.SoundMethod
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -12,24 +16,44 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-// 봉투·id·시각(contracts-link 0장 '공통 표기', 3.1). 폰 core/Basics.kt와 같은 규칙이다.
+// 봉투·id·시각(contracts-link 0장 '공통 표기', 3.1). 폰 core/Basics.kt와 같은 규칙이다. C303 A24: 앱의 ULID·시각 문자열·하루·조사는 여기 한 곳이다.
 
-internal const val MINUTE = 60_000L
-internal const val DAY = 24 * 60 * MINUTE
+internal const val MINUTE = MINUTE_MS
+internal const val DAY = DAY_MS
+internal const val SENT_ID_MAX = 100   // L86: 결과를 모르는 보낸 id는 최근 100개까지(넣은 순서)
+internal const val SENT_ID_KEEP_MS = 10 * 60_000L   // 보낸 리포트·알림 id 보관(L84): 늦은 POST가 닿을 수 있는 시간
 internal const val KEEP_MS = 7 * DAY   // 보낼 함·처리한 id·끊김 표시 보관(8.2, 8.5)
 
 private const val CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 private val random = SecureRandom()
 private val ULID_RE = Regex("[0-9A-HJKMNP-TV-Z]{26}")
 
-/** ULID(대문자 Crockford base32 26자). */
-internal fun ulid(now: Long): String {
+/** ULID(대문자 Crockford base32 26자): 앞 48비트 시각 + 뒤 80비트 난수. [next]는 난수(0 until n), 장면은 시드 난수를 넘긴다(같은 시드면 같은 id). */
+internal fun ulid(now: Long, next: (Int) -> Int = random::nextInt): String {
     val out = CharArray(26)
     var t = now
     for (i in 9 downTo 0) { out[i] = CROCKFORD[(t % 32).toInt()]; t /= 32 }
-    for (i in 10 until 26) out[i] = CROCKFORD[random.nextInt(32)]
+    for (i in 10 until 26) out[i] = CROCKFORD[next(32)]
     return String(out)
 }
+
+/** C303 A19: 판단 코어 음원 종류 ↔ 전송 값(contracts-link 3.3 sound.method). 리포트·④가 같이 쓴다. */
+internal fun soundMethod(k: MethodKind): SoundMethod = when (k) {
+    MethodKind.WHITE_NOISE -> SoundMethod.WHITE_NOISE
+    MethodKind.WOMB -> SoundMethod.WOMB
+    MethodKind.LULLABY -> SoundMethod.LULLABY
+    MethodKind.SONG -> SoundMethod.PARENT_SONG
+}
+
+/** [soundMethod]의 거꾸로. 전송 글자(`white_noise` 등)나 UNKNOWN이면 null. */
+internal fun methodKindOf(m: SoundMethod): MethodKind? = MethodKind.entries.firstOrNull { soundMethod(it) == m }
+internal fun methodKindOf(wire: String?): MethodKind? = SoundMethod.entries.firstOrNull { it.wire == wire }?.let(::methodKindOf)
+
+/** C303 A24: 마지막 글자의 받침(0 = 없음, 8 = ㄹ). 한글이 아니면 없음으로 본다. */
+internal fun jong(w: String): Int { val c = w.lastOrNull() ?: return 0; return if (c in '가'..'힣') (c - '가') % 28 else 0 }
+
+/** C303 A24: 을/를. 받침이 있으면 '을'. 말(Voice)과 ④ 문장이 같이 쓴다. */
+internal fun eul(w: String) = if (jong(w) == 0) "를" else "을"
 
 /** 밖에서 온 곡 id 검사. 파일 이름(CarPaths)에 들어가므로 통과한 것만 쓴다(6.4 '받는 쪽이 전부 검사'). */
 internal fun isUlid(s: String) = ULID_RE.matches(s)

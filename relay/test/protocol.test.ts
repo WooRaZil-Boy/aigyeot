@@ -87,6 +87,13 @@ describe("protocol 예제", () => {
     expect(Object.keys(roundTrip(P.bodySchemas.report_summary, body))).toEqual(Object.keys(body));
   });
 
+  it("llm 요청 cry.unavailable(C245): 있으면 통과, 잘못된 타입은 거절", () => {
+    const base = JSON.parse(files.api_llm_request);
+    const withCry = (extra: object) => ({ ...base, state: { ...base.state, cry: { ...base.state.cry, ...extra } } });
+    expect(P.LlmRequest(withCry({ unavailable: true }), "$").state.cry.unavailable).toBe(true);
+    expect(() => P.LlmRequest(withCry({ unavailable: "yes" }), "$")).toThrow(P.DecodeError);
+  });
+
   it("모르는 필드는 버리고, null이어야 할 필드가 빠지면 거절한다", () => {
     expect(P.bodySchemas.ack({ ids: ["A"], extra: 1 }, "$")).toStrictEqual({ ids: ["A"] });
     expect(() => P.bodySchemas.feeding_state({ last_feeding_start: null }, "$")).toThrow(P.DecodeError);

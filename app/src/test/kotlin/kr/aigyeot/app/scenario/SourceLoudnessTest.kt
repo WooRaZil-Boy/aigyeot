@@ -12,8 +12,8 @@ class SourceLoudnessTest {
     }
 
     @Test fun `뱃속 소리 에셋이 assets에 실제로 있다(exec와 장면 측정이 같은 경로)`() {
-        assertEquals("sound/womb.m4a", kr.aigyeot.app.exec.AndroidAudio.WOMB_ASSET)
-        val f = java.io.File("src/main/assets/${kr.aigyeot.app.exec.AndroidAudio.WOMB_ASSET}")
+        assertEquals("sound/womb.m4a", kr.aigyeot.app.exec.android.AndroidAudio.WOMB_ASSET)
+        val f = java.io.File("src/main/assets/${kr.aigyeot.app.exec.android.AndroidAudio.WOMB_ASSET}")
         org.junit.Assert.assertTrue(f.path, f.isFile && f.length() > 100_000)
     }
 

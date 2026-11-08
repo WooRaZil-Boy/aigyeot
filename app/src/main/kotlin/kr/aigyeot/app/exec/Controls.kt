@@ -117,7 +117,7 @@ internal class Controls(
         j.done = true
         jobs -= j
         j.timers.forEach { it() }
-        log.row(API.getValue(j.kind), j.area.name, j.target?.let(::fmt) ?: "unknown", j.last?.let(::fmt), ok, j.ackMs,
+        log.row(j.cmdId, API.getValue(j.kind), j.area.name, j.target?.let(::fmt) ?: "unknown", j.last?.let(::fmt), ok, j.ackMs,
             if (ok) clock() - j.t0 else null, j.attempt)
         post(ControlResult(clock(), j.cmdId, j.kind, j.area, ok, j.before, j.last))
     }
@@ -144,7 +144,7 @@ internal class Controls(
         w.cancel()
         try { navi.cancelWaypoint() } catch (e: Exception) { /* 닫는 일은 결과를 막지 않는다 */ }
         val ms = clock() - w.t0
-        log.row("addWaypoint", w.c.restId, "added", note, ok, ms, if (ok) ms else null)
+        log.row(w.c.cmdId, "addWaypoint", w.c.restId, "added", note, ok, ms, if (ok) ms else null)
         post(WaypointResult(clock(), w.c.cmdId, w.c.restId, ok))
     }
 

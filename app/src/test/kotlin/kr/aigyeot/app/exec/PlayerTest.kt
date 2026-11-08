@@ -39,7 +39,7 @@ class PlayerTest {
         assertTrue(track.rear && track.started && audio.focusHeld)
         assertEquals(1.0f, track.gains.first(), "첫 이득이 1.0")
         assertFalse(track.gainBeforeStart, "시작 전에는 gain을 부르지 않는다")
-        assertTrue(r.rows.any { it.api == "requestAudioFocus" && it.ok }, "포커스 결과를 ControlLog에")
+        assertTrue(r.rows.any { it.api == "requestAudioFocus" && it.ok && it.goal.contains("USAGE_MEDIA") && it.goal.contains("GAIN_TRANSIENT") }, "포커스 결과와 요청 context·gain 종류를 ControlLog에")
         assertTrue(r.rows.any { it.api == "getRoutedDevice" && it.actual == REAR_ZONE && it.ok }, "출력 장치를 ControlLog에")
     }
 
@@ -403,5 +403,15 @@ class PlayerTest {
     @Test fun `ControlLog 줄에는 세션 id와 시각이 붙는다`() {
         start()
         assertTrue(r.rows.all { it.sessionId == "s1" && it.at == t.now })
+    }
+
+    @Test fun `재생 기록은 지금 세션이 없어도(세션 닫힘 뒤) 재생을 낸 세션 id`() {
+        val p2 = Player(audio, t, { t.now }, { r.events += it }, ControlLogger({ t.now }, { null }, { r.rows += it }), { front }, Params())
+        p2.start(StartPlayback("S9-1", PlayKind.AUTO, noise, t.now + 56_000, 2_000))
+        p2.release()
+        assertTrue(r.rows.size >= 3 && r.rows.all { it.sessionId == "S9" }, r.rows.map { it.api to it.sessionId }.toString())
+        audio.rear = false
+        p2.start(StartPlayback("S9-2", PlayKind.AUTO, noise, t.now + 56_000, 2_000))   // 뒷좌석 없음: getDevices 줄
+        assertTrue(r.rows.last().api == "getDevices" && r.rows.last().sessionId == "S9")
     }
 }

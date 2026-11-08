@@ -1,5 +1,6 @@
 package kr.aigyeot.app.detect
 
+import kr.aigyeot.engine.Params
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,9 +18,15 @@ class CryHeadTest {
         expected.forEachIndexed { i, e -> assertEquals(e, head.prob(listOf(scores(i), scores(i + 1), scores(i + 2))), 1e-5, "구간 $i") }
     }
 
-    @Test fun `threshold가 있으면 쓰고 없으면 0점7`() {
-        assertEquals(0.7, CryHead.parse(headFile.readText()).threshold)
-        assertEquals(0.7, CryHead.parse("""{"classes":[0],"w":[1.0,1.0],"bias":0.0}""").threshold)
-        assertEquals(0.5, CryHead.parse("""{"classes":[0],"w":[1.0,1.0],"bias":0.0,"threshold":0.5}""").threshold)
+    /** C303 ④(A21): 판별기 문턱·구간 수·창 길이는 판단 코어 Params 하나. 판별층 JSON의 학습 문턱이 다르면 실패한다. */
+    @Test fun c303_a21_detectorThresholdIsParams() {
+        assertEquals(Params().alarmThreshold, CryHead.trainedThreshold(headFile.readText()), "판별층을 다시 학습해 문턱이 바뀌면 Params.alarmThreshold(명세서 14장)를 먼저 고친다")
+        assertEquals(Params().yamnetHopMs, Detect.WINDOW_MS)
+        assertEquals(Detect.WINDOW_SAMPLES * 1000L / Detect.SAMPLE_RATE, Detect.WINDOW_MS, "창 한 걸음은 15600표본 ÷ 16 kHz")
+        val head = CryHead(intArrayOf(0), doubleArrayOf(0.0, 0.0), 0.0)   // 늘 p = 0.5
+        fun alarms(p: Params) = SegmentTracker(head, p).let { t -> (1..4).mapNotNull { t.push(FloatArray(521), it * Detect.WINDOW_MS, 0) }.map { it.alarm } }
+        assertEquals(listOf(false, true), alarms(Params(alarmThreshold = 0.5)), "Params 문턱 이상 두 구간이면 경보")
+        assertEquals(listOf(false, false), alarms(Params(alarmThreshold = 0.51)))
+        assertEquals(listOf(false, false), alarms(Params(alarmThreshold = 0.5, alarmSegments = 3)), "구간 수도 Params")
     }
 }

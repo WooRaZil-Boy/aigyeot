@@ -134,7 +134,7 @@ class S53JudgeTest {
 
     @Test fun r21a_inputLost_flagsPauseKeepsState() {
         val l = session().ev(InputLost(T0, PauseReason.SILENCED))
-        assertEquals(Phase.LISTENING, l.ses.phase); assertEquals(setOf(PauseReason.SILENCED), l.ses.pauses)
+        assertEquals(Phase.LISTENING, l.ses.phase); assertEquals(setOf(PauseReason.SILENCED), l.s.car.pauses)
         l.alarm()
         assertTrue(l.step<StartPlayback>().isEmpty())     // 경보 판정은 보류
         val a = session().attempt1().ev(InputLost(T0, PauseReason.MIC_ERROR))
@@ -189,7 +189,7 @@ class S53JudgeTest {
         assertEquals(listOf<Command>(ShowNotice(Notice.MIC_STOPPED)), sim.cmds)
         sim.ev(MicService(sim.t, false, null))
         assertFalse(sim.s.car.micRunning)
-        assertEquals(setOf(PauseReason.MIC_ERROR), sim.ses.pauses)
+        assertEquals(setOf(PauseReason.MIC_ERROR), sim.s.car.pauses)
         assertEquals(Unjudged.MIC_ERROR, sim.ep.first!!.unjudged)
     }
 

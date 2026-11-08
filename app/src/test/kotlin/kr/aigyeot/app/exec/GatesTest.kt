@@ -88,6 +88,49 @@ class GatesTest {
         assertEquals(0, focusHeld)
     }
 
+    @Test fun `포커스를 잃으면 걸린 문장을 멈추고 실패로 끝내며 포커스를 반납한다`() {
+        ready()
+        g.speak("A") { doneA = it }
+        g.focusLost()
+        assertEquals(false, doneA)
+        assertEquals(1, stops, "SDK 멈춤")
+        assertEquals(0, focusHeld, "포커스 반납")
+    }
+
+    @Test fun `예열 중 포커스 상실은 무시한다`() {
+        g.warm()
+        g.focusLost()
+        assertEquals(0, stops)
+        g.speak("A") { doneA = it }
+        g.settled(true)                                  // 예열 onDone
+        assertEquals(listOf("", "A"), said)
+        assertNull(doneA)
+    }
+
+    @Test fun `상실 뒤 큐 문장은 끝 신호 뒤에 이어서 시작하고 늦은 onStop이 그 문장을 끝내지 않는다`() {
+        ready()
+        g.speak("A") { doneA = it }
+        g.focusLost()
+        g.speak("B") { doneB = it }
+        assertEquals(listOf("", "A"), said, "A의 끝 신호를 기다리며 미룬다")
+        g.settled(false)                                 // A의 늦은 onStop
+        assertEquals(listOf("", "A", "B"), said)
+        assertNull(doneB, "onStop이 B를 끝내면 안 된다")
+        g.settled(true)
+        assertEquals(true, doneB)
+        assertEquals(0, focusHeld)
+    }
+
+    @Test fun `상실 전에 큐에 있던 문장은 지우지 않고 상실 뒤 이어서 말한다`() {
+        ready()
+        g.speak("A") { doneA = it }
+        g.speak("B") { doneB = it }                      // A가 걸려 있어 큐
+        g.focusLost()
+        assertEquals(false, doneA)
+        t.advance(TtsGate.SETTLE_MS)
+        assertEquals(listOf("", "A", "B"), said)
+    }
+
     @Test fun `STT는 PCM을 넣기 전에 온 결과를 버리고 넣은 뒤 결과는 전달한다`() {
         val got = mutableListOf<Pair<String, Boolean>>()
         val sent = mutableListOf<Int>(); var completes = 0; var stops = 0

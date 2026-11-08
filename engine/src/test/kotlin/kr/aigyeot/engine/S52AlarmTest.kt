@@ -58,14 +58,16 @@ class S52AlarmTest {
         assertEquals(sim.t, e.alarmAt); assertNull(e.first); assertNull(e.second); assertEquals(0, e.playedMs)
         assertEquals(HandoffCause.NO_SOUND, e.handoff!!.cause)
         assertTrue(sim.step<CaptureContext>().isNotEmpty())
-        assertEquals("handoff_alert", sim.step<SendToPhone>().single().type)
         assertTrue(Sid.S02 !in sim.sids())
         assertTrue(Sid.S10 in sim.sids())   // 경로 정보 없음 → 쉼터 없음(C22)
+        assertTrue(sim.step<SendToPhone>().isEmpty())   // C146: 알림은 S10을 말한 뒤
+        sim.done()
+        assertEquals("handoff_alert", sim.all<SendToPhone>().single().type)
     }
 
     @Test fun r04d_alarmAfterCap_logsOnly() {
         val sim = session()
-        sim.s = sim.s.copy(session = sim.ses.copy(capReached = true, playedMs = P.sessionPlayCapMs))
+        sim.s = sim.s.copy(session = sim.ses.copy(playedMs = P.sessionPlayCapMs))
         sim.alarm()
         assertEquals(listOf<Command>(LogAlarm(sim.ses.id, sim.t, AlarmOnly.SESSION_CAP)), sim.cmds)
         assertEquals(Phase.LISTENING, sim.ses.phase)

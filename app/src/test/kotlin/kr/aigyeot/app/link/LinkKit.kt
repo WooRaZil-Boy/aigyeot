@@ -66,11 +66,14 @@ class FakeRelay : Relay {
     var pairCodeRes: Res<PairCodeResponse> = Res.Offline
     var onPairCode: suspend () -> Unit = {}
     var deleteGate: CompletableDeferred<Unit>? = null
+    var onDeleted: () -> Unit = {}
     val pairLog = CopyOnWriteArrayList<String>()   // 연결 코드 받기·지우기 차례
     var deleteDeviceRes: Res<Unit> = Res.Ok(204, Unit)
     val deletedDevices = mutableListOf<String>()
     var recordsRes: Res<Unit> = Res.Ok(204, Unit)
     var recordsCalls = 0
+    val recordsIds = mutableListOf<String>()
+    val recordsDropIds = mutableListOf<List<String>>()
     var songRes: (String, File) -> Res<Long> = { _, f -> f.writeBytes(ByteArray(100)); Res.Ok(200, 100) }
     val songCalls = mutableListOf<String>()
     var onInbox: suspend () -> Unit = {}   // 받은 함 요청을 보낸 직후(응답을 돌려주기 전)에 시험이 끼어든다
@@ -80,7 +83,7 @@ class FakeRelay : Relay {
     override suspend fun registerCar() = register.also { registers++ }
     override suspend fun pairCode(token: String): Res<PairCodeResponse> { pairLog += "code"; onPairCode(); return pairCodeRes }
     override suspend fun deletePairCode(token: String): Res<Unit> {
-        pairLog += "delete"; deleteGate?.await(); pairLog += "deleted"
+        pairLog += "delete"; deleteGate?.await(); pairLog += "deleted"; onDeleted()
         return Res.Ok(204, Unit)
     }
     override suspend fun devices(token: String): Res<DevicesResponse> { devicesCalls++; onDevices(); return devicesRes }
@@ -93,7 +96,7 @@ class FakeRelay : Relay {
     }
     override suspend fun ack(token: String, ids: List<String>): Res<Unit> = Res.Ok(204, Unit).also { acked.addAll(ids) }
     override suspend fun song(token: String, songId: String, dest: File, maxBytes: Long) = songRes(songId, dest).also { songCalls += songId }
-    override suspend fun deleteRecords(token: String) = recordsRes.also { recordsCalls++ }
+    override suspend fun deleteRecords(token: String, id: String, dropIds: List<String>) = recordsRes.also { recordsCalls++; recordsIds += id; recordsDropIds += dropIds }
     override suspend fun llm(token: String, req: LlmRequest) = llmRes(req).also { llmCalls += req }
     // 기본: 붙자마자 네트워크 오류로 닫힌다. 시험이 바꾸면 열기·프레임·보낸 글자를 정한다
     val socketSent = CopyOnWriteArrayList<String>()
@@ -120,7 +123,15 @@ abstract class LinkKit {
     var engineState: EngineState? get() = stateFlow.value; set(v) { stateFlow.value = v }   // 호스트 복원 뒤의 상태(C132). 복원 전은 null로 둔다
     var probeResult: SongProbe? = SongProbe(94.5, true)
     var copyResult: suspend (File, File) -> LoudnessResult = { i, o -> i.copyTo(o, overwrite = true); LoudnessResult(true) }
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 켜면 새로 보내는 작업을 붙잡아 두었다가 [release]에서 돌린다(시작 전 취소 시험 L90). */
+    class HoldDispatcher : kotlinx.coroutines.CoroutineDispatcher() {
+        @Volatile var holding = false
+        val held = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        override fun dispatch(context: kotlin.coroutines.CoroutineContext, block: Runnable) { if (holding) held.add(block) else Dispatchers.IO.dispatch(context, block) }
+        fun release() { holding = false; while (true) Dispatchers.IO.dispatch(kotlin.coroutines.EmptyCoroutineContext, held.poll() ?: break) }
+    }
+    val hold = HoldDispatcher()
+    private val scope = CoroutineScope(SupervisorJob() + hold)
     open val qaWaitMs = 3_000L
     var onPost: (Event) -> Unit = {}   // 사건이 나간 직후(받기 잠금 안)에 시험이 끼어든다
     val link by lazy {

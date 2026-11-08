@@ -2,7 +2,7 @@ package kr.aigyeot.engine
 
 import kotlinx.serialization.Serializable
 
-// 계약 2.2. 상태 클래스와 열거값.
+// 계약 2.2. 상태 클래스와 열거값. 상태를 읽는 규칙 함수는 Rules.kt(설계 3.1·3.8).
 
 @Serializable
 data class EngineState(
@@ -20,9 +20,9 @@ data class EngineState(
     val speech: SpeechQueue,
     val steer: SteerState,
     val care: CareView? = null,           // 폰 돌봄 기록 요약(C119). ④ 상태값·오프라인 문장만 읽고 판단에는 쓰지 않는다. 스냅숏 호환 기본값 null
-    val careGen: Int = 0,                 // '모든 기록 지우기' 세대. ClearRecords마다 +1. 사건의 gen이 이것과 다르면 그 요약은 지우기 전에 받은 것이라 버린다(C128). 스냅숏 호환 기본값 0
     val bootAt: Long? = null,             // 복원 시각. 복원으로 경로를 비운 뒤 60초는 장시간 제안(L1)이 경로를 기다린다(C128). 스냅숏 호환 기본값 null
     val careRoom: String? = null,         // 지금 `care`를 받은 중계 방. 방이 다르면 seq를 견주지 않는다(C130). 스냅숏 호환 기본값 null
+    val handoffs: List<HandoffLedger> = emptyList(), // 인계 알림 장부 하나(V6). 열린 세션의 것(세션마다 하나)과 닫힐 때 말하던 줄의 것(C152·C159)을 세션 id로 가른다. 만든 순서
     val careSeq: Long? = null,            // 지금 `care`를 실어 온 중계 seq(장면 주입이면 null). 같은 asOf일 때 견준다(C126 ①). 스냅숏 호환 기본값 null
 ) {
     companion object
@@ -45,6 +45,7 @@ data class SteerWindowAcc(
     val reversals: Int,
     val excluded: Boolean,
     val cryPresent: Boolean, val playing: Boolean,
+    val observed: Boolean = true,   // C312: 창 동안 sees/hears가 거짓인 때가 있었으면 false
 )
 
 @Serializable
@@ -57,7 +58,7 @@ data class CarView(
     val cabinC: Double?,
     val route: RouteView?,
     val seatHeat: Map<Area, Int>,
-    val outPauses: Set<PauseReason> = emptySet(),   // 세션 밖에서 받은 입력 끊김 사유. 다음 세션이 이어받는다(21a·21h, C79)
+    val pauses: Set<PauseReason> = emptySet(),   // 입력 끊김 사유(판정 멈춤 5.3) 하나(V16). 세션 안팎이 같은 칸이라 다음 세션이 그대로 이어받는다(21a·21h, C79)
 )
 
 @Serializable
@@ -68,44 +69,89 @@ data class Ignition(
     val windowLockPending: List<WindowLockPending>,
     val suspendedAt: Long?,
     val driverUserId: Int,
+    val nursingStop: NursingStop? = null,   // 결정 ①(V1): 수유실 들름은 시동 단위. 세션이 13a로 닫혀도 F8 수유 확인이 뜬다
 )
 
 @Serializable
 data class SessionState(
     val id: String, val openedAt: Long, val trigger: OpenTrigger,
     val methods: List<Method>,
-    val phase: Phase,
-    val attemptNo: Int,
-    val play: Play?,
-    val judgeFrom: Long?,
-    val windowEnd: Long?,
-    val episode: EpisodeState?,
-    val pauses: Set<PauseReason>,
-    val quietMs: Long,
-    val playedMs: Long,
-    val capReached: Boolean,
-    val driveFrom: Long?,
-    val longDriveOffered: Boolean,
-    val lastPAt: Long?,
-    val carseatFrom: Long,
-    val s17Said: Boolean,
+    val stage: Stage,                     // 단계(D5). 시도 번호·재생·판정 창·조용함·경보 대기는 단계 안에만 있다. 쓰는 곳은 Tx.enter 하나(V23)
+    val episode: EpisodeState?,           // LISTENING이면 null(enter가 보장)
+    val playedMs: Long,                   // 세션 재생 누적(줄지 않는다). 쌓은 값이라 저장한다. 상한 도달은 capReached(p)로 계산(P4, V15)
+    val offers: OfferState = OfferState(),        // 주인 Offer(D7, 설계 3.3). 쓰기는 OfferReducer.kt의 private offers {} 하나
+    val controls: ControlState = ControlState(),  // 주인 Control(D7). 쓰기는 ControlReducer.kt의 private controls {} 하나
+    val s17Said: Boolean,                 // 읽는 곳은 시험(S51·S55)뿐. 지우면 그 단언의 기대값 표현이 바뀌어 남긴다(설계 10.2-5)
     val micNoticeArmed: Boolean,
-    val lastOffer: Map<Sid, Long>,
-    val pendingAsk: PendingAsk?,
-    val windowLockBefore: Map<Area, Boolean>?,
-    val frontAudible: Boolean,
-    val comfortDone: Boolean,
-    val comfortPending: ComfortPending? = null, // 42a에서 낸 `LowerHvac`의 결과를 기다리는 중(C102). 결과(42g·42h)가 오면 null. 스냅숏 호환을 위해 기본값 null
-    val nursingStop: NursingStop?,
-    val addedRestIds: Set<String> = emptySet(),
-    val waypointPending: WaypointPending?,
     val recordsCleared: Boolean,
-    val pendingAlarm: PendingAlarm?,
     val restLog: List<RestLogEntry> = emptyList(),   // 휴식 기록(6.1 session.rest_log): 제안 시각·문장·쉼터·답·경유지
-    val playStarted: Boolean = false,    // 이 세션에 PlaybackStarted가 한 번이라도 있었음(output_route null 판단, C85)
+    val output: OutputRoute? = null,     // C85: 이 세션 재생의 출력(6.1 session.output_route). 시작한 재생이 없으면 null, 앞좌석 폴백이 한 번이라도 있었으면 DEFAULT_FALLBACK(옛 playStarted + frontAudible, P4)
     val departChecked: Boolean = false,  // 출발 수유실 제안(F5)을 이번 세션에 이미 봤음. 제안하지 않았어도 참(C117)
-    val pendingHandoffAlert: PendingHandoffAlert? = null, // 인계 알림이 그 줄을 낼 때까지 기다리는 중(H10). 스냅숏 호환 기본값 null
     val micPath: MicPath? = null,        // 세션을 열 때의 마이크 경로. 세션 중 바뀌어도 SaveSession 행은 이 값을 유지(C88)
+    val cryRuns: Int = 0,                // C277·C287: 이번 세션에서 감지한 이어진 울음 수(④ '몇 번 울었어'. alarmRun이 새로 열릴 때마다 하나). 기록 지우기 때 0. 스냅숏 호환 기본값 0
+    val alarmRun: AlarmRun? = null,      // C286: 지금 세션의 이어진 경보(G3). ④ 울음 상태값이 에피소드 종류가 아니라 이것으로 본다. 스냅숏 호환 기본값 null
+    val mixedUntil: Long? = null,        // V4(P2, C318): 소리가 난 마지막 자동 시도 재생이 멈춘 시각(재생 종료 기록의 stopAt). 이보다 앞에 시작한 구간은 재생 소리가 섞여 sees()가 거른다(C301). 판정 창 시작(judgeFrom)과 다른 칸. 쓰는 곳은 playEnd 하나
+) {
+    // 읽기 투영(D5): 직렬화되지 않는 멤버 getter. 앱·장면 expect.state·시험이 그대로 읽는다
+    val phase: Phase get() = stage.phase
+    val attemptNo: Int get() = stage.n
+    val play: Play? get() = stage.play
+    val judgeFrom: Long? get() = stage.window?.from
+    val windowEnd: Long? get() = stage.window?.end
+    val quietMs: Long get() = stage.quietMs
+    val pendingAlarm: PendingAlarm? get() = (stage as? Stage.Attempt)?.alarm
+    val carseatFrom: Long get() = openedAt                                       // V15: 카시트 시작은 늘 세션 시작(④ Qa.kt)
+    val frontAudible: Boolean get() = output == OutputRoute.DEFAULT_FALLBACK     // 장면 측정(SceneRun)
+    // 읽기 투영(D7): 묶음 칸(offers·controls)을 옛 이름 그대로 읽는다. 쓰기는 주인 파일의 private 쓰기 함수뿐(P3)
+    val spokenAt: Map<Sid, Long> get() = offers.spokenAt
+    val pendingAsk: PendingAsk? get() = offers.pendingAsk
+    val waypointPending: WaypointPending? get() = offers.waypointPending
+    val addedRestIds: Set<String> get() = offers.addedRestIds
+    val driveFrom: Long? get() = offers.driveFrom
+    val longDriveOffered: Boolean get() = offers.longDriveOffered
+    val leftParkAt: Long? get() = offers.leftParkAt
+    val windowLockBefore: Map<Area, Boolean>? get() = controls.windowLockBefore
+    val comfortDone: Boolean get() = controls.comfortDone
+    val comfortPending: ComfortPending? get() = controls.comfortPending
+}
+
+/** 제안 상태(D7, 주인 Offer). 쉼터 제안·질문·경유지·장시간 주행. */
+@Serializable data class OfferState(
+    val spokenAt: Map<Sid, Long> = emptyMap(),   // 결정 ②(V5, 옛 lastOffer): 제안 문장을 실제로 말한 시각만(offerSpoken 한 곳). 10분 금지는 이 칸과 큐로 offerBanned가 계산한다
+    val pendingAsk: PendingAsk? = null,          // 쉼터 질문의 답 기다림(H4)
+    val waypointPending: WaypointPending? = null,   // 경유지 결과 기다림(H5)
+    val addedRestIds: Set<String> = emptySet(),  // 이 세션에 넣은 경유지(H4c)
+    val driveFrom: Long? = null,                 // 장시간 주행(L1)을 세는 시작. P에 오래 서면 비운다(L2)
+    val longDriveOffered: Boolean = false,       // 2시간 제안을 실제로 말했다(L1, C84)
+    val leftParkAt: Long? = null,                // 옛 lastPAt: P에서 나온 시각(이번 주행의 시작, A1). 이름이 뜻과 달라 바꿨다(P2)
+)
+
+/** 차량 제어 상태(D7, 주인 Control). */
+@Serializable data class ControlState(
+    val windowLockBefore: Map<Area, Boolean>? = null,   // 3e: 잠그기 전 뒷창 잠금 값. 세션이 닫힐 때 되돌린다(3f)
+    val comfortDone: Boolean = false,                   // 42a: 이 세션에 쾌적 조정을 했다
+    val comfortPending: ComfortPending? = null,         // 42a에서 낸 `LowerHvac`의 결과를 기다리는 중(C102). 결과(42g·42h)가 오면 null
+)
+
+/** V15(P4): 세션 재생 상한에 닿았다. playedMs는 줄지 않아 저장하지 않고 계산한다. */
+fun SessionState.capReached(p: Params): Boolean = playedMs >= p.sessionPlayCapMs
+
+/** C286: 이어진 경보(G3)의 처음·마지막 경보 시각. 경보가 문턱(두 걸음, [alarmContinues])보다 오래 끊기면 다음 경보가 새로 연다. */
+@Serializable data class AlarmRun(val from: Long, val last: Long)
+
+/**
+ * C303 A3~A7: 복원 ②(Room 대조)에 호스트가 넘기는 Room 사실. 판단 코어는 Room을 모른다.
+ * [episodes]는 상태가 가리키는 에피소드 id(열린 에피소드·인계 장부)의 Room 행(없으면 빠짐). [told]는 그중 인계가 Room에서 이미 확정된 행의
+ * handoff_told_driver(null이 아닌 것만). [history]는 Room에서 다시 센 28일 1차 시도.
+ */
+data class RoomFacts(
+    val sessionEnded: Boolean,
+    val sessionPlayedMs: Long,
+    val alarmEpisodes: Int,
+    val episodePlayedMs: Long,
+    val episodes: Map<String, EpisodeRecord>,
+    val history: List<FirstTry>,
+    val told: Map<String, Boolean> = emptyMap(),
 )
 
 @Serializable
@@ -117,6 +163,7 @@ data class Play(
     val endAt: Long,
     val mode: PlayMode,
     val action: SecondAction? = null,     // 2차 시도: 시작할 때 정한 행동(C81). PlaybackStarted는 이 값만 따른다
+    val fromQa: Boolean = false,          // V18(P5): ④ 도구로 연 요청 재생. 거절(18d·Q5a)은 지금 질문 창이 아니라 이 값을 본다
 )
 
 @Serializable
@@ -141,15 +188,11 @@ data class TryRecord(
     val unjudged: Unjudged?,
 )
 
-// 필드는 6.1 episode의 handoff_cause·handoff_kind·waypoint_added·guardian_notified에서 가져왔다.
+// 필드는 6.1 episode의 handoff_cause·handoff_kind. 확정 칸(말함·쉼터 이름)은 SettleHandoff, guardian_notified는 link, 경유지는 EpisodeState.waypointAdded(결정 ③·V6·V15)
 @Serializable
 data class HandoffRecord(
     val cause: HandoffCause,
     val kind: HandoffKind?,
-    val waypointAdded: Boolean,
-    val guardianNotified: Boolean,
-    val toldDriver: Boolean? = null,      // H11(C130): 인계 문장(S07·S08·S10·S15)을 운전자에게 실제로 냈는가. H1은 null
-    val restName: String? = null,         // H11: 실제로 물은 쉼터 이름
 )
 
 @Serializable data class PendingAlarm(val alarmAt: Long, val delayFromAt: Long)   // C36
@@ -171,6 +214,7 @@ data class HandoffRecord(
     val at: Long, val hasDestination: Boolean,
     val remainingSec: Int?, val rests: List<RestCandidate>,
     val remainingKm: Double? = null,   // 목적지까지 남은 거리(km). 출발 수유실 제안(F5)용. 스냅숏 호환 기본값 null
+    val restsPendingSince: Long? = null,   // C269: RouteState.restsPending이 처음 참이 된 시각(참인 동안 유지). null = 기다리지 않음. 스냅숏 호환 기본값 null
 )
 @Serializable data class CareView(
     val asOf: Long,                       // 폰이 요약을 계산한 시각(epoch ms). 더 늦은 것만 받는다
@@ -181,25 +225,37 @@ data class HandoffRecord(
     val lastDiaperAt: Long?, val todayDiaperCount: Int?,
     val todayFeedCount: Int,
     val zone: String? = null,             // 요약의 IANA 시간대. ④ '같은 날'을 이 시간대로 본다(C126 ③). 스냅숏 호환 기본값 null = 차 시간대
-)
+) {
+    /** C303 A16: 24시간 안의 요약만 ④가 쓴다(C223, L61). 받기(LinkRoom)와 상태값(Qa)이 같이 쓴다. */
+    fun freshAt(now: Long): Boolean = now - asOf <= DAY_MS
+}
 @Serializable data class RestCandidate(
     val id: String, val name: String, val kind: RestKind,
     val distanceKm: Double, val hasNursingRoom: Boolean,
+    /** C304: 이름만으로 경유지 줄이 하나로 정해져 넣을 수 있는가(RestAreas.placeable). 기본 true(옛 스냅숏·장면 JSON). 넣을 수 없는 쉼터는 제안하지 않는다. */
+    val addable: Boolean = true,
 )
 @Serializable data class PendingAsk(
     val askId: String, val sid: Sid, val restId: String, val episodeId: String?,
     val hasNursingRoom: Boolean,
+    val restLogIndex: Int? = null,        // V18(P5): 질문을 낼 때 적은 휴식 기록 줄(SessionState.restLog의 위치). 답은 그 줄에만 붙인다
 )
-@Serializable data class PendingHandoffAlert(
-    val kind: HandoffKind, val sid: Sid, val askRestId: String?, val queuedAt: Long?,   // null = 옛 줄(스냅숏 호환). null도 같은 줄을 가리키는 값이다
-    val minutes: Int?, val sessionId: String, val episodeId: String?, val occurredAt: Long,
-    val alert: Boolean = true,                 // false: 폰 알림은 따로 보냈거나 보내지 않고 줄을 냈는지만 따른다(H2·H8, H11)
-    val closedRecord: EpisodeRecord? = null,   // 에피소드가 먼저 닫히면 마지막으로 저장한 행(H11: 그 행을 갱신한다)
+/**
+ * 인계 알림 장부(H10, V6). 묶인 줄은 `Line.handoff` 표시와 [sessionId]로 찾는다(C258). kind·minutes·restName은 묶인 줄을 낼 때(또는 바꿀 때) 그 줄에서 채운다.
+ * 세션이 닫혀도 그 줄의 SpeechDone까지 같은 칸에 남는다(C152). 확정은 [settle] → SettleHandoff 하나다(Room 행 사본을 들지 않는다).
+ */
+@Serializable data class HandoffLedger(
+    val sessionId: String, val episodeId: String?, val occurredAt: Long, val cause: HandoffCause,
+    val kind: HandoffKind, val minutes: Int?,
+    val alert: Boolean = true,                 // 이 장부가 폰 알림을 보낼 차례. false: 바로 보냈거나 받는 보호자가 없었다(H2·H8)
+    val utteranceId: String? = null,           // C146: 묶은 줄을 낸 발화 id. 그 SpeechDone(spoken = true)에서 알림·확정
+    val restName: String? = null,              // C146: 그 줄을 낼 때의 쉼터 이름
 )
 @Serializable data class WaypointPending(
     val cmdId: String, val restId: String, val sessionId: String, val episodeId: String?,
     val fromQa: Boolean = false,
     val restLogIndex: Int? = null,        // 이 요청을 낸 휴식 기록 줄(SessionState.restLog의 위치). 결과는 그 줄에만 붙인다
+    val restName: String? = null,         // C269: 요청할 때의 쉼터 이름(S09). 결과가 올 때 쉼터 목록이 비어(다시 받는 중) 있어도 id를 읽지 않게. 스냅숏 호환 기본값 null
 )
 @Serializable data class NursingStop(
     val restId: String,
@@ -216,14 +272,17 @@ data class HandoffRecord(
     val until: Long,
     val ruleSaid: Boolean,
     val songHeard: Boolean = false,       // Q5d: 이 듣기 창이 열린 동안 자장가·부모 노래가 있었다(재생이 먼저 끝나도 가사를 질문으로 받지 않는다)
+    val careStale: Boolean = false,       // C196: 질문 중 돌봄 요약이 바뀌었다. 이 질문의 QaReply 글은 말하지 않는다(도구는 처리)
 )
 @Serializable data class Line(
     val sid: Sid, val vars: Map<String, String>, val askRestId: String?,
     val qaAnswer: Boolean = false,
+    val careUsed: Boolean = true,         // C216: ④ 답(QA) 줄이 돌봄 값을 썼는가. false면 돌봄 요약이 바뀌어도 빼지 않는다
     val longDrive: Boolean = false,       // 2시간 제안(S11, 쉼터 없으면 S10). 말하기가 끝나야 longDriveOffered가 선다(L1, C84)
     val playId: String? = null,           // S02~S04: 이 알림을 낸 재생. 그 재생이 계속될 때만 말한다(C15)
     val queuedAt: Long? = null,           // 큐에 넣은 시각. 미룰 수 있는 문장이 holdMaxMs를 넘으면 버린다(C107). 기본값 null = 버리지 않음(스냅숏 호환)
     val sessionId: String? = null,        // 줄을 넣은 세션 id. 다른 세션의 줄이 끝나도 지금 세션 상태는 바꾸지 않는다(C141). null(옛 스냅숏)이면 지금 세션으로 본다
+    val handoff: Boolean = false,         // C258: 인계 안내 줄(S07·S08·S10·S15). 그 세션의 인계 묶음은 이 줄을 따라간다. 스냅숏 호환 기본값 false
 )
 /** 휴식 기록 한 줄. sid는 제안 문장(S07·S07_DEPART·S08·S10·S11) 또는 ④ 경유지 요청이면 QA. */
 @Serializable data class RestLogEntry(
@@ -276,8 +335,3 @@ data class HandoffRecord(
 @Serializable enum class FeedingFrom { CAR_SCREEN, PHONE }
 @Serializable enum class TurnSignal { NONE, LEFT, RIGHT }             // 값은 계약에 없음
 @Serializable enum class Notice { BABY_ABOARD, FEEDING_CONFIRM, SAFETY_CONTROL_FAILED, MIC_STOPPED }  // 4.3
-
-/** CS1(C126 ①): 새 요약이 지금 값을 바꾸는가. asOf가 늦거나, 같은 초에 둘 다 중계 seq가 있고 새것이 크다. */
-fun careReplaces(old: CareView?, oldSeq: Long?, new: CareView, newSeq: Long?, oldRoom: String? = null, newRoom: String? = null): Boolean =
-    old == null || new.asOf > old.asOf ||
-        (new.asOf == old.asOf && ((oldRoom != null && newRoom != null && oldRoom != newRoom) || (oldSeq != null && newSeq != null && newSeq > oldSeq)))   // 둘 다 방을 알고 다르면 seq 비교가 뜻이 없어 나중에 받은 것(C130). 모르면(옛 스냅숏·장면) 같은 방으로 본다

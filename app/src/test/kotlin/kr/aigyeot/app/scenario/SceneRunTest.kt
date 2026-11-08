@@ -22,6 +22,7 @@ import kr.aigyeot.engine.PlayMode
 import kr.aigyeot.engine.SendToPhone
 import kr.aigyeot.engine.Sid
 import kr.aigyeot.engine.Speak
+import kr.aigyeot.engine.Stage
 import kr.aigyeot.engine.YesNo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -195,9 +196,9 @@ class SceneRunTest {
         val w = FakeWorld()
         val t0 = 1_000_000L
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, t0)
-        r.onStep(base.withSession { it.copy(attemptNo = 2, openedAt = t0 - 1) })   // 실제 세션이 2차 시도 중
+        r.onStep(base.withSession { it.copy(stage = Stage.Gap(2, null), openedAt = t0 - 1) })   // 실제 세션이 2차 시도 뒤
         assertEquals(0, r.row().maxAttempts)
-        r.onStep(base.withSession { it.copy(attemptNo = 2, openedAt = t0 + 1) })   // 장면 안에서 열린 세션은 센다
+        r.onStep(base.withSession { it.copy(stage = Stage.Gap(2, null), openedAt = t0 + 1) })   // 장면 안에서 열린 세션은 센다
         assertEquals(2, r.row().maxAttempts)
     }
 
@@ -445,8 +446,8 @@ class SceneRunTest {
         val t0 = w.now
         val r = SceneRun(scene("""{"t":6,"say":{"intent":"YES","onAsk":"S07","by":5}}"""), 0, w, w, t0)
         w.now = t0 + 6_000; r.advance(w.now)
-        w.now += 100; r.onStep(base.withSession { it.copy(pendingAsk = ask) })     // 듣기 중
-        w.now += 100; r.onStep(base.withSession { it.copy(pendingAsk = null) })    // 이미 닫힘
+        w.now += 100; r.onStep(base.withSession { it.copy(offers = it.offers.copy(pendingAsk = ask)) })     // 듣기 중
+        w.now += 100; r.onStep(base.withSession { it.copy(offers = it.offers.copy(pendingAsk = null)) })    // 이미 닫힘
         w.now += 100; r.advance(w.now)
         assertTrue(w.events.none { it is Answer })
         w.now = t0 + 11_500; r.advance(w.now)
@@ -455,7 +456,7 @@ class SceneRunTest {
         val w2 = FakeWorld()
         val r2 = SceneRun(scene("""{"t":6,"say":{"intent":"YES","onAsk":"S07","by":5}}"""), 0, w2, w2, t0)
         w2.now = t0 + 6_000; r2.advance(w2.now)
-        w2.now += 100; r2.onStep(base.withSession { it.copy(pendingAsk = ask) })
+        w2.now += 100; r2.onStep(base.withSession { it.copy(offers = it.offers.copy(pendingAsk = ask)) })
         w2.now += 100; r2.advance(w2.now)
         assertEquals("a1", w2.events.filterIsInstance<Answer>().single().askId)
     }
@@ -480,7 +481,7 @@ class SceneRunTest {
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, t0)
         val play = Play("p", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE, null), t0 + 100, t0 + 60_000, PlayMode.NORMAL)
         w.now = t0 + 100
-        r.onStep(base.withSession { it.copy(play = play, playedMs = 0, openedAt = t0 + 1) })
+        r.onStep(base.withSession { it.copy(stage = Stage.Attempt(1, play), playedMs = 0, openedAt = t0 + 1) })
         assertEquals(0L, r.row().sessionPlayMs)   // 시계가 안 갔다
         r.advance(t0 + 5_100)   // Tick 없이 시계만 5초 감
         assertTrue("session_play_ms ${r.row().sessionPlayMs}", r.row().sessionPlayMs >= 5_000)
@@ -504,7 +505,7 @@ class SceneRunTest {
         val r = SceneRun(scene("""{"t":0,"say":{"intent":"YES","onAsk":"S07","by":1}}"""), 0, w, w, t0)
         r.advance(t0)
         w.now = t0 + 2_000
-        r.onStep(base.withSession { it.copy(pendingAsk = PendingAsk("a1", Sid.S07, "r1", null, false)) })
+        r.onStep(base.withSession { it.copy(offers = it.offers.copy(pendingAsk = PendingAsk("a1", Sid.S07, "r1", null, false))) })
         r.advance(w.now)
         assertTrue(w.events.none { it is Answer })
         assertEquals(0.0, r.firstFail()!!, 0.0)

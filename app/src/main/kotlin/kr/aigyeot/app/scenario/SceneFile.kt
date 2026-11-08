@@ -13,6 +13,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kr.aigyeot.engine.CarSeat
 import kr.aigyeot.engine.Command
+import kr.aigyeot.engine.DEFAULT_METHODS
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
@@ -61,10 +62,10 @@ private val EVENTS: Set<String> = Event.serializer().descriptor.getElementDescri
 private val CONTROLS = listOf("speed", "accelerator", "brake", "steering")
 private val eventJson = Json { ignoreUnknownKeys = false }
 
+/** 장면 파일의 음원 이름([methodText]의 거꾸로). C303 A19: 곡 없는 종류는 판단 코어 기본 음원 목록에서 읽는다(목록을 따로 적지 않는다). */
 fun parseMethod(s: String): Method = when {
     s.startsWith("SONG:") && s.length > 5 -> Method(MethodKind.SONG, s.removePrefix("SONG:"))
-    s == "WHITE_NOISE" || s == "WOMB" || s == "LULLABY" -> Method(MethodKind.valueOf(s))
-    else -> throw SceneError("음원 이름 '$s'")
+    else -> DEFAULT_METHODS.firstOrNull { it.kind.name == s } ?: throw SceneError("음원 이름 '$s'")
 }
 
 fun methodText(m: Method) = if (m.kind == MethodKind.SONG) "SONG:${m.songId}" else m.kind.name

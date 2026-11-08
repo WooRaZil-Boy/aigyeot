@@ -26,14 +26,14 @@ class C141SessionLineTest {
         val (sim, _) = bOpened(s10)
         val st = Engine().dropSpeaking(sim.s, sim.t + 1_000)
         assertFalse(st.session!!.longDriveOffered)
-        assertTrue(st.session!!.lastOffer.isEmpty())
+        assertTrue(st.session!!.spokenAt.isEmpty())
     }
 
     @Test fun c141_lateSpeechDone_otherSessionLine_keepsLongDriveOffered() {
         val (sim, _) = bOpened(s10)
         sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
         assertFalse(sim.ses.longDriveOffered)
-        assertTrue(sim.ses.lastOffer.isEmpty())
+        assertTrue(sim.ses.spokenAt.isEmpty())
     }
 
     /** 세션 B에서 에피소드를 실제로 연 상태(A의 S06이 u1로 말하는 중). */
@@ -58,17 +58,20 @@ class C141SessionLineTest {
         assertFalse(sim.ep.s06Said)
     }
 
-    @Test fun c141_sameSession_longDriveOfferedStands() {
+    @Test fun c141_sameSession_speechDoneLongDriveOfferedStands_dropSpeakingNot() {   // C151: 복원이 버리면 말하지 않은 것
+        // (C151) dropSpeaking은 같은 세션 줄도 말한 것으로 치지 않는다
         val sim = session()
         sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(s10.copy(sessionId = sim.ses.id))))
-        assertTrue(Engine().dropSpeaking(sim.s, sim.t + 1_000).session!!.longDriveOffered)
+        assertFalse(Engine().dropSpeaking(sim.s, sim.t + 1_000).session!!.longDriveOffered)
         sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
         assertTrue(sim.ses.longDriveOffered)
     }
 
-    @Test fun c141_oldSnapshotNullSessionId_appliesAsBefore() {
+    @Test fun c141_oldSnapshotNullSessionId_lateSpeechDoneAppliesAsBefore() {   // C151: dropSpeaking은 말한 것으로 치지 않는다
         val (sim, _) = bOpened(s10, keepNull = true)
-        assertTrue(Engine().dropSpeaking(sim.s, sim.t + 1_000).session!!.longDriveOffered)
+        assertFalse(Engine().dropSpeaking(sim.s, sim.t + 1_000).session!!.longDriveOffered)
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
+        assertTrue(sim.ses.longDriveOffered)
     }
 
     @Test fun c141_say_stampsCurrentSessionId() {

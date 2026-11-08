@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 
 class CryDetectorTest {
     // 점수 s인 창 → 구간 평균 s → p = sigmoid(-10 + 30 s)
-    private val head = CryHead(intArrayOf(0), doubleArrayOf(30.0, 0.0), -10.0, 0.7)
+    private val head = CryHead(intArrayOf(0), doubleArrayOf(30.0, 0.0), -10.0)
     private var now = 0L
     private var score = 1f // 가짜 YAMNet 점수(클래스 0)
     private val events = CopyOnWriteArrayList<Event>()

@@ -14,16 +14,24 @@ import kr.aigyeot.engine.PlaybackStarted
 import kr.aigyeot.engine.RejectReason
 import kr.aigyeot.engine.StartPlayback
 import kr.aigyeot.engine.StopPlayback
+import kr.aigyeot.engine.sessionIdOf
 import java.util.Locale
 
 internal const val REAR_ZONE = "bus100_audio_zone_1"
 
-/** control_log 한 줄(계약 6.1). session_id·at은 여기서 채운다. */
+/** 포커스 요청 줄의 goal: 원한 결과와 요청 context·gain 종류(Audio.kt의 요청과 같게, C321). */
+internal const val FOCUS_GOAL = "GRANTED(USAGE_MEDIA, GAIN_TRANSIENT)"
+
+/**
+ * control_log 한 줄(계약 6.1). session_id·at은 여기서 채운다.
+ * V13(P5): session_id는 결과가 온 때의 상태가 아니라 명령을 낸 세션이다. [ref]는 그 명령의 cmdId·playId(`{세션 id}-{seq}`)이고
+ * 세션 id는 [sessionIdOf] 하나로 얻는다. 명령 없이 나는 줄(Exec start 등)만 ref가 null이라 지금 세션([session])을 쓴다.
+ */
 internal class ControlLogger(private val clock: () -> Long, private val session: () -> String?, private val sink: (ControlLogEntity) -> Unit) {
     /** 저장 쪽이 던져도 삼킨다: 기록 실패가 재생 예약·제어 결과를 끊으면 안 된다(로그는 부수 효과). */
-    fun row(api: String, target: String, goal: String, actual: String?, ok: Boolean, ackMs: Long? = null, appliedMs: Long? = null, retries: Int = 0) {
+    fun row(ref: String?, api: String, target: String, goal: String, actual: String?, ok: Boolean, ackMs: Long? = null, appliedMs: Long? = null, retries: Int = 0) {
         try {
-            sink(ControlLogEntity(sessionId = session(), at = clock(), api = api, target = target, goal = goal, actual = actual,
+            sink(ControlLogEntity(sessionId = if (ref != null) sessionIdOf(ref) else session(), at = clock(), api = api, target = target, goal = goal, actual = actual,
                 ackMs = ackMs, appliedMs = appliedMs, ok = ok, retries = retries))
         } catch (e: Exception) { /* 무시 */ }
     }
@@ -60,7 +68,7 @@ internal class Player(
         // 포트가 던져도 상태를 남기지 않고 ERROR로 거절한다(결과를 두 번 내지 않게 Exec의 catch까지 가지 않는다)
         val rear = try { audio.hasRearOutput() } catch (e: Exception) { return reject(c.playId, "getDevices ${e.message}") }
         if (!rear && !frontAllowed()) {
-            log.row("getDevices", REAR_ZONE, "present", "absent", false)
+            log.row(c.playId, "getDevices", REAR_ZONE, "present", "absent", false)
             return post(PlaybackRejected(clock(), c.playId, RejectReason.NO_REAR_OUTPUT))
         }
         val granted = try {
@@ -70,10 +78,10 @@ internal class Player(
             }
         } catch (e: Exception) { return reject(c.playId, "requestAudioFocus ${e.message}") }
         if (!granted) {
-            log.row("requestAudioFocus", c.playId, "GRANTED", "FAILED", false)
+            log.row(c.playId, "requestAudioFocus", c.playId, FOCUS_GOAL, "FAILED", false)
             return post(PlaybackRejected(clock(), c.playId, RejectReason.FOCUS_DENIED))
         }
-        log.row("requestAudioFocus", c.playId, "GRANTED", "GRANTED", true)
+        log.row(c.playId, "requestAudioFocus", c.playId, FOCUS_GOAL, "GRANTED", true)
         val track = try { audio.open(c.method, rear, onRouted = { routed(c.playId, it) }, onError = { failed(c.playId, "playback error") }) }
             catch (e: Exception) { return reject(c.playId, "open ${e.message}") }
         if (track == null) return reject(c.playId, "open ${c.method.kind}")
@@ -89,8 +97,8 @@ internal class Player(
         x.pendingRoute = rear && routed == null
         if (!elsewhere && !x.pendingRoute || front) {
             apply(x, if (front) "fallback" else "start")
-            log.row("getRoutedDevice", c.playId, if (rear) REAR_ZONE else "default", routed, !elsewhere)
-        } else if (elsewhere) log.row("getRoutedDevice", c.playId, REAR_ZONE, routed, false)
+            log.row(c.playId, "getRoutedDevice", c.playId, if (rear) REAR_ZONE else "default", routed, !elsewhere)
+        } else if (elsewhere) log.row(c.playId, "getRoutedDevice", c.playId, REAR_ZONE, routed, false)
         if (cur !== x) return                                                  // 이득 설정이 던져 이미 거절로 닫혔다
         x.announced = true
         post(PlaybackStarted(clock(), c.playId, routed, fallback = !rear || front))
@@ -131,7 +139,7 @@ internal class Player(
             cur = null
             x.timers.forEach { it() }
             runCatching { x.track.release() }
-            log.row("stopPlayback", x.id, "RELEASE", "released", true)
+            log.row(x.id, "stopPlayback", x.id, "RELEASE", "released", true)
         }
         runCatching { audio.abandonFocus() }
     }
@@ -140,11 +148,11 @@ internal class Player(
     private fun resolve(x: Cur, addr: String?, final: Boolean) {
         if (!x.pendingRoute || cur !== x) return
         when {
-            addr == REAR_ZONE -> { x.pendingRoute = false; apply(x, "start"); log.row("getRoutedDevice", x.id, REAR_ZONE, addr, true) }
+            addr == REAR_ZONE -> { x.pendingRoute = false; apply(x, "start"); log.row(x.id, "getRoutedDevice", x.id, REAR_ZONE, addr, true) }
             addr != null -> {
                 x.pendingRoute = false
-                if (frontAllowed()) { x.base = p.fallbackGain.toFloat(); apply(x, "fallback"); log.row("getRoutedDevice", x.id, REAR_ZONE, addr, false) }
-                else { log.row("getRoutedDevice", x.id, REAR_ZONE, addr, false); failed(x.id, "routed $addr") }
+                if (frontAllowed()) { x.base = p.fallbackGain.toFloat(); apply(x, "fallback"); log.row(x.id, "getRoutedDevice", x.id, REAR_ZONE, addr, false) }
+                else { log.row(x.id, "getRoutedDevice", x.id, REAR_ZONE, addr, false); failed(x.id, "routed $addr") }
             }
             final -> failed(x.id, "routing unknown")
         }
@@ -161,19 +169,19 @@ internal class Player(
         if (addr == null || addr == REAR_ZONE) return
         if (frontAllowed()) {                                          // D12: 다른 곳으로 나가면 이득 0.3으로만
             if (x.base > p.fallbackGain) { x.base = p.fallbackGain.toFloat(); apply(x, "fallback") }
-            log.row("getRoutedDevice", id, REAR_ZONE, addr, false)
+            log.row(id, "getRoutedDevice", id, REAR_ZONE, addr, false)
         } else failed(id, "routed $addr")
     }
 
     private fun failed(id: String, why: String) {
         val x = cur?.takeIf { it.id == id } ?: return
-        log.row("playback", id, "playing", why, false)
+        log.row(id, "playback", id, "playing", why, false)
         end(x, EndReason.ERROR)
     }
 
     private fun reject(id: String, why: String) {
         audio.abandonFocus()
-        log.row("playback", id, "playing", why, false)
+        log.row(id, "playback", id, "playing", why, false)
         post(PlaybackRejected(clock(), id, RejectReason.ERROR))
     }
 
@@ -183,7 +191,7 @@ internal class Player(
         x.timers.forEach { it() }
         x.track.release()
         audio.abandonFocus()
-        log.row("stopPlayback", x.id, reason.name, "released", reason != EndReason.ERROR)
+        log.row(x.id, "stopPlayback", x.id, reason.name, "released", reason != EndReason.ERROR)
         post(PlaybackEnded(clock(), x.id, reason))
     }
 
@@ -221,7 +229,7 @@ internal class Player(
         if (g == x.gain) return
         x.gain = g
         try { x.track.gain(g) } catch (e: Exception) { return gainFailed(x, e) }
-        log.row("AudioTrack.setVolume", x.id, String.format(Locale.ROOT, "%.3f", g), why, true)
+        log.row(x.id, "AudioTrack.setVolume", x.id, String.format(Locale.ROOT, "%.3f", g), why, true)
     }
 
     companion object {

@@ -56,23 +56,80 @@ fun pickFirst(methods: List<Method>, history: List<FirstTry>, rng: Long, perMeth
 /** 5장 성적: (1+성공)/(2+시도)가 가장 큰 것, 동점이면 처음 순서. `except`는 2차의 '1차와 다른 음원'. */
 fun best(methods: List<Method>, history: List<FirstTry>, except: Method? = null): Method {
     val ms = ordered(methods).filter { it != except }.ifEmpty { ordered(methods) }
-    return ms.maxBy { m ->
-        val n = history.count { it.method == m }
-        (1.0 + history.count { it.method == m && it.success }) / (2.0 + n)
-    }
+    return ms.maxBy { m -> methodScore(history.count { it.method == m && it.success }, history.count { it.method == m }) }
 }
+
+/** C303 A18: 방법별 성적 점수 (1+성공)/(2+시도). 2차 고르기·④ sound_stats가 같이 쓴다. */
+fun methodScore(successes: Int, attempts: Int): Double = (1.0 + successes) / (2.0 + attempts)
+
+const val MINUTE_MS = 60_000L
+const val DAY_MS = 86_400_000L   // C303 A24: 하루. 앱(Wire.DAY)도 이 값을 쓴다
+
+/** C303 A18: 성적·history 창(28일)의 시작. 세션 열기·Room history·리포트·홈 화면이 같이 쓴다. */
+fun Params.statSince(now: Long): Long = now - statWindowDays * DAY_MS
+
+/**
+ * C320 V17: [methods] 각각의 28일 안 1차 시도 성적(성공 수·시도 수). ④ sound_stats와 홈 '방법별 성적'이 같이 쓴다(리포트는 Room에서 같은 [statSince]로 센다).
+ * 창 시작 시각(`at == statSince`)은 안에 든다. 노래 방법은 곡(songId)까지 같은 시도만 센다(Method 동등).
+ */
+fun methodStats(history: List<FirstTry>, methods: List<Method>, now: Long, p: Params = Params()): List<Pair<Method, Pair<Int, Int>>> {
+    val since = p.statSince(now)
+    val recent = history.filter { it.at >= since }
+    return methods.map { m -> recent.filter { it.method == m }.let { r -> m to (r.count { it.success } to r.size) } }
+}
+
+/** C320 V13(P5): cmdId·playId(`{세션 id}-{seq}`, Tx.newId)에서 낸 때의 세션 id. 세션 밖에서 낸 id(`idle-…`)와 모양이 다른 id는 null. */
+fun sessionIdOf(ref: String): String? = ref.substringBeforeLast('-', "").takeIf { it.isNotEmpty() && it != "idle" }
+
+/** C303 A1: 이어진 경보(G3) 문턱 두 걸음. 경보는 한 걸음(975ms)마다 오고, 조용한 구간이 끼면 최소 세 걸음 뒤에 온다. 판단 코어 `alarmRun`·④ 지금 울음·`alarm_log`가 같이 쓴다. */
+fun alarmContinues(last: Long, at: Long, p: Params = Params()): Boolean = at - last <= 2 * p.yamnetHopMs
+
+/** C303 A14: 수유 시작 시각은 더 나중일 때만 바꾼다(F1·F6, 계약 4.3). */
+fun laterFeeding(cur: Long?, new: Long): Boolean = cur == null || new > cur
+
+/** C303 A15: 다음 수유 시간대 시작 예상(10장, feeding_state `window_start_expected`). */
+fun windowStartExpected(feedingStart: Long?, intervalMin: Int?, p: Params = Params()): Long? =
+    if (feedingStart != null && intervalMin != null) feedingStart + (intervalMin * MINUTE_MS * p.feedingWindowStart).toLong() else null
+
+/** C303 C4: 배고플 시각 = 마지막 수유 시작 + 간격(C117). */
+fun hungryAt(feedingStart: Long, intervalMin: Int): Long = feedingStart + intervalMin * MINUTE_MS
+
+/** C303 C4: 출발 수유실 제안(S07_DEPART)의 채울 값. */
+internal fun departVars(rest: RestCandidate, hungryAt: Long) = mapOf("hungryAt" to hungryAt.toString(), "distanceKm" to km(rest.distanceKm), "restName" to rest.name)
+
+/** C303 C3: 목적지까지 남은 분(올림). */
+fun remainingMinutes(route: RouteView?): Int? = route?.remainingSec?.let { (it + 59) / 60 }
+
+/**
+ * 결정 ②(S3·S3a·F5i, V5): 그 제안 문장을 말한 지 offerRepeatMs 안이거나([spokenAt] = 말한 시각만), 이 세션 큐(말하는 맨 앞 줄 포함)에
+ * 같은 문장 줄이 있으면 막힘. 버린 줄은 큐에 없으니 금지를 남기지 않는다. S07과 S07_DEPART는 서로 묶어 본다(S3a).
+ * [except]: 다시 고르는 그 줄과 겹쳐 넘겨받는 줄(같은 객체로 견준다). 세션 id가 없는 줄은 이 세션 것으로 본다(overlap과 같다).
+ */
+fun offerBanned(
+    spokenAt: Map<Sid, Long>, queue: List<Line>, sessionId: String?, sid: Sid, now: Long, p: Params = Params(), except: List<Line?> = emptyList(),
+): Boolean {
+    val sids = if (sid == Sid.S07 || sid == Sid.S07_DEPART) setOf(Sid.S07, Sid.S07_DEPART) else setOf(sid)
+    return sids.any { k -> spokenAt[k]?.let { now - it < p.offerRepeatMs } == true } ||
+        queue.any { l -> l.sid in sids && (l.sessionId == null || l.sessionId == sessionId) && except.none { it === l } }
+}
+
+/** C303 A22: 공백을 뺀 글자가 두 자 미만이면 듣지 않은 것(Q3). null = 들은 말 없음. 실행기 듣기와 판단 코어가 같이 쓴다. */
+fun heardText(text: String?): String? = text?.takeIf { s -> s.count { !it.isWhitespace() } >= 2 }
+
+/** C303 B11: 말 견주기 정규화. 글자·숫자만 남기고 끝의 '요' 한 글자를 뗀다(Q4 그만, '응/아니' 낱말, C109). */
+fun plainWord(text: String): String = text.filter { it.isLetterOrDigit() }.removeSuffix("요")
 
 /** 10장 수유 시간대. 다음 입력은 `feedingStart`를 바꾸므로 끝은 시작 + 간격 × 2만 본다. */
 fun feedingWindow(feedingStart: Long?, intervalMin: Int?, now: Long, p: Params = Params()): Boolean {
     if (feedingStart == null || intervalMin == null || intervalMin <= 0) return false
-    val iv = intervalMin * 60_000L
-    return now >= feedingStart + (iv * p.feedingWindowStart).toLong() &&
-        now < feedingStart + (iv * p.feedingWindowEnd).toLong()
+    return now >= windowStartExpected(feedingStart, intervalMin, p)!! &&
+        now < feedingStart + (intervalMin * MINUTE_MS * p.feedingWindowEnd).toLong()
 }
 
 /** 4.3 정차 장소 고르기: 앞쪽 30km 안에서 가장 가까운 곳, 수유실 휴게소가 그 + 5km 안이면 그곳. */
 fun pickRest(route: RouteView?, p: Params = Params()): RestCandidate? {
-    val near = route?.rests.orEmpty().filter { it.distanceKm in 0.0..p.restSearchKm }.sortedBy { it.distanceKm }
+    // C304: 제안·④ 다음 쉼터는 넣을 수 있는 쉼터(addable)만 본다. 거르는 곳은 pickRest·pickDepartRest 둘뿐이다.
+    val near = route?.rests.orEmpty().filter { it.addable && it.distanceKm in 0.0..p.restSearchKm }.sortedBy { it.distanceKm }
     val first = near.firstOrNull() ?: return null
     return near.firstOrNull { it.hasNursingRoom && it.distanceKm <= first.distanceKm + p.nursingExtraKm } ?: first
 }
@@ -85,11 +142,11 @@ fun pickDepartRest(route: RouteView?, feedingStart: Long?, intervalMin: Int?, no
     val km = route?.remainingKm ?: return null
     val sec = route.remainingSec ?: return null
     if (feedingStart == null || intervalMin == null || km <= 0.0) return null
-    val h = feedingStart + intervalMin * 60_000L
-    val lead = leadMin * 60_000L
+    val h = hungryAt(feedingStart, intervalMin)
+    val lead = leadMin * MINUTE_MS
     if (h < now + lead || h > now + sec * 1000L) return null
     fun eta(r: RestCandidate) = now + (sec * 1000.0 * r.distanceKm / km).toLong()
-    return route.rests.filter { it.hasNursingRoom && eta(it) <= h - lead }
+    return route.rests.filter { it.addable && it.hasNursingRoom && eta(it) <= h - lead }   // C304
         .sortedWith(compareByDescending<RestCandidate> { eta(it) }.thenBy { it.distanceKm }).firstOrNull()
 }
 
@@ -98,24 +155,18 @@ fun nearDestination(route: RouteView?, p: Params = Params()): Boolean =
     route?.hasDestination == true && route.remainingSec != null && route.remainingSec <= p.arrivalNoticeMaxSec
 
 /**
- * 4.1·4.2 ②·4.3·4.5 쉼터 제안 문장. P면, 목적지까지 10분 이하면, 같은 문장을 10분 안에 냈으면 null.
+ * 4.1·4.2 ②·4.3·4.5 쉼터 제안 문장. P면, 목적지까지 10분 이하면 null. 10분 금지(S3·S3a)는 부르는 쪽이 [offerBanned]로 본다(결정 ②).
  * 쉼터가 있으면 '응/아니' 질문(`askRestId`), 없으면 S10. `longDrive`면 S11, 아니면 수유실 S07·일반 S08.
  */
-fun offerRest(
-    longDrive: Boolean, gear: Gear?, route: RouteView?, lastOffer: Map<Sid, Long>, now: Long, driveFrom: Long?,
-    p: Params = Params(),
-): Line? {
+fun offerRest(longDrive: Boolean, gear: Gear?, route: RouteView?, now: Long, driveFrom: Long?, p: Params = Params()): Line? {
     if (gear == Gear.P || nearDestination(route, p)) return null
     val rest = pickRest(route, p)
-    val line = if (rest == null) Line(Sid.S10, emptyMap(), null, longDrive = longDrive) else {
+    return if (rest == null) Line(Sid.S10, emptyMap(), null, longDrive = longDrive) else {
         val sid = if (longDrive) Sid.S11 else if (rest.hasNursingRoom) Sid.S07 else Sid.S08
         val vars = mutableMapOf("distanceKm" to km(rest.distanceKm), "restName" to rest.name)
         if (longDrive) vars["drove"] = hm(now - (driveFrom ?: now))
         Line(sid, vars, rest.id, longDrive = longDrive)
     }
-    // S3a: 출발 제안(S07_DEPART)을 낸 뒤에도 같은 10분 동안 S07을 내지 않는다
-    val last = if (line.sid == Sid.S07) listOfNotNull(lastOffer[Sid.S07], lastOffer[Sid.S07_DEPART]).maxOrNull() else lastOffer[line.sid]
-    return if (last != null && now - last < p.offerRepeatMs) null else line
 }
 
 data class SteerOut(val state: SteerState, val closed: SteerWindowRecord?)
@@ -126,13 +177,13 @@ data class SteerOut(val state: SteerState, val closed: SteerWindowRecord?)
  */
 fun steer(
     st: SteerState, sample: VehicleSample, cryPresent: Boolean, playing: Boolean, sessionId: String,
-    p: Params = Params(),
+    p: Params = Params(), observed: Boolean = true,
 ): SteerOut {
     var w = st.window
     var closed: SteerWindowRecord? = null
     if (w != null && sample.at >= w.startAt + p.steerWindowMs) {
         val avg = w.speedSumKmh / maxOf(1, w.speedCount)
-        closed = SteerWindowRecord(sessionId, w.startAt, (avg / 20).toInt(), w.excluded, w.cryPresent, w.playing, w.reversals)
+        closed = SteerWindowRecord(sessionId, w.startAt, (avg / 20).toInt(), w.excluded, w.cryPresent, w.playing, w.reversals, w.observed)
         w = null
     }
     val acc = w ?: SteerWindowAcc(sample.at, 0.0, 0, 0, false, false, false)
@@ -157,6 +208,7 @@ fun steer(
         speedSumKmh = acc.speedSumKmh + sample.speedKmh, speedCount = acc.speedCount + 1,
         reversals = acc.reversals + rev, excluded = acc.excluded || sample.turnSignal != TurnSignal.NONE,
         cryPresent = acc.cryPresent || cryPresent, playing = acc.playing || playing,
+        observed = acc.observed && observed,   // C312
     )
     return SteerOut(st.copy(filtered = f, lastSampleAt = sample.at, extremumDeg = ext, dir = dir, window = next), closed)
 }
@@ -173,6 +225,9 @@ internal fun methodName(m: Method) = when (m.kind) {
     MethodKind.LULLABY -> "자장가"
     MethodKind.SONG -> "우리 노래"
 }
+
+/** C303 A19: 화면·④·리포트에 쓰는 음원 이름. 말(methodName)과 부모 노래만 다르다("우리 노래" ↔ "부모 노래"). */
+fun methodLabel(k: MethodKind) = if (k == MethodKind.SONG) "부모 노래" else methodName(Method(k))
 
 private const val B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 

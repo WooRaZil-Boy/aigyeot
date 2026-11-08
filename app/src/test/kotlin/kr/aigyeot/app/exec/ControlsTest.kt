@@ -237,7 +237,7 @@ class ControlsTest {
         t.advance(2_000)
         assertTrue(r.events.isEmpty() && car.writes.size == 1 && navi.cancels == 0, "조건: 둘 다 진행 중")
         c.closeAll("stop")
-        assertEquals(listOf(ControlResult(t.now, "s1-8", WINDOW_LOCK, ROW_2_LEFT, false, 1.0, 1.0), WaypointResult(t.now, "s1-12", "tbt:안성", false)), r.events)
+        assertEquals(listOf<kr.aigyeot.engine.Event>(ControlResult(t.now, "s1-8", WINDOW_LOCK, ROW_2_LEFT, false, 1.0, 1.0), WaypointResult(t.now, "s1-12", "tbt:안성", false)), r.events)
         assertEquals(1, navi.cancels)
         assertEquals(0, t.pending(), "타이머 취소")
         t.advance(30_000)
@@ -255,5 +255,34 @@ class ControlsTest {
         assertEquals(WaypointResult(t.now, "s1-12", "tbt:안성", false), r.events.single())
         navi.done!!(true, "added")
         assertEquals(WaypointResult(t.now, "s1-13", "tbt:망향", true), r.events.last())
+    }
+
+    // C320 V13(P5): 지금 세션이 없어도(세션 닫힘 뒤 늦은 결과) 제어 기록은 명령을 낸 세션 id로 남는다
+    private val closed = Controls(car, navi, t, { t.now }, { r.events += it }, ControlLogger({ t.now }, { null }, { r.rows += it }), Params()) { id -> anseong.takeIf { it.id == id } }
+
+    @Test fun `열선·창문 잠금·독서등·공조 기록은 지금 세션이 없어도 명령 세션 id`() {
+        car.values[SEAT_HEAT to ROW_2_LEFT] = 2.0
+        car.values[WINDOW_LOCK to ROW_2_LEFT] = 1.0
+        car.values[READING_LIGHT to ROW_2_LEFT] = 1.0
+        car.values[kr.aigyeot.engine.ControlKind.HVAC_TEMP to ROW_2_LEFT] = 24.0
+        closed.seatHeat(SetSeatHeat("S9-1", listOf(ROW_2_LEFT), 0))
+        closed.windowLock(SetWindowLock("S9-2", mapOf(ROW_2_LEFT to false)))
+        closed.readingLight(SetReadingLight("S9-3", listOf(ROW_2_LEFT), false))
+        closed.lowerHvac(kr.aigyeot.engine.LowerHvac("S9-4", listOf(ROW_2_LEFT), -2.0))
+        t.advance(1_000)
+        assertEquals(4, r.rows.size)
+        assertTrue(r.rows.all { it.sessionId == "S9" }, r.rows.map { it.sessionId }.toString())
+    }
+
+    @Test fun `경유지 기록은 지금 세션이 없어도 명령 세션 id`() {
+        closed.waypoint(AddWaypoint("S9-5", "tbt:안성"))
+        navi.done!!(true, "added")
+        assertEquals("S9", r.rows.single().sessionId)
+    }
+
+    @Test fun `세션 밖에서 낸 id는 세션 id가 null`() {
+        closed.waypoint(AddWaypoint("idle-5", "tbt:안성"))
+        navi.done!!(true, "added")
+        assertNull(r.rows.single().sessionId)
     }
 }

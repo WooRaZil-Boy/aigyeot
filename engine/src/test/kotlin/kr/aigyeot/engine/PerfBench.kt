@@ -53,17 +53,18 @@ class PerfBench {
         fun apply(e: Event, key: String) {
             val r = step(e, key); steps++
             val o = s; s = r.state
-            if (o.copy(now = 0, session = o.session?.copy(quietMs = 0)) != s.copy(now = 0, session = s.session?.copy(quietMs = 0))) {
+            fun EngineState.noQuiet() = session?.let { it.copy(stage = it.stage.withQuiet(0)) }
+            if (o.copy(now = 0, session = o.noQuiet()) != s.copy(now = 0, session = s.noQuiet())) {
                 snapsAny++
                 if (o.copy(now = 0, steer = o.steer.copy(filtered = null, lastSampleAt = null, extremumDeg = null, window = null, dir = 0),
-                        session = o.session?.copy(quietMs = 0)) !=
+                        session = o.noQuiet()) !=
                     s.copy(now = 0, steer = s.steer.copy(filtered = null, lastSampleAt = null, extremumDeg = null, window = null, dir = 0),
-                        session = s.session?.copy(quietMs = 0)) || r.commands.any { it is SaveSession || it is SaveEpisode || it is SavePlay })
+                        session = s.noQuiet()) || r.commands.any { it is SaveSession || it is SaveEpisode || it is SavePlay })
                     run { snapsNoSteer++; by.merge(key, 1, Int::plus) }
             }
             if (r.commands.any { it is SaveSession || it is SaveEpisode || it is SavePlay || it is SaveSnapshot || it is CloseSession }) snapsCoarse++
             s.history.size.let { if (it > maxH) maxH = it }
-            s.session?.let { x -> if (x.restLog.size > maxR) maxR = x.restLog.size; if (x.lastOffer.size > maxO) maxO = x.lastOffer.size }
+            s.session?.let { x -> if (x.restLog.size > maxR) maxR = x.restLog.size; if (x.spokenAt.size > maxO) maxO = x.spokenAt.size }
             if (s.speech.queue.size > maxQ) maxQ = s.speech.queue.size
             for (c in r.commands) cmds.merge(c::class.simpleName!!, 1, Int::plus)
             for (c in r.commands) when (c) {

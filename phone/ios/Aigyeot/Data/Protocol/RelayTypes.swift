@@ -141,7 +141,7 @@ struct LlmDiaper: Codable, Equatable {
 struct LlmState: Codable, Equatable {
     var cry: LlmCry
     @NullEncoded var feeding: LlmFeeding?
-    var carseatMin: Int
+    @NullEncoded var carseatMin: Int?
     @NullEncoded var cabinTemp: Double?
     @NullEncoded var nextRest: LlmNextRest?
     var methodStats: [MethodStat]

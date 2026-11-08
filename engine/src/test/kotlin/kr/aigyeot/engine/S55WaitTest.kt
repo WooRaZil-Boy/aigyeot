@@ -69,7 +69,7 @@ class S55WaitTest {
         for (sim in listOf(idle(), session(), session().handoff())) {
             val phase = sim.s.session?.phase
             // H10: 인계가 큐에 둔 S10이 버려지면 같은 Step에 이름 없는 알림이 나간다
-            val alert = if (sim.s.session?.pendingHandoffAlert != null) listOf("SendToPhone", "SaveEpisode") else emptyList()   // H11: 말하지 않은 인계 줄은 에피소드 행에 false를 남긴다
+            val alert = if (sim.s.openLedger() != null) listOf("SendToPhone", "SettleHandoff") else emptyList()   // H11: 말하지 않은 인계 줄은 확정(SettleHandoff)으로 false를 남긴다
             sim.ev(Suspend(sim.t + 1_000))
             assertEquals(listOf("CancelSpeech", "ReleaseAudio") + alert + "SaveSnapshot", sim.cmds.map { it::class.simpleName })
             assertEquals(phase, sim.s.session?.phase)
@@ -102,7 +102,7 @@ class S55WaitTest {
     // 엔진 쪽 동작만 본다, Room 대조는 호스트 시험
     @Test fun r14q_restoreWithStaleSnapshot_roomCapAndEndWin() {
         val sim = session()
-        sim.s = sim.s.copy(session = sim.ses.copy(playedMs = P.sessionPlayCapMs, capReached = true))   // ② Room 누적이 이김
+        sim.s = sim.s.copy(session = sim.ses.copy(playedMs = P.sessionPlayCapMs))   // ② Room 누적이 이김
         sim.ev(Boot(sim.t + MIN, Gear.D, 10)).alarm()
         assertTrue(sim.step<StartPlayback>().isEmpty())
         assertEquals(AlarmOnly.SESSION_CAP, sim.step<LogAlarm>().single().reason)
@@ -120,12 +120,12 @@ class S55WaitTest {
         assertEquals(20_000, sim.ses.playedMs)
         val rec = sim.step<SavePlay>().single().record
         assertEquals(PlayEndReason.ERROR, rec.endReason); assertEquals(sim.t, rec.endedAt)
-        // endAt 뒤 복원: 56초로 자르지 않고 복원 시각까지 센다(2.4 '상한 쪽으로 보수적')
+        // C318(V10): endAt 뒤에 온 끝은 endAt까지만 센다(실행기는 endAt에 멈췄다). 옛 기대값은 복원 시각까지 70초('상한 쪽으로 보수적')
         val late = session().attempt1()
         late.ev(PlaybackEnded(late.t + 70_000, late.play().id, EndReason.ERROR))
         assertEquals(Phase.WAIT, late.ses.phase)
-        assertEquals(70_000, late.ses.playedMs); assertEquals(70_000, late.ep.playedMs)
-        assertEquals(70_000, late.step<SavePlay>().single().record.playedMs)
+        assertEquals(56_000, late.ses.playedMs); assertEquals(56_000, late.ep.playedMs)
+        assertEquals(56_000, late.step<SavePlay>().single().record.playedMs)
     }
 
     @Test fun r14s_restoreWithPlayAlreadyLogged_noDoubleCount() {
@@ -191,7 +191,7 @@ class S55WaitTest {
         val sim = session().attempt1()
         val old = sim.ep.id
         // 호스트가 Room의 에피소드 끝을 보고 LISTENING으로 복원했다
-        sim.s = sim.s.copy(session = sim.ses.copy(phase = Phase.LISTENING, attemptNo = 0, play = null, episode = null))
+        sim.s = sim.s.copy(session = sim.ses.withStage(Phase.LISTENING))
         sim.ev(Boot(sim.t + MIN, Gear.D, 10)).attempt1()
         assertEquals(1, sim.ses.attemptNo)
         assertNotEquals(old, sim.ep.id)

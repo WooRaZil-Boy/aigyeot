@@ -24,10 +24,14 @@ interface LinkDao {
     @Insert fun insertOutbox(o: OutboxEntity)
     @Query("SELECT * FROM outbox ORDER BY rowid LIMIT 1") fun outboxFront(): OutboxEntity?
     @Query("SELECT * FROM outbox ORDER BY rowid") fun outbox(): List<OutboxEntity>
-    @Query("SELECT EXISTS(SELECT 1 FROM outbox WHERE type = 'records_clear')") fun clearPending(): Boolean
     @Query("DELETE FROM outbox WHERE id = :id") fun deleteOutbox(id: String)
     @Query("UPDATE outbox SET attempts = attempts + 1, next_try_at = :at WHERE id = :id") fun retryOutbox(id: String, at: Long)
     @Query("DELETE FROM outbox WHERE created_at < :before") fun expireOutbox(before: Long)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun insertSentId(e: SentIdEntity)
+    @Query("DELETE FROM sent_id WHERE sent_at < :before") fun expireSentIds(before: Long)
+    @Query("DELETE FROM sent_id WHERE id = :id") fun deleteSentId(id: String)
+    /** L86: 넣은 순서(rowid, REPLACE는 새 rowid)로 최근 [keep]개만 남긴다. 시계와 무관. */
+    @Query("DELETE FROM sent_id WHERE rowid NOT IN (SELECT rowid FROM sent_id ORDER BY rowid DESC LIMIT :keep)") fun capSentIds(keep: Int)
 
     // ---- processed_message(7일) ----
     @Query("SELECT EXISTS(SELECT 1 FROM processed_message WHERE id = :id)") fun processed(id: String): Boolean
@@ -55,6 +59,11 @@ interface LinkDao {
     @Query("DELETE FROM phone_link_mark") fun clearMarks()
     @Query("DELETE FROM phone_link_mark WHERE unpaired = 1 AND updated_at < :before") fun expireMarks(before: Long)
 
+    // ---- care_applied(한 행, C144) ----
+    @Query("SELECT * FROM care_applied LIMIT 1") fun careApplied(): CareAppliedEntity?
+    @Upsert fun putCareApplied(c: CareAppliedEntity)
+    @Query("DELETE FROM care_applied") fun clearCareApplied()
+
     // ---- phone_link(store 표) ----
     @Query("SELECT * FROM phone_link ORDER BY linked_at") fun phoneLinks(): List<PhoneLinkEntity>
     @Query("SELECT * FROM phone_link WHERE id = :id") fun phoneLink(id: String): PhoneLinkEntity?
@@ -62,7 +71,10 @@ interface LinkDao {
     @Query("DELETE FROM phone_link WHERE id = :id") fun deletePhoneLink(id: String)
     @Query("DELETE FROM phone_link") fun clearPhoneLinks()
     @Query("UPDATE phone_link SET last_seen_at = :at WHERE id = :id") fun setLastSeen(id: String, at: Long)
+    /** C303 A12: 알림 받을 보호자 수(H8). 판단 코어 LinkChanged·보낼 함 넣기·store 처음 상태가 이 쿼리 하나를 쓴다. */
     @Query("SELECT COUNT(*) FROM phone_link WHERE role = 'guardian' AND handoff_alerts = 1") fun otherGuardians(): Int
+    /** C303 A13: 보낼 폰 수. 보낼 함 넣기·소켓 유지·리포트 만들기가 이 쿼리 하나를 쓴다. */
+    @Query("SELECT COUNT(*) FROM phone_link") fun phoneCount(): Int
 
     // ---- song(store 표) ----
     @Query("SELECT * FROM song") fun songs(): List<SongEntity>
@@ -73,5 +85,6 @@ interface LinkDao {
     // ---- child_profile·episode(store 표) ----
     @Query("SELECT * FROM child_profile LIMIT 1") fun profile(): ChildProfileEntity?
     @Query("UPDATE child_profile SET last_feeding_start = :at") fun setLastFeedingStart(at: Long)
-    @Query("SELECT id FROM episode WHERE session_id = :sessionId AND trigger = 'ALARM'") fun alarmEpisodeIds(sessionId: String): List<String>
+    /** 결정 ③(V7): handoff_alert를 보낼 함에 넣은 트랜잭션에서만 부른다(LinkRoom.enqueue). guardian_notified를 쓰는 유일한 곳. */
+    @Query("UPDATE episode SET guardian_notified = 1 WHERE id = :episodeId") fun markGuardianNotified(episodeId: String)
 }

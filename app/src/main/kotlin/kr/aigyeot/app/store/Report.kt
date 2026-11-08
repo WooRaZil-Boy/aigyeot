@@ -3,13 +3,20 @@ package kr.aigyeot.app.store
 import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlinx.serialization.json.Json
+import kr.aigyeot.app.link.rfc3339
+import kr.aigyeot.app.link.soundMethod
 import kr.aigyeot.app.store.db.ContextSampleEntity
 import kr.aigyeot.app.store.db.EpisodeEntity
 import kr.aigyeot.app.store.db.PlayLogEntity
 import kr.aigyeot.app.store.db.SteerWindowEntity
 import kr.aigyeot.app.store.db.StoreDao
+import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.RestLogEntry
+import kr.aigyeot.engine.methodLabel
+import kr.aigyeot.engine.speaks
+import kr.aigyeot.engine.statSince
+import kr.aigyeot.engine.toldShown
 import kr.aigyeot.shared.CarAction
 import kr.aigyeot.shared.CarActionKind
 import kr.aigyeot.shared.ControlRecord
@@ -26,17 +33,13 @@ import kr.aigyeot.shared.PreCryContext
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.SecondAction
 import kr.aigyeot.shared.SecondAttempt
-import kr.aigyeot.shared.SoundMethod
 import kr.aigyeot.shared.SoundRef
 import kr.aigyeot.shared.Steering
 import kr.aigyeot.shared.SteeringUnavailableReason
 import kr.aigyeot.shared.StopInfo
 import kr.aigyeot.shared.StopReason
 import kr.aigyeot.shared.TimelineEpisode
-import java.security.SecureRandom
-import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -45,25 +48,24 @@ import kotlin.math.roundToInt
 // 64 KB는 봉투(v·id·seq·type·car·from·ts)를 포함한 요청 본문 기준(contracts-link 1.1)인데 여기서는 body만 잰다. 봉투 여유를 뺀 값을 한도로 쓴다
 private const val MAX_BYTES = 64 * 1024 - 2048
 private val SEOUL = ZoneId.of("Asia/Seoul")
-private val ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx")
 
-/** 3.3 '시각': +09:00 ISO 8601, 초 단위(C48). */
-fun iso(ms: Long): String = Instant.ofEpochMilli(ms).atZone(SEOUL).format(ISO)
+/** 3.3 '시각': +09:00 ISO 8601, 초 단위(C48). C303 A24: 형식은 Wire.rfc3339 하나, 시간대만 Asia/Seoul로 고정한다. */
+fun iso(ms: Long): String = rfc3339(ms, SEOUL)
 
-private val B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-private val rnd = SecureRandom()
+/** C305: 인계 결과가 확정됐나. 말하는 종류(`HandoffKind.speaks()`)의 인계 행에 handoff_told_driver가 아직 null이면 확정 전이다. 화면의 '정리 중'과 집계가 이 함수만 쓴다(report_pending은 리포트 보내기 전용). */
+fun handoffSettled(rows: List<EpisodeEntity>): Boolean =
+    rows.none { r -> r.handoffToldDriver == null && r.handoffKind?.let { kr.aigyeot.engine.HandoffKind.valueOf(it).speaks() } == true }
 
-/** ULID(대문자 Crockford base32 26자): 앞 48비트 시각 + 뒤 80비트 난수. */
-fun ulid(ms: Long): String = buildString(26) {
-    for (i in 9 downTo 0) append(B32[((ms ushr (5 * i)) and 31).toInt()])
-    repeat(16) { append(B32[rnd.nextInt(32)]) }
-}
+/** 리포트 화면용: 본문과 '정리 중' 여부(= !handoffSettled)를 한 Room 트랜잭션에서 함께 읽는다(C189·C305). 확정은 에피소드 행으로 정하고 report_pending은 보지 않는다. [build]는 트랜잭션 안에서 돈다. */
+fun readReport(db: kr.aigyeot.app.store.db.AppDatabase, sessionId: String, build: (StoreDao) -> ReportSummaryBody?): Pair<ReportSummaryBody?, Boolean> =
+    db.runInTransaction(java.util.concurrent.Callable { db.storeDao().let { build(it) to !handoffSettled(it.episodes(sessionId)) } })
 
 /** 세션 하나의 report_summary. 세션이 없거나 아직 열려 있으면 null. 64 KB를 넘으면 오래된 에피소드부터 줄인다. */
-fun buildReport(dao: StoreDao, sessionId: String, now: Long, p: Params = Params()): ReportSummaryBody? {
+fun buildReport(dao: StoreDao, sessionId: String, now: Long, p: Params = Params(), finalizing: Boolean = false): ReportSummaryBody? {
     val s = dao.session(sessionId) ?: return null
     val endedAt = s.endedAt ?: return null
     val episodes = dao.episodes(sessionId)
+    val settled = finalizing || handoffSettled(episodes)   // 확정 전(인계 TTS 도중)에는 toldDriver가 null인 안내를 세지 않는다(C189·C305)
     val plays = dao.plays(sessionId)
     val songName = { id: String? -> id?.let { dao.song(it)?.name } }
     val timeline = episodes.map { timeline(it, plays.filter { pl -> pl.episodeId == it.id }, songName) }
@@ -73,14 +75,21 @@ fun buildReport(dao: StoreDao, sessionId: String, now: Long, p: Params = Params(
         sessionId = s.id, startedAt = iso(s.startedAt), endedAt = iso(endedAt), simulated = s.scenarioId != null,
         outputRoute = when (s.outputRoute) { "REAR_ZONE" -> OutputRoute.REAR_ZONE; "DEFAULT_FALLBACK" -> OutputRoute.DEFAULT_ZONE_FALLBACK; else -> OutputRoute.NO_PLAYBACK }, // C85
         timeline = timeline, preCryContext = context,
-        steering = steering(windows, dao.baselineWindows(s.driverUserId)),
-        carActions = carActions(s.outputRoute, plays, episodes, s.restLog, dao.controls(sessionId).filter { it.ok }),
+        steering = steering(windows, dao.baselineWindows(s.driverUserId), responseStartAt(plays, episodes, dao.firstAlarmLogAt(sessionId))),
+        carActions = carActions(s.outputRoute, plays, episodes, settled, s.restLog, dao.controls(sessionId).filter { it.ok }),
         controls = dao.controls(sessionId).groupBy { it.api to it.target }.map { (k, rows) ->
             ControlRecord(k.first, k.second, rows.size, rows.count { it.ok }, rows.count { !it.ok }, rows.sumOf { it.retries })
         },
         methodStats = methodStats(dao, now, p, songName),
     )
     return truncate(full)
+}
+
+/** C345: 대응 시작 = 처음 경보한 시각 이후에 시작한 재생 기록의 가장 이른 시각. 경보 없는 에피소드(소리 바꾸기 요청 등)의 재생·경보 전 재생은 대응이 아니다. 없으면 null */
+/** C346: 재생 없이 기록만 한 경보(대기·통화·포커스 거절·상한)는 alarm_log에만 남으므로 그 첫 시각도 함께 본다 */
+internal fun responseStartAt(plays: List<PlayLogEntity>, episodes: List<EpisodeEntity>, alarmLogFirst: Long?): Long? {
+    val firstAlarm = (episodes.mapNotNull { it.alarmAt } + listOfNotNull(alarmLogFirst)).minOrNull() ?: return null
+    return plays.mapNotNull { it.startedAt }.filter { it >= firstAlarm }.minOrNull()
 }
 
 private fun truncate(b: ReportSummaryBody): ReportSummaryBody {
@@ -96,14 +105,14 @@ private fun truncate(b: ReportSummaryBody): ReportSummaryBody {
     return r
 }
 
-private fun sound(method: String, songId: String?, songName: (String?) -> String?): SoundRef = when (method) {
-    "WHITE_NOISE" -> SoundRef(SoundMethod.WHITE_NOISE, "백색소음")
-    "WOMB" -> SoundRef(SoundMethod.WOMB, "뱃속 소리")
-    "LULLABY" -> SoundRef(SoundMethod.LULLABY, "자장가")
-    else -> SoundRef(SoundMethod.PARENT_SONG, songName(songId) ?: "부모 노래")
+/** C303 A19: Room의 음원 종류 글자 → 전송 값·이름(Wire.soundMethod, 판단 코어 methodLabel). 부모 노래는 곡 이름이 있으면 그 이름. */
+private fun sound(method: String, songId: String?, songName: (String?) -> String?): SoundRef {
+    val k = kind(method)
+    return SoundRef(soundMethod(k), (if (k == MethodKind.SONG) songName(songId) else null) ?: methodLabel(k))
 }
 
-private fun soundMethod(m: String) = when (m) { "WHITE_NOISE" -> SoundMethod.WHITE_NOISE; "WOMB" -> SoundMethod.WOMB; "LULLABY" -> SoundMethod.LULLABY; else -> SoundMethod.PARENT_SONG }
+/** Room 글자 → 종류. 모르는 글자는 부모 노래로 본다(옛 리포트 규칙 그대로). */
+private fun kind(method: String) = MethodKind.entries.firstOrNull { it.name == method } ?: MethodKind.SONG
 
 private fun result(r: String?) = when (r) { "SUCCESS" -> EpisodeResult.SUCCESS; "FAIL" -> EpisodeResult.FAILURE; "UNJUDGED" -> EpisodeResult.UNDETERMINED; else -> null }
 
@@ -120,7 +129,7 @@ private val EXCLUDED = mapOf(
 private fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (String?) -> String?): TimelineEpisode {
     val started = plays.filter { it.startedAt != null }.sortedBy { it.startedAt }   // 시작하지 못한 재생은 plays에 넣지 않는다
     val entries = started.map {
-        PlayEntry(PlayPurpose.valueOf(it.purpose), soundMethod(it.method), it.songId, iso(it.startedAt!!), iso(it.endedAt), (it.playedMs / 1000.0).roundToInt())
+        PlayEntry(PlayPurpose.valueOf(it.purpose), soundMethod(kind(it.method)), it.songId, iso(it.startedAt!!), iso(it.endedAt), (it.playedMs / 1000.0).roundToInt())
     }
     val second = e.secondAction?.let { a ->
         val pl = started.firstOrNull { it.purpose == "AUTO_SECOND" }
@@ -190,12 +199,18 @@ internal fun reversals(angles: List<Double>, deg: Double): Int {
  * 3. steering: 이 세션의 울음 창을 같은 운전자·같은 속도대의 평소 창 중앙값과 견준다(G38).
  * 속도대마다 견준 뒤 울음 창의 속도대 비중으로 합친다(명세서 17장 C97).
  */
-internal fun steering(session: List<SteerWindowEntity>, baseline: List<SteerWindowEntity>): Steering {
-    val usable = session.filter { !it.excluded }
-    val cry = usable.filter { it.cryPresent }
-    // 울음 창이 있었지만 모두 제외됐으면 NO_CRY가 아니라 비교할 창 없음(C112)
+internal fun steering(session: List<SteerWindowEntity>, baseline: List<SteerWindowEntity>, responseAt: Long?): Steering {
+    // C341: 창의 역할을 한 곳에서 가른다. cryPresent는 본 울음만 세우니 관측이 일부여도 울음 창이다(자동 시도 재생이 울음 3초 뒤 시작해 첫 울음 창은 거의 늘 미관측). 조용함은 관측하고 울음이 없을 때만(C312·C338)
+    fun SteerWindowEntity.role() = when {
+        excluded -> SteerRole.SKIP
+        cryPresent -> SteerRole.CRY
+        observed -> SteerRole.QUIET
+        else -> SteerRole.UNKNOWN
+    }
+    val cry = session.filter { it.role() == SteerRole.CRY }
+    // C330·C331·C338: NO_CRY는 창이 있고 모든 창을 관측했고 어느 창에도 울음이 없을 때만(제외는 관측과 별개). 관측 못 한 창이 하나라도 있으면(마이크 꺼짐·나중에 켬), 울음 창이 있었지만 모두 제외됐으면 비교할 창 없음(C112)
     if (cry.isEmpty()) return Steering(false, null, null, null, null,
-        if (session.none { it.cryPresent }) SteeringUnavailableReason.NO_CRY else SteeringUnavailableReason.NO_COMPARABLE_WINDOW)
+        if (session.isNotEmpty() && session.all { it.observed && !it.cryPresent }) SteeringUnavailableReason.NO_CRY else SteeringUnavailableReason.NO_COMPARABLE_WINDOW)
     // 같은 속도대 비교(G38): 평소 창이 있는 속도대의 울음 창만 쓴다
     val baseBands = baseline.map { it.speedBand }.toSet()
     val comparable = cry.filter { it.speedBand in baseBands }
@@ -209,14 +224,16 @@ internal fun steering(session: List<SteerWindowEntity>, baseline: List<SteerWind
     }
     val baselinePerMin = comparable.map { stat.getValue(it.speedBand).first }.average()
     val during = comparable.map { it.reversals.toDouble() }.average()
-    // 대응 뒤 창: 첫 울음 창보다 뒤이고, 울음 창과 같은 속도대에서 재생 중인데 울음이 없는 창만
-    val firstCry = comparable.minOf { it.startAt }
-    val after = usable.filter { it.startAt > firstCry && it.speedBand in bands && it.playing && !it.cryPresent }
-        .map { it.reversals - stat.getValue(it.speedBand).first }.takeIf { it.isNotEmpty() }?.average()?.plus(baselinePerMin)
+    // C344: 대응 뒤 = 조용한 창 중 첫 울음 창보다 뒤이고 대응 시작 시각(responseAt, play_log 기준) 이후, 울음 창과 같은 속도대. 대응이 없었으면(null) 없음
+    val firstCry = cry.minOf { it.startAt }   // C347: 기준선 없는 속도대의 울음 창도 포함(comparable만 보면 첫 울음이 늦어 '대응 뒤'가 줄어든다)
+    val after = session.filter { responseAt != null && it.role() == SteerRole.QUIET && it.startAt > firstCry && it.startAt >= responseAt && it.speedBand in bands }
+        .map { it.reversals - stat.getValue(it.speedBand).first }.takeIf { it.isNotEmpty() }?.average()?.plus(baselinePerMin)?.coerceAtLeast(0.0)   // C354: 속도대가 섞이면 음수가 될 수 있어 0 아래로 내리지 않는다
     val z = comparable.filter { stat.getValue(it.speedBand).second > 0 }
         .map { (it.reversals - stat.getValue(it.speedBand).first) / stat.getValue(it.speedBand).second }.takeIf { it.isNotEmpty() }?.average()
     return Steering(true, baselinePerMin, during, after, z, null)
 }
+
+private enum class SteerRole { SKIP, CRY, QUIET, UNKNOWN }
 
 private fun median(v: List<Double>): Double = v.sorted().let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2 }
 
@@ -224,25 +241,26 @@ private fun median(v: List<Double>): Double = v.sorted().let { if (it.size % 2 =
  * 4. car_actions. 제어는 control_log의 성공 줄을 api 이름으로 가른다.
  * shortcut: api 이름의 낱말(Seat·WindowLock·ReadingLight·Hvac)로 가른다. exec가 이름을 바꾸면 여기를 맞춘다(보고서에 적음)
  */
-private fun carActions(route: String?, plays: List<PlayLogEntity>, eps: List<EpisodeEntity>, restLog: String, controls: List<kr.aigyeot.app.store.db.ControlLogEntity>): List<CarAction> {
+private fun carActions(route: String?, plays: List<PlayLogEntity>, eps: List<EpisodeEntity>, settled: Boolean, restLog: String, controls: List<kr.aigyeot.app.store.db.ControlLogEntity>): List<CarAction> {
     val played = plays.filter { it.startedAt != null }
     val waypoints = runCatching { Json.decodeFromString<List<RestLogEntry>>(restLog) }.getOrDefault(emptyList()).count { it.waypointOk == true }
     fun ctl(word: String, exclude: String? = null) = controls.count { it.api.contains(word, true) && (exclude == null || !it.api.contains(exclude, true)) }
     return listOf(
         CarAction(if (route == "DEFAULT_FALLBACK") CarActionKind.DEFAULT_ZONE_PLAYBACK else CarActionKind.REAR_PLAYBACK, played.size, (played.sumOf { it.playedMs } / 1000.0).roundToInt()),
         CarAction(CarActionKind.SEAT_HEATER_OFF, ctl("SeatTemperature"), null),
-        CarAction(CarActionKind.REAR_WINDOW_LOCK, controls.count { it.api.contains("WindowLock", true) && it.goal.lowercase() in setOf("true", "1", "1.0") }, null),
+        // C337: 잠금에 성공한 뒷창 수. 같은 창의 되돌림·다시 잠금 줄(C335·3f·C86)이 두 번째 '목표 참' 줄이라 영역으로 중복 없이 센다
+        CarAction(CarActionKind.REAR_WINDOW_LOCK, controls.filter { it.api.contains("WindowLock", true) && it.goal.lowercase() in setOf("true", "1", "1.0") }.map { it.target }.distinct().size, null),
         CarAction(CarActionKind.CABIN_COOL, ctl("Hvac", "Seat"), null),
         CarAction(CarActionKind.READING_LIGHT_OFF, ctl("ReadingLight"), null),
         CarAction(CarActionKind.WAYPOINT_ADDED, waypoints, null),
-        CarAction(CarActionKind.ARRIVAL_NOTICE, eps.count { it.handoffKind == "ARRIVAL_NOTICE" && it.handoffToldDriver != false }, null),
-        CarAction(CarActionKind.GUARDIAN_ALERT, eps.count { it.guardianNotified }, null),
+        CarAction(CarActionKind.ARRIVAL_NOTICE, eps.count { it.handoffKind == "ARRIVAL_NOTICE" && toldShown(it.handoffToldDriver, settled) }, null),   // C303 A10
+        CarAction(CarActionKind.GUARDIAN_ALERT, eps.count { it.guardianNotified && settled }, null),   // C220: 확정 전(C152 대기)에는 알림이 나갔는지 모른다
     ).filter { it.count > 0 }
 }
 
 /** 선택. method_stats: 28일 1차 시도(장면 제외, 6.1 MethodStat). */
 private fun methodStats(dao: StoreDao, now: Long, p: Params, songName: (String?) -> String?): List<MethodStat> =
-    dao.firstTries(now - p.statWindowDays * Store.DAY).groupBy { it.method to it.songId }.map { (k, rows) ->
+    dao.firstTries(p.statSince(now)).groupBy { it.method to it.songId }.map { (k, rows) ->
         val s = sound(k.first, k.second, songName)
         MethodStat(s.method, s.label, rows.count { it.result == "SUCCESS" }, rows.size)
     }

@@ -11,6 +11,7 @@ import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStateBody
 import kr.aigyeot.shared.LlmRequest
 import kr.aigyeot.shared.LlmResponse
+import kr.aigyeot.shared.LlmState
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
 import kr.aigyeot.shared.Sender
@@ -33,7 +34,7 @@ class LinkFixtureTest : LinkKit() {
     @Test fun receivedFixtures_applyWithoutBodyErrors() {
         profile()
         for (f in listOf("paired.json", "feeding_started.json", "song_added.json", "song_selected.json", "song_removed.json", "state_request.json", "unpaired.json")) {
-            assertTrue(runBlocking { link.receive(envOf(f)) }, f)
+            assertEquals(Link.Rx.ACK, runBlocking { link.receive(envOf(f)) }, f)
         }
         assertEquals(instantOf("2026-11-05T08:12:21+09:00"), events.filterIsInstance<FeedingStarted>().single().startedAt)
         assertTrue(dao.mark(PHONE) != null)                                   // paired.json의 기기
@@ -68,8 +69,9 @@ class LinkFixtureTest : LinkKit() {
         assertEquals(listOf(SwitchSound(T0, Method(MethodKind.LULLABY), "L1")), tools)
         assertEquals("소리를 바꿀게요.", text)
         val a = ProtocolJson.decodeFromString(LlmResponse.serializer(), fixture("api_llm_response_answer.json"))
-        assertEquals(a.text, qaEvents(a, "L1", T0, st, "q", emptyList()).second)   // C129: 예제 글은 숫자·상태 단정이 없어 세 검사를 통과해 그대로 말한다
-        val failing = a.copy(text = "40분 지났어요.")
-        assertEquals("수유 기록이 없어요. 잠 기록이 없어요.", qaEvents(failing, "L1", T0, st, "q", emptyList()).second)   // 검사에 걸리면 예제 주제 feeding·sleep 문장, 상태값이 비어 있다
+        // C194: 예제는 글 없이 사실 주제(feeding·sleep)만 고른 응답이라 차가 주제 문장을 말한다. 상태값은 돌봄 요약 예제의 것
+        val care = ProtocolJson.decodeFromJsonElement(LlmState.serializer(), Json.parseToJsonElement(fixture("api_llm_request_care.json")).jsonObject.getValue("state"))
+        assertEquals("마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요. 기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분, 지난밤에는 2번 깼어요.", qaEventsCare(a, "L1", T0, care, "q", emptyList()).let { assertEquals("", it.second, "글은 호스트가 큐에서 짠다(C221)"); fallbackReply(it.factTopics, care) })
+        assertEquals("수유 기록을 확인할 수 없어요. 잠 기록을 확인할 수 없어요.", qaEventsCare(a, "L1", T0, st, "q", emptyList()).let { fallbackReply(it.factTopics, st) })   // 상태값이 비면 확인할 수 없다
     }
 }

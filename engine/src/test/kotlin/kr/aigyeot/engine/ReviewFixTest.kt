@@ -30,20 +30,21 @@ class ReviewFixTest {
 
     @Test fun r21h_lostWhileIdle_nextSessionInheritsPause() {
         val sim = idle().ev(InputLost(T0, PauseReason.SILENCED)).doorCycle().gear(Gear.D)
-        assertEquals(setOf(PauseReason.SILENCED), sim.ses.pauses)
+        assertEquals(setOf(PauseReason.SILENCED), sim.s.car.pauses)
         sim.alarm()
         assertTrue(sim.step<StartPlayback>().isEmpty())      // 판정 멈춤 중
         sim.ev(InputRestored(sim.t, PauseReason.SILENCED))
-        assertTrue(sim.ses.pauses.isEmpty() && sim.s.car.outPauses.isEmpty())
+        assertTrue(sim.s.car.pauses.isEmpty())
     }
 
     @Test fun r21h_pausesCarriedOverWhenSessionCloses() {
         val sim = session().ev(InputLost(T0, PauseReason.SILENCED))
         sim.gear(Gear.P).ev(RearDoor(sim.t, Side.LEFT, true))   // 13a
         assertEquals(null, sim.s.session)
-        assertEquals(setOf(PauseReason.SILENCED), sim.s.car.outPauses)
+        assertEquals(setOf(PauseReason.SILENCED), sim.s.car.pauses)
         sim.ev(RearDoor(sim.t, Side.LEFT, false)).gear(Gear.D)
-        assertEquals(setOf(PauseReason.SILENCED), sim.ses.pauses)
+        assertEquals(setOf(PauseReason.SILENCED), sim.s.car.pauses)
+        assertTrue(sim.s.session != null)
     }
 
     @Test fun r42a_hotAtStartCoolBeforeStarted_keepsComfort() {
@@ -229,16 +230,16 @@ class QueuedOfferDropTest {
         sim.ev(Tick(T0 + 120 * MIN)).toGap().recry().started().toGap().recry()
         assertEquals(Phase.HANDOFF, sim.ses.phase)
         val q = sim.s.speech.queue
-        assertEquals(setOf(Sid.S11, Sid.S07), q.filter { it.askRestId == "n" }.map { it.sid }.toSet())
-        // 첫 제안에 응해 경유지가 들어간다
+        assertEquals(1, q.count { it.askRestId == "n" }, "C273: 인계가 같은 쉼터를 묻는 S11 줄을 넘겨받는다(두 줄을 두지 않는다)")
+        assertTrue(q.single { it.askRestId == "n" }.let { it.handoff && it.longDrive })
+        // 그 제안에 응해 경유지가 들어간다
         sim.done()
         sim.ev(Tick(sim.t + P.speechGapMs))
         val ask = sim.step<Ask>().single()
         sim.ev(Answer(sim.t, ask.askId, YesNo.YES))
         sim.ev(WaypointResult(sim.t, sim.step<AddWaypoint>().single().cmdId, "n", true))
-        // 단언 직전: 이미 넣었고, 두 번째 줄은 아직 큐에 있다
         assertEquals(setOf("n"), sim.ses.addedRestIds)
-        assertEquals(1, sim.s.speech.queue.drop(if (sim.s.speech.speaking != null) 1 else 0).count { it.askRestId == "n" })
+        assertEquals(0, sim.s.speech.queue.drop(if (sim.s.speech.speaking != null) 1 else 0).count { it.askRestId == "n" })
         sim.flush()
         assertEquals(1, sim.all<Ask>().count { it.sid == Sid.S07 || it.sid == Sid.S11 })
     }

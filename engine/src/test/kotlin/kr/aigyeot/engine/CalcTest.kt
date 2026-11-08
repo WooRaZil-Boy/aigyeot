@@ -2,11 +2,27 @@ package kr.aigyeot.engine
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 // 계약 2.3 순수 함수와 명세서 15장 '톰슨 샘플링(고정 시드 재현)'.
 class CalcTest {
+    @Test fun methodStats_windowBoundary28Days() {
+        val now = 100 * DAY_MS
+        val m = Method(MethodKind.WHITE_NOISE)
+        val since = Params().statSince(now)
+        val h = listOf(FirstTry(since - 1, m, true), FirstTry(since, m, true), FirstTry(since + 1, m, false), FirstTry(now, Method(MethodKind.WOMB), true))
+        assertEquals(listOf(m to (1 to 2), Method(MethodKind.WOMB) to (1 to 1), Method(MethodKind.LULLABY) to (0 to 0)),
+            methodStats(h, listOf(m, Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), now), "28일 바로 전은 빠지고 경계 시각은 든다")
+    }
+
+    @Test fun sessionIdOf_fromCmdId() {
+        assertEquals("01ABC", sessionIdOf("01ABC-12"))
+        assertNull(sessionIdOf("idle-3"))
+        assertNull(sessionIdOf("noseq"))
+    }
+
     @Test fun splitMix64_matchesReferenceOutput() {
         // SplitMix64 참조 구현(시드 0)의 첫 출력. JVM·플랫폼과 상관없이 같아야 한다.
         assertEquals(0xE220A8397B1DCDAFuL.toLong(), splitMix64(0).second)
@@ -86,19 +102,40 @@ class CalcTest {
 
     @Test fun offerRest_rules() {
         val r = RouteView(0, false, null, listOf(rest("a", 10.0)))
-        assertNull(offerRest(false, Gear.P, r, emptyMap(), 0, null))
-        assertEquals(Sid.S08, offerRest(false, Gear.D, r, emptyMap(), 0, null)!!.sid)
-        assertEquals(Sid.S11, offerRest(true, Gear.D, r, emptyMap(), 0, null)!!.sid)
-        assertEquals(Sid.S10, offerRest(false, Gear.D, null, emptyMap(), 0, null)!!.sid)
-        assertNull(offerRest(false, Gear.D, r, mapOf(Sid.S08 to 0L), 9 * MIN, null))
-        assertNull(offerRest(false, Gear.D, RouteView(0, true, 600, r.rests), emptyMap(), 0, null))
+        assertNull(offerRest(false, Gear.P, r, 0, null))
+        assertEquals(Sid.S08, offerRest(false, Gear.D, r, 0, null)!!.sid)
+        assertEquals(Sid.S11, offerRest(true, Gear.D, r, 0, null)!!.sid)
+        assertEquals(Sid.S10, offerRest(false, Gear.D, null, 0, null)!!.sid)
+        assertTrue(offerBanned(mapOf(Sid.S08 to 0L), emptyList(), "s", Sid.S08, 9 * MIN))   // S3: 10분 금지는 offerBanned(결정 ②)
+        assertNull(offerRest(false, Gear.D, RouteView(0, true, 600, r.rests), 0, null))
+    }
+
+    @Test fun c304_departOffer_skipsUnaddable() {
+        val now = 0L
+        val iv = 180
+        // 수유 시작 = now - 70분 → 배고플 시각 h = now + 110분. 남은 7200초(120분)·120km: eta(분) = km
+        val start = now - 70 * MIN
+        fun at(id: String, d: Double, ok: Boolean = true) = RestCandidate(id, id, RestKind.REST_AREA, d, true, addable = ok)
+        val rests = listOf(at("용인", 28.5), at("덕평", 41.2), at("여주", 57.9, ok = false), at("충주", 95.4))
+        // h - lead(20) = 90분: 충주(95.4)는 늦고, addable이면 가장 늦은 eta는 여주(57.9)
+        assertEquals("여주", pickDepartRest(RouteView(now, true, 7200, rests.map { it.copy(addable = true) }, 120.0), start, iv, now, 20)?.id)
+        assertEquals("덕평", pickDepartRest(RouteView(now, true, 7200, rests, 120.0), start, iv, now, 20)?.id)
+    }
+
+    @Test fun c304_offerRest_skipsUnaddable() {
+        fun r(vararg l: RestCandidate) = RouteView(0, false, null, l.toList())
+        val bad = rest("bad", 5.0).copy(addable = false)
+        assertEquals("ok", offerRest(false, Gear.D, r(bad, rest("ok", 10.0)), 0, null)!!.askRestId)
+        assertEquals(Sid.S10, offerRest(false, Gear.D, r(bad), 0, null)!!.sid, "넣을 수 있는 쉼터가 없으면 쉼터 없음 안내")
+        assertEquals("ok", pickRest(r(bad, rest("ok", 10.0)))!!.id)
     }
 
     @Test fun s3a_s07WaitsAfterDepartOffer() {
         val r = RouteView(0, false, null, listOf(rest("n", 10.0, true)))
-        assertEquals(Sid.S07, offerRest(false, Gear.D, r, emptyMap(), 0, null)!!.sid)
-        assertNull(offerRest(false, Gear.D, r, mapOf(Sid.S07_DEPART to 0L), 9 * MIN, null))
-        assertEquals(Sid.S07, offerRest(false, Gear.D, r, mapOf(Sid.S07_DEPART to 0L), 10 * MIN, null)!!.sid)
-        assertNull(offerRest(false, Gear.D, r, mapOf(Sid.S07 to 0L, Sid.S07_DEPART to 5 * MIN), 14 * MIN, null))   // 늦은 쪽 기준
+        assertEquals(Sid.S07, offerRest(false, Gear.D, r, 0, null)!!.sid)
+        fun banned(spoken: Map<Sid, Long>, now: Long) = offerBanned(spoken, emptyList(), "s", Sid.S07, now)
+        assertTrue(banned(mapOf(Sid.S07_DEPART to 0L), 9 * MIN))
+        assertFalse(banned(mapOf(Sid.S07_DEPART to 0L), 10 * MIN))
+        assertTrue(banned(mapOf(Sid.S07 to 0L, Sid.S07_DEPART to 5 * MIN), 14 * MIN))   // 늦은 쪽 기준
     }
 }

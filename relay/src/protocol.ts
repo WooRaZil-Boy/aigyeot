@@ -103,6 +103,7 @@ const CareSummaryBody = obj({
   today_feed_count: int,
 });
 export const AckBody = obj({ ids: arr(str) });
+export const DropIdsBody = obj({ drop_ids: arr(str) });
 
 const ReportSummaryBody = obj({
   session_id: str,
@@ -279,9 +280,9 @@ export const LlmRequest = obj({
   request_id: str,
   question: str,
   state: obj({
-    cry: obj({ current_min: nullable(int), count_this_drive: int }),
+    cry: obj({ current_min: nullable(int), count_this_drive: int, confirming: opt(bool), unavailable: opt(bool) }),
     feeding: nullable(obj({ elapsed_min: int, interval_min: int })),
-    carseat_min: int,
+    carseat_min: nullable(int),
     cabin_temp: nullable(num),
     next_rest: nullable(obj({ id: str, name: str, distance_km: num, nursing_room: bool })),
     method_stats: arr(MethodStat),

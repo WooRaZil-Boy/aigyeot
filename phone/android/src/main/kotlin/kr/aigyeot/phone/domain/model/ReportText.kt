@@ -59,8 +59,8 @@ fun preCryDrive(p: PreCryContext) =
 
 fun secondText(songs: List<SongEntry>, sec: SecondAttempt): String {
     val what = when (sec.action) {
-        SecondAction.COMFORT_COOL -> "실내를 시원하게 했어요"
-        SecondAction.FEEDING_WINDOW -> "수유 시간대라 안내했어요"
+        SecondAction.COMFORT_COOL -> "더운 실내로 판단했어요"
+        SecondAction.FEEDING_WINDOW -> "수유 시간대로 판단했어요"
         SecondAction.OTHER_SOUND -> "다른 소리로 바꿨어요" + (sec.sound?.let { "(${soundText(songs, it)})" } ?: "")
         SecondAction.FOCUS_DENIED -> "소리를 이어서 틀지 못했어요"
     }
@@ -104,8 +104,8 @@ fun stopText(reason: StopReason, mode: HandoffKind, rest: String?, toldDriver: B
         when (mode) {
             HandoffKind.REST_OFFER -> if (toldDriver == false) "쉼터는 묻지 못했어요" else "${rest ?: "쉼터"}에 들르자고 제안했어요"
             HandoffKind.ARRIVAL_NOTICE -> if (toldDriver == false) "도착 안내는 하지 못했어요" else "도착 안내를 했어요"
-            HandoffKind.NO_REST -> if (toldDriver == false) "가까운 쉼터가 없었어요" else "가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요"
-            HandoffKind.PARKED -> "차가 선 채로 알렸어요"
+            HandoffKind.NO_REST -> if (toldDriver == false) "안전한 곳에 세우도록 안내하지 못했어요" else "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요"
+            HandoffKind.PARKED -> if (reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"   // U59
         },
     )
     if (waypointAdded) append(" · 경유지 추가")
@@ -116,8 +116,8 @@ fun stopText(reason: StopReason, mode: HandoffKind, rest: String?, toldDriver: B
 fun stopLine(st: StopInfo) =
     "정차: ${stopText(st.reason, st.mode, st.restName, st.toldDriver, st.waypointAdded, st.guardianNotified)}"
 
-/** U53: told_driver == false인 정차는 안내하지 못했으니 세지 않는다(null은 참). 실제 정차 횟수가 아니다. */
-fun stopNoticeCount(stops: List<StopInfo?>) = stops.count { it != null && it.toldDriver != false }
+/** U53·U55: told_driver == false인 정차와 정차 인계(parked, 운전자에게 말하지 않음)는 안내가 아니니 세지 않는다(null은 참). 실제 정차 횟수가 아니다. */
+fun stopNoticeCount(stops: List<StopInfo?>) = stops.count { it != null && it.toldDriver != false && it.mode != HandoffKind.PARKED }
 
 fun actionText(a: CarActionKind) = when (a) {
     CarActionKind.REAR_PLAYBACK -> "뒷좌석 재생"

@@ -7,6 +7,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kr.aigyeot.app.host.HostApi
 import kr.aigyeot.app.host.ScenarioSetup
+import kr.aigyeot.app.link.DAY
+import kr.aigyeot.app.link.instantOf
+import kr.aigyeot.app.link.rfc3339
+import kr.aigyeot.app.link.ulid
 import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.engine.AdjustPlayback
 import kr.aigyeot.engine.Answer
@@ -25,6 +29,7 @@ import kr.aigyeot.engine.Gear
 import kr.aigyeot.engine.LogAlarm
 import kr.aigyeot.engine.LowerHvac
 import kr.aigyeot.engine.Method
+import kr.aigyeot.engine.OFFER_SIDS
 import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.Phase
 import kr.aigyeot.engine.PlayKind
@@ -42,11 +47,6 @@ import kr.aigyeot.engine.Step
 import kr.aigyeot.engine.SwitchSound
 import kr.aigyeot.engine.Via
 import kr.aigyeot.engine.YesNo
-import java.time.Instant
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -75,8 +75,6 @@ data class RunRow(
     val failures: List<String>,
 )
 
-/** 쉼터 제안 문장(이 문장에 '응'은 운전자 조작에서 뺀다, 15장). */
-private val REST_OFFERS = setOf(Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11)
 /** exec가 control_log에 남기는 재생 줄의 이름(scenario가 읽는 약속, 보고서 '다른 갈래에 요청'). */
 /**
  * 차 제어 결과 줄을 기다리는 가장 긴 시간(계약 7.4): 마지막 차 제어 할 일부터 verifyTimeoutMs × (verifyRetries + 2) + 2초.
@@ -140,7 +138,7 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
         val runSeed = seed   // Setup.seed가 아니라 반복 k번째 시드(seed + k). run 블록 안에서는 seed가 Setup.seed를 가리킨다
         return scene.setup.run { ScenarioSetup(
             scene.id, runSeed, profile, methods,
-            history.map { FirstTry(t0 - it.daysAgo * 86_400_000L, it.method, it.success) },
+            history.map { FirstTry(t0 - it.daysAgo * DAY, it.method, it.success) },
             feedingStartOffsetSec?.let { t0 + it * 1000 }, otherGuardians, override, care?.let { careView(it, t0) },
         ) }
     }
@@ -300,7 +298,7 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
             val st = state()
             val ask = st?.session?.pendingAsk
             if (ask != null && ask.sid == s.onAsk && st.speech.speaking != ask.askId && log.last().at <= until) {   // by가 지난 뒤 처음 열린 질문에는 답하지 않는다
-                driverOp(restYes = s.intent == "YES" && ask.sid in REST_OFFERS)
+                driverOp(restYes = s.intent == "YES" && ask.sid in OFFER_SIDS)   // 쉼터 제안 문장의 '응'은 운전자 조작에서 뺀다(15장, C303 A23)
                 post(Answer(host.clock(), ask.askId, YesNo.valueOf(s.intent)))
                 return true
             }
@@ -351,7 +349,7 @@ class SceneRun(val scene: Scene, val k: Int, private val host: HostApi, private 
     }
 
     private fun envelope(p: Phone, now: Long) = buildJsonObject {
-        put("v", 1); put("id", ulid(now, rnd)); put("type", p.type)
+        put("v", 1); put("id", ulid(now, rnd::nextInt)); put("type", p.type)
         put("from", buildJsonObject { put("role", "owner"); put("device", "d_scenario") })
         put("ts", rfc3339(now))
         val off = p.body["atOffsetSec"]   // 시각은 그 단계 기준 초로 적는다(7.3)
@@ -401,21 +399,10 @@ fun cmdMatches(c: Command, name: String, sid: Sid?, method: kr.aigyeot.engine.Me
 
 /** 기대값이 RFC 3339 문자열이면 실제 값이 문자열이든 숫자(epoch ms, 판단 코어의 occurred_at)든 ±2초로 비교한다. 그 밖은 같음 비교. */
 private fun same(want: JsonElement, got: JsonElement): Boolean {
-    val w = (want as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(::parseTime)
+    val w = (want as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(::instantOf)
     val gp = got as? JsonPrimitive
-    val g = gp?.let { if (it.isString) parseTime(it.content) else it.content.toDoubleOrNull()?.toLong() }
+    val g = gp?.let { if (it.isString) instantOf(it.content) else it.content.toDoubleOrNull()?.toLong() }
     return if (w != null && g != null) abs(w - g) <= 2000 else want == got
-}
-
-private fun parseTime(s: String): Long? = runCatching { OffsetDateTime.parse(s).toInstant().toEpochMilli() }.getOrNull()
-
-fun rfc3339(ms: Long): String =
-    OffsetDateTime.ofInstant(Instant.ofEpochMilli(ms).truncatedTo(ChronoUnit.SECONDS), ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-
-private const val B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-private fun ulid(ms: Long, rnd: Random) = buildString(26) {
-    for (i in 9 downTo 0) append(B32[((ms shr (5 * i)) and 31).toInt()])
-    repeat(16) { append(B32[rnd.nextInt(32)]) }
 }
 
 data class GainPoint(val at: Long, val playId: String, val gain: Double)

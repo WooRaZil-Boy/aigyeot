@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { TOOLS } from "../src/llm";
+import { PROMPT_VERSION, SYSTEM_PROMPT, TOOLS } from "../src/llm";
 import { forgetAccessToken, retryAfterS } from "../src/push";
 import { ulid } from "../src/util";
 import { BASE, addGuardian, call, carWithOwner, newCar, send } from "./helpers";
@@ -12,7 +12,7 @@ import { BASE, addGuardian, call, carWithOwner, newCar, send } from "./helpers";
 const fixtures = import.meta.glob("./fixtures/llm_*", { query: "?raw", import: "default", eager: true });
 const fixture = (name: string) => fixtures[`./fixtures/${name}`] as string;
 const contractTools = JSON.parse(fixture("llm_tools.json"));
-const contractPrompt = fixture("llm_p5.txt");
+const contractPrompt = fixture("llm_p6.txt");
 
 type Seen = { url: string; headers: Headers; body: any };
 
@@ -66,7 +66,7 @@ describe("POST /v1/llm", () => {
     const seen = fakeFetch(() => claude([{ type: "thinking", thinking: "" }, { type: "text", text: "자장가가 " }, { type: "text", text: "잘 통했어요." }]));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody() });
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-haiku-5-5", prompt_version: "p5" });
+    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-haiku-5-5", prompt_version: "p6" });
     expect(typeof r.json.latency_ms).toBe("number");
     const [s] = seen;
     expect(s.url).toBe("https://api.anthropic.com/v1/messages");
@@ -82,7 +82,15 @@ describe("POST /v1/llm", () => {
     expect(s.body.messages[0].content).toMatch(/\n\n운전자 질문: 뭐가 제일 잘 통해\?$/);
   });
 
-  it("p5 answer tool_use는 tool_calls로 그대로 넘긴다", async () => {
+  it("c194 p6 지시: 버전 p6, 사실 주제는 글 없이 도구로, 글에는 숫자를 쓰지 않는다(계약 글자 그대로)", () => {
+    expect(PROMPT_VERSION).toBe("p6");
+    expect(SYSTEM_PROMPT).toBe(contractPrompt);
+    expect(SYSTEM_PROMPT).toContain("이때 글은 쓰지 않는다");
+    expect(SYSTEM_PROMPT).toContain("글에는 숫자를 쓰지 않는다");
+    expect(SYSTEM_PROMPT).not.toContain("숫자는 상태값에 있는 숫자만");
+  });
+
+  it("p6 answer tool_use는 tool_calls로 그대로 넘긴다", async () => {
     const car = await newCar();
     fakeFetch(() => claude([{ type: "tool_use", id: "t1", name: "answer", input: { topics: ["feeding", "sleep"] } }], "tool_use"));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody("마지막 수유 언제야") });

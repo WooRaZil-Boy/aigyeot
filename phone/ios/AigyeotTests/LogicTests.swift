@@ -2726,14 +2726,41 @@ final class StopTextTests: XCTestCase {
     func test_운전자에게_말하지_못한_인계는_제안했다고_보이지_않는다() throws {
         XCTAssertEqual(stopHandoffText(try stop(.restOffer, told: false)), "쉼터는 묻지 못했어요")
         XCTAssertEqual(stopHandoffText(try stop(.arrivalNotice, told: false)), "도착 안내는 하지 못했어요")
-        XCTAssertEqual(stopHandoffText(try stop(.noRest, told: false)), "가까운 쉼터가 없었어요")
+        XCTAssertEqual(stopHandoffText(try stop(.noRest, told: false)), "안전한 곳에 세우도록 안내하지 못했어요")
         XCTAssertEqual(stopHandoffText(try stop(.restOffer, told: true)), "휴게소에 들르자고 제안했어요")
         XCTAssertEqual(stopHandoffText(try stop(.restOffer, told: nil)), "휴게소에 들르자고 제안했어요")
         XCTAssertEqual(stopHandoffText(try stop(.arrivalNotice, told: true)), "도착 안내를 했어요")
-        XCTAssertEqual(stopHandoffText(try stop(.noRest, told: nil)), "가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요")
-        XCTAssertEqual(stopHandoffText(try stop(.parked, told: nil)), "차가 선 채로 알렸어요")
+        XCTAssertEqual(stopHandoffText(try stop(.noRest, told: nil)), "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요")
+        XCTAssertEqual(stopHandoffText(try stop(.parked, told: nil)), "차가 선 채로 달래기를 멈췄어요")
         let out = String(data: try ProtocolCoding.encoder.encode(try stop(.restOffer, told: nil)), encoding: .utf8)!
         XCTAssertFalse(out.contains("told_driver"))
+    }
+
+    func test_뒷좌석_출력이_없어_정차한_인계는_소리를_틀지_못했다고_쓴다() throws {   // U59
+        let json = "{\"handoff\":true,\"reason\":\"no_sound\",\"mode\":\"parked\",\"rest_name\":null,\"waypoint_added\":false,\"guardian_notified\":false}"
+        let s = try ProtocolCoding.decoder.decode(StopInfo.self, from: Data(json.utf8))
+        XCTAssertEqual(stopText(s), "뒷좌석 출력 없음 · 차가 선 채로 소리를 틀지 못했어요")
+    }
+
+    func test_정차_인계는_알렸다고_보이지_않는다() throws {
+        func parked(_ g: Bool) throws -> StopInfo {
+            let json = "{\"handoff\":true,\"reason\":\"attempt_limit\",\"mode\":\"parked\",\"rest_name\":null,\"waypoint_added\":false,\"guardian_notified\":\(g)}"
+            return try ProtocolCoding.decoder.decode(StopInfo.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(stopText(try parked(false)), "두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요")
+        XCTAssertEqual(stopText(try parked(true)), "두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요 · 다른 보호자에게 알림")
+    }
+
+    func test_정차_문구는_확인된_사실만_쓴다() throws {
+        func parked(_ g: Bool) throws -> StopInfo {
+            let json = "{\"handoff\":true,\"reason\":\"attempt_limit\",\"mode\":\"parked\",\"rest_name\":null,\"waypoint_added\":false,\"guardian_notified\":\(g)}"
+            return try ProtocolCoding.decoder.decode(StopInfo.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(stopText(try parked(true)), "두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요 · 다른 보호자에게 알림")
+        XCTAssertEqual(stopText(try parked(false)), "두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요")
+        XCTAssertEqual(stopText(try stop(.noRest, told: true)), "두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요")
+        XCTAssertEqual(stopText(try stop(.noRest, told: false)), "두 번 시도 뒤 · 안전한 곳에 세우도록 안내하지 못했어요")
+        XCTAssertEqual(stopText(try stop(.noRest, told: nil)), "두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요")
     }
 
     func test_뒤붙임까지_전체_줄이_안드로이드와_같다() throws {

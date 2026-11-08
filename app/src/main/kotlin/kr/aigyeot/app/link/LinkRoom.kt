@@ -4,20 +4,27 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kr.aigyeot.app.link.db.CareAppliedEntity
 import kr.aigyeot.app.link.db.OutboxEntity
 import kr.aigyeot.app.link.db.PhoneLinkMarkEntity
 import kr.aigyeot.app.link.db.ProcessedMessageEntity
 import kr.aigyeot.app.link.db.SongDownloadEntity
 import kr.aigyeot.app.link.db.SongSelectionEntity
+import kr.aigyeot.app.store.SnapshotJson
 import kr.aigyeot.app.store.db.AppDatabase
+import kr.aigyeot.app.store.db.ChildProfileEntity
 import kr.aigyeot.app.store.db.PhoneLinkEntity
 import kr.aigyeot.app.store.db.SongEntity
 import kr.aigyeot.engine.CareView
+import kr.aigyeot.engine.careReplaces
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.FeedingFrom
 import kr.aigyeot.engine.FeedingStarted
 import kr.aigyeot.engine.LinkChanged
+import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.engine.Params
+import kr.aigyeot.engine.laterFeeding
+import kr.aigyeot.engine.windowStartExpected
 import kr.aigyeot.shared.CareSummaryBody
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
@@ -40,17 +47,16 @@ internal const val PENDING = "PENDING"
 internal const val ACTIVE = "ACTIVE"
 internal const val REJECTED = "REJECTED"
 internal const val DELETED = "DELETED"
-/** '모든 기록 지우기' 때 그때까지 받은 마지막 중계 seq를 `phone_link_mark.last_seq`에 둔 행의 id(C126 ②). shortcut: 표를 따로 만들지 않고 기존 표를 쓴다. 새 방이면 clearMarks가 함께 지운다 */
-internal const val CARE_CLEAR = "care_clear"
 
 /** 차가 받아 처리하는 type(8.4). 나머지는 1단계에서 ack만 한다. */
 internal val RECEIVED_TYPES = setOf("feeding_started", "song_added", "song_removed", "song_selected", "paired", "unpaired", "state_request", "care_summary")
 
 /**
  * 후보 ③(contracts-link 8.4, 명세서 5장). 고른 곡이 쓸 수 있으면 그 곡, 아니면 쓸 수 있는 곡 중 추가 순번이 가장 큰 곡.
- * store도 `MethodsChanged`를 낼 때 같은 규칙을 쓴다(이 함수를 불러도 된다).
+ * C303 ⑥(B9): 프로필에서 부모 노래를 껐으면 없다(프로필이 없으면 켬). store(`MethodsChanged`)와 폰에 보내는 song_status 후보 표시가 이 함수 하나를 쓴다.
  */
-fun candidateSong(songs: List<SongEntity>, selection: SongSelectionEntity?): String? {
+fun candidateSong(profile: ChildProfileEntity?, songs: List<SongEntity>, selection: SongSelectionEntity?): String? {
+    if (profile != null && profile.methods.none { it.kind == MethodKind.SONG }) return null
     val active = songs.filter { it.status == ACTIVE }
     return active.firstOrNull { it.id == selection?.songId }?.id ?: active.maxByOrNull { it.addedSeq ?: Long.MIN_VALUE }?.id
 }
@@ -61,11 +67,13 @@ internal class Applied {
     val deleteFiles = mutableListOf<String>()
     var download = false
     var outbox = false
-    var phones = false
+    var phones = false            // 연결 표가 실제로 바뀜(L88): 마지막 폰 확인을 다시 부른다
+    var status = false            // 마지막 접속 시각 등 화면 상태만 새로 고침
     var newOwner = false          // 연결 코드로 붙은 새 owner(G41: 연결 화면이 열려 있으면 새 코드)
     var justPaired: String? = null
     var care: CareView? = null    // care_summary 요약(L60). 지금 값보다 늦은지는 커밋 뒤 link가 든 실제 최신 요약과 견준다(C126 ④)
     var careSeq: Long? = null     // 그 메시지의 중계 seq(C126 ①)
+    var careCleared = false       // 요약을 보낸 owner가 연결에서 빠져 Room 행을 지웠다(C158): 커밋 뒤 실제 값을 비우고 CareCleared
 }
 
 /** 8.3 3단계·8.4·8.5 넣기를 Room 트랜잭션 안에서 한다. 네트워크는 부르지 않는다. */
@@ -80,11 +88,11 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
     // ---------------------------------------------------------------- 받기(8.3·8.4)
 
     /** 1단계를 통과한 봉투 하나. 처리한 id면 null(ack만). 본문이 틀리면 처리한 것으로 적고 무시한다(받은 함이 막히지 않게). */
-    fun receive(env: Envelope, now: Long): Applied? = tx {
+    fun receive(env: Envelope, now: Long, carId: String?): Applied? = tx {
         if (dao.processed(env.id)) return@tx null
         val out = Applied()
         val seq = env.seq ?: 0
-        runCatching { apply(env, seq, now, out) }.onFailure { if (it !is BadBody) throw it }
+        runCatching { apply(env, seq, now, out, carId) }.onFailure { if (it !is BadBody) throw it }
         dao.insertProcessed(ProcessedMessageEntity(env.id, seq, now))
         out
     }
@@ -108,16 +116,9 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
     }
     private fun songId(id: String) = id.takeIf(::isUlid) ?: throw BadBody()
 
-    private fun apply(env: Envelope, seq: Long, now: Long, out: Applied) {
+    private fun apply(env: Envelope, seq: Long, now: Long, out: Applied, carId: String?) {
         when (env.type) {
-            "feeding_started" -> {
-                val at = instantOf(env.decode(FeedingStartedBody.serializer()).at) ?: throw BadBody()
-                val cur = dao.profile()?.lastFeedingStart
-                if (cur != null && at <= cur) return                                   // 같거나 이르면 무시
-                dao.setLastFeedingStart(at)
-                enqueue("feeding_state", feedingState(), now, out)
-                out.events += FeedingStarted(now, at, FeedingFrom.PHONE, env.id)
-            }
+            "feeding_started" -> feedingStarted(instantOf(env.decode(FeedingStartedBody.serializer()).at) ?: throw BadBody(), FeedingFrom.PHONE, env.id, now, out)
             "song_added" -> {
                 val b = env.decode(SongAddedBody.serializer())
                 val id = songId(b.songId)
@@ -146,11 +147,17 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
                 old?.normalizedPath?.let { out.deleteFiles += it }
                 statuses(listOf(id) + moved(before), now, out)
             }
-            "care_summary" -> {   // Room에는 두지 않는다(C119)
+            "care_summary" -> {   // 적용하는 요약은 처리 완료와 같은 트랜잭션에 한 행으로 둔다(C144)
                 val c = careView(env.decode(CareSummaryBody.serializer()), now)
-                // C126 ②: 지우기 전에 중계에 들어온 요약은 버린다(삭제가 아직 보낼 함에 있거나, 지울 때 받은 마지막 seq 이하)
-                if (dao.clearPending() || seq <= (dao.mark(CARE_CLEAR)?.lastSeq ?: Long.MIN_VALUE)) return
-                out.care = c; out.careSeq = seq
+                val sender = env.from?.device
+                if (!c.freshAt(now)) return   // C223·C303 A16: 24시간 넘게 지난 요약은 ④가 쓰지 않는다. 처리 완료·ack만 하고 L77로 최신 요약을 덮지 않는다
+                // 기준은 Room 행이다(L69): 메모리 값·스냅숏은 복원 전에 옛 것일 수 있다. 끊긴 기기의 늦은 요약은 받지 않는다(C158)
+                val row = dao.careApplied()
+                val old = row?.let { r -> runCatching { SnapshotJson.decodeFromString(CareView.serializer(), r.summaryJson) }.getOrNull() }
+                if ((sender == null || dao.mark(sender)?.unpaired != true) && (old == null || careReplaces(old, row.seq, c, seq, row.carId, carId))) {
+                    dao.putCareApplied(CareAppliedEntity(1, carId, seq, SnapshotJson.encodeToString(CareView.serializer(), c), sender))
+                    out.care = c; out.careSeq = seq
+                }
             }
             "song_selected" -> select(songId(env.decode(SongRefBody.serializer()).songId), seq, now, out)
             "paired" -> {
@@ -182,11 +189,30 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
         }
     }
 
+    /**
+     * 수유 입력 하나(폰 feeding_started·차 화면 '지금 먹이기 시작했어요', V3·C322). 저장된 값보다 나중일 때만 Room에 쓰고 feeding_state를 넣은 뒤
+     * 사건을 낸다(같거나 이르면 아무것도 하지 않는다, C303 A14). Room이 원본이라 장면 중 입력도 장면 끝 복원 ⑤가 실제 상태에 맞춘다.
+     */
+    fun feedingStarted(at: Long, from: FeedingFrom, msgId: String?, now: Long, out: Applied) {
+        if (!laterFeeding(dao.profile()?.lastFeedingStart, at)) return
+        dao.setLastFeedingStart(at)
+        enqueue("feeding_state", feedingState(), now, out)
+        out.events += FeedingStarted(now, at, from, msgId)
+    }
+
     /** 끊김(받은 unpaired, 차 화면 끊기). 기기 id는 다시 쓰지 않으므로 끊김 표시는 늦은 paired를 모두 막는다(8.4). */
     fun unpair(deviceId: String, seq: Long, now: Long, out: Applied) {
         dao.deletePhoneLink(deviceId)
         dao.putMark(PhoneLinkMarkEntity(deviceId, maxOf(seq, dao.mark(deviceId)?.lastSeq ?: 0), true, now))
+        clearCareOf(deviceId, out)
         linkChanged(now, out)
+    }
+
+    /** 요약을 보낸 기기가 [deviceId]면(null이면 보낸 기기와 상관없이) 행을 지운다(C158). 실제 값·사건은 커밋 뒤 link가 한다. */
+    private fun clearCareOf(deviceId: String?, out: Applied) {
+        val row = dao.careApplied() ?: return
+        if (deviceId != null && row.senderDevice != deviceId) return
+        dao.clearCareApplied(); out.careCleared = true
     }
 
     /** song_selected(폰이 보낸 것, 차가 보내고 받은 seq): 기록된 seq보다 클 때만(8.4). ③이 바뀌면 두 곡의 song_status. */
@@ -202,6 +228,9 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
     /** ③이 [before]에서 바뀌었으면 두 곡(8.4 '바뀌면 두 곡의 song_status'). */
     private fun moved(before: String?): List<String?> = candidate().let { after -> if (after == before) emptyList() else listOf(before, after) }
 
+    /** C303 ⑥(B9): 곡 표 밖(프로필의 부모 노래 켬·끔)에서 ③이 [before]에서 바뀌었으면 두 곡의 song_status. 그 트랜잭션 안에서 부른다(store 프로필 저장). */
+    fun candidateMoved(before: String?, now: Long) = statuses(moved(before), now, Applied())
+
     private fun linkChanged(now: Long, out: Applied) {
         out.phones = true
         out.events.removeAll { it is LinkChanged }
@@ -210,27 +239,29 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
 
     // ---------------------------------------------------------------- 보낼 함(8.5)
 
-    fun candidate(): String? = candidateSong(dao.songs(), dao.selection())
+    fun candidate(): String? = candidateSong(dao.profile(), dao.songs(), dao.selection())
 
-    /** 보낼 함에 넣는다. 받을 상대가 없으면 만들지 않는다(8.5 '만들지 않는 때'). [to]는 state_request의 답. */
+    /**
+     * 보낼 함에 넣는다. 받을 상대가 없으면 만들지 않는다(8.5 '만들지 않는 때'). [to]는 state_request의 답.
+     * 결정 ③(V7): handoff_alert를 넣었으면 같은 트랜잭션에서 그 에피소드의 guardian_notified를 참으로. 이 칸을 쓰는 곳은 여기 하나다(넣지 않으면 거짓 그대로).
+     */
     fun enqueue(type: String, body: JsonObject?, now: Long, out: Applied?, to: String? = null) {
-        val links = dao.phoneLinks()
         val make = when {
             type == "song_selected" || type == "records_clear" || to != null -> true
-            type == "handoff_alert" -> links.any { it.role == "guardian" && it.handoffAlerts }
-            else -> links.isNotEmpty()
+            type == "handoff_alert" -> dao.otherGuardians() > 0   // C303 A12: H8과 같은 쿼리
+            else -> dao.phoneCount() > 0                          // C303 A13
         }
         if (!make) return
         dao.insertOutbox(OutboxEntity(ulid(now), type, to, body?.toString() ?: "", now, 0, 0))
         out?.outbox = true
+        if (type == "handoff_alert") (body?.get("episode_id") as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(dao::markGuardianNotified)
     }
 
     /** feeding_state body는 넣는 이 트랜잭션에서 저장된 최신 값으로 만든다(3.3 '경합 방지'). */
     fun feedingState(): JsonObject {
         val p = dao.profile()
         val start = p?.lastFeedingStart
-        val iv = p?.feedingIntervalMin
-        val expected = if (start != null && iv != null) start + (iv * MINUTE * params.feedingWindowStart).toLong() else null
+        val expected = windowStartExpected(start, p?.feedingIntervalMin, params)   // C303 A15
         return ProtocolJson.encodeToJsonElement(FeedingStateBody.serializer(), FeedingStateBody(start?.let(::rfc3339), expected?.let(::rfc3339))).jsonObject
     }
 
@@ -316,8 +347,10 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
                 changed = true
             }
         }
+        // 보낸 기기가 목록에도 연결 표에도 없으면 요약을 지운다(C158). 목록에 있으면 지우지 않는다
+        dao.careApplied()?.senderDevice?.let { id -> if (phones.none { it.deviceId == id } && dao.phoneLink(id) == null) clearCareOf(id, out) }
         if (changed) linkChanged(now, out)
-        out.phones = true
+        out.status = true
     }
 
     // ---------------------------------------------------------------- 차 토큰 무효(8.6)
@@ -332,6 +365,7 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
         dao.clearMarks()
         dao.clearProcessed()
         dao.clearDownloads()
+        clearCareOf(null, out)   // 옛 방의 폰이 보낸 요약(C158)
         val songs = dao.songs()
         dao.deleteInactiveSongs()
         val active = songs.filter { it.status == ACTIVE }.sortedBy { it.addedSeq ?: Long.MIN_VALUE }

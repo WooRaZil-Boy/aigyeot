@@ -46,6 +46,35 @@ class Sim(var s: EngineState, private val eng: Engine = Engine()) {
     }
 }
 
+/**
+ * D5 시험 조립(옛 `copy(phase = …, attemptNo = …, play = …, judgeFrom = …)`): 단계만 바꾼 세션. 시도 번호는 지금 값.
+ * ATTEMPT는 지금 재생(없으면 시험용 자동 재생), GAP·CONFIRM은 판정 멈춤(창 없음), WAIT·HANDOFF는 조용함 0. LISTENING이면 enter처럼 에피소드를 비운다.
+ */
+fun SessionState.withStage(phase: Phase): SessionState = copy(
+    stage = when (phase) {
+        Phase.LISTENING -> Stage.Listening
+        Phase.ATTEMPT -> Stage.Attempt(maxOf(attemptNo, 1), play ?: Play("$id-test", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, WN, null, openedAt + P.attemptMs, PlayMode.NORMAL))
+        Phase.GAP -> Stage.Gap(attemptNo, null)
+        Phase.CONFIRM -> Stage.Confirm(attemptNo, null)
+        Phase.WAIT -> Stage.Wait(attemptNo)
+        Phase.HANDOFF -> Stage.Handoff(attemptNo)
+    },
+    episode = if (phase == Phase.LISTENING) null else episode,
+)
+
+/** D7 시험 조립(옛 `copy(lastOffer = …, pendingAsk = …, driveFrom = …)`): 제안 상태(OfferState)만 바꾼 세션. */
+fun SessionState.withOffers(f: OfferState.() -> OfferState): SessionState = copy(offers = offers.f())
+
+/** 지금 세션의 인계 장부(V6: 장부 하나 `handoffs`에서 세션 id로 고른다). */
+fun EngineState.openLedger(): HandoffLedger? = session?.let { x -> handoffs.firstOrNull { it.sessionId == x.id } }
+/** 닫힌 세션의 인계 장부(옛 closedHandoffs). */
+fun EngineState.closedLedgers(): List<HandoffLedger> = handoffs.filter { it.sessionId != session?.id }
+val Sim.ledger: HandoffLedger? get() = s.openLedger()
+/** 그 에피소드의 마지막 인계 확정(SettleHandoff, 지금까지 낸 할 일에서). 없으면 아직 확정 전. */
+fun Sim.settled(id: String = ep.id): SettleHandoff? = log.filterIsInstance<SettleHandoff>().lastOrNull { it.episodeId == id }
+/** 인계 문장을 말했나(옛 ep.handoff.toldDriver). 확정 전·H1이면 null. */
+fun Sim.told(id: String = ep.id): Boolean? = settled(id)?.toldDriver
+
 fun idle(
     prof: Profile? = profile(), methods: List<Method> = listOf(WN, LL), history: List<FirstTry> = emptyList(),
     feedingStart: Long? = null, guardians: Int = 1, seed: Long = 42, mic: Boolean = true, gear: Gear = Gear.P,

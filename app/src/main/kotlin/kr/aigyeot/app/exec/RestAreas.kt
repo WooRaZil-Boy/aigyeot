@@ -46,14 +46,24 @@ internal object RestAreas {
      * 방향 근거가 없으면 넣지 않는다. TBT 이름에 방향이 붙는지는 첫날 실측(C75).
      */
     fun place(tbtName: String, aheadKm: Double?, here: Here?, rows: List<RestArea> = all): RestArea? {
+        pointOf(tbtName, rows)?.let { return it }
         val m = match(tbtName, rows)
-        if (m.size <= 1) return m.firstOrNull()
         here ?: return null
         val c = m.filter { aheadKm == null || km(here, it) <= aheadKm + SLACK_KM }
         // 남은 줄이 모두 서로 TIE_M 안(사실상 같은 점)이면 어느 줄이든 내비에 가는 점이 같으니 첫 줄
-        if (c.size > 1 && c.all { a -> c.all { b -> hypot((a.lon - b.lon) * 111_320 * cos(a.lat * PI / 180), (a.lat - b.lat) * 110_574) <= TIE_M } }) return c.first()
+        if (tied(c)) return c.first()
         return c.singleOrNull()
     }
+
+    /** C304: 이름만으로 넣을 줄이 정해지는가(맞춘 줄이 하나, 또는 여럿이 모두 사실상 같은 점). 제안(Feeds의 addable)과 넣기([place])가 같은 판단을 쓴다. */
+    fun placeable(tbtName: String, rows: List<RestArea> = all): Boolean = pointOf(tbtName, rows) != null
+
+    /** C309: 이름이 한 점으로 정해지는가의 한 출처. 맞춘 줄이 하나면 그 줄, 여럿이 모두 사실상 같은 점이면 첫 줄, 아니면 null. [placeable]·[place]·[waypointListed]가 쓴다. */
+    fun pointOf(tbtName: String, rows: List<RestArea> = all): RestArea? =
+        match(tbtName, rows).let { if (it.size == 1 || tied(it)) it.first() else null }
+
+    fun tied(c: List<RestArea>) =
+        c.size > 1 && c.all { a -> c.all { b -> hypot((a.lon - b.lon) * 111_320 * cos(a.lat * PI / 180), (a.lat - b.lat) * 110_574) <= TIE_M } }
 
     private fun norm(s: String) = s.filterNot(Char::isWhitespace).replace("휴게소", "").replace("졸음쉼터", "").replace("방향", "")
 
@@ -72,11 +82,11 @@ private const val TIE_M = 10.0
 
 /**
  * 경유지 목록 판정(C110). 점은 (이름, 위도, 경도). 좌표가 0·0이면(실제 내비는 이름만 맞게 준다) 이름을 [rows]의 줄로 바꿔
- * 한 줄로 정해지고 [target]과 같을 때만 성공이다(방향 없는 이름은 두 줄이라 아님). 좌표가 있으면 [waypointPresent]의 300m 규칙.
+ * 한 점으로 정해지고([RestAreas.pointOf]) [target]과 같은 점일 때만 성공이다(방향 없는 이름이 서로 다른 두 점이면 아님). 좌표가 있으면 [waypointPresent]의 300m 규칙.
  */
 internal fun waypointListed(points: List<Triple<String, Double, Double>>, target: RestArea, rows: List<RestArea> = RestAreas.all, radiusM: Double = 300.0): Boolean =
     points.any { (name, la, lo) ->
-        if (la == 0.0 && lo == 0.0) RestAreas.match(name, rows).singleOrNull() == target
+        if (la == 0.0 && lo == 0.0) RestAreas.pointOf(name, rows)?.let { it == target || RestAreas.tied(listOf(it, target)) } == true   // C309
         else waypointPresent(listOf(la to lo), target, rows, radiusM)
     }
 

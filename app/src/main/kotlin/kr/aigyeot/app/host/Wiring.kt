@@ -15,6 +15,7 @@ import kr.aigyeot.app.exec.Exec
 import kr.aigyeot.app.link.Link
 import kr.aigyeot.app.scenario.Scenario
 import kr.aigyeot.app.store.Store
+import kr.aigyeot.app.store.retryOnDbError
 import kr.aigyeot.app.store.db.AppDatabase
 import kr.aigyeot.app.store.db.open
 import kr.aigyeot.app.ui.Notices
@@ -28,8 +29,8 @@ fun route(c: Command): To = when (c) {
     is StartPlayback, is StopPlayback, is AdjustPlayback, ReleaseAudio, is Speak, is Ask, is Listen, CancelSpeech,
     is SetSeatHeat, is SetWindowLock, is SetReadingLight, is LowerHvac, is AddWaypoint -> To.EXEC
     is SendToPhone, is Qa -> To.LINK
-    is ShowNotice -> To.UI
-    is SaveSession, is SaveEpisode, is SavePlay, is LogAlarm, is CaptureContext, is SaveSteerWindow, is CloseSession,
+    is ShowNotice, is HideNotice -> To.UI
+    is SaveSession, is SaveEpisode, is SettleHandoff, is SavePlay, is LogAlarm, is CaptureContext, is SaveSteerWindow, is CloseSession,
     is SaveSnapshot, is SaveFeedingStart, DeleteRecords, DeleteRelayRecords -> To.STORE   // DeleteRelayRecords는 store가 기록 지우기와 한 트랜잭션(C90)
 }
 
@@ -37,9 +38,12 @@ fun route(c: Command): To = when (c) {
 class Targets(
     val exec: (Command) -> Unit, val link: (Command) -> Unit, val notice: (Notice) -> Unit,
     val wake: () -> Unit = {},                                                      // contracts-link 8.6 '바로 다시 확인'(Link.wake)
-    val restore: suspend (EngineState, Long, Boolean) -> List<Event> = { _, _, _ -> emptyList() },   // 3번째: 실제 요약 기준을 다시 채울지(장면 중이면 거짓)
-      // 8.3 '복원 뒤 대조'의 수유·보호자(Link.restoreEvents)
-    val routeAgain: () -> Unit = {},                                                // 복원 ③ 뒤 내비 최신 경로를 중복 억제 없이 다시 낸다(Exec.reemitRoute, C130)
+    val restore: suspend (EngineState, Long) -> List<Event> = { _, _ -> emptyList() },   // 8.3 '복원 뒤 대조'의 수유·보호자·요약(Link.restoreEvents)
+    val reemitAll: () -> Unit = {},                                                 // 장면 끝 복원 뒤 지금 차 값·경로를 중복 억제 없이 다시 낸다(Exec.reemitAll, V12·C130)
+    val lastGear: () -> Gear? = { null },                                           // C328: 실행기가 마지막으로 받은 기어. 장면 끝 복원 Boot의 기준선(Exec.lastGear)
+    val cancelIfSpeaking: (String) -> Pair<Boolean, Long>? = { exec(CancelSpeech); null },    // C208: 이 발화가 아직 말하는 중이면 끊고 null, 이미 끝났으면 그 spoken(Exec.cancelIfSpeaking)
+    val linkNow: (List<SendToPhone>, () -> Unit) -> Unit = { cmds, also -> also(); cmds.forEach(link) },   // C160·결정 ③: store 쓰기(also) 먼저, 보낼 함 넣기 나중을 한 트랜잭션으로(Link.enqueueNow)
+    val hideNotice: (Notice) -> Unit = {},                                          // C347: HideNotice(Notices.cancel)
 )
 
 /** 사건의 at만 바꾼 사본(2.4 'at 찍기'). */
@@ -53,11 +57,17 @@ fun Event.withAt(t: Long): Event = if (at == t) this else when (this) {
     is DriverStop -> copy(at = t); is SwitchSound -> copy(at = t); is DriverAddWaypoint -> copy(at = t); is AskButton -> copy(at = t)
     is Heard -> copy(at = t); is QaReply -> copy(at = t); is BabyAboard -> copy(at = t); is FeedingStarted -> copy(at = t)
     is FeedingConfirmed -> copy(at = t); is ProfileChanged -> copy(at = t); is ClearRecords -> copy(at = t)
-    is MethodsChanged -> copy(at = t); is LinkChanged -> copy(at = t); is CareSummary -> copy(at = t)
+    is MethodsChanged -> copy(at = t); is LinkChanged -> copy(at = t); is CareSummary -> copy(at = t); is CareCleared -> copy(at = t)
 }
 
 /** Link가 쓰는 사건 길: 첫째는 실제로 받은 사건(장면 override가 막는다), 둘째는 장면 phone 단계 주입(7.3, 막지 않는다). */
 internal fun Host.linkSinks(): Pair<(Event) -> Unit, (Event) -> Unit> = ::postReal to ::post
+
+/** 화면·알림이 사건을 넣는 곳(설계 4.4). 화면은 호스트를 모르고 이것만 받는다. */
+fun interface EventSink { fun post(e: Event) }
+
+/** V3(P7, C322): 화면 버튼·알림은 실제 세계 입력이라 실제 입구(SceneController.postReal) 하나로 들어간다. 무엇을 넘길지는 이 한 줄에서 정한다. */
+internal fun Host.uiSink(): EventSink = EventSink(::postReal)
 
 /**
  * 프로세스에 하나인 모듈 묶음. 화면과 감시 서비스가 같은 것을 쓴다.
@@ -74,15 +84,19 @@ class Graph private constructor(ctx: Context) {
     private val sinks = host.linkSinks()
     val link = Link(ctx, db, clock, sinks.first, latest, sinks.second, stateReady = { host.steps.first { it != null } })
     val scenario = Scenario(ctx, host, link)
+    /** 화면·알림 사건의 입구(V3). */
+    val events: EventSink = host.uiSink()
 
     init {
-        host.targets = Targets(exec::handle, link::handle, { Notices.show(ctx, it) }, link::wake, link::restoreEvents, exec::reemitRoute)
+        host.targets = Targets(exec::handle, link::handle, { Notices.show(ctx, it) }, link::wake, link::restoreEvents, exec::reemitAll, lastGear = exec::lastGear, cancelIfSpeaking = exec::cancelIfSpeaking, linkNow = link::enqueueNow, hideNotice = { Notices.cancel(ctx, it) })
         MicFgs.clock = clock
+        // 마이크 사건은 장면 입력원이다: 장면은 실제 마이크를 끄고 장면 PCM을 마이크 서비스에 넣으며(Scenario.runAll·runOnce), 장면 끝 전에 다시 끈다.
+        // 그래서 장면 중 마이크 사건은 늘 장면 소리에서 나오고 override로 거르지 않는 주입 길(post)을 쓴다(C322)
         MicFgs.emit = host::post
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         // link가 곡 표를 고치면 store가 후보 ③을 다시 계산한다(명세서 5장, 계약 6.1 '③ 계산')
         db.invalidationTracker.createFlow("song", "song_selection", "child_profile")
-            .onEach { host.methodsMaybeChanged() }.launchIn(scope)
+            .retryOnDbError("host").onEach { host.methodsMaybeChanged() }.launchIn(scope)   // C293
         // 세션·단계가 바뀔 때만 logcat 한 줄(tag host). 에뮬레이터 실측이 세션 열림을 본다
         host.stepLog.map { it.state.session?.let { x -> "${x.id} ${x.phase}" } ?: "IDLE" }.distinctUntilChanged()
             .onEach { Log.i("host", "stepLog 세션 $it") }.launchIn(scope)

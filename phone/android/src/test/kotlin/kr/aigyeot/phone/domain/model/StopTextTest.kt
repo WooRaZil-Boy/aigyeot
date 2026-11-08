@@ -12,12 +12,12 @@ class StopTextTest {
     @Test fun `운전자에게 말하지 못한 인계는 제안했다고 보이지 않는다`() {
         assertEquals("두 번 시도 뒤 · 쉼터는 묻지 못했어요", t(HandoffKind.REST_OFFER, false))
         assertEquals("두 번 시도 뒤 · 도착 안내는 하지 못했어요", t(HandoffKind.ARRIVAL_NOTICE, false))
-        assertEquals("두 번 시도 뒤 · 가까운 쉼터가 없었어요", t(HandoffKind.NO_REST, false))
+        assertEquals("두 번 시도 뒤 · 안전한 곳에 세우도록 안내하지 못했어요", t(HandoffKind.NO_REST, false))
         assertEquals("두 번 시도 뒤 · 휴게소에 들르자고 제안했어요", t(HandoffKind.REST_OFFER, true))
         assertEquals("두 번 시도 뒤 · 휴게소에 들르자고 제안했어요", t(HandoffKind.REST_OFFER, null))
         assertEquals("두 번 시도 뒤 · 도착 안내를 했어요", t(HandoffKind.ARRIVAL_NOTICE, true))
-        assertEquals("두 번 시도 뒤 · 가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요", t(HandoffKind.NO_REST, null))
-        assertEquals("두 번 시도 뒤 · 차가 선 채로 알렸어요", t(HandoffKind.PARKED, null))
+        assertEquals("두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요", t(HandoffKind.NO_REST, null))
+        assertEquals("두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요", t(HandoffKind.PARKED, null))
         assertEquals("두 번 시도 뒤 · 쉼터에 들르자고 제안했어요", stopText(StopReason.ATTEMPT_LIMIT, HandoffKind.REST_OFFER, null, true))
     }
 
@@ -32,5 +32,26 @@ class StopTextTest {
         fun info(told: Boolean?) = StopInfo(true, StopReason.ATTEMPT_LIMIT, HandoffKind.ARRIVAL_NOTICE, null, false, false, told)
         assertEquals(0, stopNoticeCount(emptyList()))
         assertEquals(2, stopNoticeCount(listOf(null, info(true), info(null), info(false))))
+    }
+
+    @Test fun `정차 인계는 알렸다고 보이지 않는다`() {
+        assertEquals("두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요", stopText(StopReason.ATTEMPT_LIMIT, HandoffKind.PARKED, null, null, false, false))
+        assertEquals("두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요 · 다른 보호자에게 알림", stopText(StopReason.ATTEMPT_LIMIT, HandoffKind.PARKED, null, null, false, true))
+        val parked = StopInfo(true, StopReason.ATTEMPT_LIMIT, HandoffKind.PARKED, null, false, false, null)
+        val told = StopInfo(true, StopReason.ATTEMPT_LIMIT, HandoffKind.ARRIVAL_NOTICE, null, false, false, true)
+        assertEquals(1, stopNoticeCount(listOf(parked, told)))
+    }
+
+    @Test fun `뒷좌석 출력이 없어 정차한 인계는 소리를 틀지 못했다고 쓴다`() {   // U59
+        assertEquals("뒷좌석 출력 없음 · 차가 선 채로 소리를 틀지 못했어요", stopText(StopReason.NO_SOUND, HandoffKind.PARKED, null, null, false, false))
+    }
+
+    @Test fun `정차 문구는 확인된 사실만 쓴다`() {
+        val a = StopReason.ATTEMPT_LIMIT
+        assertEquals("두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요 · 다른 보호자에게 알림", stopText(a, HandoffKind.PARKED, null, null, false, true))
+        assertEquals("두 번 시도 뒤 · 차가 선 채로 달래기를 멈췄어요", stopText(a, HandoffKind.PARKED, null, null, false, false))
+        assertEquals("두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요", stopText(a, HandoffKind.NO_REST, null, true))
+        assertEquals("두 번 시도 뒤 · 안전한 곳에 세우도록 안내하지 못했어요", stopText(a, HandoffKind.NO_REST, null, false))
+        assertEquals("두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요", stopText(a, HandoffKind.NO_REST, null, null))
     }
 }

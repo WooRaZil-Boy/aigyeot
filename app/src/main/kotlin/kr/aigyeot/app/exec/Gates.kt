@@ -58,6 +58,19 @@ internal class TtsGate(
         arm(SETTLE_MS)                                       // 끝 신호가 올 때까지 다음 문장을 미룬다
     }
 
+    /**
+     * 오디오 포커스를 잃었다(LOSS·LOSS_TRANSIENT, C321 ②). 말하던 문장을 멈추고 그 문장을 실패로 끝낸다. 예열·앞 요청뿐이면 아무것도 안 한다.
+     * [stop]과 달리 큐는 비우지 않는다: 다음 문장은 판단 코어가 정한 것이라 다시 포커스를 요청하고, 거절되면 그때 실패로 끝난다.
+     */
+    fun focusLost() {
+        val c = cur ?: return
+        cur = null
+        abandonFocus()
+        runCatching { sdkStop() }
+        arm(SETTLE_MS)                                       // 끝 신호(onStop)가 올 때까지 다음 문장을 미룬다
+        c(false)
+    }
+
     private fun begin(text: String, done: (Boolean) -> Unit) {
         if (!requestFocus()) return done(false)
         cur = done

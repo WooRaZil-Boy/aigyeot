@@ -30,16 +30,26 @@ class ContractTypesTest {
 
     @Test fun sessionStateRoundTrip() {
         val s = state.copy(session = SessionState(
-            "s-1", 1L, OpenTrigger.DOOR_THEN_D, state.methodsNext, Phase.ATTEMPT, 0,
-            Play("s-1-1", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL),
-            null, null,
-            EpisodeState("e-1", EpisodeTrigger.ALARM, 1L, 1L, 0L, 0L, null, null, false,
-                HandoffRecord(HandoffCause.TWO_ATTEMPTS, HandoffKind.PARKED, false, false), emptyList(), 0L, false),
-            setOf(PauseReason.SILENCED), 0L, 0L, false, null, false, null, 0L, false, false,
-            mapOf(Sid.S10 to 3L), null, mapOf(Area.ROW_2_LEFT to true), false, false, null, null,   // comfortDone, comfortPending, nursingStop
-            waypointPending = null, recordsCleared = false, pendingAlarm = null,
-        ))
+            "s-1", 1L, OpenTrigger.DOOR_THEN_D, state.methodsNext,
+            stage = Stage.Attempt(1, Play("s-1-1", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL)),
+            episode = EpisodeState("e-1", EpisodeTrigger.ALARM, 1L, 1L, 0L, 0L, null, null, false,
+                HandoffRecord(HandoffCause.TWO_ATTEMPTS, HandoffKind.PARKED), emptyList(), 0L, false),
+            playedMs = 0L, offers = OfferState(spokenAt = mapOf(Sid.S10 to 3L), leftParkAt = 2L),
+            controls = ControlState(windowLockBefore = mapOf(Area.ROW_2_LEFT to true)),
+            s17Said = false, micNoticeArmed = false, recordsCleared = false,
+        ), car = state.car.copy(pauses = setOf(PauseReason.SILENCED)))
         assertEquals(s, json.decodeFromString<EngineState>(json.encodeToString(s)))
+    }
+
+    /** D5: 단계(sealed Stage)가 종류마다 JSON으로 썼다 다시 읽어도 같다. 읽기 투영(phase 등)은 직렬화되지 않는다. */
+    @Test fun stageRoundTrip() {
+        val pl = Play("s-1-1", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL)
+        val stages = listOf(
+            Stage.Listening, Stage.Attempt(1, pl, PendingAlarm(5L, 1L)), Stage.Gap(1, JudgeWindow(2L, 8_002L)), Stage.Gap(1, null),
+            Stage.Confirm(2, JudgeWindow(2L, 30_002L)), Stage.Wait(2, 3L, pl.copy(kind = PlayKind.REQUEST, purpose = PlayPurpose.REQUEST)), Stage.Handoff(2, 4L),
+        )
+        stages.forEach { st -> assertEquals(st, json.decodeFromString<Stage>(json.encodeToString(st))) }
+        assertEquals("""{"type":"GAP","n":1,"window":null}""", json.encodeToString<Stage>(Stage.Gap(1, null)))
     }
 
     @Test fun comfortPendingRoundTripAndOldSnapshotDefault() {

@@ -1,7 +1,7 @@
 // 차 방(CarRoom, 차마다 하나, 계약 0장·4.2): 기기·토큰 해시, 받는 쪽별 메시지함, seq, 노래 파일, 푸시, WebSocket.
 import { DurableObject } from "cloudflare:workers";
 import type { CodeKind, Directory } from "./directory";
-import { AckBody, Envelope, PatchDeviceRequest, bodySchemas } from "./protocol";
+import { AckBody, DropIdsBody, Envelope, PatchDeviceRequest, bodySchemas } from "./protocol";
 import { type PushJob, pushConfigured, sendPush } from "./push";
 import {
   DAY,
@@ -89,6 +89,11 @@ CREATE TABLE IF NOT EXISTS push_jobs (
   PRIMARY KEY (message_id, device_id)
 );
 CREATE INDEX IF NOT EXISTS push_jobs_next ON push_jobs(next_at);
+CREATE TABLE IF NOT EXISTS record_clears (
+  id TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,
+  dropped INTEGER NOT NULL DEFAULT 0 -- 1: 지우기 때 차가 뺀 메시지 id의 버림 표시(L79)
+);
 ${RATE_LIMITS_DDL}`;
 
 type DeviceRole = "car" | "owner" | "guardian";
@@ -183,12 +188,23 @@ const sameBytes = (a: ArrayBuffer, b: ArrayBuffer) => {
   return x.length === y.length && x.every((v, i) => v === y[i]);
 };
 
+/** 11-07 한 번짜리 맞춤: 같은 날 먼저 만든 옛 record_clears(칸 id·at, L78의 before_at)를 지금 꼴로 고친다. CREATE IF NOT EXISTS는 칸을 더하지 않는다. */
+export function migrateRecordClears(sql: SqlStorage) {
+  const cols = sql.exec<{ name: string }>("PRAGMA table_info(record_clears)").toArray().map((c) => c.name);
+  if (!cols.includes("dropped")) sql.exec("ALTER TABLE record_clears ADD COLUMN dropped INTEGER NOT NULL DEFAULT 0");
+  // L81: part·parts를 걷어냈다(L80 칸).
+  if (cols.includes("parts")) sql.exec("ALTER TABLE record_clears DROP COLUMN parts");
+  // before_at은 NOT NULL이라 남아 있으면 새 INSERT가 실패한다.
+  if (cols.includes("before_at")) sql.exec("ALTER TABLE record_clears DROP COLUMN before_at");
+}
+
 export class CarRoom extends DurableObject<Env> {
   private sql = this.ctx.storage.sql;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql.exec(DDL);
+    migrateRecordClears(this.sql);
     // ping은 방을 깨우지 않는다(2장 'Hibernation').
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -308,7 +324,7 @@ export class CarRoom extends DurableObject<Env> {
         case "GET /v1/songs/:id":
           return this.getSong(dev, songId!);
         case "DELETE /v1/records":
-          return this.clearRecords(dev);
+          return this.clearRecords(req, dev, url.searchParams);
       }
       throw new HttpError(404, "not_found");
   }
@@ -463,6 +479,7 @@ export class CarRoom extends DurableObject<Env> {
         `SELECT min(t) AS t FROM (
           SELECT min(created_at) + ${KEEP} AS t FROM messages
           UNION ALL SELECT min(uploaded_at) + ${KEEP} FROM songs
+          UNION ALL SELECT min(at) + ${KEEP} FROM record_clears
           UNION ALL SELECT min(next_at) FROM push_jobs WHERE ${pushConfigured(this.env) ? 1 : 0}
           UNION ALL SELECT last_activity_at + ${30 * DAY} FROM room
             WHERE NOT EXISTS (SELECT 1 FROM devices WHERE role <> 'car'))`,
@@ -605,6 +622,11 @@ export class CarRoom extends DurableObject<Env> {
     const out = this.ctx.storage.transactionSync(() => {
       // 같은 id 다시 보내기(1.4): 내용이 같으면 200과 처음 seq, 다르면 409.
       this.stillPaired(dev);
+      // L79·L87: 버림 표시를 먼저 본다. 지우기 때 차가 뺀 id가 늦게 도착했다. 저장·배달·푸시 없이 200(차는 보낼 함에서 지운다).
+      if (this.sql.exec("SELECT 1 FROM record_clears WHERE id = ? AND dropped = 1", env.id).toArray().length) {
+        return { status: 200, seq: 0, recipients: 0, body: env.body };
+      }
+
       const old = this.sql
         .exec<{ seq: number; body: string | null; body_hash: ArrayBuffer; created_at: number }>(
           "SELECT seq, body, body_hash, created_at FROM messages WHERE id = ?",
@@ -752,15 +774,34 @@ export class CarRoom extends DurableObject<Env> {
     return new Response(row.data, { headers: { "Content-Type": "audio/mp4", Date: new Date().toUTCString() } });
   }
 
-  /** '모든 기록 지우기'의 중계 몫: 리포트·인계 알림·돌봄 요약 보관분만(1.4). */
-  private clearRecords(dev: Device) {
+  /** '모든 기록 지우기'의 중계 몫: 리포트·인계 알림 보관분만(1.4, 돌봄 요약은 지우지 않는다. L68). 본문 `{"drop_ids":[...]}`는 차가 보낼 함에서 뺀 id(L79). */
+  private async clearRecords(req: Request, dev: Device, q: URLSearchParams) {
     need(dev, "car");
+    const id = q.get("id");
+    if (!id || !ULID_RE.test(id)) throw new HttpError(400, "bad_request", "id가 ULID가 아님");
+    const raw = await readJson(req);
+    const dropIds = decode(DropIdsBody, raw).drop_ids;
+    // 보낼 함 상한(8.5)과 별개로 본문 64 KB 안에 드는 개수만 받는다(ULID 26자 + 따옴표·쉼표).
+    if (dropIds.length > 1000 || !dropIds.every((x) => ULID_RE.test(x))) {
+      throw new HttpError(400, "bad_request", "drop_ids는 ULID 1000개 이하");
+    }
     this.ctx.storage.transactionSync(() => {
-      const sel = "SELECT id FROM messages WHERE type IN ('report_summary','handoff_alert','care_summary')";
+      const now = Date.now();
+      // 같은 id를 다시 받으면(204이 차에 닿지 못한 재시도) 아무것도 하지 않는다(L67).
+      if (this.sql.exec("SELECT 1 FROM record_clears WHERE id = ? AND dropped = 0", id).toArray().length) return;
+      take(this.sql, "records_clear", 10, HOUR, now); // L97: 새 삭제 id만 센다(차당 시간당 10회, 설계값)
+      this.sql.exec("INSERT INTO record_clears (id, at) VALUES (?, ?)", id, now);
+      // L87: 행이 있든 없든 버림 표시(이미 있는 것의 본문은 아래에서 비워지고, 행이 기한으로 지워져도 늦은 POST를 막는다).
+      for (const d of dropIds) {
+        this.sql.exec("INSERT OR IGNORE INTO record_clears (id, at, dropped) VALUES (?, ?, 1)", d, now);
+      }
+      const sel = "SELECT id FROM messages WHERE type IN ('report_summary','handoff_alert')";
       this.sql.exec(`DELETE FROM deliveries WHERE message_id IN (${sel})`);
       this.sql.exec(`DELETE FROM push_jobs WHERE message_id IN (${sel})`);
-      this.sql.exec("DELETE FROM messages WHERE type IN ('report_summary','handoff_alert','care_summary')");
+      // 행은 남기고 본문만 비운다: 폰이 같은 id로 다시 보내도 새 seq로 되살아나지 않게(1.4 같은 id 다시 보내기).
+      this.sql.exec("UPDATE messages SET body = NULL WHERE type IN ('report_summary','handoff_alert')");
     });
+    await this.scheduleAlarm();
     return json(204);
   }
 
@@ -805,6 +846,7 @@ export class CarRoom extends DurableObject<Env> {
       this.sql.exec("DELETE FROM messages WHERE created_at <= ?", old);
       this.sql.exec("DELETE FROM song_blobs WHERE song_id IN (SELECT song_id FROM songs WHERE uploaded_at <= ?)", old);
       this.sql.exec("DELETE FROM songs WHERE uploaded_at <= ?", old);
+      this.sql.exec("DELETE FROM record_clears WHERE at <= ?", old);
       this.sql.exec("DELETE FROM rate_limits WHERE expires_at <= ?", now);
       this.sql.exec("DELETE FROM push_jobs WHERE expires_at <= ?", now);
     });

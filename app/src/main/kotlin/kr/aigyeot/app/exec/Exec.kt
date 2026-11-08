@@ -1,6 +1,7 @@
 package kr.aigyeot.app.exec
 
 import android.content.Context
+import kr.aigyeot.app.exec.android.androidIo
 import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.engine.AddWaypoint
 import kr.aigyeot.engine.AdjustPlayback
@@ -33,6 +34,9 @@ import kr.aigyeot.engine.YesNo
 internal class ExecIo(
     val lock: Any, val sched: Sched, val audio: AudioPort, val tts: TtsPort, val stt: SttPort, val tap: MicTap,
     val control: ControlPort, val navi: NaviPort, val start: () -> Unit = {}, val stop: () -> Unit = {},
+    val reemit: () -> Unit = {},   // 차량 신호·경로의 지금 값을 중복 억제 없이 다시 낸다(장면 끝, V12)
+    val lastGear: () -> kr.aigyeot.engine.Gear? = { null },   // 마지막으로 받은 기어(C328, 장면 끝 복원의 기준선)
+    val resubscribeSpeed: () -> Unit = {},   // 속도 권한이 늦게 허용됐을 때 차량 구독을 다시 한다(C321 ①)
 )
 
 /**
@@ -71,7 +75,7 @@ class Exec internal constructor(
     fun start() = synchronized(io.lock) {
         if (started) return@synchronized
         started = true
-        try { io.start() } catch (e: Exception) { log.row("start", "Exec", "done", e.toString(), false) }
+        try { io.start() } catch (e: Exception) { log.row(null, "start", "Exec", "done", e.toString(), false) }
     }
 
     /** 말하기·듣기를 끊고 재생을 사건 없이 놓고 구독을 푼다. 시작 안 했거나 두 번 불러도 안전하며, 한 단계가 던져도 나머지 정리가 이어진다. */
@@ -84,8 +88,20 @@ class Exec internal constructor(
         runCatching { io.stop() }
     }
 
-    /** 장면 끝 복원이 경로를 비운 뒤 호스트가 부른다(C130). 내비의 최신 경로를 다시 낸다. */
-    fun reemitRoute(): Unit = synchronized(io.lock) { runCatching { io.navi.reemit() } }
+    /** C208: 발화를 끊는 사건 앞에서 말하는 중인지 묻기와 끊기를 done 콜백과 같은 잠금 안에서 한다. null = 끊었다, 아니면 이미 끝난 발화의 spoken. */
+    fun cancelIfSpeaking(id: String): Pair<Boolean, Long>? = synchronized(io.lock) { runCatching { voice.cancelIfSpeaking(id) }.getOrDefault(null) }
+
+    /**
+     * 장면 끝 복원 뒤 호스트가 부른다(V12, C130). 지금 차 값(기어·뒷문·통화·실내 온도·뒷좌석 열선·속도 표본·경로)을 중복 억제 없이 다시 내,
+     * 장면 동안 장면 상태로 갔거나 override로 버린 실제 신호를 실제 상태가 받게 한다. 받은 적이 없는 신호는 내지 않는다.
+     */
+    fun reemitAll(): Unit = synchronized(io.lock) { runCatching { io.reemit() } }
+
+    /** C328: 실행기가 마지막으로 받은 기어. 받은 적이 없거나 던지면 null. */
+    fun lastGear(): kr.aigyeot.engine.Gear? = synchronized(io.lock) { runCatching { io.lastGear() }.getOrNull() }
+
+    /** C321 ①: 화면의 권한 결과에서 CAR_SPEED가 허용되면 부른다. 실행기 스레드에서 Car가 준비돼 있고 속도가 아직 안 붙었을 때만 다시 구독한다. */
+    fun resubscribeSpeed(): Unit = synchronized(io.lock) { runCatching { io.resubscribeSpeed() } }
 
     /** 계약 4장 '받는 곳'이 exec인 할 일. 그 밖(Qa·ShowNotice·저장)은 무시한다. */
     fun handle(cmd: Command): Unit = synchronized(io.lock) {
@@ -108,7 +124,7 @@ class Exec internal constructor(
             }
         } catch (e: Exception) {
             // SDK가 던져도 판단 코어가 결과를 영원히 기다리지 않게 실패 결과를 낸다
-            log.row("handle", cmd::class.simpleName.orEmpty(), "done", e.toString(), false)
+            log.row(null, "handle", cmd::class.simpleName.orEmpty(), "done", e.toString(), false)
             failed(cmd).forEach(post)
         }
     }

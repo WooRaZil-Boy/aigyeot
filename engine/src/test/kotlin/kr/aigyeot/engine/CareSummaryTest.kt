@@ -36,6 +36,17 @@ class CareSummaryTest {
         inj.ev(CareSummary(T0, care(T0, 2), seq = 3)); assertEquals(care(T0, 1), inj.s.care)
     }
 
+    @Test fun l77_differentSenderHigherSeqReplaces_regardlessOfAsOf() {
+        val sim = idle().ev(CareSummary(T0 + 240_000, care(T0 + 240_000, 1), seq = 430, room = "c_A"))
+        sim.ev(CareSummary(T0 + 60_000, care(T0 + 60_000, 2), seq = 431, room = "c_A"))
+        assertEquals(care(T0 + 60_000, 2), sim.s.care)                                          // 큰 seq는 이른 as_of도 바꾼다(보낸 기기는 보지 않는다)
+        sim.ev(CareSummary(T0 + 300_000, care(T0 + 300_000, 3), seq = 429, room = "c_A"))
+        assertEquals(care(T0 + 60_000, 2), sim.s.care)                                          // 작은 seq는 늦은 as_of도 버린다
+        val inj = idle().ev(CareSummary(T0 + 240_000, care(T0 + 240_000, 1)))                  // seq 없는 장면 주입끼리는 as_of
+        inj.ev(CareSummary(T0 + 60_000, care(T0 + 60_000, 2), room = "c_A")); assertEquals(care(T0 + 240_000, 1), inj.s.care)
+        inj.ev(CareSummary(T0 + 300_000, care(T0 + 300_000, 3))); assertEquals(care(T0 + 300_000, 3), inj.s.care)
+    }
+
     @Test fun cs1_differentRoom_sameSecond_laterReceivedWins_sameRoomComparesSeq() {
         val sim = idle().ev(CareSummary(T0, care(T0, 1), seq = 9000, room = "c_A"))
         sim.ev(CareSummary(T0, care(T0, 2), seq = 2, room = "c_B"))               // 새 방은 seq를 새로 센다
@@ -52,20 +63,17 @@ class CareSummaryTest {
         assertEquals(a.s, b.s.copy(care = null, careSeq = null, careRoom = null))
     }
 
-    @Test fun c40e_clearRecords_dropsCareSummary() {
-        val sim = idle().ev(CareSummary(T0, care(T0))).ev(ClearRecords(T0))
-        assertNull(sim.s.care)
+    @Test fun c40e_clearRecords_keepsCareSummary() {
+        val sim = idle().ev(CareSummary(T0, care(T0), seq = 7)).ev(ClearRecords(T0))
+        assertEquals(care(T0), sim.s.care); assertEquals(7L, sim.s.careSeq)   // 폰 돌봄 요약은 지우지 않는다(C157)
         assertEquals(listOf("DeleteRecords", "DeleteRelayRecords", "SaveSnapshot"), sim.cmds.map { it::class.simpleName })
-        sim.ev(CareSummary(T0, care(T0 - 5_000), gen = sim.s.careGen))      // 폰이 다음에 보내는 요약은 다시 받는다(옛 asOf라도)
-        assertEquals(care(T0 - 5_000), sim.s.care)
     }
 
-    @Test fun cs1_staleGenDropped_afterClearRecords() {
-        val sim = idle().ev(ClearRecords(T0))
-        assertEquals(1, sim.s.careGen)
-        sim.ev(CareSummary(T0, care(T0), seq = 430, gen = 0))               // 지우기 전에 받아 큐에서 기다리던 옛 요약
-        assertNull(sim.s.care)
-        sim.ev(CareSummary(T0, care(T0), seq = 431, gen = 1))
-        assertEquals(care(T0), sim.s.care)
+    @Test fun c158_careClearedEvent() {
+        val sim = idle().ev(CareSummary(T0, care(T0), seq = 7, room = "c_A"))
+        sim.ev(CareCleared(T0))
+        assertNull(sim.s.care); assertNull(sim.s.careSeq); assertNull(sim.s.careRoom)
+        sim.ev(CareSummary(T0, care(T0 - 1_000)))                                  // 비운 뒤에는 이른 요약도 받는다
+        assertEquals(care(T0 - 1_000), sim.s.care)
     }
 }

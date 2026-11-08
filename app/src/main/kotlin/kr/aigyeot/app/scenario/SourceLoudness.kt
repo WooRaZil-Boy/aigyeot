@@ -7,7 +7,7 @@ import android.media.MediaFormat
 import android.os.SystemClock
 import android.util.Log
 import kr.aigyeot.app.common.CarPaths
-import kr.aigyeot.app.exec.AndroidAudio
+import kr.aigyeot.app.exec.android.AndroidAudio
 import kr.aigyeot.app.exec.Loudness
 import kr.aigyeot.app.exec.WhiteNoise
 import kr.aigyeot.engine.Method

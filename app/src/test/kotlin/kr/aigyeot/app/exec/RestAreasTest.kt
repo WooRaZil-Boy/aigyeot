@@ -1,5 +1,7 @@
 package kr.aigyeot.app.exec
 
+import ai.pleos.playground.navi.constants.TurnType
+import ai.pleos.playground.navi.data.TBTInfo
 import kr.aigyeot.engine.RestKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,6 +23,32 @@ class RestAreasTest {
         assertTrue(RestAreas.match("안성맞춤휴게소").all { it.name.startsWith("안성맞춤") }, "안성과 섞이지 않는다")
         assertTrue(RestAreas.match("없는휴게소").isEmpty())
         assertTrue(RestAreas.match("휴게소").isEmpty(), "이름이 비면 아무것도 맞추지 않는다")
+    }
+
+    @Test fun c304_placeable_twoRowsNoDirection_false() {
+        assertFalse(RestAreas.placeable("여주휴게소"), "양방향 두 줄(좌표 차 10m 초과)은 이름만으로 못 넣는다")
+        assertFalse(RestAreas.placeable("없는휴게소"))
+    }
+
+    // C310: PleosNavi.addWaypoint(NaviHelper SDK 필요, 단위 시험 불가)의 입구 판단이 쓰는 함수. 점이 있으면 위치 없이 보내고 null이고 줄이 있으면 위치를 받는다.
+    @Test fun c310_tiedRows_addWaypointWithoutLocation() {
+        assertTrue(RestAreas.match("보성녹차휴게소").size > 1)
+        assertTrue(RestAreas.pointOf("보성녹차휴게소") != null, "같은 좌표 두 줄은 위치 요청 없이 send")
+        assertTrue(RestAreas.pointOf("여주휴게소") == null && RestAreas.match("여주휴게소").size > 1, "다른 점 두 줄은 위치 요청")
+        assertTrue(RestAreas.match("없는휴게소").isEmpty(), "맞춘 줄이 없으면 no_coords")
+    }
+
+    @Test fun c304_placeable_singleRow_true() {
+        assertTrue(RestAreas.placeable("덕평휴게소"))
+        assertTrue(RestAreas.placeable("안성휴게소(부산방향)"), "방향이 붙으면 한 줄")
+    }
+
+    @Test fun c304_feedsAddable_sameAsPlaceable() {
+        val got = restsOf(listOf(
+            TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "여주휴게소"),
+            TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "덕평휴게소"),
+        )) { true }
+        assertEquals(listOf(false, true), got.map { it.addable })
     }
 
     @Test fun `수유실은 맞춘 줄이 모두 있을 때만 있다`() {
@@ -134,6 +162,14 @@ class RestAreasTest {
         assertNull(RestAreas.place("오창졸음쉼터", 3.0, null, rows), "오창은 쌍")
         val s = rows.first { it.name == "오창(하남)" }
         assertTrue(waypointPresent(listOf(s.lat to s.lon), s, rows), "쉼터 자료로 대조")
+    }
+
+    @Test fun c309_tiedRows_waypointListedByName() {
+        val sun = RestAreas.all.first { it.name == "보성녹차(순천)" }
+        val yeong = RestAreas.all.first { it.name == "보성녹차(영암)" }
+        for (t in listOf(sun, yeong)) assertTrue(waypointListed(listOf(Triple("보성녹차휴게소", 0.0, 0.0)), t), "같은 점 두 줄은 이름만으로 한 점")
+        val yeoju = RestAreas.all.first { it.name.startsWith("여주(") }
+        assertFalse(waypointListed(listOf(Triple("여주휴게소", 0.0, 0.0)), yeoju), "다른 점 두 줄은 이름만으로는 실패")
     }
 
     // C110: 실제 내비는 목록 좌표를 0.0, 0.0으로 주고 이름만 맞게 준다

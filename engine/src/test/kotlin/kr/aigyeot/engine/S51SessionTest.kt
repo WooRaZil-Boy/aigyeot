@@ -118,6 +118,26 @@ class S51SessionTest {
         assertEquals(mapOf(restore.cmdId to setOf(L)), sim.s.ign.windowLockPending.single().restoring)
     }
 
+    @Test fun r03f_restoreCmdId_belongsToLockingSession_inIdle() {   // C323(P5)
+        val sim = session(prof = profile(sibling = true))
+        val idA = sim.ses.id
+        val lock = sim.step<SetWindowLock>().single()
+        sim.gear(Gear.P, MIN).ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session)
+        lockResult(sim, lock, L, 0.0)
+        assertTrue(sim.step<SetWindowLock>().single().cmdId.startsWith("$idA-"))
+    }
+
+    @Test fun r03f_restoreCmdId_belongsToLockingSession_whenNextSessionOpen() {   // C323(P5)
+        val sim = session(prof = profile(sibling = true))
+        val idA = sim.ses.id
+        val lock = sim.step<SetWindowLock>().single()
+        sim.gear(Gear.P, MIN).doorCycle().gear(Gear.D)
+        assertTrue(sim.ses.id != idA)
+        lockResult(sim, lock, L, 0.0)
+        assertTrue(sim.step<SetWindowLock>().single().cmdId.startsWith("$idA-"))
+    }
+
     @Test fun r03g_restoreResult_releasesQueuedLockOfNextSession() {
         val sim = session(prof = profile(sibling = true))
         val lockA = sim.step<SetWindowLock>().single()
@@ -177,6 +197,85 @@ class S51SessionTest {
         assertTrue(ended.reportPending)
         assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>())
         assertEquals("feeding_state", sim.step<SendToPhone>().single().type)
+    }
+
+    // ---- C335: 리포트(CloseSession)는 뒷창 잠금·되돌림 결과를 기다린 뒤 한 번 ----
+    /** 형제 프로필 세션에서 두 영역 잠금 결과를 받고(before 닫힘) P·뒷문 열림으로 닫는다. 되돌림 명령을 돌려준다. */
+    private fun closedWithRestore(): Triple<Sim, String, SetWindowLock> {
+        val sim = session(prof = profile(sibling = true))
+        val id = sim.ses.id
+        val lock = sim.step<SetWindowLock>().single()
+        lockResult(sim, lock, L, 0.0); lockResult(sim, lock, R, 0.0)
+        sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true))
+        assertNull(sim.s.session)
+        return Triple(sim, id, sim.step<SetWindowLock>().single())
+    }
+
+    @Test fun c335_report_waitsForRestoreResult() {
+        val (sim, id, restore) = closedWithRestore()
+        assertTrue(sim.step<SaveSession>().last().record.reportPending)
+        assertTrue(sim.step<CloseSession>().isEmpty(), "되돌림 결과 전에는 리포트 없음")
+        lockResult(sim, restore, L)
+        assertTrue(sim.step<CloseSession>().isEmpty())
+        lockResult(sim, restore, R)
+        assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>())
+        assertEquals(1, sim.all<CloseSession>().size)
+    }
+
+    @Test fun c335_report_afterRestoreFailure_once() {
+        val (sim, id, restore) = closedWithRestore()
+        lockResult(sim, restore, L, ok = false)
+        assertTrue(sim.step<CloseSession>().isEmpty())
+        lockResult(sim, restore, R)
+        assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>())   // control_log 줄은 실행기가 결과보다 먼저 쓴다(Controls.finish)
+        assertEquals(1, sim.all<CloseSession>().size)
+    }
+
+    @Test fun c335_report_waitsThroughLockingThenRestoring_3f3g() {
+        val sim = session(prof = profile(sibling = true))
+        val id = sim.ses.id
+        val lock = sim.step<SetWindowLock>().single()
+        sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true))   // 잠금 결과 전에 닫힘
+        assertTrue(sim.all<CloseSession>().isEmpty(), "잠금 결과 대기 중")
+        lockResult(sim, lock, L, 0.0)                                        // 3f: 되돌림
+        val restore = sim.step<SetWindowLock>().single()
+        assertTrue(sim.all<CloseSession>().isEmpty())
+        lockResult(sim, lock, R, ok = false)                                 // 잠금 실패: 되돌림 결과가 남았다
+        assertTrue(sim.all<CloseSession>().isEmpty())
+        lockResult(sim, restore, L)                                          // 3g
+        assertEquals(listOf(CloseSession(id)), sim.all<CloseSession>())
+    }
+
+    @Test fun c335_report_immediateWhenNothingLocked() {
+        val sim = session(prof = profile(sibling = true))
+        val lock = sim.step<SetWindowLock>().single()
+        lockResult(sim, lock, L, ok = false); lockResult(sim, lock, R, ok = false)
+        val id = sim.ses.id
+        sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true))
+        assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>())
+    }
+
+    @Test fun c335_report_afterBootDropsRestoreWait_c86() {
+        val (sim, id, _) = closedWithRestore()
+        assertTrue(sim.all<CloseSession>().isEmpty())
+        sim.ev(Boot(sim.t + MIN, Gear.P, 10))
+        assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>())
+        assertTrue(sim.s.ign.windowLockPending.isEmpty())
+    }
+
+    @Test fun c335_report_ofOldSessionAfterNextSessionOpens() {
+        val sim = session(prof = profile(sibling = true))
+        val idA = sim.ses.id
+        val lockA = sim.step<SetWindowLock>().single()
+        sim.gear(Gear.P, MIN).doorCycle().gear(Gear.D)
+        assertTrue(sim.ses.id != idA)
+        assertTrue(sim.all<CloseSession>().isEmpty())
+        lockResult(sim, lockA, L, 0.0)
+        val restL = sim.step<SetWindowLock>().single()
+        lockResult(sim, lockA, R, ok = false)
+        assertTrue(sim.all<CloseSession>().isEmpty())
+        lockResult(sim, restL, L)
+        assertEquals(listOf(CloseSession(idA)), sim.all<CloseSession>(), "옛 세션 id로, 새 세션이 열려 있어도")
     }
 
     @Test fun r13b_longParkWithoutDoor_keepsSession() {

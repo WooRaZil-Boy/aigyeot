@@ -11,9 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -24,44 +22,36 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
-import kotlinx.coroutines.delay
-import kr.aigyeot.app.link.Link
 import kr.aigyeot.app.link.LinkConn
 import kr.aigyeot.app.link.LinkStatus
-import kr.aigyeot.app.link.db.SongSelectionEntity
-import kr.aigyeot.app.store.db.SongEntity
-import kr.aigyeot.engine.Method
-import kr.aigyeot.engine.MethodKind
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /** 연결 화면(contracts-link 8.7): 열면 코드를 받고(①), 닫으면 지운다(④). 코드·QR·남은 시간·폰 목록·끊기. */
 @Composable
-fun ConnectScreen(link: Link, clock: () -> Long, onBack: () -> Unit) = Page("휴대폰 연결", onBack) {
-    DisposableEffect(link) { link.openPairing(); onDispose { link.closePairing() } }
-    val st by link.status.collectAsState()
-    var now by remember { mutableLongStateOf(clock()) }
-    LaunchedEffect(st.pairExpiresAt) { while (st.pairExpiresAt != null) { now = clock(); delay(1_000) } }
+fun ConnectScreen(
+    ui: ConnectUiState, onOpen: () -> Unit, onClose: () -> Unit, onDisconnect: (String) -> Unit, onRefresh: () -> Unit, onBack: () -> Unit,
+) = Page("휴대폰 연결", onBack) {
+    DisposableEffect(Unit) { onOpen(); onDispose { onClose() } }
+    val st = ui.link
     LinkLines(st)
     val code = st.pairCode
     if (code != null) {
         Body("휴대폰 앱에서 QR을 찍거나 코드를 넣어 주세요")
         Text(code.chunked(3).joinToString(" "), style = MaterialTheme.typography.headlineSmall)
         st.pairUri?.let { uri -> remember(uri) { qr(uri) }?.let { Image(it, "연결 QR", Modifier.size(320.dp)) } }
-        st.pairExpiresAt?.let { Label("남은 시간 ${((it - now) / 1000).coerceAtLeast(0) / 60}분 ${((it - now) / 1000).coerceAtLeast(0) % 60}초") }
+        ui.remainingS?.let { Label(remainingText(it)) }
     }
     Label("연결된 휴대폰")
     if (st.phones.isEmpty()) Body("아직 없어요")
     st.phones.forEach { ph ->
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.weight(2f)) {
-                Body((if (ph.role == "owner") "함께 타는 보호자" else "다른 보호자") + (ph.lastSeenAt?.let { " · 마지막 연락 ${hm(it)}" } ?: ""))
-            }
-            Box(Modifier.weight(1f)) { BigButton("끊기", primary = false) { link.disconnect(ph.deviceId) } }
+            Box(Modifier.weight(2f)) { Body(phoneLabel(ph)) }
+            Box(Modifier.weight(1f)) { BigButton("끊기", primary = false) { onDisconnect(ph.deviceId) } }
         }
     }
-    BigButton("목록 새로 보기", primary = false) { link.refreshPhones() }
+    BigButton("목록 새로 보기", primary = false, onClick = onRefresh)
 }
 
 /** 정차 화면의 연결 상태 한 줄(contracts-link 8.6). NONE은 표시하지 않는다. CONNECTED는 연결된 폰이 있을 때만 "연결됨"(C106). */
@@ -101,18 +91,15 @@ internal fun LinkLines(st: LinkStatus) {
     linkLines(st, paired).forEach { Body(it.text, if (it.error) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified) }
 }
 
-/** 노래 고르기(G20, 명세서 5장): 받은 부모 노래 중 실험에 쓸 곡을 고른다. 후보 ③ 다시 계산은 store가 한다. */
+/** 노래 고르기 화면(G20). 고른 곡은 다음 주행부터 쓴다. */
 @Composable
-fun SongsScreen(songs: List<SongEntity>, selection: SongSelectionEntity?, methods: List<Method>, onSelect: (String) -> Unit, onBack: () -> Unit) =
+fun SongsScreen(rows: List<SongRow>, onSelect: (String) -> Unit, onBack: () -> Unit) =
     Page("부모 노래", onBack) {
-        val third = methods.firstOrNull { it.kind == MethodKind.SONG }?.songId
-        if (songs.isEmpty()) Body("휴대폰에서 노래를 보내면 여기 보여요")
-        songs.forEach { s ->
+        if (rows.isEmpty()) Body("휴대폰에서 노래를 보내면 여기 보여요")
+        rows.forEach { s ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.weight(2f)) {
-                    Body((s.name ?: "이름 없는 노래") + (s.durationS?.let { " · ${it.toInt()}초" } ?: "") + if (s.id == third) " · 실험에 쓰는 곡" else "")
-                }
-                Box(Modifier.weight(1f)) { BigButton("이 곡 쓰기", enabled = s.id != selection?.songId) { onSelect(s.id) } }
+                Box(Modifier.weight(2f)) { Body(s.label) }
+                Box(Modifier.weight(1f)) { BigButton("이 곡 쓰기", enabled = !s.selected) { onSelect(s.id) } }
             }
         }
         Label("고른 곡은 다음 주행부터 써요")

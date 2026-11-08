@@ -179,6 +179,8 @@ data class SteerWindowEntity(
     @ColumnInfo(name = "cry_present") val cryPresent: Boolean,
     @ColumnInfo(name = "playing") val playing: Boolean,
     @ColumnInfo(name = "reversals") val reversals: Int,
+    /** C312: 이 창 동안 판단 코어가 울음을 봤나. 아니면 cry_present=0이 '울음 없음'이 아니라 '보지 못함'이다. */
+    @ColumnInfo(name = "observed", defaultValue = "1") val observed: Boolean = true,
 )
 
 /** 13장 PhoneLink. */

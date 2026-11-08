@@ -124,7 +124,7 @@ data class UploadSongResponse(val songId: String, val sizeBytes: Long)
 // ---- POST /v1/llm ----
 
 @Serializable
-data class LlmCry(val currentMin: Int?, val countThisDrive: Int)
+data class LlmCry(val currentMin: Int?, val countThisDrive: Int, val confirming: Boolean = false, val unavailable: Boolean = false)   // confirming: 그침 확인 중(GAP·CONFIRM, C231). unavailable: 마이크 꺼짐·입력 끊김이라 울음을 확인할 수 없음(C245). false는 보내지 않는다
 
 @Serializable
 data class LlmFeeding(val elapsedMin: Int, val intervalMin: Int)
@@ -142,7 +142,7 @@ data class LlmDiaper(val minAgo: Int?, val todayCount: Int?)
 data class LlmState(
     val cry: LlmCry,
     val feeding: LlmFeeding?,
-    val carseatMin: Int,
+    val carseatMin: Int?,   // 세션이 없으면 null(C234)
     val cabinTemp: Double?,
     val nextRest: LlmNextRest?,
     val methodStats: List<MethodStat>,

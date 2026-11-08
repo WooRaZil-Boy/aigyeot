@@ -5,8 +5,12 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kr.aigyeot.app.link.db.OutboxEntity
+import kr.aigyeot.app.store.DB_TRIES
+import kr.aigyeot.app.store.WORKER_RETRY_MS
+import kr.aigyeot.app.store.dbPause
 import kr.aigyeot.engine.Command
 import kr.aigyeot.engine.SendToPhone
+import kr.aigyeot.engine.fresh
 import kr.aigyeot.shared.SendMessageResponse
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -61,6 +65,21 @@ class LinkSendTest : LinkKit() {
         assertEquals(SA, dao.selection()!!.songId); assertEquals(77L, dao.selection()!!.seq)
         runBlocking { link.receive(env("song_selected", 76, """{"song_id":"$SB"}""")) }   // 폰의 더 작은 seq 선택
         assertEquals(SA, dao.selection()!!.songId)
+    }
+
+    // C302 U: 곡 선택 쓰기의 첫 시도만 실패하면 다시 해 보낼 함에 넣는다(조용히 유실하지 않는다)
+    @Test fun c302_selectSongDbErrorOnce_retriedAndQueued() {
+        song(SA, ACTIVE, 10)
+        val w = db.openHelper.writableDatabase
+        w.execSQL("CREATE TRIGGER fail_once BEFORE INSERT ON outbox BEGIN SELECT RAISE(ABORT, 'x'); END")
+        var pauses = 0
+        val orig = dbPause
+        dbPause = { pauses++; w.execSQL("DROP TRIGGER fail_once") }
+        try {
+            link.selectSong(SA)
+            eventually { outbox("song_selected").isNotEmpty() }
+        } finally { dbPause = orig }
+        assertEquals(1, pauses, "재시도가 한 번 일어났다")
     }
 
     @Test fun pump_permanentFailure_dropped() {
@@ -138,7 +157,8 @@ class LinkSendTest : LinkKit() {
     }
 
     @Test fun pump_recordsClear_usesDeleteRecords() {
-        item("records_clear", body = "")
+        val clearId = ulid(now)
+        item("records_clear", id = clearId, body = "")
         relay.recordsRes = Res.Err(503, "internal", null)
         pump()
         assertEquals(1, relay.recordsCalls); assertEquals(1, outbox().size)
@@ -146,7 +166,22 @@ class LinkSendTest : LinkKit() {
         relay.recordsRes = Res.Ok(204, Unit)
         pump()
         assertEquals(2, relay.recordsCalls); assertTrue(outbox().isEmpty())
+        assertEquals(listOf(clearId, clearId), relay.recordsIds)   // 재시도도 같은 id(L67)
         assertTrue(relay.sent.isEmpty())   // 메시지가 아니다
+    }
+
+    @Test fun pump_recordsClear_sendsDropIds() {
+        item("records_clear", body = """{"drop_ids":["A1","B2"]}""")
+        relay.recordsRes = Res.Err(503, "internal", null)
+        pump()
+        now += 5_000
+        relay.recordsRes = Res.Ok(204, Unit)
+        pump()
+        // 본문의 id 목록을 보내고 재시도도 같다(L79). 옛 빈 본문은 빈 목록
+        assertEquals(listOf(listOf("A1", "B2"), listOf("A1", "B2")), relay.recordsDropIds)
+        item("records_clear", body = "")
+        pump()
+        assertEquals(emptyList<String>(), relay.recordsDropIds.last())
     }
 
     @Test fun pump_okFromOldRoom_afterInvalidate_seqNotApplied_resentToNewRoom() {
@@ -167,6 +202,103 @@ class LinkSendTest : LinkKit() {
         assertTrue(outbox().isEmpty())
     }
 
+    // L84: 리포트·알림을 보낼 때마다 id를 적고(보내는 동안에도), 10분 넘은 행은 지운다. 다른 type은 적지 않는다
+    @Test fun l84_pump_recordsSentIds_prunesOld() {
+        phone()
+        db.openHelper.writableDatabase.execSQL("INSERT INTO sent_id (id, sent_at) VALUES ('OLD', ${now - SENT_ID_KEEP_MS - 1})")
+        val a = ulid(now); val b = ulid(now)
+        item("report_summary", id = a); item("song_status"); item("handoff_alert", id = b)
+        var during: List<String> = emptyList()
+        relay.sendResult = { env -> if (env.id == a) during = sentIds(); Res.Offline }   // 결과를 모르는 것만 남는다(L86)
+        pump()
+        assertEquals(listOf(a), during, "보내는 동안 이미 적혀 있다")
+        assertEquals(listOf(a), sentIds(), "오래된 행은 지워지고 결과를 모르는 a만 남는다")
+    }
+
+    // L86 ①: 확정 응답(2xx·4xx)이면 보낸 id를 지운다. 5xx·네트워크 오류·429는 결과를 모르니 남긴다
+    @Test fun l86_sentIdRemovedOnDefiniteResponse() {
+        phone()
+        for ((res, kept) in listOf(Res.Err(400, "bad_request", null) to false, Res.Err(500, "x", null) to true, Res.Err(429, "r", 30L) to true, Res.Offline to true, null to false)) {
+            db.openHelper.writableDatabase.execSQL("DELETE FROM sent_id"); db.openHelper.writableDatabase.execSQL("DELETE FROM outbox")
+            val a = ulid(now); item("report_summary", id = a)
+            relay.sendResult = { env -> res ?: Res.Ok(201, SendMessageResponse(env.id, 1, 1, env.body)) }
+            pump()
+            assertEquals(if (kept) listOf(a) else emptyList(), sentIds(), "응답 $res")
+        }
+    }
+
+    // L86 ①: 시계가 되돌아가도 개수 상한 100개가 우선(넣은 순서로 오래된 것부터)
+    @Test fun l86_sentIdCappedAt100() {
+        phone()
+        val w = db.openHelper.writableDatabase
+        for (i in 0 until 150) w.execSQL("INSERT INTO sent_id (id, sent_at) VALUES ('X${"%03d".format(i)}', ${now + (if (i < 75) 3_600_000L else 0L)})")   // 앞 절반은 미래 시각(시계 되돌림)
+        val a = ulid(now); item("report_summary", id = a)
+        relay.sendResult = { Res.Offline }
+        pump()
+        assertEquals(setOf(a) + (51..149).map { "X${"%03d".format(it)}" }, sentIds().toSet())   // 151개 중 최근 100개
+    }
+
+    // L86 ②: 맨 앞을 고르는 일과 id 적기는 한 트랜잭션이라, 그 사이에 다른 스레드가 항목을 지우고 기록 지우기(drop_ids 계산)를 해도
+    // 고른 항목의 id가 drop_ids에 들어간다. 트랜잭션이 없으면 id가 적히기 전에 계산돼 빠진다
+    @Test fun l86_frontSelectAndSentIdAtomic() {
+        phone()
+        val x = ulid(now); item("report_summary", id = x)
+        relay.sendResult = { Res.Offline }
+        val store = kr.aigyeot.app.store.Store(db, { now })
+        var clearer: Thread? = null
+        link.afterFrontSelect = {
+            link.afterFrontSelect = null
+            val t = Thread {
+                dao.deleteOutbox(x)   // 고른 항목이 다른 곳에서 지워진다
+                store.clearRecords(kr.aigyeot.engine.EngineState.Companion.fresh(1, null, emptyList(), emptyList(), null, 0))
+            }
+            clearer = t; t.start(); t.join(500)    // 트랜잭션이 있으면 이 스레드는 pump가 끝날 때까지 기다린다
+        }
+        pump()
+        clearer!!.join(5_000)
+        pump()   // 기록 지우기 항목(records_clear)을 중계로 보낸다
+        assertTrue(x in relay.recordsDropIds.single(), "지운 리포트 id가 drop_ids에 없다: ${relay.recordsDropIds}")
+    }
+
+    // L94: 보낼 함 일꾼이 Room 예외로 한 바퀴(C302 재시도 DB_TRIES번)를 다 실패해도 새 신호 없이 WORKER_RETRY_MS 뒤 다시 깨어 맨 앞을 보낸다(시계는 가짜 now를 따른다)
+    @Test fun l94_pumpDbErrorOnce_retriesWithoutNewSignal() {
+        // 폰을 연결하지 않아 소켓 반복(재연결·대체 확인)이 보낼 함을 몰래 깨우지 않는다
+        relay.sendResult = { env -> Res.Ok(201, SendMessageResponse(env.id, 1, 1, env.body)) }
+        link.start(); Thread.sleep(1_000)   // 시작 때의 신호를 먼저 흘려보낸다
+        var fails = 0
+        var thrownAt = 0L
+        link.afterFrontSelect = { if (fails < DB_TRIES) { fails++; thrownAt = System.currentTimeMillis(); error("Room 예외(시험)") } }
+        val a = ulid(now); item("handoff_alert", id = a)   // 이 한 번의 신호만 일꾼을 깨운다
+        eventually { fails == DB_TRIES }
+        assertTrue(relay.sent.isEmpty())
+        eventually(waitMs = WORKER_RETRY_MS + 5_000) { relay.sent.map { it.id } == listOf(a) }
+        assertTrue(System.currentTimeMillis() - thrownAt >= WORKER_RETRY_MS - 1_000, "새 신호가 아니라 설계값 10초 뒤 깨우기로 보냈다")
+    }
+
+    // C302 W: 한 번 실패는 같은 바퀴 안에서 다시 해 10초를 기다리지 않고 보낸다
+    @Test fun c302_pumpDbErrorOnce_retriedWithinRound() {
+        relay.sendResult = { env -> Res.Ok(201, SendMessageResponse(env.id, 1, 1, env.body)) }
+        link.start(); Thread.sleep(1_000)
+        var thrownAt = 0L
+        link.afterFrontSelect = { if (thrownAt == 0L) { thrownAt = System.currentTimeMillis(); error("Room 예외(시험)") } }
+        val a = ulid(now); item("handoff_alert", id = a)
+        eventually(waitMs = 3_000) { relay.sent.map { it.id } == listOf(a) }
+        assertTrue(thrownAt != 0L, "첫 시도가 실제로 던졌다")
+        assertTrue(System.currentTimeMillis() - thrownAt < WORKER_RETRY_MS - 1_000, "다시 깨우기를 기다리지 않았다")
+    }
+
+    // L86 ② 보조: 만료로 사라진 항목은 고르지도 적지도 보내지도 않는다
+    @Test fun l86_expiredFrontNotSelectedNorSent() {
+        phone()
+        val gone = ulid(now); item("report_summary", id = gone, createdAt = now - 7 * 24 * 3_600_000L - 1)
+        val live = ulid(now); item("report_summary", id = live)
+        relay.sendResult = { Res.Offline }
+        pump()
+        assertEquals(listOf(live), relay.sent.map { it.id })
+        assertEquals(listOf(live), sentIds())
+    }
+    private fun sentIds() = db.openHelper.readableDatabase.query("SELECT id FROM sent_id").use { c -> generateSequence { if (c.moveToNext()) c.getString(0) else null }.toList() }
+
     @Test fun pump_sevenDayOldItem_droppedWithoutSending() {
         item("report_summary", createdAt = now - 7 * 24 * 3_600_000L - 1)
         pump()
@@ -175,10 +307,10 @@ class LinkSendTest : LinkKit() {
 }
 
 /** 비동기로 넣는 동작(scope.launch)이 끝날 때까지 2초 기다린다. */
-fun eventually(cond: () -> Boolean) {
-    val until = System.currentTimeMillis() + 2_000
+fun eventually(waitMs: Long = 2_000, cond: () -> Boolean) {
+    val until = System.currentTimeMillis() + waitMs
     while (!cond()) {
-        check(System.currentTimeMillis() < until) { "2초 안에 조건이 맞지 않음" }
+        check(System.currentTimeMillis() < until) { "${waitMs}ms 안에 조건이 맞지 않음" }
         Thread.sleep(10)
     }
 }

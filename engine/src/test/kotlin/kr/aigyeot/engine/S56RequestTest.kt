@@ -11,7 +11,7 @@ class S56RequestTest {
     /** 재생 없는 WAIT(1차를 '그만'으로 멈춤, 에피소드 재생 10초). */
     private fun waiting() = session().attempt1().tick(10_000).ev(DriverStop(T0 + 10_000, Via.VOICE))
     private fun Sim.epPlayed(ms: Long) = apply { s = s.copy(session = ses.copy(episode = ep.copy(playedMs = ms))) }
-    private fun Sim.quiet(ms: Long) = apply { s = s.copy(session = ses.copy(quietMs = ms)) }
+    private fun Sim.quiet(ms: Long) = apply { s = s.copy(session = ses.copy(stage = ses.stage.withQuiet(ms))) }
     private fun Sim.request(m: Method = LL) = ev(SwitchSound(t, m))
     private fun Sim.end() = ev(Tick(play().endAt))
 
@@ -95,7 +95,7 @@ class S56RequestTest {
         sim.s = sim.s.copy(session = sim.ses.copy(playedMs = P.sessionPlayCapMs - 20_000))
         sim.request().started().end()
         assertEquals(Phase.WAIT, sim.ses.phase)
-        assertTrue(sim.ses.capReached)
+        assertTrue(sim.ses.capReached(P))
         assertTrue(sim.step<StopPlayback>().isEmpty() && sim.step<SendToPhone>().isEmpty())
         assertNull(sim.ep.handoff)
     }
@@ -113,7 +113,7 @@ class S56RequestTest {
         val cap = waiting().tick(4 * MIN + 10_000)
         cap.s = cap.s.copy(session = cap.ses.copy(playedMs = P.sessionPlayCapMs - 56_000))
         cap.request().started().end()
-        assertEquals(Phase.LISTENING, cap.ses.phase); assertTrue(cap.ses.capReached)
+        assertEquals(Phase.LISTENING, cap.ses.phase); assertTrue(cap.ses.capReached(P))
     }
 
     @Test fun r18i_switchWhilePlaying_restarts() {

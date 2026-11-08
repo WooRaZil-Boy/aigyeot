@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.ErrorResponse
@@ -76,7 +77,8 @@ interface Relay {
     suspend fun ack(token: String, ids: List<String>): Res<Unit>
     /** 노래 파일을 [dest]에 쓴다. 값은 받은 바이트 수. [maxBytes]를 넘으면 maxBytes + 1에서 멈춘다. */
     suspend fun song(token: String, songId: String, dest: File, maxBytes: Long): Res<Long>
-    suspend fun deleteRecords(token: String): Res<Unit>
+    /** [id]는 보낼 함 records_clear 항목 id: 다시 보내도 같아서 중계가 두 번째를 건너뛴다(L67). [dropIds]는 1,000개 이하(L81), 지우기 때 보낼 함에서 뺀 report_summary·handoff_alert id: 본문 `{"drop_ids":[…]}`로 보내 늦게 닿은 같은 id를 중계가 배달하지 않게 한다(L79). */
+    suspend fun deleteRecords(token: String, id: String, dropIds: List<String>): Res<Unit>
     suspend fun llm(token: String, req: LlmRequest): Res<LlmResponse>
     fun socket(token: String, events: SocketEvents): RelaySocket
 }
@@ -185,7 +187,8 @@ internal class OkRelay(private val baseUrl: String, private val http: OkHttpClie
         },
     )
 
-    override suspend fun deleteRecords(token: String) = exec({ req("/v1/records", token).delete().build() }, nothing)
+    override suspend fun deleteRecords(token: String, id: String, dropIds: List<String>) =
+        exec({ req("/v1/records?id=$id", token).delete(buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString().toRequestBody(jsonType)).build() }, nothing)
 
     override suspend fun llm(token: String, req: LlmRequest) = exec(
         { req("/v1/llm", token).post(encode(LlmRequest.serializer(), req)).build() },

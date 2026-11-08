@@ -36,9 +36,12 @@ sealed interface Command
 
 // 4.3 화면·휴대폰·기록
 @Serializable data class ShowNotice(val kind: Notice) : Command
+@Serializable data class HideNotice(val kind: Notice) : Command
 @Serializable data class SendToPhone(val type: String, val body: JsonObject) : Command
 @Serializable data class SaveSession(val record: SessionRecord) : Command
 @Serializable data class SaveEpisode(val record: EpisodeRecord) : Command
+/** H11(V6·V20): 인계 확정. 그 에피소드 행의 handoff_kind·handoff_told_driver·handoff_rest_name만 쓴다. 판단 코어·장면 끝이 같은 규칙([settleHandoff])으로 낸다. */
+@Serializable data class SettleHandoff(val episodeId: String, val kind: HandoffKind, val toldDriver: Boolean?, val restName: String?) : Command
 @Serializable data class SavePlay(val record: PlayRecord) : Command
 @Serializable data class LogAlarm(val sessionId: String, val at: Long, val reason: AlarmOnly) : Command
 @Serializable data class CaptureContext(val episodeId: String, val alarmAt: Long) : Command

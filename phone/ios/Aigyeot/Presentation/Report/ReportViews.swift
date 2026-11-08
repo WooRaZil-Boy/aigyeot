@@ -146,7 +146,7 @@ private struct EpisodeView: View {
                     .font(.caption).foregroundStyle(DesignSystem.textSecondary)
             }
             line("판정", resultText(e.result, excluded: e.excludedReason))
-            line("다시 울었는지", e.recried ? "다시 울었어요" : "다시 울지 않았어요")
+            if e.recried { line("다시 울었는지", "다시 울었어요") }
             if let s = e.second {
                 line("2차", secondText(s))
             }
@@ -241,8 +241,8 @@ private func excludedText(_ x: ExcludedReason) -> String {
 private func secondText(_ s: SecondAttempt) -> String {
     let what: String
     switch s.action {
-    case .comfortCool: what = "실내를 시원하게 했어요"
-    case .feedingWindow: what = "수유 시간대라 안내했어요"
+    case .comfortCool: what = "더운 실내로 판단했어요"
+    case .feedingWindow: what = "수유 시간대로 판단했어요"
     case .otherSound: what = "다른 소리로 바꿨어요" + (s.sound.map { "(\(soundLabel($0.method, $0.label)))" } ?? "")
     case .focusDenied: what = "소리를 이어서 틀지 못했어요"
     }
@@ -255,15 +255,15 @@ func stopHandoffText(_ s: StopInfo) -> String {
         switch s.mode {
         case .restOffer: return "쉼터는 묻지 못했어요"
         case .arrivalNotice: return "도착 안내는 하지 못했어요"
-        case .noRest: return "가까운 쉼터가 없었어요"
+        case .noRest: return "안전한 곳에 세우도록 안내하지 못했어요"
         case .parked: break
         }
     }
     switch s.mode {
     case .restOffer: return s.restName.map { "\($0)에 들르자고 제안했어요" } ?? "쉼터에 들르자고 제안했어요"
     case .arrivalNotice: return "도착 안내를 했어요"
-    case .noRest: return "가까운 쉼터가 없어 안전한 곳에 세우도록 안내했어요"
-    case .parked: return "차가 선 채로 알렸어요"
+    case .noRest: return "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요"
+    case .parked: return s.reason == .noSound ? "차가 선 채로 소리를 틀지 못했어요" : "차가 선 채로 달래기를 멈췄어요"   // U59
     }
 }
 

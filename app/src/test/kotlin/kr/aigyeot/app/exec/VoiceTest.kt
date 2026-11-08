@@ -55,6 +55,20 @@ class VoiceTest {
         assertEquals(SpeechDone(t.now, "s1-3", false), r.events.single())
     }
 
+    @Test fun `cancelIfSpeaking은 말하는 중인 그 발화만 끊고 끝났으면 그 spoken을 돌려준다(C208)`() {
+        v.speak(Speak("s1-3", Sid.S10, emptyMap()))
+        assertNull(v.cancelIfSpeaking("다른")); assertEquals(0, tts.stops)
+        assertNull(v.cancelIfSpeaking("s1-3")); assertEquals(1, tts.stops)
+        tts.done!!(true)
+        assertTrue(r.events.isEmpty(), "끊은 발화의 늦은 끝 신호는 버린다")
+        v.speak(Speak("s1-4", Sid.S10, emptyMap())); tts.done!!(true); val at4 = t.now
+        t.now += 3_000   // 묻는 시각이 늦어도 실제 완료 시각을 돌려준다(C212)
+        assertEquals(true to at4, v.cancelIfSpeaking("s1-4"), "이미 끝났다: spoken=true")
+        v.speak(Speak("s1-5", Sid.S10, emptyMap())); tts.done!!(false); val at5 = t.now
+        assertEquals(false to at5, v.cancelIfSpeaking("s1-5"), "이미 끝났다: spoken=false")
+        assertEquals(listOf<Event>(SpeechDone(at4, "s1-4", true), SpeechDone(at5, "s1-5", false)), r.events)
+    }
+
     @Test fun `끝 신호가 오지 않으면 20초 뒤 spoken=false로 끝내 큐가 막히지 않는다`() {
         v.speak(Speak("s1-3", Sid.S10, emptyMap()))
         t.advance(Voice.SPEECH_TIMEOUT_MS)

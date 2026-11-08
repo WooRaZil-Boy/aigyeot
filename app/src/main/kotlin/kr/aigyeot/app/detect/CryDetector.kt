@@ -117,5 +117,5 @@ class CryDetector(
         emit(InputRestored(at, reason))
     }
 
-    private companion object { const val FIRST_SEGMENT_MS = Detect.SEGMENT_WINDOWS * Detect.WINDOW_MS }
+    private companion object { val FIRST_SEGMENT_MS = Detect.SEGMENT_WINDOWS * Detect.WINDOW_MS }
 }

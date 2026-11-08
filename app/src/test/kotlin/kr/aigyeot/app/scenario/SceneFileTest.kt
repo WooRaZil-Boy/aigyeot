@@ -62,6 +62,9 @@ class SceneFileTest {
             {"id":"r1","name":"휴게소","kind":"REST_AREA","distanceKm":7,"hasNursingRoom":true}]}}""", "\"RouteState\""))
         val e = injectEvent("RouteState", (s.steps[0].action as Inject).fields, 9) as RouteState
         assertEquals(7.0, e.rests.single().distanceKm, 0.0)
+        assertEquals("C269: 키가 없으면 쉼터 목록을 기다리지 않는다", false, e.restsPending)
+        val p = parseScene(scene("""{"t":1,"inject":{"event":"RouteState","hasDestination":true,"remainingSec":360,"rests":[],"restsPending":true}}""", "\"RouteState\""))
+        assertEquals("장면도 기다림을 흉내 낼 수 있다", true, (injectEvent("RouteState", (p.steps[0].action as Inject).fields, 9) as RouteState).restsPending)
     }
 
     @Test fun `형식 오류는 거절한다`() {

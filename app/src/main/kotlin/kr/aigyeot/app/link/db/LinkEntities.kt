@@ -15,7 +15,7 @@ data class RelayCredentialEntity(
     @ColumnInfo(name = "token_encrypted") val tokenEncrypted: String,
 )
 
-/** 보낼 함. type은 메시지 5종과 records_clear(body_json 빈 문자열, 8.5). */
+/** 보낼 함. type은 메시지 5종과 records_clear(body_json `{"drop_ids":[…]}`, L79·8.5). */
 @Entity(tableName = "outbox")
 data class OutboxEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String, // ULID
@@ -25,6 +25,13 @@ data class OutboxEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "attempts") val attempts: Int,
     @ColumnInfo(name = "next_try_at") val nextTryAt: Long,
+)
+
+/** 중계로 보낸 report_summary·handoff_alert id(10분, L84). 보낼 함에서 지워져도 기록 지우기의 drop_ids에 담는다. */
+@Entity(tableName = "sent_id")
+data class SentIdEntity(
+    @PrimaryKey @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "sent_at") val sentAt: Long,
 )
 
 /** 처리한 메시지 id(7일). */
@@ -58,4 +65,14 @@ data class PhoneLinkMarkEntity(
     @ColumnInfo(name = "last_seq") val lastSeq: Long,
     @ColumnInfo(name = "unpaired") val unpaired: Boolean,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+/** 적용한 최신 돌봄 요약(한 행, C144). summary_json은 CareView JSON. 같은 방에서 CS1로 새로울 때만 바꾼다('모든 기록 지우기'는 지우지 않는다, C157). */
+@Entity(tableName = "care_applied")
+data class CareAppliedEntity(
+    @PrimaryKey @ColumnInfo(name = "id") val id: Int,
+    @ColumnInfo(name = "car_id") val carId: String?,
+    @ColumnInfo(name = "seq") val seq: Long,
+    @ColumnInfo(name = "summary_json") val summaryJson: String,
+    @ColumnInfo(name = "sender_device") val senderDevice: String? = null,   // 봉투 sender_device. 그 기기가 연결에서 빠지면 행을 지운다(C158)
 )

@@ -32,7 +32,7 @@ import java.time.temporal.ChronoUnit
  * 휴대폰 연결은 홈의 '휴대폰 연결'에서 한다.
  */
 @Composable
-fun SetupScreen(old: ChildProfileEntity?, now: Long, noRearOutput: Boolean, onBack: (() -> Unit)?, onSave: (ChildProfileEntity) -> Unit) =
+fun SetupScreen(old: ChildProfileEntity?, now: () -> Long, noRearOutput: Boolean, onBack: (() -> Unit)?, onSave: (ChildProfileEntity) -> Unit) =
     Page("아기 설정", onBack) {
         val ym = old?.birthYm?.let { runCatching { YearMonth.parse(it) }.getOrNull() } ?: YearMonth.now()
         var consent by rememberSaveable { mutableStateOf(old.consentChecked()) }
@@ -82,7 +82,7 @@ fun SetupScreen(old: ChildProfileEntity?, now: Long, noRearOutput: Boolean, onBa
                 id = old?.id ?: "child", nickname = nickname.trim(), birthYm = YearMonth.of(year, month).toString(), carseat = seat,
                 feedingIntervalMin = interval, lastFeedingStart = old?.lastFeedingStart,
                 methods = listOfNotNull(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY), if (song) Method(MethodKind.SONG) else null),
-                hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now, aiNoticeVersion = AI_NOTICE_VERSION,
+                hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now(), aiNoticeVersion = AI_NOTICE_VERSION,
             ))
         }
     }

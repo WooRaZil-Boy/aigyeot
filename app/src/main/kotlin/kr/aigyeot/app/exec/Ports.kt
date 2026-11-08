@@ -69,6 +69,4 @@ internal interface NaviPort {
     fun addWaypoint(restId: String, rest: RestCandidate?, done: (ok: Boolean, note: String) -> Unit)
     /** 요청을 닫았다(성공·실패·시간 초과·대체). 위치 대기·결과 대기·대조 대상을 모두 비워 늦은 응답이 경유지를 더하거나 결과가 되지 않게 한다. */
     fun cancelWaypoint()
-    /** 복원이 판단 코어의 경로를 비웠다(장면 끝, C130). 마지막으로 낸 RouteState를 중복 억제 없이 다시 낸다. 낸 적이 없으면 아무것도 하지 않는다. */
-    fun reemit() {}
 }

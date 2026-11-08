@@ -51,8 +51,18 @@ class ContextRecorder(private val halfMs: Long = 30_000, private val stepMs: Lon
      */
     fun clear() { recent.clear(); pending.clear(); bucket = Long.MIN_VALUE; cryP = null }
 
-    /** 장면 경계: [clear]에 더해 차량·기어·실내 온도·재생 값도 비운다(장면 값을 다음 칸이 이어받지 않게). */
-    fun reset() { clear(); vehicle = null; gear = null; cabin = null; playback = null }
+    /** 지운 에피소드의 기다리는 캡처를 버린다(C262). */
+    fun drop(episodeId: String) { pending.remove(episodeId) }
+
+    /**
+     * 장면 경계(수명 표 장면 시작·끝의 맥락 캡처, C319): 작성 중인 칸은 경계 앞 세계의 값이라 마감해 기다리는 캡처의 줄로 돌려주고, 캡처는 거기서 끝낸다
+     * (그 뒤 칸은 다른 세계 표본이라 쓰지 않는다). 그다음 [clear]에 더해 차량·기어·실내 온도·재생 값도 비운다(장면 값을 다음 칸이 이어받지 않게).
+     */
+    fun reset(): List<ContextSampleEntity> {
+        val rows = if (bucket != Long.MIN_VALUE) close() else emptyList()
+        clear(); vehicle = null; gear = null; cabin = null; playback = null
+        return rows
+    }
 
     private fun close(): List<ContextSampleEntity> {
         val v = vehicle ?: return emptyList()

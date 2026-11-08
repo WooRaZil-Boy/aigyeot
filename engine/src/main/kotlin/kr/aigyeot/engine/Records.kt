@@ -23,7 +23,7 @@ data class SessionRecord(
     val driverUserId: Int,
 )
 
-/** `episode` 행. */
+/** `episode` 행. 인계 확정 칸(handoff_told_driver·handoff_rest_name)은 [SettleHandoff]가, guardian_notified는 link가 쓴다(결정 ③). 여기 없다. */
 @Serializable
 data class EpisodeRecord(
     val id: String,
@@ -38,9 +38,6 @@ data class EpisodeRecord(
     val handoffCause: HandoffCause?,
     val handoffKind: HandoffKind?,
     val waypointAdded: Boolean,
-    val guardianNotified: Boolean,
-    val handoffRestName: String? = null,
-    val handoffToldDriver: Boolean? = null,
     val cryMs: Long,
     val recried: Boolean,
     val playedMs: Long,
@@ -70,4 +67,5 @@ data class SteerWindowRecord(
     val cryPresent: Boolean,
     val playing: Boolean,
     val reversals: Int,
+    val observed: Boolean = true,   // C312
 )

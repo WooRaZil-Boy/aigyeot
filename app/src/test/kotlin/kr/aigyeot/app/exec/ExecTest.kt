@@ -50,6 +50,7 @@ class ExecTest {
     private var logThrows = false
     private var starts = 0
     private var stops = 0
+    private var reemits = 0
     private var ttsStopThrows = false
     private var st: EngineState? = EngineState.fresh(1, Profile("2026-02", CarSeat.LEFT, 180, false, frontFallbackAllowed = false), emptyList(), emptyList(), null, 0)
 
@@ -68,9 +69,15 @@ class ExecTest {
     private val navi = object : NaviPort { override fun addWaypoint(restId: String, rest: RestCandidate?, done: (Boolean, String) -> Unit) { askedRests += rest; done(false, "no_coords") }
         override fun cancelWaypoint() {}
     }
-    private val exec = Exec({ t.now }, { r.events += it }, { if (logThrows) error("로그 저장 실패"); r.rows += it }, { st }, ExecIo(Any(), t, audio, tts, stt, tap, car, navi, start = { starts++ }, stop = { stops++ }))
+    private val exec = Exec({ t.now }, { r.events += it }, { if (logThrows) error("로그 저장 실패"); r.rows += it }, { st }, ExecIo(Any(), t, audio, tts, stt, tap, car, navi, start = { starts++ }, stop = { stops++ }, reemit = { reemits++; if (reemits > 1) error("SDK 실패") }))
 
     private val start = StartPlayback("s1-1", PlayKind.AUTO, Method(MethodKind.WHITE_NOISE), 1_056_000, 2_000)
+
+    // C322 V12: 장면 끝 호스트가 부르는 다시 내기는 실제 연결 하나(차량 신호·경로)로 가고, 연결이 던져도 호스트로 새지 않는다
+    @Test fun `reemitAll은 실제 연결의 다시 내기를 부르고 예외를 삼킨다`() {
+        exec.reemitAll(); assertEquals(1, reemits)
+        exec.reemitAll(); assertEquals(2, reemits, "던져도 호스트 스레드로 새지 않는다")
+    }
 
     @Test fun `할 일을 받는 곳으로 나눈다`() {
         exec.handle(start)
