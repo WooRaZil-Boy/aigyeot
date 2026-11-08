@@ -343,9 +343,14 @@ fun reportRowSub(b: ReportSummaryBody): String {
 
 fun methodName(m: SoundMethod) = when (m) {
     SoundMethod.WHITE_NOISE -> "백색소음"
+    SoundMethod.WOMB -> "뱃속 소리"
     SoundMethod.LULLABY -> "자장가"
     SoundMethod.PARENT_SONG -> "부모 노래"
+    SoundMethod.UNKNOWN -> "기타"
 }
+
+/** 차가 보낸 label을 보이되, 모르는 method(U46)는 label 대신 "기타". */
+fun soundLabel(method: SoundMethod, label: String) = if (method == SoundMethod.UNKNOWN) methodName(method) else label
 
 fun resultText(r: EpisodeResult) = when (r) {
     EpisodeResult.SUCCESS -> "그쳤어요"

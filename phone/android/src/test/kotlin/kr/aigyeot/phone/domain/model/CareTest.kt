@@ -655,4 +655,12 @@ class CareTest {
         // 차 기록 줄은 넣지 않는다: CSV는 care.json의 손 기록만 읽는다(리포트를 받지 않는다).
         assertEquals("\uFEFF" + CSV_HEADER + "\r\n", CareFile().toCsv(seoul))
     }
+
+    @Test
+    fun `모르는 소리 방법의 음원 이름은 차가 보낸 글자 대신 기타로 보인다`() {
+        val ref = ProtocolJson.decodeFromString<kr.aigyeot.shared.SoundRef>("""{"method":"future_sound","label":"미래 소리"}""")
+        assertEquals(kr.aigyeot.shared.SoundMethod.UNKNOWN, ref.method)
+        assertEquals("기타", soundLabel(ref.method, ref.label))
+        assertEquals("자장가 1", soundLabel(kr.aigyeot.shared.SoundMethod.LULLABY, "자장가 1"))
+    }
 }

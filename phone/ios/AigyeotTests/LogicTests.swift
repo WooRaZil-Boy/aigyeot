@@ -2703,6 +2703,15 @@ final class AppModelTests: XCTestCase {
     }
 }
 
+final class SoundLabelTests: XCTestCase {
+    func test_모르는_소리_방법의_음원_이름은_기타() throws {
+        let ref = try JSONDecoder().decode(SoundRef.self, from: Data(#"{"method":"future_sound","label":"미래 소리"}"#.utf8))
+        XCTAssertEqual(ref.method, .unknown)
+        XCTAssertEqual(soundLabel(ref.method, ref.label), "기타")
+        XCTAssertEqual(soundLabel(.lullaby, "자장가 1"), "자장가 1")
+    }
+}
+
 private extension Envelope {
     func with(id: String) -> Envelope { var e = self; e.id = id; return e }
 }

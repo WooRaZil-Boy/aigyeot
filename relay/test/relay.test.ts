@@ -282,6 +282,96 @@ describe("메시지", () => {
   });
 });
 
+describe("care_summary(L60)", () => {
+  const cs = (o: object = {}) => ({
+    as_of: "2026-11-06T15:00:00+09:00", zone: "Asia/Seoul", sleep_diaper_enabled: true,
+    last_sleep_start_at: "2026-11-06T12:20:00+09:00", last_sleep_end_at: "2026-11-06T12:55:30+09:00", sleeping_since: null,
+    today_sleep_min: 430, night_wakeups: 2, last_diaper_at: "2026-11-06T11:15:00+09:00", today_diaper_count: 2, today_feed_count: 3,
+    ...o,
+  });
+  const off = { sleep_diaper_enabled: false, last_sleep_start_at: null, last_sleep_end_at: null, sleeping_since: null, today_sleep_min: null, night_wakeups: null, last_diaper_at: null, today_diaper_count: null };
+  const code = async (token: string, body: unknown) => (await send(token, "care_summary", body as object)).json.error?.code;
+
+  it("owner가 보내면 차만 받는다", async () => {
+    const { car, owner } = await carWithOwner();
+    const g = await addGuardian(owner.device_token);
+    await drain(car.car_token);
+    const r = await send(owner.device_token, "care_summary", cs());
+    expect(r.status).toBe(201);
+    expect(r.json.recipients).toBe(1);
+    expect((await inbox(car.car_token)).map((m) => m.type)).toEqual(["care_summary"]);
+    expect((await inbox(g.device_token)).map((m) => m.type)).not.toContain("care_summary");
+    expect((await send(owner.device_token, "care_summary", { ...cs(), ...off })).status).toBe(201);
+  });
+
+  it("care_summary는 표의 칸만 저장해 넘긴다", async () => {
+    const { car, owner } = await carWithOwner();
+    await drain(car.car_token);
+    expect((await send(owner.device_token, "care_summary", { ...cs(), memo: "x", nickname: "y" })).status).toBe(201);
+    const [m] = await inbox(car.car_token);
+    expect(m.body).toEqual(cs());
+    expect(m.body).not.toHaveProperty("memo");
+    expect(m.body).not.toHaveProperty("nickname");
+  });
+
+  it("care_summary zone은 시간대 ID만 받는다", async () => {
+    const { owner } = await carWithOwner();
+    expect((await send(owner.device_token, "care_summary", cs({ zone: "Asia/Seoul" }))).status).toBe(201);
+    expect(await code(owner.device_token, cs({ zone: "메모 글" }))).toBe("bad_request");
+    expect(await code(owner.device_token, cs({ zone: "A".repeat(65) }))).toBe("bad_request");
+  });
+
+  it("care_summary는 없는 날짜를 400으로 거절한다", async () => {
+    const { owner } = await carWithOwner();
+    for (const as_of of ["2026-02-30T12:20:00+09:00", "2026-11-06T24:00:00+09:00", "2026-11-06T12:60:00Z", "2026-11-06T12:00:60Z", "2026-11-06T12:00:00+19:00", "2026-11-06T12:00:00+09:60", "2026-11-06T12:00:00+18:01"]) {
+      expect(await code(owner.device_token, cs({ as_of })), as_of).toBe("bad_request");
+    }
+    expect((await send(owner.device_token, "care_summary", cs({ as_of: "2028-02-29T23:59:59+09:00" }))).status).toBe(201);
+    for (const as_of of ["2026-11-06T12:00:00+18:00", "2026-11-06T12:00:01-18:00"]) expect((await send(owner.device_token, "care_summary", cs({ as_of }))).status, as_of).toBe(201);
+  });
+
+  it("care_summary는 Int 범위를 넘는 정수를 400으로 거절한다", async () => {
+    const { owner } = await carWithOwner();
+    expect(await code(owner.device_token, cs({ today_feed_count: 2147483648 }))).toBe("bad_request");
+    expect((await send(owner.device_token, "care_summary", cs({ today_feed_count: 2147483647 }))).status).toBe(201);
+  });
+
+  it("guardian·차가 보내면 403", async () => {
+    const { car, owner } = await carWithOwner();
+    const g = await addGuardian(owner.device_token);
+    expect(await code(g.device_token, cs())).toBe("forbidden_role");
+    expect(await code(car.car_token, cs())).toBe("forbidden_role");
+  });
+
+  it("형식 오류는 400", async () => {
+    const { owner } = await carWithOwner();
+    const t = owner.device_token;
+    const { zone: _z, ...noZone } = cs();
+    expect(await code(t, noZone)).toBe("bad_request"); // 필수 칸 없음
+    const { night_wakeups: _n, ...noNull } = cs();
+    expect(await code(t, noNull)).toBe("bad_request"); // null은 명시해야 한다
+    expect(await code(t, cs({ as_of: "어제" }))).toBe("bad_request"); // 시각을 읽지 못함
+    expect(await code(t, cs({ last_diaper_at: "2026-11-06 11:15" }))).toBe("bad_request");
+    expect(await code(t, cs({ today_sleep_min: -1 }))).toBe("bad_request"); // 음수
+    expect(await code(t, cs({ today_feed_count: 1.5 }))).toBe("bad_request"); // 정수 아님
+    expect(await code(t, cs({ today_feed_count: null }))).toBe("bad_request"); // null 불가
+    expect(await code(t, cs({ sleep_diaper_enabled: false }))).toBe("bad_request"); // 끔인데 잠 칸이 값
+    expect(await code(t, cs({ ...off, today_diaper_count: 0 }))).toBe("bad_request");
+  });
+
+  it("DELETE /v1/records가 care_summary 행(messages·deliveries)을 실제로 지운다", async () => {
+    const { car, owner } = await carWithOwner();
+    const id = (await send(owner.device_token, "care_summary", cs())).json.id;
+    const rows = () => Promise.all([
+      sqlIn<object>(car.car_id, "SELECT 1 FROM messages WHERE id = ?", id),
+      sqlIn<object>(car.car_id, "SELECT 1 FROM deliveries WHERE message_id = ?", id),
+    ]);
+    expect((await rows()).map((r) => r.length)).toEqual([1, 1]);
+    expect((await call("DELETE", "/v1/records", { token: car.car_token })).status).toBe(204);
+    expect((await rows()).map((r) => r.length)).toEqual([0, 0]);
+  });
+});
+
 describe("노래", () => {
   it("올리기 → song_added → 차가 받기 → song_status가 오면 파일을 지운다", async () => {
     const { car, owner } = await carWithOwner();

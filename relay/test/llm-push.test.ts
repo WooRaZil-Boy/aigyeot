@@ -42,6 +42,18 @@ const claude = (content: object[], stop_reason = "end_turn") =>
   Response.json({ model: "claude-haiku-5-5", stop_reason, content, usage: { input_tokens: 10, output_tokens: 5 } });
 
 describe("POST /v1/llm", () => {
+  it("state의 돌봄 선택 칸(L61)을 받아 Claude에 그대로 넘긴다", async () => {
+    const car = await newCar();
+    const seen = fakeFetch(() => claude([{ type: "text", text: "ok" }]));
+    const care = { sleep: { sleeping_since_min: 40, woke_min_ago: null, last_sleep_min: 35, today_sleep_min: 430 }, diaper: { min_ago: 235, today_count: 2 }, feeds_today: 3, care_as_of_min_ago: 10 };
+    const b = llmBody();
+    const r = await call("POST", "/v1/llm", { token: car.car_token, body: { ...b, state: { ...b.state, ...care } } });
+    expect(r.status).toBe(200);
+    expect(JSON.parse(seen[0].body.messages[0].content.split("\n")[1])).toMatchObject(care);
+    const bad = await call("POST", "/v1/llm", { token: car.car_token, body: { ...b, state: { ...b.state, feeds_today: "3" } } });
+    expect(bad.status).toBe(400);
+  });
+
   it("계약대로 Claude API를 부르고 글을 돌려준다", async () => {
     const car = await newCar();
     const seen = fakeFetch(() => claude([{ type: "thinking", thinking: "" }, { type: "text", text: "자장가가 " }, { type: "text", text: "잘 통했어요." }]));
@@ -60,6 +72,7 @@ describe("POST /v1/llm", () => {
     expect(s.body.messages[0].content).toMatch(/^상태값\(JSON\):\n\{"cry"/);
     expect(s.body.messages[0].content).toMatch(/\n\n운전자 질문: 뭐가 제일 잘 통해\?$/);
   });
+
 
   it("도구만 온 답은 text가 빈 문자열", async () => {
     const car = await newCar();

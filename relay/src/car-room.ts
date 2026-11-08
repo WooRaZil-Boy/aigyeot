@@ -114,7 +114,7 @@ const KEEP = 7 * DAY; // 명세서 14장
 /** 역할별로 `POST /v1/messages`로 보낼 수 있는 type(6.3). 표에 없으면 403. */
 const SENDS: Record<"car" | "owner", readonly string[]> = {
   car: ["song_selected", "song_status", "feeding_state", "report_summary", "handoff_alert"],
-  owner: ["feeding_started", "song_added", "song_removed", "song_selected", "state_request"],
+  owner: ["feeding_started", "song_added", "song_removed", "song_selected", "state_request", "care_summary"],
 };
 const CAR_SENT = new Set(SENDS.car);
 
@@ -149,6 +149,27 @@ function checkOwnFields(env: Envelope) {
     case "song_status":
       if (typeof b.song_id !== "string" || !ULID_RE.test(b.song_id)) bad("song_id");
       break;
+    case "care_summary": {
+      // 예외(6.4, L60): 3.3 표를 전부 검사한다. 먼저 필수 칸·형(정수·bool·문자열)을 본 뒤 값을 본다.
+      const c = decode(bodySchemas.care_summary, b) as Record<string, unknown>;
+      // zone은 IANA 시간대 ID여야 한다(64자 이하, Intl이 받아야 한다)
+      const zone = c.zone as string;
+      try {
+        if (zone.length > 64) throw new Error("long");
+        new Intl.DateTimeFormat("en-US", { timeZone: zone });
+      } catch {
+        bad("zone");
+      }
+      for (const k of ["as_of", "last_sleep_start_at", "last_sleep_end_at", "sleeping_since", "last_diaper_at"]) {
+        if (c[k] !== null && instant(c[k]) === null) bad(k);
+      }
+      const ints = ["today_sleep_min", "night_wakeups", "today_diaper_count", "today_feed_count"];
+      for (const k of ints) if (c[k] !== null && ((c[k] as number) < 0 || (c[k] as number) > 2147483647)) bad(k);
+      const sd = ["last_sleep_start_at", "last_sleep_end_at", "sleeping_since", "today_sleep_min", "night_wakeups", "last_diaper_at", "today_diaper_count"];
+      if (c.sleep_diaper_enabled === false && sd.some((k) => c[k] !== null)) bad("sleep_diaper_enabled");
+      env.body = c; // decode가 모르는 칸을 버린 객체만 저장·전달한다(6.4)
+      break;
+    }
     case "handoff_alert":
       if (instant(b.occurred_at) === null) bad("occurred_at");
       if (typeof b.text !== "string" || [...b.text].length > 80) bad("text");
@@ -651,6 +672,8 @@ export class CarRoom extends DurableObject<Env> {
       case "song_status":
       case "feeding_state":
         return to === undefined ? this.ids("role = 'owner'") : this.ids("role = 'owner' AND device_id = ?", to);
+      case "care_summary":
+        return this.ids("role = 'car'");
       case "report_summary":
         return this.ids("role IN ('owner','guardian')");
       case "handoff_alert":
@@ -729,14 +752,14 @@ export class CarRoom extends DurableObject<Env> {
     return new Response(row.data, { headers: { "Content-Type": "audio/mp4", Date: new Date().toUTCString() } });
   }
 
-  /** '모든 기록 지우기'의 중계 몫: 리포트·인계 알림 보관분만(1.4). */
+  /** '모든 기록 지우기'의 중계 몫: 리포트·인계 알림·돌봄 요약 보관분만(1.4). */
   private clearRecords(dev: Device) {
     need(dev, "car");
     this.ctx.storage.transactionSync(() => {
-      const sel = "SELECT id FROM messages WHERE type IN ('report_summary','handoff_alert')";
+      const sel = "SELECT id FROM messages WHERE type IN ('report_summary','handoff_alert','care_summary')";
       this.sql.exec(`DELETE FROM deliveries WHERE message_id IN (${sel})`);
       this.sql.exec(`DELETE FROM push_jobs WHERE message_id IN (${sel})`);
-      this.sql.exec("DELETE FROM messages WHERE type IN ('report_summary','handoff_alert')");
+      this.sql.exec("DELETE FROM messages WHERE type IN ('report_summary','handoff_alert','care_summary')");
     });
     return json(204);
   }

@@ -114,7 +114,7 @@ private struct ReportDetailContent: View {
             if let stats = b.methodStats, !stats.isEmpty {
                 Section {
                     ForEach(stats, id: \.method) { m in
-                        LabeledContent(m.label, value: m.attempts < 3 ? "아직 모름" : "\(m.attempts)번 중 \(m.successes)번 그침")
+                        LabeledContent(soundLabel(m.method, m.label), value: m.attempts < 3 ? "아직 모름" : "\(m.attempts)번 중 \(m.successes)번 그침")
                     }
                 } header: { SectionHeader("소리별 결과") } footer: {
                     SectionHeader("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.")
@@ -139,7 +139,7 @@ private struct EpisodeView: View {
             Text("\(clock(e.startedAt)) \(e.trigger == .cryAlarm ? "울음 감지" : "소리 바꾸기 요청")")
                 .font(.subheadline.bold())
             if e.trigger == .cryAlarm, let l = e.alarmLatencyS { line("감지까지", String(format: "%.1f초", l)) }
-            line("소리", e.sound?.label ?? "틀지 않았어요")
+            line("소리", e.sound.map { soundLabel($0.method, $0.label) } ?? "틀지 않았어요")
             line("재생", minSec(e.playS))
             ForEach(Array(e.plays.enumerated()), id: \.offset) { _, p in
                 Text("· \(purposeText(p.purpose)) \(methodName(p.method, songName(p.songId))) \(span(p.startedAt, p.endedAt)) \(minSec(p.playS))")
@@ -183,7 +183,14 @@ private func methodName(_ m: SoundMethod, _ song: String?) -> String {
     case .whiteNoise: return "백색소음"
     case .lullaby: return "자장가"
     case .parentSong: return song.map { "부모 노래(\($0))" } ?? "부모 노래"
+    case .womb: return "뱃속 소리"
+    case .unknown: return "기타"
     }
+}
+
+/// 차가 보낸 label을 보이되, 모르는 method(U46)는 label 대신 "기타".
+func soundLabel(_ method: SoundMethod, _ label: String) -> String {
+    method == .unknown ? methodName(method, nil) : label
 }
 
 private func purposeText(_ p: PlayPurpose) -> String {
@@ -223,7 +230,7 @@ private func secondText(_ s: SecondAttempt) -> String {
     switch s.action {
     case .comfortCool: what = "실내를 시원하게 했어요"
     case .feedingWindow: what = "수유 시간대라 안내했어요"
-    case .otherSound: what = "다른 소리로 바꿨어요" + (s.sound.map { "(\($0.label))" } ?? "")
+    case .otherSound: what = "다른 소리로 바꿨어요" + (s.sound.map { "(\(soundLabel($0.method, $0.label)))" } ?? "")
     case .focusDenied: what = "소리를 이어서 틀지 못했어요"
     }
     return what + (s.result.map { " · " + resultText($0, excluded: nil) } ?? "")

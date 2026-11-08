@@ -35,6 +35,9 @@ class ProtocolFixturesTest {
         "report_summary_handoff" to "report_summary",
         "handoff_alert" to "handoff_alert",
         "handoff_alert_arrival" to "handoff_alert",
+        "care_summary" to "care_summary",
+        "care_summary_off" to "care_summary",
+        "report_summary_womb" to "report_summary",
         "ack" to "ack",
         // 중계 API
         "api_error" to ErrorResponse.serializer(),
@@ -57,6 +60,7 @@ class ProtocolFixturesTest {
         "api_songs_response" to UploadSongResponse.serializer(),
         "api_llm_request" to LlmRequest.serializer(),
         "api_llm_request_minimal" to LlmRequest.serializer(),
+        "api_llm_request_care" to LlmRequest.serializer(),
         "api_llm_response" to LlmResponse.serializer(),
         "api_llm_response_tool" to LlmResponse.serializer(),
     )

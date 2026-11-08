@@ -30,6 +30,9 @@ const table: Record<string, string | P.D<unknown>> = {
   report_summary_handoff: "report_summary",
   handoff_alert: "handoff_alert",
   handoff_alert_arrival: "handoff_alert",
+  care_summary: "care_summary",
+  care_summary_off: "care_summary",
+  report_summary_womb: "report_summary",
   ack: "ack",
   api_error: P.ErrorResponse,
   api_health_response: P.HealthResponse,
@@ -51,6 +54,7 @@ const table: Record<string, string | P.D<unknown>> = {
   api_songs_response: P.UploadSongResponse,
   api_llm_request: P.LlmRequest,
   api_llm_request_minimal: P.LlmRequest,
+  api_llm_request_care: P.LlmRequest,
   api_llm_response: P.LlmResponse,
   api_llm_response_tool: P.LlmResponse,
 };

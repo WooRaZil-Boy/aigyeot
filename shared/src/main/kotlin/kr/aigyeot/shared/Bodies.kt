@@ -94,11 +94,21 @@ enum class OutputRoute {
     @SerialName("no_playback") NO_PLAYBACK,
 }
 
-@Serializable
-enum class SoundMethod {
-    @SerialName("white_noise") WHITE_NOISE,
-    @SerialName("lullaby") LULLABY,
-    @SerialName("parent_song") PARENT_SONG,
+@Serializable(with = SoundMethodSerializer::class)
+enum class SoundMethod(val wire: String) {
+    WHITE_NOISE("white_noise"),
+    WOMB("womb"),
+    LULLABY("lullaby"),
+    PARENT_SONG("parent_song"),
+    /** 받기 전용: 모르는 글자(새 방식)를 읽을 때만 쓴다. 차는 보내지 않는다. */
+    UNKNOWN("unknown"),
+}
+
+/** 모르는 method 글자 하나가 리포트 전체를 버리지 않게 UNKNOWN으로 읽는다(3.3 report_summary method). */
+object SoundMethodSerializer : KSerializer<SoundMethod> {
+    override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor("SoundMethod", kotlinx.serialization.descriptors.PrimitiveKind.STRING)
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder) = decoder.decodeString().let { w -> SoundMethod.entries.firstOrNull { it.wire == w } ?: SoundMethod.UNKNOWN }
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: SoundMethod) = encoder.encodeString(value.wire)
 }
 
 @Serializable
@@ -305,6 +315,22 @@ data class HandoffAlertBody(
     val episodeId: String,
 )
 
+/** `care_summary` body(3.3, L60). null 가능 칸은 모두 "또는 null"이라 기본값이 없다(명시적 null). */
+@Serializable
+data class CareSummaryBody(
+    val asOf: String,
+    val zone: String,
+    val sleepDiaperEnabled: Boolean,
+    val lastSleepStartAt: String?,
+    val lastSleepEndAt: String?,
+    val sleepingSince: String?,
+    val todaySleepMin: Int?,
+    val nightWakeups: Int?,
+    val lastDiaperAt: String?,
+    val todayDiaperCount: Int?,
+    val todayFeedCount: Int,
+)
+
 @Serializable
 data class AckBody(val ids: List<String>)
 
@@ -322,5 +348,6 @@ val bodySerializers: Map<String, KSerializer<*>> = mapOf(
     "feeding_state" to FeedingStateBody.serializer(),
     "report_summary" to ReportSummaryBody.serializer(),
     "handoff_alert" to HandoffAlertBody.serializer(),
+    "care_summary" to CareSummaryBody.serializer(),
     "ack" to AckBody.serializer(),
 )

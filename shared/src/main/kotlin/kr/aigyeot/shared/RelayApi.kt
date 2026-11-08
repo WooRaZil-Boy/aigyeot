@@ -133,6 +133,12 @@ data class LlmFeeding(val elapsedMin: Int, val intervalMin: Int)
 data class LlmNextRest(val id: String, val name: String, val distanceKm: Double, val nursingRoom: Boolean)
 
 @Serializable
+data class LlmSleep(val sleepingSinceMin: Int?, val wokeMinAgo: Int?, val lastSleepMin: Int?, val todaySleepMin: Int?)
+
+@Serializable
+data class LlmDiaper(val minAgo: Int?, val todayCount: Int?)
+
+@Serializable
 data class LlmState(
     val cry: LlmCry,
     val feeding: LlmFeeding?,
@@ -141,6 +147,11 @@ data class LlmState(
     val nextRest: LlmNextRest?,
     val methodStats: List<MethodStat>,
     val lastNightWakeups: Int?,
+    // 계약 '선택'(L61): 없으면 빠진다.
+    val sleep: LlmSleep? = null,
+    val diaper: LlmDiaper? = null,
+    val feedsToday: Int? = null,
+    val careAsOfMinAgo: Int? = null,
 )
 
 @Serializable

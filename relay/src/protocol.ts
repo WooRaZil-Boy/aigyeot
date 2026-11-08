@@ -56,7 +56,7 @@ export const Role = enm("car", "owner", "guardian", "relay");
 export const Platform = enm("pleos", "android", "ios");
 const PhoneRole = enm("owner", "guardian");
 const PhonePlatform = enm("android", "ios");
-const SoundMethod = enm("white_noise", "lullaby", "parent_song");
+const SoundMethod = enm("white_noise", "womb", "lullaby", "parent_song");
 const EpisodeResult = enm("success", "failure", "undetermined");
 const HandoffKind = enm("rest_offer", "arrival_notice", "no_rest", "parked");
 
@@ -88,6 +88,19 @@ export const HandoffAlertBody = obj({
   occurred_at: str,
   session_id: str,
   episode_id: str,
+});
+const CareSummaryBody = obj({
+  as_of: str,
+  zone: str,
+  sleep_diaper_enabled: bool,
+  last_sleep_start_at: nullable(str),
+  last_sleep_end_at: nullable(str),
+  sleeping_since: nullable(str),
+  today_sleep_min: nullable(int),
+  night_wakeups: nullable(int),
+  last_diaper_at: nullable(str),
+  today_diaper_count: nullable(int),
+  today_feed_count: int,
 });
 export const AckBody = obj({ ids: arr(str) });
 
@@ -222,6 +235,7 @@ export const bodySchemas: Record<string, D<unknown>> = {
   feeding_state: obj({ last_feeding_start: nullable(str), window_start_expected: nullable(str) }),
   report_summary: ReportSummaryBody,
   handoff_alert: HandoffAlertBody,
+  care_summary: CareSummaryBody,
   ack: AckBody,
 };
 
@@ -271,6 +285,18 @@ export const LlmRequest = obj({
     next_rest: nullable(obj({ id: str, name: str, distance_km: num, nursing_room: bool })),
     method_stats: arr(MethodStat),
     last_night_wakeups: nullable(int),
+    // 11-06 L61 선택 칸
+    sleep: opt(
+      obj({
+        sleeping_since_min: nullable(int),
+        woke_min_ago: nullable(int),
+        last_sleep_min: nullable(int),
+        today_sleep_min: nullable(int),
+      }),
+    ),
+    diaper: opt(obj({ min_ago: nullable(int), today_count: nullable(int) })),
+    feeds_today: opt(int),
+    care_as_of_min_ago: opt(int),
   }),
 });
 export type LlmRequest = Infer<typeof LlmRequest>;

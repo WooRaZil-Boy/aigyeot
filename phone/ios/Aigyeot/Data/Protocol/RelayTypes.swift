@@ -126,6 +126,18 @@ struct LlmNextRest: Codable, Equatable {
     var nursingRoom: Bool
 }
 
+struct LlmSleep: Codable, Equatable {
+    @NullEncoded var sleepingSinceMin: Int?
+    @NullEncoded var wokeMinAgo: Int?
+    @NullEncoded var lastSleepMin: Int?
+    @NullEncoded var todaySleepMin: Int?
+}
+
+struct LlmDiaper: Codable, Equatable {
+    @NullEncoded var minAgo: Int?
+    @NullEncoded var todayCount: Int?
+}
+
 struct LlmState: Codable, Equatable {
     var cry: LlmCry
     @NullEncoded var feeding: LlmFeeding?
@@ -134,6 +146,11 @@ struct LlmState: Codable, Equatable {
     @NullEncoded var nextRest: LlmNextRest?
     var methodStats: [MethodStat]
     @NullEncoded var lastNightWakeups: Int?
+    // 계약 '선택': 없으면 키가 빠진다.
+    var sleep: LlmSleep? = nil
+    var diaper: LlmDiaper? = nil
+    var feedsToday: Int? = nil
+    var careAsOfMinAgo: Int? = nil
 }
 
 struct LlmRequest: Codable, Equatable {

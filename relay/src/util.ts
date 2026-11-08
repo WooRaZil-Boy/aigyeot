@@ -69,7 +69,14 @@ const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})
 export function instant(s: unknown): number | null {
   if (typeof s !== "string" || !RFC3339.test(s)) return null;
   const t = Date.parse(s);
-  return Number.isNaN(t) ? null : t;
+  if (Number.isNaN(t)) return null;
+  // Date.parse는 2월 30일 같은 날짜를 보정해 통과시키므로 실제 달력 날짜·시각 범위를 따로 본다(차의 OffsetDateTime.parse와 같게)
+  const [y, mo, d, h, mi, sec] = s.match(/\d+/g)!.slice(0, 6).map(Number);
+  const cal = new Date(Date.UTC(y, mo - 1, d));
+  if (cal.getUTCFullYear() !== y || cal.getUTCMonth() !== mo - 1 || cal.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return null;
+  const off = /([+-])(\d{2}):(\d{2})$/.exec(s);   // Java OffsetDateTime은 ±18:00까지만 받는다
+  if (off && (+off[2] > 18 || +off[3] > 59 || (+off[2] === 18 && +off[3] > 0))) return null;
+  return t;
 }
 
 // ---- HTTP ----

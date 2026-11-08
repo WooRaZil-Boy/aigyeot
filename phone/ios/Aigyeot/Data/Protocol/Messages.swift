@@ -128,6 +128,13 @@ enum SoundMethod: String, Codable {
     case whiteNoise = "white_noise"
     case lullaby
     case parentSong = "parent_song"
+    case womb
+    case unknown   // 모르는 글자(U46: "기타"). 리포트를 버리지 않는다
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = SoundMethod(rawValue: raw) ?? .unknown
+    }
 }
 
 enum EpisodeTrigger: String, Codable {

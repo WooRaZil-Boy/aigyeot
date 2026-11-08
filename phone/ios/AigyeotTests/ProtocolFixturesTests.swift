@@ -34,6 +34,7 @@ final class ProtocolFixturesTests: XCTestCase {
         MessageType.feedingState: rt(FeedingStateBody.self),
         MessageType.reportSummary: rt(ReportSummaryBody.self),
         MessageType.handoffAlert: rt(HandoffAlertBody.self),
+        MessageType.careSummary: rt(CareSummaryBody.self),
         MessageType.ack: rt(AckBody.self),
     ]
 
@@ -61,6 +62,9 @@ final class ProtocolFixturesTests: XCTestCase {
         "report_summary_handoff": .envelope("report_summary"),
         "handoff_alert": .envelope("handoff_alert"),
         "handoff_alert_arrival": .envelope("handoff_alert"),
+        "care_summary": .envelope("care_summary"),
+        "care_summary_off": .envelope("care_summary"),
+        "report_summary_womb": .envelope("report_summary"),
         "ack": .envelope("ack"),
         "api_error": .api(rt(ErrorResponse.self)),
         "api_health_response": .api(rt(HealthResponse.self)),
@@ -81,6 +85,7 @@ final class ProtocolFixturesTests: XCTestCase {
         "api_inbox_response": .api(rt(InboxResponse.self)),
         "api_songs_response": .api(rt(UploadSongResponse.self)),
         "api_llm_request": .api(rt(LlmRequest.self)),
+        "api_llm_request_care": .api(rt(LlmRequest.self)),
         "api_llm_request_minimal": .api(rt(LlmRequest.self)),
         "api_llm_response": .api(rt(LlmResponse.self)),
         "api_llm_response_tool": .api(rt(LlmResponse.self)),
@@ -112,6 +117,16 @@ final class ProtocolFixturesTests: XCTestCase {
                 XCTAssertEqual(original, try rt(data), name)
             }
         }
+    }
+
+    func test_모르는_method의_리포트도_읽고_unknown이_된다() throws {
+        let url = Self.dir.appendingPathComponent("report_summary.json")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(text.contains("\"method\":\"lullaby\"") || text.contains("\"method\": \"lullaby\""), "예제에 lullaby가 없다")
+        let changed = text.replacingOccurrences(of: "\"lullaby\"", with: "\"future_sound\"")
+        let env = try ProtocolCoding.decoder.decode(Envelope.self, from: Data(changed.utf8))
+        let body = try env.decodeBody(ReportSummaryBody.self)
+        XCTAssertEqual(body.timeline.first?.sound?.method, .unknown)
     }
 
     /// 보낼 때 "빠짐"과 "null"이 계약대로 나가는지(왕복이 같아도 놓칠 수 있는 한 줄 확인).

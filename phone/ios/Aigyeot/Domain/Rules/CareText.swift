@@ -232,7 +232,7 @@ enum CareText {
 
     /// U15: 차 기록 줄의 소리는 방법 이름만 쓴다(곡 이름은 리포트 상세에서 본다).
     static func method(_ m: SoundMethod) -> String {
-        switch m { case .whiteNoise: "백색소음"; case .lullaby: "자장가"; case .parentSong: "부모 노래" }
+        switch m { case .whiteNoise: "백색소음"; case .lullaby: "자장가"; case .parentSong: "부모 노래"; case .womb: "뱃속 소리"; case .unknown: "기타" }
     }
 
     static func carResult(_ r: EpisodeResult) -> String {

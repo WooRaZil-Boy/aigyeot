@@ -46,8 +46,8 @@ fun purposeText(p: PlayPurpose) = when (p) {
 /** 에피소드 음원. 부모 노래는 이 폰이 아는 곡 이름, 모르면 차가 보낸 글자. */
 fun soundText(songs: List<SongEntry>, r: SoundRef?, songId: String? = null): String = when {
     r == null -> "재생 없음"
-    r.method == SoundMethod.PARENT_SONG -> songs.find { it.songId == songId }?.name ?: r.label
-    else -> r.label
+    r.method == SoundMethod.PARENT_SONG -> songs.find { it.songId == songId }?.name ?: soundLabel(r.method, r.label)
+    else -> soundLabel(r.method, r.label)
 }
 
 /** 재생 한 줄의 음원 이름. */
@@ -129,7 +129,7 @@ fun actionText(a: CarActionKind) = when (a) {
 }
 
 /** 소리별 성적 한 줄. 3번 미만이면 모른다. */
-fun methodStatText(m: MethodStat) = "${m.label}: " + if (m.attempts < 3) "아직 모름" else "${m.attempts}번 중 ${m.successes}번 그침"
+fun methodStatText(m: MethodStat) = "${soundLabel(m.method, m.label)}: " + if (m.attempts < 3) "아직 모름" else "${m.attempts}번 중 ${m.successes}번 그침"
 
 // ---- 우리 노래(계약 3.3 표, 7.2) ----
 

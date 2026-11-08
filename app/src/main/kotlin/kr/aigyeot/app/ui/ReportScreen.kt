@@ -92,7 +92,7 @@ fun ReportDetailScreen(id: String, build: (String) -> ReportSummaryBody?, onBack
     Body("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요")
 }
 
-private fun method(m: SoundMethod) = when (m) { SoundMethod.WHITE_NOISE -> "백색소음"; SoundMethod.LULLABY -> "자장가"; SoundMethod.PARENT_SONG -> "부모 노래" }
+private fun method(m: SoundMethod) = when (m) { SoundMethod.WHITE_NOISE -> "백색소음"; SoundMethod.WOMB -> "뱃속 소리"; SoundMethod.LULLABY -> "자장가"; SoundMethod.PARENT_SONG -> "부모 노래"; SoundMethod.UNKNOWN -> "기타" }
 
 private fun purpose(p: PlayPurpose) = when (p) { PlayPurpose.AUTO_FIRST -> "자동 1차"; PlayPurpose.AUTO_SECOND -> "자동 2차"; PlayPurpose.REQUEST -> "운전자 요청" }
 
