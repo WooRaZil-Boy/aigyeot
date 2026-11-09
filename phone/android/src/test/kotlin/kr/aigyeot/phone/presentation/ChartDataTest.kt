@@ -86,7 +86,7 @@ class ChartDataTest {
     }
 
     @Test
-    fun `잠·기저귀를 끄면 그 줄을 빼고 차에서 줄은 리포트의 주행과 울음 경보를 그린다`() {
+    fun `잠·기저귀를 끄면 그 줄을 빼고 차에서 줄은 리포트의 탑승 구간과 울음 경보를 그린다`() {
         val r = report().let { b ->
             b.copy(startedAt = iso(at(13, 10)), endedAt = iso(at(13, 52)), timeline = b.timeline.map { it.copy(startedAt = iso(at(13, 24))) })
         }
@@ -94,8 +94,9 @@ class ChartDataTest {
         assertEquals(listOf(LaneKind.FEED, LaneKind.CAR), d.lanes.map { it.kind })
         val car = d.lanes[1]
         assertEquals("울음 1번", car.value)
-        assertEquals("주행 42분", car.sub)
+        assertEquals("탑승 42분", car.sub)
         assertEquals(listOf(790 to 832), car.spans.map { it.from to it.to })
+        assertEquals("탑승 13:10–13:52 · 42분", car.spans.single().tip) // 세션 구간은 중간 정차가 들어 있어 '주행'이라 하지 않는다(차 앱과 같음)
         assertEquals(listOf(804), car.marks.map { it.at })
         // 다른 날이면 지금 선이 없다.
         assertNull(dayChart(CareFile(), emptyList(), today.minusDays(1), now, zone, showCar = false).nowMin)

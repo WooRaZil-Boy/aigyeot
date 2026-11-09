@@ -387,7 +387,7 @@ class CareTest {
         assertEquals("수유 · 오후 4:57 · 왼쪽", logRowText(ev("u", CareKind.FEED, f457, f457 + 30_000, side = FeedSide.LEFT), seoul))
         assertEquals("잠 · 오후 4:57 · 1분 미만", logRowText(ev("u", CareKind.SLEEP, f457, f457 + 30_000), seoul))
         assertEquals("수유 · 오후 4:57–4:58", logRowText(ev("u", CareKind.FEED, f457 + 59_000, f457 + MINUTE), seoul))
-        assertEquals("주행 · 오후 4:57", CarLine("s", null, f457, f457 + 1_000, null, null).text(seoul))
+        assertEquals("탑승 · 오후 4:57", CarLine("s", null, f457, f457 + 1_000, null, null).text(seoul))
         assertEquals("수유 · 오후 12:00 · 끝 시각 모름", logRowText(feed("u", at(2026, 11, 5, 12)), seoul))
         assertEquals("수유 · 오후 12:00 · 왼쪽 · 끝 시각 모름", logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.LEFT), seoul)) // U37
         assertEquals("수유 · 오후 12:00 · 젖병 80ml · 끝 시각 모름", logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.BOTTLE, ml = 80), seoul))
@@ -530,7 +530,7 @@ class CareTest {
         val drive = lines[0]
         assertTrue(drive.isDrive)
         assertEquals(report.sessionId, drive.sessionId)
-        assertEquals("주행 · 오전 8:00–8:42", drive.text(seoul))
+        assertEquals("탑승 · 오전 8:00–8:42", drive.text(seoul))
         assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 그쳤어요", lines[1].text(seoul)) // U37: 한 줄에 시각
         assertEquals(instantOf("2026-11-05T08:05:12+09:00"), lines[1].startAt)
         // 리포트에 없는 값은 칸째 뺀다. 결과 글자는 리포트 값만 옮긴다.
@@ -547,8 +547,8 @@ class CareTest {
         // 차 기록 줄은 저장하지 않는다(리포트에서 그릴 때 만든다). 패턴의 '차 울음 에피소드 수'도 같은 줄에서 센다.
         assertEquals(1, carePattern(CareFile(), listOf(switched), now, seoul).carCryEpisodes)
         assertEquals(0, carePattern(CareFile(), listOf(switched), at(2026, 11, 4, 23, 59), seoul).carCryEpisodes) // 기기 기준 내일이면 7일에 넣지 않는다(R14)
-        // 주행 끝 시각: 같은 오전·오후면 생략, 다르면 붙인다(11-05 결정).
-        assertEquals("주행 · 오전 11:50–오후 12:20", CarLine("s", null, at(2026, 11, 5, 11, 50), at(2026, 11, 5, 12, 20), null, null).text(seoul))
+        // 탑승 끝 시각: 같은 오전·오후면 생략, 다르면 붙인다(11-05 결정).
+        assertEquals("탑승 · 오전 11:50–오후 12:20", CarLine("s", null, at(2026, 11, 5, 11, 50), at(2026, 11, 5, 12, 20), null, null).text(seoul))
         // U47 리포트 글자: 목록 첫 줄 "{날짜} {구간}", 둘째 줄의 울음 수는 위 '차에서 울음' 줄 수와 같다(소리 바꾸기 요청은 세지 않는다).
         assertEquals("11월 5일(목) 오전 8:00–8:42", reportRowTitle(report, seoul))
         assertEquals("11월 5일(목)", reportDate(report, seoul))

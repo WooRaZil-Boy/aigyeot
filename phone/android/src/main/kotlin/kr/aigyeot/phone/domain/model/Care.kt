@@ -335,9 +335,9 @@ fun carLines(reports: Collection<ReportSummaryBody>): List<CarLine> = reports.fl
             .mapNotNull { e -> instantOf(e.startedAt)?.let { CarLine(r.sessionId, e.episodeId, it, null, e.sound?.method, e.result) } }
 }.sortedBy { it.startAt }
 
-/** "주행 · 오후 1:10–1:52", "차에서 울음 · {시각} · {소리} · {결과}"(7장·U37). 없는 값은 칸째 뺀다(U15). */
+/** "탑승 · 오후 1:10–1:52"(세션 구간: 중간 정차가 들어 있어 '주행'이라 하지 않는다), "차에서 울음 · {시각} · {소리} · {결과}"(7장·U37). 없는 값은 칸째 뺀다(U15). */
 fun CarLine.text(zone: ZoneId): String =
-    if (isDrive) "주행 · " + (endAt?.let { koSpan(startAt, it, zone) } ?: koClock(startAt, zone))
+    if (isDrive) "탑승 · " + (endAt?.let { koSpan(startAt, it, zone) } ?: koClock(startAt, zone))
     else listOfNotNull("차에서 울음", koClock(startAt, zone), sound?.let(::methodName), result?.let(::resultText)).joinToString(" · ")
 
 // ---- 리포트 글자(U47): 시각·구간은 U20, 두 앱 같은 글자 ----

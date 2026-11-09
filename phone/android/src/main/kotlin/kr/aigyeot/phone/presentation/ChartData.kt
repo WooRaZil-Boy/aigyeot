@@ -57,7 +57,7 @@ private fun minuteIn(ms: Long, from: Long) = ((ms - from) / MINUTE).toInt().coer
 
 /**
  * 오늘 하루 띠. 잠·수유는 그날에 걸친 구간(진행 중은 지금까지, 끝 모름은 시작 점), 기저귀는 시각 점,
- * '차에서'는 그날 리포트의 주행 구간과 울음 경보 에피소드 시각. 잠·기저귀를 끄면 그 줄을 뺀다(R16).
+ * '차에서'는 그날 리포트의 탑승 구간(세션 시작~끝, 중간 정차 포함이라 '탑승', 차 앱과 같음)과 울음 경보 에피소드 시각. 잠·기저귀를 끄면 그 줄을 뺀다(R16).
  * 수유·기저귀 횟수는 그날 시작한 기록(R13·패턴과 같음), 잠은 그날에 걸친 기록 수와 끝난 잠의 길이 합(U31).
  */
 fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalDate, now: Long, zone: ZoneId, showCar: Boolean): DayChartData {
@@ -91,11 +91,11 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
         val drives = lines.filter { it.isDrive && inDay(it.startAt, it.endAt ?: it.startAt) }.map { l ->
             val a = minuteIn(maxOf(l.startAt, from), from)
             val b = minuteIn(minOf(l.endAt ?: l.startAt, to), from)
-            DaySpan(a, b, "주행 ${hhmm(a)}–${hhmm(b)} · ${durationText((b - a) * MINUTE)}")
+            DaySpan(a, b, "탑승 ${hhmm(a)}–${hhmm(b)} · ${durationText((b - a) * MINUTE)}")
         }
         val cries = lines.filter { !it.isDrive && it.startAt in from until to }.map { l -> minuteIn(l.startAt, from).let { DayMark(it, "차에서 울음 ${hhmm(it)}") } }
         val driveMin = drives.sumOf { it.to - it.from }
-        lanes += DayLane(LaneKind.CAR, "차에서", if (driveMin > 0) "주행 ${durationText(driveMin * MINUTE)}" else null, "울음 ${cries.size}번", spans = drives, marks = cries)
+        lanes += DayLane(LaneKind.CAR, "차에서", if (driveMin > 0) "탑승 ${durationText(driveMin * MINUTE)}" else null, "울음 ${cries.size}번", spans = drives, marks = cries)
     }
     val nowMin = if (now in from until to) minuteIn(now, from) else null
     return DayChartData(lanes, nowMin)
