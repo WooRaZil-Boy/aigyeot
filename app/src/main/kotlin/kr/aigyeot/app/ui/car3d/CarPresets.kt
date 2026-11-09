@@ -38,6 +38,13 @@ enum class Callout3d(val anchors: List<String>) {
     HEAT(listOf("Anchor_Heat_RR", "Anchor_Heat_RL")),
     DIM(listOf("Anchor_Lamp_R")),
     HVAC(listOf("Anchor_Vent_R")),
+    ;
+
+    /** 칩 선이 가리킬 앵커: [Stage3d.sides]에 쪽이 있으면 그 쪽 앵커만, 없으면 시안 그대로(가까운 쪽). */
+    fun anchorsIn(s: Stage3d): List<String> = s.sides[this]?.takeIf { it.isNotEmpty() }?.let { sides -> anchors.filter { a -> sides.any { a.endsWith("_" + it.name) } } } ?: anchors
+
+    /** 3D 표시(열선 패드·뒷창 테)를 [side] 쪽에 켤까. 쪽을 모르는 그림이면 둘 다. */
+    fun shownAt(s: Stage3d, side: Seat3d?): Boolean = this in s.callouts && (side == null || s.sides[this].isNullOrEmpty() || side in s.sides.getValue(this))
 }
 
 /** 무대 한 장면의 상태(화면 층이 계산해 넘긴다). [ripple]은 소리가 실제로 나갈 때만. [drive]면 조작·카메라 이동·움직임 없음. */
@@ -48,6 +55,8 @@ data class Stage3d(
     val listen: Boolean = false,
     val callouts: Set<Callout3d> = emptySet(),
     val seat: Seat3d = Seat3d.RR,
+    /** 칩마다 실제로 해낸 뒷자리 쪽(RL·RR: 잠근 뒷창, 끈 열선). 있으면 칩 선·3D 표시는 이 쪽만, 없으면(쪽을 모르는 그림) 둘 다. */
+    val sides: Map<Callout3d, Set<Seat3d>> = emptyMap(),
     val drive: Boolean = false,
     val reducedMotion: Boolean = false,
 ) {

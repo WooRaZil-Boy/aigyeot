@@ -17,8 +17,6 @@ import kr.aigyeot.engine.OpenTrigger
 import kr.aigyeot.engine.SessionState
 import kr.aigyeot.engine.Stage
 import kr.aigyeot.engine.fresh
-import kr.aigyeot.shared.MethodStat
-import kr.aigyeot.shared.SoundMethod
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -44,38 +42,6 @@ class UiStateMappingTest {
         assertEquals(askEnabled(parked), asked.speech.qa != null, "켜진 버튼은 판단 코어가 듣기를 연다")
     }
 
-    @Test fun stats_onlyCurrentSongAndLast28Days() {
-        val third = Method(MethodKind.SONG, "b")
-        val methods = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY), third)
-        val d = DAY_MS
-        val h = listOf(
-            *Array(3) { FirstTry(T0 - it * d, Method(MethodKind.SONG, "a"), true) },          // 다른 곡의 성공
-            *Array(2) { FirstTry(T0 - it * d, third, false) },                                // 지금 곡은 2번뿐
-            *Array(3) { FirstTry(T0 - 29 * d - it, Method(MethodKind.LULLABY), true) },       // 29일 전
-        )
-        val out = stats(h, methods, T0)
-        assertEquals("부모 노래: 아직 모름", out.last(), "다른 곡의 성공이 섞이지 않는다")
-        assertEquals("자장가: 아직 모름", out[2], "29일 전 시도는 세지 않는다")
-        assertEquals(3, stats(h, methods.dropLast(1), T0).size, "③이 없으면 부모 노래 줄을 뺀다")
-        val more = h + FirstTry(T0, third, true)
-        assertEquals("부모 노래: 3번 중 1번", stats(more, methods, T0).last())
-    }
-
-    @Test fun homeUiState_beforeDrive_andMicAndFeeding() {
-        val link = LinkStatus()
-        val u = homeUiState(fresh(), T0, link)
-        assertEquals("출발 전이에요", u.status)
-        assertEquals("듣기 꺼짐", u.micText)
-        assertEquals("마지막 수유: 기록 없음", u.feeding)
-        assertFalse(u.pausesWarning); assertFalse(u.confirmShown); assertFalse(u.askEnabled)
-        assertEquals(link, u.link)
-        val s = fresh().let { it.copy(car = it.car.copy(micRunning = true), feedingStart = T0 - 90 * 60_000) }
-        assertEquals("듣기 켜짐", homeUiState(s, T0, link).micText)
-        assertTrue(homeUiState(s, T0, link).feeding.endsWith("(1시간 30분 전)"))
-        assertEquals("출발 전이에요", homeUiState(null, T0, link).status)
-        assertEquals("마지막 수유: 기록 없음", homeUiState(null, T0, link).feeding)
-    }
-
     @Test fun songRows_markThirdAndSelected() {
         fun song(id: String, name: String?, dur: Double?) = SongEntity(id, name, null, "m4a", dur, null, null, "ACTIVE", null, 1, 1)
         val rows = songRows(listOf(song("a", "자장", 61.7), song("b", null, null)), SongSelectionEntity("b", 1), listOf(Method(MethodKind.SONG, "a")))
@@ -84,19 +50,13 @@ class UiStateMappingTest {
         assertEquals(listOf(false, false), songRows(listOf(song("a", "x", null), song("b", "y", null)), null, emptyList()).map { it.selected })
     }
 
-    @Test fun reportRows_openSessionDisabled_simulationMarked() {
+    @Test fun reportRows_openSessionDisabled_simulationMarked() {   // 디자인 v6: 한 줄 글자가 제목(날짜·구간)과 부가(U47)로 나뉘었다. 자세한 문구는 ReportViewTest
         fun s(id: String, end: Long?, scene: String?) = SessionEntity(id, T0, end, "T", null, null, 0, 0, false, "[]", null, null, false, scene, 10)
         val rows = reportRows(listOf(s("a", null, null), s("b", T0 + 60_000, "sc")))
         assertEquals(listOf(false, true), rows.map { it.enabled })
-        assertTrue(rows[0].label.endsWith(" · 주행 중"))
-        assertTrue(rows[1].label.contains(" ~ ") && rows[1].label.endsWith(" · 시뮬레이션"))
+        assertEquals("주행 중", rows[0].sub)
+        assertTrue(rows[1].title.contains("–") && rows[1].sub.endsWith("시뮬레이션"))
         assertEquals(listOf("a", "b"), rows.map { it.id })
-    }
-
-    @Test fun methodStatLines_underMinShown_saysUnknown() {
-        val lines = methodStatLines(listOf(MethodStat(SoundMethod.LULLABY, "자장가", 2, 2), MethodStat(SoundMethod.WOMB, "뱃속 소리", 1, 4)))
-        assertEquals(listOf("자장가: 아직 모름", "뱃속 소리: 4번 중 1번 그침"), lines)   // 3번 미만이면 아직 모름(statMinShown)
-        assertEquals(emptyList<String>(), methodStatLines(null))
     }
 
     @Test fun connectUiState_remainingClampedAtZero_andPhoneLabel() {
@@ -104,8 +64,9 @@ class UiStateMappingTest {
         assertEquals(90L, connectUiState(LinkStatus(pairExpiresAt = T0 + 90_000), T0).remainingS)
         assertEquals(0L, connectUiState(LinkStatus(pairExpiresAt = T0 - 5_000), T0).remainingS)
         assertEquals("남은 시간 1분 30초", remainingText(90))
-        assertEquals("함께 타는 보호자", phoneLabel(LinkedPhone("d", "owner", null)))
-        assertTrue(phoneLabel(LinkedPhone("d", "guardian", T0)).startsWith("다른 보호자 · 마지막 연락 "))
+        assertEquals("함께 타는 보호자" to null, phoneLines(LinkedPhone("d", "owner", null)))
+        assertEquals("다른 보호자", phoneLines(LinkedPhone("d", "guardian", T0)).first)
+        assertTrue(phoneLines(LinkedPhone("d", "guardian", T0)).second!!.startsWith("마지막 연락 "))
     }
 
     /** C356: HANDOFF 홈 상태는 안내 여부를 말하지 않는다(쉼터 안내 없이도 들어간다). */

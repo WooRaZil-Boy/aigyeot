@@ -43,7 +43,7 @@ class EventSinkTest {
     @Test fun c322_v3_viewModels_postThroughSink() {
         k.profile(); k.boot()
         val l = link { }
-        HomeViewModel(MutableStateFlow<Step?>(null), sink, l, k.clock).ask()
+        HomeViewModel(MutableStateFlow<Step?>(null), sink, l, k.clock, MutableStateFlow(null), MutableStateFlow(null), k.store).ask()
         val app = AppViewModel(k.store, sink, ctx) { false }
         app.babyAboard(BabyAboardFrom.NOTICE)
         app.feedingConfirm(true)
@@ -55,7 +55,7 @@ class EventSinkTest {
         k.profile(); k.phone(); k.boot()
         val fromLink = CopyOnWriteArrayList<Event>()
         val l = link { fromLink += it }
-        HomeViewModel(MutableStateFlow<Step?>(null), sink, l, k.clock).feedingNow()
+        HomeViewModel(MutableStateFlow<Step?>(null), sink, l, k.clock, MutableStateFlow(null), MutableStateFlow(null), k.store).feedingNow()
         val end = System.currentTimeMillis() + 3_000
         while (fromLink.isEmpty() && System.currentTimeMillis() < end) Thread.sleep(10)
         assertEquals(listOf<Event>(FeedingStarted(T0, T0, FeedingFrom.CAR_SCREEN, null)), fromLink.toList(), "link의 실제 사건 길로 낸다")

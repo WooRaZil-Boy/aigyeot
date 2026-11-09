@@ -147,7 +147,12 @@ class Store(
             dao.insertOutbox(OutboxEntity(ulid(now), "records_clear", null, buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString(), now, 0, now))
         }
         context.clear()
+        _clearedAt.value = clock()
     }
+
+    private val _clearedAt = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    /** 마지막으로 기록을 지운 시각(이 프로세스 안, 화면 전용). 홈 물어보기 카드가 지운 전의 질문·답을 내리는 데 쓴다(값이라 흐름이 합쳐져도 놓치지 않는다). */
+    val clearedAt: kotlinx.coroutines.flow.StateFlow<Long> = _clearedAt
 
     /** 장면 경계(F17·C92): 장면 표본이 실제 에피소드의 '울음 직전 30초'에 섞이지 않게 맥락 기록기를 비운다. 기다리던 캡처는 작성 중인 칸까지 쓰고 끝낸다(C319). */
     fun resetContext() { val rows = context.reset(); bestEffort("context_sample") { insertLive(rows) } }   // C302 A: 부수 일
@@ -221,6 +226,20 @@ class Store(
     fun sessionsFlow() = dao.sessionsFlow().retryOnDbError("sessions")
     fun reportChanges(sessionId: String) = dao.reportChanges(sessionId).retryOnDbError("report")
     /** 리포트 한 건(한 트랜잭션, Report.kt [readReport]). 두 번째 값은 인계가 아직 안 끝났는지. */
+    fun okControlsFlow(sessionId: String) = dao.okControlsFlow(sessionId).retryOnDbError("controls")
+    /**
+     * 세션의 이어진 울음마다 처음 시각(홈 '오늘 하루' 차에서 줄의 마름모·횟수). 에피소드를 연 경보와 기록만 한 경보(G4: 통화·대기 중 등)를 합치고,
+     * 판단 코어 문턱(alarmContinues)으로 이어진 것은 하나로 센다(통화 중 시작해 끝난 뒤 이어진 울음이 두 줄로 남아도 한 번).
+     * 판정 창에서 다시 운 것(recried·2차 뒤 울음)은 경보가 아니라 세지 않는다: 리포트 목록 '울음 n번'(U47)·폰 '차에서 울음'과 같은 정의이고, 그 울음의 시각은 기록에 없다.
+     */
+    fun cryRuns(sessionId: String): List<Long> = cryRunStarts(dao.loggedAlarmSpans(sessionId).map { it.firstAt to it.lastAt } + dao.episodes(sessionId).mapNotNull { e -> e.alarmAt?.let { it to it } })
+
+    /** 세션의 마지막 에피소드(열린 세션도, 홈 정차 화면 '에피소드' 카드). 없으면 null. 리포트와 같은 변환(timeline)이다. */
+    fun lastEpisode(sessionId: String): kr.aigyeot.shared.TimelineEpisode? {
+        val e = dao.episodes(sessionId).lastOrNull() ?: return null
+        return timeline(e, dao.plays(sessionId).filter { it.episodeId == e.id }) { id -> id?.let { dao.song(it)?.name } }
+    }
+
     fun readReport(sessionId: String, now: Long): Pair<ReportSummaryBody?, Boolean> = readReport(db, sessionId) { buildReport(it, sessionId, now) }
 
     /**
@@ -300,6 +319,15 @@ class Store(
 }
 
 /** 화면·Room의 프로필 → 판단 코어 Profile. */
+/** [spans](처음·마지막 경보 시각)를 시간순으로 이어 붙여 이어진 울음마다 처음 시각. */
+internal fun cryRunStarts(spans: List<Pair<Long, Long>>, p: Params = Params()): List<Long> {
+    val out = mutableListOf<Long>(); var end = Long.MIN_VALUE
+    for ((a, b) in spans.sortedBy { it.first }) {
+        if (out.isNotEmpty() && (a <= end || kr.aigyeot.engine.alarmContinues(end, a, p))) end = maxOf(end, b) else { out += a; end = b }
+    }
+    return out
+}
+
 fun ChildProfileEntity.toProfile() = Profile(birthYm, CarSeat.valueOf(carseat), feedingIntervalMin, hasSibling, frontFallbackAllowed)
 
 /** Room 행 → 판단 코어 기록(복원 대조의 Room 사실). [toEntity]의 거꾸로(확정 칸·guardian_notified는 판단 코어 기록에 없다). */

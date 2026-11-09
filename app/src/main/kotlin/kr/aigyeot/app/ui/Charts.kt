@@ -116,7 +116,7 @@ data class MethodDots(val name: String, val ok: Int, val n: Int, val known: Bool
 internal fun hhmm(min: Int) = TimeText.clock(min / 60 % 24, min % 60, ClockMode.CHART)
 
 internal fun dayBlockTip(l: DayLane, r: IntRange) =
-    "${if (l.color == DataColor.CAR) "주행" else l.name} ${hhmm(r.first)}–${hhmm(r.last)} · ${TimeText.duration((r.last - r.first) * 60_000L)}"
+    "${if (l.color == DataColor.CAR) "탑승" else l.name} ${hhmm(r.first)}–${hhmm(r.last)} · ${TimeText.duration((r.last - r.first) * 60_000L)}"
 
 internal fun dayDotTip(l: DayLane, m: Int) = "${l.name} ${hhmm(m)}"
 

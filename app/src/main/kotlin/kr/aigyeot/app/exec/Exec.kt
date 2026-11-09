@@ -71,6 +71,9 @@ class Exec internal constructor(
     private val log = ControlLogger(clock, { state()?.session?.id }, logControl)
     private val player = Player(io.audio, io.sched, clock, post, log, { state()?.profile?.frontFallbackAllowed == true }, p)
     private val voice = Voice(io.tts, io.stt, io.tap, io.sched, clock, post, { state()?.car?.micRunning == true })
+    /** 화면 읽기 투영: 차가 방금 말한 문장·들은 질문(계약 차 2.5). */
+    val said get() = voice.said
+    val heard get() = voice.heard
     private val controls = Controls(io.control, io.navi, io.sched, clock, post, log, p) { id -> state()?.car?.route?.rests?.firstOrNull { it.id == id } }
 
     private val ambients = Ambients(io.ambient, io.sched, clock, post, log, p, io.ledger) { msg -> runCatching { android.util.Log.i("Ambient", msg) } }

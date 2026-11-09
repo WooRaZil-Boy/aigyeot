@@ -120,7 +120,8 @@ class CarEngine private constructor(private val prep: Prep) {
     private val shellRenderables = ArrayList<Int>()
     private val ghostRenderables = ArrayList<Int>()
     private val childGhostRenderables = ArrayList<Int>()
-    private val heatPads = ArrayList<Int>()
+    private val heatPads = HashMap<Int, Seat3d?>()   // 열선 패드 → 뒷자리 쪽(노드 Heat_Pad_RL·RR)
+    private val lockRims = HashMap<Int, Seat3d?>()   // 뒷창 잠금 테 → 쪽(노드 Lock_Outline_RL·RR, 재질 Indicator 하나를 같이 쓴다)
     private var heatMi: MaterialInstance? = null
     private val anchors = HashMap<String, Int>()
     private var childSeat = 0
@@ -249,8 +250,10 @@ class CarEngine private constructor(private val prep: Prep) {
         // 제어 표시(실내 보기에서만 또렷하게)
         val ind = if (Callout3d.LOCK in on) min(1f, lockK * (0.35f + 0.65f * k)) else 0f
         indicator.setParameter("color", teal[0] * ind, teal[1] * ind, teal[2] * ind, ind)
+        lockRims.forEach { (e, side) -> visible(e, Callout3d.LOCK.shownAt(s, side)) }   // 잠근 쪽 뒷창 테만
         val heatOn = Callout3d.HEAT in on
-        heatPads.forEach { visible(it, heatOn) }
+        // 실제로 끈 쪽 패드만(Stage3d.sides). 쪽을 모르는 그림(리포트 '차가 대신 한 일')은 둘 다
+        heatPads.forEach { (e, side) -> visible(e, Callout3d.HEAT.shownAt(s, side)) }
         if (heatOn) heatMi?.let { mi ->
             val c = mix(lin(0x7FA6C9), lin(0xE8955A), heatWarm); val i = (0.7f + 1.7f * heatWarm) * EMISSIVE_GAIN
             val b = SPECS.getValue("Heat_Pad").color
@@ -295,6 +298,8 @@ class CarEngine private constructor(private val prep: Prep) {
     // ───────────── 만들기 ─────────────
 
     private fun nameOf(e: Int) = asset.getName(e) ?: ""
+    /** 노드(또는 부모) 이름 '{base}_RL'·'{base}_RR'의 쪽. */
+    private fun sideIn(e: Int, base: String) = (nameOf(e) + "|" + parentName(e)).let { n -> Seat3d.entries.firstOrNull { "${base}_${it.name}" in n } }
     private fun parentName(e: Int) = tm.getParent(tm.getInstance(e)).let { if (it == 0) "" else nameOf(it) }
     private fun named(e: Int, re: Regex) = re.containsMatchIn(nameOf(e)) || re.containsMatchIn(parentName(e))
 
@@ -329,7 +334,7 @@ class CarEngine private constructor(private val prep: Prep) {
                     val mi = mats.getOrPut(if (shell) "shell_$mname" else mname) { orig.also { if (spec != null && baseMat != null) spec.applyTo(it, baseMat); if (baseMat != null) matOf[it] = baseMat } }
                     if (mi !== orig) rm.setMaterialInstanceAt(ri, p, mi)
                 }
-                if (mname == "Indicator") rm.setMaterialInstanceAt(ri, p, indicator)
+                if (mname == "Indicator") { rm.setMaterialInstanceAt(ri, p, indicator); lockRims[e] = sideIn(e, "Lock_Outline") }
                 if (mname == "Heat_Pad") {
                     // 열선 패드는 반투명(시안: 불투명도 0.25 + 0.65×X-ray): BLEND 짝 하나를 모든 패드가 같이 쓴다
                     val key = keyFor(SPECS["Heat_Pad"], hasColor, 2)
@@ -337,7 +342,7 @@ class CarEngine private constructor(private val prep: Prep) {
                     val mi = heatMi ?: provider.createMaterialInstance(key, IntArray(8), "heat", null)?.also { if (m != null) { SPECS.getValue("Heat_Pad").applyTo(it, m); matOf[it] = m } }
                     heatMi = mi
                     if (mi != null) rm.setMaterialInstanceAt(ri, p, mi)
-                    heatPads += e
+                    heatPads[e] = sideIn(e, "Heat_Pad")
                 }
             }
             if (shell) shellRenderables += e

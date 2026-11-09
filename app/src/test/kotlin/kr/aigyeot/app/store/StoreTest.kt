@@ -951,6 +951,16 @@ class StoreTest {
         assertEquals(4.0, buildReport(dao, "S1", now)!!.steering.afterResponsePerMin)
     }
 
+    // C378 홈 '오늘 하루': 울음 경보만 센다(리포트 목록 U47과 같은 정의). 판정 창에서 다시 운 것은 경보가 아니고 시각 기록도 없다
+    @Test fun c378_cryRuns_countsAlarmsOnly_notRecryInJudgeWindow() {
+        session()
+        dao.upsertEpisode(EpisodeEntity("E1", "S1", T0 + 60_000, T0 + 300_000, "ALARM", T0 + 60_000, 2_400, "LULLABY", null, "SUCCESS", null,
+            "OTHER_SOUND", "WHITE_NOISE", null, "SUCCESS", null, null, false, false, 61_000, true, 112_000, emptyList()))
+        dao.upsertPlay(PlayLogEntity("P2", "S1", "E1", "AUTO_SECOND", "WHITE_NOISE", null, T0 + 127_000, T0 + 183_000, 56_000, "DEADLINE"))
+        dao.insertAlarm(AlarmLogEntity(sessionId = "S1", firstAt = T0 + 400_000, lastAt = T0 + 410_000, reason = "WAITING"))
+        assertEquals(listOf(T0 + 60_000, T0 + 400_000), store.cryRuns("S1"))
+    }
+
     @Test fun c312_unobservedWindowsExcludedFromAfterResponse() {
         val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, 2) }
         val cry = SteerWindowEntity("S1", T0, 2, false, true, false, 2)

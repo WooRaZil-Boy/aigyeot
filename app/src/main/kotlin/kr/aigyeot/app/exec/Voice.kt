@@ -13,6 +13,13 @@ import kr.aigyeot.engine.Sid
 import kr.aigyeot.engine.Speak
 import kr.aigyeot.engine.SpeechDone
 import kr.aigyeot.engine.YesNo
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+/** 차가 말하기 시작한 문장(화면 표시용, 계약 차 2.5). [at]은 말하기를 시작한 시각. 말하지 못하고 끝난 문장(TTS 실패·포커스 거절·시간 초과)은 거둔다. */
+data class Said(val sid: Sid, val text: String, val at: Long)
+/** 듣기 창 [listenId]가 받은 글(물어보기 질문 표시용). */
+data class HeardText(val listenId: String, val text: String, val at: Long)
 
 /**
  * 운전자 한 문장(Speak·Ask)과 듣기(Ask의 '응/아니', Listen). 판단은 하지 않는다: 문장 간격·통화·큐는 판단 코어 몫(계약 4.1 말하기 규칙).
@@ -28,6 +35,11 @@ internal class Voice(
     private val micRunning: () -> Boolean,
 ) {
     private var speaking: String? = null
+    private val _said = MutableStateFlow<Said?>(null)
+    private val _heard = MutableStateFlow<HeardText?>(null)
+    /** 화면용 읽기 투영(디자인 v6 홈 '차가 방금 말한 문장'·물어보기 질문, 계약 차 2.5). 판단에는 쓰지 않는다. */
+    val said: StateFlow<Said?> = _said
+    val heard: StateFlow<HeardText?> = _heard
     private var lastDone: Triple<String, Boolean, Long>? = null   // 마지막으로 끝난 발화·spoken·실제 완료 시각(C208·C212)
     private var watchdog: () -> Unit = {}
     private var hearing: Hearing? = null
@@ -40,21 +52,38 @@ internal class Voice(
         val timers = mutableListOf<() -> Unit>()
     }
 
-    fun speak(c: Speak) = say(c.utteranceId, Lines.text(c.sid, c.vars)) {}
+    /** 지금 말하는 문장의 화면 표시를 거두는 일(끝나면 비운다). 끊김(cancel·cancelIfSpeaking)은 완료 콜백을 버리므로 여기서 거둔다. */
+    private var unshow: (() -> Unit)? = null
 
-    fun ask(c: Ask) = say(c.askId, Lines.text(c.sid, c.vars)) { spoken ->
-        if (!spoken || !micRunning()) post(Answer(clock(), c.askId, YesNo.NONE))
-        else hear(c.listenMs) { post(Answer(clock(), c.askId, yesNo(it))) }
+    /** 말하기를 시작하며 화면에 문장을 낸다(말하는 동안 ④ 답·안내가 보이게). 말하지 못하고 끝나거나 끊기면 앞 값으로 되돌린다. */
+    private fun show(sid: Sid, text: String): (Boolean) -> Unit {
+        val prev = _said.value
+        val mine = Said(sid, text, clock()).also { _said.value = it }
+        val undo = { if (_said.value === mine) _said.value = prev }
+        unshow = undo
+        return { spoken -> if (unshow === undo) unshow = null; if (!spoken) undo() }
+    }
+
+    fun speak(c: Speak) { val t = Lines.text(c.sid, c.vars); say(c.utteranceId, t, show(c.sid, t)) }
+
+    fun ask(c: Ask) {
+        val t = Lines.text(c.sid, c.vars)
+        val shown = show(c.sid, t)
+        say(c.askId, t) { spoken ->
+            shown(spoken)
+            if (!spoken || !micRunning()) post(Answer(clock(), c.askId, YesNo.NONE))
+            else hear(c.listenMs) { post(Answer(clock(), c.askId, yesNo(it))) }
+        }
     }
 
     fun listen(c: Listen) {
         if (!micRunning()) return post(Heard(clock(), c.listenId, null))
-        hear(c.ms) { text -> post(Heard(clock(), c.listenId, heardText(text))) }   // C303 A22: Q3 두 자 미만은 판단 코어와 같은 함수
+        hear(c.ms) { text -> heardText(text)?.let { _heard.value = HeardText(c.listenId, it, clock()) }; post(Heard(clock(), c.listenId, heardText(text))) }   // C303 A22: Q3 두 자 미만은 판단 코어와 같은 함수
     }
 
     /** CancelSpeech: 말하기와 듣기를 끊는다. 돌려줄 사건은 없다(계약 4.1). */
     fun cancel() {
-        if (speaking != null) { speaking = null; watchdog(); tts.stop() }
+        if (speaking != null) { speaking = null; watchdog(); tts.stop(); unshow?.invoke(); unshow = null }
         hearing?.let { h -> hearing = null; h.timers.forEach { it() }; tap.close(); stt.cancel() }
     }
 

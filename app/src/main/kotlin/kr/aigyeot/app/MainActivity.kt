@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -22,16 +21,15 @@ import kr.aigyeot.app.host.MonitorService
 import kr.aigyeot.app.ui.AppRoot
 import kr.aigyeot.app.ui.AppTheme
 import kr.aigyeot.app.ui.AppViewModel
-import kr.aigyeot.app.ui.Body
 import kr.aigyeot.app.ui.Notices
-import kr.aigyeot.app.ui.Page
 import kr.aigyeot.app.ui.appViewModelFactory
 import kr.aigyeot.engine.BabyAboardFrom
 import kr.aigyeot.engine.MicPath
 import kr.aigyeot.engine.Notice
 
 /**
- * 정차 화면 하나(명세서 11장). DO를 선언하지 않는다(매니페스트). 주행 제한은 CarUxRestrictionsManager 값만 보고, 값을 받기 전에는 막는다(fail-closed).
+ * 화면 하나(명세서 11장). DO를 선언하고(매니페스트, C365·C378) 주행 제한은 CarUxRestrictionsManager 값만 본다: 주행 최적화가 필요하거나
+ * 값을 아직 모르면 주행 중 화면만 그린다(fail-closed, 조작 없음).
  * 화면은 [AppRoot]가 그리고, 여기는 플랫폼 일(차량 UX 제한·권한·마이크 서비스·알림 인텐트)만 한다.
  * 최상단에서 컨트롤러 Back은 moveTaskToBack(true)(finish 금지).
  */
@@ -61,11 +59,7 @@ class MainActivity : ComponentActivity() {
         handleNotice(intent)
         setContent {
             AppTheme {
-                if (restricted.value == false) AppRoot(g, app, onBabyAboard = { babyAboard(BabyAboardFrom.HOME) }, onExit = { moveTaskToBack(true) })
-                else {
-                    BackHandler { moveTaskToBack(true) }   // 정차 대기 화면도 홈과 같이 Back은 뒤로 보낸다
-                    Page("아이곁", null) { Body("차가 서 있을 때 쓸 수 있어요") }
-                }
+                AppRoot(g, app, drive = restricted.value != false, onBabyAboard = { babyAboard(BabyAboardFrom.HOME) }, onExit = { moveTaskToBack(true) })
             }
         }
     }

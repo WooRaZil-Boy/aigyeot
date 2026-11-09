@@ -38,10 +38,11 @@
         <!-- CCP(로터리 컨트롤러)를 지원하지 않는다고 선언한다(Pleos CCP 개발 가이드) -->
         <meta-data android:name="com.hmg.rotary.ROTARY_SUPPORTED" android:value="false" />
         <!-- 아래 셋은 0단계에서 이름만 정했다. 클래스는 ui-store-host가 만든다(handoff 0-scaffold 3절) -->
-        <!-- 정차 화면: DO(distractionOptimized)를 선언하지 않는다(명세서 11장) -->
+        <!-- DO(distractionOptimized)를 선언한다(C365·C378): 주행 중에는 CarUxRestrictions 값에 따라 주행 중 화면 하나만 그린다(조작·움직임 없음) -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
+            <meta-data android:name="distractionOptimized" android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

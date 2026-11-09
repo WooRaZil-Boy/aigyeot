@@ -49,6 +49,23 @@ class VoiceTest {
         assertEquals(listOf<Event>(SpeechDone(t.now, "s1-3", true)), r.events)
     }
 
+    // 계약 차 2.5 said: 말하기를 시작하면 화면에 보이고(④ 답이 말하는 동안 카드에), 못 말하고 끝나면 앞 문장으로 되돌린다
+    @Test fun `said는 말하기 시작에 보이고 못 말하면 거둔다`() {
+        v.speak(Speak("s1-1", Sid.S02, mapOf("method" to "자장가")))
+        val first = v.said.value!!
+        assertEquals(Sid.S02, first.sid); assertEquals(t.now, first.at)
+        tts.done!!(true)
+        t.advance(1_000); v.speak(Speak("s1-2", Sid.QA, mapOf("text" to "두 시간 전에 먹였어요.")))
+        assertEquals(Sid.QA, v.said.value!!.sid, "끝나기 전, 말하는 동안 보인다")
+        tts.done!!(false)
+        assertEquals(first, v.said.value, "못 말한 문장은 거두고 앞 문장으로")
+        // 통화로 끊으면(cancelIfSpeaking → 완료 콜백을 버림) 그 자리에서 거둔다
+        v.speak(Speak("s1-4", Sid.S10, emptyMap()))
+        assertEquals(Sid.S10, v.said.value!!.sid)
+        assertNull(v.cancelIfSpeaking("s1-4"))
+        assertEquals(first, v.said.value, "끊긴 문장은 화면에 남지 않는다")
+    }
+
     @Test fun `TTS가 못 말하면 spoken=false`() {
         v.speak(Speak("s1-3", Sid.S10, emptyMap()))
         tts.done!!(false)

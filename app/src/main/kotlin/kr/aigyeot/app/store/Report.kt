@@ -126,7 +126,7 @@ private val EXCLUDED = mapOf(
     "SUSPEND" to ExcludedReason.SUSPEND, "SESSION_END" to ExcludedReason.SESSION_END,
 )
 
-private fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (String?) -> String?): TimelineEpisode {
+internal fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (String?) -> String?): TimelineEpisode {
     val started = plays.filter { it.startedAt != null }.sortedBy { it.startedAt }   // 시작하지 못한 재생은 plays에 넣지 않는다
     val entries = started.map {
         PlayEntry(PlayPurpose.valueOf(it.purpose), soundMethod(kind(it.method)), it.songId, iso(it.startedAt!!), iso(it.endedAt), (it.playedMs / 1000.0).roundToInt())
