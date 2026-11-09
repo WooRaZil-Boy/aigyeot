@@ -77,7 +77,7 @@ final class ChartDataTests: XCTestCase {
         XCTAssertEqual([odd.n, odd.ok], [0, 0])
     }
 
-    func test_잠·기저귀를_끄면_그_줄을_빼고_차에서_줄은_리포트의_주행과_울음_경보를_그린다() throws {
+    func test_잠·기저귀를_끄면_그_줄을_빼고_차에서_줄은_리포트의_탑승_구간과_울음_경보를_그린다() throws {
         var b = try report()
         b.startedAt = iso(at(13, 10))
         b.endedAt = iso(at(13, 52))
@@ -85,7 +85,7 @@ final class ChartDataTests: XCTestCase {
         let d = ChartData.day(care: CareFile(), reports: [stored(b)], day: today, now: now, zone: zone, showCar: true)
         XCTAssertEqual(d.lanes.map(\.kind), [.feed, .car])
         XCTAssertEqual(d.lanes[1].value, "울음 1번")
-        XCTAssertEqual(d.lanes[1].sub, "주행 42분")
+        XCTAssertEqual(d.lanes[1].sub, "탑승 42분")
         XCTAssertEqual(d.lanes[1].spans.map { [$0.from, $0.to] }, [[790, 832]])
         XCTAssertEqual(d.lanes[1].marks.map(\.at), [804])
         // 다른 날이면 지금 선이 없다.

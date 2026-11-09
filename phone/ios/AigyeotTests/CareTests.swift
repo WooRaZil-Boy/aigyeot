@@ -708,7 +708,7 @@ final class CareTests: XCTestCase {
         var body = try env.decodeBody(ReportSummaryBody.self)
         let report = StoredReport(messageId: env.id, seq: 1, receivedAt: clock, body: body)
         let rows = CareRules.carRows([report], zone: seoul)
-        XCTAssertEqual(rows.map(\.text), ["주행 · 오후 3:00–3:49", "차에서 울음 · 오후 3:10 · 자장가 · 계속 울었어요"])
+        XCTAssertEqual(rows.map(\.text), ["탑승 · 오후 3:00–3:49", "차에서 울음 · 오후 3:10 · 자장가 · 계속 울었어요"])
         XCTAssertEqual(rows.map(\.at), [Self.t("2026-11-05T15:00:00+09:00"), Self.t("2026-11-05T15:10:00+09:00")])
         XCTAssertEqual(rows.map(\.sessionId), [body.sessionId, body.sessionId])   // 누르면 그 리포트 상세로 간다
         // 결과별 문구, 리포트에 없는 값은 비워 둔다.
@@ -725,10 +725,10 @@ final class CareTests: XCTestCase {
         body.timeline[0].result = nil
         XCTAssertEqual(CareRules.carRows([StoredReport(messageId: "m", seq: 1, receivedAt: clock, body: body)], zone: seoul)[1].text,
                        "차에서 울음 · 오후 3:10 · 백색소음")
-        var short = body   // U41: 같은 분에 끝난 주행
+        var short = body   // U41: 같은 분에 끝난 탑승
         short.startedAt = "2026-11-05T16:57:10+09:00"; short.endedAt = "2026-11-05T16:57:30+09:00"
         XCTAssertEqual(CareRules.carRows([StoredReport(messageId: "m", seq: 1, receivedAt: clock, body: short)], zone: seoul)[0].text,
-                       "주행 · 오후 4:57")
+                       "탑승 · 오후 4:57")
         body.timeline[0].sound = nil
         XCTAssertEqual(CareRules.carRows([StoredReport(messageId: "m", seq: 1, receivedAt: clock, body: body)], zone: seoul)[1].text,
                        "차에서 울음 · 오후 3:10")

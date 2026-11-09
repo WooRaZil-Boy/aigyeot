@@ -197,7 +197,7 @@ enum CareRules {
             if let start = Rfc3339.parse(b.startedAt) {
                 let end = Rfc3339.parse(b.endedAt)
                 rows.append(CarRow(id: "drive-\(b.sessionId)", sessionId: b.sessionId, at: start,
-                                   text: "주행 · " + CareFormat.clockRange(start, end, zone)))
+                                   text: "탑승 · " + CareFormat.clockRange(start, end, zone)))   // 세션 구간은 중간 정차가 들어 있어 '주행'이라 하지 않는다(7장, 차·두 폰 통일)
             }
             for e in b.timeline where e.trigger == .cryAlarm {   // 소리 요청 에피소드는 줄을 만들지 않는다(U19)
                 guard let at = Rfc3339.parse(e.startedAt) else { continue }

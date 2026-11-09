@@ -23,7 +23,7 @@ private struct TipOverlay: ViewModifier {
             .onTapGesture(coordinateSpace: .local) { p in
                 func dist(_ r: CGRect) -> CGFloat { hypot(max(r.minX - p.x, 0, p.x - r.maxX), max(r.minY - p.y, 0, p.y - r.maxY)) }
                 func area(_ r: CGRect) -> CGFloat { r.width * r.height }
-                // 겹치면 작은 표시가 먼저(주행 칸 안의 울음 마름모 등), 담은 것이 없으면 6pt 안에서 가장 가까운 것
+                // 겹치면 작은 표시가 먼저(탑승 칸 안의 울음 마름모 등), 담은 것이 없으면 6pt 안에서 가장 가까운 것
                 let hit = hits.filter { $0.rect.contains(p) }.min { area($0.rect) < area($1.rect) }
                     ?? hits.filter { dist($0.rect) <= 6 }.min { dist($0.rect) < dist($1.rect) }
                 shown = hit == shown ? nil : hit
@@ -178,7 +178,7 @@ private struct DayBandChartBody: View {
         }
         for (i, l) in data.lanes.enumerated() {
             let c = color(l.kind)
-            let fill: Color = l.kind == .car ? DS.cCar.opacity(0.22) : c   // 주행은 트랙 안 연한 주황 칸
+            let fill: Color = l.kind == .car ? DS.cCar.opacity(0.22) : c   // 탑승 구간은 트랙 안 연한 주황 칸
             for s in l.spans { ctx.fill(Path(roundedRect: spanRect(s, lane: i, w: w), cornerRadius: rx), with: .color(fill)) }
             let cy = trY(i) + th / 2
             for m in l.marks {

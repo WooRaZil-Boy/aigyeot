@@ -32,7 +32,7 @@ enum ChartData {
     private static func minuteIn(_ ms: Int64, from: Int64) -> Int { Int(min(1440, max(0, (ms - from) / minute))) }
 
     /// 오늘 하루 띠. 잠·수유는 그날에 걸친 구간(진행 중은 지금까지, 끝 모름은 시작 점), 기저귀는 시각 점,
-    /// '차에서'는 그날 리포트의 주행 구간과 울음 경보 에피소드 시각. 잠·기저귀를 끄면 그 줄을 뺀다(R16).
+    /// '차에서'는 그날 리포트의 탑승 구간(세션 시작~끝, 중간 정차 포함이라 '탑승')과 울음 경보 에피소드 시각. 잠·기저귀를 끄면 그 줄을 뺀다(R16).
     /// 수유·기저귀 횟수는 그날 시작한 기록, 잠은 그날에 걸친 기록 수와 끝난 잠의 길이 합(U31).
     static func day(care: CareFile, reports: [StoredReport], day: String, now: Int64, zone: TimeZone, showCar: Bool) -> Day {
         guard let (from, to) = CareRules.dayRange(day, zone) else { return Day(lanes: [], nowMin: nil) }
@@ -69,7 +69,7 @@ enum ChartData {
                     let e = Rfc3339.parse(b.endedAt).map(CareTime.ms) ?? s
                     if inDay(s, e) {
                         let a = minuteIn(max(s, from), from: from), z = minuteIn(min(e, to), from: from)
-                        drives.append(Span(from: a, to: z, tip: "주행 \(hhmm(a))–\(hhmm(z)) · " + CareFormat.length(Int64(z - a) * minute)))
+                        drives.append(Span(from: a, to: z, tip: "탑승 \(hhmm(a))–\(hhmm(z)) · " + CareFormat.length(Int64(z - a) * minute)))
                     }
                 }
                 for ep in b.timeline where ep.trigger == .cryAlarm {
@@ -81,7 +81,7 @@ enum ChartData {
             drives.sort { $0.from < $1.from }
             cries.sort { $0.at < $1.at }
             let driveMin = drives.reduce(0) { $0 + $1.to - $1.from }
-            lanes.append(Lane(kind: .car, name: "차에서", sub: driveMin > 0 ? "주행 " + CareFormat.length(Int64(driveMin) * minute) : nil,
+            lanes.append(Lane(kind: .car, name: "차에서", sub: driveMin > 0 ? "탑승 " + CareFormat.length(Int64(driveMin) * minute) : nil,
                               value: "울음 \(cries.count)번", spans: drives, marks: cries))
         }
         return Day(lanes: lanes, nowMin: now >= from && now < to ? minuteIn(now, from: from) : nil)
@@ -242,7 +242,7 @@ enum ChartData {
                     stopNotices: b.timeline.compactMap(\.stop).filter { $0.toldDriver != false && $0.mode != .parked }.count)
     }
 
-    /// 주행 길이(분).
+    /// 탑승 구간 길이(분).
     static func reportMinutes(_ b: ReportSummaryBody) -> Int64? {
         guard let s = Rfc3339.parse(b.startedAt), let e = Rfc3339.parse(b.endedAt) else { return nil }
         let m = Int64(e.timeIntervalSince(s) / 60)
