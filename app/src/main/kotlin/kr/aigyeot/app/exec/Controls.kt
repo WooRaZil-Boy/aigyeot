@@ -154,6 +154,8 @@ internal class Controls(
             ControlKind.WINDOW_LOCK to "setWindowLock",
             ControlKind.READING_LIGHT to "setReadingLightSwitch",
             ControlKind.HVAC_TEMP to "setHvacTemperature",
+            ControlKind.AMBIENT_BRIGHTNESS to "setAmbientLightBrightness",   // 앰비언트는 Controls가 아니라 Ambients가 쓴다(영역이 capability). 이름은 control_log와 같다
+            ControlKind.AMBIENT_COLOR to "setAmbientLightBrightnessColor",
         )
     }
 }

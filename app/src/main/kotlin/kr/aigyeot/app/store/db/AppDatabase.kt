@@ -29,7 +29,7 @@ import kr.aigyeot.app.link.db.SongSelectionEntity
         RelayCredentialEntity::class, OutboxEntity::class, ProcessedMessageEntity::class,
         SongDownloadEntity::class, SongSelectionEntity::class, PhoneLinkMarkEntity::class, CareAppliedEntity::class, SentIdEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -59,6 +59,11 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/** 2→3(기능 D, C361): control_log.cmd_id만 더한다. 옛 줄은 null이라 앰비언트 리포트 수에 들지 않는다(앰비언트 줄이 없던 때). */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE control_log ADD COLUMN cmd_id TEXT") }
+}
+
 /** 앱의 데이터베이스(aigyeot.db). 개발 중에는 버전이 바뀌면 지우고 다시 만든다. */
 fun AppDatabase.Companion.open(context: Context): AppDatabase =
-    Room.databaseBuilder(context, AppDatabase::class.java, "aigyeot.db").addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration(dropAllTables = true).build()
+    Room.databaseBuilder(context, AppDatabase::class.java, "aigyeot.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).fallbackToDestructiveMigration(dropAllTables = true).build()

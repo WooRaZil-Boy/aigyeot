@@ -97,7 +97,7 @@ class C150ToC153Test {
     /** 쉼터 질문 S07을 말하는 중(u1)에 인계가 묶이고, 그 상태로 P·뒷문 열림으로 세션이 닫힌다. */
     private fun closedWhileSpeaking(prof: Profile = profile()): Sim {
         val sim = session(prof = prof).route(rest("n", 14.0, nursing = true))
-        sim.attempt2().toGap().busyNow()
+        sim.attempt2().dimSkipped().toGap().busyNow()   // 앰비언트 결과를 닫아 둔다(AM12는 AmbientTest)
         val old = Line(Sid.S07, mapOf("restName" to "n 휴게소", "distanceKm" to "14"), "n", queuedAt = sim.t)
         sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(old) + sim.s.speech.queue))
         sim.recry()

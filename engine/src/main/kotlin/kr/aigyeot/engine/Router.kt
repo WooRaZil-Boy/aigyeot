@@ -23,6 +23,7 @@ internal fun Tx.run(e: Event): Step {
     if (e is Resume) departOffer()   // C163: Suspend 중엔 보지 않았으니 풀린 뒤 다시 본다(같은 경로 값은 RouteFeed가 다시 내지 않는다)
     if (!rebase) { longDrive(); drain() }
     flushLedgers()
+    syncAmbient()   // 기능 D(C358): 목표와 칸을 견줘 낮춤·되돌림을 낸다. SaveSnapshot 앞이라 스냅숏에 칸이 든다
     if (snapshot) out += SaveSnapshot(s)
     return Step(s, out, wakeAt())
 }
@@ -71,6 +72,7 @@ internal fun Tx.handle(e: Event) {
             ControlKind.SEAT_HEAT -> heatResult(e)
             ControlKind.WINDOW_LOCK -> windowResult(e)
             ControlKind.HVAC_TEMP -> hvacResult(e)
+            ControlKind.AMBIENT_BRIGHTNESS, ControlKind.AMBIENT_COLOR -> ambientResult(e)
             else -> {}
         }
         is WaypointResult -> waypoint(e)

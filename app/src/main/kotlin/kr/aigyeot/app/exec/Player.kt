@@ -32,7 +32,7 @@ internal class ControlLogger(private val clock: () -> Long, private val session:
     fun row(ref: String?, api: String, target: String, goal: String, actual: String?, ok: Boolean, ackMs: Long? = null, appliedMs: Long? = null, retries: Int = 0) {
         try {
             sink(ControlLogEntity(sessionId = if (ref != null) sessionIdOf(ref) else session(), at = clock(), api = api, target = target, goal = goal, actual = actual,
-                ackMs = ackMs, appliedMs = appliedMs, ok = ok, retries = retries))
+                ackMs = ackMs, appliedMs = appliedMs, ok = ok, retries = retries, cmdId = ref))
         } catch (e: Exception) { /* 무시 */ }
     }
 }

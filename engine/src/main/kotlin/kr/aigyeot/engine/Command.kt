@@ -32,6 +32,12 @@ sealed interface Command
 @Serializable data class SetWindowLock(val cmdId: String, val values: Map<Area, Boolean>) : Command
 @Serializable data class SetReadingLight(val cmdId: String, val areas: List<Area>, val on: Boolean = false) : Command
 @Serializable data class LowerHvac(val cmdId: String, val areas: List<Area>, val deltaC: Double) : Command
+/** 기능 D(5.10): 앰비언트 밝기·색 낮춤. 결과는 ControlResult(AMBIENT_BRIGHTNESS·AMBIENT_COLOR) 둘(area = null). 영역은 실행기가 정한다 */
+@Serializable data class DimAmbient(val cmdId: String, val level: Double, val color: Int) : Command
+/** 기능 D: 되돌림. 있는 종류만. 실행기는 지금 값이 그 종류의 set과 같을 때만 before를 쓴다 */
+@Serializable data class RestoreAmbient(val cmdId: String, val brightness: AmbientValue?, val color: AmbientValue?) : Command
+/** 기능 D(5.10, C364): 실행기 낮춤 장부에 남은 낮춤을 되돌린다. `Boot`에서 `ign.ambient`가 Dimmed가 아닐 때만 낸다. 결과 사건은 없다(ControlResult를 내지 않는다) */
+@Serializable data class RestoreAmbientLedger(val cmdId: String) : Command
 @Serializable data class AddWaypoint(val cmdId: String, val restId: String) : Command
 
 // 4.3 화면·휴대폰·기록

@@ -149,6 +149,7 @@ private fun actionName(a: CarActionKind) = when (a) {
     CarActionKind.REAR_WINDOW_LOCK -> "뒷창 잠금"
     CarActionKind.CABIN_COOL -> "실내 온도 낮추기"
     CarActionKind.READING_LIGHT_OFF -> "독서등 끄기"
+    CarActionKind.AMBIENT_DIM -> "조명 낮춤"
     CarActionKind.WAYPOINT_ADDED -> "경유지 추가"
     CarActionKind.ARRIVAL_NOTICE -> "도착 안내"
     CarActionKind.GUARDIAN_ALERT -> "보호자 알림"

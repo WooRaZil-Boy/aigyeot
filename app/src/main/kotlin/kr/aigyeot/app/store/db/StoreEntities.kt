@@ -163,6 +163,7 @@ data class ControlLogEntity(
     @ColumnInfo(name = "applied_ms") val appliedMs: Long?,
     @ColumnInfo(name = "ok") val ok: Boolean,
     @ColumnInfo(name = "retries") val retries: Int,
+    @ColumnInfo(name = "cmd_id") val cmdId: String? = null,   // 그 줄을 낸 명령의 cmdId·playId. 리포트가 한 명령의 여러 줄을 한 번으로 센다(앰비언트 밝기·색, C361)
 )
 
 /** G38 조향 창(F9). CASCADE는 alarm_log와 같은 이유. */

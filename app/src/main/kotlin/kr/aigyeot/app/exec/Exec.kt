@@ -9,6 +9,9 @@ import kr.aigyeot.engine.Answer
 import kr.aigyeot.engine.Ask
 import kr.aigyeot.engine.CancelSpeech
 import kr.aigyeot.engine.Command
+import kr.aigyeot.engine.DimAmbient
+import kr.aigyeot.engine.RestoreAmbient
+import kr.aigyeot.engine.RestoreAmbientLedger
 import kr.aigyeot.engine.ControlKind
 import kr.aigyeot.engine.ControlResult
 import kr.aigyeot.engine.EngineState
@@ -37,6 +40,10 @@ internal class ExecIo(
     val reemit: () -> Unit = {},   // 차량 신호·경로의 지금 값을 중복 억제 없이 다시 낸다(장면 끝, V12)
     val lastGear: () -> kr.aigyeot.engine.Gear? = { null },   // 마지막으로 받은 기어(C328, 장면 끝 복원의 기준선)
     val resubscribeSpeed: () -> Unit = {},   // 속도 권한이 늦게 허용됐을 때 차량 구독을 다시 한다(C321 ①)
+    val ambient: AmbientPort = NoAmbient,    // 앰비언트 조명(기능 D, 4.2)
+    val ledger: LedgerStore = NoLedger,      // 실행기 낮춤 장부(4.2, C363). 앱 저장소의 파일 하나
+    val carReady: () -> Boolean = { true },  // 차 연결(Vehicle 초기화)이 끝났는가. 끝나기 전 차 제어 명령은 CarGate가 미룬다(4.2)
+    val onCarReady: (() -> Unit) -> Unit = {},   // 연결이 준비될 때 부를 일을 등록한다(실행기 잠금 안에서 불린다)
 )
 
 /**
@@ -66,6 +73,12 @@ class Exec internal constructor(
     private val voice = Voice(io.tts, io.stt, io.tap, io.sched, clock, post, { state()?.car?.micRunning == true })
     private val controls = Controls(io.control, io.navi, io.sched, clock, post, log, p) { id -> state()?.car?.route?.rests?.firstOrNull { it.id == id } }
 
+    private val ambients = Ambients(io.ambient, io.sched, clock, post, log, p, io.ledger) { msg -> runCatching { android.util.Log.i("Ambient", msg) } }
+
+    private val gate = CarGate(io.sched, p.verifyTimeoutMs * 4, io.carReady).also { g ->
+        io.onCarReady { g.readyNow() }
+    }
+
     private var started = false
 
     /**
@@ -85,6 +98,8 @@ class Exec internal constructor(
         runCatching { voice.cancel() }
         runCatching { player.release() }
         runCatching { controls.closeAll("stop") }
+        runCatching { ambients.closeAll() }
+        runCatching { gate.failAll() }
         runCatching { io.stop() }
     }
 
@@ -115,11 +130,14 @@ class Exec internal constructor(
                 is Ask -> voice.ask(cmd)
                 is Listen -> voice.listen(cmd)
                 CancelSpeech -> voice.cancel()
-                is SetSeatHeat -> controls.seatHeat(cmd)
-                is SetWindowLock -> controls.windowLock(cmd)
-                is SetReadingLight -> controls.readingLight(cmd)
-                is LowerHvac -> controls.lowerHvac(cmd)
+                is SetSeatHeat -> gated(cmd) { controls.seatHeat(cmd) }
+                is SetWindowLock -> gated(cmd) { controls.windowLock(cmd) }
+                is SetReadingLight -> gated(cmd) { controls.readingLight(cmd) }
+                is LowerHvac -> gated(cmd) { controls.lowerHvac(cmd) }
                 is AddWaypoint -> controls.waypoint(cmd)
+                is DimAmbient -> gated(cmd) { ambients.dim(cmd) }
+                is RestoreAmbient -> gated(cmd) { ambients.restore(cmd) }
+                is RestoreAmbientLedger -> gated(cmd) { ambients.restoreFromLedger(cmd.cmdId) }   // 장부는 판단 코어가 이 명령을 낼 때만 되돌린다(C364)
                 else -> {}
             }
         } catch (e: Exception) {
@@ -128,6 +146,11 @@ class Exec internal constructor(
             failed(cmd).forEach(post)
         }
     }
+
+    /** 차 제어 명령의 입구 하나(4.2 '차 준비 전 명령과 재시도'): 연결 전이면 미뤘다가 준비되면 순서대로, 시간 안에 안 되면 실패 결과. */
+    private fun gated(cmd: Command, run: () -> Unit) = gate.submit({
+        try { run() } catch (e: Exception) { log.row(null, "handle", cmd::class.simpleName.orEmpty(), "done", e.toString(), false); failed(cmd).forEach(post) }
+    }, { failed(cmd).forEach(post) }, defer = cmd !is DimAmbient)
 
     private fun failed(cmd: Command): List<Event> {
         val at = clock()
@@ -141,6 +164,10 @@ class Exec internal constructor(
             is SetReadingLight -> cmd.areas.map { ControlResult(at, cmd.cmdId, ControlKind.READING_LIGHT, it, false, null, null) }
             is LowerHvac -> cmd.areas.map { ControlResult(at, cmd.cmdId, ControlKind.HVAC_TEMP, it, false, null, null) }
             is AddWaypoint -> listOf(WaypointResult(at, cmd.cmdId, cmd.restId, false))
+            is DimAmbient -> listOf(ControlKind.AMBIENT_BRIGHTNESS, ControlKind.AMBIENT_COLOR).map { ControlResult(at, cmd.cmdId, it, null, false, null, null) }
+            is RestoreAmbient -> listOfNotNull(
+                ControlKind.AMBIENT_BRIGHTNESS.takeIf { cmd.brightness != null }, ControlKind.AMBIENT_COLOR.takeIf { cmd.color != null },
+            ).map { ControlResult(at, cmd.cmdId, it, null, false, null, null) }
             else -> emptyList()
         }
     }

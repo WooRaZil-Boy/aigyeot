@@ -586,6 +586,20 @@ class StoreTest {
         assertEquals(1, r.controls.single { it.target == "ROW_2_RIGHT" }.failed, "실패는 controls에 남는다")
     }
 
+    // 기능 D(C361): ambient_dim = 낮춤에 성공한 DimAmbient 수. 한 명령의 밝기·색 두 줄은 cmd_id로 한 번, 되돌림(restore:)·실패 줄은 세지 않는다
+    @Test fun report_ambientDim_countsDistinctSucceededDimCommands() {
+        fullSession()
+        fun amb(api: String, goal: String, cmd: String?, ok: Boolean = true, at: Long) = dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + at, api = api, target = "ROW_1_LEFT+ROW_2_RIGHT", goal = goal, actual = goal, ackMs = 1, appliedMs = 1, ok = ok, retries = 0, cmdId = cmd))
+        amb("setAmbientLightBrightness", "dim:20", "S1-5", at = 20_000); amb("setAmbientLightBrightnessColor", "dim:#3050A0", "S1-5", at = 20_001)   // 한 명령
+        amb("setAmbientLightBrightness", "restore:70", "S1-9", at = 30_000); amb("setAmbientLightBrightnessColor", "restore:#FFFFFF", "S1-9", at = 30_001)   // 되돌림
+        amb("setAmbientLightBrightness", "dim:20", "S1-12", at = 40_000); amb("setAmbientLightBrightnessColor", "dim:#3050A0", "S1-12", ok = false, at = 40_001)   // 두 번째 낮춤: 밝기만 성공
+        amb("setAmbientLightBrightness", "dim:20", "S1-15", ok = false, at = 50_000)   // 실패
+        val r = buildReport(dao, "S1", now)!!
+        assertEquals(2, r.carActions.single { it.action == kr.aigyeot.shared.CarActionKind.AMBIENT_DIM }.count)
+        assertEquals(null, r.carActions.single { it.action == kr.aigyeot.shared.CarActionKind.AMBIENT_DIM }.totalS)
+        assertTrue(r.controls.any { it.api == "setAmbientLightBrightness" && it.failed == 1 }, "실패·되돌림은 controls 요약에 든다")
+    }
+
     private fun lockLine(target: String, goal: String, at: Long) =
         dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + at, api = "setWindowLock", target = target, goal = goal, actual = goal, ackMs = 120, appliedMs = 300, ok = true, retries = 0))
     private fun rearWindowLocks(): Int {

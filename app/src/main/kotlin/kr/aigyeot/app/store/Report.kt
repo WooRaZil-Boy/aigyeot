@@ -252,6 +252,8 @@ private fun carActions(route: String?, plays: List<PlayLogEntity>, eps: List<Epi
         CarAction(CarActionKind.REAR_WINDOW_LOCK, controls.filter { it.api.contains("WindowLock", true) && it.goal.lowercase() in setOf("true", "1", "1.0") }.map { it.target }.distinct().size, null),
         CarAction(CarActionKind.CABIN_COOL, ctl("Hvac", "Seat"), null),
         CarAction(CarActionKind.READING_LIGHT_OFF, ctl("ReadingLight"), null),
+        // 기능 D(C361): 낮춤에 성공한 DimAmbient 수. 한 명령의 밝기·색 두 줄은 cmd_id로 한 번, 되돌림(restore:) 줄은 세지 않는다
+        CarAction(CarActionKind.AMBIENT_DIM, controls.filter { it.api.contains("Ambient", true) && it.goal.startsWith("dim:") }.mapNotNull { it.cmdId }.distinct().size, null),
         CarAction(CarActionKind.WAYPOINT_ADDED, waypoints, null),
         CarAction(CarActionKind.ARRIVAL_NOTICE, eps.count { it.handoffKind == "ARRIVAL_NOTICE" && toldShown(it.handoffToldDriver, settled) }, null),   // C303 A10
         CarAction(CarActionKind.GUARDIAN_ALERT, eps.count { it.guardianNotified && settled }, null),   // C220: 확정 전(C152 대기)에는 알림이 나갔는지 모른다

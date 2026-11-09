@@ -197,6 +197,6 @@ class S53JudgeTest {
         val sim = idle().ev(InputLost(T0, PauseReason.MIC_ERROR)).ev(MicService(T0, false, null))
         assertNull(sim.s.session)
         assertFalse(sim.s.car.micRunning)
-        assertEquals(listOf<Command>(ShowNotice(Notice.MIC_STOPPED)), sim.log)
+        assertEquals(listOf<Command>(ShowNotice(Notice.MIC_STOPPED)), sim.log.filter { it !is RestoreAmbientLedger })   // Boot가 장부 되돌림(C364)을 낸다
     }
 }

@@ -1,5 +1,6 @@
 package kr.aigyeot.engine
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // 계약 2.2. 상태 클래스와 열거값. 상태를 읽는 규칙 함수는 Rules.kt(설계 3.1·3.8).
@@ -70,6 +71,7 @@ data class Ignition(
     val suspendedAt: Long?,
     val driverUserId: Int,
     val nursingStop: NursingStop? = null,   // 결정 ①(V1): 수유실 들름은 시동 단위. 세션이 13a로 닫혀도 F8 수유 확인이 뜬다
+    val ambient: Ambient? = null,           // 앰비언트 조명(기능 D, 5.10, C358). 시동 단위 한 칸. null = 손대지 않음. 주인 Control, 쓰기는 ControlReducer.kt의 private ambient(next) 하나
 )
 
 @Serializable
@@ -132,6 +134,25 @@ data class SessionState(
     val comfortDone: Boolean = false,                   // 42a: 이 세션에 쾌적 조정을 했다
     val comfortPending: ComfortPending? = null,         // 42a에서 낸 `LowerHvac`의 결과를 기다리는 중(C102). 결과(42g·42h)가 오면 null
 )
+
+/** 앰비언트 조명 칸(기능 D, 5.10, C358). sessionId = 낮춘 세션: 되돌림 cmdId·control_log·리포트 기다림(AM12)이 이 세션 몫이다(P5) */
+@Serializable sealed interface Ambient {
+    val sessionId: String
+    /** `DimAmbient`를 냈고 결과 둘(밝기·색)을 기다린다. got = 이미 온 결과 중 바꾸고 확인된 값 */
+    @Serializable @SerialName("DIMMING") data class Dimming(override val sessionId: String, val cmdId: String, val got: AmbientBack = AmbientBack(), val pending: Set<ControlKind>) : Ambient
+    /** 낮춤이 확인됐다. back이 비어 있으면 바꾼 것이 없다 */
+    @Serializable @SerialName("DIMMED") data class Dimmed(override val sessionId: String, val back: AmbientBack) : Ambient
+    /** `RestoreAmbient`를 냈고 back에 있는 종류의 결과를 기다린다(이 동안 새 낮춤을 내지 않는다, AM10) */
+    @Serializable @SerialName("RESTORING") data class Restoring(override val sessionId: String, val cmdId: String, val back: AmbientBack, val pending: Set<ControlKind>) : Ambient
+}
+@Serializable data class AmbientBack(val brightness: AmbientValue? = null, val color: AmbientValue? = null) {
+    val any: Boolean get() = brightness != null || color != null
+    /** 두 종류 모두 쓴 값을 안다. 아니면(C374) 확인하지 못했거나 쓰지 않은 종류가 있어, 쓰기 직전 남기는 실행기 장부가 되돌릴 값을 알 수 있다(RestoreAmbientLedger). */
+    val complete: Boolean get() = brightness != null && color != null
+}
+@Serializable data class AmbientValue(val before: Int, val set: Int)   // 읽어 둔 원래 값·넣어 반영된 값. 색은 24비트 RGB(`and 0xFFFFFF`, 알파 뺌)
+/** 화면 '조명 낮춤' 배지(5.10). 읽기 투영(저장 안 함): 낮춤이 확인된 동안만 참 */
+val EngineState.ambientDimmed: Boolean get() = (ign.ambient as? Ambient.Dimmed)?.back?.any == true
 
 /** V15(P4): 세션 재생 상한에 닿았다. playedMs는 줄지 않아 저장하지 않고 계산한다. */
 fun SessionState.capReached(p: Params): Boolean = playedMs >= p.sessionPlayCapMs
@@ -329,7 +350,7 @@ data class HandoffRecord(
 @Serializable enum class RejectReason { FOCUS_DENIED, ERROR, NO_REAR_OUTPUT }
 @Serializable enum class EndReason { DEADLINE, STOPPED, ERROR }
 @Serializable enum class YesNo { YES, NO, NONE }
-@Serializable enum class ControlKind { SEAT_HEAT, WINDOW_LOCK, READING_LIGHT, HVAC_TEMP }
+@Serializable enum class ControlKind { SEAT_HEAT, WINDOW_LOCK, READING_LIGHT, HVAC_TEMP, AMBIENT_BRIGHTNESS, AMBIENT_COLOR }
 @Serializable enum class Via { TOOL, VOICE, SCENARIO }
 @Serializable enum class BabyAboardFrom { HOME, NOTICE }
 @Serializable enum class FeedingFrom { CAR_SCREEN, PHONE }

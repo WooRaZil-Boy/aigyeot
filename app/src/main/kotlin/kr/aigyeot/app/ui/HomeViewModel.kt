@@ -20,6 +20,7 @@ import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.Phase
 import kr.aigyeot.engine.Step
+import kr.aigyeot.engine.ambientDimmed
 import kr.aigyeot.engine.canAsk
 import kr.aigyeot.engine.methodLabel
 import kr.aigyeot.engine.methodStats
@@ -37,6 +38,7 @@ data class HomeUiState(
     val confirmShown: Boolean,
     val askEnabled: Boolean,
     val stats: List<String>,
+    val ambientDimmed: Boolean = false,   // 기능 D(5.10, C361): 읽기 투영 EngineState.ambientDimmed. 낮춤이 확인된 동안만 '조명 낮춤' 배지
 )
 
 fun homeUiState(s: EngineState?, now: Long, link: LinkStatus) = HomeUiState(
@@ -48,6 +50,7 @@ fun homeUiState(s: EngineState?, now: Long, link: LinkStatus) = HomeUiState(
     confirmShown = s?.ign?.nursingStop?.confirmShown == true,
     askEnabled = askEnabled(s),
     stats = stats(s?.history.orEmpty(), s?.methodsNext.orEmpty(), now),
+    ambientDimmed = s?.ambientDimmed == true,
 )
 
 /** 홈 상태(30초마다 시계가 갱신). 바꾸려면 사건을 [events](실제 입구, V3)로 보낸다. 수유 입력은 link가 Room에 먼저 쓴다(C322). */

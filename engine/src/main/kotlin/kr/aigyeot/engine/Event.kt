@@ -59,7 +59,7 @@ sealed interface PlayReply : Reply
 
 // 3.5 제어 결과
 @Serializable data class ControlResult(
-    override val at: Long, val cmdId: String, val control: ControlKind, val area: Area, val ok: Boolean,
+    override val at: Long, val cmdId: String, val control: ControlKind, val area: Area?, val ok: Boolean,
     val before: Double?, val after: Double?,
 ) : Event, Reply { override val ref get() = cmdId }
 @Serializable data class WaypointResult(

@@ -42,7 +42,12 @@ internal class PleosStt(private val ctx: Context, private val ex: ExecThread) : 
             override fun onUpdatedRms(rms: Double) {}
         }
         s.initialize(object : SttInit {
-            override fun onSuccess() = ex.guard { if (stt === s) { s.setLocale(Locale.KOREA); s.addListener(listener); listening = listener; ready = true } }
+            override fun onSuccess() = ex.guard {
+                if (stt === s) ex.off.run {                          // SDK 설정은 잠금 밖 레인에서, 칸은 잠금 안에서
+                    s.setLocale(Locale.KOREA); s.addListener(listener)
+                    ex.guard { if (stt === s) { listening = listener; ready = true } else runCatching { s.removeListener(listener) } }
+                }
+            }
             override fun onFailure(e: SttError) { Log.w(TAG, "stt init $e") }
         })
     }

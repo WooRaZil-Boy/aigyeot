@@ -28,7 +28,7 @@ class Engine(private val p: Params = Params()) {
      */
     fun sceneStart(real: EngineState, scene: EngineState, at: Long): SceneStart {
         val t0 = maxOf(at, real.now)
-        val t = Tx(p, real).apply { clock(t0); lifecycle(Life.SCENE_START); flushLedgers() }
+        val t = Tx(p, real).apply { clock(t0); lifecycle(Life.SCENE_START); flushLedgers(); syncAmbient() }
         return SceneStart(Step(t.s, t.out.toList(), t.wakeAt()), Tx(p, scene).apply { clock(t0); intoScene(real) }.s)
     }
 

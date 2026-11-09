@@ -185,3 +185,15 @@ internal fun Tx.valid(l: Line) = when (l.sid) {
     Sid.S06, Sid.S07, Sid.S08, Sid.S10, Sid.S11, Sid.S15 -> gearAllows(l.sid) && (l.askRestId == null || canAddWaypoint(l.askRestId))   // 쉼터 제안·인계 줄의 경로 판단은 drain의 다시 고르기(C258·C272)
     else -> true
 }
+
+// ---- 앰비언트 조명 목표(기능 D, 5.10 '언제' 표, C358) ----
+
+/** 앰비언트 목표. HOLD = 지금 조명을 그대로 둔다(재생 시작 대기). */
+internal enum class AmbientGoal { DIM, NORMAL, HOLD }
+
+/** 지금 상태에서 계산한 앰비언트 목표(P4: 칸에 두지 않는다). 읽는 곳은 [syncAmbient] 하나. */
+internal fun EngineState.ambientGoal(): AmbientGoal {
+    val x = session ?: return AmbientGoal.NORMAL
+    x.play?.let { return if (it.startedAt == null) AmbientGoal.HOLD else AmbientGoal.DIM }   // 시작 대기는 HOLD, 시작된 자동·요청 재생은 DIM
+    return if (x.phase in setOf(Phase.GAP, Phase.CONFIRM) && x.episode != null) AmbientGoal.DIM else AmbientGoal.NORMAL
+}

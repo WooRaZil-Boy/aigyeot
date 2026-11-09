@@ -27,7 +27,7 @@ enum class To { EXEC, STORE, LINK, UI }
 /** 할 일 → 받는 곳. 새 할 일이 생기면 컴파일이 여기를 짚는다(sealed). */
 fun route(c: Command): To = when (c) {
     is StartPlayback, is StopPlayback, is AdjustPlayback, ReleaseAudio, is Speak, is Ask, is Listen, CancelSpeech,
-    is SetSeatHeat, is SetWindowLock, is SetReadingLight, is LowerHvac, is AddWaypoint -> To.EXEC
+    is SetSeatHeat, is SetWindowLock, is SetReadingLight, is LowerHvac, is AddWaypoint, is DimAmbient, is RestoreAmbient, is RestoreAmbientLedger -> To.EXEC
     is SendToPhone, is Qa -> To.LINK
     is ShowNotice, is HideNotice -> To.UI
     is SaveSession, is SaveEpisode, is SettleHandoff, is SavePlay, is LogAlarm, is CaptureContext, is SaveSteerWindow, is CloseSession,

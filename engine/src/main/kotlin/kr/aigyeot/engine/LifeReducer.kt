@@ -148,6 +148,7 @@ internal fun Tx.closeSession() {                                                
 internal fun Tx.reportIfSettled(sessionId: String) {
     if (sessionId == ses?.id) return
     if (s.handoffs.any { it.sessionId == sessionId } || s.ign.windowLockPending.any { it.sessionId == sessionId }) return
+    s.ign.ambient?.let { if (it.sessionId == sessionId && it.holdsReport) return }   // AM12: 앰비언트 되돌림(또는 그 결과) 대기
     out += CloseSession(sessionId)
 }
 

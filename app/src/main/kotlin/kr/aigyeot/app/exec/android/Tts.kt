@@ -48,11 +48,12 @@ internal class PleosTts(private val ctx: Context, private val ex: ExecThread) : 
         t.initialize(object : TtsInit {
             override fun onSuccess() = ex.guard {
                 if (tts !== t) return@guard                          // 그사이 release됐다
-                t.setLocale(Locale.KOREA)
-                t.setAudioAttributes(attrs)
-                events = ev
-                t.addEventListener(ev)
-                g.warm()
+                ex.off.run {                                          // SDK 설정은 잠금 밖 레인에서, 칸·워밍업은 잠금 안에서
+                    t.setLocale(Locale.KOREA)
+                    t.setAudioAttributes(attrs)
+                    t.addEventListener(ev)
+                    ex.guard { if (tts === t) { events = ev; g.warm() } else runCatching { t.removeEventListener(ev) } }
+                }
             }
             override fun onFailure(e: TtsError) = ex.guard { Log.w(TAG, "tts init $e"); g.initFailed() }
         })

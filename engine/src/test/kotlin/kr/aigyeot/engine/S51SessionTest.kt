@@ -299,8 +299,11 @@ class S51SessionTest {
 
     @Test fun r13d_closeSession_afterEndedAtSaved() {
         val sim = session().gear(Gear.P, MIN).attempt1()          // P에서 시작한 1차(5a) 재생 중
+        val from = sim.log.size
         sim.ev(RearDoor(sim.t + 10_000, Side.LEFT, true))
-        val c = sim.cmds
+        assertTrue(sim.all<CloseSession>().isEmpty(), "AM12: 낮춤 결과를 기다리는 동안은 리포트를 미룬다")
+        sim.dimSkipped()
+        val c = sim.log.drop(from)
         val close = c.indexOfFirst { it is CloseSession }
         val play = c.indexOfFirst { it is SavePlay }
         val epEnd = c.indexOfLast { it is SaveEpisode }

@@ -37,7 +37,7 @@ import kr.aigyeot.engine.RestCandidate
  */
 internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, clock: () -> Long, post: (Event) -> Unit) : NaviPort {
     private var helper: NaviHelper? = null
-    private val route = RouteFeed(clock, post, { runCatching { helper?.getTBTInfo() } }, { Log.w(TAG, it) })   // C264: 안내 시작 때 지금 경로 TBT를 다시 요청(리스너 안에서만 불려 회차가 맞다)
+    private val route = RouteFeed(clock, post, { helper?.let { h -> ex.off.run { h.getTBTInfo() } } }, { Log.w(TAG, it) })   // C264: 안내 시작 때 지금 경로 TBT를 다시 요청(리스너 안에서만 불려 회차가 맞다)
     private var pending: ((Boolean, String) -> Unit)? = null          // addWaypoint 결과 콜백을 기다림
     private var targetRows: List<RestArea> = RestAreas.all               // 대조에 쓸 자료(쉼터 종류에 맞춘다)
     private var target: RestArea? = null                              // 보낸 경유지 줄(대조 대상)
@@ -60,7 +60,7 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
         }
         override fun onWaypointChanged(info: WaypointChangedInfo) = on {
             // 어느 요청의 알림인지 알 수 없으니 바로 성공으로 보지 않고 경유지 목록을 다시 읽어 대조한다
-            if (info.cmdType == WaypointCmdType.ADD && pending != null && target != null) runCatching { helper?.getWaypointInfo() }
+            if (info.cmdType == WaypointCmdType.ADD && pending != null && target != null) helper?.let { h -> ex.off.run { h.getWaypointInfo() } }   // 바인더라 잠금 밖 레인에서
         }
         override fun onWayPointInfo(list: List<WaypointInfo>) = on {
             val t = target ?: return@on
@@ -77,7 +77,7 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
         route.forget()                                                // 새 구독 회차: 앞 회차의 상태가 복원을 막지 않게
         val l = newListener(my).also { listener = it }
         helper = NaviHelper(ctx).also { h ->
-            h.initialize({ ex.guard { if (gen == my) { h.addListener(l); h.getRouteStateInfo(); h.getTBTInfo(); h.getDestinationInfo() } } }, { e -> Log.w(TAG, "navi init", e) })
+            h.initialize({ ex.guard { if (gen == my) ex.off.run { h.addListener(l); h.getRouteStateInfo(); h.getTBTInfo(); h.getDestinationInfo() } } }, { e -> Log.w(TAG, "navi init", e) })
         }
     }
 
@@ -115,7 +115,7 @@ internal class PleosNavi(private val ctx: Context, private val ex: ExecThread, c
         targetRows = rows
         val my = gen
         // 이미 같은 경유지가 경로에 있으면 내비는 다시 넣지 않고 알림도 주지 않는다: 먼저 목록을 읽어 있으면 보내지 않고 성공(C110)
-        precheck.start({ h.getWaypointInfo() }) { listed ->
+        precheck.start({ ex.off.run { h.getWaypointInfo() } }) { listed ->
             if (gen != my || target !== a) return@start
             if (listed) { target = null; done(true, "added") } else push(h, rest, a, done)
         }

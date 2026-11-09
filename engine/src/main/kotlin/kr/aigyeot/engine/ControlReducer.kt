@@ -71,21 +71,22 @@ private fun fmtC(v: Double) = if (v == v.toLong().toDouble()) v.toLong().toStrin
 /** 3e~3g. 문맥(P5)은 낼 때 잡은 항목: cmdId로 그 항목의 locking·restoring 칸을 찾고 그 항목의 sessionId만 본다. */
 internal fun Tx.windowResult(e: ControlResult) {
     val l = s.ign.windowLockPending.toMutableList()
-    val i = l.indexOfFirst { e.area in it.locking[e.cmdId].orEmpty() }
-    val j = l.indexOfFirst { e.area in it.restoring[e.cmdId].orEmpty() }
+    val area = e.area ?: return   // 뒷창 잠금 결과는 늘 영역이 있다(앰비언트 둘만 null)
+    val i = l.indexOfFirst { area in it.locking[e.cmdId].orEmpty() }
+    val j = l.indexOfFirst { area in it.restoring[e.cmdId].orEmpty() }
     if (i >= 0) {
-        var w = l[i].copy(locking = l[i].locking.minus(e.cmdId, e.area))
+        var w = l[i].copy(locking = l[i].locking.minus(e.cmdId, area))
         val before = e.before?.let { it != 0.0 }
         if (e.ok && before != null) {
-            if (w.sessionId == ses?.id) controls { copy(windowLockBefore = windowLockBefore.orEmpty() + (e.area to before)) } // 3e
+            if (w.sessionId == ses?.id) controls { copy(windowLockBefore = windowLockBefore.orEmpty() + (area to before)) } // 3e
             else {                                                                             // 3f
                 val c = newId(w.sessionId) // C323(P5): 잠금을 낸 세션 몫이다
-                out += SetWindowLock(c, mapOf(e.area to before))
-                w = w.copy(restoring = w.restoring + (c to setOf(e.area)))
+                out += SetWindowLock(c, mapOf(area to before))
+                w = w.copy(restoring = w.restoring + (c to setOf(area)))
             }
         }
         l[i] = w
-    } else if (j >= 0) l[j] = l[j].copy(restoring = l[j].restoring.minus(e.cmdId, e.area))       // 3g
+    } else if (j >= 0) l[j] = l[j].copy(restoring = l[j].restoring.minus(e.cmdId, area))       // 3g
     else return
     locks(l)
     pumpLocks()
@@ -135,4 +136,100 @@ internal fun Tx.restoreWindows(sessionId: String) {                             
     l[i] = w
     locks(l)
     pumpLocks()
+}
+
+// ---- 앰비언트 조명(기능 D, 5.10, C358~C361) ----
+
+private val AMBIENT_KINDS = setOf(ControlKind.AMBIENT_BRIGHTNESS, ControlKind.AMBIENT_COLOR)
+
+/** 되돌릴 것(또는 그 결과)이 남아 닫힌 세션의 리포트를 붙잡는 칸인가(AM12): Dimming·back 있는 Dimmed·Restoring. */
+internal val Ambient.holdsReport: Boolean get() = this !is Ambient.Dimmed || back.any
+
+/** 앰비언트 칸을 쓰는 유일한 함수. 칸이 어느 세션 것에서 비거나 다른 세션 것이 될 때 그 세션의 리포트를 다시 본다(AM12). */
+private fun Tx.ambient(next: Ambient?) {
+    val prev = s.ign.ambient
+    s = s.copy(ign = s.ign.copy(ambient = next))
+    if (prev != null && prev.holdsReport && !(next != null && next.holdsReport && next.sessionId == prev.sessionId)) reportIfSettled(prev.sessionId)
+}
+
+/** 맞추기 한 함수(C358): 목표와 칸을 견줘 바뀐 때만 명령을 낸다. 모든 Step 끝과 장면 시작의 실제 Step 끝에서 한 번 부른다. */
+internal fun Tx.syncAmbient() {
+    val a = s.ign.ambient
+    when (s.ambientGoal()) {
+        AmbientGoal.DIM -> if (a == null) {                                                    // AM1
+            val c = newId()
+            out += DimAmbient(c, p.ambientDimLevel, p.ambientDimColor)
+            ambient(Ambient.Dimming(ses!!.id, c, AmbientBack(), AMBIENT_KINDS))
+        }
+        AmbientGoal.NORMAL -> if (a is Ambient.Dimmed) {
+            if (!a.back.any) ambient(null)                                                      // AM6
+            else {                                                                              // AM5
+                val c = newId(a.sessionId)   // 낮춘 세션 몫(C323과 같다)
+                out += RestoreAmbient(c, a.back.brightness, a.back.color)
+                ambient(Ambient.Restoring(a.sessionId, c, a.back, backKinds(a.back)))
+            }
+            // C374: 확인하지 못한(ok=false) 종류는 back에 없지만 실행기 장부에는 쓰기 직전 값이 남아 있을 수 있다. 되돌림 명령 뒤에 장부 되돌림을 한 번 더 낸다(장부가 비면 무해)
+            if (!a.back.complete) out += RestoreAmbientLedger(newId(a.sessionId))
+        }
+        AmbientGoal.HOLD -> {}
+    }
+}
+
+private fun backKinds(b: AmbientBack): Set<ControlKind> = buildSet {
+    if (b.brightness != null) add(ControlKind.AMBIENT_BRIGHTNESS)
+    if (b.color != null) add(ControlKind.AMBIENT_COLOR)
+}
+
+/** AM7·AM8·AM9: 앰비언트 결과. 문맥은 낼 때 잡은 칸의 cmdId뿐이다(P5). 다른 cmdId는 버린다. */
+internal fun Tx.ambientResult(e: ControlResult) {
+    when (val a = s.ign.ambient) {
+        is Ambient.Dimming -> {
+            if (a.cmdId != e.cmdId || e.control !in a.pending) return
+            val v = if (e.ok && e.before != null && e.after != null) AmbientValue(e.before.toInt(), e.after.toInt()) else null
+            val got = if (e.control == ControlKind.AMBIENT_BRIGHTNESS) a.got.copy(brightness = v) else a.got.copy(color = v)
+            val left = a.pending - e.control
+            ambient(if (left.isEmpty()) Ambient.Dimmed(a.sessionId, got) else a.copy(got = got, pending = left))
+        }
+        is Ambient.Restoring -> {
+            if (a.cmdId != e.cmdId || e.control !in a.pending) return
+            val left = a.pending - e.control   // ok와 상관없이 뺀다(다시 보내지 않는다, 3g와 같다)
+            ambient(if (left.isEmpty()) null else a.copy(pending = left))
+        }
+        else -> {}
+    }
+}
+
+/** 수명 표 Ambient 행 BOOT의 DROP(AM13·AM13a): 옛 결과는 오지 않는다. Dimming은 버리고 Restoring은 Dimmed로 되돌려 Step 끝 syncAmbient가 다시 낸다. */
+internal fun Tx.dropAmbient() {
+    when (val a = s.ign.ambient) {
+        is Ambient.Dimming -> ambient(null)
+        is Ambient.Restoring -> ambient(Ambient.Dimmed(a.sessionId, a.back))
+        else -> {}
+    }
+    // C364: 실행기 낮춤 장부로 되돌릴지는 판단 코어가 정한다. Dimmed(복원으로 낮춤을 이어 가는 GAP·CONFIRM, 또는 Step 끝 AM5가 되돌릴 것)면 내지 않는다.
+    // 아니면(Dimming·null: 되돌릴 값을 잃음) 한 번 낸다. 결과 사건은 없다
+    if (s.ign.ambient !is Ambient.Dimmed) out += RestoreAmbientLedger(newId())
+}
+
+/**
+ * 수명 표 Ambient 행 SCENE_START의 CUT(C367): 실제 상태가 Dimming이면 그 결과는 장면 상태로 가 AM9로 버려진다. 칸을 비우고(AM12 리포트도 푼다)
+ * `RestoreAmbientLedger`로 실행기의 낮춤 작업을 버린다(C366과 같은 종류). Dimmed·Restoring은 그대로 두어 realStep 끝 syncAmbient가 AM5를 낸다. 칸이 없으면 아무것도 안 한다.
+ */
+internal fun Tx.cutAmbientAtSceneStart() {
+    if (s.ign.ambient !is Ambient.Dimming) return
+    ambient(null)
+    out += RestoreAmbientLedger(newId())
+}
+
+/** 수명 표 Ambient 행 SCENE_END의 RESTORE(AM15): 버릴 장면 상태의 back 있는 Dimmed를 되돌리는 명령만 낸다(상태는 버린다). */
+internal fun Tx.restoreAmbientAtSceneEnd() {
+    when (val a = s.ign.ambient) {
+        is Ambient.Dimmed -> {
+            if (a.back.any) out += RestoreAmbient(newId(a.sessionId), a.back.brightness, a.back.color)
+            if (!a.back.complete) out += RestoreAmbientLedger(newId(a.sessionId))   // C374: back이 비어도 낸다
+        }
+        // C366: 장면 끝은 장면 상태를 통째로 버린다. Dimming(결과 전)이면 실행기의 낮춤 작업이 살아 있을 수 있어, Boot와 같이 장부 되돌림 명령으로 그 작업을 버리게 한다
+        is Ambient.Dimming -> out += RestoreAmbientLedger(newId())
+        else -> {}   // Restoring(이미 낸 명령이 끝난다)·칸 없음
+    }
 }

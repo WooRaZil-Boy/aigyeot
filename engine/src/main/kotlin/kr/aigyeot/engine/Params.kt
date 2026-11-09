@@ -72,4 +72,6 @@ data class Params(
     val holdMaxMs: Long = 30_000,         // C107: 미룰 수 있는 문장을 큐에 둘 수 있는 최대 시간(8초 간격+긴 문장 8초+3초 잠잠=19초 > 15초). 설계값
     val steerHoldDeg: Double = 30.0,      // C107: 이 이상이면 조향이 큰 것으로 본다. 설계값
     val yamnetHopMs: Long = 975,
+    val ambientDimLevel: Double = 0.2,    // 기능 D(5.10, C359): 낮출 밝기 = min + (max − min) × level. 설계값·근거 없음
+    val ambientDimColor: Int = 0xFF3050A0.toInt(),   // 기능 D(5.10, C359): 차분한 어두운 파랑(알파 0xFF). 설계값·근거 없음
 )

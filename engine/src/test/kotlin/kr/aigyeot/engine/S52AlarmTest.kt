@@ -29,7 +29,7 @@ class S52AlarmTest {
         assertEquals(sim.t, e.alarmAt)
         assertEquals(3_975, e.alarmDelayMs)
         assertNull(sim.ses.pendingAlarm)
-        assertEquals(listOf("SaveEpisode", "CaptureContext", "Speak"), sim.cmds.map { it::class.simpleName })
+        assertEquals(listOf("SaveEpisode", "CaptureContext", "Speak", "DimAmbient"), sim.cmds.map { it::class.simpleName })
         assertEquals(Speak(sim.s.speech.speaking!!, Sid.S02, mapOf("method" to "백색소음")), sim.step<Speak>().single())
     }
 

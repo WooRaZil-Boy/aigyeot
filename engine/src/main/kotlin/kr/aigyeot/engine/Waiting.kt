@@ -27,6 +27,8 @@ internal sealed interface Waiting {
     data object Comfort : Waiting
     /** 뒷창 잠금·되돌림 결과 기다림(ign.windowLockPending). */
     data object WindowLock : Waiting
+    /** 앰비언트 조명 낮춤·되돌림 결과 기다림(ign.ambient, 기능 D C360). 처리 순서는 뒷창 다음. */
+    data object Ambient : Waiting
     /** 진행 중 조향 창(steer.window). */
     data object SteerWindow : Waiting
     /** 세션 예약(ign.reserved, 1c). 타입이 아니라 칸이다. */
@@ -59,10 +61,10 @@ internal enum class Life {
 
 /**
  * KEEP 남김. CUT 끊음(실행기 끊기 할 일 + 상태 비움: 재생은 열마다 멈춤·WAIT, 말하기·질문·④는 CancelSpeech 하나). SETTLE 장부 확정.
- * DROP 버림(콜백이 오지 않거나 받을 곳이 사라져 할 일 없이 비움. 뒷창 잠금만 C86 다시 잠금을 낸다). RESTORE_LOCK 뒷창 잠금 되돌림(13a).
+ * DROP 버림(콜백이 오지 않거나 받을 곳이 사라져 할 일 없이 비움. 뒷창 잠금만 C86 다시 잠금을 낸다). RESTORE 제어 되돌림(뒷창 13a·3f·V11, 앰비언트 AM15).
  * HIDE 상태는 남기고 띄운 알림만 내림(C349, 수유 확인 알림).
  */
-internal enum class Fate { KEEP, CUT, SETTLE, DROP, RESTORE_LOCK, HIDE }
+internal enum class Fate { KEEP, CUT, SETTLE, DROP, RESTORE, HIDE }
 
 /** 세션이 닫히면 큐에서 빼는 제안 문장(C140). */
 private val SESSION_OFFERS = setOf(Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11, Sid.S15)
@@ -132,9 +134,17 @@ internal fun fate(w: Waiting, life: Life, s: EngineState): Fate {
             else -> Fate.KEEP
         }
         Waiting.WindowLock -> when (life) {
-            Life.SESSION_CLOSE, Life.SCENE_END -> Fate.RESTORE_LOCK   // 13a·3f. SCENE_END(V11): 장면 세션이 닫히기 전에 끝나도 되돌린다
+            Life.SESSION_CLOSE, Life.SCENE_END -> Fate.RESTORE   // 13a·3f. SCENE_END(V11): 장면 세션이 닫히기 전에 끝나도 되돌린다
             Life.BOOT -> Fate.DROP                    // C86: 결과 대기분 버림·열린 세션 영역 다시 잠금(장면 시작 때 남긴 실제 잠금 대기도 장면 끝 Boot가 맞춘다)
             else -> Fate.KEEP   // SESSION_OPEN: 3g가 같은 영역을 기다린다(lockWindows)
+        }
+        // 조명은 기록이 아니라 KEEP이 많다: 재생·세션이 끝나면 Step 끝 syncAmbient(투영)가 되돌린다. SCENE_END는 장면 상태의 back 있는 Dimmed를 되돌리고(AM15),
+        // BOOT는 옛 결과가 오지 않아 Dimming은 버리고 Restoring은 Dimmed로 돌려 다시 보낸다(AM13·AM13a)
+        Waiting.Ambient -> when (life) {
+            Life.SCENE_START -> Fate.CUT   // C367: 실제 Dimming의 결과는 장면 상태로 가 버려지니 칸을 비우고 실행기 낮춤 작업을 장부 되돌림으로 버린다. Dimmed·Restoring은 그대로(realStep 끝 AM5)
+            Life.SCENE_END -> Fate.RESTORE
+            Life.BOOT -> Fate.DROP
+            else -> Fate.KEEP
         }
         Waiting.SteerWindow -> when (life) {
             Life.SESSION_CLOSE, Life.RESTORE -> Fate.DROP   // C50. RESTORE: C78 이미 커밋된 창을 옛 부분 집계로 덮지 않게
@@ -181,8 +191,14 @@ internal fun Tx.lifecycle(life: Life) {
     }
     if (f(Waiting.Comfort) != Fate.KEEP) dropComfort()
     when (f(Waiting.WindowLock)) {
-        Fate.RESTORE_LOCK -> ses?.let { restoreWindows(it.id) }
+        Fate.RESTORE -> ses?.let { restoreWindows(it.id) }
         Fate.DROP -> dropLostLocks()
+        else -> {}
+    }
+    when (f(Waiting.Ambient)) {   // 뒷창 다음(기능 D, C360)
+        Fate.RESTORE -> restoreAmbientAtSceneEnd()
+        Fate.CUT -> cutAmbientAtSceneStart()
+        Fate.DROP -> dropAmbient()
         else -> {}
     }
     if (f(Waiting.SteerWindow) != Fate.KEEP) dropSteerWindow()

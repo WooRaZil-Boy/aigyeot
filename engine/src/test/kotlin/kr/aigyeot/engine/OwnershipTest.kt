@@ -39,7 +39,7 @@ class OwnershipTest {
         own("Soothe", "stage", "episode", "playedMs", "alarmRun", "cryRuns", "output", "mixedUntil"),
         own("Offer", "offers", "spokenAt", "pendingAsk", "waypointPending", "addedRestIds", "driveFrom", "longDriveOffered", "leftParkAt", "handoffs"),
         own("Qa", "qa"),
-        own("Control", "windowLockPending", "controls", "windowLockBefore", "comfortDone", "comfortPending"),
+        own("Control", "windowLockPending", "controls", "windowLockBefore", "comfortDone", "comfortPending", "ambient"),
         own("Speech", "queue", "speaking", "lastDoneAt"),
         own("Record", "steer", "restLog", "recordsCleared"),
     ).flatten().toMap()

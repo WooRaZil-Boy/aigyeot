@@ -24,6 +24,7 @@ fun HomeScreen(
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(ui.status, style = MaterialTheme.typography.bodyLarge)
             Body(ui.micText)
+            if (ui.ambientDimmed) Body("조명 낮춤")
             if (ui.pausesWarning) Body("입력이 끊겨 판정을 잠시 멈췄어요", MaterialTheme.colorScheme.error)
             Body(ui.feeding)
             LinkLines(ui.link)   // contracts-link 8.6 정차 화면 표시

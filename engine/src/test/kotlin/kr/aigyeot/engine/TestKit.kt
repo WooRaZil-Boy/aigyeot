@@ -121,3 +121,10 @@ fun Sim.flush(): Sim {
     }
     return this
 }
+
+/** 기능 D(5.10): 낮춤 결과 둘을 '바꾼 것 없음'(스위치 꺼짐 등)으로 닫는다. 닫힌 세션의 리포트를 앰비언트 결과 대기가 붙잡는 시험(AM12)이 아닐 때 쓰는 도구. */
+fun Sim.dimSkipped(): Sim {
+    val c = log.filterIsInstance<DimAmbient>().lastOrNull()?.cmdId ?: return this
+    ev(ControlResult(t, c, ControlKind.AMBIENT_BRIGHTNESS, null, false, null, null))
+    return ev(ControlResult(t, c, ControlKind.AMBIENT_COLOR, null, false, null, null))
+}

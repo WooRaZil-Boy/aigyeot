@@ -3,6 +3,7 @@ package kr.aigyeot.engine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -50,7 +51,7 @@ class LifetimeTest {
         val closed = open.copy(sessionId = "old")
         val s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1"))
         // 열 순서 = Life 선언 순서: SESSION_CLOSE ROOM_CLOSED SESSION_OPEN SCENE_START SCENE_END RESTORE BOOT CLEAR SUSPEND RESUME CALL
-        // K = KEEP, C = CUT, S = SETTLE, D = DROP, R = RESTORE_LOCK, H = HIDE. 말하는 중인 상태(s)다
+        // K = KEEP, C = CUT, S = SETTLE, D = DROP, R = RESTORE, H = HIDE. 말하는 중인 상태(s)다
         val table = listOf(
             Waiting.Ledger(open) to "SKKKSKKKKKK",           // V19: 기록 지우기는 장부를 버리지 않는다(줄을 따라간다)
             Waiting.Ledger(openSpeaking) to "KKKKSKKKKKK",   // C152: 그 줄을 말하는 중이면 닫힌 세션 장부로 남는다
@@ -68,10 +69,11 @@ class LifetimeTest {
             Waiting.Nursing to "KKKHDKKKKKK",             // C349: 장면 시작은 알림만 내리고 상태는 남기며, 장면 끝은 버린다
             Waiting.Comfort to "DDKDKKDKKKK",
             Waiting.WindowLock to "RKKKRKDKKKK",             // V11: 장면 끝이 장면 세션 잠금을 되돌린다
+            Waiting.Ambient to "KKKCRKDKKKK",                // C367: 장면 시작은 Dimming만 비우고 장부 되돌림(CUT). C360: 장면 끝은 back 있는 Dimmed를 되돌리고(AM15), Boot는 결과 대기를 버린다(AM13·AM13a). 나머지는 투영이 처리한다
             Waiting.SteerWindow to "DDKKKDKKKKK",
             Waiting.Reserved to "KKDKKKKKDKK",
         )
-        val code = mapOf(Fate.KEEP to 'K', Fate.CUT to 'C', Fate.SETTLE to 'S', Fate.DROP to 'D', Fate.RESTORE_LOCK to 'R', Fate.HIDE to 'H')
+        val code = mapOf(Fate.KEEP to 'K', Fate.CUT to 'C', Fate.SETTLE to 'S', Fate.DROP to 'D', Fate.RESTORE to 'R', Fate.HIDE to 'H')
         for ((w, row) in table) assertEquals(row, Life.entries.map { code.getValue(fate(w, it, s)) }.joinToString(""), "$w")
         // V9: 장면 시작 열은 말하는 중인지 보지 않는다(말하지 않을 때도 말하기·큐·질문·④를 끊는다)
         val quiet = s.copy(speech = s.speech.copy(speaking = null))
@@ -87,7 +89,8 @@ class LifetimeTest {
         val pl = sim.play()
         val close = apply(Life.SESSION_CLOSE, sim.s)
         assertNull(close.s.session); assertTrue(StopPlayback(pl.id, false) in close.cmds)
-        assertEquals(listOf(StopPlayback(pl.id, false), CancelSpeech), apply(Life.SCENE_END, sim.s).cmds)
+        // 장면 상태의 낮춤이 결과 전(Dimming)이라 실행기의 낮춤 작업을 버리는 RestoreAmbientLedger가 더해진다(C366 2회차)
+        assertEquals(listOf(StopPlayback(pl.id, false), CancelSpeech), apply(Life.SCENE_END, sim.s).cmds.filter { it !is RestoreAmbientLedger })
         assertEquals(pl, apply(Life.RESTORE, sim.s).s.session!!.play, "복원 ③: 호스트가 앞서 PlaybackEnded(ERROR)로 끝낸다(V10)")
         for (l in listOf(Life.BOOT, Life.CLEAR, Life.RESUME)) assertEquals(pl, apply(l, sim.s).s.session!!.play, "$l")
         // V9: 장면 시작은 Suspend와 같이 끊는다(실제 감시를 멈춘다: 끝 사유 SUSPEND). 장면 길이가 실제 재생 시간에 들지 않는다(V10 (가))
@@ -248,6 +251,42 @@ class LifetimeTest {
         assertEquals(mapOf(Area.ROW_2_LEFT to false), apply(Life.SCENE_END, sim.s).cmds.filterIsInstance<SetWindowLock>().single().values, "V11: 장면 세션이 잠근 뒷창을 되돌린다")
         for (l in listOf(Life.SCENE_START, Life.RESTORE, Life.CLEAR, Life.SUSPEND, Life.RESUME, Life.CALL))
             assertEquals(pending, apply(l, sim.s).s.ign.windowLockPending, "$l")
+    }
+
+    /**
+     * 앰비언트 조명(기능 D, C360). 목표가 NORMAL인 LISTENING 세션에 칸을 놓고 열마다 본다. 행 자체가 손대는 열은 장면 끝(RESTORE)과 Boot(DROP)뿐이고,
+     * 나머지 열은 KEEP이라 칸을 그대로 둔다. 다만 Step을 타는 열은 Step 끝 syncAmbient(투영)가 목표 NORMAL에 맞춰 되돌림을 낸다(AM5).
+     * 새 세션 열(SESSION_OPEN)은 세션이 없고 P인 상태에서 부르는 입구라 이 시험에서는 보지 않는다(KEEP, AM10은 AmbientTest).
+     */
+    @Test fun lifetime_ambient() {
+        val sim = session()
+        val id = sim.ses.id
+        val back = AmbientBack(AmbientValue(70, 20), null)
+        fun with(a: Ambient?) = sim.s.copy(ign = sim.s.ign.copy(ambient = a))
+        val dimmed = with(Ambient.Dimmed(id, back))
+        // RESTORE(장면 끝): 되돌림 명령만(상태는 버린다). back 없는 Dimmed·Dimming·Restoring은 내지 않는다
+        assertEquals(1, apply(Life.SCENE_END, dimmed).cmds.filterIsInstance<RestoreAmbient>().size)
+        for (a in listOf(Ambient.Dimmed(id, AmbientBack()), Ambient.Dimming(id, "c", AmbientBack(), setOf(ControlKind.AMBIENT_COLOR)), Ambient.Restoring(id, "c", back, setOf(ControlKind.AMBIENT_BRIGHTNESS))))
+            assertTrue(apply(Life.SCENE_END, with(a)).cmds.none { it is RestoreAmbient }, "$a")
+        // KEEP 열: 행이 칸을 지우지 않는다. 상태만 맞추는 열은 칸 그대로, Step 열은 투영이 되돌림으로 넘긴다
+        for (l in listOf(Life.ROOM_CLOSED, Life.RESTORE)) assertEquals(dimmed.ign.ambient, apply(l, dimmed).s.ign.ambient, "$l")
+        for (l in listOf(Life.SESSION_CLOSE, Life.SCENE_START, Life.CLEAR, Life.SUSPEND, Life.RESUME, Life.CALL)) apply(l, dimmed).let { o ->
+            assertEquals(1, o.cmds.filterIsInstance<RestoreAmbient>().size, "$l: 지우지 않고 되돌린다")
+            assertEquals(back, (o.s.ign.ambient as Ambient.Restoring).back, "$l")
+        }
+        val dimming = with(Ambient.Dimming(id, "c", AmbientBack(), setOf(ControlKind.AMBIENT_COLOR)))
+        // C367: 장면 시작(CUT)은 Dimming을 비우고 RestoreAmbientLedger를 낸다
+        apply(Life.SCENE_START, dimming).let { o -> assertNull(o.s.ign.ambient); assertEquals(1, o.cmds.filterIsInstance<RestoreAmbientLedger>().size) }
+        for (l in listOf(Life.SESSION_CLOSE, Life.CLEAR, Life.SUSPEND, Life.RESUME, Life.CALL)) assertEquals(dimming.ign.ambient, apply(l, dimming).s.ign.ambient, "$l")
+        val restoring = with(Ambient.Restoring(id, "c", back, setOf(ControlKind.AMBIENT_BRIGHTNESS)))
+        for (l in listOf(Life.CLEAR, Life.RESUME, Life.CALL)) assertEquals(restoring.ign.ambient, apply(l, restoring).s.ign.ambient, "$l")
+        // DROP(Boot): Dimming은 버리고, Restoring은 Dimmed(back)로 돌려 Step 끝에 새 cmdId로 다시 낸다
+        assertNull(apply(Life.BOOT, dimming).s.ign.ambient)
+        apply(Life.BOOT, restoring).let { o ->
+            val r = o.cmds.filterIsInstance<RestoreAmbient>().single()
+            assertNotEquals("c", r.cmdId)
+            assertEquals(Ambient.Restoring(id, r.cmdId, back, setOf(ControlKind.AMBIENT_BRIGHTNESS)), o.s.ign.ambient)
+        }
     }
 
     @Test fun lifetime_steerWindow() {
