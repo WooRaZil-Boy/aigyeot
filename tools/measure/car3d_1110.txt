@@ -33,3 +33,9 @@
 ## 미판정
 - 실차 GPU 성능(에뮬레이터 GL 번역기만 잼)
 - IBLPrefilterContext(Equirectangular->Cubemap)가 이 에뮬레이터에서 전제 조건 오류로 멈춤 -> 환경광 큐브맵(64px, 밉 7단)을 CPU에서 만들어 씀(2x2 평균 밉이라 물리 기반 거르기는 아님)
+
+## 추가: R2 바꿈(release 크기)
+- release APK(서명 없음)가 filamat-android 포함 112,159,080 B로 저장소 100MB 한도를 넘어, 재질 다섯(ghost·flat·vtx·add·flow)을 matc 1.77.3(공식 릴리스 묶음, -p mobile -a opengl)으로 미리 컴파일해 assets/materials/*.filamat로 넣고 filamat-android를 뺐다 → 93,133,727 B
+- 원본은 app/src/main/materials/*.mat. 매개변수 이름 't'는 matc가 받지 않아 'time'으로 바꿈
+- 바꾼 뒤 에뮬레이터에서 홈 hero, 설정 위에서 본 X-ray, 실측 액티비티 rear X-ray + 소리 결(5초 301프레임) 그려짐 확인
+- 엔진 준비를 작업 스레드(바이트 읽기·큐브맵 계산) + 메인 스레드 단계 양보로 나눔: 메인 합 102~285 ms, 첫 장 1.1~1.5초(perf_v6_1110.txt 3절)
