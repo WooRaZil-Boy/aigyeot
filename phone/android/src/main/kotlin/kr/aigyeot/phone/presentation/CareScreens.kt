@@ -597,7 +597,8 @@ private fun TimerRing(e: CareEvent, now: Long) {
                 val stroke = 3.dp.toPx()
                 val r = size.minDimension / 2 - 10.dp.toPx()
                 val tl = Offset(center.x - r, center.y - r)
-                drawCircle(p.surfaceRaised, r, style = Stroke(stroke))
+                // 고리 바탕: 라이트에서는 surfaceRaised가 바탕(bg)과 같은 색이라 보이지 않아 먹색 8%로(세그먼트 판과 같은 결), 다크는 시안대로 surfaceRaised.
+                drawCircle(if (p.dark) p.surfaceRaised else p.textPrimary.copy(alpha = 0.08f), r, style = Stroke(stroke))
                 drawArc(color, -90f, 360f * ((elapsed / 1000 % 3600) / 3600f), false, tl, Size(r * 2, r * 2), style = Stroke(stroke, cap = StrokeCap.Round))
                 rotate(360f * sweep) { drawCircle(color, 6.dp.toPx(), Offset(center.x, center.y - r)) }
             }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -226,13 +227,16 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier) {
                 val nowLab = data.nowMin?.let { "지금 ${hhmm(it)}" }
                 val nowW = nowLab?.let { m.measure(it, nowStyle).size.width / 2f + 2 * px } ?: 0f
                 val nowX = data.nowMin?.let { x(it).coerceIn(nowW, size.width - nowW) }
+                var right = Float.NEGATIVE_INFINITY
                 for ((h, align) in listOf(0 to TextAlign.Start, 6 to TextAlign.Center, 12 to TextAlign.Center, 18 to TextAlign.Center, 24 to TextAlign.End)) {
                     val label = "${h}시"
                     val tw = m.measure(label, tick).size.width.toFloat()
                     val tx = x(h * 60)
                     val lo = when (align) { TextAlign.Start -> tx; TextAlign.End -> tx - tw; else -> tx - tw / 2 }
                     if (nowX != null && lo + tw > nowX - nowW && lo < nowX + nowW) continue
+                    if (lo < right + 4 * px) continue // 큰 글자에서 앞 눈금과 겹치면 뺀다(R13)
                     text(m, label, tick, tx, ay - tickH * 0.2f, align)
+                    right = lo + tw
                 }
                 if (nowLab != null && nowX != null) text(m, nowLab, nowStyle, nowX, ay - tickH * 0.2f, TextAlign.Center)
             }
@@ -377,9 +381,16 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
                     }
                     selected?.let { hits.getOrNull(it) }?.let { h -> drawRoundRect(Color.White.copy(alpha = 0.25f), h.rect.topLeft, Size(cw - 1.2f * px, cellH), CornerRadius(1.5f * px)) }
                 }
+                // 큰 글자에서 앞 눈금과 겹치는 눈금은 뺀다(R13, 200%에서 '18시24시'가 붙었다).
+                var right = Float.NEGATIVE_INFINITY
                 for (h in listOf(0, 6, 12, 18, 24)) {
                     val align = when (h) { 0 -> TextAlign.Start; 24 -> TextAlign.End; else -> TextAlign.Center }
-                    text(m, "${h}시", tick, lead + h * 2 * cw, totalH - tickH * 0.25f, align)
+                    val tw = m.measure("${h}시", tick).size.width.toFloat()
+                    val tx = lead + h * 2 * cw
+                    val lo = when (align) { TextAlign.Start -> tx; TextAlign.End -> tx - tw; else -> tx - tw / 2 }
+                    if (lo < right + 4 * px) continue
+                    text(m, "${h}시", tick, tx, totalH - tickH * 0.25f, align)
+                    right = lo + tw
                 }
             }
         }
@@ -468,7 +479,9 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(row.name, Modifier.width(80.dp), style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold), color = if (row.known) p.textPrimary else p.textTertiary)
+                // 이름 칸은 80 이상(시안 74), 큰 글자에서는 이름 폭만큼 늘어 낱말 가운데서 끊기지 않게(R13).
+                // 144에서 멈춰 긴 부모 노래 이름(30자까지)은 줄을 바꾸고 점·횟수 자리를 남긴다.
+                Text(row.name, Modifier.widthIn(min = 80.dp, max = 144.dp), style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold), color = if (row.known) p.textPrimary else p.textTertiary)
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     repeat(row.n) { i ->
                         val on = i < row.ok

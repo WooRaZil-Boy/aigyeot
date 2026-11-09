@@ -54,6 +54,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -328,7 +329,7 @@ fun RecordsTab(go: (Route) -> Unit, vm: RecordsViewModel = appViewModel()) {
     if (adding) CareSheet(CareKind.FEED, initial = null, baseDate = day.takeIf { it != today }, chooseKind = true, guardian = ui.guardian) { adding = false }
 }
 
-/** log.date.*: "오늘" / "어제" / "11월 5일(수)"(날짜 칸의 화면 읽기 이름). */
+/** log.date.*: "오늘" / "어제" / "11월 5일(수)"(고른 날 제목, 날짜 칸의 화면 읽기 이름). */
 private fun dayLabel(d: LocalDate, today: LocalDate) = when (d) {
     today -> "오늘"
     today.minusDays(1) -> "어제"
@@ -378,6 +379,8 @@ private fun DayView(
                 }
             }
         }
+        // 고른 날 제목(log.date.*). 띠는 요일·날짜 숫자뿐이라 기록이 여러 달이면 달을 알 수 없다(iOS와 같음).
+        Text(dayLabel(day, today), Modifier.padding(start = 4.dp, top = 2.dp).semantics { heading() }, style = Type.headline, color = p.textPrimary)
         val hand = care.dayEvents(day, deviceZone)
         val cars = allCars.filter { Instant.ofEpochMilli(it.startAt).atZone(deviceZone).toLocalDate() == day }
         // 새 것이 위(시안). 3시간 칸마다 시각 머리("오후 12시").
