@@ -7,32 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
 import android.util.Log
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -57,7 +31,6 @@ import kr.aigyeot.app.host.HostApi
 import kr.aigyeot.app.link.Link
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MicPath
-import kr.aigyeot.engine.Params
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -78,12 +51,16 @@ class Scenario(
     private val _running = MutableStateFlow(false)
     /** 장면이 도는 중. */
     val running: StateFlow<Boolean> = _running
+    private val _results = MutableStateFlow<SceneResults?>(null)
+    /** 마지막으로 실행한 장면의 끝난 반복 행(측정표 CSV와 같은 값, 읽기 전용). 반복이 끝날 때마다 늘어난다. */
+    val results: StateFlow<SceneResults?> = _results
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
     private val vc = VirtualConsole()
     private val loudness = SourceLoudness { androidLufs(context, it) }   // 잰 음원은 반복마다 다시 재지 않는다
 
-    fun ids(): List<String> = files().keys.sorted()          // assets/scenario + 흘려 넣은 장면
+    /** 시연·측정 화면의 장면 행(id 순, assets/scenario + 흘려 넣은 장면). 부를 때마다 파일을 다시 본다. 읽지 못한 파일은 제목·녹음 없이 둔다. */
+    fun list(): List<SceneInfo> = files().entries.sortedBy { it.key }.map { (id, read) -> sceneInfo(id, runCatching { parseScene(read()) }.getOrNull()) }
 
     fun run(id: String, repeat: Int? = null) {
         if (job?.isCompleted == false) return   // 취소 중인 이전 실행의 정리가 끝나기 전에는 새로 시작하지 않는다
@@ -94,6 +71,7 @@ class Scenario(
             return
         }
         _running.value = true
+        _results.value = SceneResults(scene.id, emptyList())
         job = scope.launch { try { runAll(scene, repeat ?: scene.repeat) } finally { _running.value = false } }
     }
 
@@ -125,6 +103,7 @@ class Scenario(
         val out = freeResultFile(dir, scene.id, SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date()))   // 같은 분에 다시 돌려도 덮어쓰지 않는다
         val rows = ArrayList<RunRow>()
         fun save() {
+            _results.value = SceneResults(scene.id, rows.toList())
             out.writeText(csv(rows))
             File(dir, out.nameWithoutExtension + ".txt").writeText(rows.joinToString("\n") { r -> "run ${r.run}: " + (r.failures.ifEmpty { listOf("통과") }).joinToString(" | ") } + "\n")
         }
@@ -289,41 +268,11 @@ class Scenario(
 
 data class ScenarioProgress(val id: String, val run: Int, val of: Int, val t: Double, val failedStep: Double?, val note: String?)
 
-/** 시연·측정 화면의 장면 부분(ui가 이 화면으로 보낸다). 정차 화면이다(명세서 11장). */
-@Composable fun ScenarioScreen(scenario: Scenario, onBack: () -> Unit) {
-    val p by scenario.progress.collectAsState()
-    val running by scenario.running.collectAsState()
-    val ids = remember { scenario.ids() }
-    var sel by rememberSaveable { mutableStateOf(ids.firstOrNull()) }   // 화면 재생성(회전)에도 남긴다(명세서 11장)
-    var repeat by rememberSaveable { mutableStateOf<Int?>(null) }   // null = 장면 파일의 repeat
-    var vcText by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val touch = Modifier.heightIn(min = Params().touchTargetDp.dp)
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onBack, touch, enabled = !running) { Text("뒤로") }
-            Text("장면 재생 · 시뮬레이션 입력", style = MaterialTheme.typography.titleLarge)
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-            items(ids) { id ->
-                Text(id, touch.fillMaxWidth().clickable(enabled = !running) { sel = id }.padding(12.dp),
-                    fontWeight = if (id == sel) FontWeight.Bold else FontWeight.Normal, color = if (id == sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton({ repeat = ((repeat ?: 5) - 1).coerceAtLeast(1) }, touch, enabled = !running) { Text("−") }
-            Text("반복 ${repeat?.toString() ?: "장면 기본"}")
-            OutlinedButton({ repeat = (repeat ?: 5) + 1 }, touch, enabled = !running) { Text("+") }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button({ sel?.let { scenario.run(it, repeat) } }, touch, enabled = sel != null && !running) { Text("실행") }
-            OutlinedButton(scenario::stop, touch, enabled = running) { Text("멈춤") }
-            OutlinedButton({ scope.launch { vcText = scenario.checkVc() } }, touch, enabled = !running) { Text("Virtual Console 확인") }
-        }
-        p?.let {
-            Text("${it.id} ${it.run}/${it.of}회 · ${it.t.toInt()}초" + (it.failedStep?.let { f -> " · 어긋남 t=$f" } ?: ""))
-            it.note?.let { n -> Text(n, maxLines = 3) }
-        }
-        vcText?.let { Text("Virtual Console: $it", maxLines = 3) }
-    }
-}
+/** 한 번 실행한 장면의 결과 행([Scenario.results]). */
+data class SceneResults(val id: String, val rows: List<RunRow>)
+
+/** 장면 행 하나: id, 제목, 장면이 트는 녹음 파일 이름(경로 빼고, 겹침 없이). */
+data class SceneInfo(val id: String, val title: String?, val audio: List<String>)
+
+internal fun sceneInfo(id: String, scene: Scene?) =
+    SceneInfo(id, scene?.title, scene?.steps.orEmpty().mapNotNull { (it.action as? Audio)?.file?.substringAfterLast('/') }.distinct())

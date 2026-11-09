@@ -44,7 +44,9 @@ internal fun connectUiState(st: LinkStatus, now: Long) = ConnectUiState(st, st.p
 
 internal fun remainingText(s: Long) = "남은 시간 ${s / 60}분 ${s % 60}초"
 
-internal fun phoneLabel(ph: LinkedPhone) = (if (ph.role == "owner") "함께 타는 보호자" else "다른 보호자") + (ph.lastSeenAt?.let { " · 마지막 연락 ${hm(it)}" } ?: "")
+/** 폰 한 줄(제목 = 역할, 부가 = 마지막 연락 '11월 9일(월) 오후 2:05'. 시각 글자는 TimeText 한 곳). */
+internal fun phoneLines(ph: LinkedPhone): Pair<String, String?> =
+    (if (ph.role == "owner") "함께 타는 보호자" else "다른 보호자") to ph.lastSeenAt?.let { "마지막 연락 ${TimeText.date(it)} ${TimeText.clock(it)}" }
 
 /** 연결 화면(contracts-link 8.7): 열면 코드를 받고(①), 닫으면 지운다(④)는 화면의 열림·닫힘이 부른다. 남은 시간은 코드가 있는 동안 1초마다 갱신. */
 class ConnectViewModel(private val link: Link, private val clock: () -> Long) : ViewModel() {

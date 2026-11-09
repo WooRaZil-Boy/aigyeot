@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.content.ContextCompat
+import kr.aigyeot.engine.CrySegment
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.InputLost
 import kr.aigyeot.engine.MicPath
@@ -51,7 +52,8 @@ class MicService : Service() {
         if (prep == null) { stopSelf(); return START_NOT_STICKY }
         val (head, source, sc) = prep
         emit(MicServiceEvent(clock(), true, path))
-        val d = CryDetector(head, sc, clock, emit).also { detector = it }
+        val out = emit
+        val d = CryDetector(head, sc, clock) { e -> out(e); if (e is CrySegment) segmentTaps.forEach { it(e) } }.also { detector = it }
         // 앞 서비스·복원에서 풀리지 않은 사유: 실제 입력이 돌아오면 사유마다 InputRestored. assumePausedNow와 겹쳐도 사유를 잃지 않게 한 잠금 안에서
         synchronized(Companion) { d.assumePaused(pendingPauses); pendingPauses = emptySet(); running = d }
         // 판별기는 읽기 스레드가 끝나는 길에서 놓는다(처리 중인 classify와 close가 겹치지 않게)
@@ -103,6 +105,8 @@ class MicService : Service() {
         @Volatile var pendingPauses: Set<PauseReason> = emptySet()
         /** 읽은 PCM(16kHz mono s16)을 그대로 넘긴다. exec STT가 쓴다. 감지 스레드에서 부르므로 빨리 돌아와야 하고, 배열은 다시 쓰이니 필요하면 복사한다. */
         @Volatile var pcmTap: ((ShortArray, Int) -> Unit)? = null
+        /** 판단 코어로 보낸 울음 구간을 그대로 넘긴다(읽기 전용, 시연·측정 화면의 울음 확률 선). 감지 스레드에서 부르므로 빨리 돌아와야 한다. */
+        val segmentTaps = java.util.concurrent.CopyOnWriteArraySet<(CrySegment) -> Unit>()   // 구독자마다 하나(지울 때 남의 것을 지우지 않게). 비어 있으면 아무 일도 하지 않는다
         /** 지금 도는 서비스의 감지기. 서비스가 시작·끝날 때만 바꾼다. */
         @Volatile internal var running: CryDetector? = null
 
