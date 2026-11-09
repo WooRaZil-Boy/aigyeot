@@ -44,6 +44,7 @@ import kr.aigyeot.engine.Via
 import kr.aigyeot.engine.cryView
 import kr.aigyeot.engine.fresh
 import kr.aigyeot.shared.LlmDiaper
+import kr.aigyeot.shared.LlmFeeding
 import kr.aigyeot.shared.LlmResponse
 import kr.aigyeot.shared.LlmSleep
 import kr.aigyeot.shared.LlmCry
@@ -54,6 +55,7 @@ import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -252,6 +254,23 @@ class LinkQaTest : LinkKit() {
         assertEquals(false, careOf(reply("x", tool("switch_sound", "method" to "white_noise")), "소리 바꿔"))
     }
 
+    // C375·C376: 글에 도구 이름·영어가 새면 정해 둔 문장으로, "하지만 주변"의 '만 주'는 숫자가 아니라 글을 그대로 쓴다
+    @Test fun c375_c376_leakFallsBack_wordEndingNumeralKept() {
+        val st = sleepAll()
+        val ok = "죄송하지만 주변 소리까지는 알 수 없어요."
+        assertEquals(ok, say(reply(ok), "그냥 얘기해 줘", st))
+        for (leak in listOf("answer 도구를 호출해 수유 주제를 고릅니다.", "Rendering the answer for the question.", "stop_soothing을 호출합니다.", "Sleep 주제로 알려 드릴게요."))
+            assertNotEquals(leak, say(reply(leak), "그냥 얘기해 줘", st), leak)
+        assertNotEquals("세 번이에요.", say(reply("세 번이에요."), "그냥 얘기해 줘", st))   // 진짜 숫자 말은 여전히 버린다
+    }
+
+    // C377: 말하는 분 값은 60분 이상이면 시간·분으로
+    @Test fun c377_spokenDuration() {
+        assertEquals("0분", dur(0)); assertEquals("59분", dur(59)); assertEquals("1시간", dur(60)); assertEquals("1시간 1분", dur(61))
+        assertEquals("17시간 54분", dur(1074)); assertEquals("2시간", dur(120))
+        assertEquals("마지막 수유 시작부터 17시간 54분 지났어요.", topicSentence("feeding", sleepAll().copy(feedsToday = null, feeding = LlmFeeding(1074, 180))))
+    }
+
     @Test fun c216_linkPassesCareUsed_offline() {
         profile(noticeVersion = 0); engineState = crying()   // C122: AI에 묻지 않는 오프라인 길
         events.clear(); ask("실내 온도 알려줘"); assertEquals(false, (events.last() as QaReply).careUsed)
@@ -266,7 +285,7 @@ class LinkQaTest : LinkKit() {
     // C164: 잠이 모두 있는 상태(마지막 잠 끝 134분 전, 길이 35분, 오늘 430분, 지난밤 깸 2번)
     private fun sleepAll(asOfAgo: Int = 10) = sleepSt(null, 134, 35, asOfAgo).copy(lastNightWakeups = 2)
 
-    private val sleepFull = "기록상 134분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 430분, 지난밤에는 2번 깼어요."
+    private val sleepFull = "기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 7시간 10분, 지난밤에는 2번 깼어요."
 
     // C172: 질문 낱말로 조각을 고르지 않는다. 같은 주제는 질문이 달라도 같은 한 문장
     @Test fun c172_sleepOneSentenceHasAllValues() {
@@ -275,20 +294,20 @@ class LinkQaTest : LinkKit() {
             assertEquals(sleepFull, say(reply(failing, answer("sleep")), q, st), q)
             assertEquals(sleepFull, offlineReply(q, st), q)
         }
-        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분, 지난밤에는 2번 깼어요.", topicSentence("sleep", sleepSt(40, null, 35).copy(lastNightWakeups = 2)))
-        assertEquals("기록상 오늘 잠은 모두 430분이에요.", topicSentence("sleep", sleepSt(null, null, null)))
+        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분, 지난밤에는 2번 깼어요.", topicSentence("sleep", sleepSt(40, null, 35).copy(lastNightWakeups = 2)))
+        assertEquals("기록상 오늘 잠은 모두 7시간 10분이에요.", topicSentence("sleep", sleepSt(null, null, null)))
         assertEquals("기록상 지난밤에 2번 깼어요.", topicSentence("sleep", stateWith(null).copy(lastNightWakeups = 2)))
-        assertEquals("마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요.", topicSentence("feeding", sleepAll()))
-        assertEquals("기록상 마지막 기저귀는 235분 전이고, 오늘 2번이에요.", topicSentence("diaper", sleepAll()))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", topicSentence("feeding", sleepAll()))
+        assertEquals("기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.", topicSentence("diaper", sleepAll()))
     }
 
     @Test fun c172_twoTopicsTwoSentences() {
         val st = sleepAll().copy(diaper = LlmDiaper(235, 4))
         // 낱말이 섞여도 주제별 값이 모두 나온다(재현 2)
-        val two = "기록상 마지막 기저귀는 235분 전이고, 오늘 4번이에요. 마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요."
+        val two = "기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 4번이에요. 마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요."
         assertEquals(two, say(reply(failing, answer("diaper", "feeding")), "오늘 기저귀 몇 번 갈았고 마지막 수유는 언제 했어?", st))
         assertEquals(2, say(reply(failing, answer("feeding", "sleep", "diaper")), "q", st).count { it == '.' })   // 앞 두 주제까지
-        assertEquals(sleepFull + " 마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요.", say(reply(failing, answer("sleep", "feeding")), "q", st))
+        assertEquals(sleepFull + " 마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", say(reply(failing, answer("sleep", "feeding")), "q", st))
     }
 
     @Test fun c172_cryHasCount() {
@@ -305,7 +324,7 @@ class LinkQaTest : LinkKit() {
 
     @Test fun c172_offlineSameSentences() {
         val st = sleepAll().copy(diaper = LlmDiaper(235, 4))
-        assertEquals("기록상 마지막 기저귀는 235분 전이고, 오늘 4번이에요.", offlineReply("기저귀 몇 번 갈았어?", st))
+        assertEquals("기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 4번이에요.", offlineReply("기저귀 몇 번 갈았어?", st))
         assertEquals(topicSentence("feeding", st), offlineReply("수유한 지 얼마나 됐어?", st))
         assertEquals(topicSentence("sleep", st), offlineReply("마지막 잠 길이는?", st))
         assertTrue(offlineReply("잠 얼마나 잤어", st).count { it == '.' } <= 2)
@@ -313,20 +332,20 @@ class LinkQaTest : LinkKit() {
 
     @Test fun c172_asOfPrefixOnce() {
         val st = sleepAll(90)
-        assertEquals("마지막 수유 시작부터 170분 지났고, 90분 전 기록 기준으로 오늘 3번 먹었어요. 기록상 마지막 기저귀는 235분 전이고, 오늘 2번이에요.", say(reply(failing, answer("feeding", "diaper")), "q", st))
-        assertEquals(sleepFull.replace("기록상", "90분 전 기록 기준으로") , offlineReply("오늘 얼마나 잤어?", st))
-        assertEquals("마지막 수유 시작부터 170분 지났어요.", say(reply(failing, answer("feeding")), "q", st.copy(feedsToday = null)))   // 돌봄 칸이 없는 문장엔 붙지 않는다
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 1시간 30분 전 기록 기준으로 오늘 3번 먹었어요. 기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.", say(reply(failing, answer("feeding", "diaper")), "q", st))
+        assertEquals(sleepFull.replace("기록상", "1시간 30분 전 기록 기준으로") , offlineReply("오늘 얼마나 잤어?", st))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", say(reply(failing, answer("feeding")), "q", st.copy(feedsToday = null)))   // 돌봄 칸이 없는 문장엔 붙지 않는다
         assertEquals(sleepFull, offlineReply("잠", sleepAll(60)))   // 60분 이하는 붙이지 않는다
     }
 
     // C179 ①: 기록이 오래되면 첫 돌봄 부분의 '기록상'만 시점으로 바뀐다(수유 경과·카시트 앞에는 안 붙는다)
     @Test fun c179_asOfReplacesFirstRecordWord() {
         val st = sleepAll(90)
-        val at = sleepFull.replace("기록상", "90분 전 기록 기준으로")
+        val at = sleepFull.replace("기록상", "1시간 30분 전 기록 기준으로")
         assertEquals("카시트에 52분째예요. $at", say(reply(failing, answer("carseat", "sleep")), "q", st))
-        assertEquals("마지막 수유 시작부터 170분 지났고, 90분 전 기록 기준으로 오늘 3번 먹었어요.", say(reply(failing, answer("feeding")), "q", st))
-        assertEquals("$at 마지막 수유 시작부터 170분 지났어요.", say(reply(failing, answer("sleep", "feeding")), "q", st.copy(feedsToday = null)))   // 둘째 돌봄 문장에는 바꿀 '기록상'이 없고, 경과 앞에는 안 붙는다
-        assertEquals("마지막 수유 시작부터 170분 지났어요. $at", say(reply(failing, answer("feeding", "sleep")), "q", st.copy(feedsToday = null)))   // 수유가 첫 문장이어도 돌봄 값 부분이 없으면 다음 돌봄 부분에서 한 번
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 1시간 30분 전 기록 기준으로 오늘 3번 먹었어요.", say(reply(failing, answer("feeding")), "q", st))
+        assertEquals("$at 마지막 수유 시작부터 2시간 50분 지났어요.", say(reply(failing, answer("sleep", "feeding")), "q", st.copy(feedsToday = null)))   // 둘째 돌봄 문장에는 바꿀 '기록상'이 없고, 경과 앞에는 안 붙는다
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요. $at", say(reply(failing, answer("feeding", "sleep")), "q", st.copy(feedsToday = null)))   // 수유가 첫 문장이어도 돌봄 값 부분이 없으면 다음 돌봄 부분에서 한 번
     }
 
     // C179 ②: 돌봄 문장은 늘 '기록상'으로 시작, 값이 없거나 0이면 기록 없음, 일부만 0이면 그 부분만 뺀다
@@ -334,13 +353,13 @@ class LinkQaTest : LinkKit() {
         val st = stateWith(null).copy(sleep = LlmSleep(null, null, null, 0), lastNightWakeups = 0)
         assertEquals("기록상 오늘 잠 기록이 없어요.", topicSentence("sleep", st))
         assertEquals("기록상 오늘 잠 기록이 없어요.", say(reply(failing, answer("sleep")), "q", st))
-        assertEquals("기록상 오늘 잠은 모두 430분이에요.", topicSentence("sleep", st.copy(sleep = LlmSleep(null, null, null, 430))))
+        assertEquals("기록상 오늘 잠은 모두 7시간 10분이에요.", topicSentence("sleep", st.copy(sleep = LlmSleep(null, null, null, 430))))
         assertEquals("기록상 지난밤에 2번 깼어요.", topicSentence("sleep", st.copy(lastNightWakeups = 2)))
-        assertEquals("기록상 134분 전에 잠이 끝났고, 마지막 잠은 35분이에요.", topicSentence("sleep", st.copy(sleep = LlmSleep(null, 134, 35, 0))))
+        assertEquals("기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분이에요.", topicSentence("sleep", st.copy(sleep = LlmSleep(null, 134, 35, 0))))
         assertEquals("기록상 오늘 수유 기록이 없어요.", topicSentence("feeding", st.copy(feeding = null, feedsToday = 0)))
-        assertEquals("마지막 수유 시작부터 170분 지났어요.", topicSentence("feeding", st.copy(feedsToday = 0)))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", topicSentence("feeding", st.copy(feedsToday = 0)))
         assertEquals("기록상 오늘 기저귀 기록이 없어요.", topicSentence("diaper", st.copy(diaper = LlmDiaper(null, 0))))
-        assertEquals("기록상 마지막 기저귀는 235분 전이에요.", topicSentence("diaper", st.copy(diaper = LlmDiaper(235, 0))))
+        assertEquals("기록상 마지막 기저귀는 3시간 55분 전이에요.", topicSentence("diaper", st.copy(diaper = LlmDiaper(235, 0))))
     }
 
     @Test fun c179_careSentencesStartWithRecord() {
@@ -366,7 +385,7 @@ class LinkQaTest : LinkKit() {
         }
         assertEquals("수유 기록을 확인할 수 없어요.", topicSentence("feeding", none))
         assertEquals("수유 기록을 확인할 수 없어요.", topicSentence("feeding", stateWith(careNow(asOfAgoMin = 25 * 60)).copy(feeding = null)))
-        assertEquals("마지막 수유 시작부터 170분 지났어요.", topicSentence("feeding", stateWith(null)))   // 경과가 있으면 그것만
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", topicSentence("feeding", stateWith(null)))   // 경과가 있으면 그것만
     }
 
     // 어제 요약 같은 꼴: sleep·diaper 객체는 있지만 안의 값이 모두 null. 시점 안내도 붙지 않는다
@@ -375,7 +394,7 @@ class LinkQaTest : LinkKit() {
         assertEquals("잠 기록을 확인할 수 없어요.", topicSentence("sleep", st))
         assertEquals("잠 기록을 확인할 수 없어요.", say(reply(failing, answer("sleep")), "q", st))
         assertEquals("기저귀 기록을 확인할 수 없어요.", say(reply(failing, answer("diaper")), "q", st))
-        assertEquals("90분 전 기록 기준으로 오늘 잠 기록이 없어요.", topicSentence("sleep", st.copy(lastNightWakeups = 0)))
+        assertEquals("1시간 30분 전 기록 기준으로 오늘 잠 기록이 없어요.", topicSentence("sleep", st.copy(lastNightWakeups = 0)))
     }
 
     @Test fun c186_zeroFromValidSummarySaysNoRecord() {
@@ -388,8 +407,8 @@ class LinkQaTest : LinkKit() {
     // C186 ②: 유효한 요약의 0으로 기록 없음을 말해도 돌봄 기록을 쓴 것이라 오래된 요약이면 시점이 붙는다
     @Test fun c186_staleZeroRecordGetsAsOf() {
         val st = stateWith(careNow(asOfAgoMin = 90).copy(todayFeedCount = 0)).copy(feeding = null)
-        assertEquals("90분 전 기록 기준으로 오늘 수유 기록이 없어요.", say(reply(failing, answer("feeding")), "q", st))
-        assertEquals("90분 전 기록 기준으로 오늘 수유 기록이 없어요.", topicSentence("feeding", st))
+        assertEquals("1시간 30분 전 기록 기준으로 오늘 수유 기록이 없어요.", say(reply(failing, answer("feeding")), "q", st))
+        assertEquals("1시간 30분 전 기록 기준으로 오늘 수유 기록이 없어요.", topicSentence("feeding", st))
     }
 
     @Test fun c129_stateClaimText_topicSentence_orOffline() {
@@ -405,7 +424,7 @@ class LinkQaTest : LinkKit() {
         val st = stateWith(careNow())
         // 글의 숫자가 상태값과 뒤바뀌어 있어도(수유 3분, 오늘 170번) 차의 주제 문장을 말한다
         val call = reply("마지막 수유는 3분 전이고 오늘 170번 먹었어요.", answer("feeding"))
-        assertEquals("마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요.", say(call, "q", st))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", say(call, "q", st))
         assertEquals("카시트에 52분째예요.", say(reply("카시트에 마흔 분째예요.", answer("carseat")), "q", st))   // 숫자 없는 글도 쓰지 않는다
     }
 
@@ -484,10 +503,10 @@ class LinkQaTest : LinkKit() {
         assertNull(none.carseatMin)   // 세션이 없으면 카시트 분을 재지 않았다
         assertEquals("카시트 시간은 출발한 뒤부터 재요.", topicSentence("carseat", none))
         val st = stateWith(null)
-        assertEquals("마지막 수유 시작부터 170분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", topicSentence("why", st))
-        assertEquals("마지막 수유 시작부터 170분이에요. 배고프거나 불편할 수 있어요.", topicSentence("why", st.copy(carseatMin = null)))
+        assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", topicSentence("why", st))
+        assertEquals("마지막 수유 시작부터 2시간 50분이에요. 배고프거나 불편할 수 있어요.", topicSentence("why", st.copy(carseatMin = null)))
         assertEquals("불편할 수 있어요.", topicSentence("why", st.copy(carseatMin = null, feeding = null)))
-        assertEquals("기록상 134분 전에 깼어요. 불편할 수 있어요.", topicSentence("why", sleepSt(null, 134, 35).copy(carseatMin = null, feeding = null)))
+        assertEquals("기록상 2시간 14분 전에 깼어요. 불편할 수 있어요.", topicSentence("why", sleepSt(null, 134, 35).copy(carseatMin = null, feeding = null)))
     }
 
     @Test fun c224_restNameWithPeriodNotCut() {
@@ -498,21 +517,21 @@ class LinkQaTest : LinkKit() {
         assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", fallbackReply(listOf("carseat", "cabin_temp"), st))
         // 두 문장 주제(sound_stats·why)는 다른 주제와 함께 말할 때 앞 문장만 쓴다(TWO_SENTENCE_TOPICS 절단 분기)
         assertEquals("자장가를 틀었을 때 7번 중 6번 그쳤어요. 카시트에 52분째예요.", fallbackReply(listOf("sound_stats", "carseat"), st))
-        assertEquals("마지막 수유 시작부터 170분, 카시트에 52분째예요. 카시트에 52분째예요.", fallbackReply(listOf("why", "carseat"), st))
+        assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째예요. 카시트에 52분째예요.", fallbackReply(listOf("why", "carseat"), st))
     }
 
     @Test fun c127_newTopics_carseatCabinTempSleepFeeding() {
         val st = sleepSt(null, 134, 35).copy(lastNightWakeups = 2, cabinTemp = null)
         assertEquals("실내 온도를 알 수 없어요.", topicSentence("cabin_temp", st))
         assertEquals("실내 온도는 27.5도예요.", topicSentence("cabin_temp", st.copy(cabinTemp = 27.5)))
-        assertEquals("기록상 134분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 430분, 지난밤에는 2번 깼어요.", topicSentence("sleep", st))
-        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분, 지난밤에는 2번 깼어요.", topicSentence("sleep", sleepSt(40, null, 35).copy(lastNightWakeups = 2)))
+        assertEquals("기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 7시간 10분, 지난밤에는 2번 깼어요.", topicSentence("sleep", st))
+        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분, 지난밤에는 2번 깼어요.", topicSentence("sleep", sleepSt(40, null, 35).copy(lastNightWakeups = 2)))
         assertEquals("잠 기록을 확인할 수 없어요.", topicSentence("sleep", st.copy(sleep = null, lastNightWakeups = null)))
-        assertEquals("마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요.", topicSentence("feeding", st))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", topicSentence("feeding", st))
         assertEquals("기록상 오늘 3번 먹었어요.", topicSentence("feeding", st.copy(feeding = null)))
-        assertEquals("마지막 수유 시작부터 170분 지났어요.", topicSentence("feeding", st.copy(feedsToday = null)))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", topicSentence("feeding", st.copy(feedsToday = null)))
         assertEquals("수유 기록을 확인할 수 없어요.", topicSentence("feeding", st.copy(feeding = null, feedsToday = null)))
-        assertEquals("61분 전 기록 기준으로 오늘 3번 먹었어요.", topicSentence("feeding", sleepSt(40, null, 35, 61).copy(feeding = null)))
+        assertEquals("1시간 1분 전 기록 기준으로 오늘 3번 먹었어요.", topicSentence("feeding", sleepSt(40, null, 35, 61).copy(feeding = null)))
     }
 
     @Test fun c129_textOnly_offlineByKeyword_toolsFixedSentences() {
@@ -565,17 +584,17 @@ class LinkQaTest : LinkKit() {
 
     @Test fun offline_c247_jamSiganIsSleep() {
         val st = sleepSt(40, null, 35)
-        val want = "기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분이에요."
+        val want = "기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분이에요."
         assertEquals(want, offlineReply("오늘 잠 시간은 얼마나 돼?", st))
         assertEquals(want, offlineReply("잠 시간 알려 줘", st))
     }
 
     @Test fun offline_jamkkanIsNotSleep() {
         val st = sleepSt(40, null, 35).copy(feeding = kr.aigyeot.shared.LlmFeeding(170, 180))
-        val feed = "마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요."   // sleepSt는 feeds_today가 있다(C127)
+        val feed = "마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요."   // sleepSt는 feeds_today가 있다(C127)
         assertEquals(feed, offlineReply("잠깐, 수유 언제 했어?", st))
         assertEquals(feed, offlineReply("잠시만 수유 언제야", st))
-        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분이에요.", offlineReply("잠 언제 잤어?", st))
+        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분이에요.", offlineReply("잠 언제 잤어?", st))
         assertEquals(offlineReply("얼마나 울었어?", st), offlineReply("잠잠해지기 전까지 얼마나 울었어?", st))   // 잠잠은 잠 질문이 아니라 울음 행
         assertTrue("잠 기록" !in offlineReply("잠잠해지기 전까지 얼마나 울었어?", st))
     }
@@ -646,8 +665,8 @@ class LinkQaTest : LinkKit() {
         val replies = listOf("왜 울어", "언제 먹였어", "얼마나 울었어", "뭐가 잘 통해", "다음 수유실", "노래 제목이 뭐야").map { offlineReply(it, st) }
         assertEquals(
             listOf(
-                "마지막 수유 시작부터 172분, 카시트에 2분째예요. 배고프거나 불편할 수 있어요.",
-                "마지막 수유 시작부터 172분 지났어요.",
+                "마지막 수유 시작부터 2시간 52분, 카시트에 2분째예요. 배고프거나 불편할 수 있어요.",
+                "마지막 수유 시작부터 2시간 52분 지났어요.",
                 "지금 1분째 울고 있고, 이번 주행에서 3번 울었어요.",
                 "자장가를 틀었을 때 7번 중 6번 그쳤어요. 소리 덕분인지는 알 수 없어요.",
                 "○○휴게소까지 7.2km이고 수유실이 있어요.",
@@ -743,45 +762,45 @@ class LinkQaTest : LinkKit() {
 
     @Test fun l61_offline_diaperRow() {
         val st = sleepSt(40, null, 35)
-        assertEquals("기록상 마지막 기저귀는 235분 전이고, 오늘 2번이에요.", offlineReply("기저귀 언제 갈았어?", st))
+        assertEquals("기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.", offlineReply("기저귀 언제 갈았어?", st))
         assertEquals("기저귀 기록을 확인할 수 없어요.", offlineReply("기저귀", st.copy(diaper = null)))
         assertEquals("기저귀 기록을 확인할 수 없어요.", offlineReply("기저귀", st.copy(diaper = LlmDiaper(null, null))))
     }
 
     @Test fun l61_offline_sleepRow() {
-        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분이에요.", offlineReply("언제 잤어?", sleepSt(40, null, 35)))
-        assertEquals("기록상 134분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 430분이에요.", offlineReply("언제 깼어?", sleepSt(null, 134, 35)))
-        assertEquals("기록상 오늘 잠은 모두 430분이에요.", offlineReply("잠", sleepSt(null, null, null)))   // 오늘 잠 값만 있으면 그 문장만(C127)
+        assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분이에요.", offlineReply("언제 잤어?", sleepSt(40, null, 35)))
+        assertEquals("기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 7시간 10분이에요.", offlineReply("언제 깼어?", sleepSt(null, 134, 35)))
+        assertEquals("기록상 오늘 잠은 모두 7시간 10분이에요.", offlineReply("잠", sleepSt(null, null, null)))   // 오늘 잠 값만 있으면 그 문장만(C127)
         assertEquals("잠 기록을 확인할 수 없어요.", offlineReply("잠", stateWith(null)))
-        assertEquals("기록상 134분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 430분이에요.", offlineReply("얼마나 잤어?", sleepSt(null, 134, 35)))   // C172: 질문 낱말로 고르지 않는다
+        assertEquals("기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 7시간 10분이에요.", offlineReply("얼마나 잤어?", sleepSt(null, 134, 35)))   // C172: 질문 낱말로 고르지 않는다
     }
 
     @Test fun l61_offline_whyRow_withWoke() {
-        assertEquals("마지막 수유 시작부터 170분, 카시트에 52분째이고, 기록상 134분 전에 깼어요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35)))
-        assertEquals("카시트에 52분째이고, 기록상 134분 전에 깼어요. 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35).copy(feeding = null)))
-        assertEquals("마지막 수유 시작부터 170분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(40, null, 35)))   // woke 없으면 그대로
+        assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째이고, 기록상 2시간 14분 전에 깼어요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35)))
+        assertEquals("카시트에 52분째이고, 기록상 2시간 14분 전에 깼어요. 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35).copy(feeding = null)))
+        assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(40, null, 35)))   // woke 없으면 그대로
     }
 
     @Test fun l61_offline_oldRecordPrefix_over60only() {
-        assertEquals("61분 전 기록 기준으로 마지막 기저귀는 235분 전이고, 오늘 2번이에요.", offlineReply("기저귀", sleepSt(40, null, 35, 61)))
-        assertEquals("기록상 마지막 기저귀는 235분 전이고, 오늘 2번이에요.", offlineReply("기저귀", sleepSt(40, null, 35, 60)))
-        assertEquals("200분 전 기록 기준으로 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분이에요.", offlineReply("잠", sleepSt(40, null, 35, 200)))
-        assertTrue(offlineReply("왜 울어?", sleepSt(null, 134, 35, 90)).contains("카시트에 52분째이고, 90분 전 기록 기준으로 134분 전에 깼어요"))
-        assertEquals("마지막 수유 시작부터 170분 지났고, 300분 전 기록 기준으로 오늘 3번 먹었어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300)))   // feeds_today를 쓴 문장(C127)
-        assertEquals("마지막 수유 시작부터 170분 지났어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300).copy(feedsToday = null)))   // 돌봄 칸을 안 쓴 문장은 붙이지 않는다
+        assertEquals("1시간 1분 전 기록 기준으로 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.", offlineReply("기저귀", sleepSt(40, null, 35, 61)))
+        assertEquals("기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.", offlineReply("기저귀", sleepSt(40, null, 35, 60)))
+        assertEquals("3시간 20분 전 기록 기준으로 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분이에요.", offlineReply("잠", sleepSt(40, null, 35, 200)))
+        assertTrue(offlineReply("왜 울어?", sleepSt(null, 134, 35, 90)).contains("카시트에 52분째이고, 1시간 30분 전 기록 기준으로 2시간 14분 전에 깼어요"))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 5시간 전 기록 기준으로 오늘 3번 먹었어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300)))   // feeds_today를 쓴 문장(C127)
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300).copy(feedsToday = null)))   // 돌봄 칸을 안 쓴 문장은 붙이지 않는다
     }
 
     @Test fun l61_offline_keywordOrder() {
         val st = sleepSt(null, 134, 35)
         assertTrue(offlineReply("수유실 기저귀 잠", st).startsWith("○○휴게소까지"))             // 1 수유실
         assertTrue(offlineReply("기저귀 잠", st).startsWith("기록상 마지막 기저귀"))              // 2 기저귀
-        assertTrue(offlineReply("잠 언제", st).startsWith("기록상 134분 전에 잠이 끝났고"))           // 3 잠
+        assertTrue(offlineReply("잠 언제", st).startsWith("기록상 2시간 14분 전에 잠이 끝났고"))           // 3 잠
         assertTrue(offlineReply("카시트 얼마나 먹였어", st).startsWith("카시트에 52분째"))          // 4 카시트 > 5 수유
         assertTrue(offlineReply("온도 먹였어", st).startsWith("실내 온도"))                       // 카시트 다음 온도
         assertTrue(offlineReply("얼마나 먹였어", st).startsWith("마지막 수유 시작부터"))          // 수유(C127)가 얼마나보다 먼저
         assertTrue(offlineReply("얼마나 울었어", st).startsWith("지금 "))                         // 얼마나
-        assertTrue(offlineReply("먹였어 왜", st).startsWith("마지막 수유 시작부터 170분 지났"))   // 먹였 > 왜
-        assertEquals("마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요.", offlineReply("수유한 지 얼마나 됐어?", st))
+        assertTrue(offlineReply("먹였어 왜", st).startsWith("마지막 수유 시작부터 2시간 50분 지났"))   // 먹였 > 왜
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", offlineReply("수유한 지 얼마나 됐어?", st))
         assertEquals("카시트에 52분째예요.", offlineReply("카시트에 얼마나 있었어?", st))
     }
 
@@ -789,7 +808,7 @@ class LinkQaTest : LinkKit() {
     @Test fun c197_asOfOnFirstRecordWordInFinalText() {
         val st = sleepSt(null, 134, 35, 90).copy(feedsToday = 0)
         val t = say(reply(failing, answer("feeding", "sleep")), "q", st)
-        assertTrue(t.startsWith("마지막 수유 시작부터 170분 지났어요. 90분 전 기록 기준으로 134분 전에 잠이 끝났고"), t)
+        assertTrue(t.startsWith("마지막 수유 시작부터 2시간 50분 지났어요. 1시간 30분 전 기록 기준으로 2시간 14분 전에 잠이 끝났고"), t)
         assertTrue("기록상" !in t, t)
         assertEquals(offlineReply("잠", st), topicSentence("sleep", st))
     }

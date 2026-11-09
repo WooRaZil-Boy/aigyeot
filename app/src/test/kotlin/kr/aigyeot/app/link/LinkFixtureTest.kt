@@ -71,7 +71,7 @@ class LinkFixtureTest : LinkKit() {
         val a = ProtocolJson.decodeFromString(LlmResponse.serializer(), fixture("api_llm_response_answer.json"))
         // C194: 예제는 글 없이 사실 주제(feeding·sleep)만 고른 응답이라 차가 주제 문장을 말한다. 상태값은 돌봄 요약 예제의 것
         val care = ProtocolJson.decodeFromJsonElement(LlmState.serializer(), Json.parseToJsonElement(fixture("api_llm_request_care.json")).jsonObject.getValue("state"))
-        assertEquals("마지막 수유 시작부터 170분 지났고, 기록상 오늘 3번 먹었어요. 기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 430분, 지난밤에는 2번 깼어요.", qaEventsCare(a, "L1", T0, care, "q", emptyList()).let { assertEquals("", it.second, "글은 호스트가 큐에서 짠다(C221)"); fallbackReply(it.factTopics, care) })
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요. 기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분, 지난밤에는 2번 깼어요.", qaEventsCare(a, "L1", T0, care, "q", emptyList()).let { assertEquals("", it.second, "글은 호스트가 큐에서 짠다(C221)"); fallbackReply(it.factTopics, care) })
         assertEquals("수유 기록을 확인할 수 없어요. 잠 기록을 확인할 수 없어요.", qaEventsCare(a, "L1", T0, st, "q", emptyList()).let { fallbackReply(it.factTopics, st) })   // 상태값이 비면 확인할 수 없다
     }
 }
