@@ -45,6 +45,16 @@ final class PresentationTests: XCTestCase {
         XCTAssertTrue(app.appViewModel.ui.isPairLocked)
     }
 
+    /// 차 타일 '차 꺼짐 · 마지막 연락 {경과}'는 U20 경과 형식이다(L100: '0분 전'·'75분 전'이 아니다).
+    func test_차_타일_마지막_연락은_U20_경과로_쓴다() {
+        let last = Date(timeIntervalSince1970: 1_800_000_000)
+        let car = DeviceInfo(deviceId: "car", role: .car, platform: .pleos, pairedAt: "2027-01-15T08:00:00Z",
+                             lastSeenAt: Rfc3339.string(last), online: false, handoffAlerts: nil)
+        let tile = CarTile(car: car, offline: false)
+        XCTAssertEqual([30, 300, 3600, 4500].map { tile.text(now: last.addingTimeInterval(TimeInterval($0))) },
+                       ["차 꺼짐 · 마지막 연락 방금", "차 꺼짐 · 마지막 연락 5분 전", "차 꺼짐 · 마지막 연락 1시간 전", "차 꺼짐 · 마지막 연락 1시간 15분 전"])
+    }
+
     func test_배너는_그_배너가_떠_있을_때만_닫히고_상세는_뷰모델로_닫는다() async {
         make()
         app.notices.showBanner("M2")
@@ -59,19 +69,24 @@ final class PresentationTests: XCTestCase {
         XCTAssertNil(app.appViewModel.ui.openAlert)
     }
 
-    func test_되돌리기는_지운_기록만_5초_동안_보인다() {
+    func test_되돌리기는_지운_기록만_5초_동안_보인다() async {
         make()
         let today = app.today()
         today.start(.feed)
         let id = try! XCTUnwrap(CareRules.inProgress(.feed, in: today.ui.care.events)).id
         app.careSheet().delete(id)
-        XCTAssertEqual(app.careTabs.undoCareId, id)
-        app.careTabs.clearUndo("other")
-        XCTAssertEqual(app.careTabs.undoCareId, id)   // 다른 기록의 타이머는 지우지 않는다
-        XCTAssertNotNil(app.careTabs.deletedAt(id))
-        app.careTabs.undoDelete(id)
-        XCTAssertNil(app.careTabs.undoCareId)
+        XCTAssertEqual(app.careTabs.undo, .delete(id))
+        app.careTabs.undo(.delete(id))
+        XCTAssertNil(app.careTabs.undo)
         XCTAssertNotNil(CareRules.inProgress(.feed, in: today.ui.care.events))
+        // 5초(띠 수명은 RecordCare 한 곳)가 지나면 그 띠만 걷힌다. 기록은 지운 그대로다.
+        app.recordCare.undoMs = 0
+        app.careSheet().delete(id)
+        XCTAssertEqual(app.careTabs.undo, .delete(id))
+        let timer = app.recordCare.undoTask
+        await timer?.value
+        XCTAssertNil(app.careTabs.undo)
+        XCTAssertNil(CareRules.inProgress(.feed, in: today.ui.care.events))
     }
 
     func test_오늘은_마지막_수유와_보내기_상태를_원본에서_계산한다() {

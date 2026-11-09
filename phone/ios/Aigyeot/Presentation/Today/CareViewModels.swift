@@ -36,13 +36,9 @@ final class CareTabsViewModel {
 
     var ui: CareTabsUiState { careTabsUi(stateRepo.connection, disconnect.run) }
 
-    /// 방금 지운 손 기록 id(Notices.undoCareId, S9).
-    var undoCareId: String? { notices.undoCareId }
-    func undoDelete(_ id: String) { recordCare.undoDelete(id) }
-    /// 5초는 지운 때부터 센다(ms, 띠가 다른 화면에서 다시 떠도 남은 시간을 이어 센다).
-    func deletedAt(_ id: String) -> Int64? { careRepo.care.events.first { $0.id == id }?.deletedAt }
-    /// 시간이 다 됐다. 그사이 다른 기록을 지웠으면 그것은 둔다.
-    func clearUndo(_ id: String) { notices.clearUndo(id) }
+    /// 떠 있는 되돌리기 띠(Notices.undo, S9·U64). 5초와 다른 띠로 바뀜은 RecordCare가 정하고 화면은 그리기만 한다.
+    var undo: CareUndo? { notices.undo }
+    func undo(_ u: CareUndo) { recordCare.undo(u) }
     /// 끊은 뒤 오늘·띠를 한 번 그렸다(U25 b).
     func disconnectShown() { disconnect.shown() }
 }

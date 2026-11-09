@@ -55,7 +55,6 @@ struct TodayView: View {
             }
             .screenBackground()
             .navigationTitle(CareText.todayTitle(nickname: vm.ui.care.childNickname))   // U34
-            .overlay(alignment: .bottom) { UndoBar() }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { sheet = .quick(.feed) } label: { Image(systemName: "plus") }.accessibilityLabel(CareText.quickPast)

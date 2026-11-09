@@ -40,6 +40,12 @@ struct CareEvent: Equatable, Identifiable {
     var timeZone: TimeZone { TimeZone(identifier: zone) ?? .current }
 }
 
+/// 되돌리기 띠(U38·U64): 방금 지운 손 기록 하나, 또는 방금 가져온 기록들. 띠는 한 번에 하나이고 수명은 RecordCare 한 곳이 정한다.
+enum CareUndo: Equatable {
+    case delete(String)
+    case imported([String])
+}
+
 struct CareFile: Equatable {
     var version = 1
     var events: [CareEvent] = []
@@ -47,6 +53,22 @@ struct CareFile: Equatable {
     var sleepDiaperEnabled = false
     /// 지금 수유 기록(`feedingLog`)을 옮겼는지(R11).
     var migratedFeedings = false
+
+    /// 이 id들을 완전히 뺀다(가져오기 되돌리기, U67).
+    mutating func removeEvents(_ ids: [String]) {
+        let drop = Set(ids)
+        events.removeAll { drop.contains($0.id) }
+    }
+
+    /// 차가 볼 기록(U67 11-09 보충, 안드로이드 `CareFile.forCar`): 가져오기 띠가 떠 있는 동안 그 줄은 아직 되돌릴 수 있으니 뺀다.
+    /// 차로 가는 계산(수유·요약 맞추기와 보낼 함의 보내기 직전 요약 재계산)은 모두 이것을 지난다(ReconcileCareSummary).
+    /// 그래서 띠 안에 되돌린 수유는 어느 길로도 차에 가지 않고, 띠가 끝나거나 다른 띠로 바뀌면 다음 계기부터 보인다.
+    func forCar(_ undo: CareUndo?) -> CareFile {
+        guard case .imported(let ids) = undo else { return self }
+        var c = self
+        c.removeEvents(ids)
+        return c
+    }
 }
 
 // MARK: JSON(13장: 쓸 때 null 키도 쓴다. 없는 키는 기본값, 모르는 키는 무시)

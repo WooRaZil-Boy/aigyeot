@@ -408,16 +408,56 @@ final class CareTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: other.path))
     }
 
+    /// U38 11-09 보충: 지우기 되돌리기는 저장한 뒤에 띠를 걷는다. 저장이 실패하면 띠를 남겨 남은 시간 안에 다시 누를 수 있다(지운 기록은 목록에 없어 손으로 되살릴 길이 없다).
+    /// 기록 지우기(R10)는 되돌릴 기록을 지우므로 되돌리기 띠(지우기·가져오기)도 걷는다.
+    func test_기록을_지우면_되돌리기_띠도_걷는다() async throws {
+        XCTAssertEqual(app.recordCare.saveEvent(event(.note, "2026-11-05T11:00:00+09:00", id: "N1")), .saved)
+        app.recordCare.delete("N1")
+        XCTAssertEqual(app.notices.undo, .delete("N1"))
+        app.clearRecords()
+        XCTAssertNil(app.careTabs.undo)
+        app.reconcileCareSummary.sendsCareSummary = true
+        app.recordCare.undoMs = 0   // 띠 5초를 기다리지 않는다(시간 작업은 아래 await에서야 돈다)
+        XCTAssertEqual(app.recordCare.importRows([feedAgo(10, id: "I1")]), ["I1"])
+        XCTAssertEqual(app.notices.undo, .imported(["I1"]))
+        app.clearRecords()
+        XCTAssertNil(app.careTabs.undo)
+        XCTAssertTrue(careStore.value.events.isEmpty)
+        let queued = careSummaries.map(\.id)
+        await app.recordCare.undoTask?.value   // 띠 시간이 끝나도 다시 띄우지 않고, 차로 다시 맞추지 않는다
+        XCTAssertNil(app.careTabs.undo)
+        XCTAssertEqual(careSummaries.map(\.id), queued)
+        XCTAssertFalse(careSummaries.contains { $0.body.objectValue?["today_feed_count"] == .number(1) })   // 지운 수유가 든 요약은 없다
+        XCTAssertFalse(app.state.state.outbox.contains { $0.type == MessageType.feedingStarted })
+    }
+
+    func test_지우기_되돌리기_저장이_실패하면_띠를_남겨_다시_누를_수_있다() async throws {
+        XCTAssertEqual(app.recordCare.saveEvent(event(.note, "2026-11-05T11:00:00+09:00", id: "N1")), .saved)
+        app.recordCare.delete("N1")
+        let timer = app.recordCare.undoTask
+        careStore.failing = true
+        app.careTabs.undo(.delete("N1"))                   // 저장 실패
+        XCTAssertEqual(app.notices.undo, .delete("N1"))    // 띠가 남는다
+        XCTAssertEqual(app.careTabs.undo, .delete("N1"))   // 화면(UndoBar)은 이 값을 그대로 그린다: 따로 숨기지 않는다
+        XCTAssertNotNil(careStore.value.events.first { $0.id == "N1" }?.deletedAt)
+        XCTAssertFalse(timer?.isCancelled ?? true)         // 띠 시간도 그대로 흐른다
+        careStore.failing = false
+        app.careTabs.undo(.delete("N1"))                   // 다시 누른다(저장 성공)
+        XCTAssertNil(careStore.value.events.first { $0.id == "N1" }?.deletedAt)
+        XCTAssertNil(app.notices.undo)
+        XCTAssertTrue(timer?.isCancelled ?? false)
+    }
+
     func test_지운_기록은_표시하고_30일_뒤_지운다() throws {
         XCTAssertEqual(app.recordCare.saveEvent(event(.note, "2026-11-05T11:00:00+09:00", id: "N1")), .saved)
         app.recordCare.delete("N1")
-        XCTAssertEqual(app.notices.undoCareId, "N1")   // U38: 어느 길로 지워도 "지웠어요" + "되돌리기"(5초)
+        XCTAssertEqual(app.notices.undo, .delete("N1"))   // U38: 어느 길로 지워도 "지웠어요" + "되돌리기"(5초)
         let marked = try XCTUnwrap(careStore.value.events.first { $0.id == "N1" })
         XCTAssertEqual(marked.deletedAt, nowMs)   // 표시만 하고 파일에 남는다
         XCTAssertTrue(CareRules.live(app.care.care.events).isEmpty)
         app.recordCare.undoDelete("N1")                    // 되돌리기
         XCTAssertNil(careStore.value.events.first?.deletedAt)
-        XCTAssertNil(app.notices.undoCareId)
+        XCTAssertNil(app.notices.undo)
         app.recordCare.delete("N1")
         // 차에 보낸 수유를 지워도 차에는 알리지 않는다.
         XCTAssertEqual(app.recordCare.saveEvent(event(.feed, "2026-11-05T11:30:00+09:00", endUnknown: true, id: "F1")), .saved)

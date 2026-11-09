@@ -40,6 +40,8 @@ struct BuildCareSummary {
 final class ReconcileCareSummary {
     private let state: PhoneStateRepository
     private let care: CareRepository
+    /// 가져오기 되돌리기 띠(`undo`). 차로 가는 계산은 `forCar`로 그 줄을 뺀다(U67 11-09 보충).
+    private let notices: Notices
     /// 보내는 중인 항목(`sendingId`)을 보고, 넣은 뒤 보내기를 시작한다.
     private let outbox: SendOutbox
     private let now: () -> Date
@@ -48,15 +50,19 @@ final class ReconcileCareSummary {
     /// '오늘'을 자르는 시간대(시험이 바꾼다).
     var timeZone: () -> TimeZone = { .current }
 
-    init(state: PhoneStateRepository, care: CareRepository, outbox: SendOutbox, now: @escaping () -> Date, sendsCareSummary: Bool) {
+    init(state: PhoneStateRepository, care: CareRepository, notices: Notices, outbox: SendOutbox, now: @escaping () -> Date, sendsCareSummary: Bool) {
         self.state = state
         self.care = care
+        self.notices = notices
         self.outbox = outbox
         self.now = now
         self.sendsCareSummary = sendsCareSummary
     }
 
     enum Queued { case queued, unchanged, failed }
+
+    /// 차로 가는 계산 세 곳(수유 맞추기·요약 맞추기·보낼 함의 보내기 직전 재계산 `queue`)이 보는 기록 한 곳: 가져오기 띠의 줄을 뺀다(U67 11-09 보충).
+    private var forCar: CareFile { care.care.forCar(notices.undo) }
 
     /// 수유를 먼저, 요약을 그다음에 맞춘다. `kick`이면 넣은 것이 있을 때 바로 보낸다(앱 시작·앞으로 올 때는 갱신이 보낸다).
     func feedingAndSummary(kick: Bool) {
@@ -76,7 +82,7 @@ final class ReconcileCareSummary {
     /// 저장에 실패하면 아무것도 바뀌지 않는다. 다음 계기가 다시 본다.
     private func enqueueFeeding() -> Bool {
         let t = now()
-        guard state.role == .owner, let latest = FeedRules.latestToSend(care.care, state.state, now: t) else { return false }
+        guard state.role == .owner, let latest = FeedRules.latestToSend(forCar, state.state, now: t) else { return false }
         return state.commit(state.creds) { FeedRules.enqueue(latest, now: t, in: &$0) }
     }
 
@@ -85,7 +91,7 @@ final class ReconcileCareSummary {
         guard sendsCareSummary, state.role == .owner else { return .unchanged }
         let sending = outbox.sendingId
         let t = now()
-        guard case let .enqueue(body, key, asOf) = SummaryRules.decide(care.care, state.state, nowMs: CareTime.ms(t), zone: timeZone(), sending: sending) else { return .unchanged }
+        guard case let .enqueue(body, key, asOf) = SummaryRules.decide(forCar, state.state, nowMs: CareTime.ms(t), zone: timeZone(), sending: sending) else { return .unchanged }
         let item = OutboxRules.item(type: MessageType.careSummary, body: body, now: t)
         return state.commit(state.creds) { SummaryRules.enqueue(item, key: key, asOf: asOf, sending: sending, in: &$0) } ? .queued : .failed
     }

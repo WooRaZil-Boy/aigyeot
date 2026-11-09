@@ -19,6 +19,19 @@ struct SettingsUiState {
     var offline: Bool { !online }
 }
 
+/// 기록 가져오기의 단계(U64). 저장은 한 번의 동기 저장이라 '저장 중'은 화면에 남지 않는다.
+enum ImportStep: Equatable {
+    case idle
+    case picking
+    /// 고른 파일을 읽거나 Nara 아이의 줄을 다시 읽는 중(메인 밖). 닫으면 그 작업을 버린다.
+    case reading
+    /// Nara 파일에 아이가 둘 이상(U66). 읽은 글자는 메모리에만 둔다.
+    case pickChild(text: String, profiles: [String])
+    case preview(ImportDraft)
+    /// import.unreadable·tooLarge·failed
+    case failed(String)
+}
+
 @MainActor
 @Observable
 final class SettingsViewModel {
@@ -53,6 +66,91 @@ final class SettingsViewModel {
 
     /// 내 기록 내보내기(C7, U29): 임시 폴더에 `aigyeot-care-{YYYYMMDD}.csv`를 쓰고 그 파일을 돌려준다. 실패하면 nil.
     func export() -> URL? { careRepo.export(fileName: CareText.exportFileName(now())) { CareExport.csv($0.events) } }
+
+    // MARK: 기록 가져오기(U64~U68)
+
+    /// 가져오기 한 번의 단계. 화면은 이것만 그린다.
+    private(set) var importStep: ImportStep = .idle
+    /// 읽기 작업은 하나다: 다시 고르기·아이 고르기·닫기가 앞 작업을 취소하고, 결과는 그 작업이 취소되지 않았을 때만 적용한다(P5).
+    /// 화면이 아니라 이 뷰모델이 쥐므로 화면이 잠깐 사라져도 이어진다. 시험은 `importJob?.value`를 기다린다.
+    @ObservationIgnored private(set) var importJob: Task<Void, Never>?
+
+    func startImport() { importStep = .picking }
+
+    /// 파일 고르기 결과(취소는 시스템이 고르기 창을 닫아 `closeImport`로 온다). 파일은 메모리로만 읽고 앱 폴더에 저장하지 않는다(U64).
+    /// 읽기·형식 판별은 메인 밖에서 한다(iCloud Drive 같은 파일 제공자는 내려받는 동안 멈출 수 있다).
+    func picked(_ result: Result<URL, Error>) {
+        let url = try? result.get()
+        runImport { [weak self] in
+            var read: CsvRead?
+            if let url { read = await Task.detached(priority: .userInitiated) { Self.read(url) }.value }
+            return await self?.loaded(read) ?? .idle
+        }
+    }
+
+    private func runImport(_ work: @escaping @MainActor () async -> ImportStep) {
+        importJob?.cancel()
+        importStep = .reading
+        importJob = Task { [weak self] in
+            let next = await work()
+            guard !Task.isCancelled, let self else { return }
+            self.importStep = next
+        }
+    }
+
+    /// 파일 고르기 바로 뒤 한 곳(9.1): 보안 범위 접근 시작·끝, 파일 제공자와 맞춘 읽기(NSFileCoordinator),
+    /// 상한 + 1바이트까지만 읽는다(크기를 몰라도 상한을 넘겨 올리지 않게). 열거나 읽지 못하면 nil(import.failed). 메인 밖에서 부른다.
+    nonisolated static func read(_ url: URL) -> CsvRead? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        var data: Data?
+        var error: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { u in
+            guard let h = try? FileHandle(forReadingFrom: u) else { return }
+            defer { try? h.close() }
+            do { data = try h.read(upToCount: CareCsv.maxBytes + 1) ?? Data() } catch { data = nil }   // 빈 파일은 빈 글자(읽기 실패와 구별)
+        }
+        return data.map(CareCsv.read)
+    }
+
+    /// 읽은 결과 → 다음 단계. nil은 파일을 열거나 읽지 못한 IO 실패(import.failed), UTF-8이 아니면 import.unreadable(11-09 보충).
+    func loaded(_ read: CsvRead?) async -> ImportStep {
+        switch read {
+        case nil: return .failed(CareText.importFailed)
+        case .tooLarge: return .failed(CareText.importTooLarge)
+        case .unreadable: return .failed(CareText.importUnreadable)
+        case .text(let text):
+            recordCare.finishClear()   // R10: 지우다 만 기록을 먼저 빼야 그 id가 '이미 있는 기록'으로 세지지 않는다(못 마치면 가져오기가 import.failed)
+            return await preview(text, profile: nil)
+        }
+    }
+
+    /// 지금 돌봄 기록을 기준으로 메인 밖에서 판별한다. 아이를 골라야 하면 아이 고르기로.
+    private func preview(_ text: String, profile: String?) async -> ImportStep {
+        let existing = careRepo.care.events, at = CareTime.ms(now())
+        let draft = await Task.detached(priority: .userInitiated) { CareCsv.parse(text, existing: existing, now: at, profile: profile) }.value
+        if draft.format == .unknown { return .failed(CareText.importUnreadable) }
+        if profile == nil, draft.format == .nara, draft.profiles.count > 1 { return .pickChild(text: text, profiles: draft.profiles) }
+        return .preview(draft)
+    }
+
+    func pickChild(_ name: String) {
+        guard case .pickChild(let text, _) = importStep else { return }
+        runImport { [weak self] in await self?.preview(text, profile: name) ?? .idle }
+    }
+
+    /// '가져오기'. 가져올 것이 없으면 닫기만 한다. 저장하면 시트를 닫는다: 띠 import.done과 되돌리기·차 보내기는 RecordCare가 한다(띠 수명 한 곳).
+    func confirmImport() {
+        guard case .preview(let draft) = importStep else { return }
+        guard !draft.rows.isEmpty else { importStep = .idle; return }
+        importStep = recordCare.importRows(draft.rows) == nil ? .failed(CareText.importFailed) : .idle
+    }
+
+    /// 닫기·취소. 읽던 작업은 버린다.
+    func closeImport() {
+        importJob?.cancel()
+        importStep = .idle
+    }
 
     func clearRecords() { clearing() }
     /// 설정의 '연결 끊기': 앱 범위에서 끝까지 하고 결과는 `ui.disconnect`(M3). 끊기면 탭이 오늘로 간다(CareTabsViewModel).

@@ -96,7 +96,6 @@ private struct DayView: View {
             }
             .listStyle(.plain)
         }
-        .overlay(alignment: .bottom) { UndoBar() }
     }
 
     @ViewBuilder private func header(_ keys: Set<String>) -> some View {
@@ -135,28 +134,22 @@ private struct DayView: View {
 
 }
 
-/// "지웠어요" + "되돌리기"(5초). 기록 탭 밀기, 고치기 시트, 타이머 어디서 지워도 같다(U38).
+/// 되돌리기 띠(U38·U64): "지웠어요" 또는 "기록 n건을 가져왔어요" + "되돌리기". 어느 탭에서 지우거나 가져와도 같은 띠다.
+/// 띠의 수명(5초, 다른 띠로 바뀜)은 RecordCare 한 곳이 정하고 이 화면은 떠 있는 띠를 그리기만 한다(가져오기는 띠가 끝난 뒤 차로 보낸다).
 struct UndoBar: View {
-    @Environment(CareTabsViewModel.self) private var undo
+    @Environment(CareTabsViewModel.self) private var vm
 
     var body: some View {
-        if let id = undo.undoCareId {
+        if let u = vm.undo {
             HStack {
-                Text(CareText.deleted)
+                Text(CareText.undoText(u))
                 Spacer()
-                Button { undo.undoDelete(id) } label: { Text(CareText.undo).bold().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
+                Button { vm.undo(u) } label: { Text(CareText.undo).bold().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
             }
             .foregroundStyle(DS.bg)   // 글자·바탕을 뒤집어 밝음·어둠 모두 읽힌다
             .padding(DS.s4)
             .background(DS.textPrimary.opacity(0.9), in: RoundedRectangle(cornerRadius: DS.rMedium))
             .padding(DS.s4)
-            .task(id: id) {
-                // 5초는 지운 때부터 센다. 띠가 사라져 취소되면 비우지 않는다(다른 화면의 띠가 남은 시간을 이어 센다).
-                let at = undo.deletedAt(id) ?? CareTime.ms(Date())
-                let left = UInt64(max(0, at + RetryPolicy.undoMs - CareTime.ms(Date())))
-                guard (try? await Task.sleep(nanoseconds: left * 1_000_000)) != nil else { return }
-                undo.clearUndo(id)
-            }
         }
     }
 }

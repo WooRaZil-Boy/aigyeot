@@ -134,8 +134,8 @@ final class ScreenTour: XCTestCase {
         app.launch()
     }
 
-    private func shot(_ name: String) {
-        sleep(1)
+    private func shot(_ name: String, settle: UInt32 = 1) {
+        sleep(settle)
         let png = XCUIScreen.main.screenshot().pngRepresentation
         try? png.write(to: dir.appendingPathComponent("\(name).png"))
     }
@@ -217,6 +217,50 @@ final class ScreenTour: XCTestCase {
         expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: app.buttons["오늘"].firstMatch)
         waitForExpectations(timeout: 10)
         XCTAssertFalse(app.buttons["하루"].exists)
+    }
+
+    /// 기록 가져오기(U64~U68): 설정 → 파일 고르기 → 아이 고르기(Nara 둘) → 미리 보기 → 띠·되돌리기, 읽을 수 없는 파일의 안내.
+    /// 파일은 미리 시뮬레이터 '나의 iPhone'에 둔다(EXAMPLE-nara.csv·EXAMPLE-unknown.csv). `SHOT_SUFFIX`를 캡처 이름 끝에 붙인다(밝음·어둠).
+    /// 띠에서 되돌리므로 같은 기기에서 다시 돌려도 같은 미리 보기가 나온다.
+    func test_기록_가져오기() {
+        let sfx = ProcessInfo.processInfo.environment["SHOT_SUFFIX"] ?? ""
+        if app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 5) { app.buttons["먼저 기록만 쓸게요"].tap() }
+        tab("설정")
+        let entry = label(beginsWith: "다른 앱 기록 가져오기")
+        for _ in 0..<4 where !(entry.exists && entry.isHittable) { app.swipeUp() }
+        shot("I0-settings" + sfx)
+        entry.tap()
+        pickFile("EXAMPLE-nara")
+        XCTAssert(app.buttons["EXAMPLE-A"].waitForExistence(timeout: 10), "아이 고르기가 없다")
+        shot("I1-pick-child" + sfx)
+        app.buttons["EXAMPLE-A"].tap()
+        XCTAssert(app.buttons["가져오기"].waitForExistence(timeout: 5), "미리 보기가 없다")
+        shot("I2-preview" + sfx)
+        app.buttons["가져오기"].tap()
+        XCTAssert(label(beginsWith: "기록 ").waitForExistence(timeout: 5), "가져온 띠가 없다")
+        tab("차")   // 띠는 탭을 옮겨도 남는다(남은 5초 안에 되돌릴 수 있다). 캡처의 1초 대기보다 먼저 본다
+        XCTAssert(app.buttons["되돌리기"].waitForExistence(timeout: 2), "차 탭에서 되돌리기가 없다")
+        shot("I3-done" + sfx, settle: 0)   // 차 탭 위의 띠(기다리면 5초가 끝난다)
+        app.buttons["되돌리기"].tap()
+        tab("설정")
+        entry.tap()
+        pickFile("EXAMPLE-unknown")
+        XCTAssert(label(beginsWith: "이 파일은 읽을 수 없어요").waitForExistence(timeout: 10), "읽을 수 없는 파일 안내가 없다")
+        shot("I4-unreadable" + sfx)
+        app.buttons["닫기"].tap()
+    }
+
+    /// 파일 고르기 창에서 '나의 iPhone'의 파일을 누른다(처음 열리면 최근 항목이라 둘러보기로 간다).
+    private func pickFile(_ name: String) {
+        let file = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        if file.waitForExistence(timeout: 4) { file.tap(); return }
+        for b in ["둘러보기", "Browse"] where app.buttons[b].exists { app.buttons[b].tap(); break }
+        for l in ["나의 iPhone", "On My iPhone"] {
+            let place = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", l)).firstMatch
+            if place.waitForExistence(timeout: 3) { place.tap(); break }
+        }
+        XCTAssert(file.waitForExistence(timeout: 15), "\(name) 파일이 고르기 창에 없다")   // 맥 부하가 높으면 '나의 iPhone' 목록이 늦게 뜬다
+        file.tap()
     }
 
     func test_새_화면() {

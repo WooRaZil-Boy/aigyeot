@@ -56,6 +56,8 @@ struct LinkStatus: Equatable {
 /// 수유·요약을 차로 보내는 계기(R6·R19). 계기마다 RecordCare.syncToCar 한 곳을 부른다.
 enum FeedTrigger: Equatable {
     case appStart, foreground, careSaved, paired
+    /// 가져오기의 되돌리기 띠가 끝났다(5초·다른 띠로 바뀜·되돌림, U67 11-09 보충): 띠 동안 차로 가는 계산에서 빠졌던 줄이 이제 보이므로 수유·요약을 한 번 맞춘다.
+    case importSettled
 }
 
 enum ConnectFailure: Equatable {

@@ -8,12 +8,12 @@ struct MainView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            Scoped({ $0.today() }) { _ in TodayView() }.tabItem { Label(CareText.tabToday, systemImage: "sun.max") }.tag(CareText.tabToday)
-            Scoped({ $0.records() }) { _ in RecordsView() }.tabItem { Label(CareText.tabLog, systemImage: "list.bullet.rectangle") }.tag(CareText.tabLog)
+            Scoped({ $0.today() }) { _ in TodayView() }.undoBar().tabItem { Label(CareText.tabToday, systemImage: "sun.max") }.tag(CareText.tabToday)
+            Scoped({ $0.records() }) { _ in RecordsView() }.undoBar().tabItem { Label(CareText.tabLog, systemImage: "list.bullet.rectangle") }.tag(CareText.tabLog)
             if !tabs.ui.guardian {
-                Scoped({ $0.car() }) { _ in CarView() }.tabItem { Label(CareText.tabCar, systemImage: "car") }.tag(CareText.tabCar)
+                Scoped({ $0.car() }) { _ in CarView() }.undoBar().tabItem { Label(CareText.tabCar, systemImage: "car") }.tag(CareText.tabCar)
             }
-            Scoped({ $0.settings() }) { _ in SettingsView() }.tabItem { Label(CareText.tabSettings, systemImage: "gearshape") }.tag(CareText.tabSettings)
+            Scoped({ $0.settings() }) { _ in SettingsView() }.undoBar().tabItem { Label(CareText.tabSettings, systemImage: "gearshape") }.tag(CareText.tabSettings)
         }
         // U25: 끊기면 연결 안 됨의 오늘로. 5장: 연결 흐름이 끝나도 오늘로(링크는 확인 시트만 띄워 이 화면과 탭이 그대로 남는다. 안드로이드는 nav.reset)
         .onChange(of: app.ui.isPaired) { _, _ in tab = CareText.tabToday }
@@ -29,6 +29,11 @@ struct MainView: View {
 }
 
 struct IdBox: Identifiable { let id: String }
+
+private extension View {
+    /// 되돌리기 띠는 모든 탭에 같은 것 하나다(안드로이드 CareTabs의 SnackbarHost): 다른 탭으로 옮겨도 남은 시간 동안 누를 수 있다.
+    func undoBar() -> some View { overlay(alignment: .bottom) { UndoBar() } }
+}
 
 /// 앞에 있을 때 푸시(`SyncInbox.onPush`)·실시간 수신이 띄운 인계 알림 배너(5.6). 시스템 알림은 띄우지 않는다.
 struct AlertBanner: View {
@@ -158,18 +163,19 @@ struct CarTile: View {
     let car: DeviceInfo?
     let offline: Bool
 
-    private func text(now: Date) -> String {
+    /// 차 타일 글(7.2). 마지막 연락은 U20 경과(1분 미만 '방금', 그 밖 '5분 전'·'1시간 전'·'1시간 15분 전', 연결 계약 5.6·L100).
+    func text(now: Date) -> String {
         if offline { return "알 수 없음" }
         guard let car else { return "차를 기다리고 있어요" }
         if car.online { return "연결됨" }
         guard let last = car.lastSeenAt.flatMap(Rfc3339.parse) else { return "차 꺼짐" }
-        return "차 꺼짐 · 마지막 연락 \(max(0, Int(now.timeIntervalSince(last) / 60)))분 전"
+        return "차 꺼짐 · 마지막 연락 " + CareText.ago(CareTime.ms(now) - CareTime.ms(last))
     }
 
     var body: some View {
         HStack {
             Image(systemName: "car.fill")
-            TimelineView(.everyMinute) { ctx in Text(text(now: ctx.date)).font(.headline).monospacedDigit() }   // '{n}분 전'은 화면을 연 채 두어도 바뀐다(7.2)
+            TimelineView(.everyMinute) { ctx in Text(text(now: ctx.date)).font(.headline).monospacedDigit() }   // 경과는 화면을 연 채 두어도 바뀐다(7.2)
             Spacer()
         }
         .padding(14)

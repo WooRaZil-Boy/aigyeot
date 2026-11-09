@@ -202,6 +202,8 @@ enum CarActionKind: String, Codable {
     case rearWindowLock = "rear_window_lock"
     case cabinCool = "cabin_cool"
     case readingLightOff = "reading_light_off"
+    /// 달래는 동안 앰비언트 조명 낮추기(기능 D, 연결 계약 4. car_actions, 명세 17장 L99).
+    case ambientDim = "ambient_dim"
     case waypointAdded = "waypoint_added"
     case arrivalNotice = "arrival_notice"
     case guardianAlert = "guardian_alert"

@@ -129,7 +129,7 @@ private struct GuardianToggle: View {
     }
 }
 
-/// 설정(5장 순서): 보호자 · 아이 별명 · 잠·기저귀도 기록하기 · (내 기록 내보내기, C7) · 이 휴대폰의 기록 지우기 · 연결 끊기 · 정보·라이선스.
+/// 설정(5장 순서): 보호자 · 아이 별명 · 잠·기저귀도 기록하기 · (내 기록 내보내기, C7 · 다른 앱 기록 가져오기, U64) · 이 휴대폰의 기록 지우기 · 연결 끊기 · 정보·라이선스.
 struct SettingsView: View {
     @Environment(SettingsViewModel.self) private var vm
     @State private var confirmDisconnect = false
@@ -161,6 +161,13 @@ struct SettingsView: View {
                     // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다.
                     ShareLink(item: CareExportFile(export: { [vm] in vm.export() }),
                               preview: SharePreview("")) { Text(CareText.export) }   // U33: 공유 시트 제목은 비운다
+                    // U64: 내보내기 바로 아래. owner·guardian 모두.
+                    Button { vm.startImport() } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(CareText.importEntry)
+                            Text(CareText.importEntrySub).font(.footnote).foregroundStyle(DesignSystem.textSecondary)
+                        }
+                    }
                 }
                 Section {
                     Button(CareText.clear, role: .destructive) { confirmClear = true }.foregroundStyle(DesignSystem.danger)   // 시스템 빨강은 대비 미달(13장 danger)
@@ -199,6 +206,7 @@ struct SettingsView: View {
             .screenBackground()
             .navigationTitle("설정")
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
+            .modifier(ImportFlow())
             .onAppear { nickname = vm.ui.care.childNickname ?? "" }
             .onDisappear {
                 vm.setNickname(nickname)   // 칸을 벗어나도 남긴다(글자마다 저장하지 않는다)

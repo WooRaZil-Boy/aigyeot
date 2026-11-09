@@ -64,7 +64,8 @@ final class AppLifecycle {
         outbox.forget(e)
         inbox.forget(e)
         connection.forget(e)
-        if e == .recordsCleared { notices.clearBanner() }   // 지운 알림을 가리키는 배너
+        // 지운 알림을 가리키는 배너와, 지운 기록을 가리키는 되돌리기 띠(되돌릴 것이 없다. 띠 시간은 endUndo가 띠가 바뀐 것을 보고 그냥 끝난다)
+        if e == .recordsCleared { notices.clearBanner(); notices.clearUndo() }
         onEvent?(e)
     }
 

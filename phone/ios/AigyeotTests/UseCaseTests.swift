@@ -106,7 +106,7 @@ final class UseCaseTests: XCTestCase {
     func test_연결을_마치면_새_자격·연결됐어요_띠·오늘_탭으로() async {
         let kit = Kit(creds: nil)
         kit.relay.pairResult = .success(Kit.newOwner)
-        kit.app.notices.addLine("옛 안내"); kit.app.notices.showBanner("B"); kit.app.notices.showUndo("U")
+        kit.app.notices.addLine("옛 안내"); kit.app.notices.showBanner("B"); kit.app.notices.showUndo(.delete("U"))
         kit.app.appViewModel.connectShown = true
         let failure = await kit.app.pairAndWait(.pair("123456"))
         XCTAssertNil(failure)
@@ -114,7 +114,7 @@ final class UseCaseTests: XCTestCase {
         XCTAssertEqual(kit.app.state.creds?.deviceId, Kit.newOwner.deviceId)
         XCTAssertEqual(kit.app.status.ui.notice, NoticeRules.paired)   // 띠를 처음으로 하고 '연결됐어요'
         XCTAssertNil(kit.app.appViewModel.ui.banner)
-        XCTAssertNil(kit.app.notices.undoCareId)
+        XCTAssertNil(kit.app.notices.undo)
         XCTAssertFalse(kit.app.appViewModel.connectShown)
         XCTAssertEqual(kit.app.appViewModel.ui.route, .main)
     }

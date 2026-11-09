@@ -120,6 +120,14 @@ final class ProtocolFixturesTests: XCTestCase {
         }
     }
 
+    /// 기능 D(L99): car_actions의 ambient_dim을 읽고 '조명 낮춤'으로 보인다(안드로이드와 같은 글자).
+    func test_리포트_차_동작에_조명_낮춤이_있다() throws {
+        let env = try ProtocolCoding.decoder.decode(Envelope.self, from: Data(contentsOf: Self.dir.appendingPathComponent("report_summary.json")))
+        let body = try env.decodeBody(ReportSummaryBody.self)
+        XCTAssertEqual(body.carActions.map(\.action), [.rearPlayback, .seatHeaterOff, .ambientDim])
+        XCTAssertEqual(actionText(.ambientDim), "조명 낮춤")
+    }
+
     func test_모르는_method의_리포트도_읽고_unknown이_된다() throws {
         let url = Self.dir.appendingPathComponent("report_summary.json")
         let text = try String(contentsOf: url, encoding: .utf8)

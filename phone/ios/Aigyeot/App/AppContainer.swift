@@ -45,7 +45,7 @@ final class AppContainer {
         state: state, relay: relay, gate: gate, inbox: syncInbox, visibility: visibility, tasks: tasks, outbox: sendOutbox,
         pushToken: registerPush, sockets: sockets, network: network, lose: lose, now: now)
     private(set) lazy var reconcileCareSummary: ReconcileCareSummary = ReconcileCareSummary(
-        state: state, care: care, outbox: sendOutbox, now: now, sendsCareSummary: sendsCareSummary)
+        state: state, care: care, notices: notices, outbox: sendOutbox, now: now, sendsCareSummary: sendsCareSummary)
     private(set) lazy var recordCare: RecordCare = RecordCare(
         care: care, state: state, notices: notices, summary: reconcileCareSummary, outbox: sendOutbox, songFiles: songFiles,
         ongoing: ongoing, now: now)

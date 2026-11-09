@@ -15,8 +15,8 @@ final class Notices {
     private(set) var careNotice: String?
     /// 앱 안 배너로 띄울 인계 알림 id(D4 a: 글은 그릴 때 저장된 본문에서 계산한다, P4).
     private(set) var banner: String?
-    /// 방금 지운 손 기록 id. 탭 화면이 '지웠어요 · 되돌리기'를 5초 보인다(U38).
-    private(set) var undoCareId: String?
+    /// 되돌리기 띠('지웠어요'·'기록 n건을 가져왔어요' + '되돌리기', U38·U64). 띄우고 걷는 것은 RecordCare가 한다(5초 한 곳).
+    private(set) var undo: CareUndo?
 
     func addLine(_ line: String) { notice = NoticeRules.adding(line, to: notice) }
     func saveFailed() { addLine(NoticeRules.saveFailed) }
@@ -27,15 +27,14 @@ final class Notices {
     /// 연결 끊김 정리(끊기·401·4001): 옛 연결의 띠와 배너를 걷는다.
     func clearForWipe() { notice = nil; careNotice = nil; banner = nil }
     /// 새 연결을 마쳤다: 화면 띠·배너·되돌리기를 처음으로.
-    func clearForPair() { notice = nil; careNotice = nil; banner = nil; undoCareId = nil }
+    func clearForPair() { notice = nil; careNotice = nil; banner = nil; undo = nil }
     func showCare(_ line: String) { careNotice = line }
     func clearCare() { careNotice = nil }
     func showBanner(_ alertId: String) { banner = alertId }
     /// `alertId`를 주면 그 배너가 아직 떠 있을 때만 걷는다(그사이 새 배너가 떴으면 둔다, 8초 닫힘).
     func clearBanner(_ alertId: String? = nil) { if alertId == nil || banner == alertId { banner = nil } }
-    func showUndo(_ id: String) { undoCareId = id }
-    /// `id`를 주면 그 기록의 되돌리기일 때만 걷는다(그사이 다른 기록을 지웠으면 둔다).
-    func clearUndo(_ id: String? = nil) { if id == nil || undoCareId == id { undoCareId = nil } }
+    func showUndo(_ u: CareUndo) { undo = u }
+    func clearUndo() { undo = nil }
 }
 
 /// 연결 전환(사용자 끊기·강제 끊김)이 함께 보는 상태와 작은 표시의 원본(안드로이드 LinkSwitch). 화면은 이 표시를 보지 않고 `Connection`만 본다.

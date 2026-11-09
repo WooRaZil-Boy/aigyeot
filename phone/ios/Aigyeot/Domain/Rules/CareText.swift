@@ -230,6 +230,49 @@ enum CareText {
         "aigyeot-care-" + CareRules.dayKey(CareTime.ms(d), zone).replacingOccurrences(of: "-", with: "") + ".csv"
     }
 
+    // 기록 가져오기(U64~U68, 7.1 settings.import·import.*)
+    static let importEntry = "다른 앱 기록 가져오기", importEntrySub = "아이곁·Huckleberry·Nara에서 내보낸 CSV"   // settings.import(.sub)
+    static let importPickChild = "어느 아이의 기록인가요?"                                  // import.pickChild
+    static let importSkipTitle = "가져오지 않는 것"                                         // import.skip.title
+    static let importZoneNote = "시각은 한국 시간으로 읽어요"                                // import.zoneNote
+    static let importConfirm = "가져오기", importCancel = "취소"                             // import.confirm·cancel
+    static let importNothing = "가져올 기록이 없어요"                                       // import.nothing
+    static let importUnreadable = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요"   // import.unreadable
+    static let importTooLarge = "파일이 너무 커요", importFailed = "가져오지 못했어요. 다시 해 주세요"   // import.tooLarge·failed
+    static func importTitle(_ n: Int) -> String { "기록 \(n)건을 가져올게요" }                // import.title
+    static func importDone(_ n: Int) -> String { "기록 \(n)건을 가져왔어요" }                 // import.done
+
+    /// 되돌리기 띠 글: '지웠어요'(U38) / import.done
+    static func undoText(_ u: CareUndo) -> String {
+        switch u { case .delete: deleted; case .imported(let ids): importDone(ids.count) }
+    }
+    static func importLatestFeed(_ at: String) -> String { "가장 늦은 수유 \(at)" }           // import.latestFeed
+
+    /// import.latestFeed {시각}(U68 11-09 보충): 오늘이면 "오전 11:00", 어제면 "어제 오전 11:00", 그 전이면 "11월 3일 오전 11:00". 날은 `zone` 기준.
+    static func dayClock(_ ms: Int64, now: Date, zone: TimeZone) -> String {
+        let clock = CareFormat.clock(CareTime.date(ms), zone)
+        let day = CareRules.dayKey(ms, zone), todayKey = CareRules.dayKey(CareTime.ms(now), zone)
+        if day == todayKey { return clock }
+        if let (start, _) = CareRules.dayRange(todayKey, zone), CareRules.dayKey(start - 1, zone) == day { return yesterday + " " + clock }
+        let p = day.split(separator: "-").compactMap { Int($0) }
+        return p.count == 3 ? "\(p[1])월 \(p[2])일 \(clock)" : clock
+    }
+
+    /// import.kinds "수유 {a} · 잠 {b} · 기저귀 {c} · 메모 {d}"(0인 종류는 뺀다)
+    static func importKinds(_ rows: [CareEvent]) -> String {
+        [CareKind.feed, .sleep, .diaper, .note].compactMap { k in
+            let n = rows.filter { $0.kind == k }.count
+            return n == 0 ? nil : "\(quickLabel(k)) \(n)"
+        }.joined(separator: " · ")
+    }
+
+    /// import.skip.*: 0인 이유는 감춘다(U68). 순서는 7.1 표 그대로.
+    static func importSkips(_ s: ImportSkipped) -> [String] {
+        [(s.duplicate, "이미 있는 기록"), (s.old, "14일보다 오래된 기록"), (s.future, "앞으로의 시각"),
+         (s.unreadable, "읽을 수 없는 줄"), (s.unsupported, "가져오지 않는 종류")]
+            .filter { $0.0 > 0 }.map { "\($0.1) \($0.0)건" }
+    }
+
     /// U15: 차 기록 줄의 소리는 방법 이름만 쓴다(곡 이름은 리포트 상세에서 본다).
     static func method(_ m: SoundMethod) -> String {
         switch m { case .whiteNoise: "백색소음"; case .lullaby: "자장가"; case .parentSong: "부모 노래"; case .womb: "뱃속 소리"; case .unknown: "기타" }
