@@ -158,4 +158,14 @@ class ReportViewTest {
         assertEquals("잠 00:00–03:10 · 3시간 10분", dayBlockTip(DayLane("잠", DataColor.SLEEP, "4번", "8시간 5분"), 0..190))
         assertEquals("기저귀 03:38", dayDotTip(DayLane("기저귀", DataColor.DIAPER, null, "4번"), 218))
     }
+
+    // 시스템 글자 200%: 이름 끝 + 간격 + 값 폭이 줄 폭을 넘으면 이름 위·값 아래로 나누고, 높이는 잰 글자 높이의 합(겹치지 않음)
+    @Test fun dayHead_stacksWhenNameAndValueDoNotFit() {
+        val one = dayHead(nameRight = 150f, nameH = 29f, nameBase = 23f, rightW = 300f, rightH = 33f, rightBase = 26f, w = 935f, gap = 16f, minH = 32f)
+        assertEquals(false, one.stacked); assertEquals(one.nameBase, one.rightBase)
+        assertTrue(one.height >= 33f, "한 줄이면 높은 글자 높이 이상")
+        val big = dayHead(nameRight = 260f, nameH = 58f, nameBase = 46f, rightW = 700f, rightH = 66f, rightBase = 52f, w = 935f, gap = 32f, minH = 32f)
+        assertEquals(true, big.stacked)
+        assertEquals(58f + 66f, big.height); assertEquals(46f, big.nameBase); assertEquals(58f + 52f, big.rightBase, "값은 이름 아래 줄")
+    }
 }

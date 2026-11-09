@@ -53,6 +53,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
+import kotlin.math.ceil
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
@@ -135,8 +139,8 @@ private val BAR_EASE = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 /** 툴팁을 띄울 수 있는 표시 하나. */
 private class Hit(val rect: Rect, val tip: String)
 
-/** 폭에 맞춘 그림 한 장: 툴팁 자리와 그리기([draw]의 인자는 0~1 등장 진행). */
-private class Geo(val hits: List<Hit>, val draw: DrawScope.(Float) -> Unit)
+/** 폭에 맞춘 그림 한 장: 높이(px, 잰 글자 크기로 정함), 툴팁 자리, 그리기([draw]의 인자는 0~1 등장 진행). */
+private class Geo(val height: Float, val hits: List<Hit>, val draw: DrawScope.(Float) -> Unit)
 
 private fun motionOff(ctx: Context) = Settings.Global.getFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 
@@ -150,20 +154,30 @@ private fun rememberReveal(ms: Int): Animatable<Float, AnimationVector1D> {
 }
 
 /**
- * 그림 틀: 높이는 미리 알고, 폭이 정해지면 [build]로 그림을 만든다. 누르고 있는 동안 가까운 표시(좌우 32dp 여유)의 툴팁을 띄운다.
- * [sweep]이면 등장 때 왼쪽에서 그려지고, 아니면 진행 값을 [Geo.draw]가 쓴다(막대가 자람).
+ * 그림 틀: 폭이 정해지면 [build]로 그림을 만들고, 높이는 그림이 정한다(글자를 잰 값으로: 시스템 글자 크기를 키워도 줄·이름·값이 겹치지 않게).
+ * 누르고 있는 동안 가까운 표시(좌우 32dp 여유)의 툴팁을 띄운다. [sweep]이면 등장 때 왼쪽에서 그려지고, 아니면 진행 값을 [Geo.draw]가 쓴다(막대가 자람).
  */
 @Composable
-private fun ChartCanvas(height: Dp, desc: String, key: Any, revealMs: Int, sweep: Boolean, modifier: Modifier, build: (Size, Float, TextMeasurer, Palette) -> Geo) {
+private fun ChartCanvas(desc: String, key: Any, revealMs: Int, sweep: Boolean, modifier: Modifier, build: (Float, Float, TextMeasurer, Palette) -> Geo) {
     val p = LocalPalette.current
     val tm = rememberTextMeasurer()
-    val u = LocalDensity.current.density
+    val dens = LocalDensity.current
+    val u = dens.density
     val reveal = rememberReveal(revealMs)
-    var size by remember { mutableStateOf(IntSize.Zero) }
+    var width by remember { mutableStateOf(0) }
     var tip by remember { mutableStateOf<Hit?>(null) }
-    val g = remember(key, size, p, u) { if (size.width == 0) null else build(Size(size.width.toFloat(), size.height.toFloat()), u, tm, p) }
+    val geos = remember(key, p, dens) { HashMap<Int, Geo>() }   // 폭마다 한 장(재기·그리기가 같은 값을 쓴다)
+    fun geo(w: Int) = geos.getOrPut(w) { build(w.toFloat(), u, tm, p) }
+    val g = if (width == 0) null else geo(width)
     Canvas(
-        modifier.fillMaxWidth().height(height).onSizeChanged { size = it }.semantics { contentDescription = desc }
+        modifier.fillMaxWidth()
+            .layout { m, c ->
+                val w = if (c.hasBoundedWidth) c.maxWidth else c.minWidth
+                val h = ceil(geo(w).height).toInt().coerceIn(c.minHeight, c.maxHeight)
+                val pl = m.measure(Constraints.fixed(w, h))
+                layout(w, h) { pl.place(0, 0) }
+            }
+            .onSizeChanged { width = it.width }.semantics { contentDescription = desc }
             .pointerInput(g) {
                 val slop = 32.dp.toPx()
                 detectTapGestures(onPress = { o ->
@@ -194,10 +208,13 @@ private fun DrawScope.drawTip(h: Hit, tm: TextMeasurer, p: Palette) {
 private fun style(sizeSp: Float, weight: Int, color: Color) =
     TextStyle(fontFamily = AppFont, fontSize = sizeSp.sp, fontWeight = FontWeight(weight), color = color, fontFeatureSettings = "tnum")
 
-/** 글자 바닥선 [baseline]에 맞춰 그린다. [halo]면 바탕색 테를 먼저(지금 선이 글자를 긋지 않게). */
-private fun DrawScope.text(l: TextLayoutResult, x: Float, baseline: Float, halo: Color? = null) {
+/**
+ * 글자 바닥선 [baseline]에 맞춰 그린다. [halo]면 그 테(같은 글을 바탕색으로 잰 것)를 먼저(지금 선이 글자를 긋지 않게).
+ * 테는 바탕색을 글 안(span)에 넣어 따로 잰다: drawText의 color 덮어쓰기와 TextStyle 색만 바꾼 측정은 글자색 배치를 그대로 써 테가 글자색으로 그려졌다.
+ */
+private fun DrawScope.text(l: TextLayoutResult, x: Float, baseline: Float, halo: TextLayoutResult? = null) {
     val at = Offset(x, baseline - l.firstBaseline)
-    if (halo != null) drawText(l, color = halo, topLeft = at, drawStyle = Stroke(width = 4.dp.toPx()))
+    if (halo != null) drawText(halo, topLeft = at, drawStyle = Stroke(width = 4.dp.toPx()))
     drawText(l, topLeft = at)
 }
 
@@ -216,10 +233,17 @@ private const val DAY_K = DAY_FS / 13f
 private fun r(v: Float) = v.roundToInt().toFloat()
 private val DAY_TH = r(18 * DAY_K); private val DAY_HH = r(DAY_FS * 1.35f); private val DAY_PAD = r(7 * DAY_K)
 private val DAY_GAP = r(16 * DAY_K); private val DAY_TOP = r(DAY_FS * 0.4f)
-private val DAY_STEP = DAY_HH + DAY_PAD + DAY_TH + DAY_GAP
 
-/** 줄 수로 정해지는 높이(dp). */
-private fun dayHeight(n: Int) = DAY_TOP + (max(n, 1) - 1) * DAY_STEP + DAY_HH + DAY_PAD + DAY_TH + r(10 * DAY_K) + DAY_FS + 2
+/** 줄 머리 배치: 한 줄(이름 왼쪽·값 오른쪽)이 들어가면 한 줄, 아니면 이름 위·값 아래. 높이·바닥선은 잰 글자 크기로(px). */
+internal data class Head(val stacked: Boolean, val height: Float, val nameBase: Float, val rightBase: Float)
+
+internal fun dayHead(nameRight: Float, nameH: Float, nameBase: Float, rightW: Float, rightH: Float, rightBase: Float, w: Float, gap: Float, minH: Float): Head {
+    if (nameRight + gap + rightW <= w) {
+        val b = max(minH * 0.78f, max(nameBase, rightBase))
+        return Head(false, max(minH, b + max(nameH - nameBase, rightH - rightBase)), b, b)
+    }
+    return Head(true, nameH + rightH, nameBase, nameH + rightBase)
+}
 
 /**
  * 오늘 하루 띠(시안 Charts.day '오늘 하루 띠 다시 그림'): 줄마다 머리(왼쪽 색 점·이름, 오른쪽 부가·굵은 값) 아래 0~24시 회색 트랙.
@@ -227,37 +251,41 @@ private fun dayHeight(n: Int) = DAY_TOP + (max(n, 1) - 1) * DAY_STEP + DAY_HH + 
  */
 @Composable
 fun DayChart(data: DayChartData, modifier: Modifier = Modifier) = ChartCanvas(
-    dayHeight(data.lanes.size).dp, "오늘 하루: " + data.lanes.joinToString(", ") { "${it.name} ${it.value}" }, data, 900, sweep = true, modifier,
-) { sz, u, tm, p -> dayGeo(data, sz.width, u, tm, p) }
+    "오늘 하루: " + data.lanes.joinToString(", ") { "${it.name} ${it.value}" }, data, 900, sweep = true, modifier,
+) { w, u, tm, p -> dayGeo(data, w, u, tm, p) }
 
 private fun dayGeo(d: DayChartData, w: Float, u: Float, tm: TextMeasurer, p: Palette): Geo {
     val fs = DAY_FS * u; val k = DAY_K * u
-    val th = DAY_TH * u; val hh = DAY_HH * u; val pad = DAY_PAD * u
-    fun headY(i: Int) = DAY_TOP * u + i * DAY_STEP * u
-    fun trY(i: Int) = headY(i) + hh + pad
-    val n = d.lanes.size
-    val bot = trY(max(n, 1) - 1) + th
-    val hTotal = dayHeight(n) * u
+    val th = DAY_TH * u; val pad = DAY_PAD * u
+    val ink = p.textPrimary
+    val dot = max(4f * u, fs * 0.3f)
+    val nameX = dot * 2 + 6 * k
     fun x(m: Int) = w * m / 1440f
     val hits = mutableListOf<Hit>()
     val ops = mutableListOf<DrawScope.() -> Unit>()
-    val line = p.line; val ink = p.textPrimary
-    for (hr in listOf(6, 12, 18)) ops += { drawLine(line, Offset(x(hr * 60), trY(0)), Offset(x(hr * 60), bot), 1.dp.toPx()) }
-    val dot = max(4f * u, fs * 0.3f)
+    val back = mutableListOf<DrawScope.() -> Unit>()   // 시각 눈금 세로선(트랙 아래)
     val rx = 4 * k
-    d.lanes.forEachIndexed { i, l ->
-        val by = headY(i) + hh * 0.78f
+    val tracks = mutableListOf<Float>()
+    var top = DAY_TOP * u
+    d.lanes.forEach { l ->
         val c = p.data(l.color)
-        val name = tm.measure(l.name, style(DAY_FS, 600, ink))
-        val right = tm.measure(buildAnnotatedString {
-            l.sub?.let { withStyle(SpanStyle(color = p.textTertiary, fontWeight = FontWeight(500))) { append("$it  ") } }
-            withStyle(SpanStyle(color = ink, fontWeight = FontWeight(700), fontSize = 26.sp)) { append(l.value) }
-        }, style(DAY_FS, 500, p.textTertiary))
-        val y = trY(i)
+        val one = Constraints(maxWidth = w.toInt().coerceAtLeast(1))
+        // 색은 글 안(span)에 둔다: TextMeasurer는 색만 다른 글을 같은 배치로 돌려줘(캐시) 테가 글자색으로 그려진다
+        fun nameIn(c: Color) = tm.measure(buildAnnotatedString { withStyle(SpanStyle(color = c)) { append(l.name) } }, style(DAY_FS, 600, c), overflow = TextOverflow.Ellipsis, maxLines = 1, constraints = one)
+        fun rightIn(sub: Color, value: Color) = tm.measure(buildAnnotatedString {
+            l.sub?.let { withStyle(SpanStyle(color = sub, fontWeight = FontWeight(500))) { append("$it  ") } }
+            withStyle(SpanStyle(color = value, fontWeight = FontWeight(700), fontSize = 26.sp)) { append(l.value) }
+        }, style(DAY_FS, 500, sub), overflow = TextOverflow.Ellipsis, maxLines = 1, constraints = one)
+        val name = nameIn(ink); val right = rightIn(p.textTertiary, ink)
+        val nameHalo = nameIn(p.surface); val rightHalo = rightIn(p.surface, p.surface)   // 같은 글을 바탕색으로(테)
+        val hd = dayHead(nameX + name.size.width, name.size.height.toFloat(), name.firstBaseline, right.size.width.toFloat(), right.size.height.toFloat(), right.firstBaseline, w, 16 * u, DAY_HH * u)
+        val nb = top + hd.nameBase; val rb = top + hd.rightBase
+        val y = top + hd.height + pad
+        tracks += y
         ops += {
-            drawCircle(c, dot, Offset(dot, by - fs * 0.34f))
-            text(name, dot * 2 + 6 * k, by, p.surface)
-            text(right, w - right.size.width, by, p.surface)
+            drawCircle(c, dot, Offset(dot, nb - name.firstBaseline + name.size.height / 2f))
+            text(name, nameX, nb, nameHalo)
+            text(right, max(0f, w - right.size.width), rb, rightHalo)
             drawRoundRect(p.surfaceRaised, Offset(0f, y), Size(w, th), CornerRadius(th / 2))
         }
         val blockColor = if (l.color == DataColor.CAR) lerp(p.surfaceRaised, p.cCar, 0.22f) else c
@@ -278,28 +306,34 @@ private fun dayGeo(d: DayChartData, w: Float, u: Float, tm: TextMeasurer, p: Pal
             ops += { drawPath(path, p.cCar); drawPath(path, p.surface, style = Stroke(2.dp.toPx())) }
             hits += Hit(Rect(Offset(cx, cy), q), dayDiamondTip(l, m))
         }
+        top = y + th + DAY_GAP * u
     }
+    val first = tracks.firstOrNull() ?: (DAY_TOP * u + DAY_HH * u + pad)
+    val bot = (tracks.lastOrNull() ?: first) + th
+    for (hr in listOf(6, 12, 18)) back += { drawLine(p.line, Offset(x(hr * 60), first), Offset(x(hr * 60), bot), 1.dp.toPx()) }
     val now = d.nowMin
-    val ay = hTotal - 2 * u
     val nowLab = now?.let { tm.measure("지금 ${hhmm(it)}", style(DAY_FS, 700, ink)) }
+    val axis = (0..24 step 6).associateWith { tm.measure("${it}시", style(DAY_FS, 500, p.textTertiary)) }
+    val labTop = bot + 10 * k
+    val labH = max(axis.values.maxOf { it.size.height }, nowLab?.size?.height ?: 0).toFloat()
+    val labBase = labTop + max(axis.values.maxOf { it.firstBaseline }, nowLab?.firstBaseline ?: 0f)
     if (now != null && nowLab != null) {
         val nx = x(now)
         ops += {
-            d.lanes.indices.forEach { i -> drawRect(p.surface.copy(alpha = 0.6f), Offset(nx + 1, trY(i) - 1), Size(max(0f, w - nx - 1), th + 2)) }
-            drawLine(ink, Offset(nx, trY(0) - 3 * k), Offset(nx, bot + 5 * k), 1.5f * u)
+            tracks.forEach { ty -> drawRect(p.surface.copy(alpha = 0.6f), Offset(nx + 1, ty - 1), Size(max(0f, w - nx - 1), th + 2)) }
+            drawLine(ink, Offset(nx, first - 3 * k), Offset(nx, bot + 5 * k), 1.5f * u)
         }
     }
     val nowHalf = (nowLab?.size?.width ?: 0) / 2f + 2 * u
     val nowX = now?.let { min(w - nowHalf, max(nowHalf, x(it))) }
-    for (hr in listOf(0, 6, 12, 18, 24)) {
-        val t = tm.measure("${hr}시", style(DAY_FS, 500, p.textTertiary))
+    axis.forEach { (hr, t) ->
         val tx = x(hr * 60); val tw = t.size.width.toFloat()
         val lo = when (hr) { 0 -> tx; 24 -> tx - tw; else -> tx - tw / 2 }
-        if (nowX != null && lo + tw > nowX - nowHalf && lo < nowX + nowHalf) continue
-        ops += { text(t, lo, ay) }
+        if (nowX != null && lo + tw > nowX - nowHalf && lo < nowX + nowHalf) return@forEach
+        ops += { text(t, lo, labBase) }
     }
-    if (nowLab != null && nowX != null) ops += { text(nowLab, nowX - nowLab.size.width / 2f, ay) }
-    return Geo(hits) { ops.forEach { it() } }
+    if (nowLab != null && nowX != null) ops += { text(nowLab, nowX - nowLab.size.width / 2f, labBase) }
+    return Geo(labTop + labH + 2 * u, hits) { back.forEach { it() }; ops.forEach { it() } }
 }
 
 // ── 에피소드 띠(소리 줄·표시 + 축 밖 결과) ──
@@ -307,44 +341,47 @@ private fun dayGeo(d: DayChartData, w: Float, u: Float, tm: TextMeasurer, p: Pal
 private const val EPI_FS = 24f
 private const val EPI_LEAD = 96f
 private const val EPI_LH = 64f
-private const val EPI_H = EPI_LH + 18 + (EPI_FS + 6) * 2
 
 /** 소리 줄 하나 + 시각을 아는 표시. 울음 줄은 리포트에 울음 구간이 없어 그리지 않는다(폰과 같음). 결과는 띠 아래 알약으로. */
 @Composable
 internal fun EpisodeChart(data: EpisodeChartData, modifier: Modifier = Modifier) = Column(modifier.fillMaxWidth()) {
     ChartCanvas(
-        EPI_H.dp, "에피소드: " + (data.sounds.mapNotNull { it.name } + data.marks.map { it.label } + data.outcomes).joinToString(", "), data, 900, sweep = true, Modifier,
-    ) { sz, u, tm, p -> episodeGeo(data, sz.width, u, tm, p) }
+        "에피소드: " + (data.sounds.mapNotNull { it.name } + data.marks.map { it.label } + data.outcomes).joinToString(", "), data, 900, sweep = true, Modifier,
+    ) { w, u, tm, p -> episodeGeo(data, w, u, tm, p) }
     if (data.outcomes.isNotEmpty()) FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         data.outcomes.forEach { Pill(it) }
     }
 }
 
 private fun episodeGeo(d: EpisodeChartData, w: Float, u: Float, tm: TextMeasurer, p: Palette): Geo {
-    val fs = EPI_FS * u; val lead = EPI_LEAD * u; val right = w - 6 * u; val lh = EPI_LH * u; val bh = lh - 8 * u
+    val laneSound = tm.measure("소리", style(EPI_FS + 1, 600, p.textSecondary))
+    // 줄 이름 칸·줄 높이는 잰 글자로(글자 크기를 키우면 넓어지고 높아진다)
+    val lead = max(EPI_LEAD * u, laneSound.size.width + 12 * u); val right = w - 6 * u
+    val lh = max(EPI_LH * u, laneSound.size.height + 12 * u); val bh = lh - 8 * u
     val total = max(d.totalS, 1)
     fun x(s: Int) = lead + (right - lead) * s / total
-    val my = bh / 2 + 2 * u + fs * 0.36f
+    fun mid(l: TextLayoutResult) = 2 * u + bh / 2 - l.size.height / 2f + l.firstBaseline   // 줄 가운데에 오는 바닥선
     val hits = mutableListOf<Hit>()
     val ops = mutableListOf<DrawScope.() -> Unit>()
-    val laneSound = tm.measure("소리", style(EPI_FS + 1, 600, p.textSecondary))
-    ops += { text(laneSound, 0f, my) }
+    ops += { text(laneSound, 0f, mid(laneSound)) }
     d.sounds.forEach { s ->
         val rect = Rect(x(s.from), 2 * u, x(s.from) + max(4 * u, x(s.to) - x(s.from) - 2 * u), 2 * u + bh)
         val gap = s.name == null
-        val inner = s.name?.takeIf { rect.width > fs * 4.6f }?.let { tm.measure(it, style(EPI_FS, 600, p.surface)) }
+        val inner = s.name?.let { tm.measure(it, style(EPI_FS, 600, p.surface)) }?.takeIf { it.size.width + 16 * u <= rect.width && it.size.height <= bh }   // 칸에 들어갈 때만
         ops += {
             drawRoundRect(if (gap) p.surfaceRaised else p.textPrimary, rect.topLeft, rect.size, CornerRadius(4 * u))
-            if (inner != null) text(inner, rect.left + 8 * u, my)
+            if (inner != null) text(inner, rect.left + 8 * u, mid(inner))
         }
         hits += Hit(rect, soundTip(s))
     }
+    val labels = d.marks.map { tm.measure(it.label, style(EPI_FS, 600, p.textSecondary)) }
+    val rowH = labels.maxOfOrNull { it.size.height }?.toFloat() ?: 0f
     d.marks.forEachIndexed { i, m ->
         val mx = min(right, x(m.at))
-        val l = tm.measure(m.label, style(EPI_FS, 600, p.textSecondary))
+        val l = labels[i]
         val lw = l.size.width.toFloat()
         val lx = when (i) { 0 -> mx; d.marks.lastIndex -> mx - lw; else -> mx - lw / 2 }.coerceIn(0f, max(0f, w - lw))
-        val ly = lh + 10 * u + fs + (i % 2) * (fs + 6 * u)
+        val ly = lh + 10 * u + (i % 2) * (rowH + 6 * u) + l.firstBaseline
         ops += {
             drawLine(p.ink(18), Offset(mx, 0f), Offset(mx, lh - 2 * u), 1.dp.toPx())
             drawCircle(p.textPrimary, 4 * u, Offset(mx, lh + 4 * u))
@@ -352,7 +389,8 @@ private fun episodeGeo(d: EpisodeChartData, w: Float, u: Float, tm: TextMeasurer
             text(l, lx, ly)
         }
     }
-    return Geo(hits) { ops.forEach { it() } }
+    val rows = if (d.marks.size > 1) 2 else d.marks.size
+    return Geo(lh + 10 * u + rows * rowH + (rows - 1).coerceAtLeast(0) * 6 * u + 4 * u, hits) { ops.forEach { it() } }
 }
 
 // ── 평소 대비 조향(막대 셋, 울음 중만 주황) ──
@@ -361,32 +399,40 @@ private const val STEER_H = 280f
 
 @Composable
 internal fun SteerChart(bars: List<SteerBar>, modifier: Modifier = Modifier) = ChartCanvas(
-    STEER_H.dp, "1분당 큰 조향 보정: " + bars.joinToString(", ") { "${it.label} ${steerValue(it.perMin)}번" }, bars, 600 + 40 * (bars.size - 1), sweep = false, modifier,
-) { sz, u, tm, p -> steerGeo(bars, sz.width, u, tm, p) }
+    "1분당 큰 조향 보정: " + bars.joinToString(", ") { "${it.label} ${steerValue(it.perMin)}번" }, bars, 600 + 40 * (bars.size - 1), sweep = false, modifier,
+) { w, u, tm, p -> steerGeo(bars, w, u, tm, p) }
 
 private fun steerGeo(bars: List<SteerBar>, w: Float, u: Float, tm: TextMeasurer, p: Palette): Geo {
-    val fs = EPI_FS * u; val h = STEER_H * u; val bw = 24 * u
-    val top = 14 * u + fs * 1.6f; val base = h - fs - 12 * u
-    val maxV = (bars.maxOfOrNull { it.perMin } ?: 0.0).takeIf { it > 0 }?.times(1.1) ?: 1.0
+    val bw = 24 * u
     val slot = w / max(bars.size, 1)
+    val fit = Constraints(maxWidth = (slot - 8 * u).toInt().coerceAtLeast(1))   // 이름이 칸보다 길면 말줄임(이웃 칸과 겹치지 않게)
+    val labels = bars.map { b ->
+        tm.measure(steerValue(b.perMin), style(EPI_FS + 1, if (b.hot) 700 else 600, if (b.hot) p.textPrimary else p.textTertiary)) to
+            tm.measure(b.label, style(EPI_FS, if (b.hot) 700 else 500, if (b.hot) p.textPrimary else p.textTertiary), overflow = TextOverflow.Ellipsis, maxLines = 1, constraints = fit)
+    }
+    // 위·아래 글자 자리는 잰 높이로, 막대 자리는 최소 120dp
+    val valueH = labels.maxOfOrNull { it.first.size.height }?.toFloat() ?: 0f
+    val labelH = labels.maxOfOrNull { it.second.size.height }?.toFloat() ?: 0f
+    val top = 10 * u + valueH + 4 * u
+    val h = max(STEER_H * u, top + 120 * u + 10 * u + labelH)
+    val base = h - labelH - 10 * u
+    val maxV = (bars.maxOfOrNull { it.perMin } ?: 0.0).takeIf { it > 0 }?.times(1.1) ?: 1.0
     val totalMs = 600f + 40f * (bars.size - 1)
     val hits = mutableListOf<Hit>()
     val items = bars.mapIndexed { i, b ->
         val cx = slot * i + slot / 2
         val yy = base - ((base - top) * b.perMin / maxV).toFloat()
         hits += Hit(Rect(cx - slot / 2, top - 10 * u, cx + slot / 2, base), "${b.label} · 1분당 ${steerValue(b.perMin)}번")
-        val v = tm.measure(steerValue(b.perMin), style(EPI_FS + 1, if (b.hot) 700 else 600, if (b.hot) p.textPrimary else p.textTertiary))
-        val t = tm.measure(b.label, style(EPI_FS, if (b.hot) 700 else 500, if (b.hot) p.textPrimary else p.textTertiary))
-        Triple(cx, yy, v to t)
+        Triple(cx, yy, labels[i])
     }
-    return Geo(hits) { k ->
+    return Geo(h, hits) { k ->
         drawLine(p.line, Offset(0f, base), Offset(w, base), 1.dp.toPx())
-        items.forEachIndexed { i, (cx, yy, labels) ->
+        items.forEachIndexed { i, (cx, yy, l) ->
             val e = BAR_EASE.transform(((k * totalMs - 40f * i) / 600f).coerceIn(0f, 1f))
             val top1 = base - (base - yy) * e
             drawPath(barPath(cx - bw / 2, cx + bw / 2, top1, base, 4 * u), if (bars[i].hot) p.cCar else p.ink(13))
-            text(labels.first, cx - labels.first.size.width / 2f, top1 - 7 * u)
-            text(labels.second, cx - labels.second.size.width / 2f, h - 5 * u)
+            text(l.first, cx - l.first.size.width / 2f, top1 - 7 * u)
+            text(l.second, cx - l.second.size.width / 2f, base + 6 * u + l.second.firstBaseline)
         }
     }
 }
@@ -398,13 +444,18 @@ internal fun StatRow(stats: List<Stat>, modifier: Modifier = Modifier) = android
     val p = LocalPalette.current
     // 칸이 좁으면(분할 840·628) 두 칸씩 두 줄로: 값('10분 30초')이 잘리지 않게
     val cols = if (maxWidth < 760.dp) 2 else 4
-    val cell = (maxWidth - 20.dp * (cols - 1)) / cols
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        stats.forEach { s ->
-            Column(Modifier.width(cell), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(s.label, style = CarType.label, color = p.textTertiary)
-                Text(s.value, style = style(40f, 700, p.textPrimary).copy(lineHeight = 52.sp), maxLines = 2)
-                s.sub?.let { Text(it, style = CarType.label, color = p.textTertiary) }
+    // 칸 폭은 나눠서 계산하지 않고 weight로(픽셀 반올림 합이 줄 폭을 넘어 마지막 칸이 내려가지 않게). 모자란 칸은 빈 자리
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        stats.chunked(cols).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                row.forEach { s ->
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(s.label, style = CarType.label, color = p.textTertiary)
+                        Text(s.value, style = style(40f, 700, p.textPrimary).copy(lineHeight = 52.sp), maxLines = 2)
+                        s.sub?.let { Text(it, style = CarType.label, color = p.textTertiary) }
+                    }
+                }
+                repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

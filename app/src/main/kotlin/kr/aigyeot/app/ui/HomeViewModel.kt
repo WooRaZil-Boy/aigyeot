@@ -401,13 +401,13 @@ private fun symbolOf(k: MethodKind) = when (k) { MethodKind.LULLABY -> Symbol.LU
 internal fun dayChart(s: EngineState?, car: List<CarSpan>, now: Long, zone: java.time.ZoneId): DayChartData? {
     val day0 = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
     fun min(t: Long) = ((t - day0) / 60_000).toInt().coerceIn(0, 1440)
-    fun today(t: Long?) = t != null && t in day0..now
+    fun today(t: Long?) = t != null && t >= day0 && t < day0 + 86_400_000L   // 오늘 날짜면(시계 눈금 now는 30초마다라 방금 기록이 그보다 늦을 수 있다)
     val care = s?.care?.takeIf { it.freshAt(now) && today(it.asOf) }
     val lanes = buildList {
         if (care?.sleepDiaperEnabled == true) {
             val blocks = listOfNotNull(
                 care.lastSleepStartAt?.let { a -> care.lastSleepEndAt?.takeIf { e -> e >= a && today(e) }?.let { e -> min(maxOf(a, day0))..min(e) } },
-                care.sleepingSince?.let { a -> min(maxOf(a, day0))..min(minOf(now, care.asOf)) },   // 잠든 중은 요약 계산 시각(as_of)까지만: 합계(todaySleepMin)와 같은 기준(연결 계약 돌봄 요약)
+                care.sleepingSince?.let { a -> min(maxOf(a, day0))..min(maxOf(a, care.asOf)) },   // 잠든 중은 요약 계산 시각(as_of)까지만: 합계(todaySleepMin)와 같은 기준(연결 계약 돌봄 요약). 끝이 시작보다 앞서지 않게
             )
             care.todaySleepMin?.let { add(DayLane("잠", DataColor.SLEEP, null, TimeText.duration(it * 60_000L), blocks)) }
         }

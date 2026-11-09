@@ -245,6 +245,9 @@ class HomeUiTest {
         // 잠든 중 띠는 요약 계산 시각(as_of)까지만(합계와 같은 기준). 지금(17:00)까지 늘이지 않는다
         val asleep = care.copy(asOf = day0 + 960 * 60_000, sleepingSince = day0 + 900 * 60_000)
         assertEquals(listOf(60..180, 900..960), ui(fresh().copy(care = asleep)).day!!.lanes[0].blocks)
+        // 눈금 now(17:00)보다 늦게 계산한 요약(as_of 17:00:10)도 띠 끝이 시작보다 앞서지 않는다
+        val late = care.copy(asOf = T0 + 10_000, sleepingSince = T0)
+        assertTrue(ui(fresh().copy(care = late)).day!!.lanes[0].blocks.all { it.first <= it.last })
     }
 
     @Test fun episodeFlow_recryOnlyBeforeAutoSecond_andSecondSuccessCounts() {
