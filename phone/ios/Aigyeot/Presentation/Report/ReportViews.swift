@@ -368,18 +368,18 @@ func stopText(_ s: StopInfo) -> String {
     return why + " · " + t
 }
 
-/// 차 동작 한 줄의 이름(안드로이드와 같은 글자).
+/// 차가 대신 한 일(car_actions) 이름. 문구표 7.1 report.actions, 안드로이드 `actionText`와 같은 글자.
 func actionText(_ a: CarActionKind) -> String {
     switch a {
     case .rearPlayback: return "뒷좌석 재생"
-    case .defaultZonePlayback: return "기본 존 재생"
-    case .seatHeaterOff: return "시트 열선 끔"
+    case .defaultZonePlayback: return "앞에서도 들리게 재생"
+    case .seatHeaterOff: return "뒷좌석 열선 끔"   // 아이 자리(2열)만 끈다
     case .rearWindowLock: return "뒷창 잠금"
-    case .cabinCool: return "실내 냉방"
+    case .cabinCool: return "실내 온도 낮춤"   // 성공한 공조 줄만 센다(C355)
     case .readingLightOff: return "독서등 끔"
     case .ambientDim: return "조명 낮춤"
     case .waypointAdded: return "경유지 추가"
     case .arrivalNotice: return "도착 안내"
-    case .guardianAlert: return "보호자 알림"
+    case .guardianAlert: return "다른 보호자 알림"
     }
 }
