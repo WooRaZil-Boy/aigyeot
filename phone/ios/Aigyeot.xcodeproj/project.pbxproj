@@ -1155,7 +1155,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = kr.aigyeot.phone;
-				RELAY_BASE_URL = "https://aigyeot-relay.workers.dev";
+				RELAY_BASE_URL = "https://aigyeot-relay.byuncorry.workers.dev";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};

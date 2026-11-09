@@ -36,14 +36,14 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
       configs:
-        # 중계 주소. 시뮬레이터의 로컬 중계는 localhost:8787(계약 0장). release 주소는 배포 뒤에 맞춘다(미정).
+        # 중계 주소. 시뮬레이터의 로컬 중계는 localhost:8787(계약 0장). release는 배포한 중계(연결 계약 L98, 차·안드로이드와 같은 글자).
         Debug:
           RELAY_BASE_URL: "http://localhost:8787"
           # Debug만 로컬 평문 HTTP를 허용한다(아래 스크립트가 ATS 항목을 더한 사본을 만든다). Release는 HTTPS·WSS만.
           INFOPLIST_FILE: "$(DERIVED_FILE_DIR)/Info-Debug.plist"
           ENABLE_USER_SCRIPT_SANDBOXING: NO
         Release:
-          RELAY_BASE_URL: "https://aigyeot-relay.workers.dev"
+          RELAY_BASE_URL: "https://aigyeot-relay.byuncorry.workers.dev"
     preBuildScripts:
       - name: Debug용 Info.plist(로컬 평문 허용)
         basedOnDependencyAnalysis: false
