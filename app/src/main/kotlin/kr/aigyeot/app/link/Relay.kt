@@ -38,10 +38,10 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-/** 중계 주소(contracts-link 0장). 한 곳에만 둔다. release(배포 중계) 주소는 사용자가 정하면 넣는다. */
+/** 중계 주소(contracts-link 0장). 한 곳에만 둔다. release는 배포한 중계(L98·L101), 폰 두 앱과 같은 글자. */
 internal object RelayAddress {
     const val DEBUG = "http://10.0.2.2:8787"   // 에뮬레이터에서 맥의 wrangler dev
-    const val RELEASE = ""                     // 아직 정하지 않음. 비어 있으면 모든 요청이 오프라인으로 끝난다
+    const val RELEASE = "https://aigyeot-relay.byuncorry.workers.dev"   // HTTPS·WSS만(0장 '전송')
     fun of(ctx: Context) = if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) DEBUG else RELEASE
 }
 
