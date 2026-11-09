@@ -1,9 +1,21 @@
+import java.util.Properties
+
 // 차 앱. 여러 갈래가 함께 쓰는 공용 파일이라 조율 담당만 고친다.
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+// release 서명: 루트 local.properties(공개 안 함)의 aigyeot.release.storeFile·storePassword·keyAlias·keyPassword.
+// 넷이 모두 있을 때만 쓰고, 하나라도 없으면 지금처럼 서명 없는 release를 만든다(빌드가 깨지지 않게). 키·비밀번호는 저장소에 두지 않는다.
+val releaseKey: Map<String, String>? = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.reader(Charsets.UTF_8)?.use { load(it) }
+}.let { p ->
+    listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+        .associateWith { p.getProperty("aigyeot.release.$it").orEmpty() }   // 비밀번호 앞뒤 공백도 비밀번호라 trim하지 않는다. 단 Properties 형식은 `=` 뒤 앞 공백을 지우므로 공백으로 시작하는 비밀번호는 `\ `로 적는다
+        .takeIf { m -> m.values.all { it.isNotEmpty() } }   // 공백만으로 된 비밀번호도 쓴다(isNotBlank면 서명이 조용히 빠짐)
 }
 
 android {
@@ -16,6 +28,18 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1"
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }   // Pleos 에뮬레이터(arm64·x86_64)와 실차(arm64)만. APK 크기를 줄인다
+    }
+    signingConfigs {
+        if (releaseKey != null) create("release") {
+            storeFile = rootProject.file(releaseKey.getValue("storeFile")) // 절대 경로 또는 저장소 루트 기준
+            storePassword = releaseKey.getValue("storePassword")
+            keyAlias = releaseKey.getValue("keyAlias")
+            keyPassword = releaseKey.getValue("keyPassword")
+        }
+    }
+    buildTypes {
+        release { if (releaseKey != null) signingConfig = signingConfigs.getByName("release") }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     buildFeatures { compose = true }
