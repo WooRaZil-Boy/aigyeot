@@ -69,6 +69,13 @@ class NumberCheckTest {
         listOf("백색소음이 도움이 될 수 있어요.", "다음 쉼터까지 약 km 정도예요.", "아기가 우는 이유는 알 수 없지만 불편할 수 있어요.", "OK, 알겠어요.").forEach { assertTrue(noLeak(it), it) }
     }
 
+    // C377: 말하는 분 값 하나. S06 elapsed·S11 drove(hm)와 ④ 문장이 같은 함수를 지난다
+    @Test fun c377_spokenMinute_boundaries() {
+        assertEquals(listOf("0분", "59분", "1시간", "1시간 1분", "2시간", "17시간 54분"), listOf(0, 59, 60, 61, 120, 1074).map(::spokenMin))
+        assertEquals("0분", spokenMin(-5))
+        for (m in listOf(0L, 59L, 60L, 61L, 1074L)) assertEquals(spokenMin(m), hm(m * 60_000 + 59_999), "hm=$m")   // 초는 내림
+    }
+
     // ---- C108 상태 단정 검사 ----
     @Test fun stateClaim_listedExpressions_caught() {
         listOf(

@@ -31,7 +31,7 @@ class S58DriveTest {
         sim.ev(Tick(T0 + 120 * MIN))
         assertEquals(Phase.ATTEMPT, sim.ses.phase)               // 재생 그대로
         val ask = sim.step<Ask>().single()
-        assertEquals(Sid.S11, ask.sid); assertEquals("2시간 0분", ask.vars["drove"])
+        assertEquals(Sid.S11, ask.sid); assertEquals("2시간", ask.vars["drove"])
         assertTrue(sim.all<SendToPhone>().isEmpty())
         assertFalse(sim.ses.longDriveOffered)                    // 말하는 중: 아직 아니다(C84)
         sim.done()

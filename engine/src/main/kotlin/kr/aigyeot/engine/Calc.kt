@@ -215,10 +215,13 @@ fun steer(
 
 // ---- 문장 채울 값(C29) ----
 internal fun km(d: Double) = d.roundToInt().toString()
-internal fun hm(ms: Long): String {
-    val m = ms.coerceAtLeast(0) / 60_000
-    return if (m >= 60) "${m / 60}시간 ${m % 60}분" else "${m}분"
+/** 말하는 분 값 하나(C377): 60분 미만 "n분", 이상 "h시간 m분", 정각은 "h시간". 문장 속 모든 경과·분 값이 이 함수를 지난다(차 문장 S06·S11·④). */
+fun spokenMin(min: Long): String {
+    val m = min.coerceAtLeast(0)
+    return if (m < 60) "${m}분" else "${m / 60}시간" + if (m % 60 > 0) " ${m % 60}분" else ""
 }
+fun spokenMin(min: Int): String = spokenMin(min.toLong())
+internal fun hm(ms: Long): String = spokenMin(ms / 60_000)
 internal fun methodName(m: Method) = when (m.kind) {
     MethodKind.WHITE_NOISE -> "백색소음"
     MethodKind.WOMB -> "뱃속 소리"

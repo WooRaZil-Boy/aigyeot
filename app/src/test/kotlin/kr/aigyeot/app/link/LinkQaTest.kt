@@ -31,6 +31,7 @@ import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.PlaybackStarted
 import kr.aigyeot.engine.Profile
 import kr.aigyeot.engine.Qa
+import kr.aigyeot.engine.spokenMin
 import kr.aigyeot.engine.QaReply
 import kr.aigyeot.engine.RearDoor
 import kr.aigyeot.engine.RestCandidate
@@ -266,8 +267,8 @@ class LinkQaTest : LinkKit() {
 
     // C377: 말하는 분 값은 60분 이상이면 시간·분으로
     @Test fun c377_spokenDuration() {
-        assertEquals("0분", dur(0)); assertEquals("59분", dur(59)); assertEquals("1시간", dur(60)); assertEquals("1시간 1분", dur(61))
-        assertEquals("17시간 54분", dur(1074)); assertEquals("2시간", dur(120))
+        assertEquals("0분", spokenMin(0)); assertEquals("59분", spokenMin(59)); assertEquals("1시간", spokenMin(60)); assertEquals("1시간 1분", spokenMin(61))
+        assertEquals("17시간 54분", spokenMin(1074)); assertEquals("2시간", spokenMin(120))
         assertEquals("마지막 수유 시작부터 17시간 54분 지났어요.", topicSentence("feeding", sleepAll().copy(feedsToday = null, feeding = LlmFeeding(1074, 180))))
     }
 

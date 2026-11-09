@@ -21,6 +21,7 @@ import kr.aigyeot.engine.noStateClaim
 import kr.aigyeot.engine.firstSentences
 import kr.aigyeot.engine.noDigits
 import kr.aigyeot.engine.noLeak
+import kr.aigyeot.engine.spokenMin
 import kr.aigyeot.engine.readable
 import kr.aigyeot.engine.pickRest
 import kr.aigyeot.shared.LlmCry
@@ -189,9 +190,6 @@ internal fun stateJson(s: LlmState): JsonElement = ProtocolJson.encodeToJsonElem
 private val FACT_TOPICS = setOf("feeding", "sleep", "diaper", "cry", "carseat", "cabin_temp", "next_rest", "sound_stats")
 private val TOPICS = FACT_TOPICS + setOf("why", "unknown")
 
-/** 말하는 분 값(C377): 60분 미만은 "n분", 이상은 "h시간 m분"(m이 0이면 "h시간"). 상태값·칸은 분 숫자 그대로다. */
-internal fun dur(min: Int): String = if (min < 60) "${min}분" else "${min / 60}시간" + ((min % 60).takeIf { it > 0 }?.let { " ${it}분" } ?: "")
-
 /** 값 조각을 ", "로 잇고 마지막 조각만 끝맺는다. 조각은 (이어질 때 꼴, 끝날 때 꼴). 비면 null. */
 private fun chain(parts: List<Pair<String, String>>): String? =
     if (parts.isEmpty()) null else parts.dropLast(1).joinToString("") { it.first + ", " } + parts.last().second
@@ -203,7 +201,7 @@ private fun chain(parts: List<Pair<String, String>>): String? =
 private fun sentence(topic: String, s: LlmState, p: Params): Pair<String, Boolean> = when (topic) {
     "feeding" -> {
         val parts = listOfNotNull(
-            s.feeding?.let { "마지막 수유 시작부터 ${dur(it.elapsedMin)} 지났고" to "마지막 수유 시작부터 ${dur(it.elapsedMin)} 지났어요" },
+            s.feeding?.let { "마지막 수유 시작부터 ${spokenMin(it.elapsedMin)} 지났고" to "마지막 수유 시작부터 ${spokenMin(it.elapsedMin)} 지났어요" },
             s.feedsToday?.takeIf { it > 0 }?.let { "기록상 오늘 ${it}번 먹었고" to "기록상 오늘 ${it}번 먹었어요" },   // 0번은 뺀다(C179)
         )
         // 횟수가 null이고 경과도 없으면 확인할 수 없다. 유효한 요약의 0이면 기록 없음이고 돌봄 기록을 쓴 것으로 친다(C186)
@@ -213,11 +211,11 @@ private fun sentence(topic: String, s: LlmState, p: Params): Pair<String, Boolea
         val z = s.sleep
         val out = mutableListOf<Pair<String, String>>()
         when {
-            z?.sleepingSinceMin != null -> out += "기록상 ${dur(z.sleepingSinceMin!!)} 전에 시작한 잠이 아직 끝나지 않았고" to "기록상 ${dur(z.sleepingSinceMin!!)} 전에 시작한 잠이 아직 끝나지 않았어요"
-            z?.wokeMinAgo != null -> out += "기록상 ${dur(z.wokeMinAgo!!)} 전에 잠이 끝났고" to "기록상 ${dur(z.wokeMinAgo!!)} 전에 잠이 끝났어요"
+            z?.sleepingSinceMin != null -> out += "기록상 ${spokenMin(z.sleepingSinceMin!!)} 전에 시작한 잠이 아직 끝나지 않았고" to "기록상 ${spokenMin(z.sleepingSinceMin!!)} 전에 시작한 잠이 아직 끝나지 않았어요"
+            z?.wokeMinAgo != null -> out += "기록상 ${spokenMin(z.wokeMinAgo!!)} 전에 잠이 끝났고" to "기록상 ${spokenMin(z.wokeMinAgo!!)} 전에 잠이 끝났어요"
         }
-        if (z != null && z.sleepingSinceMin == null && z.wokeMinAgo != null) z.lastSleepMin?.let { out += "마지막 잠은 ${dur(it)}" to "마지막 잠은 ${dur(it)}이에요" }
-        z?.todaySleepMin?.takeIf { it > 0 }?.let { out += if (out.isEmpty()) "오늘 잠은 모두 ${dur(it)}" to "오늘 잠은 모두 ${dur(it)}이에요" else "오늘은 모두 ${dur(it)}" to "오늘은 모두 ${dur(it)}이에요" }
+        if (z != null && z.sleepingSinceMin == null && z.wokeMinAgo != null) z.lastSleepMin?.let { out += "마지막 잠은 ${spokenMin(it)}" to "마지막 잠은 ${spokenMin(it)}이에요" }
+        z?.todaySleepMin?.takeIf { it > 0 }?.let { out += if (out.isEmpty()) "오늘 잠은 모두 ${spokenMin(it)}" to "오늘 잠은 모두 ${spokenMin(it)}이에요" else "오늘은 모두 ${spokenMin(it)}" to "오늘은 모두 ${spokenMin(it)}이에요" }
         s.lastNightWakeups?.takeIf { it > 0 }?.let { out += if (out.isEmpty()) "지난밤에 ${it}번 깼고" to "지난밤에 ${it}번 깼어요" else "지난밤에는 ${it}번 깼고" to "지난밤에는 ${it}번 깼어요" }
         val sleepKnown = z?.todaySleepMin != null || s.lastNightWakeups != null   // 값이 모두 null이면(날짜 바뀜·끔) 0이 아니라 모르는 것(C186)
         // 돌봄 주제 문장은 늘 '기록상'으로 시작한다. 값이 모두 0이면 기록 없음(C179), 칸 자체가 null이면 확인할 수 없음(C186)
@@ -226,7 +224,7 @@ private fun sentence(topic: String, s: LlmState, p: Params): Pair<String, Boolea
     "diaper" -> {
         val d = s.diaper
         val parts = listOfNotNull(
-            d?.minAgo?.let { "기록상 마지막 기저귀는 ${dur(it)} 전이고" to "기록상 마지막 기저귀는 ${dur(it)} 전이에요" },
+            d?.minAgo?.let { "기록상 마지막 기저귀는 ${spokenMin(it)} 전이고" to "기록상 마지막 기저귀는 ${spokenMin(it)} 전이에요" },
             d?.todayCount?.takeIf { it > 0 }?.let { if (d.minAgo == null) "기록상 오늘 기저귀는 ${it}번이고" to "기록상 오늘 기저귀는 ${it}번이에요" else "오늘 ${it}번이고" to "오늘 ${it}번이에요" },
         )
         (chain(parts)?.plus(".") ?: if (d?.todayCount == null) "기저귀 기록을 확인할 수 없어요." else "기록상 오늘 기저귀 기록이 없어요.") to (parts.isNotEmpty() || d?.todayCount != null)
@@ -235,7 +233,7 @@ private fun sentence(topic: String, s: LlmState, p: Params): Pair<String, Boolea
 }
 
 /** 기록이 60분보다 오래됐으면 문장 속 첫 '기록상'을 "{n}분 전 기록 기준으로"로 바꾼다(C179). */
-private fun asOf(t: String, s: LlmState) = s.careAsOfMinAgo?.takeIf { it > 60 }?.let { t.replaceFirst("기록상", "${dur(it)} 전 기록 기준으로") } ?: t
+private fun asOf(t: String, s: LlmState) = s.careAsOfMinAgo?.takeIf { it > 60 }?.let { t.replaceFirst("기록상", "${spokenMin(it)} 전 기록 기준으로") } ?: t
 
 /** 주제 문장 전체(8.8 '주제 문장' 표). 기록이 60분보다 오래됐으면 문장 속 첫 '기록상'을 시점으로 바꾼다(L61, C179, C197). */
 internal fun topicSentence(topic: String, s: LlmState, p: Params = Params()): String = asOf(sentence(topic, s, p).first, s)
@@ -258,9 +256,9 @@ private fun normQuestion(q: String) = readable(q).replace("잠깐", "").replace(
 
 private fun plainTopic(topic: String, s: LlmState, p: Params): Pair<String, Boolean> = when (topic) {
     "cry" -> if (s.carseatMin == null) "지금은 울음을 확인할 수 없어요." to false  // C329: 세션이 없으면 이번 주행 횟수가 없다(why의 C234와 같은 기준)
-    else ((if (s.cry.unavailable) "지금은 울음을 확인할 수 없고, " else s.cry.currentMin?.let { "지금 ${dur(it)}째 울고 있고, " } ?: if (s.cry.confirming) "울음이 그쳤는지 확인하고 있고, " else "지금은 울음이 들리지 않고, ") +
+    else ((if (s.cry.unavailable) "지금은 울음을 확인할 수 없고, " else s.cry.currentMin?.let { "지금 ${spokenMin(it)}째 울고 있고, " } ?: if (s.cry.confirming) "울음이 그쳤는지 확인하고 있고, " else "지금은 울음이 들리지 않고, ") +
         "이번 주행에서 ${s.cry.countThisDrive}번 울었어요.") to false
-    "carseat" -> (s.carseatMin?.let { "카시트에 ${dur(it)}째예요." } ?: "카시트 시간은 출발한 뒤부터 재요.") to false
+    "carseat" -> (s.carseatMin?.let { "카시트에 ${spokenMin(it)}째예요." } ?: "카시트 시간은 출발한 뒤부터 재요.") to false
     "cabin_temp" -> (s.cabinTemp?.let { "실내 온도는 ${num(it)}도예요." } ?: "실내 온도를 알 수 없어요.") to false
     "next_rest" -> (s.nextRest?.let {
         "${it.name}까지 ${num(it.distanceKm)}km이고 수유실이 ${if (it.nursingRoom) "있어요" else "없어요"}."
@@ -272,12 +270,12 @@ private fun plainTopic(topic: String, s: LlmState, p: Params): Pair<String, Bool
     "why" -> {
         val woke = s.sleep?.wokeMinAgo
         val seat = when {   // C234: 세션이 없으면 카시트 부분을 뺀다
-            s.carseatMin != null && woke != null -> "카시트에 ${dur(s.carseatMin!!)}째이고, 기록상 ${dur(woke)} 전에 깼어요."
-            s.carseatMin != null -> "카시트에 ${dur(s.carseatMin!!)}째예요."
-            woke != null -> "기록상 ${dur(woke)} 전에 깼어요."
+            s.carseatMin != null && woke != null -> "카시트에 ${spokenMin(s.carseatMin!!)}째이고, 기록상 ${spokenMin(woke)} 전에 깼어요."
+            s.carseatMin != null -> "카시트에 ${spokenMin(s.carseatMin!!)}째예요."
+            woke != null -> "기록상 ${spokenMin(woke)} 전에 깼어요."
             else -> null
         }
-        (s.feeding?.let { "마지막 수유 시작부터 ${dur(it.elapsedMin)}${if (seat != null) ", $seat" else "이에요."} 배고프거나 불편할 수 있어요." }
+        (s.feeding?.let { "마지막 수유 시작부터 ${spokenMin(it.elapsedMin)}${if (seat != null) ", $seat" else "이에요."} 배고프거나 불편할 수 있어요." }
             ?: "${seat?.plus(" ") ?: ""}불편할 수 있어요.") to (woke != null)
     }
     "unknown" -> "그건 제가 알 수 없어요." to false
