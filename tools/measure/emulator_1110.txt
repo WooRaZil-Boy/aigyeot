@@ -1,0 +1,150 @@
+# next-car 2.1 마지막 고침(C349~C357) 에뮬레이터 재확인 — 2026-11-09 06:22~07:57(파일 이름은 조율 담당이 정한 1110)
+환경: AVD PleosConnect(공식 프로필 2560×1440 mdpi, Pleos/crp_avd_arm64:14/RELEASE.release_connect_v2.1.0), emulator-5560, 운전자 user 10, 시간대 Asia/Seoul.
+      kr.aigyeot.app debug: 조율 담당이 main 작업 트리에서 빌드한 app/build/outputs/apk/debug/app-debug.apk. 다시 빌드하지 않았다(prepare.sh의 install -r로 같은 파일만 다시 깔림).
+      새 AVD라 첫 화면 '아기 설정'부터 했다: 동의, 별명 EXAMPLE, 2026년 8월, 뒷좌석 오른쪽, 수유 간격 3시간 0분, 형제 없음, 부모 노래 켬(기본). 06:28 홈 '지금 먹이기 시작했어요'로 실제 마지막 수유 06:28.
+스크립트: tools/demo/prepare.sh(06:27, 재부팅 뒤 06:52), reset.sh(회차 앞마다), cry.sh, stop.sh(07:56). 잠금 파일은 조율 담당 것이라 건드리지 않음. 프로브 없음.
+      cry.sh: 시작 때 기기의 files/scenario/cry/ 녹음 4개가 모두 0바이트였다(run-as wc -c). research/scenario-cry/의 원본으로 cry.sh를 다시 돌려 4개 모두 크기 일치 확인(2384640·2384640·1280000·1600000).
+맥 부하(1분 평균): 다른 세션의 Gradle(java 130%)·Spotlight로 크게 출렁였다. 06:27 27.6, 06:44 78.9, 06:53~07:01 최대 19.6, 07:02~07:08 최대 14.2, 07:08~07:10 127~226, 07:45~07:47 35~104, 07:50~07:54 최대 25.6.
+에뮬레이터 이상(환경, 이번 기록의 큰 제약):
+  - VHAL heartbeat 시간 초과 → carwatchdog가 VHAL 종료 → CarService(com.android.car) 재시작이 세 번 났다: 06:43:24, 07:08:20, 07:45:56. 두 번째·세 번째 뒤에는 CarService가
+    'FATAL EXCEPTION: UserService … IllegalStateException: CarServiceHelper did not connect'로 약 20초마다 다시 죽는 고리에 빠져(07:09~07:24에 44번) 홈·systemui가 검게 멈췄다.
+    그래서 `adb -s emulator-5560 reboot`로 같은 AVD를 세 번 다시 부팅했다(06:51:00, 07:24:40, 07:47:13. 조율 담당에게 메시지로 알림). 부팅 뒤 약 17~23분마다 다시 났다.
+  - audioserver(AudioFlinger) 재시작: 07:03:29 처음, 그 뒤 CarService 고리 동안 여러 번.
+  - 앱 FATAL 0줄. 앱 ANR 2번(아래 '결함 후보').
+무효 구간(판정 근거로 쓰지 않음):
+  - 장면 B 첫 회차 06:39:55~06:47:50: 맥 부하 06:39 49.5 → 06:44 78.9, 06:43:24 VHAL heartbeat 시간 초과 → 06:43:29 CarService 재시작. 결과 줄 1,2,false,356.0,2418,,…(재생 없음). 06:53에 다시 돌림(5절, 유효).
+  - 07:08:20~07:24:40: 맥 부하 07:08:28 127.5 · 07:08:59 226.4 · 07:09:29 153.4 · 07:09:59 109.5 · 07:10:29 77.3(그 뒤 10대), VHAL 종료 → CarService 재시작 고리. 이 구간에는 F8 알림 시각(1절 1차 주입)만 참고로 적는다.
+  - 07:45:56~07:47:13: 맥 부하 07:45:38 35.6 · 07:46:08 58.1 · 07:46:38 99.2 · 07:47:38 104.0, VHAL 종료 → CarService 고리. 이 구간에는 측정하지 않았다.
+시간대: 재부팅 뒤 기기 `date` → 'Mon Nov  9 07:59:41 KST 2026', persist.sys.timezone Asia/Seoul.
+DB 값: run-as로 databases/aigyeot.db·-wal·-shm을 꺼내 sqlite3로 읽었다. 캡처는 tools/measure/screens_1110/.
+
+## 판정 요약
+| 번호 | 판정 |
+| --- | --- |
+| C349 실제 수유 확인 알림 장면 시작에 숨김·장면 끝에 다시 보임·'네' 저장 | 통과(전제 조건은 스냅숏 주입으로 만듦, 1절) |
+| C349 같은 종류: 장면 C·C2가 띄운 확인 알림이 장면 끝에 남지 않음 | 미판정(장면 안에서 확인 알림까지 가는 장면이 없음. 장면 끝에 남은 수유 확인 알림이 없음만 확인) |
+| C350 마이크 꺼짐이면 S07_DEPART를 묻지 않고 켜지면 물음 | 통과(F5). 장시간 제안 L1은 미판정 |
+| C352 알림 버튼은 처리, adb의 notice_action extra는 무시 | 통과 |
+| C353 앱이 넣은 경유지도 TBT에 TURN_WAY로 옴 | 통과 → open-items 2장 첫 줄을 닫을 근거 |
+| C351 리포트 2차 '수유 시간대로 판단했어요' | 통과(측정용 장면 M11) |
+| C355 리포트 2차 '더운 실내로 판단했어요' | 통과(장면 B) |
+| C356 홈 HANDOFF '자동 달래기를 멈췄어요' | 통과(측정용 장면 M10) |
+| C357 S10·리포트 '경유지로 넣을 수 있는 가까운 쉼터를…' | 통과(M10). 폰 리포트·④ next_rest 문구는 미판정 |
+
+## 1. C349 실제 수유 정차 확인 알림 — 통과(전제 조건은 스냅숏 주입)
+전제 조건을 실제로 만들 수 없었던 이유: F7·F8의 전제는 실제 상태에서 '응'으로 넣은 수유실 경유지(ign.nursingStop.addedAt)다. '응'은 STT로만 들어오는데,
+  이 AVD는 -allow-host-audio 없이 떠 있어 실제 마이크 입력이 0이다(coordinator.md 6.2). 실제 출발 제안(2절)도 답이 NONE이었다. 화면에 '응' 버튼은 없다.
+  ④ Q5b(DriverAddWaypoint)도 듣기·중계·LLM이 있어야 해 쓰지 못했다.
+만든 방법(코드는 고치지 않음, 앱 데이터만): 앱 force-stop → aigyeot.db를 꺼내 engine_snapshot.state의 ign.nursingStop만
+  {"restId":"tbt:rest:안성휴게소(부산방향)","addedAt":<2분 전>,"firstPAt":null,"confirmShown":false}로 바꾸고 wal_checkpoint(TRUNCATE)·integrity_check ok →
+  기기에 다시 넣고 -wal·-shm 지움 → 앱 시작. 이후는 앱이 스스로 탔다: 시작 뒤 실행기 첫 GearChanged(P)로 F7 firstPAt, 15분 뒤 F8.
+1차 주입(07:08:29, 앱 pid 6234): firstPAt 07:09:05.709(F7) → 07:24:05.726 notification_enqueue id=11 '수유하셨어요?'(네·아니요 actions=2), 스냅숏 confirmShown true.
+  꼭 15분 0.017초 뒤. 그 사이 CarService 고리(위 '에뮬레이터 이상') 때문에 07:24:40 재부팅.
+프로세스 시작 다시 띄움(C349 Boot): 재부팅 뒤 07:25:37 앱 시작(BootReceiver) → 07:25:40.576 id=11 다시 enqueue. 07:26:45 force-stop(모든 알림 취소) → 07:26:47 시작 → 07:26:50.515 다시 enqueue.
+  홈 카드에도 '수유하셨어요? 네·아니요'(screens_1110/home_feeding_confirm_real_C349.png).
+D를 거친 장면(참고, 의도된 C342 동작): 07:27:27 장면 C2 실행 → 07:27:28.876 id=11 취소(HIDE). 멈춤 탭이 빗나가 장면이 t=10에 D로 갔다 → 07:28:19 장면 끝.
+  끝 뒤 알림 다시 안 뜸, 스냅숏 nursingStop null, child_profile.last_feeding_start 1794173302977(06:28) 그대로. 장면 동안 실제 기어가 P를 벗어나 stopEnded = true → F9 버림(계약대로).
+2차 주입(07:30:08): firstPAt 07:30:19.664 → 07:45:19.788 id=11 enqueue. 07:45:56 CarService 고리 → 07:47:13 재부팅 → 07:47:58.676 id=11 다시 enqueue(프로세스 시작).
+본 확인(앱 pid 5584, reset.sh 뒤 기어 P):
+  - 장면 시작에 숨김: 07:48:49.31 장면 C2 '실행' → 07:48:49.681 notification_canceled id=11(reason 8 = 앱 취소). 07:48:51.6 dumpsys notification '수유하셨어요?' 0건. 통과.
+  - D 전 멈춤 뒤 다시 보임: 07:48:55.86 '멈춤'(t≈6.5, VC 기어 Park 그대로) → 07:48:56.431 결과 줄(1,5,false,6.0,… = 멈춤) → 07:48:56.447 id=11 다시 enqueue, dumpsys 1건. 통과.
+  - 알림 '네' → 실제 상태에 저장: `cmd statusbar expand-notifications`로 연 알림 창(screens_1110/notice_feeding_confirm_C349.png)에서 '네' 탭(07:49:52.58)
+    → 07:49:52.999 `START u10 {cmp=kr.aigyeot.app/.NoticeEntry (has extras)}` → 07:49:53.029 notification_action_clicked id=11 → 07:49:53.090 id=11 취소.
+    child_profile.last_feeding_start 1794173302977 → 1794177019664(= firstPAt 07:30:19.664, F6), 스냅숏 feedingStart 같은 값, nursingStop null.
+    홈 '마지막 수유 07:30'(screens_1110/home_after_feeding_yes_C349.png). 통과.
+같은 종류(장면 C·C2가 띄운 확인 알림): 장면 C·C2는 경유지를 넣은 뒤 P로 15분 서는 단계가 없어 장면 안에서 확인 알림이 뜨지 않는다.
+  장면 C(06:38:35 끝)·C2 세 번(07:28:19·07:29:44·07:48:56 끝) 뒤 dumpsys에 장면이 만든 수유 확인 알림은 없었다. 장면 상태의 확인을 장면 끝 DROP이 내리는지는 미판정.
+
+## 2. C350 마이크 꺼짐이면 출발 제안을 묻지 않음 — 통과(F5), L1 미판정
+조건: 06:28 수유 시작(간격 3시간 → 배고플 시각 09:28). 내비 '부산역 KTX' 378km 안내(06:29:10 ROUTE_DRIVE, 4시간 1분). 동의를 막 마친 상태라 홈 '듣기 꺼짐', MicService 없음.
+  내비를 앞으로 띄워 앱은 뒤로(마이크 꺼진 채).
+- 06:29:40 VC 뒷문(우) 열고 닫기 → 06:29:44 VC D → 06:29:44.221 `stepLog 세션 01M6YH2DG4… LISTENING`(session.trigger DOOR_THEN_D, mic_path 비어 있음).
+  발화: 06:29:42 '뒤에 아기가 탔나요? …', 06:29:55 '아직 듣지 못하고 있어요. 다음에 세웠을 때 눌러 주세요.' S07_DEPART 없음(06:30:48까지 1분).
+  06:30:29 스냅숏: session.departChecked false, car.micRunning false, route remainingKm 378·remainingSec 14460·rests 22(수유실·넣을 수 있음은 덕평휴게소 41.23km뿐).
+- 06:30:48.3 앱을 앞으로(am start) → 06:30:48.611 MicService 포그라운드 시작(APP_LAUNCH) → 06:30:49.090 TTS
+  '오전 9시 28분쯤 배고플 시간이라, 41킬로미터 앞 수유실 있는 덕평휴게소를 경유지로 넣을까요?'. session.rest_log [{at 06:30:49.039, S07_DEPART, 덕평휴게소, answer NONE}](마이크 입력 0이라 NONE).
+- 06:32:18 P·뒷문 열기로 세션 닫힘(IDLE).
+- L1 장시간 제안(S11): 장시간 기준만큼 실제 주행을 만들 수 없고 장면 파일에도 S11 장면이 없어 미판정.
+
+## 3. C352 알림 액션 비공개 입구 — 통과
+수유 확인 알림(id=11)이 떠 있고 실제 nursingStop.confirmShown true인 때:
+- 앱이 앞에 떠 있을 때(onNewIntent): 07:26:29 `adb -s emulator-5560 shell am start --user 10 -n kr.aigyeot.app/.MainActivity --es notice_action feeding_yes`
+  ('intent has been delivered to currently running top-most instance') → 6초 뒤 알림 그대로, nursingStop 그대로, last_feeding_start 06:28 그대로.
+- 앱 프로세스가 없을 때(onCreate): 07:26:45 force-stop → 07:26:47 같은 명령 → 앱 새로 뜸(pid 16135), 알림은 Boot로 다시 뜸, nursingStop·last_feeding_start 그대로.
+- 알림 버튼: 1절 '네' 탭이 NoticeEntry로 들어와 처리됨(07:49:52.999 START …/.NoticeEntry, 저장 확인).
+'아기가 탔나요?'·'듣기가 멈췄어요' 알림 버튼은 이번에 누르지 않았다.
+
+## 4. C353 앱이 넣은 경유지도 TBT에 TURN_WAY — 통과
+방법: 실제 내비 '부산역 KTX' 안내 중(06:29, ① 추천 중부내륙 378km) 장면 C(반복 1)를 돌렸다. 장면 '응'으로 앱 실행기가 실제 NaviHelper.addWaypoint를 부른다.
+- 06:37:06.852 앱 `[NaviHelper]NaviHelper: addWaypoint` → 06:37:06.886 내비 `OnAddWaypointRequest(longitude=127.1448001, latitude=37.013407, poiName=안성휴게소(부산방향), waypointIndex=FIRST, …)`
+  → 06:37:17.02 모든 수신자 onWayPointInfo → 06:37:17.054 S09 '안성휴게소(부산방향)를 경유지로 넣었어요.'
+- TBT(CAP 서비스 `NavigationEventListener: onTBTInfo`, pid 3761):
+  넣기 전 06:37:16.062: 49항목(줄 잘림), 9 용인졸음쉼터 18.1km … 11 용인휴게소 28.5 · 13 덕평휴게소 41.2 … TURN_WAY 없음(중부내륙).
+  넣은 뒤 06:37:17.633: 48항목(줄 잘림), 경부선으로 다시 짬.
+    7 TURN_ENTER_SERVICEAREA 기흥휴게소(누적 20.5km) · 8 TURN_RESTAREA 오산졸음쉼터 29.8 · 9 TURN_ENTER_SERVICEAREA 안성휴게소 46.8 ·
+    **10 TURN_WAY distance 310 description '경유'(누적 47.1km)** · 11 연곡졸음쉼터 54.4 · 13 망향휴게소 65.5 · 14 천안호두휴게소 84.5 …
+  → 앱이 넣은 경유지도 운전자가 넣은 경유지(navi_route_1105e)와 같은 TURN_WAY 항목으로 온다. description은 이름이 아니라 '경유'다.
+- 장면 C 결과: 1,3,true,,2797,307,bus100_audio_zone_1,false,1,55700,55700,0,0,0,0,, (06:35:34~06:38:39, 끝에 '앱 화면이 없어 마이크를 다시 켜지 못함', 알려진 조건).
+- 경유지가 든 실제 경로에서 앱이 그 앞 쉼터를 addable=false로 두는지(C353의 고침 자체)는 재부팅으로 경로가 사라져 스냅숏으로 보지 못했다(미판정).
+
+## 5. 화면 문구 — C351·C355·C356·C357 통과
+장면 파일에 그 분기가 없는 둘은 측정용 장면을 run-as로 files/scenario/에 넣어 돌리고 끝난 뒤 지웠다(앱 코드·assets는 그대로).
+  M10 = 장면 D에서 쉼터를 비움(rests []), t=172 뒤 HANDOFF·S10·handoff_alert 기대, t=200 정지·t=202 P(HANDOFF 유지 확인), t=330 뒷문 열어 끝.
+  M11 = 장면 C에서 울음을 cont_75s(75초)로 바꾸고 '응' 단계를 뺌(2차 시도까지 울음), t=202 P·t=212 뒷문 열어 끝.
+- C356 홈 HANDOFF(M10, 07:02:21~07:07:56): 07:05:28.782 HANDOFF, P(07:05:43) 뒤 07:05:59 홈 카드 '자동 달래기를 멈췄어요'(screens_1110/home_handoff_C356.png).
+  홈 카드는 장면 상태를 그린다(마지막 수유 '기록 없음' = 장면 D 설정).
+- C357 S10(M10): 07:05:28.795 TTS '경유지로 넣을 수 있는 가까운 쉼터를 못 찾았어요. 안전한 곳에 세워서 돌봐 주세요.'
+  리포트(07:02~07:07) '정차: 두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요'(screens_1110/report_M10_no_rest_C357.png).
+  episode handoff_kind NO_REST, handoff_told_driver 1.
+  M10 결과 줄: 1,4,false,172.0,1572,8243,bus100_audio_zone_1,false,2,109874,109874,0,0,0,0,125775, — 실패는 'HANDOFF·handoff_alert 14초 안에 없음'뿐(HANDOFF가 t≈187.4로 1.4초 늦음).
+  원인은 환경: 07:03:23 1차 시도의 AudioTrack 생성이 audioserver 재시작(07:03:29.178 'AudioFlinger server died')으로 실패해(exec W 'Cannot create AudioTrack') 시도가 07:03:29로 밀림.
+  그 때문에 리포트 경보 지연이 7.8초(alarm_log FOCUS_DENIED 07:03:29.186)로 찍혔다. 맥 부하 최대 14.2.
+- C355(장면 B 유효 회차 06:53:18~07:00:59): 결과 1,2,true,,1677,641,bus100_audio_zone_1,false,2,111330,111330,0,0,0,0,,1.000, 06:59:21 S04 '실내가 27도예요. 2도 낮췄어요.'
+  리포트 '2차: 더운 실내로 판단했어요 · 그쳤어요', '실내 온도 낮추기 1번'(screens_1110/report_B_comfort_C355.png). episode second_action COMFORT.
+- C351(M11, 07:50:31~07:54:23): 결과 1,3,true,,1885,503,bus100_audio_zone_1,false,2,111437,111437,0,0,0,0,, (통과).
+  리포트 '결과: 판정하지 못했어요 · 성적에서 뺌(수유 시간대)', '2차: 수유 시간대로 판단했어요'(screens_1110/report_M11_feeding_window_C351.png). episode second_action FEEDING.
+  참고: 장면 C 자체는 2차 시도가 없다(울음이 1차 중에 그침, second_action 없음. screens_1110/report_C_first_unjudged.png).
+- 폰 두 앱 리포트 문구, ④ next_rest '경유지로 넣을 수 있는 가까운 쉼터 정보가 없어요'는 이번 범위(차 에뮬레이터)에서 보지 못했다(미판정).
+
+## 결함 후보(고치지 않음) — CarService 재연결 때 main 스레드가 exec 잠금을 쥔 채 차량 속성 읽기에 막혀 앱 ANR
+재현(환경 의존): 장면 B 실행 중(06:39:55~) 맥 부하 78로 06:43:24 VHAL heartbeat 시간 초과 → 06:43:29 CarService 죽고 다시 뜸.
+  그 뒤 앱이 06:44:57 ATTEMPT 이후 재생을 시작하지 못했고(requestAudioFocus 없음, 2차 시도·S04 없음), 장면 끝 MicService.stop에서
+  06:48:05.260 `am_anr: … executing service kr.aigyeot.app/.detect.MicService` → 06:48:06 'ANR in kr.aigyeot.app' → 강제 종료.
+  다시 뜬 프로세스(pid 7531)도 06:48:15 `ANR … No response to onStartJob`.
+시각·pid(logcat):
+  06:48:05.258 `W ActivityManager: Timeout executing service: ServiceRecord{8764af9 u10 kr.aigyeot.app/.detect.MicService}`
+  06:48:05.260 `am_anr: [10,32000,kr.aigyeot.app,545799750,executing service kr.aigyeot.app/.detect.MicService]` → 06:48:06.422 `ANR in kr.aigyeot.app` → 06:48:06.428 `am_kill: [10,32000,…,user request after error]`
+  06:48:06.485 새 프로세스 pid 7531(datatransport 작업으로 시작) → 06:48:15.302 `am_anr: [10,7531,kr.aigyeot.app,545799750,No response to onStartJob]` → 06:48:16.441 `ANR in kr.aigyeot.app`
+트레이스 사본: tools/measure/anr_1110.txt(dumpsys dropbox --print data_app_anr의 앱 프로세스 구획 두 개. user 빌드라 /data/anr/anr_*는 system 0600이라 shell로 꺼낼 수 없었다).
+스택(두 번 모두 main이 같은 꼴):
+  "main" Native: CarPropertyManager.getIntProperty ← PleosCar.readGear(Car.kt:157) ← PleosCar.start 람다(Car.kt:135) ← ExecThread.guard(ExecThread.kt:23) `- locked <0x09adebfe>`
+    ← PleosCar.start 람다(Car.kt:130) ← onLifecycleChanged ← android.car.Car$3.onServiceConnected ← LoadedApk$ServiceDispatcher(main Looper)
+    (두 번째는 MonitorService.onCreate → Graph.startModules → Exec.start → PleosCar.start(Car.kt:129)에서 같은 콜백이 바로 불림)
+  "host" Blocked: Exec.handle(Exec.kt:107) `waiting to lock <0x09adebfe> held by thread 1`
+  "binder:32000_1" Blocked: ExecThread.guard ← PleosNavi$newListener$1.on(Navi.kt:51) ← onDrivingInfo(Navi.kt:54) ← INaviServiceCallbackV2 `waiting to lock <0x09adebfe> held by thread 1`
+  (pid 32000의 대기 스레드. pid 7531은 main이 MonitorService.onCreate → Graph.get 안에서 exec 잠금 <0x0a236e36>·Graph·Graph$Companion 잠금을 쥔 채 같은 getIntProperty에 막혔고, 그 순간 잠금을 기다린 다른 스레드는 없었다)
+읽은 것: createCar에 exec handler를 줬지만 수명 콜백이 main 스레드에서 불렸고, 그 안에서 exec 잠금을 쥔 채 동기 바인더 getProperty를 불러 VHAL이 응답하지 않는 동안
+  main·host·binder가 모두 멈췄다. 차가 정상이면 나지 않는 조건(CarService·VHAL 재시작)이다. 조율 담당이 결함으로 고치기로 함(측정 중 메시지).
+참고: 07:08·07:45의 CarService 재시작 때는 앱이 죽지 않았다(07:09:26 'getCarManager not working while car service not ready' → subscribe NPE 경고 뒤 다시 구독).
+참고: 줄 번호는 설치한 APK 기준이고, 측정 중 읽은 작업 트리 Car.kt와 맞았다. 07:58 git status에는 다른 세션이 Car.kt·ExecThread.kt 등을 고치는 중(M, CarGate.kt·ReadyProbe.kt 새 파일)이라
+  이 결함 후보가 그 변경에서 이미 다뤄졌는지는 보지 않았다.
+
+## 그 밖에 본 것(판정 대상 아님)
+- 재부팅 뒤 prepare.sh(06:52:40, install -r로 새 프로세스)로 앱을 띄웠을 때 홈 '듣기 꺼짐'이었고 MicService가 시작되지 않았다(장면 B '아기 탔어요'에서 06:53:25에 시작).
+  07:01:42 force-stop 뒤 am start로 다시 해 보니 07:01:55에 시작했다. 재현되지 않아 미판정.
+- M11에서 S06 '수유한 지 …'가 07:51:50·07:52:45 두 번 나왔다. 첫 S06은 재부팅 뒤 첫 TTS라 엔진 모델 로드가 15.3초 걸렸고(GAAS 'model load elapsed: 15305ms'),
+  onDone 없이 앱 말하기 감시(SPEECH_TIMEOUT_MS 20초)가 끝내 spoken = false로 처리된 것으로 보인다 → s06Said 거짓 → 2차 FEEDING이 S06을 다시 말함(계약 4e·42b대로).
+- 장면 C2를 D 전에 멈추려면 실행 중 '멈춤' 위치가 실행 전과 다르다(진행 줄이 생겨 버튼이 올라감, 2560×1440에서 (1024,1148)). 첫 시도는 빗나가 D까지 갔다(1절 참고 회차).
+
+## FATAL·ANR 줄 수
+앱 FATAL EXCEPTION 0. 앱 ANR 2(06:48:05, 06:48:15, 위 결함 후보). CarService 죽음: 06:43 1번, 07:08~07:24 44번, 07:45~07:47 4번(재부팅으로 끊음).
+
+## 확인하지 못한 것
+- C349 전제 조건의 실제 경로('응'으로 수유실 경유지 넣기 → 그 휴게소 첫 P): 마이크 입력 0이라 만들 수 없어 스냅숏 주입으로 대신했다. F7·F8·Boot 다시 띄움·HIDE·'네' 저장은 앱이 스스로 탔다.
+- 장면 상태가 띄운 수유 확인 알림이 장면 끝 DROP으로 내려가는지(장면 안에서 F8까지 가는 장면 없음, 16분 넘는 측정용 장면은 CarService 고리 위험으로 돌리지 않음).
+- C350의 장시간 제안 L1(S11).
+- C353 고침 자체(실제 경로에서 TURN_WAY 앞 쉼터가 addable=false가 되는지): TURN_WAY가 오는 것만 확인. 재부팅으로 내비 경로가 사라져 스냅숏을 다시 보지 못함.
+- C357의 폰 리포트·보호자 no_rest 알림 문장·④ next_rest 문구(폰·중계 없음).
+- '아기가 탔나요?'·'듣기가 멈췄어요' 알림 버튼의 NoticeEntry 경로(수유 확인 버튼만 눌렀다).
+끝 상태: stop.sh로 세션 신호·forward 해제, 에뮬레이터는 켜 둠(07:47 부팅, 실제 기어 P, 세션 없음). 앱 데이터: 설정 EXAMPLE, 마지막 수유 07:30(C349 '네'), 장면 세션 기록 여럿.
+  측정용 장면 M10·M11 파일은 기기에서 지웠다. 내비 목적지는 재부팅으로 없다.
