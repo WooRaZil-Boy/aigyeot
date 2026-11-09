@@ -112,12 +112,31 @@ enum DesignSystem {
         Font(uiFont(size, weight, relativeTo: relativeTo, monospacedDigits: monospacedDigits) as CTFont)
     }
 
+    /// 잠금 화면 위젯용 글자: 이름 붙은 인스턴스(Light·Regular·Medium·SemiBold·Bold)로 고른다. 위젯은 화면을 글자 속성째 묶어 보내는데,
+    /// 가변 축 사전(wght)이 든 서체를 줄여 그리면(minimumScaleFactor) 묶는 중에 확장이 멈췄다(실측 11-10, KEY_TYPE_OF_DICTIONARY 충돌).
+    static func namedFont(_ size: CGFloat, _ weight: CGFloat, relativeTo: Font.TextStyle = .body) -> Font {
+        let name: String
+        switch weight {
+        case ..<350: name = "PretendardVariable-Light"
+        case ..<450: name = "PretendardVariable-Regular"
+        case ..<550: name = "PretendardVariable-Medium"
+        case ..<650: name = "PretendardVariable-SemiBold"
+        default: name = "PretendardVariable-Bold"
+        }
+        return .custom(name, size: size, relativeTo: relativeTo)
+    }
+
+    /// 이미 키운 크기(@ScaledMetric)를 그대로 쓰는 글자. 차트처럼 배치와 글자가 같은 배율이어야 하는 곳(두 번 키우지 않는다).
+    static func fixedFont(_ size: CGFloat, _ weight: CGFloat = 400, monospacedDigits: Bool = false) -> Font {
+        Font(uiFont(size, weight, monospacedDigits: monospacedDigits, scaled: false) as CTFont)
+    }
+
     static func font(_ s: TypeStyle, monospacedDigits: Bool = false) -> Font {
         font(s.size, s.weight, relativeTo: s.relativeTo, monospacedDigits: monospacedDigits)
     }
 
     /// 동적 글자 크기로 키운 UIFont. 서체가 없으면(시험 번들 등) 같은 굵기의 시스템 서체.
-    static func uiFont(_ size: CGFloat, _ weight: CGFloat, relativeTo: UIFont.TextStyle = .body, monospacedDigits: Bool = false) -> UIFont {
+    static func uiFont(_ size: CGFloat, _ weight: CGFloat, relativeTo: UIFont.TextStyle = .body, monospacedDigits: Bool = false, scaled: Bool = true) -> UIFont {
         var attrs: [UIFontDescriptor.AttributeName: Any] = [
             .name: pretendard,
             kCTFontVariationAttribute as UIFontDescriptor.AttributeName: [wghtAxis: weight],
@@ -133,7 +152,7 @@ enum DesignSystem {
             base = monospacedDigits ? .monospacedDigitSystemFont(ofSize: size, weight: systemWeight(weight))
                                     : .systemFont(ofSize: size, weight: systemWeight(weight))
         }
-        return UIFontMetrics(forTextStyle: relativeTo).scaledFont(for: base)
+        return scaled ? UIFontMetrics(forTextStyle: relativeTo).scaledFont(for: base) : base
     }
 
     /// 줄 높이를 맞추는 줄 간격(줄 높이 − 서체의 기본 줄 높이, 같은 비율로 키움).

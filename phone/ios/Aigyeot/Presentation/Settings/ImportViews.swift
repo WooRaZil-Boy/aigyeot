@@ -59,7 +59,7 @@ private struct ImportSheet: View {
                 case .reading: ProgressView().frame(maxWidth: .infinity)   // 읽는 중(새 글자 없이 진행 표시만)
                 case .pickChild(_, let profiles):
                     // 아이 이름은 글과 같이 스크롤한다(이름이 많거나 큰 글자여도 모두 누를 수 있게)
-                    Text(CareText.importPickChild).font(DS.title)
+                    Text(CareText.importPickChild).typeStyle(.title).foregroundStyle(DS.textPrimary)
                     ForEach(profiles, id: \.self) { name in button(name, prominent: false) { vm.pickChild(name) } }
                 case .preview(let draft): PreviewText(preview: ImportPreview(draft, now: Date()))
                 case .failed(let message): PreviewText(preview: ImportPreview(failure: message))
@@ -91,10 +91,8 @@ private struct ImportSheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    @ViewBuilder
     private func button(_ label: String, prominent: Bool, action: @escaping () -> Void) -> some View {
-        let b = Button(action: action) { Text(label).frame(maxWidth: .infinity, minHeight: 44) }
-        if prominent { b.accentButton() } else { b.neutralButton() }
+        Button(action: action) { Text(label) }.buttonStyle(PillButtonStyle(kind: prominent ? .accent : .tonal))
     }
 }
 
@@ -102,7 +100,7 @@ private struct PreviewText: View {
     let preview: ImportPreview
 
     var body: some View {
-        Text(preview.title).font(DS.title)
+        Text(preview.title).typeStyle(.title).foregroundStyle(DS.textPrimary)
         if let kinds = preview.kinds { Text(kinds).font(DS.body) }
         if let latest = preview.latestFeed { Text(latest).font(DS.body) }
         if !preview.skips.isEmpty {

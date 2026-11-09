@@ -12,115 +12,210 @@ enum CareSheet: Identifiable {
     }
 }
 
-/// 오늘(C1, 5장). owner·연결 안 됨: 상태 카드 → 빠른 버튼 → 다음 수유 시간대 → 차 타일.
-/// guardian: 인계 알림 띠 → 상태 카드 → 빠른 버튼 → 다음 수유 시간대 → 최근 리포트(U26).
+/// 오늘(C1, 5장, 시안 S.today). 큰 제목 → (guardian) 인계 알림 → 진행 중 카드 → 마지막 수유 → 빠른 기록 → 오늘 하루 → 차 카드 → 최근 리포트.
+/// guardian은 빠른 기록도 쓴다(U26). 홈에 떠 있는 버튼은 없다(v5: 지난 기록은 빠른 기록 길게 누르기·기록 탭 끝 행).
 struct TodayView: View {
     @Environment(TodayViewModel.self) private var vm
+    /// 탭 옮기기(오늘 하루 '기록', 차 카드, 최근 리포트 '전체').
+    let goTab: (String) -> Void
     @State private var sheet: CareSheet?
+    @Namespace private var zoom
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: DS.s4) {
+                VStack(alignment: .leading, spacing: 12) {
                     StatusBands(inScroll: true)
-                    if vm.ui.guardian { GuardianAlertBands() }
-                    // 경과는 분 단위라 1분마다 다시 그린다(R15: 저장하지 않고 계산).
+                    if vm.ui.guardian { GuardianAlertCards() }
+                    // 경과는 분 단위라 1분마다 다시 그린다(R15: 저장하지 않고 계산). 진행 중 카드의 초는 그 카드만 1초마다.
                     TimelineView(.everyMinute) { ctx in
                         let now = CareTime.ms(ctx.date)
-                        VStack(alignment: .leading, spacing: DS.s4) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach([CareKind.feed, .sleep], id: \.self) { k in
+                                if let e = CareRules.inProgress(k, in: vm.ui.care.events) {
+                                    RunningCard(event: e) { sheet = .timer(e.id) }
+                                        .modifier(ZoomSource(id: e.id, ns: zoom))
+                                }
+                            }
                             LastFeedCard(now: now)
-                            if let f = CareRules.inProgress(.feed, in: vm.ui.care.events) {
-                                RunningCard(text: CareText.feedingNow(f, now: now), kind: .feed) { sheet = .timer(f.id) }
+                            QuickBlock(sheet: $sheet)
+                            VStack(alignment: .leading, spacing: 0) {
+                                BlockHeader(title: CareText.todayDay, link: CareText.tabLog) { goTab(CareText.tabLog) }
+                                let today = CareRules.dayKey(now, .current)
+                                DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now, zone: .current, showCar: vm.ui.isPaired))
                             }
-                            if let s = CareRules.inProgress(.sleep, in: vm.ui.care.events) {
-                                RunningCard(text: CareText.sleepingNow(s, now: now), kind: .sleep) { sheet = .timer(s.id) }
-                            }
+                            .block()
                         }
                     }
-                    QuickButtons(sheet: $sheet)
-                    if !vm.ui.guardian, let w = vm.ui.phone.feeding.windowStartExpected {   // U35: guardian은 차 값을 받지 않는다
-                        VStack(alignment: .leading, spacing: DS.s1) {
-                            Text(CareText.nextWindow(w)).font(DS.headline)
-                            Text(CareText.nextWindowNote).font(DS.caption).foregroundStyle(DS.textSecondary)
-                        }
-                        .padding(DS.s4).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM))
+                    // U35: guardian은 기기 목록을 받을 수 없어(계약 1.3) 차 카드를 그리지 않는다.
+                    if !vm.ui.guardian {
+                        if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) { goTab(CareText.tabCar) } }
+                        else { ConnectCarTile() }
                     }
-                    // U35: guardian은 기기 목록을 받을 수 없어(계약 1.3) 차 타일을 그리지 않는다.
-                    if vm.ui.guardian { GuardianReports() }
-                    else if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) }
-                    else { ConnectCarTile() }
+                    RecentReports(owner: !vm.ui.guardian) { goTab(CareText.tabCar) }
                 }
-                .padding(DS.s4)
+                .screenPadding()
             }
             .screenBackground()
             .navigationTitle(CareText.todayTitle(nickname: vm.ui.care.childNickname))   // U34
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { sheet = .quick(.feed) } label: { Image(systemName: "plus") }.accessibilityLabel(CareText.quickPast)
-                }
-            }
             .refreshable { await vm.retryNow() }
-            .sheet(item: $sheet) { CareSheetView(sheet: $0) }
+            .sheet(item: $sheet) { s in CareSheetView(sheet: s).modifier(ZoomDestination(id: s.timerId, ns: zoom)) }
         }
     }
 }
 
-/// 마지막 수유: 없으면 "아직 수유 기록이 없어요" + '수유 시작', 있으면 "2시간 10분 전"과 "오후 12:52 · 왼쪽"(R12).
+extension CareSheet {
+    var timerId: String? { if case .timer(let i) = self { i } else { nil } }
+}
+
+/// 진행 중 카드 → 타이머(공유 요소, iOS 18+ 확대 전환). 17은 보통 시트.
+private struct ZoomSource: ViewModifier {
+    let id: String
+    let ns: Namespace.ID
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) { content.matchedTransitionSource(id: id, in: ns) } else { content }
+    }
+}
+
+private struct ZoomDestination: ViewModifier {
+    let id: String?
+    let ns: Namespace.ID
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *), let id { content.navigationTransition(.zoom(sourceID: id, in: ns)) } else { content }
+    }
+}
+
+/// 마지막 수유(시안 .hero-c): 이름 → 큰 경과 → 시각 · 쪽 → 간격 막대 → (owner) 다음 수유 시간대.
+/// 없으면 "아직 수유 기록이 없어요" + '수유 시작'.
 private struct LastFeedCard: View {
     @Environment(TodayViewModel.self) private var vm
     let now: Int64
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.s2) {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(CareText.lastFeed).font(DS.font(14, 500)).foregroundStyle(DS.textTertiary)
             if let last = vm.ui.lastFeedingStart {
-                // 화면 값이 내 기록이면 쪽·시간대·보내기 상태를 함께 보인다. 차 값이 더 늦으면 시각만.
+                // 화면 값이 내 기록이면 쪽·보내기 상태를 함께 보인다. 차 값이 더 늦으면 시각만.
                 let mine = CareRules.latestFeed(vm.ui.care.events).flatMap { vm.ui.shownStart($0) == last ? $0 : nil }
-                Text(CareText.lastFeed).font(DS.caption).foregroundStyle(DS.textSecondary)
-                Text(CareText.ago(now - CareTime.ms(last))).font(DS.display).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)   // 경과는 고정폭 숫자(8장)
+                Text(CareText.ago(now - CareTime.ms(last)))
+                    .font(DS.hero).monospacedDigit().foregroundStyle(DS.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.6).padding(.top, 6)
+                    .contentTransition(.numericText())
                 Text(CareText.feedDetail(at: last, side: mine?.feedSide, zone: mine?.timeZone ?? .current))
-                    .font(DS.body).foregroundStyle(DS.textSecondary)
+                    .font(DS.font(15, 400)).monospacedDigit().foregroundStyle(DS.textTertiary).padding(.top, 4)
+                if let m = meter(last: CareTime.ms(last)) { FeedMeter(value: m.value, tick: m.tick).padding(.top, 18).padding(.bottom, 4) }
                 if vm.ui.owner, let e = mine, let r = vm.ui.feedingRecord(for: e) {
                     Text(feedStatusText(r)).font(DS.caption)
-                        .foregroundStyle(r.status == .failed || r.status == .expired ? DS.danger : DS.textSecondary)
+                        .foregroundStyle(r.status == .failed || r.status == .expired ? DS.danger : DS.textTertiary).padding(.top, 8)
+                }
+                if !vm.ui.guardian, let w = vm.ui.phone.feeding.windowStartExpected {   // U35: guardian은 차 값을 받지 않는다
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(CareText.nextWindow(w)).font(DS.font(15, 600)).foregroundStyle(DS.textPrimary)
+                        Text(CareText.nextWindowNote).font(DS.font(13, 400)).foregroundStyle(DS.textTertiary)
+                    }
+                    .padding(.top, 14)
                 }
             } else {
-                Text(CareText.noFeedYet).font(DS.body).foregroundStyle(DS.textSecondary)
-                Button { vm.start(.feed) } label: {
-                    Text(CareText.startFeed).font(DS.title).frame(maxWidth: .infinity, minHeight: 56)
-                }
-                .accentButton()
+                Text(CareText.noFeedYet).typeStyle(.body).foregroundStyle(DS.textSecondary).padding(.top, 8)
+                Button { vm.start(.feed) } label: { Text(CareText.startFeed) }
+                    .buttonStyle(.pill).padding(.top, 14)
             }
         }
-        .padding(DS.s4).frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM))
+        .block(padding: EdgeInsets(top: 22, leading: 22, bottom: 20, trailing: 22))
+        .accessibilityElement(children: .contain)
+    }
+
+    /// 간격 막대: 차에 정해 둔 간격, 없으면 지난 7일 '평소'(안드로이드 feedMeter와 같다). 둘 다 없으면 그리지 않는다.
+    private func meter(last: Int64) -> (value: Double, tick: Double?)? {
+        let usual = ChartData.intervalWeek(care: vm.ui.care, now: now, zone: .current).usualMs
+        let f = vm.ui.guardian ? nil : vm.ui.phone.feeding
+        return ChartData.feedMeter(last: last, now: now, carLast: f?.lastStart.map(CareTime.ms),
+                                   windowStart: f?.windowStartExpected.map(CareTime.ms), usualMs: usual)
     }
 }
 
-/// 진행 중 수유·잠 카드. 누르면 타이머.
+/// 먹색 진행 막대 + 다음 수유 시간대 눈금(아이 신호 주황, 시안 .pmeter).
+private struct FeedMeter: View {
+    let value: Double
+    let tick: Double?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Capsule().fill(DS.surfaceRaised).frame(height: 6)
+                Capsule().fill(DS.textPrimary).frame(width: g.size.width * value, height: 6)
+                if let tick {
+                    RoundedRectangle(cornerRadius: 1.5).fill(DS.child).frame(width: 3, height: 18).offset(x: g.size.width * tick - 1.5)
+                }
+            }
+            .frame(height: 6)
+        }
+        .frame(height: 6)
+        .animation(reduceMotion ? nil : DS.Motion.smooth, value: value)
+        .accessibilityHidden(true)
+    }
+}
+
+/// 진행 중 수유·잠(시안 .run-c): 살아 있는 점 + "수유 중 · 왼쪽" + "오후 2:01부터" + 경과 시계. 누르면 타이머.
 private struct RunningCard: View {
-    let text: String
-    let kind: CareKind
+    let event: CareEvent
     let open: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulse = false
 
     var body: some View {
         Button(action: open) {
-            HStack(spacing: DS.s3) {
-                Image(ico: DS.icon(kind)).foregroundStyle(DS.color(kind))
-                Text(text).font(DS.headline).foregroundStyle(DS.textPrimary).monospacedDigit()
-                Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(DS.textSecondary)
+            HStack(spacing: 14) {
+                Circle().fill(DS.color(event.kind)).frame(width: 10, height: 10)
+                    .overlay {   // 동작 줄이기면 고리를 빼서(도중에 켜도) 반복을 멈춘다
+                        if !reduceMotion { Circle().stroke(DS.color(event.kind).opacity(pulse ? 0 : 0.5), lineWidth: pulse ? 8 : 0) }
+                    }
+                    .frame(width: 12)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(DS.font(16, 600)).foregroundStyle(DS.textPrimary)
+                    Text(CareFormat.clock(CareTime.date(event.startAt), event.timeZone) + "부터").font(DS.font(13, 400)).foregroundStyle(DS.textTertiary)
+                }
+                Spacer(minLength: 8)
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    Text(CareFormat.timer(CareRules.elapsedMs(event, now: CareTime.ms(ctx.date))))
+                        .font(DS.font(28, 700)).monospacedDigit().foregroundStyle(DS.textPrimary)
+                }
             }
-            .padding(DS.s4).frame(minHeight: 56)
-            .background(DS.color(kind).opacity(0.08), in: RoundedRectangle(cornerRadius: DS.rM))   // 15%에서는 종류 색 아이콘이 4.3:1(13장 4.5:1). 8%면 모든 종류가 넘는다
+            .padding(.horizontal, 20).padding(.vertical, 18)
+            .frame(maxWidth: .infinity)
+            .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(a11y)
+        .accessibilityAddTraits(.isButton)
+        .onAppear { startPulse() }
+        .onChange(of: reduceMotion) { _, _ in startPulse() }
+    }
+
+    private func startPulse() {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { pulse = false }
+        guard !reduceMotion else { return }
+        withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) { pulse = true }
+    }
+
+    /// 화면 제목 "수유 중 · 왼쪽"(design.label) / "자는 중".
+    private var title: String {
+        event.kind == .sleep ? CareText.sleepRunning : ([CareText.feedRunning] + [event.feedSide?.label].compactMap { $0 }).joined(separator: " · ")
+    }
+
+    /// 읽어 주기는 7.1 today.running 문장 그대로.
+    private var a11y: String {
+        let now = CareTime.ms(Date())
+        return event.kind == .sleep ? CareText.sleepingNow(event, now: now) : CareText.feedingNow(event, now: now)
     }
 }
 
-/// 빠른 버튼(R16): 수유·메모, 켜면 잠·기저귀. 수유·잠은 누르면 시작하고, 진행 중이면 "수유 중"·"자는 중"으로 바뀌어 타이머를 연다.
-/// 길게 누르면 지난 시각으로 적는 시트.
-private struct QuickButtons: View {
+/// 빠른 기록(R16, 시안 .qblock): 흰 블록 안 회색 원(56) 넷, 이름 14/600. 수유·잠은 누르면 시작하고, 진행 중이면 먹색 원 + "수유 중"·"자는 중"으로
+/// 바뀌어 타이머를 연다. 길게 누르면 지난 시각으로 적는 시트(today.quick.past).
+private struct QuickBlock: View {
     @Environment(TodayViewModel.self) private var vm
     @Binding var sheet: CareSheet?
     @State private var started = 0
@@ -129,19 +224,22 @@ private struct QuickButtons: View {
     var body: some View {
         let kinds = CareRules.quickKinds(sleepDiaper: vm.ui.care.sleepDiaperEnabled)
         // 큰 글자에서는 두 줄로 나눠 글자가 쪼개지지 않게 한다.
-        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.s3), count: typeSize.isAccessibilitySize ? 2 : kinds.count)
-        LazyVGrid(columns: columns, spacing: DS.s3) {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 2 : kinds.count)
+        LazyVGrid(columns: columns, spacing: 14) {
             ForEach(kinds, id: \.self) { kind in
                 let running = CareRules.inProgress(kind, in: vm.ui.care.events)
                 let title = running == nil ? CareText.quickLabel(kind) : kind == .sleep ? CareText.sleepRunning : CareText.feedRunning
-                // U51: 평소 surfaceRaised·아이콘 종류 색·글자 textPrimary, 진행 중 accent·onAccent. 종류 색을 바탕에 깔지 않는다.
-                VStack(spacing: DS.s1) {
-                    Image(ico: DS.icon(kind)).font(.title2).foregroundStyle(running == nil ? DS.color(kind) : DS.onAccent)
-                    Text(title).font(DS.headline).foregroundStyle(running == nil ? DS.textPrimary : DS.onAccent)
+                // Button + 동시 길게 누르기는 손을 뗄 때 누름도 함께 돈다(지난 기록 시트와 시작이 겹친다). 누름·길게 누르기를 한 뷰에서 갈라 받는다
+                VStack(spacing: 10) {
+                    IconImage(DS.icon(kind), size: 24)
+                        .foregroundStyle(running == nil ? DS.textPrimary : DS.surface)
+                        .frame(width: 56, height: 56)
+                        .background(running == nil ? DS.surfaceRaised : DS.textPrimary, in: Circle())
+                    Text(title).font(DS.font(14, 600)).foregroundStyle(running == nil ? DS.textSecondary : DS.textPrimary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
-                .frame(maxWidth: .infinity, minHeight: 72)
-                .background(running == nil ? DS.surfaceRaised : DS.accent, in: RoundedRectangle(cornerRadius: DS.rL))
-                .contentShape(RoundedRectangle(cornerRadius: DS.rL))
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
                 .onTapGesture { tap(kind, running: running) }
                 .onLongPressGesture(minimumDuration: 0.5) { sheet = .quick(kind) }
                 .accessibilityElement(children: .ignore)
@@ -152,6 +250,7 @@ private struct QuickButtons: View {
             }
         }
         .sensoryFeedback(.success, trigger: started)
+        .block(padding: EdgeInsets(top: 18, leading: 8, bottom: 18, trailing: 8))
     }
 
     private func tap(_ kind: CareKind, running: CareEvent?) {
@@ -163,371 +262,132 @@ private struct QuickButtons: View {
     }
 }
 
-/// 연결 안 됨의 차 타일(7장).
-struct ConnectCarTile: View {
-    @Environment(AppViewModel.self) private var root
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.s3) {
-            Label(CareText.carTileUnpaired, systemImage: "car.fill").font(DS.body)
-            Button(CareText.connectCar) { root.showConnect() }.accentButton().controlSize(.large)   // 옅은 바탕 위 .bordered는 대비 3.7:1(13장). large는 44pt 넘는다(8장)
-        }
-        .padding(DS.s4).frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.cCar.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.rM))
-    }
-}
-
-/// guardian 오늘 맨 위 인계 알림 띠(있을 때). 글자는 차가 만든 문장과 지금 화면의 '몇 분 전'이다.
-private struct GuardianAlertBands: View {
+/// guardian 오늘 맨 위 인계 알림(시안 .alert-c): 배지 "차에서 · {경과}" + 차가 만든 문장. 누르면 상세.
+private struct GuardianAlertCards: View {
     @Environment(TodayViewModel.self) private var vm
     @Environment(AppViewModel.self) private var app
 
     var body: some View {
         // '몇 분 전'은 화면을 연 채 두어도 매분 바뀐다(9장 '{n}분 전').
-        TimelineView(.everyMinute) { ctx in bands(now: ctx.date) }
-    }
-
-    private func bands(now: Date) -> some View {
-        ForEach(vm.ui.phone.alerts.prefix(5)) { a in
-            NavigationLink { AlertDetailView(id: a.id).onAppear { app.userOpenedAlert(a.id) } } label: {   // VoiceOver·키보드로 열어도 대기하던 알림 열기를 버린다
-                HStack(alignment: .top, spacing: DS.s3) {
-                    Image(systemName: "bell.badge.fill").foregroundStyle(DS.warning)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(a.body.text).foregroundStyle(DS.textPrimary).multilineTextAlignment(.leading)
-                        Text(ago(a.body.occurredAt, now: now)).font(DS.caption).monospacedDigit().foregroundStyle(DS.textSecondary)
+        TimelineView(.everyMinute) { ctx in
+            VStack(spacing: 12) {
+                ForEach(vm.ui.phone.alerts.prefix(5)) { a in
+                    NavigationLink { AlertDetailView(id: a.id).onAppear { app.userOpenedAlert(a.id) } } label: {   // VoiceOver·키보드로 열어도 대기하던 알림 열기를 버린다
+                        VStack(alignment: .leading, spacing: 10) {
+                            Badge(text: CareText.fromCar + " · " + ago(a.body.occurredAt, now: ctx.date), icon: .carFront, child: true)
+                            Text(a.body.text).font(DS.font(17, 600)).lineSpacing(8).foregroundStyle(DS.textPrimary)
+                                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(DS.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     }
-                    Spacer(minLength: 0)
+                    .buttonStyle(.press)
+                    .simultaneousGesture(TapGesture().onEnded { app.userOpenedAlert(a.id) })   // 직접 고른 알림: 대기하던 다른 알림 열기는 버린다
                 }
-                .padding(DS.s3).frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.rS))   // 경고 아이콘 대비 4.5:1(15%에서는 4.2:1)
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(TapGesture().onEnded { app.userOpenedAlert(a.id) })   // 직접 고른 알림: 대기하던 다른 알림 열기는 버린다
         }
     }
 }
 
-/// guardian 오늘의 최근 리포트 3개(5장). 머리를 누르면 리포트 목록(안드로이드와 같다).
-private struct GuardianReports: View {
+/// 차 카드(owner, 시안 .car-tile): 3D 차(정차 실시간, 손가락으로 돌림) + "● 연결됨" + 마지막 연락. 아래 줄을 누르면 차 탭.
+struct CarTile: View {
+    /// 기기 목록의 차(owner만 받는다).
+    let car: DeviceInfo?
+    let offline: Bool
+    var phones: Int? = nil
+    var stageHeight: CGFloat = 150
+    var open: (() -> Void)? = nil
+
+    /// 차 카드 글(7.2). 마지막 연락은 U20 경과(1분 미만 '방금', 그 밖 '5분 전'·'1시간 전'·'1시간 15분 전', 연결 계약 5.6·L100).
+    func text(now: Date) -> String {
+        if offline { return "알 수 없음" }
+        guard let car else { return "차를 기다리고 있어요" }
+        if car.online { return "연결됨" }
+        guard let last = car.lastSeenAt.flatMap(Rfc3339.parse) else { return "차 꺼짐" }
+        return "차 꺼짐 · 마지막 연락 " + CareText.ago(CareTime.ms(now) - CareTime.ms(last))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            CarStageCard(preset: .tile).frame(height: stageHeight)
+            row
+        }
+        .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
+    }
+
+    @ViewBuilder private var row: some View {
+        let content = HStack(alignment: .bottom, spacing: 10) {
+            TimelineView(.everyMinute) { ctx in   // 경과는 화면을 연 채 두어도 바뀐다(7.2)
+                let t = text(now: ctx.date)
+                HStack(spacing: 6) {
+                    if car?.online == true, !offline { Circle().fill(DS.active).frame(width: 8, height: 8) }
+                    Text(t).font(DS.font(16, 600)).monospacedDigit().foregroundStyle(DS.textPrimary)
+                }
+            }
+            Spacer(minLength: 8)
+            if let phones { HStack(spacing: 4) { IconImage(.smartphone, size: 16); Text("\(phones)대").font(DS.font(14, 500)) }.foregroundStyle(DS.textTertiary) }
+            if open != nil { Chevron() }
+        }
+        .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 18)
+        .frame(minHeight: 44)
+        if let open {
+            Button(action: open) { content.contentShape(Rectangle()) }.buttonStyle(.plain)
+                .accessibilityHint(CareText.tabCar)
+        } else { content }
+    }
+}
+
+/// 연결 안 됨의 차 카드(7장): 안내 한 줄 + '차와 연결하기'.
+struct ConnectCarTile: View {
+    @Environment(AppViewModel.self) private var root
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                IconImage(.carFront, size: 20).foregroundStyle(DS.textSecondary).frame(width: 40, height: 40).background(DS.surfaceRaised, in: Circle())
+                Text(CareText.carTileUnpaired).typeStyle(.body).foregroundStyle(DS.textPrimary)
+            }
+            Button { root.showConnect() } label: { Label { Text(CareText.connectCar) } icon: { IconImage(.qrCode, size: 20) } }
+                .buttonStyle(.pill)
+        }
+        .block()
+    }
+}
+
+/// 최근 리포트(시안 '최근 리포트' 블록). owner는 머리 '전체' → 차 탭, guardian은 머리를 누르면 리포트 목록(안드로이드와 같다).
+private struct RecentReports: View {
     @Environment(TodayViewModel.self) private var vm
+    let owner: Bool
+    let openCarTab: () -> Void
 
     var body: some View {
-        if vm.ui.phone.alerts.isEmpty && vm.ui.phone.reports.isEmpty {
-            Text("아직 받은 리포트·인계 알림이 없어요").foregroundStyle(DS.textSecondary)   // 계약 7.2
+        let reports = vm.ui.phone.reports
+        if !owner && vm.ui.phone.alerts.isEmpty && reports.isEmpty {
+            FootNote("아직 받은 리포트·인계 알림이 없어요")   // 계약 7.2
         }
-        if !vm.ui.phone.reports.isEmpty {
-            NavigationLink { ReportListView() } label: {
-                HStack(spacing: DS.s1) { Text(CareText.recentReports); Image(systemName: "chevron.right").font(DS.caption).accessibilityHidden(true) }.font(DS.headline)
-                    .frame(minHeight: 44).contentShape(Rectangle())   // 터치 영역 44pt(8장)
-            }
-            .padding(.top, DS.s2)
-            ForEach(vm.ui.phone.reports.prefix(3)) { r in   // 받을 때 시작 시각 늦은 순으로 둔다(InboxRules)
-                NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }
-                Divider()
-            }
-        }
-    }
-}
-
-// MARK: 시트
-
-struct CareSheetView: View {
-    let sheet: CareSheet
-
-    var body: some View {
-        switch sheet {
-        case .quick(let kind, let day): Scoped({ $0.careSheet() }) { _ in CareEditSheet(original: nil, kind: kind, day: day) }
-        case .edit(let id):
-            Scoped({ $0.careSheet() }) { vm in
-                if let e = vm.care.events.first(where: { $0.id == id }) { CareEditSheet(original: e, kind: e.kind) }
-            }
-        case .timer(let id): Scoped({ $0.timer(id: id) }) { _ in TimerView() }
-        }
-    }
-}
-
-/// 젖병 양 행: "양" + "{n}ml". 값이 없으면 + 로 10ml부터 넣는다.
-private struct AmountRow: View {
-    @Binding var amount: Int?
-
-    var body: some View {
-        Stepper {
-            LabeledContent(CareText.rowAmount, value: amount.map(CareText.ml) ?? "").labeledContentStyle(TokenLabeledContentStyle())
-        } onIncrement: {
-            amount = min(CareRules.amountRange.upperBound, (amount ?? 0) + 10)
-        } onDecrement: {
-            amount = amount.map { max(CareRules.amountRange.lowerBound, $0 - 10) }
-        }
-    }
-}
-
-/// 타이머(C2): 큰 경과 · 끝내기 · 시작 시각 수정 · 수유 쪽 바꾸기(젖병이면 양) · 이 기록 지우기. 최대 길이를 넘으면 U14의 두 버튼.
-struct TimerView: View {
-    @Environment(TimerViewModel.self) private var vm
-    @Environment(\.dismiss) private var dismiss
-    @State private var editingStart = false
-    @State private var pickingEnd = false
-    @State private var picked = Date()
-    @State private var error: String?
-    @State private var overlapping: CareEvent?
-    @State private var askOverlap = false
-
-    private var event: CareEvent? { vm.ui.event }
-
-    var body: some View {
-        NavigationStack {
-            if let e = event, e.inProgress {
-                ScrollView {
-                    VStack(spacing: DS.s5) {
-                        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                            let now = CareTime.ms(ctx.date)
-                            VStack(spacing: DS.s4) {
-                                Text(CareFormat.timer(CareRules.elapsedMs(e, now: now))).font(DS.timer).lineLimit(1).minimumScaleFactor(0.5)
-                                    .accessibilityLabel(CareFormat.duration(CareRules.elapsedMs(e, now: now)))
-                                if CareRules.isOverLimit(e, now: now) { overLimit(e) }
-                                else {
-                                    Button { vm.end(); dismiss() } label: {
-                                        Text(CareText.end).font(DS.title).frame(maxWidth: .infinity, minHeight: 56)
-                                    }
-                                    .accentButton()
-                                }
-                            }
+        if !reports.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                if owner {
+                    BlockHeader(title: CareText.recentReports, link: CareText.all) { openCarTab() }
+                } else {
+                    HStack {
+                        Text(CareText.recentReports).typeStyle(.title).foregroundStyle(DS.textPrimary).accessibilityAddTraits(.isHeader)
+                        Spacer(minLength: 8)
+                        NavigationLink { ReportListView() } label: {
+                            HStack(spacing: 2) { Text(CareText.all).font(DS.font(14, 500)); IconImage(.chevronRight, size: 16) }
+                                .foregroundStyle(DS.textTertiary).frame(minHeight: 44).contentShape(Rectangle())
                         }
-                        if e.kind == .feed { feedControls(e) }
-                        Text(CareFormat.clock(CareTime.date(e.startAt), e.timeZone)).font(DS.body).foregroundStyle(DS.textSecondary)
-                        Button { picked = CareTime.date(e.startAt); editingStart = true; pickingEnd = false } label: { Text(CareText.editStart).frame(minHeight: 44).contentShape(Rectangle()) }   // 44pt
-                        if editingStart || pickingEnd { timePicker(e) }
-                        if let error { Text(error).font(DS.caption).foregroundStyle(DS.danger) }
-                        if vm.ui.guardian { Text(CareText.guardianNote).font(DS.caption).foregroundStyle(DS.textSecondary) }
-                        Button(role: .destructive) { vm.delete(); dismiss() } label: { Text(CareText.deleteRecord).frame(minHeight: 44).contentShape(Rectangle()) }
-                            .foregroundStyle(DS.danger)   // 시스템 빨강은 밝은 바탕에서 3.4:1(13장 danger). 44pt
+                        .buttonStyle(.plain)
                     }
-                    .padding(DS.s5)
+                    .padding(.bottom, 4)
                 }
-                .screenBackground()
-                .navigationTitle(CareText.quickLabel(e.kind))
-                .navigationBarTitleDisplayMode(.inline)
-                .alert(CareSaveResult.overlap.message(for: e.kind) ?? "", isPresented: $askOverlap, presenting: overlapping) { x in
-                    Button(CareText.saveAnyway) { commitTime(x, allowOverlap: true) }
-                    Button(CareText.fix, role: .cancel) {}
-                }
-            } else {
-                Color.clear.onAppear { dismiss() }   // 끝났거나 지워졌다
-            }
-        }
-        .presentationDetents([.large])
-    }
-
-    /// 최대 길이를 넘음: 안내 문장(U36) + U14 버튼 둘.
-    @ViewBuilder private func overLimit(_ e: CareEvent) -> some View {
-        Text(e.kind == .sleep ? CareText.overLimitSleep : CareText.overLimitFeed).font(DS.headline).multilineTextAlignment(.center)
-        Button(CareText.pickEnd) { picked = Date(); pickingEnd = true; editingStart = false }
-            .accentButton().controlSize(.large)
-        Button(CareText.closeEndUnknown) { vm.endUnknown(); dismiss() }
-            .neutralButton().controlSize(.large)
-    }
-
-    @ViewBuilder private func feedControls(_ e: CareEvent) -> some View {
-        AdaptiveChoice(title: CareText.rowSide, options: FeedSide.allCases, label: { $0.label }, selection: Binding(get: { e.feedSide }, set: { side in
-            var x = e
-            x.feedSide = side
-            if side != .bottle { x.amountMl = nil }
-            show(vm.save(x, allowOverlap: true), kind: e.kind)
-        }))
-        if e.feedSide == .bottle {
-            AmountRow(amount: Binding(get: { e.amountMl }, set: { n in
-                var x = e
-                x.amountMl = n
-                show(vm.save(x, allowOverlap: true), kind: e.kind)
-            }))
-        }
-    }
-
-    private func timePicker(_ e: CareEvent) -> some View {
-        VStack(spacing: DS.s3) {
-            DatePicker(editingStart ? CareText.rowStart : CareText.rowEnd, selection: $picked, in: ...Date().addingTimeInterval(60))
-                .environment(\.timeZone, e.timeZone)   // R13: 목록처럼 그 기록의 시간대로 보인다
-            Button {
-                var x = e
-                if editingStart { x.startAt = CareTime.ms(picked) } else { x.endAt = CareTime.ms(picked) }
-                commitTime(x, allowOverlap: false)
-            } label: { Text(CareText.save).frame(minHeight: 44) }   // 44pt
-            .neutralButton()
-        }
-    }
-
-    /// 시각을 바꾸면 겹침을 먼저 묻는다(R4). 쪽·양은 시각을 바꾸지 않아 묻지 않는다.
-    private func commitTime(_ x: CareEvent, allowOverlap: Bool) {
-        let r = vm.save(x, allowOverlap: allowOverlap)
-        if r == .overlap { overlapping = x; askOverlap = true; return }
-        if show(r, kind: x.kind) {
-            editingStart = false
-            if pickingEnd { dismiss() }
-        }
-    }
-
-    @discardableResult
-    private func show(_ r: CareSaveResult, kind: CareKind) -> Bool {
-        error = r == .notSaved ? NoticeRules.saveFailed : r.message(for: kind)   // 저장 실패는 시트 안에서도 보인다(띠의 다른 안내까지 옮기지 않게)
-        return r == .saved
-    }
-}
-
-/// 빠른 기록(C3)·고치기(C4) 시트. 새 수유·잠은 시작만 적고 끝은 '끝 시각 모름'이 기본이다.
-struct CareEditSheet: View {
-    @Environment(CareSheetViewModel.self) private var vm
-    @Environment(\.dismiss) private var dismiss
-    let original: CareEvent?
-    let kind: CareKind
-    var day: String? = nil
-
-    @State private var chip: Int? = 0          // 몇 분 전(0 = 지금, nil = 직접)
-    @State private var start = Date()
-    @State private var end = Date()
-    @State private var endUnknown = true
-    @State private var side: FeedSide?
-    @State private var amount: Int?
-    @State private var diaper: DiaperKind?
-    @State private var note = ""
-    @State private var error: String?
-    @State private var askOverlap = false
-    @State private var loaded = false
-
-    private var hasDuration: Bool { kind == .feed || kind == .sleep }
-    /// R13: 고치는 기록은 그 기록의 시간대로 보인다(안드로이드 `zoneOrDevice`와 같다). 새 기록은 기기 시간대.
-    private var zone: TimeZone { original?.timeZone ?? .current }
-    /// 끝 칸이 자리 값이다: 새 기록이거나 끝 모름 기록을 고칠 때. 이때만 끝을 시작 뒤로 맞춘다(R3). 저장된 끝은 그대로 둔다
-    private var endIsPlaceholder: Bool { original?.endAt == nil }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    LabeledContent(hasDuration ? CareText.rowStart : CareText.rowTime) {
-                        if original == nil && day == nil { chips }   // 몇 분 전 칩은 오늘 기준이다
-                    }
-                    if original != nil || chip == nil {
-                        DatePicker(hasDuration ? CareText.rowStart : CareText.rowTime, selection: $start, in: ...Date().addingTimeInterval(60))
-                            .labelsHidden().environment(\.timeZone, zone)
-                            .onChange(of: start) { _, s in if endIsPlaceholder { end = max(end, s) } }
-                    }
-                    if hasDuration {
-                        Toggle(CareText.endUnknown, isOn: $endUnknown)
-                            .onChange(of: endUnknown) { _, unknown in if !unknown, endIsPlaceholder { end = max(end, start) } }
-                        if !endUnknown {
-                            DatePicker(CareText.rowEnd, selection: $end, in: ...Date().addingTimeInterval(60))
-                                .environment(\.timeZone, zone)
-                        }
-                    }
-                }
-                if kind == .feed {
-                    Section {
-                        LabeledContent(CareText.rowSide) {
-                            AdaptiveChoice(title: CareText.rowSide, options: FeedSide.allCases, label: { $0.label }, selection: $side)
-                        }
-                        if side == .bottle { AmountRow(amount: $amount) }
-                    }
-                }
-                if kind == .diaper {
-                    Section {
-                        LabeledContent(CareText.rowKind) {
-                            AdaptiveChoice(title: CareText.rowKind, options: DiaperKind.allCases, label: { CareText.diaperLabel($0) }, selection: $diaper)
-                        }
-                    }
-                }
-                Section {
-                    TextField(CareText.notePlaceholder, text: $note, axis: .vertical)
-                        .accessibilityLabel(CareText.rowNote)
-                        .onChange(of: note) { _, v in let l = CareRules.noteLimited(v); if l != v { note = l } }   // 200에서 더 받지 않는다(U17)
-                } header: {
-                    SectionHeader(CareText.rowNote)
-                } footer: {
-                    VStack(alignment: .leading, spacing: DS.s1) {
-                        if let error { Text(error).foregroundStyle(DS.danger) }
-                        if vm.guardian { SectionHeader(CareText.guardianNote) }
-                    }
-                }
-                if let e = original {
-                    Section {
-                        Button(CareText.delete, role: .destructive) { vm.delete(e.id); dismiss() }.foregroundStyle(DS.danger)
-                    }
+                ForEach(reports.prefix(3)) { r in   // 받을 때 시작 시각 늦은 순으로 둔다(InboxRules)
+                    NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }.buttonStyle(.plain)
                 }
             }
-            .screenBackground()
-            .navigationTitle(CareText.sheetTitle(kind, editing: original != nil))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(CareText.cancel) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(CareText.save) { save(allowOverlap: false) }
-                        .disabled(kind == .note && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .alert(CareSaveResult.overlap.message(for: kind) ?? "", isPresented: $askOverlap) {
-                Button(CareText.saveAnyway) { save(allowOverlap: true) }
-                Button(CareText.fix, role: .cancel) {}
-            }
-            .onAppear(perform: load)
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private var chips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.s2) {
-                chipButton(CareText.chipNow, 0)
-                ForEach(CareText.chipMinutes, id: \.self) { chipButton(CareText.chip(minutes: $0), $0) }
-                chipButton(CareText.chipCustom, nil)
-            }
-        }
-    }
-
-    private func chipButton(_ title: String, _ minutes: Int?) -> some View {
-        Button {
-            chip = minutes
-            // 누른 때 기준으로 시작을 정한다(처음 '지금'은 시트를 연 때). 끝 기본값보다 늦어지지 않는다. '직접'은 지금 값에서 고른다.
-            if let minutes { start = Date().addingTimeInterval(-Double(minutes * 60)); end = max(end, start) }   // 시트를 오래 열어 두어도 끝 ≥ 시작(R3)
-        } label: { Text(title).frame(minHeight: 44) }   // 44pt(8장)
-        .choiceButton(selected: chip == minutes)
-        .accessibilityAddTraits(chip == minutes ? .isSelected : [])
-    }
-
-    private func load() {
-        guard !loaded else { return }
-        loaded = true
-        guard let e = original else {
-            if kind == .diaper { diaper = .wet }   // 새 기저귀는 소변으로 시작한다(안드로이드 CareScreens와 같다. 종류 없이 저장하지 않게)
-            // 기록 탭에서 다른 날을 골랐으면 그날 낮 12시에서 고른다(안드로이드와 같다).
-            if let day, let noon = CareRules.noon(day, .current) { chip = nil; start = CareTime.date(noon); end = start }
-            return
-        }
-        start = CareTime.date(e.startAt)
-        if let x = e.endAt { end = CareTime.date(x); endUnknown = false } else { end = start }
-        side = e.feedSide
-        amount = e.amountMl
-        diaper = e.diaper
-        note = e.note ?? ""
-    }
-
-    private func save(allowOverlap: Bool) {
-        let now = Date()
-        let t = CareTime.ms(now)
-        var e = original ?? CareEvent(id: ULID.generate(date: now), kind: kind, startAt: 0, zone: TimeZone.current.identifier,
-                                      createdAt: t, updatedAt: t)
-        e.startAt = CareTime.ms(start)
-        if hasDuration {
-            e.endAt = endUnknown ? nil : CareTime.ms(end)
-            e.endUnknown = endUnknown
-        }
-        e.feedSide = kind == .feed ? side : nil
-        e.amountMl = kind == .feed && side == .bottle ? amount : nil
-        e.diaper = kind == .diaper ? diaper : nil
-        let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        e.note = n.isEmpty ? nil : n
-        switch vm.save(e, allowOverlap: allowOverlap, editing: original != nil) {
-        case .saved, .gone: dismiss()   // 그사이 지워졌으면 되살리지 않고 닫는다(R10)
-        case .overlap: askOverlap = true
-        case .failed(let m): error = m   // 저장 실패는 시트 안에서도 보인다(띠의 다른 안내까지 옮기지 않게)
+            .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))
         }
     }
 }

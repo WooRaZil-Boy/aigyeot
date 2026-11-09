@@ -12,6 +12,8 @@ struct SettingsUiState {
     var online: Bool
     /// 정보·라이선스의 판 글자.
     var version: String
+    /// 연결된 휴대폰 수(owner의 기기 목록, 설정 '보호자' 줄 "{n}명"). guardian은 목록을 받지 않아 0.
+    var phones: Int = 0
 
     var connected: Bool { connection.creds != nil }
     var role: PhoneRole? { connection.creds?.role }
@@ -58,7 +60,8 @@ final class SettingsViewModel {
 
     var ui: SettingsUiState {
         SettingsUiState(care: careRepo.care, connection: stateRepo.connection, disconnect: disconnect.run, online: connection.status.online,
-                        version: version)
+                        version: version,
+                        phones: stateRepo.state.devices.filter { $0.role == .owner || $0.role == .guardian }.count)
     }
 
     func setNickname(_ name: String) { recordCare.setNickname(name) }

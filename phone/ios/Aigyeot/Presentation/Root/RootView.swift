@@ -23,34 +23,57 @@ struct RootView: View {
     }
 }
 
-/// 안내 한 화면: 무엇이 오가는지(G31). 글과 순서는 7.1 `intro.*` 그대로다(U43).
+/// 안내 한 화면: 무엇이 오가는지(G31, 시안 S.intro). 3D 차 무대 + 앱 표지 → 제목·첫 줄 → 오가는 것 목록 → 버튼 둘.
+/// 글과 순서는 7.1 `intro.*` 그대로다(U43, 거치는 곳 `intro.relay`도 빼지 않는다).
 struct IntroView: View {
     @Environment(AppViewModel.self) private var vm
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.s3) {
+        VStack(spacing: 0) {
             ScrollView {   // 큰 글자에서도 버튼이 화면 밖으로 밀리지 않게 글만 굴린다
-                VStack(alignment: .leading, spacing: DesignSystem.s5) {
-                    Text(CareText.introTitle).font(DesignSystem.display)
-                    Text(CareText.introLead).font(DesignSystem.headline)
-                    VStack(alignment: .leading, spacing: DesignSystem.s3) {
-                        Label(CareText.introSends, systemImage: "arrow.left.arrow.right.circle")
-                        Label(CareText.introNotSent, systemImage: "lock.circle")
-                        Label(CareText.introRelay, systemImage: "server.rack")
-                        Label(CareText.introAI, systemImage: "sparkles")
+                VStack(alignment: .leading, spacing: 0) {
+                    ZStack(alignment: .topLeading) {
+                        RadialGradient(colors: [DesignSystem.stageGlow, DesignSystem.bg], center: UnitPoint(x: 0.5, y: 0.7), startRadius: 0, endRadius: 260)
+                        CarStageCard(preset: .phone).padding(.top, 40)
+                        AppMark(size: 52).padding(.leading, 20).padding(.top, 22)
                     }
-                    .font(DesignSystem.body)
+                    .frame(height: 250)
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(CareText.introTitle).typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
+                            Text(CareText.introLead).font(DesignSystem.font(16, 500)).foregroundStyle(DesignSystem.textSecondary)
+                        }
+                        VStack(alignment: .leading, spacing: 10) {
+                            row(.link, CareText.introSends)
+                            row(.x, CareText.introNotSent, tone: DesignSystem.child)
+                            row(.server, CareText.introRelay)
+                            row(.sparkles, CareText.introAI)
+                        }
+                    }
+                    .padding(.horizontal, 20).padding(.top, 8)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, DesignSystem.s6)
             }
-            Button { vm.connectFromIntro() } label: { Text(CareText.connectCar).frame(maxWidth: .infinity) }   // 안내에서 받은 링크가 있으면 그 확인 화면(U62)
-                .accentButton().controlSize(.large)
-            Button { vm.recordsOnlyFromIntro() } label: { Text(CareText.recordOnly).frame(maxWidth: .infinity) }
-                .neutralButton().controlSize(.large)
+            VStack(spacing: 12) {
+                Button { vm.connectFromIntro() } label: { Label { Text(CareText.connectCar) } icon: { IconImage(.qrCode, size: 20) } }   // 안내에서 받은 링크가 있으면 그 확인 화면(U62)
+                    .buttonStyle(.pillBig)
+                Button { vm.recordsOnlyFromIntro() } label: { Text(CareText.recordOnly) }
+                    .buttonStyle(.pillTonal)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 16)
         }
-        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
+    }
+
+    /// 한 줄: 회색 둥근 네모(34) 아이콘 + 13.5/500 흐린 글.
+    private func row(_ icon: Ico, _ text: String, tone: Color = DesignSystem.textSecondary) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            IconImage(icon, size: 18).foregroundStyle(tone)
+                .frame(width: 34, height: 34)
+                .background(DesignSystem.surfaceRaised, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            Text(text).font(DesignSystem.font(13.5, 500)).lineSpacing(6).foregroundStyle(DesignSystem.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -59,21 +82,22 @@ struct GoneView: View {
     @Environment(AppViewModel.self) private var vm
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 12) {
             // 가장 큰 글자에서는 두 버튼이 높이를 차지해 문장이 말줄임됐다. 문장 칸을 굴린다(8장 동적 글자 크기).
             ScrollView {
-                Label("연결이 끊겼어요. 다시 연결해 주세요.", systemImage: "exclamationmark.triangle")
-                    .font(.title3.bold())
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, DesignSystem.s6)
+                VStack(alignment: .leading, spacing: 16) {
+                    IconImage(.unlink, size: 24).foregroundStyle(DesignSystem.warning)
+                        .frame(width: 52, height: 52).background(DesignSystem.surfaceRaised, in: Circle())
+                    Text("연결이 끊겼어요. 다시 연결해 주세요.").typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, DesignSystem.s6)
             }
             .scrollBounceBehavior(.basedOnSize)
-            Button { vm.reconnectAfterGone() } label: { Text(CareText.reconnect).frame(maxWidth: .infinity) }
-                .accentButton().controlSize(.large)
-            Button { vm.continueWithoutCar() } label: { Text(CareText.keepRecording).frame(maxWidth: .infinity) }
-                .neutralButton().controlSize(.large)
+            Button { vm.reconnectAfterGone() } label: { Text(CareText.reconnect) }.buttonStyle(.pillBig)
+            Button { vm.continueWithoutCar() } label: { Text(CareText.keepRecording) }.buttonStyle(.pillTonal)
         }
-        .padding(24)
+        .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
     }
 }
@@ -93,17 +117,16 @@ struct ConnectView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("차 화면의 QR을 찍거나 코드를 넣어 주세요").font(.title2.bold())
-                    Button { scanning = true } label: {
-                        Label("QR 찍기", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
-                    }
-                    .accentButton().controlSize(.large).disabled(connecting)
+                    Text("차 화면의 QR을 찍거나 코드를 넣어 주세요").typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
+                    Button { scanning = true } label: { Label { Text("QR 찍기") } icon: { IconImage(.scanLine, size: 20) } }
+                        .buttonStyle(.pillBig).disabled(connecting)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("코드로 입력").font(.headline)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("코드로 입력").typeStyle(.headline).foregroundStyle(DesignSystem.textPrimary)
                         TextField("6자리 숫자 또는 초대 코드", text: $code)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.title3.monospaced())
+                            .font(DesignSystem.font(20, 600, relativeTo: .title3, monospacedDigits: true))
+                            .padding(.horizontal, 16).frame(minHeight: 56)
+                            .background(DesignSystem.surface, in: RoundedRectangle(cornerRadius: DesignSystem.rM, style: .continuous))
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .onChange(of: code) { _, v in
@@ -112,15 +135,16 @@ struct ConnectView: View {
                                 // 6자리를 다 넣으면 바로 연결한다.
                                 if v.filter(\.isNumber).count == 6, v.allSatisfy({ $0.isNumber || $0 == " " || $0 == "-" }) { submit() }   // 잠금 중이면 submit이 막는다
                             }
-                        if let e = inputError ?? failure ?? app.linkError { Text(e).font(.footnote).foregroundStyle(DesignSystem.danger) }
-                        if connecting { HStack { ProgressView(); Text("확인하고 있어요") } }
-                        Button { submit() } label: { Text("확인").frame(minWidth: 44, minHeight: 44) }.neutralButton().disabled(code.isEmpty || connecting || vm.ui.isLocked)   // 44pt
+                        if let e = inputError ?? failure ?? app.linkError { Text(e).font(DesignSystem.caption).foregroundStyle(DesignSystem.danger) }
+                        if connecting { HStack { ProgressView(); Text("확인하고 있어요").font(DesignSystem.body) } }
+                        Button { submit() } label: { Text("확인") }.buttonStyle(.pillTonal).disabled(code.isEmpty || connecting || vm.ui.isLocked)
                     }
                 }
-                .padding(24)
+                .padding(20)
             }
             .screenBackground()
             .navigationTitle("연결")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // 연결하지 않고 탭(연결 안 됨)으로 돌아간다(U7).
                 ToolbarItem(placement: .cancellationAction) {
@@ -209,22 +233,22 @@ struct ConfirmView: View {
         VStack(alignment: .leading, spacing: 20) {
             ScrollView {   // 큰 글자에서 안내·오류가 함께 있어도 버튼이 밀리지 않게 글만 굴린다(IntroView와 같다)
                 VStack(alignment: .leading, spacing: 20) {
-                    Text(code.confirmTitle).font(.title2.bold())
+                    Text(code.confirmTitle).typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
                     Text(code.display).font(.system(size: codeSize, weight: .bold, design: .monospaced)).minimumScaleFactor(0.5).lineLimit(1)
-                    if case .invite = code { Text("다른 보호자가 보낸 초대 코드예요. 리포트와 인계 알림을 받게 돼요.").font(.callout) }
-                    if replacing { Text("지금 연결된 차를 끊고 새 차에 연결할까요?").font(.callout) }   // G16
-                    if let failure { Text(failure.message).foregroundStyle(DesignSystem.danger) }
+                    if case .invite = code { Text("다른 보호자가 보낸 초대 코드예요. 리포트와 인계 알림을 받게 돼요.").typeStyle(.body).foregroundStyle(DesignSystem.textSecondary) }
+                    if replacing { Text("지금 연결된 차를 끊고 새 차에 연결할까요?").typeStyle(.body).foregroundStyle(DesignSystem.textSecondary) }   // G16
+                    if let failure { Text(failure.message).font(DesignSystem.body).foregroundStyle(DesignSystem.danger) }
                     if let e = app.linkError { Text(e).font(DesignSystem.caption).foregroundStyle(DesignSystem.textSecondary) }   // U52 pair.busy
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, DesignSystem.s6)
             }
-            if busy { HStack { ProgressView(); Text("확인하고 있어요") } }
-            Button { connect() } label: { Text(replacing ? CareText.pairConfirmSwitch : CareText.pairConfirm).frame(maxWidth: .infinity) }   // U49
-                .accentButton().controlSize(.large).disabled(busy || vm.ui.isLocked)
-            Button { dismiss() } label: { Text("아니에요").frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle()) }.disabled(busy)   // 터치 영역 44pt(8장)
+            if busy { HStack { ProgressView(); Text("확인하고 있어요").font(DesignSystem.body) } }
+            Button { connect() } label: { Text(replacing ? CareText.pairConfirmSwitch : CareText.pairConfirm) }   // U49
+                .buttonStyle(.pillBig).disabled(busy || vm.ui.isLocked)
+            Button { dismiss() } label: { Text("아니에요") }.buttonStyle(.pillTonal).disabled(busy)
         }
-        .padding(24)
+        .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
         .interactiveDismissDisabled(busy)
         .onChange(of: busy) { _, b in if !b { switching = nil } }

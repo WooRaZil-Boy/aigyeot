@@ -42,11 +42,15 @@ struct CareExportFile: Transferable {
 struct GuardiansView: View {
     var body: some View {
         Scoped({ $0.guardians() }) { vm in
-            Group {
-                if vm.ui.role == .owner { OwnerGuardians() } else { GuardianToggle() }
+            ScrollView {
+                Group {
+                    if vm.ui.role == .owner { OwnerGuardians() } else { GuardianToggle() }
+                }
+                .screenPadding()
             }
             .screenBackground()
             .navigationTitle(CareText.guardians)
+            .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
         }
     }
@@ -56,53 +60,63 @@ private struct OwnerGuardians: View {
     @Environment(GuardiansViewModel.self) private var vm
 
     var body: some View {
-        List {
-            Section {
-                Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요").font(.callout)
-                Text("초대 코드는 24시간 동안, 한 번만 쓸 수 있어요.").font(.footnote).foregroundStyle(DesignSystem.textSecondary)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요").typeStyle(.body).foregroundStyle(DesignSystem.textPrimary)
+                Text("초대 코드는 24시간 동안, 한 번만 쓸 수 있어요.").font(DesignSystem.caption).foregroundStyle(DesignSystem.textTertiary)
                 if let invite = vm.ui.invite { InviteCard(invite: invite) }
-                if vm.ui.busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요") } }
-                if let error = vm.ui.error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
-                Button { Task { await vm.makeInvite() } } label: { Label("초대 만들기", systemImage: "person.badge.plus") }.disabled(vm.ui.busy || vm.ui.offline)
-                if vm.ui.offline { Text("인터넷이 필요해요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }
+                if vm.ui.busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요").font(DesignSystem.body) } }
+                if let error = vm.ui.error { Text(error).font(DesignSystem.caption).foregroundStyle(DesignSystem.danger) }
+                Button { Task { await vm.makeInvite() } } label: { Label { Text("초대 만들기") } icon: { IconImage(.userPlus, size: 20) } }
+                    .buttonStyle(.pill).disabled(vm.ui.busy || vm.ui.offline)
+                if vm.ui.offline { Text("인터넷이 필요해요").font(DesignSystem.caption).foregroundStyle(DesignSystem.textTertiary) }
             }
-            Section {
-                if vm.ui.phones.isEmpty { Text("아직 없어요").foregroundStyle(DesignSystem.textSecondary) }
+            .block()
+            VStack(alignment: .leading, spacing: 0) {
+                BlockHeader(title: "연결된 휴대폰")
+                if vm.ui.phones.isEmpty { Text("아직 없어요").typeStyle(.body).foregroundStyle(DesignSystem.textTertiary).padding(.bottom, 12) }
                 ForEach(vm.ui.phones, id: \.deviceId) { d in
-                    HStack {
-                        Text(d.role == .owner ? "함께 타는 보호자" : "다른 보호자")
-                        if d.deviceId == vm.ui.myDeviceId { Text("(이 휴대폰)").foregroundStyle(DesignSystem.textSecondary) }
-                        Spacer()
-                        Text(d.platform == .ios ? "iPhone" : "Android").font(.footnote).foregroundStyle(DesignSystem.textSecondary)
-                    }
+                    ListRow(icon: .smartphone, title: d.role == .owner ? "함께 타는 보호자" : "다른 보호자",
+                            sub: [d.platform == .ios ? "iPhone" : "Android", d.deviceId == vm.ui.myDeviceId ? "이 휴대폰" : nil].compactMap { $0 }.joined(separator: " · ")) { EmptyView() }
                 }
-            } header: { SectionHeader("연결된 휴대폰") }
+            }
+            .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))
         }
         .task { await vm.refreshDevices() }
     }
 }
 
-/// 초대 코드, 링크로 보내기, QR(받는 사람은 연결 화면에서 QR을 찍어도 된다).
+/// 초대 코드, 링크로 보내기, QR(받는 사람은 연결 화면에서 QR을 찍어도 된다). QR 가운데에 앱 표지(시안: 실제 QR에 가운데 로고만 얹는다).
 private struct InviteCard: View {
     @ScaledMetric(relativeTo: .title) private var codeSize: CGFloat = 30   // 대조할 코드도 동적 글자 크기를 따른다(8장)
     let invite: InviteResponse
 
     var body: some View {
-        VStack(spacing: 10) {
-            Text(invite.display).font(.system(size: codeSize, weight: .bold, design: .monospaced)).minimumScaleFactor(0.5).lineLimit(1)
-            if let img = qr(invite.link) { Image(uiImage: img).interpolation(.none).resizable().frame(width: 160, height: 160).accessibilityLabel("초대 QR") }
+        VStack(spacing: 12) {
+            Text(invite.display).font(.system(size: codeSize, weight: .bold, design: .monospaced)).foregroundStyle(DesignSystem.textPrimary)
+                .minimumScaleFactor(0.5).lineLimit(1)
+            if let img = qr(invite.link) {
+                Image(uiImage: img).interpolation(.none).resizable().frame(width: 168, height: 168)
+                    .overlay { AppMark(size: 34).padding(3).background(.white, in: RoundedRectangle(cornerRadius: 11, style: .continuous)) }
+                    .padding(10).background(.white, in: RoundedRectangle(cornerRadius: DesignSystem.rM, style: .continuous))
+                    .accessibilityElement().accessibilityLabel("초대 QR")
+            }
             if let url = URL(string: invite.link) {
-                ShareLink(item: url, message: Text("아이곁 초대 코드: \(invite.display)")) { Label("링크로 보내기", systemImage: "square.and.arrow.up") }
+                ShareLink(item: url, message: Text("아이곁 초대 코드: \(invite.display)")) { Label { Text("링크로 보내기") } icon: { IconImage(.share, size: 20) } }
+                    .buttonStyle(.pillTonal)
             }
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
     }
 
     private static let ciContext = CIContext()   // 다시 그릴 때마다 만들지 않는다(만드는 비용이 크다)
 
+    /// 가운데 로고가 가리는 칸을 견디게 오류 정정 H(약 30%)로 만든다.
     private func qr(_ s: String) -> UIImage? {
         let f = CIFilter.qrCodeGenerator()
         f.message = Data(s.utf8)
+        f.correctionLevel = "H"
         guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
               let cg = Self.ciContext.createCGImage(out, from: out.extent) else { return nil }
         return UIImage(cgImage: cg)
@@ -113,29 +127,34 @@ private struct GuardianToggle: View {
     @Environment(GuardiansViewModel.self) private var vm
 
     var body: some View {
-        List {
-            Section {
-                Toggle("인계 알림 받기", isOn: Binding(
-                    get: { vm.ui.handoffAlerts },
-                    set: { on in
-                        Task {
-                            if await vm.setHandoff(on), on { await NotificationAccess.request() }   // 켤 때 다시 묻는다(7.3)
-                        }
-                    }))
-                .disabled(vm.ui.busy)   // 요청이 겹치면 응답 순서에 따라 화면과 실제 설정이 달라진다(요청 중은 뷰모델에, S17)
-                if let error = vm.ui.error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
-            } footer: {
-                SectionHeader("아기가 계속 울어 차가 운전자에게 쉼터를 제안하거나 세우도록 안내하면 알려 드려요. 리포트는 알림 설정과 상관없이 받아요.")
+        VStack(alignment: .leading, spacing: 12) {
+            Group26 {
+                SettingRow(icon: .bell, title: "인계 알림 받기") {
+                    Toggle("인계 알림 받기", isOn: Binding(
+                        get: { vm.ui.handoffAlerts },
+                        set: { on in
+                            Task {
+                                if await vm.setHandoff(on), on { await NotificationAccess.request() }   // 켤 때 다시 묻는다(7.3)
+                            }
+                        }))
+                    .labelsHidden().tint(DesignSystem.accent)
+                    .disabled(vm.ui.busy)   // 요청이 겹치면 응답 순서에 따라 화면과 실제 설정이 달라진다(요청 중은 뷰모델에, S17)
+                }
+                .accessibilityElement(children: .combine)
             }
+            if let error = vm.ui.error { FootNote(error).foregroundStyle(DesignSystem.danger) }
+            FootNote("아기가 계속 울어 차가 운전자에게 쉼터를 제안하거나 세우도록 안내하면 알려 드려요. 리포트는 알림 설정과 상관없이 받아요.")
         }
     }
 }
 
-/// 설정(5장 순서): 보호자 · 아이 별명 · 잠·기저귀도 기록하기 · (내 기록 내보내기, C7 · 다른 앱 기록 가져오기, U64) · 이 휴대폰의 기록 지우기 · 연결 끊기 · 정보·라이선스.
+/// 설정(5장 순서, 시안 S.settings 묶음): [보호자 · 아이 별명] [잠·기저귀도 기록하기] [내 기록 내보내기 · 다른 앱 기록 가져오기(U64)]
+/// [연결 끊기 · 이 휴대폰의 기록 지우기] [정보·라이선스].
 struct SettingsView: View {
     @Environment(SettingsViewModel.self) private var vm
     @State private var confirmDisconnect = false
     @State private var confirmClear = false
+    @State private var editingNickname = false
     @State private var nickname = ""
 
     private var busy: Bool { vm.ui.disconnect == .running }
@@ -143,76 +162,69 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if vm.ui.connected {
-                    Section { NavigationLink(CareText.guardians) { GuardiansView() } }
-                }
-                Section {
-                    LabeledContent(CareText.nickname) {
-                        TextField(CareText.nicknamePlaceholder, text: $nickname)
-                            .multilineTextAlignment(.trailing)
-                            .accessibilityLabel(CareText.nickname)
-                            .onSubmit { vm.setNickname(nickname) }
-                    }
-                    Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { vm.ui.care.sleepDiaperEnabled },
-                                                                    set: { vm.setSleepDiaper($0) }))
-                } footer: {
-                    SectionHeader(CareText.sleepDiaperToggleNote)
-                }
-                Section {
-                    // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다.
-                    ShareLink(item: CareExportFile(export: { [vm] in vm.export() }),
-                              preview: SharePreview("")) { Text(CareText.export) }   // U33: 공유 시트 제목은 비운다
-                    // U64: 내보내기 바로 아래. owner·guardian 모두.
-                    Button { vm.startImport() } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(CareText.importEntry)
-                            Text(CareText.importEntrySub).font(.footnote).foregroundStyle(DesignSystem.textSecondary)
+            ScrollView {
+                VStack(spacing: 12) {
+                    Group26 {
+                        if vm.ui.connected {
+                            NavigationLink { GuardiansView() } label: {
+                                SettingRow(icon: .users, title: CareText.guardians, sub: vm.ui.phones > 0 ? "\(vm.ui.phones)명" : nil)
+                            }
+                            .buttonStyle(.plain)
                         }
-                    }
-                }
-                Section {
-                    Button(CareText.clear, role: .destructive) { confirmClear = true }.foregroundStyle(DesignSystem.danger)   // 시스템 빨강은 대비 미달(13장 danger)
-                }
-                if vm.ui.connected {
-                    Section {
-                        LabeledContent("역할", value: vm.ui.role == .owner ? "함께 타는 보호자" : "다른 보호자").labeledContentStyle(TokenLabeledContentStyle())
-                        if let carId = vm.ui.carId { LabeledContent("차", value: String(carId.prefix(8))).labeledContentStyle(TokenLabeledContentStyle()) }
-                        Button(CareText.disconnect, role: .destructive) { confirmDisconnect = true }.foregroundStyle(DesignSystem.danger).disabled(busy || vm.ui.offline)
-                        if vm.ui.offline, !busy { Text("인터넷이 필요해요").font(.footnote).foregroundStyle(DesignSystem.textSecondary) }   // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서). 초대 만들기와 같다
-                        if busy { HStack { ProgressView(); Text("끊고 있어요") } }
-                        if let error { Text(error).font(.footnote).foregroundStyle(DesignSystem.danger) }
-                    } header: { SectionHeader("연결") }
-                }
-                Section {
-                    NavigationLink(CareText.about) {
-                        // U28·U63: 판, 오픈소스 라이선스(링크되는 라이브러리마다 이름·라이선스, 누르면 전문. 안드로이드와 같은 구조).
-                        List {
-                            Text(CareText.version(vm.ui.version))
-                            Section {
-                                ForEach(OssEntry.all) { e in
-                                    NavigationLink { LicenseView(entry: e) } label: {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(e.name)
-                                            Text(e.licenses.map(\.name).joined(separator: " · ")).font(.footnote).foregroundStyle(DesignSystem.textSecondary)
-                                        }
-                                    }
-                                }
-                            } header: { SectionHeader(CareText.oss) }   // 제목 대비 4.5:1
+                        Button { nickname = vm.ui.care.childNickname ?? ""; editingNickname = true } label: {
+                            SettingRow(icon: .baby, title: CareText.nickname, sub: vm.ui.care.childNickname ?? CareText.nicknamePlaceholder)
                         }
-                        .screenBackground()
-                        .navigationTitle(CareText.about)
+                        .buttonStyle(.plain)
+                    }
+                    Group26 {
+                        SettingRow(icon: .moon, title: CareText.sleepDiaperToggle, sub: CareText.sleepDiaperToggleNote) {
+                            Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { vm.ui.care.sleepDiaperEnabled }, set: { vm.setSleepDiaper($0) }))
+                                .labelsHidden().tint(DesignSystem.accent)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    Group26 {
+                        // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다. U33: 공유 시트 제목은 비운다
+                        ShareLink(item: CareExportFile(export: { [vm] in vm.export() }), preview: SharePreview("")) {
+                            SettingRow(icon: .download, title: CareText.export)
+                        }
+                        .buttonStyle(.plain)
+                        // U64: 내보내기 바로 아래. owner·guardian 모두.
+                        Button { vm.startImport() } label: { SettingRow(icon: .fileUp, title: CareText.importEntry, sub: CareText.importEntrySub) }
+                            .buttonStyle(.plain)
+                    }
+                    Group26 {
+                        if vm.ui.connected {
+                            // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서 인터넷이 필요하다). 초대 만들기와 같다
+                            Button { confirmDisconnect = true } label: {
+                                SettingRow(icon: .unlink, title: CareText.disconnect,
+                                           sub: busy ? "끊고 있어요" : vm.ui.offline ? "인터넷이 필요해요" : nil, tone: DesignSystem.textPrimary)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(busy || vm.ui.offline)
+                        }
+                        Button { confirmClear = true } label: {
+                            SettingRow(icon: .trash, title: CareText.clear, tone: DesignSystem.danger) { EmptyView() }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let error { FootNote(error).foregroundStyle(DesignSystem.danger) }
+                    Group26 {
+                        NavigationLink { AboutView(version: vm.ui.version) } label: { SettingRow(icon: .info, title: CareText.about) }
+                            .buttonStyle(.plain)
                     }
                 }
+                .screenPadding()
             }
             .screenBackground()
-            .navigationTitle("설정")
+            .navigationTitle(CareText.tabSettings)
             .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
             .modifier(ImportFlow())
-            .onAppear { nickname = vm.ui.care.childNickname ?? "" }
-            .onDisappear {
-                vm.setNickname(nickname)   // 칸을 벗어나도 남긴다(글자마다 저장하지 않는다)
-                vm.dismissDisconnectError()   // 설정을 떠나면 지난 끊기 실패 글을 걷는다(안드로이드와 같다)
+            .onDisappear { vm.dismissDisconnectError() }   // 설정을 떠나면 지난 끊기 실패 글을 걷는다(안드로이드와 같다)
+            .alert(CareText.nickname, isPresented: $editingNickname) {
+                TextField(CareText.nicknamePlaceholder, text: $nickname)
+                Button(CareText.save) { vm.setNickname(nickname) }
+                Button(CareText.cancel, role: .cancel) {}
             }
             .confirmationDialog("차와의 연결을 끊을까요?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
                 Button("연결 끊기", role: .destructive) { vm.startDisconnect() }
@@ -223,6 +235,33 @@ struct SettingsView: View {
                 Button("기록 지우기", role: .destructive) { vm.clearRecords() }
             }
         }
+    }
+}
+
+/// 정보·라이선스(U28·U63): 판, 오픈소스 라이선스(링크되는 라이브러리·서체·아이콘마다 이름·라이선스, 누르면 전문. 안드로이드와 같은 구조).
+private struct AboutView: View {
+    let version: String
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(CareText.version(version)).typeStyle(.body).foregroundStyle(DesignSystem.textSecondary).padding(.horizontal, 8)
+                VStack(alignment: .leading, spacing: 0) {
+                    BlockHeader(title: CareText.oss)
+                    ForEach(OssEntry.all) { e in
+                        NavigationLink { LicenseView(entry: e) } label: {
+                            ListRow(icon: .info, title: e.name, sub: e.licenses.map(\.name).joined(separator: " · "))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))
+            }
+            .screenPadding()
+        }
+        .screenBackground()
+        .navigationTitle(CareText.about)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

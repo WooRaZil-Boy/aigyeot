@@ -107,6 +107,10 @@ enum CareText {
     static let save = "저장", cancel = "취소", delete = "지우기"                           // sheet.save·cancel·delete
     static let segmentDay = "하루", segmentPattern = "패턴"                               // log.segment
     static let today = "오늘", yesterday = "어제"                                         // log.date.*
+    // 11-09 디자인 확정 새 라벨(7.1 design.*)
+    static let todayDay = "오늘 하루", all = "전체", sleepPattern = "잠 패턴"              // design.chart.*
+    static let fromCar = "차에서"                                                         // design.label "차에서 · 방금"·design.day.* 줄 이름
+    static let medianWord = "중앙값", sevenDays = "7일 동안"                              // 패턴 숫자 칸 아래(안드로이드 결정 2)
     static let patternHeader = "지난 7일"                                                // pattern.header
     static let patternFeeds = "하루 수유", patternInterval = "수유 간격", patternSleep = "하루 잠"   // pattern.*
     static let patternDiapers = "하루 기저귀", patternCarCries = "차에서 울음"
@@ -184,6 +188,13 @@ enum CareText {
         return "\(p[1])월 \(p[2])일(\(CareRules.weekdayName(day)))"
     }
 
+    /// 기록·하루 카드: 7.1 `log.row.*` 문구를 " · "로 나눠 앞 두 조각(종류·시각/구간)은 제목, 나머지는 둘째 줄(시안 ev(a, b), 안드로이드와 같다).
+    static func splitRow(_ text: String) -> (title: String, sub: String?) {
+        let parts = text.components(separatedBy: " · ")
+        guard parts.count > 2 else { return (text, nil) }
+        return (parts.prefix(2).joined(separator: " · "), parts.dropFirst(2).joined(separator: " · "))
+    }
+
     /// log.row.*: 기록 탭 손 기록 한 줄(그 기록의 시간대로 보인다).
     static func row(_ e: CareEvent) -> String {
         let z = e.timeZone
@@ -209,11 +220,15 @@ enum CareText {
     /// pattern.value
     static func avgCount(_ v: Double) -> String { "평균 \(oneDecimal(v))회" }
 
-    /// 소수 첫째 자리(안드로이드 `String.format("%.1f")`의 HALF_UP과 같게). printf는 정확히 반인 값을 짝수 쪽으로 보내
-    /// 2.25가 "2.2"(안드로이드 "2.3")였다. 평균의 분모는 1~7일이라 정확히 반인 평균은 4일의 .25·.75뿐이다(4배하면 홀수 정수).
+    /// 소수 첫째 자리(안드로이드 `String.format("%.1f")`와 같게). 자바는 가장 짧은 십진 표기(2.05)를 HALF_UP으로 자르고,
+    /// printf는 이진 값(2.0499…)이나 정확히 반인 값을 짝수 쪽으로 보내 2.25가 "2.2"·2.05가 "2.0"(안드로이드 "2.3"·"2.1")이었다.
+    /// 그래서 가장 짧은 십진 표기를 Decimal로 읽어 반올림(반은 올림)한다.
     static func oneDecimal(_ v: Double) -> String {
-        let q = v * 4
-        return String(format: "%.1f", q == q.rounded() && Int(q) % 2 != 0 ? v + 0.001 : v)
+        guard v.isFinite, var d = Decimal(string: "\(v)", locale: Locale(identifier: "en_US_POSIX")) else { return String(format: "%.1f", v) }
+        var r = Decimal()
+        NSDecimalRound(&r, &d, 1, .plain)   // 반은 올림(값은 늘 0 이상)
+        let n = NSDecimalNumber(decimal: r).doubleValue
+        return String(format: "%.1f", n)
     }
     static func median(_ ms: Int64) -> String { "중앙값 " + CareFormat.length(ms) }
     static func avgDuration(_ ms: Int64) -> String { "평균 " + CareFormat.length(ms) }

@@ -83,6 +83,14 @@ struct AigyeotApp: App {
     @Environment(\.scenePhase) private var scenePhase
     private let app = AppContainer.shared
 
+    init() {
+        // 내비게이션 제목도 Pretendard(시안 .ptop h1: 큰 제목 26/700, 접힌 제목 17/700). 막대 바탕은 시스템 그대로 둔다.
+        UINavigationBar.appearance().largeTitleTextAttributes = [.font: DesignSystem.uiFont(26, 700, relativeTo: .largeTitle),
+                                                                 .foregroundColor: UIColor(DesignSystem.textPrimary)]
+        UINavigationBar.appearance().titleTextAttributes = [.font: DesignSystem.uiFont(17, 700, relativeTo: .headline),
+                                                            .foregroundColor: UIColor(DesignSystem.textPrimary)]
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -90,6 +98,7 @@ struct AigyeotApp: App {
                 .environment(app.appViewModel).environment(app.status).environment(app.careTabs)
                 .environment(\.viewModels, app)
                 .tint(DesignSystem.accentInk)
+                .environment(\.locale, Locale(identifier: "ko_KR"))   // 한국 전용(AGENTS 범위): 시각 고르기도 "오전 3:12"로
                 .onOpenURL { app.appViewModel.receive(link: $0) }   // aigyeot://pair?code=… (7.6)
                 .onAppear {
                     app.keepConnected.watchNetwork()   // 인터넷이 돌아오면 받은 함·보낼 함을 다시 확인한다(7.5)
