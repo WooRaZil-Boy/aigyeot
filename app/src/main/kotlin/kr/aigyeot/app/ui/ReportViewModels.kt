@@ -299,16 +299,19 @@ internal fun stopText(st: StopInfo, settling: Boolean = false) = buildString {
     if (st.guardianNotified) append(" · 다른 보호자에게 알림")
 }
 
-/** 차가 한 일 이름. 시안 화면에 보이는 것('열선 끔'·'뒷자리에만 재생'·'뒷창 잠금'·'조명 낮춤')은 시안 글자, 나머지는 지금 앱 글자. */
+/**
+ * 차가 한 일 이름: 세 앱 같은 글자(phone-care-plan 7.1 report.actions). 사실대로: 열선은 아기 자리 2열만 끄고,
+ * 실내 온도 낮춤은 성공한 공조 줄만 세고(C355), 알림은 다른 보호자에게 간다(F21).
+ */
 internal fun actionName(a: CarActionKind) = when (a) {
-    CarActionKind.REAR_PLAYBACK -> "뒷자리에만 재생"
+    CarActionKind.REAR_PLAYBACK -> "뒷좌석 재생"
     CarActionKind.DEFAULT_ZONE_PLAYBACK -> "앞에서도 들리게 재생"
-    CarActionKind.SEAT_HEATER_OFF -> "열선 끔"
+    CarActionKind.SEAT_HEATER_OFF -> "뒷좌석 열선 끔"
     CarActionKind.REAR_WINDOW_LOCK -> "뒷창 잠금"
-    CarActionKind.CABIN_COOL -> "실내 온도 낮추기"
-    CarActionKind.READING_LIGHT_OFF -> "독서등 끄기"
+    CarActionKind.CABIN_COOL -> "실내 온도 낮춤"
+    CarActionKind.READING_LIGHT_OFF -> "독서등 끔"
     CarActionKind.AMBIENT_DIM -> "조명 낮춤"
     CarActionKind.WAYPOINT_ADDED -> "경유지 추가"
     CarActionKind.ARRIVAL_NOTICE -> "도착 안내"
-    CarActionKind.GUARDIAN_ALERT -> "보호자 알림"
+    CarActionKind.GUARDIAN_ALERT -> "다른 보호자 알림"
 }

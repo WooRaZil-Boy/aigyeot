@@ -139,7 +139,7 @@ class ReportViewTest {
         val v = reportView(b, settling = false)
         assertEquals("11월 9일(월) 오후 1:10–1:52 · 42분", v.title)
         assertEquals(setOf(Callout3d.LOCK, Callout3d.DIM), v.callouts, "3D 칩은 실제로 한 것만")
-        assertEquals(listOf("뒷창 잠금", "조명 낮춤", "뒷자리에만 재생"), v.actions.map { it.name }, "0번은 한 일이 아니다")
+        assertEquals(listOf("뒷창 잠금", "조명 낮춤", "뒷좌석 재생"), v.actions.map { it.name }, "0번은 한 일이 아니다")
         assertEquals("1번 · 56초", v.actions.last().extra)
         assertEquals("에피소드 · 오후 1:24부터", v.episodes.single().title)
         val lines = v.details.map { it.text }
@@ -167,5 +167,11 @@ class ReportViewTest {
         val big = dayHead(nameRight = 260f, nameH = 58f, nameBase = 46f, rightW = 700f, rightH = 66f, rightBase = 52f, w = 935f, gap = 32f, minH = 32f)
         assertEquals(true, big.stacked)
         assertEquals(58f + 66f, big.height); assertEquals(46f, big.nameBase); assertEquals(58f + 52f, big.rightBase, "값은 이름 아래 줄")
+    }
+
+    // 세 앱 같은 글자(phone-care-plan 7.1 report.actions)
+    @Test fun actionNames_matchPhoneTable() {
+        assertEquals(listOf("뒷좌석 재생", "앞에서도 들리게 재생", "뒷좌석 열선 끔", "뒷창 잠금", "실내 온도 낮춤", "독서등 끔", "조명 낮춤", "경유지 추가", "도착 안내", "다른 보호자 알림"),
+            kr.aigyeot.shared.CarActionKind.entries.map(::actionName))
     }
 }
