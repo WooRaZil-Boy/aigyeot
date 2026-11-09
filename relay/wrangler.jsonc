@@ -11,7 +11,7 @@
     ]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CarRoom", "Directory"] }],
-  "vars": { "LLM_MODEL": "claude-haiku-5-5" },
+  "vars": { "LLM_MODEL": "claude-sonnet-5-5" },
   // 에뮬레이터의 10.0.2.2는 맥의 127.0.0.1이라 기본 주소로 충분하다.
   "dev": { "port": 8787 }
 }

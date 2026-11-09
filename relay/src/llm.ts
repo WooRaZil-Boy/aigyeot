@@ -78,10 +78,11 @@ export async function askClaude(env: Env, req: LlmRequest): Promise<LlmResponse>
         "x-api-key": env.ANTHROPIC_API_KEY!,
         "anthropic-version": "2026-10-21",
       },
-      // temperature·top_p·top_k는 2026-10-21 판에서 400이라 보내지 않는다. thinking은 기본(adaptive).
+      // temperature·top_p·top_k는 2026-10-21 판에서 400이라 보내지 않는다. thinking은 between_tools 하나만(다른 필드와 같이 보내면 400, L102).
       body: JSON.stringify({
         model: env.LLM_MODEL,
         max_tokens: 1024,
+        thinking: { type: "between_tools" },
         output_config: { effort: "low" },
         system: SYSTEM_PROMPT,
         tools: TOOLS,

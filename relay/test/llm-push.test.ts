@@ -46,7 +46,7 @@ const llmBody = (question = "뭐가 제일 잘 통해?") => ({
   },
 });
 const claude = (content: object[], stop_reason = "end_turn") =>
-  Response.json({ model: "claude-haiku-5-5", stop_reason, content, usage: { input_tokens: 10, output_tokens: 5 } });
+  Response.json({ model: "claude-sonnet-5-5", stop_reason, content, usage: { input_tokens: 10, output_tokens: 5 } });
 
 describe("POST /v1/llm", () => {
   it("state의 돌봄 선택 칸(L61)을 받아 Claude에 그대로 넘긴다", async () => {
@@ -66,14 +66,15 @@ describe("POST /v1/llm", () => {
     const seen = fakeFetch(() => claude([{ type: "thinking", thinking: "" }, { type: "text", text: "자장가가 " }, { type: "text", text: "잘 통했어요." }]));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody() });
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-haiku-5-5", prompt_version: "p6" });
+    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-sonnet-5-5", prompt_version: "p6" });
     expect(typeof r.json.latency_ms).toBe("number");
     const [s] = seen;
     expect(s.url).toBe("https://api.anthropic.com/v1/messages");
     expect(s.headers.get("anthropic-version")).toBe("2026-10-21");
     expect(s.headers.get("x-api-key")).toBe("EXAMPLE-anthropic-api-key");
-    expect(s.body).toMatchObject({ model: "claude-haiku-5-5", max_tokens: 1024, output_config: { effort: "low" }, tool_choice: { type: "auto" } });
-    for (const k of ["temperature", "top_p", "top_k", "thinking"]) expect(s.body).not.toHaveProperty(k);
+    expect(s.body).toMatchObject({ model: "claude-sonnet-5-5", max_tokens: 1024, output_config: { effort: "low" }, tool_choice: { type: "auto" } });
+    expect(s.body.thinking).toEqual({ type: "between_tools" });
+    for (const k of ["temperature", "top_p", "top_k", "fallbacks"]) expect(s.body).not.toHaveProperty(k);
     expect(s.body.tools.map((t: any) => [t.name, t.strict])).toEqual([["switch_sound", true], ["add_waypoint", true], ["stop_soothing", true], ["answer", true]]);
     expect(s.body.messages).toHaveLength(1);
     expect(s.body.system).toBe(contractPrompt);
