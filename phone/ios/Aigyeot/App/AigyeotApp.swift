@@ -89,7 +89,7 @@ struct AigyeotApp: App {
                 // 화면은 뷰모델만 본다(저장소·유스케이스에 직접 손대지 않는다). 앱 범위는 셋, 나머지는 화면이 공장으로 만든다(1.7)
                 .environment(app.appViewModel).environment(app.status).environment(app.careTabs)
                 .environment(\.viewModels, app)
-                .tint(DesignSystem.accent)
+                .tint(DesignSystem.accentInk)
                 .onOpenURL { app.appViewModel.receive(link: $0) }   // aigyeot://pair?code=… (7.6)
                 .onAppear {
                     app.keepConnected.watchNetwork()   // 인터넷이 돌아오면 받은 함·보낼 함을 다시 확인한다(7.5)

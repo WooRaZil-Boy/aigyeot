@@ -61,7 +61,7 @@ struct AlertBanner: View {
                     .padding(.trailing, DesignSystem.s2)
             }
             .foregroundStyle(DesignSystem.onAccent)   // 어둠에서 흰 글자는 accent 위 대비 미달(13장)
-            .background(DesignSystem.accent, in: RoundedRectangle(cornerRadius: DesignSystem.rMedium))
+            .background(DesignSystem.accent, in: RoundedRectangle(cornerRadius: DesignSystem.rM))
             .task(id: id) {
                 try? await Task.sleep(nanoseconds: RetryPolicy.bannerNanos)
                 vm.dismissBanner(id)
@@ -108,10 +108,10 @@ struct StatusBands: View {
                     Label("오프라인이에요. 누른 것은 연결되면 차로 가요.", systemImage: "wifi.slash").padding(.vertical, 10)
                     Spacer()
                     // 7.2 '그 밖: 띠에 다시 시도'. 받은 함 429 기다림 중이면 갱신이 알아서 미룬다
-                    Button { Task { await vm.retryNow() } } label: { Text("다시 시도").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+                    Button { Task { await vm.retryNow() } } label: { Text("다시 시도").bold().foregroundStyle(DesignSystem.textPrimary).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 옅은 띠 위 파랑 글자는 4.5:1 미만이라 먹색 굵게
                 }
                 .font(DesignSystem.caption).padding(.horizontal, 10)
-                .background(DesignSystem.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
+                .background(DesignSystem.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rS))
             }
             if let w = vm.ui.clockWarning { band(w, "clock.badge.exclamationmark", DesignSystem.warning) }
             if vm.ui.guardian, notificationsDenied {
@@ -120,11 +120,11 @@ struct StatusBands: View {
                     Text("알림이 꺼져 있어 인계 알림을 못 받아요").padding(.vertical, 10)
                     Spacer()
                     Button { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) } label: {
-                        Text("설정 열기").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())   // 터치 영역 44pt(8장). 위아래 여백은 글에만
+                        Text("설정 열기").bold().foregroundStyle(DesignSystem.textPrimary).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())   // 터치 영역 44pt(8장). 위아래 여백은 글에만. 옅은 띠 위 먹색 굵게(4.5:1)
                     }
                 }
                 .font(DesignSystem.caption).padding(.horizontal, 10)
-                .background(DesignSystem.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
+                .background(DesignSystem.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rS))
             }
             if let n = vm.ui.notice {
                 // U48: 닫기는 글자 버튼(두 앱 같은 글자)
@@ -132,10 +132,10 @@ struct StatusBands: View {
                 HStack {
                     Text(n).padding(.vertical, 10)
                     Spacer()
-                    Button { vm.dismissNotice() } label: { Text(CareText.bannerClose).bold().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+                    Button { vm.dismissNotice() } label: { Text(CareText.bannerClose).bold().foregroundStyle(DesignSystem.textPrimary).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 옅은 띠 위 먹색 굵게(4.5:1)
                 }
                     .font(DesignSystem.caption).padding(.horizontal, 10)
-                    .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
+                    .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignSystem.rS))
             }
         }
     }
@@ -143,7 +143,7 @@ struct StatusBands: View {
     private func band(_ text: String, _ icon: String, _ color: Color) -> some View {
         Label(text, systemImage: icon).font(DesignSystem.caption)
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rSmall))
+            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: DesignSystem.rS))
     }
 }
 
@@ -179,7 +179,7 @@ struct CarTile: View {
             Spacer()
         }
         .padding(14)
-        .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignSystem.rMedium))
+        .background(DesignSystem.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignSystem.rM))
     }
 }
 

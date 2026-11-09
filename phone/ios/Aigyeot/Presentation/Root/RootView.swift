@@ -47,7 +47,7 @@ struct IntroView: View {
             Button { vm.connectFromIntro() } label: { Text(CareText.connectCar).frame(maxWidth: .infinity) }   // 안내에서 받은 링크가 있으면 그 확인 화면(U62)
                 .accentButton().controlSize(.large)
             Button { vm.recordsOnlyFromIntro() } label: { Text(CareText.recordOnly).frame(maxWidth: .infinity) }
-                .buttonStyle(.bordered).controlSize(.large)
+                .neutralButton().controlSize(.large)
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
@@ -71,7 +71,7 @@ struct GoneView: View {
             Button { vm.reconnectAfterGone() } label: { Text(CareText.reconnect).frame(maxWidth: .infinity) }
                 .accentButton().controlSize(.large)
             Button { vm.continueWithoutCar() } label: { Text(CareText.keepRecording).frame(maxWidth: .infinity) }
-                .buttonStyle(.bordered).controlSize(.large)
+                .neutralButton().controlSize(.large)
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
@@ -114,7 +114,7 @@ struct ConnectView: View {
                             }
                         if let e = inputError ?? failure ?? app.linkError { Text(e).font(.footnote).foregroundStyle(DesignSystem.danger) }
                         if connecting { HStack { ProgressView(); Text("확인하고 있어요") } }
-                        Button { submit() } label: { Text("확인").frame(minWidth: 44, minHeight: 44) }.buttonStyle(.bordered).disabled(code.isEmpty || connecting || vm.ui.isLocked)   // 44pt
+                        Button { submit() } label: { Text("확인").frame(minWidth: 44, minHeight: 44) }.neutralButton().disabled(code.isEmpty || connecting || vm.ui.isLocked)   // 44pt
                     }
                 }
                 .padding(24)

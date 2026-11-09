@@ -44,7 +44,7 @@ struct TodayView: View {
                             Text(CareText.nextWindowNote).font(DS.caption).foregroundStyle(DS.textSecondary)
                         }
                         .padding(DS.s4).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rMedium))
+                        .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM))
                     }
                     // U35: guardian은 기기 목록을 받을 수 없어(계약 1.3) 차 타일을 그리지 않는다.
                     if vm.ui.guardian { GuardianReports() }
@@ -93,7 +93,7 @@ private struct LastFeedCard: View {
             }
         }
         .padding(DS.s4).frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rMedium))
+        .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM))
     }
 }
 
@@ -106,13 +106,13 @@ private struct RunningCard: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: DS.s3) {
-                Image(systemName: DS.icon(kind)).foregroundStyle(DS.color(kind))
+                Image(ico: DS.icon(kind)).foregroundStyle(DS.color(kind))
                 Text(text).font(DS.headline).foregroundStyle(DS.textPrimary).monospacedDigit()
                 Spacer()
                 Image(systemName: "chevron.right").foregroundStyle(DS.textSecondary)
             }
             .padding(DS.s4).frame(minHeight: 56)
-            .background(DS.color(kind).opacity(0.08), in: RoundedRectangle(cornerRadius: DS.rMedium))   // 15%에서는 종류 색 아이콘이 4.3:1(13장 4.5:1). 8%면 모든 종류가 넘는다
+            .background(DS.color(kind).opacity(0.08), in: RoundedRectangle(cornerRadius: DS.rM))   // 15%에서는 종류 색 아이콘이 4.3:1(13장 4.5:1). 8%면 모든 종류가 넘는다
         }
         .buttonStyle(.plain)
     }
@@ -136,12 +136,12 @@ private struct QuickButtons: View {
                 let title = running == nil ? CareText.quickLabel(kind) : kind == .sleep ? CareText.sleepRunning : CareText.feedRunning
                 // U51: 평소 surfaceRaised·아이콘 종류 색·글자 textPrimary, 진행 중 accent·onAccent. 종류 색을 바탕에 깔지 않는다.
                 VStack(spacing: DS.s1) {
-                    Image(systemName: DS.icon(kind)).font(.title2).foregroundStyle(running == nil ? DS.color(kind) : DS.onAccent)
+                    Image(ico: DS.icon(kind)).font(.title2).foregroundStyle(running == nil ? DS.color(kind) : DS.onAccent)
                     Text(title).font(DS.headline).foregroundStyle(running == nil ? DS.textPrimary : DS.onAccent)
                 }
                 .frame(maxWidth: .infinity, minHeight: 72)
-                .background(running == nil ? DS.surfaceRaised : DS.accent, in: RoundedRectangle(cornerRadius: DS.rLarge))
-                .contentShape(RoundedRectangle(cornerRadius: DS.rLarge))
+                .background(running == nil ? DS.surfaceRaised : DS.accent, in: RoundedRectangle(cornerRadius: DS.rL))
+                .contentShape(RoundedRectangle(cornerRadius: DS.rL))
                 .onTapGesture { tap(kind, running: running) }
                 .onLongPressGesture(minimumDuration: 0.5) { sheet = .quick(kind) }
                 .accessibilityElement(children: .ignore)
@@ -173,7 +173,7 @@ struct ConnectCarTile: View {
             Button(CareText.connectCar) { root.showConnect() }.accentButton().controlSize(.large)   // 옅은 바탕 위 .bordered는 대비 3.7:1(13장). large는 44pt 넘는다(8장)
         }
         .padding(DS.s4).frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.car.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.rMedium))
+        .background(DS.cCar.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.rM))
     }
 }
 
@@ -199,7 +199,7 @@ private struct GuardianAlertBands: View {
                     Spacer(minLength: 0)
                 }
                 .padding(DS.s3).frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.rSmall))   // 경고 아이콘 대비 4.5:1(15%에서는 4.2:1)
+                .background(DS.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.rS))   // 경고 아이콘 대비 4.5:1(15%에서는 4.2:1)
             }
             .buttonStyle(.plain)
             .simultaneousGesture(TapGesture().onEnded { app.userOpenedAlert(a.id) })   // 직접 고른 알림: 대기하던 다른 알림 열기는 버린다
@@ -324,7 +324,7 @@ struct TimerView: View {
         Button(CareText.pickEnd) { picked = Date(); pickingEnd = true; editingStart = false }
             .accentButton().controlSize(.large)
         Button(CareText.closeEndUnknown) { vm.endUnknown(); dismiss() }
-            .buttonStyle(.bordered).controlSize(.large)
+            .neutralButton().controlSize(.large)
     }
 
     @ViewBuilder private func feedControls(_ e: CareEvent) -> some View {
@@ -352,7 +352,7 @@ struct TimerView: View {
                 if editingStart { x.startAt = CareTime.ms(picked) } else { x.endAt = CareTime.ms(picked) }
                 commitTime(x, allowOverlap: false)
             } label: { Text(CareText.save).frame(minHeight: 44) }   // 44pt
-            .buttonStyle(.bordered)
+            .neutralButton()
         }
     }
 
@@ -488,8 +488,7 @@ struct CareEditSheet: View {
             // 누른 때 기준으로 시작을 정한다(처음 '지금'은 시트를 연 때). 끝 기본값보다 늦어지지 않는다. '직접'은 지금 값에서 고른다.
             if let minutes { start = Date().addingTimeInterval(-Double(minutes * 60)); end = max(end, start) }   // 시트를 오래 열어 두어도 끝 ≥ 시작(R3)
         } label: { Text(title).frame(minHeight: 44) }   // 44pt(8장)
-        .buttonStyle(.bordered)
-        .tint(chip == minutes ? DS.accent : DS.textSecondary)
+        .choiceButton(selected: chip == minutes)
         .accessibilityAddTraits(chip == minutes ? .isSelected : [])
     }
 

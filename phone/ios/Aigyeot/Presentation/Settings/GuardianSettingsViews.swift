@@ -7,7 +7,7 @@ struct OssEntry: Identifiable {
     let name: String, artifact: String, licenses: [(name: String, file: String)]
     var id: String { name }
 
-    /// shortcut: 손으로 적은 목록이다(FirebaseMessaging과 그 의존, 빌드 산출물의 링크된 모듈로 확인). project.yml의 패키지를 바꾸면 Package.resolved와 함께 고친다.
+    /// shortcut: 손으로 적은 목록이다(FirebaseMessaging과 그 의존, 빌드 산출물의 링크된 모듈로 확인, 앱에 넣은 서체·아이콘). project.yml의 패키지를 바꾸면 Package.resolved와 함께 고친다.
     static let all: [OssEntry] = [
         OssEntry(name: "Firebase iOS SDK", artifact: "firebase-ios-sdk 12.19.2 (FirebaseCore, FirebaseCoreInternal, FirebaseInstallations, FirebaseMessaging)",
                  licenses: [("Apache License 2.0", "Apache-2.0")]),
@@ -16,6 +16,8 @@ struct OssEntry: Identifiable {
         OssEntry(name: "GoogleDataTransport", artifact: "GoogleDataTransport 10.1.1", licenses: [("Apache License 2.0", "Apache-2.0")]),
         OssEntry(name: "Promises", artifact: "promises 2.4.1 (FBLPromises)", licenses: [("Apache License 2.0", "Apache-2.0")]),
         OssEntry(name: "nanopb", artifact: "nanopb 2.30910.1", licenses: [("zlib License", "Zlib-nanopb")]),
+        OssEntry(name: "Pretendard", artifact: "Pretendard Variable 1.3.9 (서체)", licenses: [("SIL Open Font License 1.1", "OFL-Pretendard")]),
+        OssEntry(name: "Lucide", artifact: "lucide-static 1.70.0 (선 아이콘 SVG)", licenses: [("ISC License", "ISC-Lucide")]),
     ]
 
     /// 전문. 앱 묶음에 없으면 nil(시험이 모든 파일이 있는지 본다).

@@ -86,7 +86,7 @@ private struct ImportSheet: View {
             .padding(.vertical, DS.s4)
             .background(DS.bg)
         }
-        .tint(DS.accent)
+        .tint(DS.accentInk)
         .background(DS.bg)
         .presentationDetents([.medium, .large])
     }
@@ -94,7 +94,7 @@ private struct ImportSheet: View {
     @ViewBuilder
     private func button(_ label: String, prominent: Bool, action: @escaping () -> Void) -> some View {
         let b = Button(action: action) { Text(label).frame(maxWidth: .infinity, minHeight: 44) }
-        if prominent { b.buttonStyle(.borderedProminent) } else { b.buttonStyle(.bordered) }
+        if prominent { b.accentButton() } else { b.neutralButton() }
     }
 }
 

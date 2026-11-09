@@ -107,7 +107,7 @@ private struct DayView: View {
 
     private func careRow(_ e: CareEvent) -> some View {
         Button { sheet = e.inProgress ? .timer(e.id) : .edit(e.id) } label: {
-            line(icon: DS.icon(e.kind), color: DS.color(e.kind)) {
+            line(icon: Image(ico: DS.icon(e.kind)), color: DS.color(e.kind)) {
                 Text(CareText.row(e)).foregroundStyle(DS.textPrimary)
                 if e.kind != .note, let n = e.note { Text(n).font(DS.caption).foregroundStyle(DS.textSecondary) }
             }
@@ -120,14 +120,14 @@ private struct DayView: View {
     @ViewBuilder private func carRow(_ r: CarRow) -> some View {
         if vm.ui.report(sessionId: r.sessionId) != nil {
             NavigationLink { ReportDetailView(sessionId: r.sessionId) } label: {
-                line(icon: "car.fill", color: DS.car) { Text(r.text) }
+                line(icon: Image(ico: .carFront), color: DS.cCar) { Text(r.text) }
             }
         }
     }
 
-    private func line(icon: String, color: Color, @ViewBuilder content: () -> some View) -> some View {
+    private func line(icon: Image, color: Color, @ViewBuilder content: () -> some View) -> some View {
         HStack(alignment: .top, spacing: DS.s3) {
-            Image(systemName: icon).foregroundStyle(color).frame(width: 24)
+            icon.foregroundStyle(color).frame(width: 24)
             VStack(alignment: .leading, spacing: 2) { content() }
         }
     }
@@ -148,7 +148,7 @@ struct UndoBar: View {
             }
             .foregroundStyle(DS.bg)   // 글자·바탕을 뒤집어 밝음·어둠 모두 읽힌다
             .padding(DS.s4)
-            .background(DS.textPrimary.opacity(0.9), in: RoundedRectangle(cornerRadius: DS.rMedium))
+            .background(DS.textPrimary.opacity(0.9), in: RoundedRectangle(cornerRadius: DS.rM))
             .padding(DS.s4)
         }
     }
@@ -184,7 +184,7 @@ private struct DayStrip: View {
                             }
                             .frame(minWidth: 44, minHeight: 52).padding(.horizontal, DS.s1)
                             .foregroundStyle(on ? DS.onAccent : DS.textPrimary)
-                            .background(on ? DS.accent : DS.surface, in: RoundedRectangle(cornerRadius: DS.rSmall))
+                            .background(on ? DS.accent : DS.surface, in: RoundedRectangle(cornerRadius: DS.rS))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(CareText.dayTitle(key, now: now, zone: .current))
@@ -215,17 +215,17 @@ private struct PatternView: View {
             if let top { top.listRowInsets(EdgeInsets()).listRowBackground(DS.bg) }
             Section {
                 cell(CareText.patternFeeds, p.feedsPerDay.map(CareText.avgCount), days: p.feedDays,
-                     p.days.map { ($0.day, Double($0.feeds)) }, DS.feed, counts: true)
+                     p.days.map { ($0.day, Double($0.feeds)) }, DS.cFeed, counts: true)
                 LabeledContent(CareText.patternInterval,
                                value: p.feedIntervalMedianMs.map(CareText.median) ?? CareText.patternFewIntervals)
                 if on {
                     cell(CareText.patternSleep, p.sleepMsPerDay.map(CareText.avgDuration), days: p.sleepDays,
-                         p.days.map { ($0.day, Double($0.sleepMs ?? 0) / 3_600_000) }, DS.sleep, counts: false)
+                         p.days.map { ($0.day, Double($0.sleepMs ?? 0) / 3_600_000) }, DS.cSleep, counts: false)
                     cell(CareText.patternDiapers, p.diapersPerDay.map(CareText.avgCount), days: p.diaperDays,
-                         p.days.map { ($0.day, Double($0.diapers ?? 0)) }, DS.diaper, counts: true)
+                         p.days.map { ($0.day, Double($0.diapers ?? 0)) }, DS.cDiaper, counts: true)
                 }
                 cell(CareText.patternCarCries, CareText.times(p.carCries), days: nil,
-                     p.days.map { ($0.day, Double($0.carEpisodes)) }, DS.car, counts: true)
+                     p.days.map { ($0.day, Double($0.carEpisodes)) }, DS.cCar, counts: true)
             } header: {
                 SectionHeader(CareText.patternHeader)
             } footer: {

@@ -5,6 +5,7 @@ import WidgetKit
 
 @main
 struct AigyeotWidgets: WidgetBundle {
+    init() { DesignSystem.registerHostAppFont() }
     var body: some Widget { CareLiveActivity() }
 }
 
@@ -14,7 +15,7 @@ struct CareLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CareActivityAttributes.self) { context in
             HStack(spacing: 12) {
-                Image(systemName: icon(context.attributes)).font(.title2).foregroundStyle(tint(context.attributes))
+                icon(context.attributes).font(.title2).foregroundStyle(tint(context.attributes))
                 line(context).font(.headline).monospacedDigit()
                 Spacer(minLength: 0)
                 endButton(context)
@@ -24,19 +25,19 @@ struct CareLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: icon(context.attributes)).font(.title2).foregroundStyle(tint(context.attributes))
+                    icon(context.attributes).font(.title2).foregroundStyle(tint(context.attributes))
                 }
                 DynamicIslandExpandedRegion(.center) {
                     line(context).font(.headline).monospacedDigit()
                 }
                 DynamicIslandExpandedRegion(.bottom) { endButton(context) }
             } compactLeading: {
-                Image(systemName: icon(context.attributes)).foregroundStyle(tint(context.attributes))
+                icon(context.attributes).foregroundStyle(tint(context.attributes))
             } compactTrailing: {
                 // 사용자 결정(11-07): 압축 섬은 아이콘만. 좁은 섬(iPhone Care 약 30pt)에서 1시간 넘는 경과가 '1:00…'으로 잘렸다. 경과는 펼친 섬·잠금 화면에 시:분:초로 보인다
                 EmptyView()
             } minimal: {
-                Image(systemName: icon(context.attributes)).foregroundStyle(tint(context.attributes))
+                icon(context.attributes).foregroundStyle(tint(context.attributes))
             }
         }
     }
@@ -55,10 +56,13 @@ struct CareLiveActivity: Widget {
     private func endButton(_ c: ActivityViewContext<CareActivityAttributes>) -> some View {
         Button(intent: EndCareIntent(eventId: c.attributes.eventId)) { Text(CareActivityText.end).bold() }
             .buttonStyle(.borderedProminent)
-            .foregroundStyle(DesignSystem.onAccent)   // 어둠의 밝은 종류 색 위 흰 글자는 대비 미달
-            .tint(tint(c.attributes))
+            .foregroundStyle(DesignSystem.onAccent)   // 버튼은 브랜드 채움(accent) + 흰 글자(4.5:1). 데이터 색 위 흰 글자는 대비 미달
+            .tint(DesignSystem.accent)
     }
 
-    private func icon(_ a: CareActivityAttributes) -> String { a.sleep ? "moon.fill" : "drop.fill" }
-    private func tint(_ a: CareActivityAttributes) -> Color { a.sleep ? DesignSystem.sleep : DesignSystem.feed }
+    /// 압축·최소 섬은 아이콘만 보여 이름을 단다(7.1 notify.title).
+    private func icon(_ a: CareActivityAttributes) -> Image {
+        Image(a.sleep ? "ic-moon" : "ic-bottle", label: Text(a.sleep ? CareActivityText.sleeping : CareActivityText.feeding))
+    }
+    private func tint(_ a: CareActivityAttributes) -> Color { a.sleep ? DesignSystem.cSleep : DesignSystem.cFeed }
 }

@@ -39,6 +39,10 @@
 	<true/>
 	<key>RelayBaseURL</key>
 	<string>$(RELAY_BASE_URL)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>PretendardVariable.ttf</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
