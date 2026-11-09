@@ -54,6 +54,21 @@ class NumberCheckTest {
         listOf("열이 있을 수 있어요.", "한참 울 수 있어요.", "세상에서 가장 불편할 수 있어요.", "두고 보세요.").forEach { assertTrue(noDigits(it), it) }   // 단위가 바로 뒤에 오지 않으면 통과
     }
 
+    // C376: 낱말 끝의 한 음절 고유어 수("하지만 주변"의 만)는 숫자가 아니다. 진짜 숫자 말은 그대로 걸린다
+    @Test fun c376_wordEndingNativeNumeralIsNotNumber() {
+        listOf("죄송하지만 주변 소리까지는 알 수 없어요.", "편안한 곳에서 쉬세요.", "필요한 일은 없어요.", "중요한 시선이 아니에요.", "그렇지만 주위를 살펴보세요.",
+            "정확한 분은 알 수 없어요.", "안전한 곳을 찾아보세요.").forEach { assertTrue(noDigits(it), it) }
+        listOf("세 번 울었어요.", "두 시간 지났어요.", "한 번이요.", "약 두 시간이에요.", "하루에 세 번이에요.", "만 번이요.", "만 주 동안이에요.", "열 시쯤이에요.", "한 곳이에요.",
+            "서른세 분 기다려 보세요.", "열한 번 울었어요.", "스물두 시간이에요.", "두 주의 적응 기간이 필요해요.", "생후 이십 주차예요.", "예순다섯 개예요.", "약열두 시간이에요.", "백한 번 정도예요.", "백열 분 기다려요.", "백쉰 번이에요.", "두 주로 잡으면 돼요.", "세 시도 가능해요.").forEach { assertFalse(noDigits(it), it) }
+    }
+
+    // C375: 군말 검사
+    @Test fun c375_leakedEnglishAndToolWords() {
+        listOf("answer 도구를 호출해 수유 주제를 고릅니다.", "answer를 호출합니다.", "stop_soothing을 호출합니다.", "Rendering the answer for the feeding question.", "Sleep 주제로 알려 드릴게요.",
+            "(function call: answer with topics)", "add_waypoint로 넣을게요.", "도구로 고릅니다.", "호출했어요.", "ｓｗｉｔｃｈ_ｓｏｕｎｄ").forEach { assertFalse(noLeak(it), it) }
+        listOf("백색소음이 도움이 될 수 있어요.", "다음 쉼터까지 약 km 정도예요.", "아기가 우는 이유는 알 수 없지만 불편할 수 있어요.", "OK, 알겠어요.").forEach { assertTrue(noLeak(it), it) }
+    }
+
     // ---- C108 상태 단정 검사 ----
     @Test fun stateClaim_listedExpressions_caught() {
         listOf(

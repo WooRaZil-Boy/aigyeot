@@ -21,7 +21,8 @@ private const val UNIT_ATTACHED = "(?:번째|시간|주일|개월|차례|마리|
 private const val UNIT_ATTACHED_SINO = "(?:번째|시간|주일|개월|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|프로|초|분|일|월|년|주|달|살|번|회|개|배(?!고|려))"
 // 두 음절 이상(·수 붙음) 한자어 수 뒤 붙임: 낱말 겹침이 드물어 더 넓게 본다. 시("오십시오")·해("이사해요")·가지("오이가지")만 뺀다
 private const val UNIT_ATTACHED_SINO_MULTI = "(?:번째|시간|주일|개월|차례|마리|군데|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|프로|초|분|일|월|년|주|달|날|살|세|돌|번|회|개|명|곳|배(?!고|려))"
-private const val NATIVE = "(?:하나|둘|셋|넷|한|두|세|네|석|넉|다섯|여섯|일곱|여덟|아홉|열|스물|스무|서른|마흔|쉰|예순|일흔|여든|아흔|천|만)"
+// C376: 한 음절 고유어 수는 앞이 한글이면 낱말의 끝이라 안 본다("하지만 주변"의 만 주, "편안한 곳"의 한 곳)
+private const val NATIVE = "(?:(?:열|스물|서른|마흔|쉰|예순|일흔|여든|아흔|백|천|만)(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉)|(?:백|천|만)(?:열|쉰)|(?<![가-힣])(?:열|쉰|둘|셋|넷|한|두|세|네|석|넉|천|만)|스물|서른|마흔|예순|일흔|여든|아흔|하나|다섯|여섯|일곱|여덟|아홉|스무)"
 private const val SINO = "[일이삼사오육칠팔구십백천만]"
 private val KOREAN_COUNT = Regex("${NATIVE}여?(?:\\s*$UNIT_ATTACHED|\\s+$UNIT_SPACED|\\s+도)")   // C257: "만여 명"·"서른여 명"
 // 수사 앞이 한글이면 낱말의 일부라 안 본다("백색소음이 도움"의 '이'·"아이 배"). 수십·수백은 '수'를 허용, 십여 분의 '여'를 허용
@@ -70,6 +71,14 @@ fun noStateClaim(text: String): Boolean {
     val t = readable(text).filterNot { it.isWhitespace() }
     return STATE_CLAIMS.none { it in t }
 }
+
+/**
+ * 군말 검사(C375, contracts-link 8.8). 정규화한 글에 영문 낱말(영문자 4자 이상 연속)이나 '도구'·'호출'이 있으면 거짓이다.
+ * 모델이 도구 이름·주제 이름·영어 추론을 글 칸에 흘리는 것을 막는다. 걸러도 정해 둔 문장이 나갈 뿐이라 안전 쪽이다.
+ */
+fun noLeak(text: String): Boolean = !LEAK.containsMatchIn(readable(text))
+
+private val LEAK = Regex("[A-Za-z]{4,}|도구|호출")
 
 /** 설계값(공백 없는 꼴). 바꾸면 contracts-link 8.8과 NumberCheckTest를 함께 고친다. */
 internal val STATE_CLAIMS = listOf(
