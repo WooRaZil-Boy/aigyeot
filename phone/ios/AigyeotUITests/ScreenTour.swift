@@ -328,7 +328,7 @@ final class ScreenTour: XCTestCase {
         for _ in 0..<4 where !diaperRow.exists { app.swipeUp() }
         XCTAssert(diaperRow.exists, "종류를 고르지 않은 새 기저귀가 소변으로 저장되지 않았다")
         for _ in 0..<4 where !(app.buttons["하루"].exists && app.buttons["하루"].isHittable) { app.swipeDown() }
-        // 띠가 없으면 고정 영역은 0이다(제목 바로 아래 하루·패턴 전환). 늘 200pt를 차지하던 회귀를 막는다.
+        // 띠가 없으면 띠 자리는 0이다(제목 바로 아래 하루·패턴 전환). 늘 200pt를 차지하던 회귀를 막는다.
         let gap = app.buttons["하루"].firstMatch.frame.minY - app.navigationBars.firstMatch.frame.maxY   // 가장 큰 글자에서는 나눈 선택 대신 글자 버튼
         XCTAssertLessThan(gap, 40, "띠가 없는데 위쪽 빈칸 \(gap)pt")
         XCTAssertGreaterThanOrEqual(app.buttons["하루"].firstMatch.frame.height, 44, "하루·패턴 전환의 누르는 높이")   // 나눈 선택도 44pt(8장)
@@ -520,15 +520,11 @@ final class ScreenTour: XCTestCase {
         app.swipeUp(); shot("B1b-bands-today-2")
         tab("기록")
         shot("B2-bands-records")
-        // 고정 영역은 200pt까지만 차지하고 넘치면 그 안에서 굴린다(8장): 맨 아래 띠의 '설정 열기'까지 닿아야 한다.
-        let bandsArea = app.scrollViews["statusBands"]
-        XCTAssert(bandsArea.exists)
-        // 스크롤 뷰 틀은 내비게이션 바 밑(안전 영역)까지 넓어진다. 보이는 높이는 바 아래부터 잰다.
-        let visible = bandsArea.frame.maxY - max(bandsArea.frame.minY, app.navigationBars.firstMatch.frame.maxY)
-        XCTAssertLessThanOrEqual(visible, 201)
+        // 띠는 화면 스크롤 맨 위에 있다(안드로이드와 같다). 큰 글자여도 화면을 굴려 맨 아래 띠의 '설정 열기'에 닿아야 한다(8장).
         let openSettings = app.buttons["설정 열기"]
-        for _ in 0..<4 where !openSettings.isHittable { bandsArea.swipeUp() }
-        XCTAssert(openSettings.isHittable, "고정 띠 안에서 '설정 열기'에 닿지 못했다")
+        XCTAssert(openSettings.exists)
+        for _ in 0..<4 where !openSettings.isHittable { app.swipeUp() }
+        XCTAssert(openSettings.isHittable, "띠의 '설정 열기'에 닿지 못했다")
         shot("B2b-bands-records-scrolled")
         tab("설정")
         shot("B3-bands-settings")

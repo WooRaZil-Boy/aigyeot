@@ -17,19 +17,21 @@ struct ReportListView: View {
     var body: some View {
         Scoped({ $0.reports() }) { vm in
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if vm.reports.isEmpty { Text("주행이 끝나면 여기에 리포트가 와요").typeStyle(.body).foregroundStyle(DS.textTertiary).padding(.vertical, 12) }
-                    ForEach(vm.reports) { r in
-                        NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }.buttonStyle(.press)
+                VStack(spacing: 0) {
+                    StatusBands(gap: 12)
+                    VStack(alignment: .leading, spacing: 0) {
+                        if vm.reports.isEmpty { Text("주행이 끝나면 여기에 리포트가 와요").typeStyle(.body).foregroundStyle(DS.textTertiary).padding(.vertical, 12) }
+                        ForEach(vm.reports) { r in
+                            NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }.buttonStyle(.press)
+                        }
                     }
+                    .block(padding: EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                 }
-                .block(padding: EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                 .screenPadding()
             }
             .screenBackground()
             .navigationTitle("리포트")
             .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
             .refreshable { await vm.retryNow() }
         }
     }

@@ -25,7 +25,8 @@ private struct CarContent: View {
         NavigationStack {
             List {
                 Section {
-                    Group {
+                    VStack(spacing: 0) {
+                        StatusBands(gap: 12)
                         if vm.ui.isPaired {
                             CarTile(car: vm.ui.phone.car, offline: vm.ui.offline,
                                     phones: vm.ui.owner ? vm.ui.phone.devices.filter { $0.role == .owner || $0.role == .guardian }.count : nil,
@@ -54,7 +55,6 @@ private struct CarContent: View {
             .environment(\.defaultMinListRowHeight, 44)
             .screenBackground()
             .navigationTitle(CareText.tabCar)
-            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
             .refreshable { await vm.retryNow() }
             .sheet(isPresented: $recording) { Scoped({ $0.recorder() }) { rec in RecordSheet(rec: rec, player: player, replacing: replacing) } }
             .onDisappear { player.stop() }

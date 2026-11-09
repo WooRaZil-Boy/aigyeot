@@ -17,18 +17,30 @@ struct RecordsView: View {
         let segment = Segmented(title: CareText.tabLog, options: [false, true], label: { $0 ? CareText.segmentPattern : CareText.segmentDay },
                                 selection: Binding(get: { pattern }, set: { pattern = $0 ?? false }))
         NavigationStack {
-            Group {
-                if pattern {
-                    PatternView(now: now, segment: segment)
-                } else {
-                    DayView(sheet: $sheet, day: Binding(get: { picked ?? today }, set: { picked = $0 == today ? nil : $0 }), now: now, segment: segment) {
-                        sheet = .quick(.feed, day: picked == nil || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금)
+            // 하루·패턴은 한 List 안에서 내용만 바꾼다. 스크롤 뷰를 통째로 바꾸면 큰 제목이 새 스크롤을 따라 접히지 않고 내용 위에 남았다.
+            List {
+                Group {
+                    VStack(spacing: 0) {
+                        StatusBands(gap: 12)   // 지우기 실패 등 안내 띠(다른 탭과 같다)
+                        segment
+                    }
+                    .padding(.horizontal, 16).padding(.top, 4)
+                    if pattern {
+                        PatternView(now: now)
+                    } else {
+                        DayView(sheet: $sheet, day: Binding(get: { picked ?? today }, set: { picked = $0 == today ? nil : $0 }), now: now) {
+                            sheet = .quick(.feed, day: picked == nil || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금)
+                        }
                     }
                 }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .screenBackground()
             .navigationTitle(CareText.tabLog)
-            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }   // 지우기 실패 등 안내 띠(다른 탭과 같다)
             .sheet(item: $sheet) { CareSheetView(sheet: $0) }
             .task {
                 now = Date()   // 다시 들어오면(자정을 넘긴 뒤 등) 바로 지금으로. 그다음은 분이 바뀔 때마다
@@ -43,12 +55,11 @@ struct RecordsView: View {
 }
 
 /// 날짜 띠 + 하루 타임라인(새 것이 위, 3시간마다 시각 머리). 손 기록은 누르면 고치기, 밀면 지우기(5초 되돌리기). 차 기록은 누르면 리포트 상세.
-private struct DayView<Segment: View>: View {
+private struct DayView: View {
     @Environment(RecordsViewModel.self) private var vm
     @Binding var sheet: CareSheet?
     @Binding var day: String
     let now: Date
-    let segment: Segment
     let add: () -> Void
 
     private enum Item: Identifiable {
@@ -77,38 +88,34 @@ private struct DayView<Segment: View>: View {
         let car = CareRules.carRows(vm.ui.reports, zone: .current)
         let keys = recordKeys(car)
         let list = items(day, car)
-        List {
-            Group {
-                segment.padding(.horizontal, 16).padding(.top, 4)
-                DayStrip(selected: $day, span: keys.min().flatMap { a in keys.max().map { (a, $0) } }, records: keys, now: now)
-                // 고른 날 제목(log.date.*: "오늘"·"어제"·"11월 5일(수)"). 띠는 요일·날짜 숫자뿐이라 달이 바뀌어도 어느 날인지 보이게
-                Text(CareText.dayTitle(day, now: now, zone: .current)).typeStyle(.headline).foregroundStyle(DS.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, 2)
-                    .accessibilityAddTraits(.isHeader)
-                if list.isEmpty { FootNote(CareText.emptyDay).padding(.horizontal, 16) }
-                ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
-                    let bucket = hourBucket(item)
-                    if i == 0 || hourBucket(list[i - 1]) != bucket { HourHead(hour: bucket) }
-                    switch item {
-                    case .care(let e): careRow(e)
-                    case .car(let r): carRow(r)
-                    }
+        // 행만 낸다(바깥 RecordsView의 List가 담는다)
+        Group {
+            DayStrip(selected: $day, span: keys.min().flatMap { a in keys.max().map { (a, $0) } }, records: keys, now: now)
+            // 고른 날 제목(log.date.*: "오늘"·"어제"·"11월 5일(수)"). 띠는 요일·날짜 숫자뿐이라 달이 바뀌어도 어느 날인지 보이게
+            Text(CareText.dayTitle(day, now: now, zone: .current)).typeStyle(.headline).foregroundStyle(DS.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, 2)
+                .accessibilityAddTraits(.isHeader)
+            if list.isEmpty { FootNote(CareText.emptyDay).padding(.horizontal, 16) }
+            ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
+                let bucket = hourBucket(item)
+                if i == 0 || hourBucket(list[i - 1]) != bucket { HourHead(hour: bucket) }
+                switch item {
+                case .care(let e): careRow(e)
+                case .car(let r): carRow(r)
                 }
-                ListRow(icon: .plus, title: CareText.quickPast, add: true)
-                    .padding(.horizontal, 20).padding(.vertical, 8)
-                    .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
-                    .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 24)
-                    .onTapGesture(perform: add)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityAction { add() }
             }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+            ListRow(icon: .plus, title: CareText.quickPast, add: true)
+                .padding(.horizontal, 20).padding(.vertical, 8)
+                .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
+                .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 24)
+                .onTapGesture(perform: add)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { add() }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     /// 3시간 칸의 시작 시(그 기록의 시간대).
@@ -275,10 +282,9 @@ private struct DayStrip: View {
 
 /// 패턴(C5, R14·R16, 시안 S.pattern): 지난 7일 숫자 → 수유 간격 7일 막대 → (잠·기저귀 켬) 잠 패턴 히트맵 → 차에서 울음 7일 막대 → 덧붙임.
 /// 값을 붙이는 규칙은 안드로이드 PatternView·ChartData와 같다(진행 기록 '결정' 2~5).
-private struct PatternView<Segment: View>: View {
+private struct PatternView: View {
     @Environment(RecordsViewModel.self) private var vm
     let now: Date
-    let segment: Segment
 
     var body: some View {
         let on = vm.ui.care.sleepDiaperEnabled
@@ -286,55 +292,57 @@ private struct PatternView<Segment: View>: View {
         let p = CareRules.pattern(vm.ui.care.events, reports: vm.ui.reports, now: ms, zone: .current, sleepDiaper: on)
         let iw = ChartData.intervalWeek(care: vm.ui.care, now: ms, zone: .current)
         let cw = ChartData.carCryWeek(reports: vm.ui.reports, now: ms, zone: .current)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                segment.padding(.horizontal, 4).padding(.top, 4)
-                VStack(alignment: .leading, spacing: 0) {
-                    BlockHeader(title: CareText.patternHeader)
-                    let kpis = kpiItems(p)
-                    VStack(alignment: .leading, spacing: 16) {
-                        ForEach(0..<((kpis.count + 2) / 3), id: \.self) { r in KpiRow(items: Array(kpis[(r * 3)..<min(kpis.count, r * 3 + 3)])) }
-                    }
+        // 블록마다 한 행(바깥 RecordsView의 List가 담는다). 행 사이 12, 옆 12(시안 `.pad`).
+        Group {
+            VStack(alignment: .leading, spacing: 0) {
+                BlockHeader(title: CareText.patternHeader)
+                let kpis = kpiItems(p)
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(0..<((kpis.count + 2) / 3), id: \.self) { r in KpiRow(items: Array(kpis[(r * 3)..<min(kpis.count, r * 3 + 3)])) }
                 }
-                .block()
-                VStack(alignment: .leading, spacing: 0) {
-                    BlockHeader(title: CareText.patternInterval)
-                    let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).bold().foregroundColor(DS.textPrimary) },
-                               iw.usualMs.map { Text("평소 " + CareFormat.length($0)) }].compactMap { $0 }
-                    if !sub.isEmpty { BlockSub(text: sub.dropFirst().reduce(sub[0]) { $0 + Text(" · ") + $1 }) }
-                    WeekBarsChart(items: iw.bars.enumerated().map { i, b in
-                        .init(label: b.label, value: b.value.map(Double.init), tip: b.tip, hot: i == iw.bars.count - 1,
-                              valueLabel: i == iw.bars.count - 1 ? b.value.map(CareFormat.length) : nil)
-                    }, hot: DS.cFeed, target: iw.usualMs.map { (Double($0), "평소 " + CareFormat.length($0)) },
-                                  summary: "지난 7일 수유 간격 중앙값")
-                }
-                .block()
-                if on {
-                    let g = ChartData.sleepGrid(care: vm.ui.care, now: ms, zone: .current)
-                    VStack(alignment: .leading, spacing: 0) {
-                        BlockHeader(title: CareText.sleepPattern)
-                        if let avg = g.avgMs {
-                            BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).bold().foregroundColor(DS.textPrimary) + Text(" · " + CareText.basedOn(days: g.sleepDays)))
-                        }
-                        SleepHeatChart(grid: g)
-                    }
-                    .block()
-                }
-                VStack(alignment: .leading, spacing: 0) {
-                    BlockHeader(title: CareText.patternCarCries)
-                    BlockSub(text: [Text("7일 동안 ") + Text("\(cw.total)번").bold().foregroundColor(DS.textPrimary),
-                                    cw.avgLatencyS.map { Text("평균 감지 " + ChartData.seconds($0)) }].compactMap { $0 }
-                        .reduce(Text("")) { $0 == Text("") ? $1 : $0 + Text(" · ") + $1 })
-                    WeekBarsChart(items: cw.bars.enumerated().map { i, b in
-                        .init(label: b.label, value: b.value.map(Double.init), tip: b.tip, hot: i == cw.bars.count - 1,
-                              valueLabel: i == cw.bars.count - 1 ? b.value.map { "\($0)번" } : nil)
-                    }, hot: DS.cCar, height: 110, summary: "지난 7일 차에서 울음 횟수")
-                }
-                .block()
-                FootNote(CareText.patternFootnote)
             }
-            .screenPadding()
+            .block()
+            VStack(alignment: .leading, spacing: 0) {
+                BlockHeader(title: CareText.patternInterval)
+                let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).bold().foregroundColor(DS.textPrimary) },
+                           iw.usualMs.map { Text("평소 " + CareFormat.length($0)) }].compactMap { $0 }
+                if !sub.isEmpty { BlockSub(text: sub.dropFirst().reduce(sub[0]) { $0 + Text(" · ") + $1 }) }
+                WeekBarsChart(items: iw.bars.enumerated().map { i, b in
+                    .init(label: b.label, value: b.value.map(Double.init), tip: b.tip, hot: i == iw.bars.count - 1,
+                          valueLabel: i == iw.bars.count - 1 ? b.value.map(CareFormat.length) : nil)
+                }, hot: DS.cFeed, target: iw.usualMs.map { (Double($0), "평소 " + CareFormat.length($0)) },
+                              summary: "지난 7일 수유 간격 중앙값")
+            }
+            .block()
+            if on {
+                let g = ChartData.sleepGrid(care: vm.ui.care, now: ms, zone: .current)
+                VStack(alignment: .leading, spacing: 0) {
+                    BlockHeader(title: CareText.sleepPattern)
+                    if let avg = g.avgMs {
+                        BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).bold().foregroundColor(DS.textPrimary) + Text(" · " + CareText.basedOn(days: g.sleepDays)))
+                    }
+                    SleepHeatChart(grid: g)
+                }
+                .block()
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                BlockHeader(title: CareText.patternCarCries)
+                BlockSub(text: [Text("7일 동안 ") + Text("\(cw.total)번").bold().foregroundColor(DS.textPrimary),
+                                cw.avgLatencyS.map { Text("평균 감지 " + ChartData.seconds($0)) }].compactMap { $0 }
+                    .reduce(Text("")) { $0 == Text("") ? $1 : $0 + Text(" · ") + $1 })
+                WeekBarsChart(items: cw.bars.enumerated().map { i, b in
+                    .init(label: b.label, value: b.value.map(Double.init), tip: b.tip, hot: i == cw.bars.count - 1,
+                          valueLabel: i == cw.bars.count - 1 ? b.value.map { "\($0)번" } : nil)
+                }, hot: DS.cCar, height: 110, summary: "지난 7일 차에서 울음 횟수")
+            }
+            .block()
+            FootNote(CareText.patternFootnote).padding(.bottom, 24)
         }
+        .padding(.top, 12)
+        .padding(.horizontal, 12)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     /// 지난 7일 숫자 칸(결정 2): 하루 수유 "평균 n회"·"{n}일 기준", 수유 간격 "{기간}"·"중앙값", 차에서 울음 "{n}번"·"7일 동안", 켜면 하루 잠·하루 기저귀.

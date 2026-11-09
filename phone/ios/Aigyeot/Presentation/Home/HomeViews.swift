@@ -111,21 +111,14 @@ struct StatusBands: View {
     @Environment(StatusViewModel.self) private var vm
     @State private var notificationsDenied = false
     @Environment(\.scenePhase) private var scenePhase
-    /// 오늘 탭은 화면 스크롤 안에 둔다. 나머지 탭은 고정 영역(safeAreaInset)이다.
-    var inScroll = false
+    /// 띠가 있을 때만 아래에 두는 간격(간격 없는 묶음 맨 위에 둘 때). 띠가 없으면 높이 0이다.
+    var gap: CGFloat = 0
 
+    // 모든 탭에서 화면 스크롤 안 맨 위에 둔다(안드로이드와 같다). 스크롤 바깥 고정 영역(safeAreaInset)에 따로 스크롤을 두면
+    // 내비게이션 바가 그 스크롤을 따라가 큰 제목이 접히지 않고 내용 위에 남았다.
     var body: some View {
-        Group {
-            // 고정 영역: 띠 높이만큼만 차지하고(없으면 0), 큰 글자로 200pt를 넘으면 묶음째 그 안에서 굴린다(8장 동적 글자 크기).
-            // frame(maxHeight:)만 두면 제안 높이가 커서 띠가 없어도 늘 200pt 빈칸이 생겼다.
-            if inScroll { bands } else {
-                ScrollView { bands }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(maxHeight: 200)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("statusBands")
-            }
-        }
+        bands
+        .padding(.bottom, shows ? gap : 0)
         .task { notificationsDenied = await NotificationAccess.isDenied() }
         // 설정에서 돌아오면 다시 확인
         .onChange(of: scenePhase) { _, p in
@@ -137,6 +130,9 @@ struct StatusBands: View {
         }
     }
 
+    private var deniedBand: Bool { vm.ui.guardian && notificationsDenied }
+    private var shows: Bool { vm.ui.showsOfflineBand || vm.ui.clockWarning != nil || deniedBand || vm.ui.notice != nil }
+
     private var bands: some View {
         VStack(spacing: 8) {
             if vm.ui.showsOfflineBand {
@@ -146,7 +142,7 @@ struct StatusBands: View {
                 }
             }
             if let w = vm.ui.clockWarning { band(.clockAlert, w, tone: DS.warning) { EmptyView() } }
-            if vm.ui.guardian, notificationsDenied {
+            if deniedBand {
                 band(.bellOff, "알림이 꺼져 있어 인계 알림을 못 받아요", tone: DS.warning) {
                     bandButton("설정 열기") { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
                 }

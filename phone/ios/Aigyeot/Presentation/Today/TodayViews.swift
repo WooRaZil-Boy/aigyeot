@@ -24,35 +24,37 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    StatusBands(inScroll: true)
-                    if vm.ui.guardian { GuardianAlertCards() }
-                    // 경과는 분 단위라 1분마다 다시 그린다(R15: 저장하지 않고 계산). 진행 중 카드의 초는 그 카드만 1초마다.
-                    TimelineView(.everyMinute) { ctx in
-                        let now = CareTime.ms(ctx.date)
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach([CareKind.feed, .sleep], id: \.self) { k in
-                                if let e = CareRules.inProgress(k, in: vm.ui.care.events) {
-                                    RunningCard(event: e) { sheet = .timer(e.id) }
-                                        .modifier(ZoomSource(id: e.id, ns: zoom))
+                VStack(alignment: .leading, spacing: 0) {
+                    StatusBands(gap: 12)   // 띠가 없으면 높이 0이고 간격도 없다
+                    VStack(alignment: .leading, spacing: 12) {
+                        if vm.ui.guardian { GuardianAlertCards() }
+                        // 경과는 분 단위라 1분마다 다시 그린다(R15: 저장하지 않고 계산). 진행 중 카드의 초는 그 카드만 1초마다.
+                        TimelineView(.everyMinute) { ctx in
+                            let now = CareTime.ms(ctx.date)
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach([CareKind.feed, .sleep], id: \.self) { k in
+                                    if let e = CareRules.inProgress(k, in: vm.ui.care.events) {
+                                        RunningCard(event: e) { sheet = .timer(e.id) }
+                                            .modifier(ZoomSource(id: e.id, ns: zoom))
+                                    }
                                 }
+                                LastFeedCard(now: now)
+                                QuickBlock(sheet: $sheet)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    BlockHeader(title: CareText.todayDay, link: CareText.tabLog) { goTab(CareText.tabLog) }
+                                    let today = CareRules.dayKey(now, .current)
+                                    DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now, zone: .current, showCar: vm.ui.isPaired))
+                                }
+                                .block()
                             }
-                            LastFeedCard(now: now)
-                            QuickBlock(sheet: $sheet)
-                            VStack(alignment: .leading, spacing: 0) {
-                                BlockHeader(title: CareText.todayDay, link: CareText.tabLog) { goTab(CareText.tabLog) }
-                                let today = CareRules.dayKey(now, .current)
-                                DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now, zone: .current, showCar: vm.ui.isPaired))
-                            }
-                            .block()
                         }
+                        // U35: guardian은 기기 목록을 받을 수 없어(계약 1.3) 차 카드를 그리지 않는다.
+                        if !vm.ui.guardian {
+                            if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) { goTab(CareText.tabCar) } }
+                            else { ConnectCarTile() }
+                        }
+                        RecentReports(owner: !vm.ui.guardian) { goTab(CareText.tabCar) }
                     }
-                    // U35: guardian은 기기 목록을 받을 수 없어(계약 1.3) 차 카드를 그리지 않는다.
-                    if !vm.ui.guardian {
-                        if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) { goTab(CareText.tabCar) } }
-                        else { ConnectCarTile() }
-                    }
-                    RecentReports(owner: !vm.ui.guardian) { goTab(CareText.tabCar) }
                 }
                 .screenPadding()
             }

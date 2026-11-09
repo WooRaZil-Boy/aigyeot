@@ -43,7 +43,8 @@ struct GuardiansView: View {
     var body: some View {
         Scoped({ $0.guardians() }) { vm in
             ScrollView {
-                Group {
+                VStack(spacing: 0) {
+                    StatusBands(gap: 12)
                     if vm.ui.role == .owner { OwnerGuardians() } else { GuardianToggle() }
                 }
                 .screenPadding()
@@ -51,7 +52,6 @@ struct GuardiansView: View {
             .screenBackground()
             .navigationTitle(CareText.guardians)
             .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
         }
     }
 }
@@ -163,62 +163,64 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 12) {
-                    Group26 {
-                        if vm.ui.connected {
-                            NavigationLink { GuardiansView() } label: {
-                                SettingRow(icon: .users, title: CareText.guardians, sub: vm.ui.phones > 0 ? "\(vm.ui.phones)명" : nil)
+                VStack(spacing: 0) {
+                    StatusBands(gap: 12).padding(.horizontal, 12)
+                    VStack(spacing: 12) {
+                        Group26 {
+                            if vm.ui.connected {
+                                NavigationLink { GuardiansView() } label: {
+                                    SettingRow(icon: .users, title: CareText.guardians, sub: vm.ui.phones > 0 ? "\(vm.ui.phones)명" : nil)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Button { nickname = vm.ui.care.childNickname ?? ""; editingNickname = true } label: {
+                                SettingRow(icon: .baby, title: CareText.nickname, sub: vm.ui.care.childNickname ?? CareText.nicknamePlaceholder)
                             }
                             .buttonStyle(.plain)
                         }
-                        Button { nickname = vm.ui.care.childNickname ?? ""; editingNickname = true } label: {
-                            SettingRow(icon: .baby, title: CareText.nickname, sub: vm.ui.care.childNickname ?? CareText.nicknamePlaceholder)
+                        Group26 {
+                            SettingRow(icon: .moon, title: CareText.sleepDiaperToggle, sub: CareText.sleepDiaperToggleNote) {
+                                Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { vm.ui.care.sleepDiaperEnabled }, set: { vm.setSleepDiaper($0) }))
+                                    .labelsHidden().tint(DesignSystem.accent)
+                            }
+                            .accessibilityElement(children: .combine)
                         }
-                        .buttonStyle(.plain)
-                    }
-                    Group26 {
-                        SettingRow(icon: .moon, title: CareText.sleepDiaperToggle, sub: CareText.sleepDiaperToggleNote) {
-                            Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { vm.ui.care.sleepDiaperEnabled }, set: { vm.setSleepDiaper($0) }))
-                                .labelsHidden().tint(DesignSystem.accent)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                    Group26 {
-                        // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다. U33: 공유 시트 제목은 비운다
-                        ShareLink(item: CareExportFile(export: { [vm] in vm.export() }), preview: SharePreview("")) {
-                            SettingRow(icon: .download, title: CareText.export)
-                        }
-                        .buttonStyle(.plain)
-                        // U64: 내보내기 바로 아래. owner·guardian 모두.
-                        Button { vm.startImport() } label: { SettingRow(icon: .fileUp, title: CareText.importEntry, sub: CareText.importEntrySub) }
-                            .buttonStyle(.plain)
-                    }
-                    Group26 {
-                        if vm.ui.connected {
-                            // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서 인터넷이 필요하다). 초대 만들기와 같다
-                            Button { confirmDisconnect = true } label: {
-                                SettingRow(icon: .unlink, title: CareText.disconnect,
-                                           sub: busy ? "끊고 있어요" : vm.ui.offline ? "인터넷이 필요해요" : nil, tone: DesignSystem.textPrimary)
+                        Group26 {
+                            // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다. U33: 공유 시트 제목은 비운다
+                            ShareLink(item: CareExportFile(export: { [vm] in vm.export() }), preview: SharePreview("")) {
+                                SettingRow(icon: .download, title: CareText.export)
                             }
                             .buttonStyle(.plain)
-                            .disabled(busy || vm.ui.offline)
+                            // U64: 내보내기 바로 아래. owner·guardian 모두.
+                            Button { vm.startImport() } label: { SettingRow(icon: .fileUp, title: CareText.importEntry, sub: CareText.importEntrySub) }
+                                .buttonStyle(.plain)
                         }
-                        Button { confirmClear = true } label: {
-                            SettingRow(icon: .trash, title: CareText.clear, tone: DesignSystem.danger) { EmptyView() }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if let error { FootNote(error).foregroundStyle(DesignSystem.danger) }
-                    Group26 {
-                        NavigationLink { AboutView(version: vm.ui.version) } label: { SettingRow(icon: .info, title: CareText.about) }
+                        Group26 {
+                            if vm.ui.connected {
+                                // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서 인터넷이 필요하다). 초대 만들기와 같다
+                                Button { confirmDisconnect = true } label: {
+                                    SettingRow(icon: .unlink, title: CareText.disconnect,
+                                               sub: busy ? "끊고 있어요" : vm.ui.offline ? "인터넷이 필요해요" : nil, tone: DesignSystem.textPrimary)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(busy || vm.ui.offline)
+                            }
+                            Button { confirmClear = true } label: {
+                                SettingRow(icon: .trash, title: CareText.clear, tone: DesignSystem.danger) { EmptyView() }
+                            }
                             .buttonStyle(.plain)
+                        }
+                        if let error { FootNote(error).foregroundStyle(DesignSystem.danger) }
+                        Group26 {
+                            NavigationLink { AboutView(version: vm.ui.version) } label: { SettingRow(icon: .info, title: CareText.about) }
+                                .buttonStyle(.plain)
+                        }
                     }
+                    .screenPadding()
                 }
-                .screenPadding()
             }
             .screenBackground()
             .navigationTitle(CareText.tabSettings)
-            .safeAreaInset(edge: .top) { StatusBands().padding(.horizontal, 16) }
             .modifier(ImportFlow())
             .onDisappear { vm.dismissDisconnectError() }   // 설정을 떠나면 지난 끊기 실패 글을 걷는다(안드로이드와 같다)
             .alert(CareText.nickname, isPresented: $editingNickname) {
