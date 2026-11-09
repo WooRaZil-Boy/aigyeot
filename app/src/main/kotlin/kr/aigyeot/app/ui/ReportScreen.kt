@@ -1,156 +1,175 @@
 package kr.aigyeot.app.ui
 
-import androidx.compose.foundation.layout.Column
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kr.aigyeot.app.link.methodKindOf
-import kr.aigyeot.engine.methodLabel
-import kr.aigyeot.engine.toldShown
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import kr.aigyeot.app.R
+import kr.aigyeot.app.ui.car3d.CarView
+import kr.aigyeot.app.ui.car3d.Light3d
+import kr.aigyeot.app.ui.car3d.Stage3d
+import kr.aigyeot.app.ui.car3d.View3d
 import kr.aigyeot.shared.CarActionKind
-import kr.aigyeot.shared.EpisodeResult
-import kr.aigyeot.shared.ExcludedReason
-import kr.aigyeot.shared.HandoffKind
-import kr.aigyeot.shared.OutputRoute
-import kr.aigyeot.shared.PlayPurpose
-import kr.aigyeot.shared.SecondAction
-import kr.aigyeot.shared.SecondAttempt
-import kr.aigyeot.shared.SoundMethod
-import kr.aigyeot.shared.StopInfo
-import kr.aigyeot.shared.StopReason
 
-/** 리포트 목록(읽기만). 열린 세션은 '주행 중'으로 보인다. */
-@Composable
-fun ReportListScreen(rows: List<ReportRow>, onOpen: (String) -> Unit, onBack: () -> Unit) = Page("주행 리포트", onBack) {
-    if (rows.isEmpty()) Body("아직 기록이 없어요")
-    rows.forEach { r -> BigButton(r.label, enabled = r.enabled, primary = false) { onOpen(r.id) } }
-}
+// 주행 리포트(시안 car.js reports(): 왼쪽 목록 560 + 오른쪽 상세, 창 폭 840 이하면 목록과 상세를 한 줄로 따로).
+// 상세 순서: 날짜·구간 → 숫자 줄 → 에피소드 띠 → 자세히(시안에 자리가 없는 사실) → 차가 대신 한 일 | 평소 대비 조향 → 방법별 성적.
+// 화면은 ReportView를 그리기만 한다(계산은 ReportViewModels.kt).
 
-/** 리포트 상세. 휴대폰에 보내는 report_summary와 같은 body를 같은 순서로 그린다(명세서 11장 다섯 항목 + 방법별 성적). */
+/**
+ * 리포트 화면 하나. [openId]: 고른 리포트(넓은 창에서 없으면 열 수 있는 첫 줄). 좁은 창(840 이하)에서는 [openId]가 있으면 상세만, 없으면 목록만.
+ * [detail]은 리포트 id의 상세 상태(ViewModel은 부르는 쪽이 만든다). [onBack]의 인자는 목록으로 돌아갈지(좁은 창 상세에서만 참).
+ */
 @Composable
-fun ReportDetailScreen(ui: ReportDetailUiState, onBack: () -> Unit) = Page("리포트", onBack) {
-    val loaded = ui as? ReportDetailUiState.Loaded ?: return@Page Body("불러오는 중이에요")
-    val b = loaded.body
-    val settling = loaded.settling
-    if (b.simulated) Body("시뮬레이션 입력으로 만든 기록이에요")
-    Body("${b.startedAt.substring(11, 16)} ~ ${b.endedAt.substring(11, 16)}")
-    when (b.outputRoute) {
-        OutputRoute.REAR_ZONE -> Body("소리는 뒷좌석으로 나갔어요")
-        OutputRoute.DEFAULT_ZONE_FALLBACK -> Body("뒷좌석 출력이 없어 앞에서도 들렸어요")
-        OutputRoute.NO_PLAYBACK -> Unit   // 재생이 없었으면 출력 경로를 보이지 않는다
-    }
-    if (b.truncated == true) Body("오래된 에피소드는 줄였어요")
-    Label("1. 에피소드 타임라인")
-    if (b.timeline.isEmpty()) Body("기록된 에피소드가 없어요")   // 통화 중 경보처럼 에피소드 없이 기록만 한 경보도 있다
-    b.timeline.forEach { e ->
-        Section {
-            Body("${e.startedAt.substring(11, 19)} " + if (e.trigger.name == "CRY_ALARM") "울음 감지${e.alarmLatencyS?.let { " (지연 ${"%.1f".format(it)}초)" } ?: ""}" else "소리 바꾸기")
-            Body("${e.sound?.label ?: "재생 없음"} · ${e.playS}초" + (e.plays.size.takeIf { it > 1 }?.let { " · 재생 ${it}번" } ?: ""))
-            e.plays.forEach { Body("· ${purpose(it.purpose)} ${method(it.method)} ${it.startedAt.substring(11, 19)}~${it.endedAt.substring(11, 19)} ${it.playS}초") }
-            Body("결과: " + result(e.result) + (e.excludedReason?.let { " · 성적에서 뺌(${excluded(it)})" } ?: ""))
-            if (e.recried) Body("다시 울었어요")
-            e.second?.let { Body("2차: " + secondText(it)) }
-            e.stop?.let { Body("정차: " + stopText(it, settling)) }
-            Body("울음 ${e.totalCryS}초")
+fun ReportsScreen(
+    rows: List<ReportRow>, openId: String?, detail: @Composable (String) -> ReportDetailUiState,
+    onOpen: (String) -> Unit, onBack: (toList: Boolean) -> Unit,
+) = BoxWithConstraints(Modifier.fillMaxSize()) {
+    val narrow = maxWidth < NarrowPage   // 목록 560 + 상세 두 칸이 들어가는 폭(설정·시연과 같은 기준)이 아니면 목록과 상세를 따로
+    val detailOnly = narrow && openId != null
+    BackHandler(enabled = detailOnly) { onBack(true) }
+    Column(Modifier.fillMaxSize()) {
+        Header("주행 리포트", { onBack(detailOnly) })
+        when {
+            detailOnly -> key(openId) { Detail(detail(openId!!), narrow = true, Modifier.fillMaxSize()) }
+            narrow -> ReportList(rows, null, onOpen, Modifier.fillMaxSize())
+            else -> Row(Modifier.fillMaxSize()) {
+                val sel = openId ?: rows.firstOrNull { it.enabled }?.id
+                ReportList(rows, sel, onOpen, Modifier.width(560.dp + 44.dp + 18.dp).fillMaxHeight(), PaddingValues(start = 44.dp, end = 18.dp, top = 32.dp, bottom = 40.dp))
+                if (sel != null) key(sel) { Detail(detail(sel), narrow = false, Modifier.weight(1f).fillMaxHeight(), PaddingValues(start = 18.dp, end = 44.dp, top = 32.dp, bottom = 40.dp)) }
+            }
         }
     }
-    Label("2. 울음 직전 주행")
-    if (b.preCryContext.isEmpty()) Body("기록된 맥락이 없어요")
-    b.preCryContext.forEach { c ->
-        Section {
-            Body("평균 ${c.speedKmhAvg}km/h · 최고 ${c.speedKmhMax}km/h · 브레이크 ${c.brakePresses}번")
-            Body("큰 조향 ${c.steeringReversals}번 · 방향지시등 ${if (c.turnSignalUsed) "켬" else "안 켬"} · 기어 ${c.gear.name}" + (c.cabinTempC?.let { " · 실내 ${"%.1f".format(it)}℃" } ?: "") + if (c.playing) " · 재생 중" else "")
+}
+
+/** 차가 한 일 | 조향 두 칸이 들어가는 상세 폭: 칸마다 안쪽 여백 64 + 차 그림 200 + 간격 20 + 글자 200, 칸 사이 28(시안 창 1706의 상세 약 1022는 두 칸). */
+private val TwoCards = (64 + 200 + 20 + 200).dp * 2 + 28.dp
+
+private val PagePad = PaddingValues(start = 44.dp, end = 44.dp, top = 32.dp, bottom = 40.dp)
+
+/** 목록(시안 왼쪽): '주행' 제목 + 행(아이콘 route, '{날짜} {구간}', 부가 '울음 n번'). 열린 세션은 '주행 중'이라 열 수 없다. */
+@Composable
+private fun ReportList(rows: List<ReportRow>, selected: String?, onOpen: (String) -> Unit, modifier: Modifier, pad: PaddingValues = PagePad) {
+    val p = LocalPalette.current
+    LazyColumn(modifier, contentPadding = pad, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item { Sect("주행") }
+        if (rows.isEmpty()) item { Body("아직 기록이 없어요") }
+        items(rows, key = { it.id }) { r ->
+            ListRow(r.title, r.sub.ifEmpty { null }, R.drawable.ic_route, selected = r.id == selected, enabled = r.enabled, onClick = { onOpen(r.id) }) {
+                if (r.enabled) LineIcon(R.drawable.ic_chevron_right, 36.dp, p.textTertiary)
+            }
         }
     }
-    Label("3. 평소 대비 조향")
-    with(b.steering) {
-        Body(if (!available) (if (unavailableReason?.name == "NO_CRY") "울음이 없어 비교하지 않았어요" else "비교할 구간이 없어요")
-             else "평소 분당 ${"%.1f".format(baselinePerMin)}번 · 울음 중 ${"%.1f".format(duringCryPerMin)}번" + (afterResponsePerMin?.let { " · 대응 뒤 ${"%.1f".format(it)}번" } ?: ""))
+}
+
+/** 상세(시안 오른쪽 .detail, 칸 사이 22). 좁은 창이면 두 칸(차가 한 일 | 조향)도 세로로 쌓는다. */
+@Composable
+private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier, pad: PaddingValues = PagePad) {
+    val p = LocalPalette.current
+    Column(modifier.verticalScroll(rememberScrollState()).padding(pad), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        val v = (ui as? ReportDetailUiState.Loaded)?.view ?: return@Column Body("불러오는 중이에요")
+        Text(v.title, style = CarType.titleS, color = p.textPrimary)
+        Panel { StatRow(v.stats) }
+        v.episodes.forEach { Panel(label = it.title) { EpisodeChart(it.chart) } }
+        Panel(label = "자세히") { v.details.forEach { DetailText(it) } }
+        // 두 칸은 상세의 실제 폭이 두 칸을 받을 때만(창 1200처럼 상세가 좁으면 차 그림 200이 글자 칸을 다 먹는다)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (narrow || maxWidth < TwoCards) Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                DidCard(v)
+                SteerCard(v)
+            } else Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                DidCard(v, Modifier.weight(1f).fillMaxHeight())
+                SteerCard(v, Modifier.weight(1f).fillMaxHeight())
+            }
+        }
+        if (v.methods.isNotEmpty()) Panel(label = "방법별 성적") {
+            MethodDotsChart(v.methods)
+            Note("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.", Modifier.padding(top = 6.dp))
+        }
     }
-    Label("4. 차가 대신 한 일")
-    if (b.carActions.isEmpty()) Body("없어요")
-    b.carActions.forEach { Body("${actionName(it.action)} ${it.count}번" + (it.totalS?.let { s -> " · ${s}초" } ?: "")) }
-    Label("5. 제어 기록")
-    if (b.controls.isEmpty()) Body("없어요")
-    b.controls.forEach { Body("${it.api} ${it.target}: 성공 ${it.succeeded} · 실패 ${it.failed} · 재시도 ${it.retries}") }
-    Label("방법별 성적")
-    methodStatLines(b.methodStats).forEach { Body(it) }
-    Body("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요")
-}
-
-/** C303 A19: 이름은 판단 코어 methodLabel 하나. 받은 모르는 방식(UNKNOWN)만 "기타". */
-private fun method(m: SoundMethod) = methodKindOf(m)?.let(::methodLabel) ?: "기타"
-
-private fun purpose(p: PlayPurpose) = when (p) { PlayPurpose.AUTO_FIRST -> "자동 1차"; PlayPurpose.AUTO_SECOND -> "자동 2차"; PlayPurpose.REQUEST -> "운전자 요청" }
-
-private fun result(r: EpisodeResult?) = when (r) {
-    EpisodeResult.SUCCESS -> "그쳤어요"; EpisodeResult.FAILURE -> "계속 울었어요"; EpisodeResult.UNDETERMINED -> "판정하지 못했어요"; null -> "시도 없음"
-}
-
-/** 폰 리포트의 excluded()와 같은 뜻(열거 이름을 그대로 쓰지 않는다). */
-private fun excluded(e: ExcludedReason) = when (e) {
-    ExcludedReason.SESSION_END -> "세션이 끝나 판정하지 못했어요"
-    ExcludedReason.DRIVER_STOP -> "운전자가 멈춤"
-    ExcludedReason.CALL -> "통화"
-    ExcludedReason.GEAR_TO_PARK, ExcludedReason.STARTED_IN_PARK -> "정차 중"
-    ExcludedReason.SWITCH_SOUND -> "소리 바꾸기 요청"
-    ExcludedReason.FEEDING_WINDOW -> "수유 시간대"
-    ExcludedReason.SESSION_CAP -> "세션 상한"
-    ExcludedReason.MIC_ERROR -> "마이크 오류"
-    ExcludedReason.DETECTOR_TIMEOUT -> "감지 시간 초과"
-    ExcludedReason.INPUT_SILENCED -> "입력이 무음 처리됨"
-    ExcludedReason.FOCUS_LOSS -> "소리를 이어서 틀지 못함"
-    ExcludedReason.SUSPEND -> "일시 중단"
-}
-
-private fun secondText(sec: SecondAttempt): String {
-    val what = when (sec.action) {
-        // C355: 분기는 고른 사실이다. 실제로 낮췄는지는 car_actions cabin_cool이 보인다
-        SecondAction.COMFORT_COOL -> "더운 실내로 판단했어요"
-        SecondAction.FEEDING_WINDOW -> "수유 시간대로 판단했어요"
-        SecondAction.OTHER_SOUND -> "다른 소리로 바꿨어요" + (sec.sound?.let { "(${it.label})" } ?: "")
-        SecondAction.FOCUS_DENIED -> "소리를 이어서 틀지 못했어요"
-    }
-    return what + (sec.result?.let { " · ${result(it)}" } ?: "")
-}
-
-/** [settling]: 인계 행에 아직 확정 안 된(말하는 종류인데 told_driver null) 것이 있으면(`handoffSettled` 거짓, C305) 한 줄로만 보인다(C185). */
-internal fun stopText(st: StopInfo, settling: Boolean = false) = buildString {
-    append(when (st.reason) {
-        StopReason.ATTEMPT_LIMIT -> "두 번 시도 뒤"
-        StopReason.SESSION_CAP -> "세션 20분 상한"
-        StopReason.FEEDING_WINDOW -> "수유 시간대"
-        StopReason.NO_SOUND -> "뒷좌석 출력 없음"
-    })
-    append(" · ")
-    if (settling) { append("정리하는 중이에요"); return@buildString }
-    val told = toldShown(st.toldDriver, settled = true)   // C130 ⑦·C303 A10: 인계 문장을 못 말했으면 "했다"고 쓰지 않는다(폰 U53과 같은 글). 확정 전은 위에서 끝났다
-    append(when (st.mode) {
-        HandoffKind.REST_OFFER -> if (told) "${st.restName ?: "쉼터"} 들르기 제안" else "쉼터는 묻지 못했어요"
-        HandoffKind.ARRIVAL_NOTICE -> if (told) "도착 안내" else "도착 안내는 하지 못했어요"
-        HandoffKind.NO_REST -> if (told) "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요" else "안전한 곳에 세우도록 안내하지 못했어요"
-        HandoffKind.PARKED -> if (st.reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"   // U59
-    })
-    if (st.waypointAdded) append(" · 경유지 추가")
-    if (st.guardianNotified) append(" · 다른 보호자에게 알림")
 }
 
 @Composable
-private fun Section(content: @Composable () -> Unit) =
-    Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { content() } }
+private fun DetailText(d: DetailLine) {
+    val p = LocalPalette.current
+    if (d.head) Text(d.text, Modifier.padding(top = 10.dp), style = CarType.bodyS.copy(fontWeight = FontWeight(600)), color = p.textPrimary)
+    else Body(d.text)
+}
 
-private fun actionName(a: CarActionKind) = when (a) {
-    CarActionKind.REAR_PLAYBACK -> "뒷자리 재생"
-    CarActionKind.DEFAULT_ZONE_PLAYBACK -> "앞에서도 들리게 재생"
-    CarActionKind.SEAT_HEATER_OFF -> "열선 끄기"
-    CarActionKind.REAR_WINDOW_LOCK -> "뒷창 잠금"
-    CarActionKind.CABIN_COOL -> "실내 온도 낮추기"
-    CarActionKind.READING_LIGHT_OFF -> "독서등 끄기"
-    CarActionKind.AMBIENT_DIM -> "조명 낮춤"
-    CarActionKind.WAYPOINT_ADDED -> "경유지 추가"
-    CarActionKind.ARRIVAL_NOTICE -> "도착 안내"
-    CarActionKind.GUARDIAN_ALERT -> "보호자 알림"
+/** 차가 대신 한 일(시안 .did): 위에서 본 3D 정지 그림(칩은 실제로 한 것만) + 한 일 목록. */
+@Composable
+private fun DidCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifier, label = "차가 대신 한 일") {
+    val p = LocalPalette.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        CarStill(v, Modifier.size(200.dp, 233.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (v.actions.isEmpty()) Body("없어요")
+            v.actions.forEach { a ->
+                // 횟수·초는 이름 아래 둘째 줄(넓은 창 두 칸이면 목록 폭이 약 210이라 한 줄에 두면 잘린다)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LineIcon(actionIcon(a.kind), 30.dp, p.textTertiary)
+                    Column {
+                        Text(a.name, style = CarType.label.copy(fontSize = 26.sp, lineHeight = 32.sp), color = p.textPrimary)
+                        Text(a.extra, style = CarType.label, color = p.textTertiary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 3D 'did' 자리(정차 화면에서만 보이고 조작 없음, 상태가 바뀔 때 한 장만 그린다). 화면을 떠나면 놓는다. */
+@Composable
+private fun CarStill(v: ReportView, modifier: Modifier) {
+    val dark = LocalPalette.current.isDark
+    AndroidView(
+        factory = { CarView(it, interactive = false) }, modifier = modifier, onRelease = { it.destroy() },
+        // 지난 주행의 정지 그림: 움직임 없음(reducedMotion으로 바람 결·효과도 끈다)
+        update = { it.dark = dark; Stage3d(view = View3d.DID, light = Light3d.BASE, callouts = v.callouts, reducedMotion = true).let { s -> if (it.state != s) it.set(s, animate = false) } },
+    )
+}
+
+/** 평소 대비 조향 보정(시안 Charts.steer + note). 비교할 수 없으면 그 이유 한 줄. */
+@Composable
+private fun SteerCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifier, label = "평소 대비 조향 보정") {
+    if (v.steer == null) Body(v.steerText ?: "")
+    else {
+        SteerChart(v.steer)
+        Note("1분당 큰 조향 보정 횟수예요.", Modifier.padding(top = 6.dp))
+    }
+}
+
+private fun actionIcon(a: CarActionKind) = when (a) {
+    CarActionKind.REAR_PLAYBACK -> R.drawable.ic_volume_2
+    CarActionKind.DEFAULT_ZONE_PLAYBACK -> R.drawable.ic_speaker
+    CarActionKind.SEAT_HEATER_OFF -> R.drawable.ic_flame_kindling
+    CarActionKind.REAR_WINDOW_LOCK -> R.drawable.ic_lock
+    CarActionKind.CABIN_COOL -> R.drawable.ic_snowflake
+    CarActionKind.READING_LIGHT_OFF -> R.drawable.ic_lightbulb_off
+    CarActionKind.AMBIENT_DIM -> R.drawable.ic_sun_dim
+    CarActionKind.WAYPOINT_ADDED -> R.drawable.ic_map_pin
+    CarActionKind.ARRIVAL_NOTICE -> R.drawable.ic_navigation
+    CarActionKind.GUARDIAN_ALERT -> R.drawable.ic_bell
 }
