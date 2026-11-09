@@ -70,7 +70,6 @@ dependencies {
     implementation(libs.filament.android)   // 홈 무대 3D(디자인 v6): GLB 그리기
     implementation(libs.filament.gltfio)
     implementation(libs.filament.utils)     // 환경광(IBL) 미리 거르기·KTX
-    implementation(libs.filament.filamat)   // X-ray 유령 껍데기 등 맞춤 재질을 실행 중에 만든다(R2)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit4)
     testImplementation(kotlin("test-junit")) // 갈래 ① 감지 시험(assertNotNull 등). JUnit4 위에서 돈다

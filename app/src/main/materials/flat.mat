@@ -1,0 +1,17 @@
+// 단색(미리 곱하지 않은 색 + 알파). 컴파일: matc -p mobile -a opengl -o assets/materials/flat.filamat flat.mat (Filament 1.77.3)
+material {
+    name : flat,
+    shadingModel : unlit,
+    blending : transparent,
+    doubleSided : true,
+    depthWrite : false,
+    parameters : [ { type : float4, name : color } ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        vec4 c = materialParams.color;
+        material.baseColor = vec4(c.rgb * c.a, c.a);
+    }
+}

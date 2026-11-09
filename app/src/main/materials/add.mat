@@ -1,0 +1,18 @@
+// 단색(미리 곱하지 않은 색 + 알파), 꼭짓점 색을 곱함, 더하기 섞기. 컴파일: matc -p mobile -a opengl -o assets/materials/add.filamat add.mat (Filament 1.77.3)
+material {
+    name : add,
+    shadingModel : unlit,
+    blending : add,
+    doubleSided : true,
+    depthWrite : false,
+    requires : [ color ],
+    parameters : [ { type : float4, name : color } ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        vec4 c = materialParams.color; c *= getColor();
+        material.baseColor = vec4(c.rgb * c.a, c.a);
+    }
+}

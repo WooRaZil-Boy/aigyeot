@@ -1,0 +1,26 @@
+// 바람 결: 관을 따라 흐르는 줄무늬(시안 flowMaterial). uv.x = 관 길이 방향. 컴파일: matc -p mobile -a opengl -o assets/materials/flow.filamat flow.mat (Filament 1.77.3)
+material {
+    name : flow,
+    shadingModel : unlit,
+    blending : transparent,
+    doubleSided : true,
+    depthWrite : false,
+    requires : [ uv0 ],
+    parameters : [
+        { type : float3, name : color },
+        { type : float, name : time },
+        { type : float, name : k }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        vec2 uv = getUV0();
+        float s = fract(uv.x * 4.0 - materialParams.time);
+        float a = smoothstep(0.0, 0.25, s) * (1.0 - smoothstep(0.45, 0.7, s));
+        a *= smoothstep(0.0, 0.12, uv.x) * (1.0 - smoothstep(0.75, 1.0, uv.x));
+        a *= 0.85 * materialParams.k;
+        material.baseColor = vec4(materialParams.color * a, a);
+    }
+}

@@ -28,10 +28,7 @@ class Car3dSpikeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val t0 = SystemClock.elapsedRealtime()
-        CarEngine.debugNoAo = intent.getBooleanExtra("noao", false)
-        CarEngine.get(this)
-        Log.i(TAG, "engine+glb ${SystemClock.elapsedRealtime() - t0}ms")
+        CarEngine.debugNoAo = intent.getBooleanExtra("noao", false)   // 엔진 준비는 CarView가 기다린다(CarEngine 로그에 단계별 시간)
         car = CarView(this, interactive = true)
         car.dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES || intent.getBooleanExtra("dark", false)
         car.onFrame = { ft, ms, rendered ->

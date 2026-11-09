@@ -51,7 +51,6 @@ pleos-tts = { module = "ai.pleos.playground:TextToSpeech", version.ref = "pleosS
 filament-android = { module = "com.google.android.filament:filament-android", version.ref = "filament" }
 filament-gltfio = { module = "com.google.android.filament:gltfio-android", version.ref = "filament" }
 filament-utils = { module = "com.google.android.filament:filament-utils-android", version.ref = "filament" }
-filament-filamat = { module = "com.google.android.filament:filamat-android", version.ref = "filament" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }

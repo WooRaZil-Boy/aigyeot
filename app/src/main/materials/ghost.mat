@@ -1,0 +1,32 @@
+// X-ray 유령 껍데기(프레넬 테두리 빛, 시안 car3d.js ghostMaterial). 컴파일: matc -p mobile -a opengl -o assets/materials/ghost.filamat ghost.mat (Filament 1.77.3)
+material {
+    name : ghost,
+    shadingModel : unlit,
+    blending : transparent,
+    doubleSided : true,
+    depthWrite : false,
+    requires : [ tangents ],
+    parameters : [
+        { type : float3, name : color },
+        { type : float, name : k },
+        { type : float, name : base }
+    ],
+    variables : [ wn ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        material.wn = vec4(material.worldNormal, 0.0);
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        vec3 n = normalize(variable_wn.xyz);
+        vec3 v = normalize(getWorldCameraPosition() - getWorldPosition());
+        float f = 1.0 - abs(dot(n, v));
+        float a = clamp((materialParams.base + 0.78 * pow(f, 2.4)) * materialParams.k, 0.0, 1.0);
+        material.baseColor = vec4(materialParams.color * a, a);
+    }
+}
