@@ -41,7 +41,7 @@ internal fun androidLufs(ctx: Context, m: Method): Double? = try {
     }
 } catch (e: Exception) { Log.w("SCENARIO", "음원 크기를 재지 못함 $m", e); null }
 
-// ponytail: exec SongLoudness의 private decode와 같은 일을 한 번 더 한다. exec가 `SongLoudness.measure(File)`을 열면 이 함수를 지운다
+// 한계: exec SongLoudness의 private decode와 같은 일을 한 번 더 한다. exec가 `SongLoudness.measure(File)`을 열면 이 함수를 지운다
 /** m4a를 풀어 16비트 PCM을 [Loudness]에 넣는다. 30초 안에 끝나지 않으면 예외. */
 private fun decodeLufs(source: (MediaExtractor) -> Unit): Double? {
     val ex = MediaExtractor()

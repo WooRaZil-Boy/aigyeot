@@ -14,7 +14,7 @@ internal class PcmTap(private val ex: ExecThread) : MicTap {
         val openedAt = SystemClock.elapsedRealtime()
         val t: (ShortArray, Int) -> Unit = { pcm, n ->
             // MicService는 창을 다 읽은 뒤 부르므로 첫 창에는 open 전 소리가 섞인다. 그 몫을 앞에서 잘라 낸다.
-            // ponytail: 듣기 끝 직전 말이 다음 창으로 넘어가 빠지는 쪽은 알려진 한계(창 975ms 단위)
+            // 한계: 듣기 끝 직전 말이 다음 창으로 넘어가 빠지는 쪽은 알려진 한계(창 975ms 단위)
             val k = keepTail(n, openedAt, SystemClock.elapsedRealtime())
             if (k > 0) {
                 val b = ByteArray(k * 2)
