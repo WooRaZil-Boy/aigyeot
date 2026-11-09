@@ -126,6 +126,7 @@ fun actionText(a: CarActionKind) = when (a) {
     CarActionKind.REAR_WINDOW_LOCK -> "뒷창 잠금"
     CarActionKind.CABIN_COOL -> "실내 온도 낮춤"
     CarActionKind.READING_LIGHT_OFF -> "독서등 끔"
+    CarActionKind.AMBIENT_DIM -> "조명 낮춤" // 기능 D(명세 17장 L99), iOS와 같은 글자
     CarActionKind.WAYPOINT_ADDED -> "경유지 추가"
     CarActionKind.ARRIVAL_NOTICE -> "도착 안내"
     CarActionKind.GUARDIAN_ALERT -> "다른 보호자 알림"
@@ -161,14 +162,17 @@ fun songStatusText(e: SongEntry, online: Boolean, selecting: Boolean): String = 
 
 // ---- 차 타일(7.2)·수유 전송 상태(7.5) ----
 
-/** 홈 차 타일: 오프라인이면 알 수 없음, 아니면 연결됨 또는 차 꺼짐 · 마지막 연락 n분 전. */
+/**
+ * 홈 차 타일: 오프라인이면 알 수 없음, 아니면 연결됨 또는 "차 꺼짐 · 마지막 연락 {경과} 전".
+ * {경과}는 U20 경과 형식([agoText]): 1분 미만 "마지막 연락 방금", "5분 전"·"1시간 전"·"1시간 15분 전"(연결 계약 차 타일 값, 명세 17장 L100).
+ */
 fun carTileText(devices: List<DeviceInfo>, online: Boolean, now: Long): String {
     val car = devices.find { it.role == Role.CAR }
     return when {
         !online -> "알 수 없음"
         car == null -> "차를 기다리고 있어요"
         car.online -> "연결됨"
-        else -> "차 꺼짐" + (instantOf(car.lastSeenAt)?.let { " · 마지막 연락 ${((now - it) / 60_000).coerceAtLeast(0)}분 전" } ?: "")
+        else -> "차 꺼짐" + (instantOf(car.lastSeenAt)?.let { " · 마지막 연락 ${agoText(it, now)}" } ?: "")
     }
 }
 

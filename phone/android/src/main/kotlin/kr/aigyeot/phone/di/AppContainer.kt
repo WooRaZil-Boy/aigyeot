@@ -21,6 +21,8 @@ import kr.aigyeot.phone.data.KeystoreCredentialRepository
 import kr.aigyeot.phone.data.OkHttpRelayClient
 import kr.aigyeot.phone.data.PrefsLinkMarks
 import kr.aigyeot.phone.data.Recorder
+import kr.aigyeot.phone.data.readDocument
+import kr.aigyeot.phone.domain.model.CareCsv
 import kr.aigyeot.phone.domain.repository.CareRepository
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.Mark
@@ -114,7 +116,7 @@ class AppContainer(app: Application) {
     val inbox: SyncInbox = SyncInbox(state, relay, lose, notices, songs, clock, scope)
     val push: RegisterPush = RegisterPush(state, relay, lose, pushTokens, scope)
     val connection: KeepConnected = KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, AndroidNetworkWatcher(app), visibility, clock, scope)
-    private val reconcile = ReconcileCareSummary(state, care, outbox, clock)
+    private val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
     val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, log, allowDebugSeed = BuildConfig.DEBUG)
     val clearRecords = ClearRecords(care, state, recordCare, notices, songs, connection, outbox, clock, scope)
     val pair = Pair(state, care, credentials, relay, link, disconnect, lose, marks, pushTokens, songs, recordCare, notices, clock, scope, log)
@@ -139,7 +141,7 @@ class AppContainer(app: Application) {
                 CareSheetViewModel::class.java -> CareSheetViewModel(care, notices, recordCare)
                 RecordsViewModel::class.java -> RecordsViewModel(state, care, recordCare)
                 CarViewModel::class.java -> CarViewModel(state, connection)
-                SettingsViewModel::class.java -> SettingsViewModel(state, care, recordCare, clearRecords, disconnect, clock)
+                SettingsViewModel::class.java -> SettingsViewModel(state, care, recordCare, clearRecords, disconnect, clock, { readDocument(app.contentResolver, it, CareCsv.MAX_BYTES + 1) })
                 SongsViewModel::class.java -> SongsViewModel(state, connection, recordSong, selectSong, removeSong, songs, Recorder(app), clock, handle())
                 ReportsViewModel::class.java -> ReportsViewModel(state)
                 ReportDetailViewModel::class.java -> ReportDetailViewModel(handle().toRoute<Route.Report>().id, state)

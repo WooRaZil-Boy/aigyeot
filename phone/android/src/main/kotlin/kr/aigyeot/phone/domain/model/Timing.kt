@@ -39,3 +39,9 @@ const val PING_REST_MS = 15_000L
 
 /** FCM 토큰을 기다리는 최대 시간. */
 const val PUSH_TOKEN_TIMEOUT_MS = 5_000L
+
+/** 앱 안 인계 알림 배너는 뜬 지 8초 뒤 저절로 닫힌다(연결 계약 5.6, 명세 17장 L100, iOS `RetryPolicy.bannerNanos`와 같음). */
+const val BANNER_MS = 8_000L
+
+/** 되돌리기 띠('지웠어요'·'기록 n건을 가져왔어요' + '되돌리기')가 떠 있는 시간(7장·U38·U64). 가져오기는 이 띠가 끝난 뒤 차로 보낸다(U67 11-09 보충). */
+const val UNDO_MS = 5_000L

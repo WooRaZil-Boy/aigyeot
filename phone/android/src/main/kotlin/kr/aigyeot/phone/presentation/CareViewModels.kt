@@ -1,16 +1,28 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.APP_ZONE
+import kr.aigyeot.phone.domain.model.CareCsv
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.CareUndo
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.DisconnectRun
+import kr.aigyeot.phone.domain.model.IMPORT_FAILED
+import kr.aigyeot.phone.domain.model.IMPORT_TOO_LARGE
+import kr.aigyeot.phone.domain.model.IMPORT_UNREADABLE
+import kr.aigyeot.phone.domain.model.ImportDraft
+import kr.aigyeot.phone.domain.model.ImportFormat
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SAVE_FAILED
 import kr.aigyeot.phone.domain.model.exportFileName
@@ -45,11 +57,11 @@ class CareTabsViewModel(
 ) : ViewModel(scope) {
     val ui: StateFlow<CareTabsUiState> = derive(state.connection, disconnect.run) { careTabsUi(state.connection.value, disconnect.run.value) }
 
-    /** 방금 지운 손 기록 id(띠 하나가 계속 받는다). */
-    val undoIds: Flow<String> = notices.undoCareId.mapNotNull { it }
+    /** 떠 있는 되돌리기 띠(방금 지운 손 기록·가져온 기록). 수명(5초·바뀜)은 RecordCare 한 곳이 정한다. */
+    val undo: StateFlow<CareUndo?> = notices.undo
 
-    fun clearUndo() = notices.clearUndo()
-    fun undoDelete(id: String) = recordCare.undoDelete(id)
+    /** 끝날 때까지 기다릴 작업. 끝난 뒤에도 [undo]가 그 띠면 되돌리기 저장이 실패한 것이다(U38 11-09 보충). */
+    fun undo(u: CareUndo) = recordCare.undo(u)
 
     /** 끊은 뒤 오늘·띠를 한 번 그렸다(U25 b). */
     fun disconnectShown() = disconnect.shown()
@@ -178,6 +190,25 @@ class CarViewModel(
 /** 설정 탭. */
 data class SettingsUiState(val care: CareFile, val connected: Boolean, val disconnect: DisconnectRun?)
 
+/** 기록 가져오기(U64~U68) 단계. 파일 글은 이 메모리에만 두고 저장하지 않는다. */
+sealed interface ImportUi {
+    data object Closed : ImportUi
+
+    /** 고른 파일을 읽는 중. */
+    data object Reading : ImportUi
+
+    /** Nara 이름이 둘 이상(import.pickChild). 고르면 같은 글을 다시 읽는다. */
+    data class PickChild(val text: String, val profiles: List<String>) : ImportUi
+
+    /** 미리 보기(U68). 가져올 기록이 0이면 '닫기'만. */
+    data class Preview(val draft: ImportDraft) : ImportUi
+
+    data class Saving(val draft: ImportDraft) : ImportUi
+
+    /** 끝내는 안내(import.unreadable·tooLarge·failed): 글과 '닫기'만. */
+    data class Ended(val message: String) : ImportUi
+}
+
 class SettingsViewModel(
     state: PhoneStateRepository,
     private val care: CareRepository,
@@ -185,6 +216,8 @@ class SettingsViewModel(
     private val clearRecords: ClearRecords,
     private val disconnect: Disconnect,
     private val clock: Clock,
+    /** 기록 가져오기: 고른 문서를 메모리로만 읽는다(상한 + 1바이트까지, 열거나 읽지 못하면 null). 앱은 ContentResolver, 시험은 가짜. */
+    private val readDocument: suspend (uri: String) -> ByteArray?,
     scope: CoroutineScope = vmScope(),
 ) : ViewModel(scope) {
     val ui: StateFlow<SettingsUiState> = derive(care.care, state.connection, disconnect.run) {
@@ -196,6 +229,59 @@ class SettingsViewModel(
 
     /** 내 기록 내보내기(C7, U29): 캐시 export/에 CSV를 쓰고 그 파일을 돌려준다. 실패하면 null. */
     suspend fun export(): File? = care.export(exportFileName(clock.now(), APP_ZONE)) { it.toCsv(APP_ZONE) }
+
+    private val _import = MutableStateFlow<ImportUi>(ImportUi.Closed)
+    val import: StateFlow<ImportUi> = _import.asStateFlow()
+
+    /** 가져오기 작업은 하나다: 새 고르기·아이 고르기·저장·닫기가 앞 작업을 취소하고, 결과는 그 작업 안에서만 적용한다(P5). */
+    private var importJob: Job? = null
+
+    private fun runImport(now: ImportUi, block: suspend () -> ImportUi) {
+        importJob?.cancel()
+        _import.value = now
+        importJob = viewModelScope.launch { _import.value = block() }
+    }
+
+    /**
+     * 파일 고르기 결과(문서 주소). 읽기([readDocument], 상한 + 1바이트까지)·형식 판별을 이 ViewModel이 쥔 작업이 한다:
+     * 화면이 회전하거나 사라져도 이어지고, 다시 고르면 앞 파일의 결과는 버린다. 열거나 읽지 못하면 import.failed.
+     */
+    fun pick(uri: String) = runImport(ImportUi.Reading) {
+        val bytes = readDocument(uri) ?: return@runImport ImportUi.Ended(IMPORT_FAILED)
+        val text = withContext(Dispatchers.Default) { CareCsv.read(bytes) } ?: return@runImport ImportUi.Ended(IMPORT_TOO_LARGE)
+        show(text, null)
+    }
+
+    /** Nara 아이를 골랐다: 그 아이 줄만 다시 읽는다. */
+    fun pickChild(name: String) {
+        val p = _import.value as? ImportUi.PickChild ?: return
+        runImport(ImportUi.Reading) { show(p.text, name) }
+    }
+
+    /** 읽기는 지금 돌봄 기록을 기준으로 건너뛸 줄을 정한다(U67). 아이를 골라야 하면 고르기로. */
+    private suspend fun show(text: String, profile: String?): ImportUi {
+        val d = withContext(Dispatchers.Default) { CareCsv.parse(text, care.care.value, clock.now(), profile) }
+        return when {
+            d.format == ImportFormat.UNKNOWN -> ImportUi.Ended(IMPORT_UNREADABLE)
+            d.needsChild && profile == null -> ImportUi.PickChild(text, d.profiles)
+            else -> ImportUi.Preview(d)
+        }
+    }
+
+    /** '가져오기': 한 번에 저장하고 닫는다. 띠의 되돌리기는 RecordCare가 띄운다. 실패하면 import.failed. */
+    fun confirmImport() {
+        val p = _import.value as? ImportUi.Preview ?: return
+        if (p.draft.rows.isEmpty()) return closeImport()
+        // 저장은 앱 범위에서 끝난다(RecordCare). 이 기다림이 취소돼도 들어간 기록과 띠는 그대로다.
+        runImport(ImportUi.Saving(p.draft)) { if (recordCare.importRows(p.draft.rows)) ImportUi.Closed else ImportUi.Ended(IMPORT_FAILED) }
+    }
+
+    /** 취소·닫기: 읽던 작업은 버린다. 저장 중에는 닫지 않는다(저장 결과가 화면을 정한다). */
+    fun closeImport() {
+        if (_import.value is ImportUi.Saving) return
+        importJob?.cancel()
+        _import.value = ImportUi.Closed
+    }
 
     fun clearRecords() = clearRecords.invoke()
     fun startDisconnect() = disconnect.start()

@@ -46,6 +46,9 @@ class ClearRecords(
             }
             if (!marked) return@launch
             notices.clearBanner() // 지운 알림 본문·상세로 가는 '보기'를 막는다
+            // 지운 기록은 id째 빠져 되돌려도 되살아나지 않으니 되돌리기 띠도 걷는다(U38 11-09 보충, iOS `recordsCleared`와 같음).
+            // 지울 표시를 저장한 뒤라 그 사이 맞추기는 보내지 않는다. 띠 시간은 그대로 둬도 [RecordCare]의 끝이 다른 띠로 보고 그냥 끝난다.
+            notices.clearUndo()
             notices.pruneFeedingDrop(state.state.value.unseenDrops) // 지운 수유의 버림 안내 줄도 띠에서 걷는다
             state.deleteRecoveryCopy() // 사용자가 기록을 지웠으니 옮겨 둔 상태도 지운다
             songs.clean()

@@ -6,12 +6,14 @@ import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.CareSummaryBody
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.MINUTE
+import kr.aigyeot.phone.domain.model.forCar
 import kr.aigyeot.phone.domain.model.reconciled
 import kr.aigyeot.phone.domain.model.reconciledSummary
 import kr.aigyeot.phone.domain.model.rfc3339
 import kr.aigyeot.phone.domain.repository.CareRepository
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
+import kr.aigyeot.phone.domain.state.Notices
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -27,17 +29,18 @@ class ReconcileCareSummary(
     private val state: PhoneStateRepository,
     private val care: CareRepository,
     private val outbox: SendOutbox,
+    private val notices: Notices,
     private val clock: Clock,
 ) {
     /** 수유와 요약(R5·R19). `c`는 계기가 시작할 때 잡은 자격이다(P5). */
     suspend fun feedingAndSummary(c: Credentials) {
-        if (state.commit(c) { it.reconciled(care.care.value, clock.now(), APP_ZONE, outbox.sending) } && state.state.value.outbox.isNotEmpty()) outbox.pump()
+        if (state.commit(c) { it.reconciled(care.care.value.forCar(notices.undo.value), clock.now(), APP_ZONE, outbox.sending) } && state.state.value.outbox.isNotEmpty()) outbox.pump()
     }
 
     /** 요약만(기록 지우기를 마친 뒤). 지우기를 아직 못 마쳤으면 아무것도 넣지 않는다. */
     suspend fun summaryOnly() {
         val c = state.creds ?: return
-        if (state.commit(c) { it.reconciledSummary(care.care.value, clock.now(), APP_ZONE, outbox.sending) } && state.state.value.outbox.isNotEmpty()) outbox.pump()
+        if (state.commit(c) { it.reconciledSummary(care.care.value.forCar(notices.undo.value), clock.now(), APP_ZONE, outbox.sending) } && state.state.value.outbox.isNotEmpty()) outbox.pump()
     }
 }
 

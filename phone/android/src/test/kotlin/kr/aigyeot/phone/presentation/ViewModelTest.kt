@@ -1,12 +1,17 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kr.aigyeot.phone.domain.model.APP_ZONE
+import kr.aigyeot.phone.domain.model.CareCsv
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.CareUndo
+import kr.aigyeot.phone.domain.model.HOUR
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.DisconnectRun
@@ -135,6 +140,114 @@ class ViewModelTest {
         recordCare.delete(e.id)
         until("지움") { care.care.value.events.single().deletedAt != null }
         assertEquals(SheetSave.Gone, vm.save(e.copy(note = "고침"), editing = true))
+    }
+
+    /** 가져오기 시험용 설정 ViewModel: 문서 주소 → 파일 내용(없으면 열지 못함). 값이 함수라 읽기를 붙잡아 둘 수 있다. */
+    private fun Kit.settingsVm(files: Map<String, suspend () -> ByteArray?>) =
+        SettingsViewModel(state, care, recordCare, clearRecords, disconnect, clock, { uri -> files[uri]?.invoke() }, vmScope())
+
+    private val wall = { ms: Long -> java.time.Instant.ofEpochMilli(ms).atZone(APP_ZONE).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) }
+
+    private fun naraTwoChildren() = listOf(
+        "Type,Profile Name,Start Date/time,Note,[Breastfeed] Left Duration (Seconds),[Breastfeed] Right Duration (Seconds),[Diaper] Type",
+        "Diaper,EXAMPLE-X,${wall(NOW - HOUR)},,,,Wet",
+        "Breastfeed,EXAMPLE-Y,${wall(NOW - 2 * HOUR)},EXAMPLE,300,300,",
+        "Diaper,EXAMPLE-Y,${wall(NOW - 3 * HOUR)},,,,Dirty",
+    ).joinToString("\n").toByteArray()
+
+    @Test
+    fun `가져오기는 아이 고르기와 미리 보기를 거쳐 저장하고 띠의 되돌리기로 뺀다`() = kitTest {
+        val vm = settingsVm(
+            mapOf(
+                "content://unknown" to { "date,activity\n2025-11-05,feed\n".toByteArray() },
+                "content://euckr" to { "Type,Start,End,Duration\n수유,,,\n".toByteArray(charset("EUC-KR")) }, // UTF-8로 풀 수 없다
+                "content://big" to { ByteArray(CareCsv.MAX_BYTES + 1) },
+                "content://nara" to { naraTwoChildren() },
+            ),
+        )
+        suspend fun ended(message: String) = until(message) { vm.import.value == ImportUi.Ended(message) }
+        // 끝내는 안내 셋(7.1 import.unreadable·tooLarge·failed): 글과 '닫기'만.
+        val unreadable = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요"
+        vm.pick("content://unknown")
+        ended(unreadable)
+        vm.closeImport()
+        vm.pick("content://euckr")
+        ended(unreadable)
+        vm.pick("content://big")
+        ended("파일이 너무 커요")
+        vm.pick("content://gone") // 파일을 열지 못했다
+        ended("가져오지 못했어요. 다시 해 주세요")
+        vm.closeImport()
+        assertEquals(ImportUi.Closed, vm.import.value)
+        // Nara 아이 둘: 고르기 → 미리 보기 → 가져오기.
+        vm.pick("content://nara")
+        until("아이 고르기") { vm.import.value is ImportUi.PickChild }
+        assertEquals(listOf("EXAMPLE-X", "EXAMPLE-Y"), (vm.import.value as ImportUi.PickChild).profiles)
+        vm.pickChild("EXAMPLE-Y")
+        until("미리 보기") { vm.import.value is ImportUi.Preview }
+        val rows = (vm.import.value as ImportUi.Preview).draft.rows
+        assertEquals(listOf(CareKind.DIAPER, CareKind.FEED), rows.map { it.kind })
+        vm.confirmImport()
+        until("저장 뒤 닫힘") { vm.import.value == ImportUi.Closed }
+        assertEquals(rows.map { it.id }, care.care.value.events.map { it.id })
+        // 탭의 띠가 받는 되돌리기(5초 안 '되돌리기')는 넣은 기록을 모두 뺀다.
+        val tabs = CareTabsViewModel(state, notices, recordCare, disconnect, vmScope())
+        val undo = notices.undo.value as CareUndo.Import
+        tabs.undo(undo)
+        until("되돌림") { care.care.value.events.isEmpty() }
+    }
+
+    @Test
+    fun `앱 안 배너는 8초 뒤 그 배너만 닫히고 옛 배너의 시간이 새 배너를 닫지 않는다`() = kitTest {
+        assertEquals(8_000L, kr.aigyeot.phone.domain.model.BANNER_MS) // 연결 계약 5.6, iOS bannerNanos와 같음
+        AppViewModel(state, notices, link, pair, lose, vmScope(), bannerMs = 1_000) // 시험은 1초로 센다
+        val a = kr.aigyeot.phone.domain.model.Banner("가", "01JXALERTA000000000000000A")
+        val b = kr.aigyeot.phone.domain.model.Banner("나", "01JXALERTB000000000000000B")
+        notices.showBanner(a)
+        kotlinx.coroutines.delay(600)
+        notices.showBanner(b) // a가 닫히기 전에 새 배너
+        kotlinx.coroutines.delay(600) // a가 뜬 지 1.2초: a의 시간은 지났지만 b는 1.6초까지 남는다
+        assertEquals(b, notices.banner.value)
+        until("b가 저절로 닫힘") { notices.banner.value == null }
+        // 닫는 것은 그 id일 때만: 다른 배너 id로 닫으려 하면 지금 배너는 남는다
+        notices.showBanner(a)
+        notices.clearBanner(b.alertId)
+        assertEquals(a, notices.banner.value)
+    }
+
+    @Test
+    fun `가져오기 읽기는 ViewModel이 쥐고 마지막으로 고른 파일만 미리 본다`() = kitTest {
+        val slow = CompletableDeferred<Unit>()
+        val one = "kind,start,end,end_unknown,side,amount_ml,diaper,note\nNOTE,${kr.aigyeot.phone.domain.model.rfc3339(NOW - HOUR)},,false,,,,EXAMPLE\n".toByteArray()
+        val vm = settingsVm(
+            mapOf(
+                "content://slow" to { slow.await(); naraTwoChildren() },
+                "content://fast" to { one },
+            ),
+        )
+        // 읽는 중에 다시 골랐다: 먼저 고른 파일이 늦게 끝나도 마지막 파일의 미리 보기만 남는다.
+        vm.pick("content://slow")
+        assertEquals(ImportUi.Reading, vm.import.value)
+        vm.pick("content://fast")
+        until("새 파일 미리 보기") { vm.import.value is ImportUi.Preview }
+        slow.complete(Unit)
+        settle()
+        assertEquals(listOf(CareKind.NOTE), (vm.import.value as ImportUi.Preview).draft.rows.map { it.kind })
+        // 화면이 회전·사라져도(ViewModel은 그대로) 읽기는 이어져 결과가 적용된다. 화면 범위가 아니라 ViewModel 범위다.
+        val held = CompletableDeferred<Unit>()
+        val vm2 = settingsVm(mapOf("content://held" to { held.await(); naraTwoChildren() }))
+        vm2.pick("content://held")
+        settle()
+        held.complete(Unit)
+        until("아이 고르기") { vm2.import.value is ImportUi.PickChild }
+        // 읽는 중에 닫으면 늦게 끝난 결과를 띄우지 않는다.
+        val late = CompletableDeferred<Unit>()
+        val vm3 = settingsVm(mapOf("content://late" to { late.await(); one }))
+        vm3.pick("content://late")
+        vm3.closeImport()
+        late.complete(Unit)
+        settle()
+        assertEquals(ImportUi.Closed, vm3.import.value)
     }
 
     private class FakeRecorder : SongRecorder {

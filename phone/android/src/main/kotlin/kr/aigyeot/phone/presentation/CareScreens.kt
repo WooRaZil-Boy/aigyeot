@@ -15,6 +15,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 import android.Manifest
 import android.content.Intent
+import kr.aigyeot.phone.domain.model.importPreview
+import kr.aigyeot.phone.domain.model.text
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -47,6 +49,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -99,13 +102,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.Connection
@@ -228,13 +229,16 @@ fun CareTabs(go: (Route) -> Unit, vm: CareTabsViewModel = appViewModel()) {
         }
     }
     // 7장 '기록 지우기 되돌리기': "지웠어요" + "되돌리기"(5초). 타이머에서 지운 것도 돌아와서 보인다(U38).
-    // 효과 하나가 계속 받는다: id를 키로 두면 비우는 순간 효과가 취소돼 띠가 바로 사라진다(11-05 에뮬레이터에서 찾음).
-    // 띠가 떠 있는 동안 또 지우면 앞 띠를 닫고 새 기록의 5초를 시작한다(collectLatest).
-    LaunchedEffect(Unit) {
-        vm.undoIds.collectLatest { id ->
-            vm.clearUndo()
-            val r = withTimeoutOrNull(5_000) { snack.showSnackbar("지웠어요", "되돌리기", duration = SnackbarDuration.Indefinite) }
-            if (r == SnackbarResult.ActionPerformed) vm.undoDelete(id)
+    // 설정의 기록 가져오기도 같은 띠다: "기록 n건을 가져왔어요" + "되돌리기"(5초, U64).
+    // 띠의 수명(5초, 다른 띠로 바뀜)은 RecordCare 한 곳이 정하고 화면은 떠 있는 띠를 그리기만 한다: 띠가 걷히거나 바뀌면 이 효과가 취소돼 닫힌다.
+    // 가져오기는 띠가 끝난 뒤에야 차로 보내므로(U67 11-09 보충) 화면 시계로 띠를 닫지 않는다.
+    val undo by vm.undo.collectAsStateWithLifecycle()
+    LaunchedEffect(undo) {
+        val u = undo ?: return@LaunchedEffect
+        // 눌러 닫힌 띠가 되돌리기 저장 실패로 남았으면 다시 띄운다: 남은 시간 안에 다시 누를 수 있게(U38 11-09 보충). 띠 시간이 끝나면 키가 바뀌어 멈춘다.
+        while (snack.showSnackbar(u.text, "되돌리기", duration = SnackbarDuration.Indefinite) == SnackbarResult.ActionPerformed) {
+            vm.undo(u).join()
+            if (vm.undo.value != u) break
         }
     }
     Scaffold(
@@ -892,6 +896,9 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
     val activity = context.findActivity()
     DisposableEffect(Unit) { onDispose { if (activity?.isChangingConfigurations != true) vm.dismissDisconnectError() } }
     var confirm by remember { mutableStateOf<String?>(null) }
+    val importUi by vm.import.collectAsStateWithLifecycle()
+    // 기록 가져오기(U64): 시스템 파일 고르기 → 주소만 ViewModel로(읽기는 ViewModel이 쥔 작업, 회전해도 이어진다).
+    val pickCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { vm.pick(it.toString()) } }
     var nickname by remember(care.childNickname) { mutableStateOf(care.childNickname.orEmpty()) }
     fun saveNickname() {
         if (nickname.trim() != care.childNickname.orEmpty()) vm.setNickname(nickname)
@@ -929,6 +936,12 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("내 기록 내보내기") }
+        OutlinedButton(onClick = { pickCsv.launch(CSV_TYPES) }, modifier = Modifier.fillMaxWidth()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("다른 앱 기록 가져오기") // settings.import(U64)
+                Muted("아이곁·Huckleberry·Nara에서 내보낸 CSV") // settings.import.sub
+            }
+        }
         OutlinedButton(onClick = { confirm = "clear" }, modifier = Modifier.fillMaxWidth()) { Text("이 휴대폰의 기록 지우기") }
         if (ui.connected) {
             Muted("기록을 지워도 연결은 그대로예요. 차에 남은 기록은 차 화면에서 지워요.")
@@ -950,6 +963,62 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
                 }) { Text(if (what == "clear") "지우기" else "끊기") }
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("취소") } },
+        )
+    }
+    ImportDialog(importUi, vm)
+}
+
+/** 고르는 화면의 종류(U64). 파일 앱마다 CSV를 다른 이름으로 알려 넷 다 연다. */
+private val CSV_TYPES = arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/octet-stream")
+
+/** 기록 가져오기(U64~U68) 대화창. 단계는 [ImportUi]가 정하고 글은 7.1 import.* 그대로다(미리 보기 글은 [importPreview]가 고른다). */
+@Composable
+private fun ImportDialog(ui: ImportUi, vm: SettingsViewModel) {
+    when (ui) {
+        ImportUi.Closed -> Unit
+        // 읽는 중(클라우드 파일은 오래 걸릴 수 있다): 새 글자 없이 진행 표시와 '취소'만(iOS와 같음). 취소하면 읽던 결과는 버린다.
+        ImportUi.Reading -> AlertDialog(
+            onDismissRequest = vm::closeImport,
+            text = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = vm::closeImport) { Text("취소") } }, // import.cancel
+        )
+        is ImportUi.PickChild -> AlertDialog(
+            onDismissRequest = vm::closeImport,
+            title = { Text("어느 아이의 기록인가요?") }, // import.pickChild
+            text = {
+                // 큰 글자·낮은 창에서도 아래 아이까지 고를 수 있게 넘긴다(대화창 본문 높이는 제한된다).
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    for (name in ui.profiles) TextButton(onClick = { vm.pickChild(name) }, modifier = Modifier.fillMaxWidth()) { Text(name) }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = vm::closeImport) { Text("취소") } }, // import.cancel
+        )
+        is ImportUi.Preview, is ImportUi.Saving -> {
+            val saving = ui is ImportUi.Saving
+            val draft = if (ui is ImportUi.Preview) ui.draft else (ui as ImportUi.Saving).draft
+            val p = importPreview(draft, rememberNow(60_000), deviceZone)
+            AlertDialog(
+                onDismissRequest = vm::closeImport, // 저장 중에는 닫지 않는다(ViewModel)
+                title = { Text(p.title) },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        for (line in p.lines) Text(line, style = Type.body)
+                        p.skipTitle?.let { Text(it, style = Type.headline) }
+                        for (line in p.skips) Muted(line, Type.body)
+                        p.note?.let { Muted(it) }
+                    }
+                },
+                // 첫 버튼은 '가져오기' 또는(가져올 것이 없으면) '닫기'. 없으면 ViewModel이 닫는다.
+                confirmButton = { TextButton(enabled = !saving, onClick = vm::confirmImport) { Text(p.buttons.first()) } },
+                dismissButton = p.buttons.getOrNull(1)?.let { cancel -> { TextButton(enabled = !saving, onClick = vm::closeImport) { Text(cancel) } } },
+            )
+        }
+        is ImportUi.Ended -> AlertDialog(
+            onDismissRequest = vm::closeImport,
+            text = { Text(ui.message, style = Type.body) },
+            confirmButton = { TextButton(onClick = vm::closeImport) { Text("닫기") } }, // banner.close
         )
     }
 }

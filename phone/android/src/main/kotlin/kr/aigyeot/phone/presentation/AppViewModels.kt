@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kr.aigyeot.phone.domain.model.BANNER_MS
 import kr.aigyeot.phone.domain.model.Banner
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.DisconnectRun
@@ -54,12 +58,24 @@ class AppViewModel(
     private val pair: Pair,
     private val lose: LoseConnection,
     scope: CoroutineScope = vmScope(),
+    private val bannerMs: Long = BANNER_MS,
 ) : ViewModel(scope) {
     private val pendingCode = MutableStateFlow<String?>(null)
     private val openAlert = MutableStateFlow<String?>(null)
 
     val ui: StateFlow<AppUiState> = derive(state.connection, pair.run, link.disconnectRun, notices.banner, pendingCode, openAlert) {
         AppUiState(state.connection.value, pair.run.value, link.disconnectRun.value, notices.banner.value, pendingCode.value, openAlert.value)
+    }
+
+    init {
+        // 앱 안 배너(연결 계약 5.6): 뜬 지 [bannerMs] 뒤 그 배너만 닫는다. 새 배너가 뜨거나 닫히면 앞 기다림은 버리고 새로 센다(소비 코루틴 하나).
+        viewModelScope.launch {
+            notices.banner.collectLatest { b ->
+                if (b == null) return@collectLatest
+                delay(bannerMs)
+                notices.clearBanner(b.alertId)
+            }
+        }
     }
 
     /**

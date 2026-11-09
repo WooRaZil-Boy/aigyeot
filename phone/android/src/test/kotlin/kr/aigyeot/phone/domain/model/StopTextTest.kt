@@ -54,4 +54,17 @@ class StopTextTest {
         assertEquals("두 번 시도 뒤 · 안전한 곳에 세우도록 안내하지 못했어요", stopText(a, HandoffKind.NO_REST, null, false))
         assertEquals("두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요", stopText(a, HandoffKind.NO_REST, null, null))
     }
+
+    @Test fun `차 타일 마지막 연락은 U20 경과로 쓴다`() {
+        // 연결 계약 차 타일 값(명세 17장 L100): 1분 미만 '방금', 그 밖은 U20 경과 + ' 전'
+        val now = 1_793_944_800_000L
+        fun tile(agoMs: Long) = carTileText(
+            listOf(kr.aigyeot.shared.DeviceInfo("d_car", kr.aigyeot.shared.Role.CAR, kr.aigyeot.shared.Platform.PLEOS, rfc3339(now - DAY), rfc3339(now - agoMs), false)),
+            online = true, now = now,
+        )
+        assertEquals("차 꺼짐 · 마지막 연락 방금", tile(30_000))
+        assertEquals("차 꺼짐 · 마지막 연락 5분 전", tile(5 * MINUTE))
+        assertEquals("차 꺼짐 · 마지막 연락 1시간 전", tile(60 * MINUTE))
+        assertEquals("차 꺼짐 · 마지막 연락 1시간 15분 전", tile(75 * MINUTE))
+    }
 }

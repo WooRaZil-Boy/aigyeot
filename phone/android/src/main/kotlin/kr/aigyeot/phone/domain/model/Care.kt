@@ -183,6 +183,27 @@ fun CareFile.undoDelete(id: String): CareFile {
     return copy(events = events.map { if (it.id == id) (if (clash) restored.copy(endUnknown = true) else restored) else it })
 }
 
+/** 띠의 '되돌리기'(5초)가 되돌릴 것: 방금 지운 손 기록 하나(7장·U38) 또는 방금 가져온 기록들(U64). */
+sealed interface CareUndo {
+    data class Delete(val id: String) : CareUndo
+
+    data class Import(val ids: List<String>) : CareUndo
+}
+
+/** 띠 글: "지웠어요" / import.done "기록 {n}건을 가져왔어요". */
+val CareUndo.text: String
+    get() = when (this) {
+        is CareUndo.Delete -> "지웠어요"
+        is CareUndo.Import -> "기록 ${ids.size}건을 가져왔어요"
+    }
+
+/**
+ * 차가 볼 기록(U67 11-09 보충): 가져오기 띠가 떠 있는 동안 그 줄은 아직 되돌릴 수 있으니 뺀다. 수유·요약(R5·R19)을 계산하는 곳은 모두 이것을 지난다
+ * (보내기 계기 [kr.aigyeot.phone.domain.usecase.ReconcileCareSummary]와 보내기 직전 재계산 [kr.aigyeot.phone.domain.usecase.SendOutbox]).
+ * 그래서 띠 안에 되돌린 수유는 어느 길로도 차에 가지 않고, 띠가 끝나거나 다른 띠로 바뀌면 다음 계기부터 보인다.
+ */
+fun CareFile.forCar(undo: CareUndo?): CareFile = if (undo is CareUndo.Import) withoutIds(undo.ids) else this
+
 /** R8: 지운 지 30일이 지난 기록을 실제로 뺀다. 앱을 열 때 부른다. */
 fun CareFile.purged(now: Long) = copy(events = events.filter { it.deletedAt == null || now - it.deletedAt < KEEP_DELETED_MS })
 
@@ -383,6 +404,18 @@ fun koSpan(start: Long, end: Long, zone: ZoneId): String =
 
 /** "11월 5일(수)". */
 fun koDate(d: LocalDate) = "${d.monthValue}월 ${d.dayOfMonth}일(${"월화수목금토일"[d.dayOfWeek.value - 1]})"
+
+/** 며칠 전일 수 있는 시각(import.latestFeed, U68 11-09 보충): 오늘이면 "오전 11:00", 어제면 "어제 오전 11:00", 그 전이면 "11월 3일 오전 11:00". */
+fun koDayClock(ms: Long, now: Long, zone: ZoneId): String {
+    val d = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val day = when (d) {
+        today -> ""
+        today.minusDays(1) -> "어제 "
+        else -> "${d.monthValue}월 ${d.dayOfMonth}일 "
+    }
+    return day + koClock(ms, zone)
+}
 
 /** U20: 1분 미만 "방금", 1~59분 "12분", 60분 이상 "2시간 10분", 분이 0이면 "2시간". */
 fun elapsedText(ms: Long): String {

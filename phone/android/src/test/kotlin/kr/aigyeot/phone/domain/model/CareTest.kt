@@ -524,6 +524,7 @@ class CareTest {
     fun `리포트에서 차 기록 줄을 만든다`() {
         val env = ProtocolJson.decodeFromString(Envelope.serializer(), File("../../shared/src/test/resources/protocol/report_summary.json").readText())
         val report = ProtocolJson.decodeFromJsonElement(ReportSummaryBody.serializer(), env.body)
+        assertTrue(report.carActions.any { actionText(it.action) == "조명 낮춤" }) // 기능 D ambient_dim(리포트 '차가 대신 한 일')
         val lines = carLines(listOf(report))
         assertEquals(2, lines.size)
         val drive = lines[0]

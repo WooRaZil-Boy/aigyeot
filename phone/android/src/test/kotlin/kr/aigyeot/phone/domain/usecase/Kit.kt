@@ -159,7 +159,7 @@ object Quiet : Logger {
     override fun e(msg: String, t: Throwable?) = Unit
 }
 
-class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: Map<Mark, String> = emptyMap()) {
+class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: Map<Mark, String> = emptyMap(), undoMs: Long = 2_000) {
     var now = NOW
     val clock = Clock { now }
     val relay = FakeRelay()
@@ -188,8 +188,8 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     val inbox = SyncInbox(state, relay, lose, notices, songs, clock, scope)
     val push = RegisterPush(state, relay, lose, pushTokens, scope)
     val connection = KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, network, visibility, clock, scope)
-    val reconcile = ReconcileCareSummary(state, care, outbox, clock)
-    val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, Quiet, allowDebugSeed = true)
+    val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
+    val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, Quiet, allowDebugSeed = true, undoMs = undoMs)
     val clearRecords = ClearRecords(care, state, recordCare, notices, songs, connection, outbox, clock, scope)
     val pair = Pair(state, care, credentials, relay, link, disconnect, lose, this.marks, pushTokens, songs, recordCare, notices, clock, scope, Quiet)
     val recordSong = RecordSong(state, songs, clearRecords, outbox, notices, clock, scope)
@@ -216,13 +216,15 @@ fun kitTest(
     creds: Credentials? = OWNER,
     marks: Map<Mark, String> = emptyMap(),
     prepare: (File) -> Unit = {},
+    /** 되돌리기 띠 시간(앱은 5초). 시험은 기본 2초, 띠가 끝나는 것을 보는 시험은 더 줄이거나 늘린다. */
+    undoMs: Long = 2_000,
     block: suspend Kit.() -> Unit,
 ) = runBlocking {
     val job = SupervisorJob(coroutineContext[Job])
     val dir = createTempDirectory().toFile()
     try {
         prepare(dir)
-        Kit(CoroutineScope(coroutineContext + job), dir, creds, marks).block()
+        Kit(CoroutineScope(coroutineContext + job), dir, creds, marks, undoMs).block()
     } finally {
         job.cancel()
         dir.deleteRecursively()

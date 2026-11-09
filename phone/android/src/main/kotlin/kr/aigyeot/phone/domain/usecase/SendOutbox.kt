@@ -13,6 +13,7 @@ import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SAVE_RETRY_MS
 import kr.aigyeot.phone.domain.model.SendResult
 import kr.aigyeot.phone.domain.model.afterSend
+import kr.aigyeot.phone.domain.model.forCar
 import kr.aigyeot.phone.domain.model.frontExpired
 import kr.aigyeot.phone.domain.model.hasNetworkWait
 import kr.aigyeot.phone.domain.model.hurriedNetworkWaits
@@ -144,8 +145,8 @@ class SendOutbox(
             if (item?.payload is OutboxPayload.CareSummary && refreshed != item.id) {
                 // 보내기 직전에 다시 계산한다: 오래 기다린 요약의 as_of·'오늘' 값이 낡지 않게(자정을 넘긴 복구, 그사이 지운 기록).
                 // 같은 날 같은 내용이면 그대로(같은 id). 바꿨으면 처음부터 다시 고른다. 저장하지 못하면 옛 요약을 보내지 않는다(iOS와 같음).
-                // 요약만 다시 계산한다: 수유 보내기는 정해진 네 계기에서만(R6).
-                if (!state.commit(c) { it.reconciledSummary(care.care.value, clock.now(), APP_ZONE, sending) }) return retrySaveLater()
+                // 요약만 다시 계산한다: 수유 보내기는 정해진 네 계기에서만(R6). 되돌릴 수 있는 가져오기 줄은 뺀다([forCar], U67).
+                if (!state.commit(c) { it.reconciledSummary(care.care.value.forCar(notices.undo.value), clock.now(), APP_ZONE, sending) }) return retrySaveLater()
                 refreshed = state.state.value.outbox.firstOrNull { it.payload is OutboxPayload.CareSummary }?.id
                 if (refreshed != item.id) continue
             }

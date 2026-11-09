@@ -1,8 +1,11 @@
 package kr.aigyeot.phone.data
 
+import android.content.ContentResolver
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.Uri
+import java.io.ByteArrayOutputStream
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
@@ -101,4 +104,23 @@ class AndroidNetworkWatcher(private val context: Context) : NetworkWatcher {
         context.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(cb)
         callback = null
     }
+}
+
+/**
+ * 기록 가져오기(U64·U65): 고른 문서를 메모리로만 읽는다(앱 폴더에 두지 않는다). `limit`바이트까지만 읽어
+ * 너무 큰 파일은 나머지를 읽지 않는다. 열거나 읽지 못하면 null(import.failed).
+ */
+suspend fun readDocument(resolver: ContentResolver, uri: String, limit: Int): ByteArray? = withContext(Dispatchers.IO) {
+    runCatching {
+        resolver.openInputStream(Uri.parse(uri))?.use { s ->
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (out.size() < limit) {
+                val n = s.read(buf, 0, minOf(buf.size, limit - out.size()))
+                if (n < 0) break
+                out.write(buf, 0, n)
+            }
+            out.toByteArray()
+        }
+    }.getOrNull()
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -206,12 +207,12 @@ fun AppRoot(app: AppViewModel) {
             composable<Route.Guardians> { GuardiansScreen(onBack = { nav.popBackStack() }) }
             composable<Route.Alert> { AlertScreen(onBack = { nav.popBackStack() }) }
         }
-        // 앱 안 배너(5.6): 앞에 있을 때 온 인계 알림. 시스템 알림은 띄우지 않는다.
+        // 앱 안 배너(5.6): 앞에 있을 때 온 인계 알림. 시스템 알림은 띄우지 않는다. 8초 뒤 저절로 닫히고(AppViewModel), 글은 3줄에서 자른다(전문은 인계 알림 목록).
         ui.banner?.let { b ->
             Card(Modifier.fillMaxWidth().padding(12.dp).align(Alignment.TopCenter).semantics { liveRegion = LiveRegionMode.Polite }) {
                 Column(Modifier.padding(16.dp)) {
                     Text("인계 알림", style = MaterialTheme.typography.labelLarge)
-                    Text(b.text)
+                    Text(b.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Row {
                         TextButton(onClick = { app.dismissBanner(); nav.navigate(Route.Alert(b.alertId)) }) { Text("보기") }
                         TextButton(onClick = app::dismissBanner) { Text("닫기") }

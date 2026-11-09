@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kr.aigyeot.phone.domain.model.Banner
+import kr.aigyeot.phone.domain.model.CareUndo
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.DisconnectRun
 import kr.aigyeot.phone.domain.model.LeaveWatch
@@ -37,10 +38,10 @@ class Notices {
     private val _banner = MutableStateFlow<Banner?>(null)
     val banner: StateFlow<Banner?> = _banner.asStateFlow()
 
-    private val _undoCareId = MutableStateFlow<String?>(null)
+    private val _undo = MutableStateFlow<CareUndo?>(null)
 
-    /** 방금 지운 손 기록 id. 탭 화면이 "지웠어요 · 되돌리기"를 5초 보인다(7장). */
-    val undoCareId: StateFlow<String?> = _undoCareId.asStateFlow()
+    /** 방금 지운 손 기록·가져온 기록. 탭 화면이 "지웠어요"·"기록 n건을 가져왔어요" + "되돌리기"를 5초 보인다(7장·U64). */
+    val undo: StateFlow<CareUndo?> = _undo.asStateFlow()
 
     /** 사용자가 닫은 버림(메시지 id). 지우는 저장을 기다리는 사이 다른 버림의 저장이 끝나도 다시 띄우지 않는다. */
     private val dismissed: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -78,16 +79,15 @@ class Notices {
         _notice.value = null
         _careNotice.value = null
         _banner.value = null
-        _undoCareId.value = null
+        _undo.value = null
     }
 
     fun showBanner(b: Banner) {
         _banner.value = b
     }
 
-    fun clearBanner() {
-        _banner.value = null
-    }
+    /** 배너를 닫는다. `onlyId`가 있으면 그 id의 배너일 때만(그사이 새 배너가 떴으면 새 것은 남긴다, 연결 계약 5.6). */
+    fun clearBanner(onlyId: String? = null) = _banner.update { if (onlyId == null || it?.alertId == onlyId) null else it }
 
     fun showCare(text: String) {
         _careNotice.value = text
@@ -97,12 +97,12 @@ class Notices {
         _careNotice.value = null
     }
 
-    fun showUndo(id: String) {
-        _undoCareId.value = id
+    fun showUndo(u: CareUndo) {
+        _undo.value = u
     }
 
     fun clearUndo() {
-        _undoCareId.value = null
+        _undo.value = null
     }
 }
 

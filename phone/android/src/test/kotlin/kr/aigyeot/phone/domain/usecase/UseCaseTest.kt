@@ -4,8 +4,16 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kr.aigyeot.phone.domain.model.CSV_HEADER
+import kr.aigyeot.phone.domain.model.CareCsv
+import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.CareUndo
 import kr.aigyeot.phone.domain.model.Connection
+import kr.aigyeot.phone.domain.model.HOUR
+import kr.aigyeot.phone.domain.model.MINUTE
+import kr.aigyeot.phone.domain.model.text
 import kr.aigyeot.phone.domain.model.DisconnectRun
 import kr.aigyeot.phone.domain.model.OutboxPayload
 import kr.aigyeot.phone.domain.model.PairRun
@@ -20,6 +28,7 @@ import kr.aigyeot.shared.InboxResponse
 import kr.aigyeot.shared.PairResponse
 import kr.aigyeot.shared.Role
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -327,5 +336,236 @@ class UseCaseTest {
         until("지움") { care.care.value.events.isEmpty() && state.state.value.clearingCareIds == null }
         // 넣은 적이 있으면 빈 요약을 보낸다(R10·R19). 지우기 표시를 끈 저장 다음 저장에서 넣으므로 기다린다.
         until("빈 요약") { state.state.value.lastSentCareSummary != null }
+    }
+
+    // ---- 기록 가져오기(U64·U67): 저장은 RecordCare 입구 하나, 차 보내기는 다른 저장과 같은 계기 ----
+
+    private fun Kit.imported(vararg rows: String) =
+        CareCsv.parse((listOf(CSV_HEADER) + rows).joinToString("\r\n") + "\r\n", care.care.value, now).rows
+
+    @Test
+    fun `가져오기 저장이 실패하면 아무것도 들어가지 않는다`() = kitTest(prepare = { File(it, "care.json.new").mkdirs() }) {
+        val rows = imported("FEED,${rfc3339(now - HOUR)},,true,LEFT,,,EXAMPLE", "DIAPER,${rfc3339(now - 2 * HOUR)},,false,,,WET,EXAMPLE")
+        assertEquals(2, rows.size)
+        assertFalse(recordCare.importRows(rows))
+        assertEquals(emptyList<CareEvent>(), care.care.value.events)
+        assertNull(notices.undo.value)
+        settle()
+        assertNull(state.state.value.lastSentFeedingAt)
+        assertTrue(relay.sent.none { it.type == "feeding_started" })
+    }
+
+    @Test
+    fun `되돌리면 넣은 기록이 모두 빠지고 다시 가져올 수 있다`() = kitTest {
+        recordCare.start(CareKind.NOTE)
+        until("손 기록") { care.care.value.events.size == 1 }
+        val before = care.care.value
+        val text = arrayOf(
+            "FEED,${rfc3339(now - 3 * HOUR)},${rfc3339(now - 3 * HOUR + 600_000)},false,RIGHT,,,EXAMPLE",
+            "SLEEP,${rfc3339(now - 6 * HOUR)},${rfc3339(now - 5 * HOUR)},false,,,,EXAMPLE",
+            "DIAPER,${rfc3339(now - 2 * HOUR)},,false,,,WET,",
+        )
+        val rows = imported(*text)
+        assertTrue(recordCare.importRows(rows))
+        assertEquals(CareUndo.Import(rows.map { it.id }), notices.undo.value) // 띠 import.done + 되돌리기
+        assertEquals("기록 3건을 가져왔어요", (notices.undo.value as CareUndo).text)
+        recordCare.undo(notices.undo.value!!)
+        until("되돌림") { care.care.value.events == before.events } // 지운 표시가 아니라 완전히 뺀다
+        val again = imported(*text)
+        assertEquals(rows.map { it.id }, again.map { it.id }) // 같은 파일을 다시 가져올 수 있다
+        assertTrue(recordCare.importRows(again))
+        assertEquals(4, care.care.value.events.size)
+        // 같은 미리 보기를 한 번 더 저장해도 같은 id는 다시 넣지 않고 되돌리기도 띄우지 않는다.
+        notices.clearUndo()
+        assertTrue(recordCare.importRows(again))
+        assertEquals(4, care.care.value.events.size)
+        assertNull(notices.undo.value)
+    }
+
+    private fun Kit.threeRows() = imported(
+        "FEED,${rfc3339(now - 3 * HOUR)},${rfc3339(now - 3 * HOUR + 600_000)},false,RIGHT,,,EXAMPLE",
+        "SLEEP,${rfc3339(now - 6 * HOUR)},${rfc3339(now - 5 * HOUR)},false,,,,EXAMPLE",
+        "DIAPER,${rfc3339(now - 2 * HOUR)},,false,,,WET,",
+    )
+
+    @Test
+    fun `미리 보기 뒤 손으로 넣은 기록과 겹치는 줄은 저장 때 빼고 띠 수는 실제로 들어간 수다`() = kitTest {
+        val rows = threeRows() // 미리 보기(기저귀 지금 - 2시간 포함)
+        // 미리 보기를 띄운 채 다른 탭에서 같은 종류·30초 차이 기저귀를 손으로 적었다.
+        val hand = CareEvent("01JXHAND000000000000000001", CareKind.DIAPER, now - 2 * HOUR + 30_000, zone = "Asia/Seoul", createdAt = now, updatedAt = now)
+        assertTrue(recordCare.saveEvent(hand))
+        assertTrue(recordCare.importRows(rows))
+        val diaper = rows.single { it.kind == CareKind.DIAPER }
+        assertEquals(listOf(hand.id) + rows.filter { it != diaper }.map { it.id }, care.care.value.events.map { it.id })
+        assertEquals(CareUndo.Import(rows.filter { it != diaper }.map { it.id }), notices.undo.value)
+        assertEquals("기록 2건을 가져왔어요", (notices.undo.value as CareUndo).text)
+    }
+
+    @Test
+    fun `지우다 만 기록 지우기는 먼저 마치고 가져오며 띠 수는 실제로 들어간 수다`() = kitTest {
+        // 기록 지우기가 care.json은 비웠지만 사본 정리를 못 해 표시가 남았다. 지울 id가 지금 가져올 줄의 id(내용 해시)와 같다.
+        val rows = threeRows()
+        state.commitLocal { it.copy(clearingCareIds = rows.map { r -> r.id }, clearingSince = now) }
+        assertTrue(recordCare.importRows(rows))
+        assertEquals(rows.map { it.id }, care.care.value.events.map { it.id }) // 저장 후처리가 다시 빼지 않았다
+        assertNull(state.state.value.clearingCareIds)
+        assertEquals("기록 3건을 가져왔어요", (notices.undo.value as CareUndo).text)
+    }
+
+    @Test
+    fun `지우다 만 기록 지우기를 마치지 못하면 가져오지 않는다`() {
+        lateinit var locked: File
+        kitTest(prepare = { dir ->
+            // 내보낸 CSV 사본(7.4 '캐시')을 지울 수 없게 해 기록 지우기의 정리가 끝나지 않게 한다.
+            locked = File(dir, "export/locked").apply { mkdirs(); File(this, "x.csv").writeText("x"); setWritable(false) }
+        }) {
+            try {
+                val rows = threeRows()
+                state.commitLocal { it.copy(clearingCareIds = rows.map { r -> r.id }, clearingSince = now) }
+                assertFalse(recordCare.importRows(rows)) // import.failed
+                assertEquals(emptyList<CareEvent>(), care.care.value.events)
+                assertNull(notices.undo.value)
+                assertEquals(rows.map { it.id }, state.state.value.clearingCareIds) // 다음 계기에 다시 마친다
+            } finally {
+                locked.setWritable(true)
+            }
+        }
+    }
+
+    @Test
+    fun `가져온 더 늦은 수유는 owner일 때 차로 보낸다`() {
+        fun Kit.rows() = imported(
+            "FEED,${rfc3339(now - 30 * HOUR)},,true,LEFT,,,EXAMPLE 24시간 밖",
+            "FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE",
+        )
+        // U67 11-09 보충(사용자 결정): 저장 직후가 아니라 되돌리기 띠가 끝난 뒤 한 번 보낸다.
+        kitTest(undoMs = 1_000) {
+            assertTrue(recordCare.importRows(rows()))
+            settle()
+            assertTrue(relay.sent.none { it.type == "feeding_started" }) // 띠가 떠 있는 동안은 보내지 않는다
+            assertNull(state.state.value.lastSentFeedingAt)
+            until("띠가 끝난 뒤 수유 보냄") { relay.sent.any { it.type == "feeding_started" } }
+            assertNull(notices.undo.value)
+            assertEquals(now - HOUR, state.state.value.lastSentFeedingAt) // 가장 늦은 수유 하나(R5)
+            assertEquals(1, relay.sent.count { it.type == "feeding_started" })
+        }
+        kitTest(creds = OWNER.copy(role = Role.GUARDIAN), undoMs = 300) {
+            assertTrue(recordCare.importRows(rows())) // guardian도 가져온다(U64). 차로는 보내지 않는다(R5)
+            assertEquals(2, care.care.value.events.size)
+            until("띠가 끝남") { notices.undo.value == null }
+            settle()
+            assertNull(state.state.value.lastSentFeedingAt)
+            assertTrue(relay.sent.none { it.type == "feeding_started" })
+        }
+    }
+
+    @Test
+    fun `가져오기를 되돌리기 띠 안에 되돌리면 차로 아무것도 보내지 않는다`() = kitTest(undoMs = 1_000) {
+        assertTrue(recordCare.importRows(threeRows()))
+        // 띠가 떠 있는 동안 온 다른 계기(앞으로 오기)는 가져온 줄을 빼고 맞춘다: 되돌릴 수유를 먼저 보내지 않는다(값 없는 요약은 보내지 않는다, U61).
+        recordCare.syncToCar(kr.aigyeot.phone.domain.model.FeedTrigger.FOREGROUND)
+        settle()
+        assertTrue(relay.sent.isEmpty())
+        recordCare.undo(notices.undo.value!!)
+        until("되돌림") { care.care.value.events.isEmpty() }
+        kotlinx.coroutines.delay(1_500) // 띠가 끝났을 시간도 지났다
+        assertNull(notices.undo.value)
+        assertTrue(relay.sent.none { it.type == "feeding_started" || it.type == "care_summary" })
+        assertNull(state.state.value.lastSentFeedingAt)
+    }
+
+    @Test
+    fun `가져오기 띠가 다른 띠로 바뀌어 닫히면 바로 차로 보낸다`() = kitTest(undoMs = 60_000) {
+        val hand = CareEvent("01JXHAND000000000000000002", CareKind.NOTE, now - 5 * HOUR, zone = "Asia/Seoul", note = "EXAMPLE", createdAt = now, updatedAt = now)
+        assertTrue(recordCare.saveEvent(hand))
+        assertTrue(recordCare.importRows(threeRows()))
+        settle()
+        assertTrue(relay.sent.none { it.type == "feeding_started" })
+        // 손 기록을 지워 '지웠어요' 띠가 가져오기 띠를 바꿨다: 가져오기는 이제 되돌릴 수 없으니 바로 보낸다(띠 시간 60초를 기다리지 않는다).
+        recordCare.delete(hand.id)
+        until("앞 띠가 닫혀 수유 보냄") { relay.sent.any { it.type == "feeding_started" } }
+        assertEquals(CareUndo.Delete(hand.id), notices.undo.value)
+        assertEquals(now - 3 * HOUR, state.state.value.lastSentFeedingAt)
+        // 새로 가져온 더 늦은 수유는 그 띠가 떠 있는 동안 차로 가는 계산에서 빠진다.
+        val more = imported("FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE")
+        assertTrue(recordCare.importRows(more))
+        recordCare.syncToCar(kr.aigyeot.phone.domain.model.FeedTrigger.FOREGROUND) // 띠 안의 다른 계기
+        settle()
+        assertEquals(now - 3 * HOUR, state.state.value.lastSentFeedingAt)
+        // 가져오기 띠가 새 가져오기 띠로 바뀌면 앞 줄은 이제 되돌릴 수 없으니 보내고, 새 줄만 그 띠가 끝날 때까지 빠진다.
+        assertTrue(recordCare.importRows(imported("FEED,${rfc3339(now - 30 * MINUTE)},,true,RIGHT,,,EXAMPLE")))
+        until("앞 가져오기 수유 보냄") { state.state.value.lastSentFeedingAt == now - HOUR }
+        settle()
+        assertEquals(now - HOUR, state.state.value.lastSentFeedingAt)
+    }
+
+    @Test
+    fun `지우기 되돌리기 저장이 실패하면 띠를 남겨 다시 누를 수 있다`() = kitTest(undoMs = 60_000) {
+        val hand = CareEvent("01JXHAND000000000000000004", CareKind.DIAPER, now - HOUR, zone = "Asia/Seoul", createdAt = now, updatedAt = now)
+        assertTrue(recordCare.saveEvent(hand))
+        recordCare.delete(hand.id)
+        until("지움") { notices.undo.value == CareUndo.Delete(hand.id) }
+        val u = notices.undo.value!!
+        val block = File(dir, "care.json.new").apply { mkdirs() } // care.json 저장 한 번 실패
+        recordCare.undo(u).join()
+        assertEquals(u, notices.undo.value) // 띠가 남아 남은 시간 안에 다시 누를 수 있다(U38 11-09 보충)
+        assertTrue(care.care.value.events.single().deletedAt != null)
+        block.deleteRecursively()
+        recordCare.undo(u).join()
+        assertNull(care.care.value.events.single().deletedAt) // 되살아났다
+        assertNull(notices.undo.value)
+    }
+
+    @Test
+    fun `기록을 지우면 되돌리기 띠도 걷는다`() = kitTest(undoMs = 1_000) {
+        // 지우기 띠: 지운 기록은 id째 빠지므로 되돌릴 것이 없다(U38 11-09 보충).
+        val hand = CareEvent("01JXHAND000000000000000005", CareKind.DIAPER, now - HOUR, zone = "Asia/Seoul", createdAt = now, updatedAt = now)
+        assertTrue(recordCare.saveEvent(hand))
+        recordCare.delete(hand.id)
+        until("지우기 띠") { notices.undo.value == CareUndo.Delete(hand.id) }
+        clearRecords()
+        until("지움") { care.care.value.events.isEmpty() && state.state.value.clearingCareIds == null }
+        assertNull(notices.undo.value)
+        // 가져오기 띠: 띠 시간이 끝나도 지운 줄을 차로 보내지 않는다.
+        val sentBefore = relay.sent.size
+        assertTrue(recordCare.importRows(threeRows()))
+        assertTrue(notices.undo.value is CareUndo.Import)
+        clearRecords()
+        until("지움") { care.care.value.events.isEmpty() && state.state.value.clearingCareIds == null }
+        assertNull(notices.undo.value)
+        kotlinx.coroutines.delay(1_500) // 띠 시간이 지났다
+        assertNull(notices.undo.value)
+        val after = relay.sent.drop(sentBefore)
+        assertTrue(after.none { it.type == "feeding_started" })
+        val summaries = after.filter { it.type == "care_summary" }.map { it.body } +
+            state.state.value.outbox.mapNotNull { (it.payload as? OutboxPayload.CareSummary)?.body }
+        assertTrue("$summaries", summaries.all { it.isEmptySummary() }) // 빈 요약만
+    }
+
+    private fun kotlinx.serialization.json.JsonObject.isEmptySummary() =
+        (get("today_feed_count") as JsonPrimitive).content == "0" && (get("last_diaper_at") as? JsonPrimitive)?.contentOrNull == null &&
+            (get("last_sleep_start_at") as? JsonPrimitive)?.contentOrNull == null
+
+    /** 보낸 요약의 '오늘 수유 수'. */
+    private fun kr.aigyeot.shared.Envelope.feeds() = body["today_feed_count"]?.let { (it as JsonPrimitive).content.toInt() }
+
+    @Test
+    fun `보낼 함에서 기다리던 요약을 띠 안에 다시 계산해도 가져온 줄은 빼고 되돌리면 끝까지 차로 가지 않는다`() = kitTest(undoMs = 1_000) {
+        val ok = relay.sendResult
+        relay.sendResult = { if (it.type == "care_summary") RelayResult.Unreached else ok(it) }
+        val hand = CareEvent("01JXHAND000000000000000003", CareKind.FEED, now - 2 * HOUR, now - 2 * HOUR + 600_000, zone = "Asia/Seoul", createdAt = now, updatedAt = now)
+        assertTrue(recordCare.saveEvent(hand)) // 오늘 수유 1회 요약이 망 실패로 보낼 함에 남았다
+        until("망 실패 기다림") { state.state.value.outbox.any { it.payload is OutboxPayload.CareSummary && it.networkWait } }
+        assertTrue(recordCare.importRows(imported("FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE")))
+        relay.sendResult = ok
+        outbox.hurryNetworkWaits() // 띠 안에 망이 돌아왔다: 보내기 직전 재계산
+        until("기다리던 요약 보냄") { state.state.value.outbox.none { it.payload is OutboxPayload.CareSummary } }
+        assertEquals(listOf(1), relay.sent.filter { it.type == "care_summary" }.map { it.feeds() }.distinct()) // 가져온 수유는 세지 않았다
+        recordCare.undo(notices.undo.value!!)
+        until("되돌림") { care.care.value.events.map { it.id } == listOf(hand.id) }
+        kotlinx.coroutines.delay(1_500) // 띠가 끝났을 시간도 지났다
+        assertNull(notices.undo.value)
+        assertEquals(listOf(1), relay.sent.filter { it.type == "care_summary" }.map { it.feeds() }.distinct())
+        assertEquals(now - 2 * HOUR, state.state.value.lastSentFeedingAt) // 가져온 더 늦은 수유는 끝까지 가지 않았다
     }
 }
