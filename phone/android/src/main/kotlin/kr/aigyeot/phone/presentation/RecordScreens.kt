@@ -27,11 +27,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -50,6 +55,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -60,12 +66,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
+import kr.aigyeot.phone.domain.model.CarLine
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.CareSource
-import kr.aigyeot.phone.domain.model.CarLine
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Diaper
 import kr.aigyeot.phone.domain.model.FeedSide
@@ -94,9 +104,6 @@ import kr.aigyeot.phone.domain.model.quickKinds
 import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.text
 import kr.aigyeot.phone.domain.model.ulid
-import java.time.Instant
-import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 // 기록 탭(C4·C5·C14)과 빠른 기록·고치기 시트(C3). 디자인 v6 시안 phone.js S.log·S.pattern·S.sheet.
 
@@ -143,6 +150,8 @@ fun CareSheet(
     var diaper by rememberSaveable { mutableStateOf(initial?.diaper ?: Diaper.WET) }
     var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
     var pick by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickDate by rememberSaveable { mutableStateOf(false) }
+    var datePicked by rememberSaveable { mutableStateOf(false) } // 날짜를 직접 골랐으면 시각을 골라도 그 날에 둔다
     var error by remember { mutableStateOf<String?>(null) }
     var overlap by remember { mutableStateOf<CareEvent?>(null) }
     val timed = k == CareKind.FEED || k == CareKind.SLEEP
@@ -202,9 +211,12 @@ fun CareSheet(
             }
             if (guardian) FootNote(GUARDIAN_ONLY)
             SheetRows {
-                // 시작(수유·잠) 또는 시각(기저귀·메모). 값 칩을 누르면 시각을 고른다.
+                // 시작(수유·잠) 또는 시각(기저귀·메모). 날짜 칩은 날짜를, 시각 칩은 시각을 고른다(iOS 날짜·시각 선택기와 같은 기능: 지난 기록을 다른 날로 옮길 수 있다).
                 SheetRow(if (timed) "시작" else "시각", first = true) {
-                    ValueChip(listOfNotNull(baseDate?.let(::koDate), koClock(startAt, zone)).joinToString(" "), selected = true) { pick = "start" }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ValueChip(dayLabel(Instant.ofEpochMilli(startAt).atZone(zone).toLocalDate(), LocalDate.now(zone)), selected = true) { pickDate = true }
+                        ValueChip(koClock(startAt, zone), selected = true) { pick = "start" }
+                    }
                 }
                 if (timed) SheetRow("끝") {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -231,7 +243,7 @@ fun CareSheet(
                 }
             }
             if (initial == null && baseDate == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((label, min) in agoChips) Chip(label, chip == label, { chip = label; startAt = System.currentTimeMillis() - min * MINUTE; error = null })
+                for ((label, min) in agoChips) Chip(label, chip == label, { chip = label; startAt = System.currentTimeMillis() - min * MINUTE; datePicked = false; error = null })
                 Chip("직접", chip == "직접", { pick = "start" })
             }
             when (k) {
@@ -261,8 +273,8 @@ fun CareSheet(
             val now = System.currentTimeMillis()
             when {
                 which == "end" -> endAt = firstAtOrAfter(h, m, startAt, zone)
-                initial != null -> startAt = onDate(Instant.ofEpochMilli(startAt).atZone(zone).toLocalDate(), h, m, zone)
-                baseDate != null -> startAt = onDate(baseDate, h, m, zone)
+                // 고치는 기록·다른 날 기록·날짜를 고른 기록은 지금 보이는 날 그대로 시각만 바꾼다.
+                initial != null || baseDate != null || datePicked -> startAt = onDate(Instant.ofEpochMilli(startAt).atZone(zone).toLocalDate(), h, m, zone)
                 else -> startAt = latestAtOrBefore(h, m, now + MINUTE, zone)
             }
             if (which == "start") chip = "직접"
@@ -270,7 +282,42 @@ fun CareSheet(
             pick = null
         }
     }
+    if (pickDate) {
+        val t = Instant.ofEpochMilli(startAt).atZone(zone)
+        DateDialog(t.toLocalDate(), max = LocalDate.now(zone), onDismiss = { pickDate = false }) { d ->
+            val moved = onDate(d, t.hour, t.minute, zone)
+            endAt = endAt?.let { it + (moved - startAt) } // 날을 옮기면 끝도 같이 옮겨 길이를 지킨다
+            startAt = moved
+            chip = "직접"
+            datePicked = true
+            error = null
+            pickDate = false
+        }
+    }
     overlap?.let { e -> OverlapDialog(e.kind, onSave = { overlap = null; save(e) }, onDismiss = { overlap = null }) }
+}
+
+/** 날짜 고르기(플랫폼다움: Material 날짜 선택기). 오늘 뒤는 고를 수 없다(iOS `in: ...지금`과 같음). */
+@Composable
+private fun DateDialog(date: LocalDate, max: LocalDate, onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
+    // DatePicker는 UTC 자정 밀리초로 날을 주고받는다.
+    val maxMs = max.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= maxMs
+            override fun isSelectableYear(year: Int) = year <= max.year
+        },
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) } ?: onDismiss() }) {
+                Text(stringResource(android.R.string.ok))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    ) { DatePicker(state, showModeToggle = false) }
 }
 
 /** 시트 행 묶음(.sheet .rows: 먹색 4% 바탕, 모서리 20, 안쪽 2/14, 행 사이 1 선). */
