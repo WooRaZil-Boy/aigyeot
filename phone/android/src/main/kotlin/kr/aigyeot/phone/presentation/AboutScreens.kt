@@ -1,10 +1,11 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -37,16 +38,18 @@ private fun rememberOss(): List<OssEntry> {
 @Composable
 fun AboutScreen(onBack: () -> Unit, open: (Int) -> Unit) {
     val list = rememberOss()
-    Page("정보·라이선스", onBack) {
-        Text("판 ${BuildConfig.VERSION_NAME}", style = Type.body)
-        Text("오픈소스 라이선스", style = Type.headline)
-        list.forEachIndexed { i, e ->
-            Card(onClick = { open(i) }, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(Space.s4)) {
-                    Text(e.name)
-                    Muted(e.licenses.joinToString(" · ") { it.name })
+    BackPage("정보·라이선스", onBack) {
+        Block {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppMark(48.dp, 14.dp)
+                Column(Modifier.padding(start = 14.dp)) {
+                    Text("아이곁", style = Type.title, color = Tokens.colors.textPrimary)
+                    Text("판 ${BuildConfig.VERSION_NAME}", style = Type.caption, color = Tokens.colors.textTertiary)
                 }
             }
+        }
+        ListBlock("오픈소스 라이선스") {
+            list.forEachIndexed { i, e -> ListRow(e.name, e.licenses.joinToString(" · ") { it.name }, onClick = { open(i) }) }
         }
     }
 }
@@ -56,13 +59,15 @@ fun AboutScreen(onBack: () -> Unit, open: (Int) -> Unit) {
 fun LicenseScreen(index: Int, onBack: () -> Unit) {
     val context = LocalContext.current
     val e = rememberOss().getOrNull(index)
-    Page(e?.name ?: "", onBack) {
-        if (e == null) return@Page
-        Muted(e.artifact)
-        for (l in e.licenses) {
-            Text(l.name, style = Type.headline)
-            val body = l.file?.let { f -> runCatching { context.assets.open("licenses/$f").use { it.readBytes().decodeToString() } }.getOrNull() }
-            Text(body ?: l.url, style = Type.caption)
+    BackPage(e?.name ?: "", onBack) {
+        if (e == null) return@BackPage
+        Block {
+            Text(e.artifact, Modifier.padding(bottom = 10.dp), style = Type.caption, color = Tokens.colors.textTertiary)
+            for (l in e.licenses) {
+                Text(l.name, Modifier.padding(bottom = 6.dp), style = Type.headline, color = Tokens.colors.textPrimary)
+                val body = l.file?.let { f -> runCatching { context.assets.open("licenses/$f").use { it.readBytes().decodeToString() } }.getOrNull() }
+                Text(body ?: l.url, style = Type.caption, color = Tokens.colors.textSecondary)
+            }
         }
     }
 }

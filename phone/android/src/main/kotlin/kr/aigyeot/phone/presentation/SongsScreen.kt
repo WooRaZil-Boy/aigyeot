@@ -1,6 +1,5 @@
 package kr.aigyeot.phone.presentation
 
-import androidx.compose.foundation.layout.heightIn
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -8,26 +7,28 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,74 +38,100 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kr.aigyeot.phone.R
+import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.SongPhase
 import kr.aigyeot.phone.domain.model.replaceable
 import kr.aigyeot.phone.domain.model.songStatusText
+import kotlin.math.abs
+import kotlin.math.sin
 
-/** 우리 노래(owner): 1~3곡 녹음·다시 듣기·지우기·고르기, 차로 보낸 상태. */
-@Composable
-fun SongsScreen(onBack: () -> Unit) = Page("우리 노래", onBack) {
-    StatusBands()
-    SongsSection()
-}
+// 우리 노래(owner): 차 탭 '우리 노래' 블록(U39)과 노래 녹음 화면(시안 S.song: 위 녹음, 아래 목록).
 
-/** 우리 노래 내용(지금 화면). 차 탭 '우리 노래' 섹션(U39)과 노래 화면이 함께 쓴다. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 우리 노래 블록: 1~3곡, 차로 보낸 상태. 행을 누르면 듣기·실험에 쓰기·다시 녹음·지우기를 고른다.
+ * 오른쪽은 실험에 쓰는 곡이면 브랜드 체크, 아니면 재생 단추. `onRecord`가 있으면 머리에 '녹음하기'(3곡 미만).
+ */
 @Composable
-fun ColumnScope.SongsSection(vm: SongsViewModel = appViewModel()) {
+fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = appViewModel(), recording: Boolean = false) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
     DisposableEffect(Unit) { onDispose { vm.stopAll() } }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.stopPlaying() }
-    var sheet by rememberSaveable { mutableStateOf(false) } // 화면을 다시 만들어도 시트를 둔다(녹음은 놓았으니 다시 녹음)
-    var replacing by rememberSaveable { mutableStateOf<String?>(null) } // '다시 녹음'으로 바꿀 곡(9장)
     val songs = ui.songs
-    if (songs.isEmpty()) Muted("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Type.body)
-    for (e in songs) {
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(e.name ?: "지운 노래", style = MaterialTheme.typography.titleMedium)
-                Muted(songStatusText(e, ui.online, e.songId in ui.selecting))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (e.file != null) {
-                        TextButton(onClick = {
-                            if (!vm.play(e)) android.widget.Toast.makeText(context, "녹음 파일을 읽지 못했어요.", android.widget.Toast.LENGTH_SHORT).show()
-                        }) { Text("듣기") }
-                    }
-                    if (e.phase == SongPhase.ACCEPTED && !e.candidate) {
-                        TextButton(onClick = { vm.select(e.songId) }) { Text("실험에 쓰기") }
-                    }
+    val p = Tokens.colors
+    fun play(e: SongEntry) {
+        if (!vm.play(e)) android.widget.Toast.makeText(context, "녹음 파일을 읽지 못했어요.", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    ListBlock("우리 노래", if (onRecord != null && songs.size < 3) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
+        if (songs.isEmpty()) Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Modifier.padding(bottom = 14.dp), style = Type.body, color = p.textTertiary)
+        for (e in songs) {
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                ListRow(
+                    e.name ?: "지운 노래",
+                    songStatusText(e, ui.online, e.songId in ui.selecting),
+                    icon = R.drawable.ic_song,
+                    onClick = { menu = true }.takeIf { !recording }, // 녹음하는 동안은 목록을 만지지 않는다
+                    trailing = {
+                        when {
+                            e.candidate -> AIcon(R.drawable.ic_circle_check, Modifier.size(22.dp).semantics { contentDescription = "실험에 쓰는 노래" }, p.accent)
+                            e.file != null && !recording -> Box(
+                                Modifier.size(40.dp).clip(CircleShape).pressable { play(e) }.semantics { contentDescription = "듣기" },
+                                contentAlignment = Alignment.Center,
+                            ) { AIcon(R.drawable.ic_play, Modifier.size(20.dp), p.textTertiary) }
+                        }
+                    },
+                )
+                DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp), containerColor = p.surface) {
+                    if (e.file != null) DropdownMenuItem({ Text("듣기") }, { menu = false; play(e) })
+                    if (e.phase == SongPhase.ACCEPTED && !e.candidate) DropdownMenuItem({ Text("실험에 쓰기") }, { menu = false; vm.select(e.songId) })
                     // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다(9장 '노래 거절', iOS와 같음).
-                    if (e.replaceable) {
-                        TextButton(onClick = { vm.stopPlaying(); replacing = e.songId; sheet = true }) { Text("다시 녹음") }
-                    }
-                    TextButton(onClick = { vm.remove(e.songId) }) { Text("지우기") }
+                    if (e.replaceable && onRecord != null) DropdownMenuItem({ Text("다시 녹음") }, { menu = false; vm.stopPlaying(); onRecord(e.songId) })
+                    DropdownMenuItem({ Text("지우기", color = p.danger) }, { menu = false; vm.remove(e.songId) })
                 }
             }
         }
+        if (songs.size >= 3) Text("노래는 3곡까지예요", Modifier.padding(bottom = 12.dp), style = Type.caption, color = p.textTertiary)
     }
-    Button(enabled = songs.size < 3, onClick = { replacing = null; sheet = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-        Text(if (songs.size < 3) "녹음하기" else "노래는 3곡까지예요")
-    }
-    Muted("녹음은 3분까지예요. 차가 받으면 다음 주행부터 써요.")
-    if (sheet) {
-        ModalBottomSheet(onDismissRequest = { vm.closeSheet(); sheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            RecordSheet(vm, replacing, ui.online) { sheet = false }
-        }
+    FootNote("녹음은 3분까지예요. 차가 받으면 다음 주행부터 써요.")
+}
+
+/**
+ * 노래 녹음(시안 S.song): 위 소리 결(브랜드 파랑, 녹음 중에만 움직임) + 경과 "0:42 / 3:00" + 녹음 단추(84, 멈춤은 빨간 네모) →
+ * 멈춘 뒤 다시 듣기·다시 녹음·이름·차로 보내기(구현 계획 8장) → 아래 우리 노래 목록.
+ * `replacing`이 있으면 그 곡을 바꾼다(9장 '노래 거절'). 보내기가 목록·보낼 함에 커밋되면 닫는다.
+ */
+@Composable
+fun RecordScreen(replacing: String?, onBack: () -> Unit, vm: SongsViewModel = appViewModel()) {
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    BackPage("우리 노래", onBack) {
+        StatusBands()
+        Recorder(vm, replacing, ui.online, onBack)
+        val s by vm.sheetUi.collectAsStateWithLifecycle()
+        SongsBlock(onRecord = null, vm = vm, recording = s.take is Take.Recording)
     }
 }
 
-/** 녹음 시트: 큰 녹음·멈춤 버튼, 경과/최대 시간, 멈춘 뒤 다시 듣기·다시 녹음·보내기(구현 계획 8장). */
 @Composable
-private fun RecordSheet(vm: SongsViewModel, replacing: String?, online: Boolean, onClose: () -> Unit) {
+private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, onClose: () -> Unit) {
     val context = LocalContext.current
     var granted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
@@ -117,12 +144,12 @@ private fun RecordSheet(vm: SongsViewModel, replacing: String?, online: Boolean,
         granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (granted) denied = false
     }
-    // 시트마다 고유한 임시 파일(ViewModel이 정한다). 화면만 다시 만들면(회전) 같은 녹음·보내기를 이어받는다.
+    // 화면마다 고유한 임시 파일(ViewModel이 정한다). 화면만 다시 만들면(회전) 같은 녹음·보내기를 이어받는다.
     LaunchedEffect(Unit) { vm.openSheet() }
     val s by vm.sheetUi.collectAsStateWithLifecycle()
-    // 목록·보낼 함에 커밋된 뒤에만 시트를 닫는다. 실패하면 녹음은 그대로 두고 다시 보낼 수 있다.
+    // 목록·보낼 함에 커밋된 뒤에만 닫는다. 실패하면 녹음은 그대로 두고 다시 보낼 수 있다.
     LaunchedEffect(s.send) { if (vm.takeSendResult()) onClose() }
-    // 닫으면 임시 파일은 보내기가 끝난 뒤 지운다. 시트를 닫았거나 화면을 끝냈을 때만: 회전·시스템이 화면만 없앤 때는 남겨 복원된 시트가 이어받는다.
+    // 떠나면 임시 파일은 보내기가 끝난 뒤 지운다. 화면을 떠났거나 끝냈을 때만: 회전·시스템이 화면만 없앤 때는 남겨 복원된 화면이 이어받는다.
     val activity = context.findActivity()
     DisposableEffect(Unit) {
         onDispose {
@@ -147,53 +174,80 @@ private fun RecordSheet(vm: SongsViewModel, replacing: String?, online: Boolean,
         is Take.Recorded -> take.ms
         is Take.Idle -> take.ms
     }
-
-    // 큰 글자·키보드가 떠도 이름 칸과 보내기 버튼까지 굴려 닿게 한다(8장 동적 글자 크기).
-    Column(Modifier.verticalScroll(rememberScrollState()).imePadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("노래 녹음", style = MaterialTheme.typography.titleLarge)
+    val p = Tokens.colors
+    Block(padding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 18.dp)) {
         if (!granted) {
             if (denied) {
-                Text("설정에서 마이크를 켜 주세요")
-                OutlinedButton(onClick = {
+                Text("설정에서 마이크를 켜 주세요", Modifier.padding(bottom = 12.dp), style = Type.headline, color = p.textPrimary)
+                Btn("설정 열기", {
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-                }) { Text("설정 열기") }
+                }, kind = BtnKind.TONAL)
             }
-            return@Column
+            return@Block
         }
-        val sec = (elapsed / 1000).toInt()
-        Text("%d:%02d / 3:00".format(sec / 60, sec % 60), style = MaterialTheme.typography.displaySmall)
-        Button(
-            enabled = !s.sending, // 보내는 동안 그 원본을 바꾸는 녹음은 막는다
-            onClick = vm::toggleRecording,
-            modifier = Modifier.size(120.dp),
-        ) { Text(if (take is Take.Recording) "멈춤" else "녹음") }
-        s.startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Wave(take is Take.Recording)
+            val sec = (elapsed / 1000).toInt()
+            Text("%d:%02d / 3:00".format(sec / 60, sec % 60), style = Type.hero.copy(fontSize = 44.sp, lineHeight = 50.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = p.textPrimary)
+            RecButton(take is Take.Recording, enabled = !s.sending, onClick = vm::toggleRecording) // 보내는 동안 그 원본을 바꾸는 녹음은 막는다
+            s.startError?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+        }
         if (take is Take.Recorded) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = vm::playTake) { Text("다시 듣기") }
-                OutlinedButton(enabled = !s.sending, onClick = vm::discardTake) { Text("다시 녹음") }
+            Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Btn("다시 듣기", vm::playTake, Modifier.weight(1f), kind = BtnKind.TONAL, icon = R.drawable.ic_play)
+                    Btn("다시 녹음", vm::discardTake, Modifier.weight(1f), kind = BtnKind.TONAL, enabled = !s.sending)
+                }
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(30) },
+                    label = { Text("노래 이름(30자까지)") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                s.sendError?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+                Btn(if (s.sending) "보내는 중" else "차로 보내기", { vm.send(name.trim(), replacing) }, enabled = name.isNotBlank() && !s.sending, big = true)
+                if (!online) Text("연결되면 보내요", style = Type.caption, color = p.textTertiary) // 7.2 우리 노래·오프라인(iOS 시트와 같음)
             }
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it.take(30) },
-                label = { Text("노래 이름(30자까지)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            s.sendError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(
-                enabled = name.isNotBlank() && !s.sending,
-                onClick = { vm.send(name.trim(), replacing) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            ) { Text(if (s.sending) "보내는 중" else "차로 보내기") }
-            if (!online) Muted("연결되면 보내요") // 7.2 우리 노래·오프라인(iOS 시트와 같음)
         }
     }
 }
 
-/** 화면의 액티비티(감싼 Context를 벗겨 찾는다). */
-internal tailrec fun android.content.Context.findActivity(): android.app.Activity? = when (this) {
-    is android.app.Activity -> this
-    is android.content.ContextWrapper -> baseContext.findActivity()
-    else -> null
+/** 소리 결(.wave: 막대 44, 폭 4, 브랜드 파랑). 녹음 중에만 1.2초 결로 움직이고, 아니면(동작 줄이기 포함) 멈춘 모양. */
+@Composable
+private fun Wave(live: Boolean) {
+    val p = Tokens.colors
+    val reduced = LocalReducedMotion.current
+    var shown by remember { mutableStateOf(true) }
+    // 녹음 중이고 화면에 보일 때만 움직인다(굴려 가리면 멈춤).
+    val t = if (live && !reduced && shown) rememberInfiniteTransition(label = "wave").animateFloat(0f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "wave").value else 0f
+    Canvas(Modifier.fillMaxWidth().height(96.dp).onScreen { shown = it }.semantics { contentDescription = if (live) "녹음 중" else "녹음 대기" }) {
+        val n = 44
+        val bw = 4.dp.toPx()
+        val gap = 3.dp.toPx()
+        val total = n * bw + (n - 1) * gap
+        val x0 = (size.width - total) / 2
+        for (i in 0 until n) {
+            val base = 0.2f + abs(sin(i * 0.7f)) * 0.7f
+            val k = if (live) (0.35f + 0.65f * abs(sin((t * 2f * Math.PI.toFloat()) + i * 0.55f))) else 0.25f
+            val h = size.height * base * k
+            drawRoundRect(p.accentInk.copy(alpha = if (live) 1f else 0.45f), Offset(x0 + i * (bw + gap), (size.height - h) / 2), Size(bw, h), CornerRadius(bw / 2))
+        }
+    }
+}
+
+/** 녹음 단추(.recbtn: 84 원, 빨강 14% 바탕. 대기는 빨간 원 60, 녹음 중은 빨간 네모 30·모서리 8, 스프링 bouncy). */
+@Composable
+private fun RecButton(recording: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val p = Tokens.colors
+    val reduced = LocalReducedMotion.current
+    val spec = if (reduced) tween<androidx.compose.ui.unit.Dp>(0) else Springs.bouncy.spec()
+    val side by animateDpAsState(if (recording) 30.dp else 60.dp, spec, label = "rec")
+    val corner by animateDpAsState(if (recording) 8.dp else 30.dp, spec, label = "recR")
+    Box(
+        Modifier.size(84.dp).clip(CircleShape).background(lerpColor(p.surface, p.danger, 0.14f))
+            .pressable(enabled = enabled, onClick = onClick).semantics { contentDescription = if (recording) "멈춤" else "녹음" },
+        contentAlignment = Alignment.Center,
+    ) { Box(Modifier.size(side).clip(RoundedCornerShape(corner)).background(p.danger)) }
 }

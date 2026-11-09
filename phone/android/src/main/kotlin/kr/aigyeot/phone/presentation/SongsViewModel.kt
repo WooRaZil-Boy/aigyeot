@@ -115,8 +115,11 @@ class SongsViewModel(
     fun select(songId: String) = selectSong(songId)
     fun remove(songId: String) = removeSong(songId)
 
-    /** 듣기. 녹음 파일을 읽지 못하면 거짓. */
-    fun play(e: SongEntry): Boolean = e.file?.let { recorder.play(songs.file(it)) {} } ?: false
+    /** 듣기. 녹음 파일을 읽지 못하면 거짓. 녹음하는 동안은 틀지 않는다(스피커 소리가 새 녹음에 섞인다, 녹음 화면 아래 목록). */
+    fun play(e: SongEntry): Boolean {
+        if (sheet.value.take is Take.Recording) return true
+        return e.file?.let { recorder.play(songs.file(it)) {} } ?: false
+    }
 
     fun stopPlaying() = recorder.stopPlaying()
 

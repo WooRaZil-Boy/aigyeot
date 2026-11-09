@@ -18,6 +18,7 @@ import kr.aigyeot.phone.presentation.AigyeotTheme
 import kr.aigyeot.phone.presentation.AppRoot
 import kr.aigyeot.phone.presentation.AppViewModel
 import kr.aigyeot.phone.presentation.LocalViewModelFactory
+import kr.aigyeot.phone.presentation.ProvideMotion
 
 class MainActivity : ComponentActivity() {
     private val container get() = (application as AigyeotApp).container
@@ -39,8 +40,10 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             AigyeotTheme {
-                CompositionLocalProvider(LocalViewModelFactory provides container.viewModels) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { AppRoot(app) } // 13장 bg(탭 밖 화면도)
+                ProvideMotion {
+                    CompositionLocalProvider(LocalViewModelFactory provides container.viewModels) {
+                        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { AppRoot(app) } // 토큰 bg(탭 밖 화면도)
+                    }
                 }
             }
         }

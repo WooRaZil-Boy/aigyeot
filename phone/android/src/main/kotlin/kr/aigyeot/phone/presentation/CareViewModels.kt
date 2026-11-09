@@ -187,8 +187,8 @@ class CarViewModel(
     }
 }
 
-/** 설정 탭. */
-data class SettingsUiState(val care: CareFile, val connected: Boolean, val disconnect: DisconnectRun?)
+/** 설정 탭. `phones`는 차를 뺀 연결된 휴대폰 수('보호자 n명', 시안 S.settings). */
+data class SettingsUiState(val care: CareFile, val connected: Boolean, val disconnect: DisconnectRun?, val phones: Int = 0)
 
 /** 기록 가져오기(U64~U68) 단계. 파일 글은 이 메모리에만 두고 저장하지 않는다. */
 sealed interface ImportUi {
@@ -220,8 +220,13 @@ class SettingsViewModel(
     private val readDocument: suspend (uri: String) -> ByteArray?,
     scope: CoroutineScope = vmScope(),
 ) : ViewModel(scope) {
-    val ui: StateFlow<SettingsUiState> = derive(care.care, state.connection, disconnect.run) {
-        SettingsUiState(care.care.value, state.connection.value is Connection.Paired, disconnect.run.value)
+    val ui: StateFlow<SettingsUiState> = derive(care.care, state.connection, state.state, disconnect.run) {
+        SettingsUiState(
+            care.care.value,
+            state.connection.value is Connection.Paired,
+            disconnect.run.value,
+            state.state.value.devices.count { it.role != Role.CAR },
+        )
     }
 
     fun setNickname(name: String?) = recordCare.setNickname(name)

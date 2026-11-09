@@ -1,6 +1,33 @@
 package kr.aigyeot.phone.presentation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import kr.aigyeot.phone.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,10 +35,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,7 +89,8 @@ sealed interface Route {
     @Serializable data class Timer(val id: String) : Route
     @Serializable data object About : Route
     @Serializable data class License(val index: Int) : Route
-    @Serializable data object Songs : Route
+    /** 노래 녹음(시안 S.song). `replacing`은 다시 녹음해 바꿀 곡(9장 '노래 거절'). */
+    @Serializable data class Record(val replacing: String? = null) : Route
     @Serializable data object Reports : Route
     @Serializable data class Report(val id: String) : Route
     @Serializable data object Guardians : Route
@@ -127,10 +152,11 @@ fun AppRoot(app: AppViewModel) {
     (ui.pairRun as? PairRun.Failed)?.takeIf { it.resetOffer }?.let { r ->
         AlertDialog(
             onDismissRequest = app::clearPairRun,
-            title = { Text("연결 정보를 읽지 못했어요") },
+            title = { Text("연결 정보를 읽지 못했어요", style = Type.headline) },
             text = { Text("이 휴대폰의 연결 정보를 지우고 새로 연결할까요? 돌봄 기록은 그대로 남아요. 전에 연결했던 이 휴대폰은 차 화면에서 지워 주세요.") },
             confirmButton = { TextButton(onClick = { app.resetAndPair(r.code) }) { Text("지우고 연결하기") } },
             dismissButton = { TextButton(onClick = app::clearPairRun) { Text("취소") } },
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
         )
     }
     // U25 b: 설정에서 끊기가 끝나면, 그사이 다른 화면을 열었어도 탭으로 돌아간다. 이력에 탭이 없으면 새로 간다. 오늘 탭 고르기는 CareTabs가 한다.
@@ -155,8 +181,27 @@ fun AppRoot(app: AppViewModel) {
         app.consumeOpenAlert()
     }
 
-    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-        NavHost(nav, startDestination = start) {
+    // 탭 고르기는 여기서 든다: 리포트·노래 녹음처럼 탭 밖 화면도 시안대로 아래 탭 막대를 보이고, 누르면 그 탭으로 돌아간다.
+    var homeTab by rememberSaveable { mutableStateOf("오늘") }
+    val guardian = (ui.connection as? Connection.Paired)?.creds?.role == Role.GUARDIAN
+    fun toTab(t: String) {
+        homeTab = t
+        if (!nav.popBackStack<Route.Home>(inclusive = false)) nav.reset(Route.Home)
+    }
+    val reduced = LocalReducedMotion.current
+    // 아래 시스템 막대·자판 자리는 화면마다 맡는다(탭 막대는 흰 막대가 그 자리까지 깔린다, 시안 v5).
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
+      // 진행 중 판 → 타이머 고리 공유 요소(README 4.7 spring.smooth). 화면 교체는 base 220 페이드, 동작 줄이기면 바로.
+      SharedTransitionLayout {
+       CompositionLocalProvider(LocalSharedScope provides this) {
+        NavHost(
+            nav,
+            startDestination = start,
+            enterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.base.spec()) },
+            exitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.exit.spec()) },
+            popEnterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.base.spec()) },
+            popExitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.exit.spec()) },
+        ) {
             composable<Route.Intro> {
                 IntroScreen(
                     onConnect = { introCode?.let { c -> introCode = null; nav.navigate(Route.Confirm(c)) } ?: nav.navigate(Route.Connect) },
@@ -197,28 +242,66 @@ fun AppRoot(app: AppViewModel) {
                     onRecordsOnly = recordsOnly,
                 )
             }
-            composable<Route.Home> { CareTabs(go = { nav.navigate(it) }) }
-            composable<Route.Timer> { TimerScreen(onBack = { nav.popBackStack() }) }
+            composable<Route.Home> { NavScope(this) { CareTabs(go = { nav.navigate(it) }, tab = homeTab, onTab = { homeTab = it }) } }
+            composable<Route.Timer> { NavScope(this) { TimerScreen(onBack = { nav.popBackStack() }) } }
             composable<Route.About> { AboutScreen({ nav.popBackStack() }) { nav.navigate(Route.License(it)) } }
             composable<Route.License> { e -> LicenseScreen(e.toRoute<Route.License>().index) { nav.popBackStack() } }
-            composable<Route.Songs> { SongsScreen { nav.popBackStack() } }
-            composable<Route.Reports> { ReportsScreen(onBack = { nav.popBackStack() }, open = { nav.navigate(Route.Report(it)) }) }
-            composable<Route.Report> { ReportDetailScreen(onBack = { nav.popBackStack() }) }
+            // 시안 S.song·S.report: 탭 밖 화면이지만 아래 탭 막대가 있다(노래·리포트는 '차', guardian 리포트는 '오늘').
+            composable<Route.Record> { e -> WithTabs(guardian, "차", ::toTab) { RecordScreen(e.toRoute<Route.Record>().replacing, onBack = { nav.popBackStack() }) } }
+            composable<Route.Reports> { WithTabs(guardian, if (guardian) "오늘" else "차", ::toTab) { ReportsScreen(onBack = { nav.popBackStack() }, open = { nav.navigate(Route.Report(it)) }) } }
+            composable<Route.Report> { WithTabs(guardian, if (guardian) "오늘" else "차", ::toTab) { ReportDetailScreen(onBack = { nav.popBackStack() }) } }
             composable<Route.Guardians> { GuardiansScreen(onBack = { nav.popBackStack() }) }
             composable<Route.Alert> { AlertScreen(onBack = { nav.popBackStack() }) }
         }
-        // 앱 안 배너(5.6): 앞에 있을 때 온 인계 알림. 시스템 알림은 띄우지 않는다. 8초 뒤 저절로 닫히고(AppViewModel), 글은 3줄에서 자른다(전문은 인계 알림 목록).
-        ui.banner?.let { b ->
-            Card(Modifier.fillMaxWidth().padding(12.dp).align(Alignment.TopCenter).semantics { liveRegion = LiveRegionMode.Polite }) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("인계 알림", style = MaterialTheme.typography.labelLarge)
-                    Text(b.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    Row {
-                        TextButton(onClick = { app.dismissBanner(); nav.navigate(Route.Alert(b.alertId)) }) { Text("보기") }
-                        TextButton(onClick = app::dismissBanner) { Text("닫기") }
-                    }
-                }
-            }
+       }
+      }
+        // 앱 안 배너(5.6, 시안 .banner .anoti): 앞에 있을 때 온 인계 알림. 시스템 알림은 띄우지 않는다. 8초 뒤 저절로 닫히고(AppViewModel),
+        // 글은 3줄에서 자른다(전문은 인계 알림 목록). 위에서 떨어지듯 들어온다(spring bouncy).
+        AnimatedVisibility(
+            visible = ui.banner != null,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = if (reduced) EnterTransition.None else slideInVertically(Springs.bouncy.spec()) { -it } + fadeIn(Motion.base.spec()),
+            exit = if (reduced) ExitTransition.None else slideOutVertically(tween(260, easing = Motion.exit.easing)) { -it } + fadeOut(tween(260)),
+        ) {
+            var last by remember { mutableStateOf(ui.banner) }
+            ui.banner?.let { last = it }
+            last?.let { b -> HandoffBanner(b.text, onOpen = { app.dismissBanner(); nav.navigate(Route.Alert(b.alertId)) }, onClose = app::dismissBanner) }
         }
     }
+}
+
+/**
+ * 인계 알림 배너(시안 .anoti): 흰 카드(모서리 26), 머리 '● 아이곁 · 지금'(브랜드 원 안 흰 표지), 제목 '인계 알림', 글 3줄, '보기'·'닫기'.
+ */
+@Composable
+private fun HandoffBanner(text: String, onOpen: () -> Unit, onClose: () -> Unit) {
+    val p = Tokens.colors
+    Column(
+        Modifier.fillMaxWidth().padding(8.dp)
+            .shadow(16.dp, RoundedCornerShape(26.dp), ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
+            .clip(RoundedCornerShape(26.dp)).background(p.surface).padding(horizontal = 16.dp, vertical = 14.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
+                AIcon(R.drawable.ic_stat_aigyeot, Modifier.size(16.dp), Color.White)
+            }
+            Text("  아이곁 · 지금", style = Type.caption.copy(fontSize = 12.5.sp), color = p.textSecondary)
+        }
+        Text("인계 알림", Modifier.padding(top = 8.dp), style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
+        Text(text, style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = p.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BannerAction("보기", onOpen)
+            BannerAction("닫기", onClose)
+        }
+    }
+}
+
+@Composable
+private fun BannerAction(text: String, onClick: () -> Unit) {
+    val p = Tokens.colors
+    Box(
+        Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(18.dp)).background(p.textPrimary.copy(alpha = 0.07f)).pressable(onClick = onClick).padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, style = Type.body.copy(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold), color = p.textPrimary) }
 }
