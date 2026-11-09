@@ -1,0 +1,35 @@
+# 3D 실측(디자인 v6 R1~R4) — 차 에뮬레이터 AVD PleosConnect(2560x1440, arm64, GPU host), 운전자 user 10
+# 도구: debug 빌드의 3D 실측 액티비티(kr.aigyeot.app/.car3d.Car3dSpikeActivity, 태그 CAR3D), 보기 크기 1070x1098(홈 무대 자리)
+# 엔진: Filament 1.77.3(filament-android·gltfio-android·filament-utils-android·filamat-android, Maven Central)
+# 모델: assets/car/aigyeot_car.glb 5,089,768 B(면 119,455, 메시 113, 프리미티브 126, 재질 38)
+
+## R1 그려지는가·속도
+- 백엔드: OpenGL ES 3.0 (Android Emulator OpenGL ES Translator, Apple M4 Pro, 4.1 Metal), Filament 기능 수준 1
+- 그려짐: 예(hero 바깥 보기, rear·top X-ray, 라이트·다크, 주행 중 정지 그림). 캡처는 저장소 밖에 둠
+- 엔진 + GLB + 재질 + 환경광 준비(메인 스레드, 한 번): 828 / 859 / 917 / 975 / 1012 / 1100 ms (6회)
+- 카메라 이동 1.1초(hero -> rear, 열선·잠금 칩 3개): 64 프레임, 간격 평균 17.2 ms, 최대 50.0 ms(첫 프레임), 33ms 넘음 1, 프레임 CPU 평균 2.08 ms 최대 38.99 ms
+- 카메라 이동 1.1초(rear -> hero): 66 프레임, 간격 평균 16.7 ms, 최대 16.7 ms, 33ms 넘음 0, CPU 평균 1.69 ms 최대 3.94 ms
+- 카메라 이동 1.1초(hero -> top): 61 프레임, 간격 평균 17.5 ms, 최대 50.0 ms, CPU 평균 1.58 ms
+- gfxinfo(소리 결 반복 5초 포함 497 프레임): 50/90/95/99 백분위 16/16/16/17 ms, Janky 5 (1.01%), Missed Vsync 0
+- 대기: 카메라 이동이 끝난 뒤 5초 동안 그린 프레임 0(상태가 바뀔 때 마지막 한 장만, 열선·잠금 움직임이 있으면 그 0.5초만 더)
+- 주행 중(drive=true): 상태가 바뀌면 바로 한 장(카메라 이동·움직임 없음), 그 뒤 0 프레임
+- top(대기): 앱 프로세스 CPU 0.0%
+- 소리 결(정차 중 달래기, 60fps 연속): 앱 프로세스 CPU 60%(top 한 번, 에뮬레이터 GL 번역기). 주행 중에는 소리 결이 멈춘 그림이라 해당 없음
+- meminfo(대기, 3D 보기 하나): TOTAL PSS 183,673 KB / 225,409 KB(다크·rear 뒤), Native Heap 약 95 MB
+- 명세 15장 예산(CPU 5% 미만·RAM 400MB 이하)은 주행 장면 전체 측정에서 다시 잰다(perf_v6_1110.txt)
+
+## R2 X-ray 재질
+- filamat-android(실행 중 재질 만들기)로 프레넬 유령 재질(unlit, TRANSPARENT, worldNormal을 변수로 넘겨 1-|n·v|) 성공. 같은 방법으로 단색·꼭짓점 색·더하기 재질(고리·그림자·잠금 테)도 만듦
+- matc는 받지 않음(필요 없었음). 다만 filamat-jni.so가 arm64 9.2 MB + x86_64 9.8 MB라 APK가 커진다(R12)
+- 바깥 껍데기 흐리기: gltfio 제공자(UbershaderProvider)에서 같은 열쇠의 BLEND 짝 인스턴스를 만들어 0<k<1 동안 바꿔 끼우고, k>=0.995면 숨김
+- X-ray 유령 겹: createInstancedAsset로 같은 정점·색인 버퍼를 쓰는 둘째 인스턴스를 만들어 유령 대상만 장면에 넣고 유령 재질을 씌움
+
+## R3 AO(COLOR_0)
+- 곱해짐: 같은 장면(top, 라이트)에서 GLB의 COLOR_0 값을 모두 흰색으로 덮어 그린 것과 견주면 화소 2.7%가 20단계 넘게 다르고 최대 71단계 차이(시트 접힘·바닥이 밝아짐). gltfio 우버셰이더가 꼭짓점 색을 기본색에 곱한다
+
+## R4 무게
+- 렌더러블 131(유령 둘째 인스턴스 13 추가), 프레임 CPU 1~3 ms, 위 프레임 간격으로 보아 지금 무게로 60fps 유지. 재질 합치기·실내 줄이기는 하지 않음
+
+## 미판정
+- 실차 GPU 성능(에뮬레이터 GL 번역기만 잼)
+- IBLPrefilterContext(Equirectangular->Cubemap)가 이 에뮬레이터에서 전제 조건 오류로 멈춤 -> 환경광 큐브맵(64px, 밉 7단)을 CPU에서 만들어 씀(2x2 평균 밉이라 물리 기반 거르기는 아님)

@@ -7,5 +7,11 @@
             android:name=".detect.DetectReplayActivity"
             android:exported="true"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <!-- 3D 실측(디자인 v6 R1~R4): adb로만 연다 -->
+        <activity
+            android:name=".car3d.Car3dSpikeActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
     </application>
 </manifest>
