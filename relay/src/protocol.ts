@@ -202,6 +202,7 @@ const ReportSummaryBody = obj({
         "rear_window_lock",
         "cabin_cool",
         "reading_light_off",
+        "ambient_dim",
         "waypoint_added",
         "arrival_notice",
         "guardian_alert",

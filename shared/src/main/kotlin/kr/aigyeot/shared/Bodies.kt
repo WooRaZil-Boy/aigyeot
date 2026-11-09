@@ -196,6 +196,7 @@ enum class CarActionKind {
     @SerialName("rear_window_lock") REAR_WINDOW_LOCK,
     @SerialName("cabin_cool") CABIN_COOL,
     @SerialName("reading_light_off") READING_LIGHT_OFF,
+    @SerialName("ambient_dim") AMBIENT_DIM,   // 기능 D(5.10, C361): 달래는 동안 실내 앰비언트 조명 낮춤. 폰 두 앱의 enum도 같은 단계에서 더한다(iOS는 모르는 값에서 디코딩이 깨진다)
     @SerialName("waypoint_added") WAYPOINT_ADDED,
     @SerialName("arrival_notice") ARRIVAL_NOTICE,
     @SerialName("guardian_alert") GUARDIAN_ALERT,
