@@ -6,5 +6,6 @@ cd "$(dirname "$0")" && . ./vc.sh
 need_pleos
 vc_start   # 앞 루프를 끄고 forward·세션을 다시 잡는다
 set_baseline
+ambient_level 70 ffffff   # 앞 회차의 낮춘 밝기·색을 원래(70·흰색)로. 스위치는 그대로
 app_front
 echo "기준값을 다시 맞추고 앱을 앞으로 가져왔다(공조 전원 $(hvac_power))."

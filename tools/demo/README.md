@@ -1,6 +1,6 @@
 # 시연 준비 스크립트
 
-Pleos 에뮬레이터(AVD `PleosProbe`)에서 아이곁 차 앱을 시연하기 전후에 쓰는 bash 스크립트다. 모든 adb 명령은 `-s "$SERIAL"`을 붙인다(기본 `emulator-5560`, `SERIAL=emulator-5554 ./prepare.sh`처럼 바꾼다). 실패하면 무엇이 왜 실패했는지 찍고 멈춘다. 중계(`wrangler dev`)는 다루지 않는다.
+Pleos 에뮬레이터(AVD `PleosConnect`, 2560×1440 공식 프로필, `-timezone Asia/Seoul`로 띄움)에서 아이곁 차 앱을 시연하기 전후에 쓰는 bash 스크립트다. 모든 adb 명령은 `-s "$SERIAL"`을 붙인다(기본 `emulator-5560`, `SERIAL=emulator-5554 ./prepare.sh`처럼 바꾼다). 실패하면 무엇이 왜 실패했는지 찍고 멈춘다. 중계(`wrangler dev`)는 다루지 않는다.
 
 | 파일 | 쓰임 |
 | --- | --- |
@@ -8,6 +8,7 @@ Pleos 에뮬레이터(AVD `PleosProbe`)에서 아이곁 차 앱을 시연하기 
 | `cry.sh <녹음>...` | debug 빌드만. 장면용 울음 녹음(16kHz 모노 16비트 PCM)을 `files/scenario/cry/`에 넣고 크기를 확인한다. release면 "방법이 정해지지 않음"을 찍고 멈춘다 |
 | `reset.sh` | 같은 장면을 되풀이하기 전. 기준값·공조 전원을 다시 맞추고 앱을 앞으로 가져온다(앞 회차의 내비 화면·주행 상태를 지움) |
 | `stop.sh` | 세션 신호 유지를 멈추고 forward를 지운다 |
+| 앰비언트(`prepare.sh`·`reset.sh`·`stop.sh`) | 조명 낮춤 시연용. `prepare.sh`는 차량 설정 '무드 조명'을 '켜기'로 켜고(VC `ambient_mode`로는 안 켜진다, 설정 화면 덤프에서 '켜기'를 찾아 누름) 밝기 70·흰색으로 맞춘다. `reset.sh`는 밝기 70·흰색만 되돌리고 스위치는 그대로, `stop.sh`는 스위치를 끈다. 시연 중 차량 서비스(VHAL·CarService)가 다시 뜨면 무드 조명이 꺼짐으로 돌아간다(11-09 실측). 장면 도중이면 차량 설정 → 라이트 → '무드 조명'에서 '켜기'를 누르고 앱으로 돌아온다. `prepare.sh`는 APK를 다시 설치해(`adb install -r`) 앱을 끝내므로 장면 사이에만 돌린다 |
 | `vc.sh` | 공용 함수(`vc`, `vc_start`, `vc_stop`, `set_baseline` 등). 다른 스크립트가 source 한다 |
 
 순서: `prepare.sh` → (debug면) `cry.sh 녹음파일` → 차 화면에서 시연·측정 → 장면 실행 → 다시 하기 전에 `reset.sh` → 끝나면 `stop.sh`.

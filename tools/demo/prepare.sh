@@ -36,5 +36,8 @@ echo "[5/6] forward $VC_PORT, VC 세션 신호 유지 시작(pid $(cat "$VC_PID"
 
 set_baseline
 echo "[6/6] 기준값: 기어 P, 정지, 뒷문 닫힘, 공조 전원 켬, 22도"
+ambient_on || die "무드 조명을 켜지 못했다(위 메시지 확인)"   # 차량 설정 '무드 조명' 켜기(안 켜면 조명 낮춤이 'skip: off')
+ambient_level 70 ffffff   # 기준값 요청이 VC 기본 밝기 100을 다시 내므로 그 뒤에 70·흰색으로
+echo "앰비언트: 무드 조명 켜기, 밝기 70·흰색"
 app_front
 echo "완료. 앱을 띄웠다."

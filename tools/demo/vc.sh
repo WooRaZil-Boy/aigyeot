@@ -58,6 +58,57 @@ set_baseline() {
   [ "$(hvac_power)" = true ] || die "공조 전원이 켜지지 않았다(VC power=1 뒤에도 false)"
 }
 
+# 화면의 uiautomator 덤프(XML)를 찍는다.
+ui_dump() {
+  # 앞 덤프를 먼저 지운다. Android 14 dump는 화면이 멈추지 않아 실패해도 종료 코드 0이라, 남은 파일을 읽으면 옛 좌표를 누른다
+  a shell rm -f /sdcard/aigyeot-ui.xml
+  a shell uiautomator dump /sdcard/aigyeot-ui.xml >/dev/null 2>&1 || die "uiautomator dump 실패(화면이 켜져 있는지 확인)"
+  a shell cat /sdcard/aigyeot-ui.xml 2>/dev/null || die "uiautomator dump가 파일을 남기지 않았다(화면이 멈추지 않음)"
+}
+
+# stdin의 덤프에서 text가 $1인 노드의 bounds 중앙 "x y"를 찍는다. $2가 있으면 그 text 노드 다음에 처음 나오는 것만. 없으면 빈 출력.
+ui_pos() {
+  python3 -c '
+import sys, re
+xml = sys.stdin.read(); want = sys.argv[1]; after = sys.argv[2] if len(sys.argv) > 2 else ""
+seen = not after
+for m in re.finditer(r"text=\"([^\"]*)\"[^>]*?bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", xml):
+    t = m.group(1)
+    if not seen:
+        seen = (t == after)
+        continue
+    if t == want:
+        x1, y1, x2, y2 = map(int, m.groups()[1:]); print((x1 + x2) // 2, (y1 + y2) // 2); break
+' "$@"
+}
+
+# 실내 조명 '무드 조명' 스위치를 차량 설정 화면에서 누른다(VC ambient_mode로는 앱이 읽는 스위치가 안 켜진다, featD_1110).
+# $1 = 켜기 | 끄기. 차량 설정 → '라이트' → 아래로 스크롤 → '무드 조명' 다음의 [끄기|켜기|자동] 중 $1을 덤프에서 찾아 누른다.
+ambient_switch() {
+  local want="$1" out xy i
+  out=$(a shell am start -n ai.umos.vehiclecontrol/.VehicleControlActivity 2>&1) || die "차량 설정을 열지 못했다: ${out:0:160}"
+  case "$out" in *Error*|*Exception*) die "차량 설정을 열지 못했다: ${out:0:160}";; esac
+  sleep 2
+  xy=$(ui_dump | ui_pos "라이트"); [ -n "$xy" ] || die "차량 설정 화면에서 '라이트' 항목을 찾지 못했다(화면 덤프에 없음)"
+  a shell input tap $xy || { echo "실패: '라이트' 탭 실패(adb input tap $xy)" >&2; return 1; }
+  sleep 1
+  xy=""
+  for i in 1 2 3 4 5 6; do
+    xy=$(ui_dump | ui_pos "$want" "무드 조명")
+    [ -n "$xy" ] && break
+    a shell input swipe 1900 1150 1900 250 500 || { echo "실패: 스크롤 실패(adb input swipe)" >&2; return 1; }
+    sleep 1
+  done
+  [ -n "$xy" ] || die "'무드 조명' 다음의 '$want'를 찾지 못했다(스크롤 6번까지 시도)"
+  a shell input tap $xy || { echo "실패: '$want' 탭 실패(adb input tap $xy)" >&2; return 1; }
+  sleep 1   # 마지막 명령이 탭이 아니게 되므로 위 || 가 실패 코드를 지킨다
+}
+ambient_on() { ambient_switch 켜기; }
+ambient_off() { ambient_switch 끄기; }
+
+# 밝기·색은 VC로 바꾼다. 같은 body PUT이 VC 기본 밝기 100을 다시 내므로 기준값 뒤에 한 번 맞춘다. 기본 70·흰색(원래 값).
+ambient_level() { vc PUT "/vehicle/body?ambient_brightness_pct=${1:-70}&ambient_color=%23${2:-ffffff}"; }
+
 # 앱을 user 10 앞으로 가져온다.
 app_front() {
   local out rc
