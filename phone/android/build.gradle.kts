@@ -8,9 +8,10 @@ plugins {
 }
 if (file("google-services.json").exists()) apply(plugin = libs.plugins.google.services.get().pluginId)
 
-// 중계 주소. debug는 에뮬레이터에서 맥의 wrangler dev(10.0.2.2:8787), release는 배포한 주소를 -Paigyeot.relayUrl=https://… 로 넣는다.
+// 중계 주소. debug는 에뮬레이터에서 맥의 wrangler dev(10.0.2.2:8787), release는 배포한 주소(계약 L98·L101, 차 RelayAddress.RELEASE·iOS RelayBaseURL과 같은 글자).
+// 다른 주소로 시험할 때만 -Paigyeot.relayUrl=https://… 로 바꾼다.
 val relayDebug = providers.gradleProperty("aigyeot.relayUrl.debug").getOrElse("http://10.0.2.2:8787")
-val relayRelease = providers.gradleProperty("aigyeot.relayUrl").getOrElse("https://aigyeot-relay.invalid")
+val relayRelease = providers.gradleProperty("aigyeot.relayUrl").getOrElse("https://aigyeot-relay.byuncorry.workers.dev")
 
 // release 서명: 루트 local.properties(공개 안 함)의 aigyeot.release.storeFile·storePassword·keyAlias·keyPassword.
 // 넷이 모두 있을 때만 쓰고, 하나라도 없으면 지금처럼 서명 없는 release를 만든다(빌드가 깨지지 않게). 키·비밀번호는 저장소에 두지 않는다.
