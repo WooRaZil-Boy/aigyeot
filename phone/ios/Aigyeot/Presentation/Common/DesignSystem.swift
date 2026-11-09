@@ -21,7 +21,7 @@ enum Ico: String, CaseIterable {
     case circleCheck = "circle-check", route, mic, moonStar = "moon-star", waves, heartPulse = "heart-pulse"
     case wifiOff = "wifi-off", bell, bellOff = "bell-off", bellRing = "bell-ring", share, scanLine = "scan-line", camera
     case mapPin = "map-pin", triangleAlert = "triangle-alert", rotate3d = "rotate-3d", carseat, clockAlert = "clock-alert"
-    case userPlus = "user-plus", refresh = "refresh-cw", lock, circleHelp = "circle-help", rotateCcw = "rotate-ccw"
+    case userPlus = "user-plus", refresh = "refresh-cw", lock, circleHelp = "circle-help", locateFixed = "locate-fixed"
 
     var assetName: String { "ic-" + rawValue }
 }

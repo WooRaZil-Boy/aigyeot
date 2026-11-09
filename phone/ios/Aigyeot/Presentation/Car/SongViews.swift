@@ -38,9 +38,10 @@ private struct CarContent: View {
                 if vm.ui.owner { songs }
                 if vm.ui.isPaired {
                     Section {   // 7.1 car.section.reports(U39)
-                        BlockHeader(title: "리포트").padding(.top, 8)
+                        BlockHeader(title: "리포트").listRowInsets(Self.headInsets)
                         if vm.ui.reports.isEmpty {
-                            Text("주행이 끝나면 여기에 리포트가 와요").font(DS.font(15, 400)).foregroundStyle(DS.textTertiary).padding(.bottom, 12)
+                            Text("주행이 끝나면 여기에 리포트가 와요").font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
+                                .listRowInsets(Self.noteInsets)
                         }
                         ForEach(vm.ui.reports) { r in
                             NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r, chevron: false) }
@@ -63,13 +64,18 @@ private struct CarContent: View {
         }
     }
 
+    /// 목록 행 기본 여백(위아래 약 11pt)이 블록 머리의 아래 여백과 겹쳐 머리와 내용이 벌어지지 않게, 머리는 위만·안내 글은 아래만 둔다(옆은 목록 기본 16pt와 같게).
+    private static let headInsets = EdgeInsets(top: 18, leading: 16, bottom: 0, trailing: 16)
+    private static let noteInsets = EdgeInsets(top: 0, leading: 16, bottom: 18, trailing: 16)
+
     /// 우리 노래(owner만): 1~3곡 녹음·다시 듣기·지우기, 실험에 쓸 한 곡 고르기, 차로 보낸 상태.
     private var songs: some View {
         Section {
             BlockHeader(title: "우리 노래", link: songsVM.ui.slotsUsed < 3 ? "녹음하기" : nil) { player.stop(); replacing = nil; recording = true }   // 7.1 car.section.songs(U39)
-                .padding(.top, 8)
+                .listRowInsets(Self.headInsets)
             if songsVM.ui.songs.isEmpty {
                 Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요").font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
+                    .listRowInsets(Self.noteInsets)
             }
             ForEach(songsVM.ui.songs) { row in
                 SongRowView(row: row, player: player, rerecord: { player.stop(); replacing = row.id; recording = true },

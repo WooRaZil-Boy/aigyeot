@@ -116,7 +116,7 @@ final class CarStageView: UIView {
         still.isAccessibilityElement = false
         addSubview(still)
         addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(pan(_:))))
-        reset.setImage(UIImage(named: Ico.rotateCcw.assetName)?.withRenderingMode(.alwaysTemplate), for: .normal)
+        reset.setImage(UIImage(named: Ico.locateFixed.assetName)?.withRenderingMode(.alwaysTemplate), for: .normal)
         reset.tintColor = UIColor(DS.textSecondary)
         reset.backgroundColor = UIColor(DS.surface).withAlphaComponent(0.85)
         reset.layer.cornerRadius = 22
