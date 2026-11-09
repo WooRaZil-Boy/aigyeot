@@ -6,6 +6,8 @@ private typealias DS = DesignSystem
 struct RecordsView: View {
     @State private var pattern = false
     @State private var sheet: CareSheet?
+    /// 타임라인의 차 기록에서 연 리포트. 목록 안 NavigationLink는 카드 밖에 시스템 › 를 붙여 버튼으로 열고 여기서 넘긴다.
+    @State private var report: String?
     /// 사용자가 고른 날. 없으면 늘 오늘이다(화면을 연 채 자정을 넘기면 오늘을 따라간다. 옛 오늘에 머물면 '+'가 어제 낮 12시로 적었다)
     @State private var picked: String?
     /// 자정을 넘기면 날짜 띠·제목·'지난 7일'이 바뀐다. 화면을 연 채 두어도 매분 같은 기준 시각으로 다시 그린다(안드로이드 rememberNow).
@@ -28,7 +30,7 @@ struct RecordsView: View {
                     if pattern {
                         PatternView(now: now)
                     } else {
-                        DayView(sheet: $sheet, day: Binding(get: { picked ?? today }, set: { picked = $0 == today ? nil : $0 }), now: now) {
+                        DayView(sheet: $sheet, report: $report, day: Binding(get: { picked ?? today }, set: { picked = $0 == today ? nil : $0 }), now: now) {
                             sheet = .quick(.feed, day: picked == nil || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금)
                         }
                     }
@@ -42,6 +44,7 @@ struct RecordsView: View {
             .screenBackground()
             .navigationTitle(CareText.tabLog)
             .sheet(item: $sheet) { CareSheetView(sheet: $0) }
+            .navigationDestination(item: $report) { ReportDetailView(sessionId: $0) }
             .task {
                 now = Date()   // 다시 들어오면(자정을 넘긴 뒤 등) 바로 지금으로. 그다음은 분이 바뀔 때마다
                 while !Task.isCancelled {
@@ -58,6 +61,7 @@ struct RecordsView: View {
 private struct DayView: View {
     @Environment(RecordsViewModel.self) private var vm
     @Binding var sheet: CareSheet?
+    @Binding var report: String?
     @Binding var day: String
     let now: Date
     let add: () -> Void
@@ -137,7 +141,7 @@ private struct DayView: View {
     @ViewBuilder private func carRow(_ r: CarRow) -> some View {
         if vm.ui.report(sessionId: r.sessionId) != nil {
             let (title, sub) = CareText.splitRow(r.text)
-            NavigationLink { ReportDetailView(sessionId: r.sessionId) } label: {
+            Button { report = r.sessionId } label: {
                 TimelineCard(icon: .carFront, dot: DS.cCar, title: title, sub: sub, memo: nil)
             }
             .buttonStyle(.press)
