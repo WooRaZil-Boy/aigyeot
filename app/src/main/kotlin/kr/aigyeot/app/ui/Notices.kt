@@ -26,7 +26,7 @@ object Notices {
     fun show(ctx: Context, kind: Notice) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "아이곁 알림", NotificationManager.IMPORTANCE_DEFAULT))
-        val b = Notification.Builder(ctx, CHANNEL).setSmallIcon(android.R.drawable.ic_dialog_info).setAutoCancel(true)
+        val b = Notification.Builder(ctx, CHANNEL).setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setAutoCancel(true)
         when (kind) {
             Notice.BABY_ABOARD -> b.setContentTitle("아기가 탔나요?").setContentText("누르면 듣기를 켜요").setContentIntent(open(ctx, BABY_ABOARD))
             Notice.MIC_STOPPED -> b.setContentTitle("듣기가 멈췄어요").setContentText("누르면 다시 들어요").setContentIntent(open(ctx, MIC_RESTART))

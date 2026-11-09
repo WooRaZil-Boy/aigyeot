@@ -81,7 +81,7 @@ class MicService : Service() {
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "듣기", NotificationManager.IMPORTANCE_LOW))
         return Notification.Builder(this, CHANNEL).setContentTitle("아이곁이 듣는 중이에요")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now).setOngoing(true).build()
+            .setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setOngoing(true).build()
     }
 
     companion object {

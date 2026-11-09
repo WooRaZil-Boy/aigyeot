@@ -37,7 +37,7 @@ class MonitorService : Service() {
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "아이곁 감시", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL).setContentTitle("아이곁이 함께해요")
-            .setSmallIcon(android.R.drawable.ic_dialog_info).setOngoing(true).build()
+            .setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setOngoing(true).build()
         try { startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) }
         catch (e: Exception) { Log.e(TAG, "startForeground 실패", e); stopSelf(); return }
         g = Graph.get(this)   // 호스트 복원(①~⑤)이 여기서 큐에 들어간다
