@@ -245,12 +245,15 @@ private struct DayStrip: View {
         return CareRules.stripKeys(CareRules.days(from: first, through: last, zone: .current).map(\.key), records: records)
     }
 
+    private static let end = "strip-end"
+
     var body: some View {
         let todayKey = CareRules.dayKey(CareTime.ms(now), .current)
+        let all = days
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 8) {   // 오래 쓰면 칸이 수백 개라 보이는 칸만 그린다
-                    ForEach(days, id: \.self) { key in
+                    ForEach(all, id: \.self) { key in
                         let on = key == selected
                         Button { selected = key } label: {
                             VStack(spacing: 5) {
@@ -268,13 +271,18 @@ private struct DayStrip: View {
                         .accessibilityAddTraits(on ? .isSelected : [])
                         .id(key)
                     }
+                    Color.clear.frame(width: 8).id(Self.end)   // 끝 여백(칸 간격 8 + 8 = 16). 오늘로 돌아올 때 이 표시까지 굴린다
                 }
-                .padding(.horizontal, 16)
+                .padding(.leading, 16)
             }
             // 칸이 게을리 그려져 onAppear의 scrollTo만으로는 오늘(맨 끝)로 가지 않았다. 처음부터 끝에 붙여 연다.
             .defaultScrollAnchor(.trailing)
             .fixedSize(horizontal: false, vertical: true)   // 띠 높이를 칸에 맞춘다(위아래 빈 공간)
-            .onAppear { proxy.scrollTo(selected, anchor: .trailing) }
+            // 다시 나타날 때(탭을 옮겼다 돌아옴) 고른 칸이 보이게: 맨 끝 날(보통 오늘)은 끝 여백까지, 앞의 날은 가운데로.
+            // 칸 자체를 .trailing으로 굴리면 칸이 화면 끝에 붙어 여백이 사라졌다.
+            .onAppear {
+                if selected == all.last { proxy.scrollTo(Self.end, anchor: .trailing) } else { proxy.scrollTo(selected, anchor: .center) }
+            }
         }
         .padding(.vertical, 4)
     }
