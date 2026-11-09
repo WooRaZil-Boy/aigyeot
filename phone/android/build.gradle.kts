@@ -33,6 +33,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1"
+        // 3D(Filament) 네이티브 라이브러리는 에뮬레이터(arm64·x86_64)와 폰(arm64)만 넣는다. APK 크기를 줄인다(차 앱과 같음).
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
     signingConfigs {
         if (releaseKey != null) create("release") {
@@ -70,6 +72,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.code.scanner)
     implementation(libs.zxing.core) // 초대 QR 만들기
+    // 디자인 v6 실시간 3D 차(차 앱과 같은 판 1.77.3). 공용 버전 카탈로그는 조율 담당이 고치므로 여기서는 좌표를 직접 적는다.
+    implementation("com.google.android.filament:filament-android:1.77.3")
+    implementation("com.google.android.filament:gltfio-android:1.77.3")
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     debugImplementation(libs.compose.ui.tooling)

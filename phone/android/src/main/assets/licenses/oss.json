@@ -572,6 +572,28 @@
   ]
  },
  {
+  "name": "Filament",
+  "artifact": "com.google.android.filament:filament-android:1.77.3",
+  "licenses": [
+   {
+    "name": "The Apache Software License, Version 2.0",
+    "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+    "file": "Apache-2.0.txt"
+   }
+  ]
+ },
+ {
+  "name": "Filament glTF Loader",
+  "artifact": "com.google.android.filament:gltfio-android:1.77.3",
+  "licenses": [
+   {
+    "name": "The Apache Software License, Version 2.0",
+    "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+    "file": "Apache-2.0.txt"
+   }
+  ]
+ },
+ {
   "name": "firebase-annotations",
   "artifact": "com.google.firebase:firebase-annotations:18.0.0",
   "licenses": [

@@ -1,0 +1,15 @@
+안드로이드 폰 앱 3D 차(디자인 v6) 실측 — 11-10
+기기: AVD CarePhone(Android 16 QPR, arm64, 1080x2400), 디버그 빌드. Filament 1.77.3 + gltfio, GLB 5.09MB(assets/car/aigyeot_car.glb).
+장면: 차 탭 카드(PRESET tile, 190dp), 바깥 보기만(X-ray 0), 빛 listen.
+
+1) 호스트 GPU(-gpu host, OpenGL ES 3.0 번역기)
+- 3D 준비(엔진·GLB·재질·환경광·그림자): 처음 판 220ms(모두 메인 스레드) → 고친 판 441ms(파일 읽기·GLB 이름표·환경광 픽셀 291ms는 작업 스레드,
+  메인 스레드 단계는 GLB 7ms·자원 48ms·재질 14ms·환경광 9ms로 나눠 단계마다 한 프레임 양보). 프로세스 수명에 한 번.
+- 차 탭 진입 직후 UI 프레임: 처음 판 50번째 61ms·90번째 1200ms → 고친 판(앱 새로 켠 뒤 첫 진입) 31프레임 50번째 22ms·90번째 32ms·99번째 117ms, 다시 진입 50번째 21ms·90번째 31ms.
+- 손가락 회전 뒤 '처음 자리로'(1.1초 이동): 1.3초 동안 51프레임, 50번째 16ms·90번째 17ms, GPU 50번째 12ms.
+- 대기 0프레임: 회전을 멈춘 뒤 5초 동안 gfxinfo Total frames rendered 0.
+- 대기 CPU: top 3회 0.0%. 메모리: TOTAL PSS 179,681KB(Native Heap 78,268KB), RSS 286,920KB.
+2) 소프트웨어 GPU(AVD 기본 hw.gpu.enabled=no, SwiftShader)
+- 3D 준비 635ms, 첫 프레임 GPU 약 4,950ms(90·99번째 모두). 그린 뒤 대기 CPU 0%.
+- 판단: 시연·측정은 -gpu host로 띄운다. 소프트웨어 GPU에서도 그려지기는 한다(느림).
+APK: 디버그 34.4MB(서체 6.7MB·GLB 5.1MB·Filament arm64·x86_64 포함). release 크기는 미측정.
