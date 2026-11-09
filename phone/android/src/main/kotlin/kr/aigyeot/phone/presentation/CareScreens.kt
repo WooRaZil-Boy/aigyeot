@@ -331,7 +331,7 @@ private fun QuickButtons(care: CareFile, start: (CareKind) -> Unit, sheet: (Care
             // U51: 평소 surfaceRaised·종류 색 점·textPrimary, 진행 중 accent·onAccent. 종류 색을 바탕에 깔지 않는다.
             val p = Tokens.colors
             Surface(
-                shape = Radius.rLarge,
+                shape = Radius.large,
                 color = if (running == null) p.surfaceRaised else p.accent,
                 contentColor = if (running == null) p.textPrimary else p.onAccent,
                 modifier = Modifier.heightIn(min = 64.dp).width(150.dp).combinedClickable(
@@ -727,7 +727,7 @@ private fun ColumnScope.DayView(ui: RecordsUiState, go: (Route) -> Unit, delete:
             is CarLine -> key(row.sessionId + (row.episodeId ?: "")) {
                 Card(onClick = { go(Route.Report(row.sessionId)) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
-                        KindIcon(null, Tokens.colors.car)
+                        KindIcon(null, Tokens.colors.cCar)
                         Spacer(Modifier.width(Space.s3))
                         Text(row.text(deviceZone))
                     }
@@ -747,10 +747,10 @@ private fun ColumnScope.DayView(ui: RecordsUiState, go: (Route) -> Unit, delete:
 }
 
 private fun kindColor(k: CareKind, p: Palette) = when (k) {
-    CareKind.FEED -> p.feed
-    CareKind.SLEEP -> p.sleep
-    CareKind.DIAPER -> p.diaper
-    CareKind.NOTE -> p.note
+    CareKind.FEED -> p.cFeed
+    CareKind.SLEEP -> p.cSleep
+    CareKind.DIAPER -> p.cDiaper
+    CareKind.NOTE -> p.cNote
 }
 
 /**
@@ -801,7 +801,7 @@ private fun HandRow(e: CareEvent, onOpen: () -> Unit, onDelete: (onFail: () -> U
         state = swipe,
         enableDismissFromStartToEnd = false,
         // 밀 때만 그린다(가만히 있을 때 카드 모서리 밖으로 빨간 테두리가 비치지 않게).
-        backgroundContent = { if (swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart) Box(Modifier.fillMaxSize().background(Tokens.colors.danger, Radius.rMedium)) },
+        backgroundContent = { if (swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart) Box(Modifier.fillMaxSize().background(Tokens.colors.danger, Radius.medium)) },
     ) {
         // 밀기를 못 쓰는 화면 읽기에도 같은 지우기(되돌리기 포함)를 준다(iOS swipeActions와 같음).
         Card(onClick = onOpen, modifier = Modifier.fillMaxWidth().semantics { customActions = listOf(CustomAccessibilityAction("지우기") { onDelete(restore); true }) }) {

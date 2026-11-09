@@ -1,5 +1,11 @@
 package kr.aigyeot.phone.presentation
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -13,72 +19,140 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import kr.aigyeot.phone.R
 
-// 디자인 토큰(phone-care-plan 13장 이름·값 그대로, iOS `DesignSystem`과 같은 이름·같은 값). 11-06 사용자 결정: 청록 + Pleos 회색.
+// 디자인 토큰(디자인 v6 확정, 시안 tokens.json의 폰 값). 같은 이름·같은 값을 iOS가 쓴다.
+// 공개 사본 shared/src/test/resources/design/tokens.json과 TokensTest가 값을 대조한다.
+// 원칙(한국 앱 결): 회색 바탕 + 흰 블록, 숫자·진행은 먹색, 브랜드 파랑(accent)은 행동(버튼·선택·스위치)에만,
+// 아이의 신호는 주황(child). 데이터 색은 잠·수유·차에서 울음 세 칸, 기저귀·메모는 회색.
 
 @Immutable
 data class Palette(
     val bg: Color,
+    val stage: Color,
     val surface: Color,
     val surfaceRaised: Color,
+    val line: Color,
     val textPrimary: Color,
     val textSecondary: Color,
+    val textTertiary: Color,
     val accent: Color,
+    val accentInk: Color,
     val onAccent: Color,
-    val feed: Color,
-    val sleep: Color,
-    val diaper: Color,
-    val note: Color,
-    val car: Color,
+    val accentSoft: Color,
+    val onAccentSoft: Color,
+    val glow: Color,
+    val child: Color,
+    val childSoft: Color,
+    val childGlow: Color,
     val warning: Color,
     val danger: Color,
+    val active: Color,
+    val fill: Color,
+    val onFill: Color,
+    val cFeed: Color,
+    val cSleep: Color,
+    val cDiaper: Color,
+    val cNote: Color,
+    val cCar: Color,
+    val dark: Boolean,
 )
 
 val LightPalette = Palette(
-    bg = Color(0xFFF7F8FA),
+    bg = Color(0xFFF2F4F6),
+    stage = Color(0xFFE9ECEF),
     surface = Color(0xFFFFFFFF),
-    surfaceRaised = Color(0xFFEDEEF2),
-    textPrimary = Color(0xFF131417),
-    textSecondary = Color(0xFF4F525A),
-    accent = Color(0xFF0E6D77),
+    surfaceRaised = Color(0xFFF2F4F6),
+    line = Color(0x14191F28),
+    textPrimary = Color(0xFF191F28),
+    textSecondary = Color(0xFF4E5968),
+    textTertiary = Color(0xFF5D6673),
+    accent = Color(0xFF2867E6),
+    accentInk = Color(0xFF2867E6),
     onAccent = Color(0xFFFFFFFF),
-    feed = Color(0xFFB83C0A),
-    sleep = Color(0xFF5146B5),
-    diaper = Color(0xFF3F6E0D),
-    note = Color(0xFF5F636B),
-    car = Color(0xFF0057DE),
-    warning = Color(0xFF9A5B00),
-    danger = Color(0xFFC8211A),
+    accentSoft = Color(0xFFEAF1FF),
+    onAccentSoft = Color(0xFF1D4FC4),
+    glow = Color(0xFF7AA5FF),
+    child = Color(0xFFC2410C),
+    childSoft = Color(0xFFFFF1E8),
+    childGlow = Color(0xFFFF9A5C),
+    warning = Color(0xFFB45309),
+    danger = Color(0xFFD12F34),
+    active = Color(0xFF12A150),
+    fill = Color(0xFF2B2E33),
+    onFill = Color(0xFFFFFFFF),
+    cFeed = Color(0xFF1BAF7A),
+    cSleep = Color(0xFF9B87F5),
+    cDiaper = Color(0xFF8B95A1),
+    cNote = Color(0xFF8B95A1),
+    cCar = Color(0xFFEB6834),
+    dark = false,
 )
 
 val DarkPalette = Palette(
-    bg = Color(0xFF131417),
-    surface = Color(0xFF1D1E21),
-    surfaceRaised = Color(0xFF2A2B30),
-    textPrimary = Color(0xFFF7F8FA),
-    textSecondary = Color(0xFFB9BCC3),
-    accent = Color(0xFF5CC6D0),
-    onAccent = Color(0xFF06282C), // 어둠에서는 어두운 글자(흰 글자는 대비 미달, 13장)
-    feed = Color(0xFFFF9A6B),
-    sleep = Color(0xFFADA6FF),
-    diaper = Color(0xFFA6D66A),
-    note = Color(0xFFA4A8AE),
-    car = Color(0xFF5AA8FF),
-    warning = Color(0xFFFFC24D),
-    danger = Color(0xFFFF6D64),
+    bg = Color(0xFF0F1013),
+    stage = Color(0xFF141519),
+    surface = Color(0xFF1B1C21),
+    surfaceRaised = Color(0xFF25262C),
+    line = Color(0x14FFFFFF),
+    textPrimary = Color(0xFFF2F3F5),
+    textSecondary = Color(0xFFB0B8C1),
+    textTertiary = Color(0xFF8B95A1),
+    accent = Color(0xFF2867E6),
+    accentInk = Color(0xFF7AA5FF),
+    onAccent = Color(0xFFFFFFFF),
+    accentSoft = Color(0xFF18233A),
+    onAccentSoft = Color(0xFFA9C4FF),
+    glow = Color(0xFF7AA5FF),
+    child = Color(0xFFFF8F55),
+    childSoft = Color(0xFF33211A),
+    childGlow = Color(0xFFFF9A5C),
+    warning = Color(0xFFF5C451),
+    danger = Color(0xFFFF6B6B),
+    active = Color(0xFF34C77B),
+    fill = Color(0xFFE0E1E6),
+    onFill = Color(0xFF131417),
+    cFeed = Color(0xFF199E70),
+    cSleep = Color(0xFF9580EE),
+    cDiaper = Color(0xFF6B7684),
+    cNote = Color(0xFF6B7684),
+    cCar = Color(0xFFD95926),
+    dark = true,
 )
 
-/** 글자 단계(13장 크기/줄 높이 sp). `timer`는 경과가 흔들리지 않게 고정폭 숫자(tnum)다. */
+/** Pretendard Variable 1.3.9(OFL, res/font). 굵기마다 가변 축 `wght`를 그 값으로 둔다. */
+private fun pretendard(w: Int) = Font(R.font.pretendard_variable, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w)))
+
+val Pretendard = FontFamily(listOf(300, 400, 500, 600, 650, 700).map(::pretendard))
+
+private fun style(size: Int, line: Int, weight: Int, tracking: Double = 0.0) = TextStyle(
+    fontFamily = Pretendard,
+    fontSize = size.sp,
+    lineHeight = line.sp,
+    fontWeight = FontWeight(weight),
+    letterSpacing = tracking.em,
+    // 줄 높이 안에서 글자를 가운데에 둔다(웹 line-height와 같은 놓임).
+    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+)
+
+/** 글자 단계(tokens.json type.phone: 크기/줄 높이/굵기). 자간은 시안 CSS의 em 값. `timer`는 고정폭 숫자(tnum). */
 object Type {
-    val display = TextStyle(fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold)
-    val title = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
-    val headline = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
-    val body = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal)
-    val caption = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Normal)
-    val timer = TextStyle(fontSize = 64.sp, lineHeight = 72.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
+    val hero = style(30, 38, 700, -0.03)
+    val display = style(26, 34, 700, -0.03)
+    val title = style(20, 28, 700, -0.02)
+    val headline = style(17, 24, 600)
+    val body = style(16, 24, 400)
+    val caption = style(13, 18, 500)
+    val timer = style(64, 72, 650, -0.03).copy(fontFeatureSettings = "tnum")
 }
 
 /** 간격(4의 배수). */
@@ -91,11 +165,48 @@ object Space {
     val s6 = 32.dp
 }
 
-/** 모서리. */
+/** 모서리(tokens.json radius.phone). 흰 블록은 rL(20). */
 object Radius {
-    val rSmall = RoundedCornerShape(8.dp)
-    val rMedium = RoundedCornerShape(14.dp) // 카드
-    val rLarge = RoundedCornerShape(22.dp) // 큰 버튼
+    val rS: Dp = 8.dp
+    val rM: Dp = 12.dp
+    val rL: Dp = 20.dp
+    val rXL: Dp = 28.dp
+    val small = RoundedCornerShape(rS)
+    val medium = RoundedCornerShape(rM)
+    val large = RoundedCornerShape(rL)
+    val xl = RoundedCornerShape(rXL)
+}
+
+/** 시간 곡선 하나(tokens.json motion: ms + cubic-bezier). linear는 (0,0,1,1). */
+data class Curve(val ms: Int, val x1: Float, val y1: Float, val x2: Float, val y2: Float) {
+    val easing: Easing get() = if (x1 == 0f && y1 == 0f && x2 == 1f && y2 == 1f) LinearEasing else CubicBezierEasing(x1, y1, x2, y2)
+    fun <T> spec(delayMs: Int = 0): AnimationSpec<T> = tween(ms, delayMs, easing)
+}
+
+/** 모션 표(시안 README 4.7). 시스템 애니메이션이 꺼져 있으면 바로 바뀐다. */
+object Motion {
+    val press = Curve(90, 0f, 0f, 1f, 1f)
+    val fast = Curve(150, 0.4f, 0f, 0.2f, 1f)
+    val base = Curve(220, 0.4f, 0f, 0.2f, 1f)
+    val enter = Curve(360, 0.2f, 0.8f, 0.2f, 1f)
+    val exit = Curve(180, 0.4f, 0f, 1f, 1f)
+    val camera = Curve(1100, 0.65f, 0f, 0.35f, 1f)
+    val light = Curve(900, 0.4f, 0f, 0.2f, 1f)
+    val ripple = Curve(2400, 0.2f, 0.6f, 0.35f, 1f)
+}
+
+/** 스프링 하나(tokens.json spring: Compose 감쇠비·강성 그대로). */
+data class SpringToken(val damping: Float, val stiffness: Float) {
+    fun <T> spec(): AnimationSpec<T> = spring(damping, stiffness)
+}
+
+object Springs {
+    val snappy = SpringToken(0.86f, 600f)
+    val smooth = SpringToken(1.0f, 385f)
+    val bouncy = SpringToken(0.78f, 420f)
+
+    /** 숫자 굴림(README 4.7 roll, Dorr): .85·632. */
+    val roll = SpringToken(0.85f, 632f)
 }
 
 private val LocalPalette = staticCompositionLocalOf { LightPalette }
@@ -105,7 +216,7 @@ object Tokens {
     val colors: Palette @Composable get() = LocalPalette.current
 }
 
-/** 앱 전체 테마. 토큰을 Material 색·글자에 얹어 기존 화면과 Material 부품도 같은 토큰을 따른다. 동적 색은 쓰지 않는다(8장). */
+/** 앱 전체 테마. 토큰을 Material 색·글자에 얹어 남은 Material 부품(대화 상자·시각 고르기·시트)도 같은 토큰을 따른다. 동적 색은 쓰지 않는다. */
 @Composable
 fun AigyeotTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
@@ -116,43 +227,57 @@ fun AigyeotTheme(content: @Composable () -> Unit) {
         surface = p.surface,
         onSurface = p.textPrimary,
         surfaceVariant = p.surfaceRaised,
-        onSurfaceVariant = p.textSecondary,
+        onSurfaceVariant = p.textTertiary,
         surfaceTint = p.surface, // 높이에 따른 색 얹기를 쓰지 않는다
-        // 카드·시트·탭 막대는 surface, 대화 상자는 surfaceRaised(iOS 카드도 surface).
         surfaceContainerLowest = p.surface,
         surfaceContainerLow = p.surface,
         surfaceContainer = p.surface,
-        surfaceContainerHigh = p.surfaceRaised,
-        surfaceContainerHighest = p.surface,
-        primary = p.accent,
-        onPrimary = p.onAccent,
-        primaryContainer = p.accent,
-        secondary = p.accent, // 탭 막대 고른 글자(material3 1.4). 강조색은 하나(8장), iOS tint와 같음
-        onSecondary = p.onAccent,
-        onPrimaryContainer = p.onAccent,
-        // 시각 고르기의 고른 오전·오후 칸 등 Material 기본 분홍(tertiary)이 남지 않게 강조색 하나로(8장).
-        tertiary = p.accent,
-        onTertiary = p.onAccent,
-        tertiaryContainer = p.accent,
-        onTertiaryContainer = p.onAccent,
-        // 고른 칩·분할 버튼·탭 표시는 회색 바탕(탭의 강조색 점이 보이게, 8장 '강조색은 하나만').
+        surfaceContainerHigh = p.surface,
+        surfaceContainerHighest = p.surfaceRaised,
+        surfaceDim = p.bg,
+        surfaceBright = p.surface,
+        // 남은 Material 글자 버튼(대화 상자 '취소' 등)은 primary를 글자색으로 쓴다: 글자 짝 대비를 지키게 accentInk(다크 #7AA5FF).
+        // 그 위에 얹는 글자(시각 고르기의 고른 칸)는 다크에서 어두운 바탕색으로 대비를 맞춘다.
+        primary = p.accentInk,
+        onPrimary = if (p.dark) p.bg else p.onAccent,
+        primaryContainer = p.accentSoft,
+        onPrimaryContainer = p.onAccentSoft,
+        secondary = p.accentInk,
+        onSecondary = if (p.dark) p.bg else p.onAccent,
         secondaryContainer = p.surfaceRaised,
         onSecondaryContainer = p.textPrimary,
-        outline = p.note,
-        outlineVariant = p.surfaceRaised,
+        tertiary = p.accentInk,
+        onTertiary = if (p.dark) p.bg else p.onAccent,
+        tertiaryContainer = p.accentSoft,
+        onTertiaryContainer = p.onAccentSoft,
+        outline = p.textTertiary,
+        outlineVariant = p.line,
         inverseSurface = p.textPrimary,
-        inverseOnSurface = p.bg,
-        inversePrimary = p.bg, // 스낵바 '되돌리기' 글자. 기본 보라색이 남지 않게(iOS와 같음)
+        inverseOnSurface = p.surface,
+        inversePrimary = p.surface, // 스낵바 '되돌리기' 글자(먹색 띠 위 흰 글자)
+        scrim = Color(0x520A0C0E), // 시안 .scrim rgba(10,12,14,.32)
         error = p.danger,
     )
-    val base = Typography()
-    val type = base.copy(
-        displaySmall = Type.display,
-        headlineSmall = Type.title,
-        titleLarge = Type.title,
-        titleMedium = Type.headline,
-        bodyLarge = Type.body,
-        bodySmall = Type.caption,
-    )
-    MaterialTheme(colorScheme = scheme, typography = type, shapes = Shapes(small = Radius.rSmall, medium = Radius.rMedium, large = Radius.rLarge)) { CompositionLocalProvider(LocalPalette provides p, content = content) }
+    val type = Typography().run {
+        copy(
+            displayLarge = displayLarge.copy(fontFamily = Pretendard),
+            displayMedium = displayMedium.copy(fontFamily = Pretendard),
+            displaySmall = Type.display,
+            headlineLarge = headlineLarge.copy(fontFamily = Pretendard),
+            headlineMedium = headlineMedium.copy(fontFamily = Pretendard),
+            headlineSmall = Type.title,
+            titleLarge = Type.title,
+            titleMedium = Type.headline,
+            titleSmall = titleSmall.copy(fontFamily = Pretendard),
+            bodyLarge = Type.body,
+            bodyMedium = Type.body.copy(fontSize = 15.sp, lineHeight = 22.sp),
+            bodySmall = Type.caption,
+            labelLarge = labelLarge.copy(fontFamily = Pretendard, fontWeight = FontWeight.SemiBold),
+            labelMedium = labelMedium.copy(fontFamily = Pretendard),
+            labelSmall = labelSmall.copy(fontFamily = Pretendard),
+        )
+    }
+    MaterialTheme(colorScheme = scheme, typography = type, shapes = Shapes(small = Radius.small, medium = Radius.medium, large = Radius.large, extraLarge = Radius.xl)) {
+        CompositionLocalProvider(LocalPalette provides p, content = content)
+    }
 }

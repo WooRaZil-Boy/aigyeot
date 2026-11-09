@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- 알림 작은 아이콘 칸 색 = 토큰 accent(라이트·다크 같음) -->
+    <color name="notification_accent">#2867E6</color>
+</resources>

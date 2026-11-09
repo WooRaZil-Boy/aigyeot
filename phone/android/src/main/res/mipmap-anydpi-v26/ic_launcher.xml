@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 적응형 앱 아이콘(디자인 v6): 흰 바탕 + 파랑 초승달·주황 점 앞 층. 테마 아이콘(13+)은 앞 층 알파만 쓰는 단색 층. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>

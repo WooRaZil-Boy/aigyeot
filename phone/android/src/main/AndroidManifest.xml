@@ -10,6 +10,8 @@
         android:name=".AigyeotApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="아이곁"
         android:supportsRtl="true"
         android:theme="@style/Theme.Aigyeot">
@@ -57,5 +59,12 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="handoff_alert" />
+        <!-- 앱이 닫혀 있을 때 시스템이 띄우는 인계 알림의 작은 아이콘·색(디자인 v6: 앞 층 흰 실루엣 + 브랜드 파랑). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_aigyeot" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
     </application>
 </manifest>

@@ -1045,6 +1045,17 @@
   ]
  },
  {
+  "name": "Lucide",
+  "artifact": "lucide-static@1.70.0 (res/drawable/ic_*.xml)",
+  "licenses": [
+   {
+    "name": "ISC License",
+    "url": "https://lucide.dev/license",
+    "file": "ISC-lucide.txt"
+   }
+  ]
+ },
+ {
   "name": "Navigation Common",
   "artifact": "androidx.navigation:navigation-common-android:2.10.2",
   "licenses": [
@@ -1228,6 +1239,17 @@
     "name": "BSD-3-Clause",
     "url": "https://opensource.org/licenses/BSD-3-Clause",
     "file": "BSD-3-Clause-protobuf.txt"
+   }
+  ]
+ },
+ {
+  "name": "Pretendard",
+  "artifact": "pretendard@1.3.9 (res/font/pretendard_variable.ttf)",
+  "licenses": [
+   {
+    "name": "SIL Open Font License 1.1",
+    "url": "https://openfontlicense.org",
+    "file": "OFL-1.1-pretendard.txt"
    }
   ]
  },

@@ -42,7 +42,8 @@ object CareNotify {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
             val n = NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setSmallIcon(R.drawable.ic_stat_aigyeot) // 앱 아이콘 앞 층의 흰 실루엣(디자인 v6)
+                .setColor(context.getColor(R.color.notification_accent))
                 .setContentTitle(if (kind == CareKind.FEED) "수유 중" else "자는 중")
                 .setContentText(e.feedSide?.let(::sideName))
                 .setWhen(e.startAt)

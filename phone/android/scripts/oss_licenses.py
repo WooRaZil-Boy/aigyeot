@@ -6,6 +6,7 @@ release 런타임 의존성마다 POM의 <licenses> 이름·주소를 그대로 
   ./gradlew :phone:dependencies --configuration releaseRuntimeClasspath -q > deps.txt
   python3 phone/android/scripts/oss_licenses.py deps.txt phone/android/src/main/assets/licenses/oss.json
 전문 파일: 이름에 Apache가 있으면 Apache-2.0.txt, BSD-3-Clause면 BSD-3-Clause-protobuf.txt. 그 밖(Google 약관)은 주소만 보인다.
+Maven 밖에서 앱에 넣은 자산(서체·선 아이콘)은 EXTRA에 적어 함께 쓴다.
 """
 import json
 import os
@@ -46,6 +47,15 @@ def licenses(g, a, v, depth=0):
     raise SystemExit(f"라이선스 없음: {g}:{a}:{v}")
 
 
+# Maven 의존성이 아닌 앱 자산(디자인 v6): res/font의 Pretendard, res/drawable의 Lucide 선 아이콘.
+EXTRA = [
+    {"name": "Pretendard", "artifact": "pretendard@1.3.9 (res/font/pretendard_variable.ttf)",
+     "licenses": [{"name": "SIL Open Font License 1.1", "url": "https://openfontlicense.org", "file": "OFL-1.1-pretendard.txt"}]},
+    {"name": "Lucide", "artifact": "lucide-static@1.70.0 (res/drawable/ic_*.xml)",
+     "licenses": [{"name": "ISC License", "url": "https://lucide.dev/license", "file": "ISC-lucide.txt"}]},
+]
+
+
 def full_text(name):
     if "Apache" in name:
         return "Apache-2.0.txt"
@@ -74,6 +84,7 @@ def main(deps, out):
             "artifact": f"{g}:{a}:{v}",
             "licenses": [{"name": n, "url": u, "file": full_text(n)} for n, u in licenses(g, a, v)],
         })
+    rows += EXTRA
     rows.sort(key=lambda r: r["name"].lower())
     with open(out, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=1)
