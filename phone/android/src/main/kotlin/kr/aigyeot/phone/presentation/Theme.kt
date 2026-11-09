@@ -1,6 +1,6 @@
 package kr.aigyeot.phone.presentation
 
-import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.LocaleList
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -142,6 +144,10 @@ private fun style(size: Int, line: Int, weight: Int, tracking: Double = 0.0) = T
     letterSpacing = tracking.em,
     // 줄 높이 안에서 글자를 가운데에 둔다(웹 line-height와 같은 놓임).
     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+    // 한국어는 낱말 단위로 줄을 바꾼다(시안 word-break: keep-all, README 4.4). API 33+에서 먹고 그 아래는 기본 줄바꿈.
+    lineBreak = LineBreak(LineBreak.Strategy.HighQuality, LineBreak.Strictness.Strict, LineBreak.WordBreak.Phrase),
+    // 기기 언어가 한국어가 아니어도 한국어 규칙으로 줄을 바꾼다(낱말 단위 줄바꿈은 글자의 로케일을 본다).
+    localeList = LocaleList("ko-KR"),
 )
 
 /** 글자 단계(tokens.json type.phone: 크기/줄 높이/굵기). 자간은 시안 CSS의 em 값. `timer`는 고정폭 숫자(tnum). */
@@ -180,7 +186,7 @@ object Radius {
 /** 시간 곡선 하나(tokens.json motion: ms + cubic-bezier). linear는 (0,0,1,1). */
 data class Curve(val ms: Int, val x1: Float, val y1: Float, val x2: Float, val y2: Float) {
     val easing: Easing get() = if (x1 == 0f && y1 == 0f && x2 == 1f && y2 == 1f) LinearEasing else CubicBezierEasing(x1, y1, x2, y2)
-    fun <T> spec(delayMs: Int = 0): AnimationSpec<T> = tween(ms, delayMs, easing)
+    fun <T> spec(delayMs: Int = 0): FiniteAnimationSpec<T> = tween(ms, delayMs, easing)
 }
 
 /** 모션 표(시안 README 4.7). 시스템 애니메이션이 꺼져 있으면 바로 바뀐다. */
@@ -197,7 +203,7 @@ object Motion {
 
 /** 스프링 하나(tokens.json spring: Compose 감쇠비·강성 그대로). */
 data class SpringToken(val damping: Float, val stiffness: Float) {
-    fun <T> spec(): AnimationSpec<T> = spring(damping, stiffness)
+    fun <T> spec(): FiniteAnimationSpec<T> = spring(damping, stiffness)
 }
 
 object Springs {
