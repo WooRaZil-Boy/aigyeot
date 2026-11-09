@@ -100,6 +100,21 @@ private extension GraphicsContext {
         draw(t, at: p, anchor: anchor)
         return m
     }
+
+    /// 시간 눈금 0·6·12·18·24시(오늘 하루 띠·잠 패턴 같은 규칙). 앞 눈금과 4pt 안으로 붙거나 `avoid`(지금 글자)와 겹치면 뺀다.
+    /// 큰 글자에서 '18시24시'처럼 붙지 않게(안드로이드와 같다).
+    func hourTicks(x: (Int) -> CGFloat, y: CGFloat, size: CGFloat, avoid: ClosedRange<CGFloat>? = nil) {
+        var prevHi = -CGFloat.infinity
+        for (h, a) in [(0, UnitPoint.bottomLeading), (6, .bottom), (12, .bottom), (18, .bottom), (24, .bottomTrailing)] {
+            let text = "\(h)시"
+            let tw = resolve(Text(text).font(DS.fixedFont(size, 500, monospacedDigits: true))).measure(in: CGSize(width: 200, height: 100)).width
+            let lo = x(h) - tw * a.x, hi = lo + tw
+            if lo < prevHi + 4 { continue }
+            if let avoid, hi > avoid.lowerBound, lo < avoid.upperBound { continue }
+            label(text, at: CGPoint(x: x(h), y: y), anchor: a, size: size, weight: 500, color: DS.textTertiary)
+            prevHi = hi
+        }
+    }
 }
 
 // MARK: 오늘 하루 띠
@@ -194,10 +209,10 @@ private struct DayBandChartBody: View {
             let nowLab = "지금 " + ChartData.hhmm(now)
             let nowW = ctx.resolve(Text(nowLab).font(DS.fixedFont(fs13, 700, monospacedDigits: true))).measure(in: CGSize(width: 400, height: 100)).width
             let nowX = min(w - nowW / 2, max(nowW / 2, nx))
-            ticks(ctx, w: w, y: ay, avoid: (nowX - nowW / 2 - 4)...(nowX + nowW / 2 + 4))
+            ctx.hourTicks(x: { x($0 * 60, w) }, y: ay, size: fs, avoid: (nowX - nowW / 2 - 4)...(nowX + nowW / 2 + 4))
             ctx.label(nowLab, at: CGPoint(x: nowX, y: ay), anchor: .bottom, size: fs13, weight: 700, color: DS.textPrimary)
         } else {
-            ticks(ctx, w: w, y: ay, avoid: nil)
+            ctx.hourTicks(x: { x($0 * 60, w) }, y: ay, size: fs)
         }
         // 줄 머리: 왼쪽 점·이름, 오른쪽 부가 · 값. 지금 선 위에 바탕색 테(halo)로 그려 선이 글자를 긋지 않는다.
         let dot = max(4, fs * 0.3)
@@ -212,16 +227,6 @@ private struct DayBandChartBody: View {
         }
     }
 
-    private func ticks(_ ctx: GraphicsContext, w: CGFloat, y: CGFloat, avoid: ClosedRange<CGFloat>?) {
-        for (h, a) in [(0, UnitPoint.bottomLeading), (6, .bottom), (12, .bottom), (18, .bottom), (24, .bottomTrailing)] {
-            let label = "\(h)시"
-            let tw = ctx.resolve(Text(label).font(DS.fixedFont(fs, 500, monospacedDigits: true))).measure(in: CGSize(width: 200, height: 100)).width
-            let tx = x(h * 60, w)
-            let lo = tx - tw * a.x, hi = lo + tw
-            if let avoid, hi > avoid.lowerBound, lo < avoid.upperBound { continue }
-            ctx.label(label, at: CGPoint(x: tx, y: y), anchor: a, size: fs, weight: 500, color: DS.textTertiary)
-        }
-    }
 }
 
 // MARK: 7일 막대(수유 간격·차에서 울음)·조향 비교
@@ -340,9 +345,7 @@ private struct SleepHeatChartBody: View {
                 ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(on ? DS.cSleep : DS.surfaceRaised))
             }
         }
-        for (h, a) in [(0, UnitPoint.bottomLeading), (6, .bottom), (12, .bottom), (18, .bottom), (24, .bottomTrailing)] {
-            ctx.label("\(h)시", at: CGPoint(x: lead + CGFloat(h * 2) * cw, y: size.height - 1), anchor: a, size: fs, weight: 500, color: DS.textTertiary)
-        }
+        ctx.hourTicks(x: { lead + CGFloat($0 * 2) * cw }, y: size.height - 1, size: fs)
     }
 }
 
@@ -427,17 +430,16 @@ struct MethodDots: View {
             ForEach(rows) { m in
                 let known = m.n >= 3
                 Group {
-                    if typeSize.isAccessibilitySize {   // 큰 글자: 이름·값 한 줄, 그 아래 점(가로 폭을 넘지 않게)
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack { name(m, known: known); Spacer(minLength: 8); value(m, known: known) }
-                            dots(m, known: known)
-                        }
-                    } else {
-                        HStack(spacing: 12) {
-                            name(m, known: known).frame(minWidth: 74, alignment: .leading)
-                            dots(m, known: known)
-                            Spacer(minLength: 4)
-                            value(m, known: known)
+                    // 큰 글자, 또는 이름을 80으로 줄여도 한 줄에 점·횟수가 들어가지 않는 좁은 폭(320pt 등)이면 이름·값 한 줄, 그 아래 점
+                    if typeSize.isAccessibilitySize { stacked(m, known: known) } else {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) {
+                                WidthIn(lo: 80, hi: 144) { name(m, known: known) }   // 긴 부모 노래 이름은 줄을 바꾸고 점·횟수 자리를 남긴다(안드로이드 widthIn 80~144)
+                                dots(m, known: known)
+                                Spacer(minLength: 4)
+                                value(m, known: known)
+                            }
+                            stacked(m, known: known)
                         }
                     }
                 }
@@ -446,6 +448,27 @@ struct MethodDots: View {
             }
         }
         .onAppear { if reduceMotion { t = 1 } else { withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { t = 1 } } }
+    }
+
+    private func stacked(_ m: Row, known: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack { name(m, known: known); Spacer(minLength: 8); value(m, known: known) }
+            dots(m, known: known)
+        }
+    }
+
+    /// 자식 너비를 lo~hi로 묶는다: 한 줄 너비가 hi를 넘으면 hi에서 줄을 바꾸고, 짧으면 lo를 채운다(안드로이드 Modifier.widthIn).
+    /// 이상 크기(제안 없음)는 lo다: ViewThatFits가 '이름을 lo까지 줄이면 한 줄에 들어가는지'로 고르게.
+    private struct WidthIn: Layout {
+        let lo: CGFloat, hi: CGFloat
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let one = subviews[0].sizeThatFits(.unspecified).width
+            let w = min(hi, max(lo, min(one, proposal.width ?? lo)))
+            return CGSize(width: w, height: subviews[0].sizeThatFits(ProposedViewSize(width: w, height: nil)).height)
+        }
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+        }
     }
 
     private func name(_ m: Row, known: Bool) -> some View {
