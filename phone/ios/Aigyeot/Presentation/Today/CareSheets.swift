@@ -246,7 +246,7 @@ private struct TimerRing: View {
         let color = DS.color(event.kind)
         let d = min(size, 320)
         ZStack {
-            Circle().stroke(DS.textPrimary.opacity(0.08), lineWidth: 3)   // surfaceRaised는 라이트 bg와 같은 색이라 보이지 않는다(안드로이드 결정 18)
+            Circle().stroke(DS.tonal, lineWidth: 3)
             Circle().trim(from: 0, to: hour).stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round)).rotationEffect(.degrees(-90))
             Circle().fill(color).frame(width: 12, height: 12)
                 .offset(y: -d / 2)
@@ -381,7 +381,7 @@ struct CareEditSheet: View {
             Text(title).font(DS.font(15, 600))
                 .foregroundStyle(on ? DS.onFill : DS.textSecondary)
                 .padding(.horizontal, 14).frame(minHeight: 44)
-                .background(on ? DS.fill : DS.surfaceRaised, in: Capsule())
+                .background(on ? DS.fill : DS.tonal, in: Capsule())
         }
         .buttonStyle(.press)
         .accessibilityAddTraits(on ? .isSelected : [])

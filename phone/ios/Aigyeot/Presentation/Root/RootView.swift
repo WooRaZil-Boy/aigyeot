@@ -69,7 +69,7 @@ struct IntroView: View {
         HStack(alignment: .top, spacing: 12) {
             IconImage(icon, size: 18).foregroundStyle(tone)
                 .frame(width: 34, height: 34)
-                .background(DesignSystem.surfaceRaised, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(DesignSystem.tonal, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             Text(text).font(DesignSystem.font(13.5, 500)).lineSpacing(6).foregroundStyle(DesignSystem.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -87,7 +87,7 @@ struct GoneView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     IconImage(.unlink, size: 24).foregroundStyle(DesignSystem.warning)
-                        .frame(width: 52, height: 52).background(DesignSystem.surfaceRaised, in: Circle())
+                        .frame(width: 52, height: 52).background(DesignSystem.tonal, in: Circle())
                     Text("연결이 끊겼어요. 다시 연결해 주세요.").typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

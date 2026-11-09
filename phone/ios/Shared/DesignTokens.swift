@@ -41,6 +41,9 @@ enum DesignSystem {
     static let stage = token("stage")
     static let surface = token("surface")
     static let surfaceRaised = token("surfaceRaised")
+    /// 바탕(bg) 위에도 놓이는 옅은 판: 톤 버튼·타이머 고리 바탕·시트 칩·안내 아이콘 판. surfaceRaised는 라이트에서 bg와 같은 색이라
+    /// 바탕 위에서 보이지 않아, 라이트만 먹색 8%(세그먼트 판과 같은 결), 다크는 surfaceRaised. 안드로이드와 같은 규칙.
+    static let tonal = Color(lightHex: palette["textPrimary"]![0] + "14", darkHex: palette["surfaceRaised"]![1])
     static let line = token("line")
     static let textPrimary = token("textPrimary")
     static let textSecondary = token("textSecondary")

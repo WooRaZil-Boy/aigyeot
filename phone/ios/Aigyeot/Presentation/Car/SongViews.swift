@@ -307,7 +307,7 @@ struct Waveform: View {
                 ForEach(Array(levels.suffix(Self.barCount(fitting: g.size.width)).enumerated()), id: \.offset) { _, l in
                     Capsule().fill(DS.accentInk).frame(width: 4, height: max(4, CGFloat(l) * g.size.height))
                 }
-                if levels.isEmpty { Capsule().fill(DS.surfaceRaised).frame(height: 4) }
+                if levels.isEmpty { Capsule().fill(DS.tonal).frame(height: 4) }
             }
             .frame(width: g.size.width, height: g.size.height)
         }

@@ -262,7 +262,7 @@ struct PillButtonStyle: ButtonStyle {
             switch kind { case .accent: DS.onAccent; case .tonal: DS.textPrimary; case .danger: DS.danger }
         }
         private var bg: Color {
-            switch kind { case .accent: DS.accent; case .tonal: DS.surfaceRaised; case .danger: .clear }
+            switch kind { case .accent: DS.accent; case .tonal: DS.tonal; case .danger: .clear }
         }
     }
 }
