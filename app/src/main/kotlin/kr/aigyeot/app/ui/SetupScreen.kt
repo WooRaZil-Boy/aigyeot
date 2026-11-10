@@ -144,12 +144,12 @@ fun SetupScreen(
         pair({ m -> Column(m) {
                 FieldLabel("태어난 해·달")
                 val next = YearMonth.of(year, month).plusMonths(1)
-                FitStepper("${year}년 ${month}월", minusEnabled = true, plusEnabled = !next.isAfter(YearMonth.now()),
+                Stepper(fit = true, text = "${year}년 ${month}월", minusEnabled = true, plusEnabled = !next.isAfter(YearMonth.now()),
                     onMinus = { if (month == 1) { year--; month = 12 } else month-- },
                     onPlus = { if (!next.isAfter(YearMonth.now())) { year = next.year; month = next.monthValue } })
             } }, { m -> Column(m) {
                 FieldLabel("평소 수유 간격")
-                FitStepper(interval?.let { "${it / 60}시간 ${it % 60}분" } ?: "비움(수유 시계 꺼짐)", minusEnabled = interval != null, plusEnabled = (interval ?: 0) < 600,
+                Stepper(fit = true, text = interval?.let { "${it / 60}시간 ${it % 60}분" } ?: "비움(수유 시계 꺼짐)", minusEnabled = interval != null, plusEnabled = (interval ?: 0) < 600,
                     onMinus = { interval = interval?.let { if (it <= 30) null else it - 30 } },
                     onPlus = { interval = ((interval ?: 0) + 30).coerceAtMost(600) })
             } })
@@ -241,29 +241,6 @@ private fun SeatHit(on: Boolean, label: String, modifier: Modifier, onClick: () 
 @Composable
 private fun RowsCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) =
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(CarRadius.l)).background(LocalPalette.current.surface).padding(8.dp)) { content() }
-
-/** Theme Stepper와 같은 모양에 글자만 칸에 맞춰 줄인다(36→24, 두 줄까지). 반 폭 두 칸(g2)·분할 840에서 '비움(수유 시계 꺼짐)'이 넘치지 않게. */
-@Composable
-private fun FitStepper(text: String, minusEnabled: Boolean, plusEnabled: Boolean, onMinus: () -> Unit, onPlus: () -> Unit) {
-    val p = LocalPalette.current
-    val shape = RoundedCornerShape(32.dp)
-    Row(Modifier.fillMaxWidth().heightIn(min = 100.dp).clip(shape).background(p.surface).border(2.dp, p.line, shape), verticalAlignment = Alignment.CenterVertically) {
-        StepKey(R.drawable.ic_minus, "줄이기", minusEnabled, onMinus)
-        BasicText(
-            text, Modifier.weight(1f), style = CarType.titleM.copy(color = p.textPrimary, textAlign = TextAlign.Center, lineHeight = 1.25.em),
-            maxLines = 2, autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 36.sp),
-        )
-        StepKey(R.drawable.ic_plus, "늘리기", plusEnabled, onPlus)
-    }
-}
-
-@Composable
-private fun StepKey(icon: Int, label: String, enabled: Boolean, onClick: () -> Unit) {
-    val p = LocalPalette.current
-    Box(Modifier.size(100.dp).press(enabled, label = label, shape = RoundedCornerShape(32.dp), pressedBg = p.ink(8), onClick = onClick), Alignment.Center) {
-        LineIcon(icon, 40.dp, p.textPrimary.copy(alpha = if (enabled) 1f else 0.38f), label)
-    }
-}
 
 /**
  * 정차 화면의 3D 정지 그림 한 칸(설정·연결이 같이 쓴다). 상태가 바뀔 때만 한 장 그린다(손가락 회전 없음, animate=false).

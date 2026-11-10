@@ -28,6 +28,7 @@ import kr.aigyeot.app.link.methodKindOf
 import kr.aigyeot.app.store.Store
 import kr.aigyeot.app.store.retryOnDbError
 import kr.aigyeot.engine.hears
+import kr.aigyeot.app.store.db.ControlAct
 import kr.aigyeot.app.store.db.OkControl
 import kr.aigyeot.app.ui.car3d.Callout3d
 import kr.aigyeot.app.ui.car3d.Light3d
@@ -339,21 +340,18 @@ internal fun episodeCard(e: TimelineEpisode): HomeCard.Episode? {
 }
 
 /** 3D 무대 상태(시안 STEPS의 view·light·ripple·callouts·listen). 주행·동작 줄이기 깃발은 화면이 붙인다. */
-/** 칩 근거 api(control_log): 열선 끄기·공조 온도(리포트 seat_heater_off·cabin_cool과 같은 줄). */
-internal const val API_SEAT_HEAT = "setHvacSeatTemperature"
-internal const val API_HVAC_TEMP = "setHvacTemperature"
 
 internal fun stage(s: EngineState?, done: Set<OkControl> = emptySet()): Stage3d {
     val x = s?.session
     val seat = when (s?.profile?.carseat) { CarSeat.LEFT -> Seat3d.RL; CarSeat.CENTER -> Seat3d.RC; else -> Seat3d.RR }
     // 칩 선·3D 표시는 실제로 해낸 뒷자리 쪽만: 잠금은 결과를 받은 영역(3e windowLockBefore 키), 열선은 성공한 control_log 영역(가운데 카시트는 양쪽을 따로)
-    val heat = if (x == null) emptySet() else done.filter { it.api == API_SEAT_HEAT }.mapNotNull { sideOf(it.target) }.toSet()
+    val heat = if (x == null) emptySet() else done.filter { it.act == ControlAct.SEAT_HEAT_OFF }.mapNotNull { sideOf(it.target) }.toSet()
     val lock = x?.windowLockBefore?.keys.orEmpty().mapNotNull { sideOf(it.name) }.toSet()
     val callouts = buildSet {
         if (lock.isNotEmpty()) add(Callout3d.LOCK)          // 3e: 앱이 뒷창을 잠갔다(세션이 닫힐 때 되돌림)
         if (s?.ambientDimmed == true) add(Callout3d.DIM)              // 5.10 낮춤이 확인된 동안
         // 열선·공조는 명령을 낸 것이 아니라 해낸 것만(이 세션 control_log 성공 줄, 리포트 seat_heater_off·cabin_cool과 같은 근거)
-        if (x != null && done.any { it.api == API_HVAC_TEMP }) add(Callout3d.HVAC)
+        if (x != null && done.any { it.act == ControlAct.CABIN_COOL }) add(Callout3d.HVAC)
         if (x != null && heat.isNotEmpty()) add(Callout3d.HEAT)
     }
     if (x == null) return Stage3d(View3d.HERO, if (s?.car?.micRunning == true) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)

@@ -30,7 +30,7 @@ interface StoreDao {
     @Query("SELECT report_pending FROM session WHERE id = :id") fun reportPending(id: String): Boolean?
     @Query("SELECT * FROM session ORDER BY started_at DESC") fun sessionsFlow(): Flow<List<SessionEntity>>
     /** 홈 3D 칩(열선 끔·공조 낮춤): 이 세션에 앱이 그 제어를 실제로 해낸(성공한) 줄의 api 목록. */
-    @Query("SELECT DISTINCT api, target FROM control_log WHERE session_id = :sessionId AND ok = 1") fun okControlsFlow(sessionId: String): Flow<List<OkControl>>
+    @Query("SELECT DISTINCT api, target, goal FROM control_log WHERE session_id = :sessionId AND ok = 1") fun okControlsFlow(sessionId: String): Flow<List<OkControl>>
     @Query("SELECT * FROM alarm_log WHERE session_id = :sessionId") fun loggedAlarmSpans(sessionId: String): List<AlarmLogEntity>
 
     // ---- episode·play_log ----
@@ -125,5 +125,7 @@ interface StoreDao {
 /** [StoreDao.firstTries]의 한 줄. */
 data class FirstTryRow(val at: Long, val method: String, val songId: String?, val result: String)
 
-/** 이 세션에 해낸 제어 한 가지(control_log 성공 줄의 api·영역). 홈 3D 칩의 근거. */
-data class OkControl(val api: String, val target: String)
+/** 이 세션에 해낸 제어 한 가지(control_log 성공 줄의 api·영역·목표). 홈 3D 칩의 근거. 뜻은 [act]. */
+data class OkControl(val api: String, val target: String, val goal: String = "") {
+    val act: ControlAct get() = controlAct(api, goal)
+}

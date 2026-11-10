@@ -146,8 +146,8 @@ class HomeUiTest {
         val locked = ses(Stage.Listening, controls = ControlState(windowLockBefore = mapOf(Area.ROW_2_LEFT to false), comfortDone = true))
         assertEquals(setOf(Callout3d.LOCK), ui(driving(locked)).stage.callouts, "쾌적 조정을 냈어도(comfortDone) 공조를 실제로 낮춘 줄이 없으면 칩이 없다")
         val dimmed = driving(locked).let { it.copy(ign = it.ign.copy(ambient = Ambient.Dimmed("S1", AmbientBack(brightness = AmbientValue(80, 20))))) }
-        val hvac = OkControl(API_HVAC_TEMP, "ROW_1_LEFT")
-        val heatL = OkControl(API_SEAT_HEAT, "ROW_2_LEFT"); val heatR = OkControl(API_SEAT_HEAT, "ROW_2_RIGHT")
+        val hvac = OkControl(kr.aigyeot.app.store.db.ControlApi.HVAC_TEMP, "ROW_1_LEFT")
+        val heatL = OkControl(kr.aigyeot.app.store.db.ControlApi.SEAT_HEAT, "ROW_2_LEFT"); val heatR = OkControl(kr.aigyeot.app.store.db.ControlApi.SEAT_HEAT, "ROW_2_RIGHT")
         val all = ui(dimmed, done = setOf(hvac, heatL))
         assertEquals(setOf(Callout3d.LOCK, Callout3d.HVAC, Callout3d.DIM, Callout3d.HEAT), all.stage.callouts)
         assertEquals(setOf(Seat3d.RL), all.stage.sides[Callout3d.HEAT], "가운데 카시트에서 왼쪽만 끄면 칩 선은 왼쪽만")

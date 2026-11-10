@@ -1,5 +1,6 @@
 package kr.aigyeot.app.exec
 
+import kr.aigyeot.app.store.db.ControlApi
 import kr.aigyeot.engine.AmbientValue
 import kr.aigyeot.engine.ControlKind
 import kr.aigyeot.engine.ControlResult
@@ -218,7 +219,7 @@ internal class Ambients(
                     s == null -> { note("ambient ${c.cmdId} skip $kind: read failed"); skip(c.cmdId, kind, null) }
                     !s.allowed -> { note("ambient ${c.cmdId} skip $kind: ${refusal(kind)}"); skip(c.cmdId, kind, null) }
                     b == null || b <= target -> { note("ambient ${c.cmdId} skip brightness: $b"); skip(c.cmdId, kind, b) }
-                    else -> write(c.cmdId, kind, a, b, target, "setAmbientLightBrightness", "dim:$target", { "$it" },
+                    else -> write(c.cmdId, kind, a, b, target, ControlApi.AMBIENT_BRIGHTNESS, ControlApi.DIM + target, { "$it" },
                         ::readBrightness) { v, ack -> port.writeBrightness(a, v, ack) }
                 }
             })
@@ -237,7 +238,7 @@ internal class Ambients(
                     s == null -> { note("ambient ${c.cmdId} skip $kind: read failed"); skip(c.cmdId, kind, null) }
                     !s.allowed -> { note("ambient ${c.cmdId} skip $kind: ${refusal(kind)}"); skip(c.cmdId, kind, null) }
                     cur == null || cur == rgb -> { note("ambient ${c.cmdId} skip color: $cur"); skip(c.cmdId, kind, cur) }
-                    else -> write(c.cmdId, kind, a, cur, rgb, "setAmbientLightBrightnessColor", "dim:" + hex(rgb), ::hex,
+                    else -> write(c.cmdId, kind, a, cur, rgb, ControlApi.AMBIENT_COLOR, ControlApi.DIM + hex(rgb), ::hex,
                         ::readColor) { v, ack -> port.writeColor(a, 0xFF000000.toInt() or v, ack) }
                 }
             })
@@ -254,12 +255,12 @@ internal class Ambients(
         withArea(c.cmdId, kinds, restoring = true, quiet = quiet) { a ->
             c.brightness?.let { v -> task(c.cmdId, ControlKind.AMBIENT_BRIGHTNESS)?.let { t -> arm(t) {
                 snapshot(ControlKind.AMBIENT_BRIGHTNESS, a, dim = false, { s ->
-                    restoreOne(c.cmdId, ControlKind.AMBIENT_BRIGHTNESS, s?.now, v, a, "setAmbientLightBrightness", { "$it" },
+                    restoreOne(c.cmdId, ControlKind.AMBIENT_BRIGHTNESS, s?.now, v, a, ControlApi.AMBIENT_BRIGHTNESS, { "$it" },
                         ::readBrightness) { x, ack -> port.writeBrightness(a, x, ack) } })
             } } }
             c.color?.let { v -> task(c.cmdId, ControlKind.AMBIENT_COLOR)?.let { t -> arm(t) {
                 snapshot(ControlKind.AMBIENT_COLOR, a, dim = false, { s ->
-                    restoreOne(c.cmdId, ControlKind.AMBIENT_COLOR, s?.now, v, a, "setAmbientLightBrightnessColor", ::hex,
+                    restoreOne(c.cmdId, ControlKind.AMBIENT_COLOR, s?.now, v, a, ControlApi.AMBIENT_COLOR, ::hex,
                         ::readColor) { x, ack -> port.writeColor(a, 0xFF000000.toInt() or x, ack) } })
             } } }
         }
@@ -272,7 +273,7 @@ internal class Ambients(
         if (task(cmdId, kind) == null) return   // 버려진 작업의 늦은 읽기 응답은 아무것도 바꾸지 않는다
         if (now == null) { note("ambient $cmdId skip restore $kind: read failed"); skip(cmdId, kind, null); return }   // 미정: 장부는 그대로
         if (now != v.set) { note("ambient $cmdId skip restore $kind: now=$now set=${v.set}"); task(cmdId, kind)?.let { resolved(it) }; skip(cmdId, kind, now); return }   // 정해짐(운전자가 바꿨다): 장부를 지운다
-        write(cmdId, kind, a, now, v.before, api, "restore:" + fmt(v.before), fmt, read, put)   // 되돌림은 스위치를 보지 않는다
+        write(cmdId, kind, a, now, v.before, api, ControlApi.RESTORE + fmt(v.before), fmt, read, put)   // 되돌림은 스위치를 보지 않는다
     }
 
     /** F19(4.2): 쓰기 성공 콜백과 다시 읽은 값이 모두 맞아야 ok. 5초 안에 안 되면 한 번 다시 보내고, 그래도 안 되면 ok = false. */
@@ -292,14 +293,14 @@ internal class Ambients(
             settle(t, ok, before, last)
         }
         t.finishNow = { ok, _, _ -> finish(ok) }   // 첫 put 바로 앞에서 건다: 그 전에 버려지면 settle만(시도가 아니라 control_log 없음)
-        val dimGoal = goal.startsWith("dim:")
+        val dimGoal = goal.startsWith(ControlApi.DIM)
         fun send(n: Int) {
             if (t.done) return
             t.timers.forEach { it() }; t.timers.clear()
             attempt = n
             var acked: Boolean? = null
             val ack = { ok: Boolean -> if (!t.done && attempt == n) { acked = ok; ackMs = clock() - t0 } }
-            if (n == 0 && goal.startsWith("dim:")) ledgerSet(kind, AmbientValue(before, want))   // 쓰기 전에 장부에 남긴다(쓰다 죽어도 되돌릴 값이 남게)
+            if (n == 0 && goal.startsWith(ControlApi.DIM)) ledgerSet(kind, AmbientValue(before, want))   // 쓰기 전에 장부에 남긴다(쓰다 죽어도 되돌릴 값이 남게)
             try { put(want, ack) } catch (e: Exception) { ack(false) }
             fun poll() {
                 if (t.done || attempt != n) return

@@ -77,11 +77,24 @@ object SongLoudness {
 
     private class Fmt(val rate: Int, val channels: Int)
 
-    /** 풀어서 16비트 PCM을 [onPcm]에 넘긴다. 출력 형식이 정해지면 [onFormat]. 연속 [MAX_IDLE]번 진전이 없으면 예외. */
-    private fun decode(input: File, onFormat: (Fmt) -> Unit = {}, onPcm: (ShortArray, Int) -> Unit = { _, _ -> }): Fmt {
+    /** 파일 하나의 통합 크기(BS.1770, LUFS). 잴 수 없으면 null. 장면 측정(SourceLoudness)도 이것을 쓴다. */
+    fun lufs(source: (MediaExtractor) -> Unit): Double? {
+        var meter: Loudness? = null
+        decode(source, onFormat = { meter = Loudness(it.rate, it.channels) }) { s, n -> meter!!.addPcm16(s, n) }
+        return meter?.integrated()
+    }
+
+    private fun decode(input: File, onFormat: (Fmt) -> Unit = {}, onPcm: (ShortArray, Int) -> Unit = { _, _ -> }): Fmt =
+        decode({ it.setDataSource(input.path) }, onFormat, onPcm)
+
+    /**
+     * 풀어서 16비트 PCM을 [onPcm]에 넘긴다(디코더는 이것 하나: 부모 노래 사본과 장면 음원 측정이 같이 쓴다). [source]가 MediaExtractor에 자료를 건다(파일·asset).
+     * 출력 형식이 정해지면 [onFormat]. PCM 16비트가 아니면 예외. 연속 [MAX_IDLE]번 진전이 없으면 예외.
+     */
+    private fun decode(source: (MediaExtractor) -> Unit, onFormat: (Fmt) -> Unit = {}, onPcm: (ShortArray, Int) -> Unit = { _, _ -> }): Fmt {
         val ex = MediaExtractor()
         try {
-            ex.setDataSource(input.path)
+            source(ex)
             val track = (0 until ex.trackCount).first { ex.getTrackFormat(it).getString(MediaFormat.KEY_MIME).orEmpty().startsWith("audio/") }
             ex.selectTrack(track)
             val inFmt = ex.getTrackFormat(track)

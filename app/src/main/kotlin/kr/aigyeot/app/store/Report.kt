@@ -1,5 +1,6 @@
 package kr.aigyeot.app.store
 
+import kr.aigyeot.app.store.db.act
 import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlinx.serialization.json.Json
@@ -237,23 +238,20 @@ private enum class SteerRole { SKIP, CRY, QUIET, UNKNOWN }
 
 private fun median(v: List<Double>): Double = v.sorted().let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2 }
 
-/**
- * 4. car_actions. 제어는 control_log의 성공 줄을 api 이름으로 가른다.
- * shortcut: api 이름의 낱말(Seat·WindowLock·ReadingLight·Hvac)로 가른다. exec가 이름을 바꾸면 여기를 맞춘다(보고서에 적음)
- */
+/** 4. car_actions. 제어는 control_log의 성공 줄을 그 뜻(controlAct, 홈 3D 칩과 같은 함수)으로 가른다. */
 private fun carActions(route: String?, plays: List<PlayLogEntity>, eps: List<EpisodeEntity>, settled: Boolean, restLog: String, controls: List<kr.aigyeot.app.store.db.ControlLogEntity>): List<CarAction> {
     val played = plays.filter { it.startedAt != null }
     val waypoints = runCatching { Json.decodeFromString<List<RestLogEntry>>(restLog) }.getOrDefault(emptyList()).count { it.waypointOk == true }
-    fun ctl(word: String, exclude: String? = null) = controls.count { it.api.contains(word, true) && (exclude == null || !it.api.contains(exclude, true)) }
+    fun ctl(a: kr.aigyeot.app.store.db.ControlAct) = controls.count { it.act == a }
     return listOf(
         CarAction(if (route == "DEFAULT_FALLBACK") CarActionKind.DEFAULT_ZONE_PLAYBACK else CarActionKind.REAR_PLAYBACK, played.size, (played.sumOf { it.playedMs } / 1000.0).roundToInt()),
-        CarAction(CarActionKind.SEAT_HEATER_OFF, ctl("SeatTemperature"), null),
+        CarAction(CarActionKind.SEAT_HEATER_OFF, ctl(kr.aigyeot.app.store.db.ControlAct.SEAT_HEAT_OFF), null),
         // C337: 잠금에 성공한 뒷창 수. 같은 창의 되돌림·다시 잠금 줄(C335·3f·C86)이 두 번째 '목표 참' 줄이라 영역으로 중복 없이 센다
-        CarAction(CarActionKind.REAR_WINDOW_LOCK, controls.filter { it.api.contains("WindowLock", true) && it.goal.lowercase() in setOf("true", "1", "1.0") }.map { it.target }.distinct().size, null),
-        CarAction(CarActionKind.CABIN_COOL, ctl("Hvac", "Seat"), null),
-        CarAction(CarActionKind.READING_LIGHT_OFF, ctl("ReadingLight"), null),
+        CarAction(CarActionKind.REAR_WINDOW_LOCK, controls.filter { it.act == kr.aigyeot.app.store.db.ControlAct.WINDOW_LOCK }.map { it.target }.distinct().size, null),
+        CarAction(CarActionKind.CABIN_COOL, ctl(kr.aigyeot.app.store.db.ControlAct.CABIN_COOL), null),
+        CarAction(CarActionKind.READING_LIGHT_OFF, ctl(kr.aigyeot.app.store.db.ControlAct.READING_LIGHT_OFF), null),
         // 기능 D(C361): 낮춤에 성공한 DimAmbient 수. 한 명령의 밝기·색 두 줄은 cmd_id로 한 번, 되돌림(restore:) 줄은 세지 않는다
-        CarAction(CarActionKind.AMBIENT_DIM, controls.filter { it.api.contains("Ambient", true) && it.goal.startsWith("dim:") }.mapNotNull { it.cmdId }.distinct().size, null),
+        CarAction(CarActionKind.AMBIENT_DIM, controls.filter { it.act == kr.aigyeot.app.store.db.ControlAct.AMBIENT_DIM }.mapNotNull { it.cmdId }.distinct().size, null),
         CarAction(CarActionKind.WAYPOINT_ADDED, waypoints, null),
         CarAction(CarActionKind.ARRIVAL_NOTICE, eps.count { it.handoffKind == "ARRIVAL_NOTICE" && toldShown(it.handoffToldDriver, settled) }, null),   // C303 A10
         CarAction(CarActionKind.GUARDIAN_ALERT, eps.count { it.guardianNotified && settled }, null),   // C220: 확정 전(C152 대기)에는 알림이 나갔는지 모른다

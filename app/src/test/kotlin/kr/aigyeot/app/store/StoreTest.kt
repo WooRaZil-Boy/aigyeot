@@ -121,7 +121,7 @@ class StoreTest {
         dao.upsertPlay(PlayLogEntity("P1", "S1", "E1", "AUTO_FIRST", "LULLABY", null, T0 + 63_000, T0 + 119_000, 56_000, "DEADLINE"))
         dao.insertContext((0..60).map { i -> ContextSampleEntity("E1", T0 + 30_000 + i * 1_000L, 50.0 + i % 3, i == 5, if (i % 10 < 5) 0.0 else 5.0, "NONE", "D", 24.5, null, null, null) })
         dao.upsertSteer(SteerWindowEntity("S1", T0, 2, false, true, false, 4))
-        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 10_000, api = "Seat.setHvacSeatTemperature", target = "ROW_2_LEFT", goal = "0", actual = "0", ackMs = 120, appliedMs = 300, ok = true, retries = 0))
+        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 10_000, api = kr.aigyeot.app.store.db.ControlApi.SEAT_HEAT, target = "ROW_2_LEFT", goal = "0", actual = "0", ackMs = 120, appliedMs = 300, ok = true, retries = 0))
     }
 
     @Test fun reportFields_matchContractAndSharedExample() {
@@ -577,7 +577,7 @@ class StoreTest {
 
     @Test fun report_carActions_countOnlySucceededControls() {
         fullSession()   // 열선 성공 한 줄
-        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 11_000, api = "Seat.setHvacSeatTemperature", target = "ROW_2_RIGHT", goal = "0", actual = "3", ackMs = 120, appliedMs = null, ok = false, retries = 1))
+        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 11_000, api = kr.aigyeot.app.store.db.ControlApi.SEAT_HEAT, target = "ROW_2_RIGHT", goal = "0", actual = "3", ackMs = 120, appliedMs = null, ok = false, retries = 1))
         dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 12_000, api = "setWindowLock", target = "ROW_2_LEFT", goal = "1", actual = "0", ackMs = 120, appliedMs = null, ok = false, retries = 1))
         val r = buildReport(dao, "S1", now)!!
         val acts = r.carActions.associate { it.action to it.count }
@@ -959,6 +959,16 @@ class StoreTest {
         dao.upsertPlay(PlayLogEntity("P2", "S1", "E1", "AUTO_SECOND", "WHITE_NOISE", null, T0 + 127_000, T0 + 183_000, 56_000, "DEADLINE"))
         dao.insertAlarm(AlarmLogEntity(sessionId = "S1", firstAt = T0 + 400_000, lastAt = T0 + 410_000, reason = "WAITING"))
         assertEquals(listOf(T0 + 60_000, T0 + 400_000), store.cryRuns("S1"))
+    }
+
+    // 제어 기록의 뜻은 한 함수(홈 3D 칩과 리포트 car_actions가 같이 쓴다)
+    @Test fun controlAct_classifiesEachApiAndGoal() {
+        val a = kr.aigyeot.app.store.db.ControlApi
+        fun act(api: String, goal: String) = kr.aigyeot.app.store.db.controlAct(api, goal)
+        assertEquals(kr.aigyeot.app.store.db.ControlAct.SEAT_HEAT_OFF, act(a.SEAT_HEAT, "0")); assertEquals(kr.aigyeot.app.store.db.ControlAct.CABIN_COOL, act(a.HVAC_TEMP, "20.0")); assertEquals(kr.aigyeot.app.store.db.ControlAct.READING_LIGHT_OFF, act(a.READING_LIGHT, "OFF"))
+        assertEquals(kr.aigyeot.app.store.db.ControlAct.WINDOW_LOCK, act(a.WINDOW_LOCK, "true")); assertEquals(kr.aigyeot.app.store.db.ControlAct.WINDOW_RESTORE, act(a.WINDOW_LOCK, "false"))
+        assertEquals(kr.aigyeot.app.store.db.ControlAct.AMBIENT_DIM, act(a.AMBIENT_BRIGHTNESS, a.DIM + "20")); assertEquals(kr.aigyeot.app.store.db.ControlAct.AMBIENT_RESTORE, act(a.AMBIENT_COLOR, a.RESTORE + "#FFFFFF"))
+        assertEquals(kr.aigyeot.app.store.db.ControlAct.OTHER, act("addWaypoint", "added"))
     }
 
     @Test fun c312_unobservedWindowsExcludedFromAfterResponse() {

@@ -1,5 +1,6 @@
 package kr.aigyeot.app.exec
 
+import kr.aigyeot.app.store.db.ControlApi
 import kr.aigyeot.engine.AddWaypoint
 import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.ControlKind
@@ -150,12 +151,12 @@ internal class Controls(
 
     companion object {
         private val API = mapOf(
-            ControlKind.SEAT_HEAT to "setHvacSeatTemperature",
-            ControlKind.WINDOW_LOCK to "setWindowLock",
-            ControlKind.READING_LIGHT to "setReadingLightSwitch",
-            ControlKind.HVAC_TEMP to "setHvacTemperature",
-            ControlKind.AMBIENT_BRIGHTNESS to "setAmbientLightBrightness",   // 앰비언트는 Controls가 아니라 Ambients가 쓴다(영역이 capability). 이름은 control_log와 같다
-            ControlKind.AMBIENT_COLOR to "setAmbientLightBrightnessColor",
+            ControlKind.SEAT_HEAT to ControlApi.SEAT_HEAT,
+            ControlKind.WINDOW_LOCK to ControlApi.WINDOW_LOCK,
+            ControlKind.READING_LIGHT to ControlApi.READING_LIGHT,
+            ControlKind.HVAC_TEMP to ControlApi.HVAC_TEMP,
+            ControlKind.AMBIENT_BRIGHTNESS to ControlApi.AMBIENT_BRIGHTNESS,   // 앰비언트는 Controls가 아니라 Ambients가 쓴다(영역이 capability). 이름은 control_log와 같다
+            ControlKind.AMBIENT_COLOR to ControlApi.AMBIENT_COLOR,
         )
     }
 }

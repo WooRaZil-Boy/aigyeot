@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.unit.em
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -347,15 +348,30 @@ fun <T> Segmented(items: List<Pair<T, String>>, selected: T, modifier: Modifier 
     }
 }
 
-/** 수 고르기(시안 .stepper: 높이 100, 양끝 100 단추, 가운데 titleM). */
+/**
+ * 수 고르기(시안 .stepper: 높이 100, 양끝 100 단추, 가운데 titleM). [fit]이면 가운데 글자를 칸에 맞춰 줄인다(36→24, 두 줄까지:
+ * 반 폭 두 칸·분할 840에서 '비움(수유 시계 꺼짐)'이 넘치지 않게). 모양·양끝 단추는 하나다.
+ */
 @Composable
-fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, onMinus: () -> Unit, onPlus: () -> Unit) {
+fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, fit: Boolean = false, onMinus: () -> Unit, onPlus: () -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(32.dp)
     Row(modifier.fillMaxWidth().heightIn(min = 100.dp).clip(shape).background(p.surface).border(2.dp, p.line, shape), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(100.dp).press(minusEnabled, label = "줄이기", shape = RoundedCornerShape(32.dp), pressedBg = p.ink(8), onClick = onMinus), Alignment.Center) { LineIcon(R.drawable.ic_minus, 40.dp, p.textPrimary.copy(alpha = if (minusEnabled) 1f else 0.38f), "줄이기") }
-        Text(text, style = CarType.titleM, color = p.textPrimary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
-        Box(Modifier.size(100.dp).press(plusEnabled, label = "늘리기", shape = RoundedCornerShape(32.dp), pressedBg = p.ink(8), onClick = onPlus), Alignment.Center) { LineIcon(R.drawable.ic_plus, 40.dp, p.textPrimary.copy(alpha = if (plusEnabled) 1f else 0.38f), "늘리기") }
+        StepKey(R.drawable.ic_minus, "줄이기", minusEnabled, onMinus)
+        if (fit) androidx.compose.foundation.text.BasicText(
+            text, Modifier.weight(1f), style = CarType.titleM.copy(color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 1.25.em),
+            maxLines = 2, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 36.sp),
+        ) else Text(text, style = CarType.titleM, color = p.textPrimary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
+        StepKey(R.drawable.ic_plus, "늘리기", plusEnabled, onPlus)
+    }
+}
+
+/** 스테퍼 양끝 단추(100, 누름 면 먹색 8%, 끄면 흐림 38%). */
+@Composable
+private fun StepKey(icon: Int, label: String, enabled: Boolean, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Box(Modifier.size(100.dp).press(enabled, label = label, shape = RoundedCornerShape(32.dp), pressedBg = p.ink(8), onClick = onClick), Alignment.Center) {
+        LineIcon(icon, 40.dp, p.textPrimary.copy(alpha = if (enabled) 1f else 0.38f), label)
     }
 }
 

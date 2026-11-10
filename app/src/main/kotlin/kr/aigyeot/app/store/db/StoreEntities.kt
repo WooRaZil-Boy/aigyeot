@@ -226,3 +226,34 @@ class Converters {
     @TypeConverter fun unjudgedToJson(v: List<Unjudged>): String = Json.encodeToString(v)
     @TypeConverter fun unjudgedFromJson(v: String): List<Unjudged> = Json.decodeFromString(v)
 }
+
+/** control_log의 api 이름과 앰비언트 목표 글자의 앞(실행기가 쓰는 글자). 줄의 뜻을 읽는 곳은 [controlAct] 하나다. */
+object ControlApi {
+    const val SEAT_HEAT = "setHvacSeatTemperature"
+    const val WINDOW_LOCK = "setWindowLock"
+    const val READING_LIGHT = "setReadingLightSwitch"
+    const val HVAC_TEMP = "setHvacTemperature"
+    const val AMBIENT_BRIGHTNESS = "setAmbientLightBrightness"
+    const val AMBIENT_COLOR = "setAmbientLightBrightnessColor"
+    /** 앰비언트 줄 목표: 낮춤 "dim:값", 되돌림 "restore:값"(C361). */
+    const val DIM = "dim:"
+    const val RESTORE = "restore:"
+}
+
+/** 제어 기록 한 줄이 차가 한 일 중 무엇인가(홈 3D 칩·리포트 car_actions가 같이 쓴다). */
+enum class ControlAct { SEAT_HEAT_OFF, WINDOW_LOCK, WINDOW_RESTORE, CABIN_COOL, READING_LIGHT_OFF, AMBIENT_DIM, AMBIENT_RESTORE, OTHER }
+
+/**
+ * 줄의 뜻(api 이름 + 목표 글자). 열선·공조·독서등은 앱이 끄거나 낮추기만 하므로 api로, 뒷창은 목표가 참이면 잠금·아니면 되돌림(C335·3f),
+ * 앰비언트는 목표 앞 글자로 낮춤·되돌림을 가른다. 경유지·재생 등 다른 줄은 OTHER.
+ */
+fun controlAct(api: String, goal: String): ControlAct = when (api) {
+    ControlApi.SEAT_HEAT -> ControlAct.SEAT_HEAT_OFF
+    ControlApi.WINDOW_LOCK -> if (goal.lowercase() in setOf("true", "1", "1.0")) ControlAct.WINDOW_LOCK else ControlAct.WINDOW_RESTORE
+    ControlApi.HVAC_TEMP -> ControlAct.CABIN_COOL
+    ControlApi.READING_LIGHT -> ControlAct.READING_LIGHT_OFF
+    ControlApi.AMBIENT_BRIGHTNESS, ControlApi.AMBIENT_COLOR -> if (goal.startsWith(ControlApi.DIM)) ControlAct.AMBIENT_DIM else ControlAct.AMBIENT_RESTORE
+    else -> ControlAct.OTHER
+}
+
+val ControlLogEntity.act: ControlAct get() = controlAct(api, goal)
