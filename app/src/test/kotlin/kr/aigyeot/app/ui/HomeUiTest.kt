@@ -282,5 +282,6 @@ class HomeUiTest {
         assertEquals(90f / 225f, f.fill!!, 1e-4f); assertEquals(144f / 225f, f.windowMark!!, 1e-4f)
         assertEquals("방금", feedCard(T0 - 30_000, 180, T0).ago); assertTrue(feedCard(T0 - 30_000, 180, T0).fresh)
         assertNull(feedCard(T0, null, T0).fill, "간격이 없으면 막대 없음"); assertEquals("", feedCard(null, 180, T0).ago)
+        feedCard(T0 + 5_000, 180, T0).let { assertEquals("방금", it.ago); assertTrue(it.fresh); assertEquals(0f, it.fill) }   // 눈금 시각보다 늦은 수유 기록
     }
 }

@@ -457,7 +457,7 @@ internal fun intervalText(min: Int) = "평소 " + if (min % 60 == 0) "${min / 60
 internal fun agoText(ms: Long): String = (ms / 60_000).coerceAtLeast(0).let { m -> if (m < 1) "방금" else "${m / 60}:%02d".format(m % 60) }
 
 /**
- * 홈 상태. 시계는 30초마다(마지막 수유 지난 시간), 판단 코어·연결·차가 말한 문장이 바뀔 때마다 다시 계산한다.
+ * 홈 상태. 시계는 10초 눈금마다(마지막 수유 지난 시간), 판단 코어·연결·차가 말한 문장이 바뀔 때마다 다시 계산한다.
  * 정차 중 에피소드 카드는 세션이 있고 기어 P일 때만 Room에서 마지막 에피소드를 읽는다(리포트와 같은 변환).
  * 바꾸려면 사건을 [events](실제 입구, V3)로 보낸다. 수유 입력은 link가 Room에 먼저 쓴다(C322).
  */
@@ -465,8 +465,9 @@ class HomeViewModel(
     steps: StateFlow<Step?>, private val events: EventSink, private val link: Link, private val clock: () -> Long,
     said: StateFlow<Said?>, private val heard: StateFlow<HeardText?>, private val store: Store,
 ) : ViewModel() {
-    // 시계 글자(수유 '방금'·'h:mm', 오늘 하루 지금 선)를 다시 계산하는 눈금. 값은 계산할 때의 clock()을 쓴다(눈금보다 늦은 기록도 바로 맞게)
-    private val ticker = flow { while (true) { emit(Unit); delay(10_000) } }
+    // 시계 글자(수유 '방금'·'h:mm', 오늘 하루 지금 선)를 다시 계산하는 눈금. 홈은 눈금의 시각만 쓴다: 판단 코어가 Step을 낼 때마다 clock()을 읽으면
+    // 수유 막대 몫이 매번 달라 HomeUi가 같지 않게 되고, 주행 중 Step마다 홈 전체를 다시 그린다(장면 B·C·E 앱 CPU 2배). 눈금보다 늦은 수유 기록은 agoText·fill이 0으로 막는다
+    private val ticker = flow { while (true) { emit(clock()); delay(10_000) } }
     private var lastKey: String? = null
     private var keyFrom = 0L
 
@@ -503,8 +504,7 @@ class HomeViewModel(
     private val extras = combine(lastEpisode.onStart { emit(Tagged(null, null)) }, done.onStart { emit(Tagged(null, emptySet())) }, carDay.onStart { emit(emptyList()) }) { a, b, c -> Triple(a, b, c) }
 
     // 기록 지우기 시각도 같이 본다(지운 뒤 홈에 돌아오면 옛 물어보기 카드가 바로 내려가게)
-    val uiState: StateFlow<HomeUi> = combine(steps, link.status, ticker, combine(said, heard, store.clearedAt) { a, b, _ -> a to b }, extras) { s, st, _, sh, ex ->
-        val now = clock()
+    val uiState: StateFlow<HomeUi> = combine(steps, link.status, ticker, combine(said, heard, store.clearedAt) { a, b, _ -> a to b }, extras) { s, st, now, sh, ex ->
         val sid = s?.state?.session?.id
         homeUi(s?.state, now, st, sh.first, sh.second, stepFrom(s?.state), ex.first.of(sid), ex.second.of(sid) ?: emptySet(), ex.third, lastQa = lastQa(s?.state))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), homeUi(steps.value?.state, clock(), link.status.value, said.value, heard.value, stepFrom(steps.value?.state), null, lastQa = lastQa(steps.value?.state)))
