@@ -63,6 +63,13 @@ final class DesignTour: XCTestCase {
         if feedRow.waitForExistence(timeout: 3) {
             feedRow.tap()
             shot("06-sheet-edit")
+            let time = app.buttons["시작 시각"].firstMatch   // 시각 칩 → 작은 창의 시각 바퀴
+            if time.exists {
+                time.tap()
+                shot("06b-sheet-time", settle: 1)
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()   // 작은 창 밖을 눌러 닫는다
+                sleep(1)
+            }
             app.buttons["취소"].firstMatch.tap()
         }
         app.buttons["패턴"].firstMatch.tap()

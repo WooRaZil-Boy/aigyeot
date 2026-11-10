@@ -16,7 +16,7 @@ struct CareLiveActivity: Widget {
         ActivityConfiguration(for: CareActivityAttributes.self) { context in
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
-                    Circle().fill(tint(context.attributes)).frame(width: 10, height: 10).padding(.leading, 6)
+                    Circle().fill(Color(lightHex: "#DDB08F", darkHex: "#DDB08F")).frame(width: 10, height: 10).padding(.leading, 6)   // 시안 .live-act .ri
                     VStack(alignment: .leading, spacing: 0) {
                         Text(title(context.attributes)).font(DesignSystem.namedFont(16, 700))
                         if let side = context.state.side { Text(side).font(DesignSystem.namedFont(13, 500)).opacity(0.8) }

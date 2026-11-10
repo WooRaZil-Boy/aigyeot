@@ -28,7 +28,7 @@ private struct SheetToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button(action: cancel) {
-                if #available(iOS 26, *) { IconImage(.x, size: 20) } else { Text(CareText.cancel) }
+                if #available(iOS 26, *) { IconImage(.x, size: 20).foregroundStyle(DS.textPrimary) } else { Text(CareText.cancel) }   // 시안 .gbtn: 먹색 X
             }
             .accessibilityLabel(CareText.cancel)
         }
@@ -105,6 +105,71 @@ private struct SheetRow<Value: View>: View {
         }
         .frame(minHeight: 50)
         .modifier(RowLine())
+    }
+}
+
+/// 값 칩 줄: 한 줄에 안 들어가면(큰 글자) 오른쪽 정렬로 쌓는다.
+private struct ChipLine<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { content() }
+            VStack(alignment: .trailing, spacing: 0) { content() }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// 값 칩(시안 .sheet .row em): 고르면 브랜드 10% 바탕 + onAccentSoft 글자(행 판 위에서 accentInk는 4.08:1이라 5.7:1인 onAccentSoft,
+/// 안드로이드와 같음), 안 고르면 먹색 8% + textSecondary. 15.5·600, 모서리 10, 높이 36 이상.
+private struct ValueChip: View {
+    let text: String
+    var selected = true
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(text).font(DS.font(15.5, 600)).monospacedDigit()
+                .foregroundStyle(selected ? DS.onAccentSoft : DS.textSecondary)
+                .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 36)
+                .background(selected ? DS.accent.opacity(0.1) : DS.textPrimary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .padding(.vertical, 4).contentShape(Rectangle())   // 보이는 칩은 36, 누르는 자리는 44(8장)
+        }
+        .buttonStyle(.press)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// 날짜·시각 칩: 누르면 그 칩에 붙은 작은 창에 시스템 고르기가 열린다(날짜는 달력, 시각은 바퀴). 지금 뒤는 고를 수 없다.
+private struct PickerChip: View {
+    let text: String
+    var selected = true
+    let a11y: String
+    @Binding var date: Date
+    let components: DatePickerComponents
+    let zone: TimeZone
+    /// 지금 뒤를 막는다(시작·시각). 끝 시각은 날을 맞추기 전 값이라 막지 않는다.
+    var limitToNow = true
+    var beforeOpen: () -> Void = {}
+    @State private var open = false
+
+    var body: some View {
+        ValueChip(text: text, selected: selected) { beforeOpen(); open = true }
+            .accessibilityLabel(a11y)
+            .accessibilityValue(text)
+            .popover(isPresented: $open) {
+                let limit = limitToNow ? Date().addingTimeInterval(60) : Date.distantFuture
+                Group {
+                    if components == .date {
+                        DatePicker(a11y, selection: $date, in: ...limit, displayedComponents: components).datePickerStyle(.graphical)
+                    } else {
+                        DatePicker(a11y, selection: $date, in: ...limit, displayedComponents: components).datePickerStyle(.wheel)
+                    }
+                }
+                .labelsHidden()
+                .environment(\.timeZone, zone)
+                .padding(12)
+                .presentationCompactAdaptation(.popover)
+            }
     }
 }
 
@@ -297,6 +362,30 @@ struct CareEditSheet: View {
     /// 끝 칸이 자리 값이다: 새 기록이거나 끝 모름 기록을 고칠 때. 이때만 끝을 시작 뒤로 맞춘다(R3). 저장된 끝은 그대로 둔다
     private var endIsPlaceholder: Bool { original?.endAt == nil }
 
+    /// 시작 날짜 칩: 날을 옮기면 끝도 같은 만큼 옮겨 길이를 지킨다(안드로이드와 같음).
+    private var startDay: Binding<Date> {
+        Binding(get: { start }, set: { moved in
+            end = end.addingTimeInterval(moved.timeIntervalSince(start))   // 끝 모름이어도 옮겨 둔다(다시 시각을 고를 때 옛 날이 남지 않게)
+            start = moved
+        })
+    }
+
+    /// 끝 시각 칩: 고른 시·분을 시작 뒤 처음 오는 그 시각으로 둔다(시작보다 이르면 다음 날).
+    /// 바퀴는 지금 뒤를 막지 않는다: 날을 맞추기 전 값이라 어제 밤 시각이 막힌다. 지금보다 늦은 끝은 저장 검사(R3)가 잡는다.
+    private var endAfterStart: Binding<Date> {
+        Binding(get: { end }, set: { end = afterStart($0) })
+    }
+
+    /// `picked`의 시·분이 시작 뒤 처음 오는 때. 시작과 같은 분이면 시작 그대로(초 때문에 다음 날로 넘기지 않는다), 이른 시각이면 다음 날.
+    private func afterStart(_ picked: Date) -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
+        let hm = cal.dateComponents([.hour, .minute], from: picked)
+        guard let same = cal.date(bySettingHour: hm.hour ?? 0, minute: hm.minute ?? 0, second: 0, of: start),
+              let startMinute = cal.dateInterval(of: .minute, for: start)?.start else { return picked }
+        return same < startMinute ? (cal.date(byAdding: .day, value: 1, to: same) ?? same) : max(same, start)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -304,22 +393,27 @@ struct CareEditSheet: View {
                     if original == nil && day == nil { chips }   // 몇 분 전 칩은 오늘 기준이다
                     SheetRows {
                         if original != nil || chip == nil {
-                            SheetRow(name: hasDuration ? CareText.rowStart : CareText.rowTime) {
-                                DatePicker(hasDuration ? CareText.rowStart : CareText.rowTime, selection: $start, in: ...Date().addingTimeInterval(60))
-                                    .labelsHidden().environment(\.timeZone, zone)
-                                    .onChange(of: start) { _, s in if endIsPlaceholder { end = max(end, s) } }
+                            // 시작(수유·잠) 또는 시각: 날짜 칩은 날을, 시각 칩은 시각을 고른다(시안 .sheet .row em, 안드로이드와 같음)
+                            let name = hasDuration ? CareText.rowStart : CareText.rowTime
+                            SheetRow(name: name) {
+                                ChipLine {
+                                    PickerChip(text: CareText.dayTitle(CareRules.dayKey(CareTime.ms(start), zone), now: Date(), zone: zone),
+                                               a11y: name + " 날짜", date: startDay, components: .date, zone: zone)
+                                    PickerChip(text: CareFormat.clock(start, zone), a11y: name + " 시각", date: $start, components: .hourAndMinute, zone: zone)
+                                }
                             }
+                            .onChange(of: start) { _, s in if endIsPlaceholder { end = max(end, s) } }
                         }
                         if hasDuration {
-                            Toggle(isOn: $endUnknown) { Text(CareText.endUnknown).font(DS.font(15.5, 500)) }
-                                .tint(DS.accent)
-                                .frame(minHeight: 50)
-                                .modifier(RowLine())
-                                .onChange(of: endUnknown) { _, unknown in if !unknown, endIsPlaceholder { end = max(end, start) } }
-                            if !endUnknown {
-                                SheetRow(name: CareText.rowEnd) {
-                                    DatePicker(CareText.rowEnd, selection: $end, in: ...Date().addingTimeInterval(60))
-                                        .labelsHidden().environment(\.timeZone, zone)
+                            // 끝: '끝 시각 모름' 칩과 시각 칩. 시각만 고르고 날은 시작 뒤 처음 오는 그 시각이다(자정을 넘긴 잠, 안드로이드 firstAtOrAfter)
+                            SheetRow(name: CareText.rowEnd) {
+                                ChipLine {
+                                    ValueChip(text: CareText.endUnknown, selected: endUnknown) { endUnknown = true }
+                                    PickerChip(text: endUnknown ? CareText.chipCustom : CareFormat.clock(end, zone), selected: !endUnknown,
+                                               a11y: CareText.rowEnd + " 시각", date: endAfterStart, components: .hourAndMinute, zone: zone, limitToNow: false) {
+                                        // 끝 모름에서 돌아오면 보이는 시각을 시작 뒤로 맞춘다(시작을 그사이 옮겼어도)
+                                        if endUnknown { endUnknown = false; end = endIsPlaceholder ? max(end, start) : afterStart(end) }
+                                    }
                                 }
                             }
                         }
@@ -346,7 +440,7 @@ struct CareEditSheet: View {
                 }
                 .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 24)
             }
-            .screenBackground()
+            .scrollContentBackground(.hidden).background(DS.surface)   // 시안 .sheet: 흰 면 위에 행 판(먹색 4%)
             .navigationTitle(CareText.sheetTitle(kind, editing: original != nil))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

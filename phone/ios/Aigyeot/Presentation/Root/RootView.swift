@@ -29,38 +29,36 @@ struct IntroView: View {
     @Environment(AppViewModel.self) private var vm
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {   // 큰 글자에서도 버튼이 화면 밖으로 밀리지 않게 글만 굴린다
-                VStack(alignment: .leading, spacing: 0) {
-                    ZStack(alignment: .topLeading) {
-                        RadialGradient(colors: [DesignSystem.stageGlow, DesignSystem.bg], center: UnitPoint(x: 0.5, y: 0.7), startRadius: 0, endRadius: 260)
-                        CarStageCard(preset: .phone).padding(.top, 40)
-                        AppMark(size: 52).padding(.leading, 20).padding(.top, 22)
-                    }
-                    .frame(height: 250)
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(CareText.introTitle).typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
-                            Text(CareText.introLead).font(DesignSystem.font(16, 500)).foregroundStyle(DesignSystem.textSecondary)
-                        }
-                        VStack(alignment: .leading, spacing: 10) {
-                            row(.link, CareText.introSends)
-                            row(.x, CareText.introNotSent, tone: DesignSystem.child)
-                            row(.server, CareText.introRelay)
-                            row(.sparkles, CareText.introAI)
-                        }
-                    }
-                    .padding(.horizontal, 20).padding(.top, 8)
+        // 시안 .intro: 무대(250, 화면 맨 위부터 상태 막대 뒤까지) → 제목·첫 줄 → 목록 → 버튼 둘이 한 흐름(사이 12, 옆 12). 큰 글자면 통째로 굴린다.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .topLeading) {
+                    RadialGradient(colors: [DesignSystem.stageGlow, DesignSystem.bg], center: UnitPoint(x: 0.5, y: 0.7), startRadius: 0, endRadius: 260)
+                    CarStageCard(preset: .phone, hint: false).padding(.top, 40)
+                    AppMark(size: 52).padding(.leading, 20).padding(.top, 62)
                 }
+                .frame(height: 250)
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(CareText.introTitle).typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
+                        Text(CareText.introLead).font(DesignSystem.font(16, 500)).foregroundStyle(DesignSystem.textSecondary)
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        row(.link, CareText.introSends)
+                        row(.x, CareText.introNotSent, tone: DesignSystem.child)
+                        row(.server, CareText.introRelay)
+                        row(.sparkles, CareText.introAI)
+                    }
+                    Button { vm.connectFromIntro() } label: { Label { Text(CareText.connectCar) } icon: { IconImage(.qrCode, size: 20) } }   // 안내에서 받은 링크가 있으면 그 확인 화면(U62)
+                        .buttonStyle(.pillBig)
+                    Button { vm.recordsOnlyFromIntro() } label: { Text(CareText.recordOnly) }
+                        .buttonStyle(.pillTonal)
+                }
+                .padding(.horizontal, 12).padding(.bottom, 24)
             }
-            VStack(spacing: 12) {
-                Button { vm.connectFromIntro() } label: { Label { Text(CareText.connectCar) } icon: { IconImage(.qrCode, size: 20) } }   // 안내에서 받은 링크가 있으면 그 확인 화면(U62)
-                    .buttonStyle(.pillBig)
-                Button { vm.recordsOnlyFromIntro() } label: { Text(CareText.recordOnly) }
-                    .buttonStyle(.pillTonal)
-            }
-            .padding(.horizontal, 20).padding(.vertical, 16)
         }
+        .ignoresSafeArea(edges: .top)
+        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(DesignSystem.bg)
     }
 
@@ -70,7 +68,7 @@ struct IntroView: View {
             IconImage(icon, size: 18).foregroundStyle(tone)
                 .frame(width: 34, height: 34)
                 .background(DesignSystem.tonal, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            Text(text).font(DesignSystem.font(13.5, 500)).lineSpacing(6).foregroundStyle(DesignSystem.textSecondary)
+            Text(text).font(DesignSystem.font(13.5, 500)).lineSpacing(4).foregroundStyle(DesignSystem.textSecondary)   // 줄 높이 20
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)

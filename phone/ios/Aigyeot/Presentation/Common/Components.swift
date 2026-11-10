@@ -148,7 +148,7 @@ struct SettingRow<Tail: View>: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            IconImage(icon, size: 19).foregroundStyle(tone == DS.textPrimary ? DS.textTertiary : tone).frame(width: 32)
+            IconImage(icon, size: 19).foregroundStyle(DS.textTertiary).frame(width: 32)   // 시안 .grp .li: 아이콘은 늘 흐린 색, 뜻 색은 글자에만
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(DS.font(16, 600)).foregroundStyle(tone)
                 if let sub { Text(sub).font(DS.font(14, 400)).foregroundStyle(DS.textTertiary) }

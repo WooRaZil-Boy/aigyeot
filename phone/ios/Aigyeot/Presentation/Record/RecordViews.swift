@@ -325,7 +325,7 @@ private struct PatternView: View {
             .enterRise(1)
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternInterval)
-                let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).bold().foregroundColor(DS.textPrimary) },
+                let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).font(DS.font(14, 700)).foregroundColor(DS.textPrimary) },
                            iw.usualMs.map { Text("평소 " + CareFormat.length($0)) }].compactMap { $0 }
                 if !sub.isEmpty { BlockSub(text: sub.dropFirst().reduce(sub[0]) { $0 + Text(" · ") + $1 }) }
                 WeekBarsChart(items: iw.bars.enumerated().map { i, b in
@@ -341,7 +341,7 @@ private struct PatternView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     BlockHeader(title: CareText.sleepPattern)
                     if let avg = g.avgMs {
-                        BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).bold().foregroundColor(DS.textPrimary) + Text(" · " + CareText.basedOn(days: g.sleepDays)))
+                        BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).font(DS.font(14, 700)).foregroundColor(DS.textPrimary) + Text(" · " + CareText.basedOn(days: g.sleepDays)))
                     }
                     SleepHeatChart(grid: g)
                 }
@@ -350,7 +350,7 @@ private struct PatternView: View {
             }
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternCarCries)
-                BlockSub(text: [Text("7일 동안 ") + Text("\(cw.total)번").bold().foregroundColor(DS.textPrimary),
+                BlockSub(text: [Text("7일 동안 ") + Text("\(cw.total)번").font(DS.font(14, 700)).foregroundColor(DS.textPrimary),
                                 cw.avgLatencyS.map { Text("평균 감지 " + ChartData.seconds($0)) }].compactMap { $0 }
                     .reduce(Text("")) { $0 == Text("") ? $1 : $0 + Text(" · ") + $1 })
                 WeekBarsChart(items: cw.bars.enumerated().map { i, b in

@@ -34,6 +34,8 @@ struct CarPreset: Equatable {
 /// 차 카드의 무대: 정지 그림(대기) ↔ 실시간 3D(손가락 회전·카메라 이동 중). 처음에는 '끌어서 돌려 보기' 대신 작은 회전 표시만(시안 .live3d::after).
 struct CarStageCard: View {
     var preset: CarPreset = .tile
+    /// 작은 회전 표시(시안 .car-tile .live3d::after). 첫 안내 무대(.ih3d)에는 없다.
+    var hint = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var moved = false
@@ -41,7 +43,7 @@ struct CarStageCard: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             CarStageRepresentable(preset: preset, dark: scheme == .dark, reduceMotion: reduceMotion) { moved = $0 }
-            if !moved {   // 돌린 뒤에는 무대 안의 '처음 자리로' 단추가 이 자리를 쓴다
+            if hint && !moved {   // 돌린 뒤에는 무대 안의 '처음 자리로' 단추가 이 자리를 쓴다
                 IconImage(.rotate3d, size: 16).foregroundStyle(DS.textTertiary)
                     .frame(width: 26, height: 26)
                     .background(DS.surface.opacity(0.8), in: Circle())
