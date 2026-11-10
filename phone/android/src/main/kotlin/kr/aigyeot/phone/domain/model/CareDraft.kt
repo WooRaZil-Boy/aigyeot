@@ -109,7 +109,7 @@ fun CareDraft.pick(chip: Int?, now: Long) =
 /** 시작 시각 칩. 고치기·다른 날·날짜를 고른 시트는 지금 보이는 날 그대로, 오늘 새 기록이면 지금 이전에서 가장 늦은 그 시각. */
 fun CareDraft.setStart(hour: Int, minute: Int, now: Long): CareDraft {
     val at = if (original != null || day != null || datePicked) onDate(Instant.ofEpochMilli(start).atZone(zone).toLocalDate(), hour, minute, zone)
-    else latestAtOrBefore(hour, minute, now + MINUTE, zone)
+    else latestAtOrBefore(hour, minute, latestPick(now), zone)
     return copy(start = at, chip = null)
 }
 

@@ -25,6 +25,10 @@ val CareJson = Json {
 const val FEED_MAX_MS = 3 * HOUR // 설계값(6장 R3)
 const val SLEEP_MAX_MS = 16 * HOUR // 설계값(6장 R3)
 const val FUTURE_SLACK_MS = MINUTE
+
+/** 고를 수 있는 가장 늦은 시각(iOS `CareRules.latestPick`): 지금 + 1분 여유(R3와 같은 값). */
+fun latestPick(now: Long) = now + FUTURE_SLACK_MS
+
 const val KEEP_DELETED_MS = 30 * DAY
 const val SEND_WINDOW_MS = DAY // R5 (b)
 const val NOTE_MAX = 200

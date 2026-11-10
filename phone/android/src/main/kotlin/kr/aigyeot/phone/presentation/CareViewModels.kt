@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareCsv
 import kr.aigyeot.phone.domain.model.CareDraft
+import kr.aigyeot.phone.domain.model.latestPick
 import kr.aigyeot.phone.domain.model.toggleSide
 import kr.aigyeot.phone.domain.model.setStart
 import kr.aigyeot.phone.domain.model.setNote
@@ -38,7 +39,6 @@ import kr.aigyeot.phone.domain.model.IMPORT_TOO_LARGE
 import kr.aigyeot.phone.domain.model.IMPORT_UNREADABLE
 import kr.aigyeot.phone.domain.model.ImportDraft
 import kr.aigyeot.phone.domain.model.ImportFormat
-import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SAVE_FAILED
 import kr.aigyeot.phone.domain.model.check
@@ -158,7 +158,7 @@ class TimerViewModel(
         val e = ui.value.event ?: return
         if (_phase.value == CareSheetViewModel.Phase.Saving) return
         val next = when (field) {
-            TimeField.START -> e.withStartPicked(hour, minute, clock.now() + MINUTE)
+            TimeField.START -> e.withStartPicked(hour, minute, latestPick(clock.now()))
             TimeField.END -> e.withEndPicked(hour, minute)
         }
         when (val c = care.care.value.check(next, clock.now())) {
