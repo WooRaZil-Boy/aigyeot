@@ -51,6 +51,9 @@ hvac_power() { curl -s -m3 "$VC_URL/vehicle/hvac" | python3 -c 'import sys,json;
 # 기준값: 기어 P, 정지, 뒷문 닫힘, 공조 전원 켬, 운전석 22도.
 set_baseline() {
   vc PUT "/vehicle/gear?gear=Park"
+  # 브레이크를 한 번 밟았다 뗀다: 장면 E 끝(brake=100) 뒤 brake=0만 보내면 앱이 받는 BRAKE_PEDAL_STATUS가 true로 남는 일이 있었다(그러면 운전이 바쁘다고 보고 S06·S07을 미룬다)
+  vc PUT "/vehicle/controls?speed=0&accelerator=0&brake=30&steering=0"
+  sleep 1
   vc PUT "/vehicle/controls?speed=0&accelerator=0&brake=0&steering=0"
   vc PUT "/vehicle/body?door_rl=0&door_rr=0"
   vc PUT "/vehicle/hvac?power=1&driver_temp=22.0"
