@@ -71,7 +71,7 @@ final class AppContainer {
                                                                     connection: keepConnected)
     private(set) lazy var status: StatusViewModel = StatusViewModel(state: state, connection: keepConnected, notices: notices,
                                                                     outbox: sendOutbox)
-    private(set) lazy var careTabs: CareTabsViewModel = CareTabsViewModel(state: state, care: care, notices: notices, recordCare: recordCare,
+    private(set) lazy var careTabs: CareTabsViewModel = CareTabsViewModel(state: state, notices: notices, recordCare: recordCare,
                                                                           disconnect: disconnect)
     /// 정보·라이선스의 판 글자(앱 묶음에서 읽는다).
     private let version: String
@@ -150,7 +150,7 @@ extension AppContainer: ViewModelFactory {
         ConnectViewModel(state: state, pair: pair) { [weak self] r in self?.appViewModel.pairFinished(r) }
     }
     func today() -> TodayViewModel {
-        TodayViewModel(state: state, care: care, notices: notices, connection: keepConnected, recordCare: recordCare)
+        TodayViewModel(state: state, care: care, connection: keepConnected, recordCare: recordCare)
     }
     func timer(id: String) -> TimerViewModel { TimerViewModel(id: id, state: state, care: care, recordCare: recordCare) }
     func careSheet(_ target: CareSheetTarget) -> CareSheetViewModel {

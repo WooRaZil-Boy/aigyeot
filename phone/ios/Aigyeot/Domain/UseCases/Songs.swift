@@ -96,7 +96,7 @@ final class SelectSong {
     func callAsFunction(_ id: String) {
         guard let row = state.state.songs.first(where: { $0.id == id }), row.state == .accepted else { return }
         let item = OutboxRules.item(type: MessageType.songSelected, body: SongRefBody(songId: id), now: now())
-        if state.commit(state.creds, { SongRules.select(id, item: item, in: &$0) }) { outbox.kick() }
+        if state.commit(state.creds, { SongRules.select(item, in: &$0) }) { outbox.kick() }
     }
 }
 

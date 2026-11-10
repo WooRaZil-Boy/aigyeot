@@ -1530,7 +1530,7 @@ final class CareTests: XCTestCase {
         XCTAssertNil(p.diapersPerDay)   // 기록한 날이 없다
         XCTAssertEqual(CareText.noRecords, "기록 없음")
         XCTAssertEqual(CareText.basedOn(days: p.diaperDays), "0일 기준")
-        XCTAssertEqual(CareText.median(p.feedIntervalMedianMs!), "중앙값 2시간 50분")
+        XCTAssertEqual(p.feedIntervalMedianMs.map(CareFormat.length), "2시간 50분")
         XCTAssertEqual(CareText.times(p.carCries), "2번")
         // U27: 길이·평균은 "방금"을 쓰지 않는다.
         XCTAssertEqual(CareFormat.length(0), "0분")

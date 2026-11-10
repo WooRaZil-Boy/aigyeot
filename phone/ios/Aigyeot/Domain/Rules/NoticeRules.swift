@@ -25,13 +25,6 @@ enum NoticeRules {
         return n.components(separatedBy: "\n").contains(line) ? n : n + "\n" + line
     }
 
-    /// '앞 기록을 끝냈어요' 안내. 앞의 같은 종류 안내는 바꾸고, 버림·저장 실패 안내는 남긴다(U54, 안드로이드는 돌봄 안내를 따로 둔다).
-    static func replacingCareNotice(_ line: String, in notice: String?) -> String {
-        let care: Set = [CareText.previousFeedEnded, CareText.previousFeedEndedUnknown, CareText.previousSleepEnded, CareText.previousSleepEndedUnknown]
-        let kept = (notice ?? "").components(separatedBy: "\n").filter { !$0.isEmpty && !care.contains($0) }
-        return adding(line, to: kept.isEmpty ? nil : kept.joined(separator: "\n"))
-    }
-
     /// 같은 종류가 진행 중이라 앞 기록을 빠른 길로 닫았을 때의 안내(U14·U21). 수유·잠만 있다.
     static func previousEnded(_ kind: CareKind, unknown: Bool) -> String? {
         switch kind {

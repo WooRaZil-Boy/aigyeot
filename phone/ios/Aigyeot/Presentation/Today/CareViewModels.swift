@@ -21,14 +21,12 @@ func careTabsUi(_ c: Connection, _ run: DisconnectRun?) -> CareTabsUiState {
 @Observable
 final class CareTabsViewModel {
     @ObservationIgnored private let stateRepo: PhoneStateRepository
-    @ObservationIgnored private let careRepo: CareRepository
     @ObservationIgnored private let notices: Notices
     @ObservationIgnored private let recordCare: RecordCare
     @ObservationIgnored private let disconnect: Disconnect
 
-    init(state: PhoneStateRepository, care: CareRepository, notices: Notices, recordCare: RecordCare, disconnect: Disconnect) {
+    init(state: PhoneStateRepository, notices: Notices, recordCare: RecordCare, disconnect: Disconnect) {
         stateRepo = state
-        careRepo = care
         self.notices = notices
         self.recordCare = recordCare
         self.disconnect = disconnect
@@ -51,7 +49,6 @@ struct CareUiState {
     var phone: PhoneState
     var connection: Connection
     var online: Bool
-    var careNotice: String?
 
     var role: PhoneRole? { connection.creds?.role }
     var isPaired: Bool { connection.creds != nil }
@@ -77,21 +74,18 @@ struct CareUiState {
 final class TodayViewModel {
     @ObservationIgnored private let stateRepo: PhoneStateRepository
     @ObservationIgnored private let careRepo: CareRepository
-    @ObservationIgnored private let notices: Notices
     @ObservationIgnored private let connection: KeepConnected
     @ObservationIgnored private let recordCare: RecordCare
 
-    init(state: PhoneStateRepository, care: CareRepository, notices: Notices, connection: KeepConnected, recordCare: RecordCare) {
+    init(state: PhoneStateRepository, care: CareRepository, connection: KeepConnected, recordCare: RecordCare) {
         stateRepo = state
         careRepo = care
-        self.notices = notices
         self.connection = connection
         self.recordCare = recordCare
     }
 
     var ui: CareUiState {
-        CareUiState(care: careRepo.care, phone: stateRepo.state, connection: stateRepo.connection, online: connection.status.online,
-                    careNotice: notices.careNotice)
+        CareUiState(care: careRepo.care, phone: stateRepo.state, connection: stateRepo.connection, online: connection.status.online)
     }
 
     /// 빠른 버튼·카드의 수유·잠 시작.
@@ -105,14 +99,11 @@ final class TodayViewModel {
 /// 타이머(C2). 끝났거나 지운 기록이면 `event`가 없고 화면이 닫힌다.
 struct TimerUiState {
     var event: CareEvent?
-    var care: CareFile
-    var connected: Bool
     var guardian: Bool
 }
 
 func timerUi(id: String, care: CareFile, connection: Connection) -> TimerUiState {
-    TimerUiState(event: care.events.first { $0.id == id }, care: care, connected: connection.creds != nil,
-                 guardian: connection.creds?.role == .guardian)
+    TimerUiState(event: care.events.first { $0.id == id }, guardian: connection.creds?.role == .guardian)
 }
 
 @MainActor

@@ -136,7 +136,6 @@ struct PhoneState: Codable, Equatable {
     var reports: [StoredReport] = []
     var alerts: [StoredAlert] = []
     var songs: [SongRow] = []
-    var selectedSongId: String?
     var feeding = FeedingState()
     var feedingLog: [FeedingRecord] = []
     /// `GET /v1/devices` 마지막 결과(오프라인에서 보이는 값).
@@ -241,7 +240,7 @@ extension OutboxItem: Codable {
 
 extension PhoneState {
     enum CodingKeys: String, CodingKey {
-        case introSeen, carId, processed, shown, outbox, reports, alerts, songs, selectedSongId, feeding, feedingLog
+        case introSeen, carId, processed, shown, outbox, reports, alerts, songs, feeding, feedingLog
         case devices, deviceMarks, devicesSnapshotSeq, handoffAlerts, lastReceivedAt, needsStateRequest, lastStateRequestAt
         case lastSentFeedingAt, lastSentCareSummary, lastSentCareAsOf, maxSentCareAsOf, clearingCareIds, unseenDrops
     }
@@ -255,7 +254,6 @@ extension PhoneState {
         reports = try c.decodeIfPresent([StoredReport].self, forKey: .reports) ?? []
         alerts = try c.decodeIfPresent([StoredAlert].self, forKey: .alerts) ?? []
         songs = try c.decodeIfPresent([SongRow].self, forKey: .songs) ?? []
-        selectedSongId = try c.decodeIfPresent(String.self, forKey: .selectedSongId)
         feeding = try c.decodeIfPresent(FeedingState.self, forKey: .feeding) ?? FeedingState()
         feedingLog = try c.decodeIfPresent([FeedingRecord].self, forKey: .feedingLog) ?? []
         devices = try c.decodeIfPresent([DeviceInfo].self, forKey: .devices) ?? []

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 우리 노래 규칙(9장, 7.4·L48). `songs`·`selectedSongId`는 이 파일과 받기(InboxRules)·보낼 함 규칙(OutboxRules)으로만 고친다(P3).
+/// 우리 노래 규칙(9장, 7.4·L48). `songs`는 이 파일과 받기(InboxRules)·보낼 함 규칙(OutboxRules)으로만 고친다(P3).
 enum SongRules {
     static let maxSongs = 3
     static let maxDurationS: Double = 180
@@ -34,9 +34,8 @@ enum SongRules {
         s.outbox.append(upload)
     }
 
-    /// 실험에 쓸 곡(받아들인 곡만).
-    static func select(_ id: String, item: OutboxItem, in s: inout PhoneState) {
-        s.selectedSongId = id
+    /// 실험에 쓸 곡 고르기는 차로 보내는 요청만 남긴다(보이는 표시는 차가 알려 주는 `SongRow.candidate`).
+    static func select(_ item: OutboxItem, in s: inout PhoneState) {
         s.outbox.append(item)
     }
 }

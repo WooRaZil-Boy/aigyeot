@@ -263,19 +263,6 @@ func methodDotRows(_ stats: [MethodStat]) -> [MethodDots.Row] {
     CareStats.methodOrder(stats).map { MethodDots.Row(id: $0.index, name: soundLabel($0.stat.method, $0.stat.label), ok: $0.stat.successes, n: $0.stat.attempts) }
 }
 
-/// 방법별 성적 행. 모르는 소리가 둘이어도 두 행(method를 행 id로 쓰지 않는다).
-struct MethodStatRow: Identifiable {
-    let id: Int
-    let title: String
-    let value: String
-}
-
-func methodStatRows(_ stats: [MethodStat]) -> [MethodStatRow] {
-    stats.enumerated().map { i, s in
-        MethodStatRow(id: i, title: soundLabel(s.method, s.label), value: s.attempts < 3 ? "아직 모름" : "\(s.attempts)번 중 \(s.successes)번 그침")
-    }
-}
-
 /// 차가 보낸 label을 보이되, 모르는 method(U46)는 label 대신 "기타".
 func soundLabel(_ method: SoundMethod, _ label: String) -> String {
     method == .unknown ? methodName(method, nil) : label

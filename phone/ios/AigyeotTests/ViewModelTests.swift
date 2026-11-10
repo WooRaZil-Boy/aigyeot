@@ -196,17 +196,15 @@ final class ViewModelTests: XCTestCase {
         XCTAssertEqual(careTabsUi(.gone(deviceId: "d_1"), .failed("x")), CareTabsUiState(guardian: false, disconnectDone: false))
     }
 
-    func test_타이머는_그_기록과_연결_여부를_본다() {
+    func test_타이머는_그_기록과_guardian_여부를_본다() {
         let e = CareRules.newEvent(.feed, at: 1_800_000_000_000)
         var care = CareFile()
         care.events = [e]
         let paired = timerUi(id: e.id, care: care, connection: .paired(guardian))
         XCTAssertEqual(paired.event?.id, e.id)
-        XCTAssertTrue(paired.connected)
         XCTAssertTrue(paired.guardian)
         let gone = timerUi(id: "other", care: care, connection: .none)
         XCTAssertNil(gone.event)   // 끝났거나 지운 기록: 화면이 닫힌다
-        XCTAssertFalse(gone.connected)
         XCTAssertFalse(gone.guardian)
     }
 

@@ -141,10 +141,9 @@ final class Pair {
         // 끝나는 때 화면이 다시 그려지게 값을 비운다. 그 사이 새 429가 와서 시각이 바뀌었으면 건드리지 않는다.
         // 허용 오차를 0으로 준다. 기본값으로는 기다린 시간의 약 6.5%만큼 늦게 깨어 589초 잠금이 39초 늦게 풀렸다(시뮬레이터 실측).
         // 시험의 settle()이 잠금 시간만큼 기다리지 않게 작업 묶음에 넣지 않는다(잠금 시각만 비우는 타이머다)
-        unlockTask = Task { [weak self] in
+        Task { [weak self] in
             try? await Task.sleep(for: .seconds(secs), tolerance: .zero, clock: .continuous)
             if self?.lockedUntil == until { self?.lockedUntil = nil }
         }
     }
-    @ObservationIgnored private var unlockTask: Task<Void, Never>?
 }

@@ -5,9 +5,7 @@ import Observation
 struct RecordsUiState {
     var care: CareFile
     var phone: PhoneState
-    var connection: Connection
 
-    var guardian: Bool { connection.creds?.role == .guardian }
     var reports: [StoredReport] { phone.reports }
     func report(sessionId: String) -> StoredReport? { phone.reports.first { $0.body.sessionId == sessionId } }
 
@@ -44,7 +42,7 @@ final class RecordsViewModel {
         self.recordCare = recordCare
     }
 
-    var ui: RecordsUiState { RecordsUiState(care: careRepo.care, phone: stateRepo.state, connection: stateRepo.connection) }
+    var ui: RecordsUiState { RecordsUiState(care: careRepo.care, phone: stateRepo.state) }
 
     /// 밀어 지우기(5초 되돌리기).
     func delete(_ id: String) { recordCare.delete(id) }

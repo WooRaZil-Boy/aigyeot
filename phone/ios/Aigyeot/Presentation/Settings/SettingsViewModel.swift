@@ -16,8 +16,6 @@ struct SettingsUiState {
     var phones: Int = 0
 
     var connected: Bool { connection.creds != nil }
-    var role: PhoneRole? { connection.creds?.role }
-    var carId: String? { connection.creds?.carId }
     var offline: Bool { !online }
 }
 

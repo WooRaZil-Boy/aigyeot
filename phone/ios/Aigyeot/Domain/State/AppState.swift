@@ -29,7 +29,6 @@ final class Notices {
     /// 새 연결을 마쳤다: 화면 띠·배너·되돌리기를 처음으로.
     func clearForPair() { notice = nil; careNotice = nil; banner = nil; undo = nil }
     func showCare(_ line: String) { careNotice = line }
-    func clearCare() { careNotice = nil }
     func showBanner(_ alertId: String) { banner = alertId }
     /// `alertId`를 주면 그 배너가 아직 떠 있을 때만 걷는다(그사이 새 배너가 떴으면 둔다, 8초 닫힘).
     func clearBanner(_ alertId: String? = nil) { if alertId == nil || banner == alertId { banner = nil } }

@@ -58,7 +58,6 @@ enum DesignSystem {
     /// 아이의 신호(주황): 울음·경보·인계 알림.
     static let child = token("child")
     static let childSoft = token("childSoft")
-    static let childGlow = token("childGlow")
     static let warning = token("warning")
     static let danger = token("danger")
     static let active = token("active")
@@ -102,8 +101,6 @@ enum DesignSystem {
     ]
 
     static var hero: Font { font(.hero) }
-    static var display: Font { font(.display) }
-    static var title: Font { font(.title) }
     static var headline: Font { font(.headline) }
     static var body: Font { font(.body) }
     static var caption: Font { font(.caption) }
@@ -274,7 +271,4 @@ extension View {
 
     /// 화면 바탕을 `bg`로 깐다(목록·폼의 시스템 바탕을 걷는다).
     func screenBackground() -> some View { scrollContentBackground(.hidden).background(DesignSystem.bg) }
-
-    /// 주요 버튼: accent 바탕에 onAccent 글자.
-    func accentButton() -> some View { buttonStyle(.borderedProminent).tint(DesignSystem.accent).foregroundStyle(DesignSystem.onAccent) }
 }

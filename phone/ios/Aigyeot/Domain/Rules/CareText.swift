@@ -230,7 +230,6 @@ enum CareText {
         let n = NSDecimalNumber(decimal: r).doubleValue
         return String(format: "%.1f", n)
     }
-    static func median(_ ms: Int64) -> String { "중앙값 " + CareFormat.length(ms) }
     static func avgDuration(_ ms: Int64) -> String { "평균 " + CareFormat.length(ms) }
     static func times(_ n: Int) -> String { "\(n)번" }
     static let noRecords = "기록 없음"                                                   // pattern.value(U27)

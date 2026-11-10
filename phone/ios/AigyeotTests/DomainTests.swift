@@ -5,12 +5,10 @@ import XCTest
 final class DomainRulesTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
-    func test_띠_글은_같은_글을_한_번만_더하고_돌봄_안내는_바꾼다() {
+    func test_띠_글은_같은_글을_한_번만_더한다() {
         XCTAssertEqual(NoticeRules.adding("가", to: nil), "가")
         XCTAssertEqual(NoticeRules.adding("가", to: "가"), "가")
         XCTAssertEqual(NoticeRules.adding("나", to: "가"), "가\n나")
-        let n = NoticeRules.replacingCareNotice(CareText.previousFeedEndedUnknown, in: "버림\n" + CareText.previousFeedEnded)
-        XCTAssertEqual(n, "버림\n" + CareText.previousFeedEndedUnknown)   // 앞 돌봄 안내만 바뀌고 버림 안내는 남는다(U54)
         XCTAssertNil(NoticeRules.previousEnded(.note, unknown: false))
         XCTAssertNil(NoticeRules.clockWarning(skew: 120))
         XCTAssertNotNil(NoticeRules.clockWarning(skew: -121))

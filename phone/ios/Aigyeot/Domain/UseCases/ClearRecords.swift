@@ -30,7 +30,7 @@ final class ClearRecords {
         let sending = outbox.sendingId
         let ids = care.care.events.map(\.id)
         let ok = state.commitLocal { st in
-            st.reports = []; st.alerts = []; st.songs = []; st.selectedSongId = nil
+            st.reports = []; st.alerts = []; st.songs = []
             st.feeding = FeedingState(); st.feedingLog = []; st.shown = [:]
             OutboxRules.clearForRecordsWipe(sending: sending, in: &st)   // 다 지운 뒤 빈 요약을 새로 넣는다
             st.lastSentCareSummary = nil

@@ -50,7 +50,6 @@ enum OutboxRules {
     /// (지운 곡의 PUT 기다림이 뒤 메시지를 막지 않게, 안드로이드 `removeSong`과 같다) 지움 메시지를 넣는다.
     static func markSongRemoved(_ id: String, removal: OutboxItem, now: Date, in s: inout PhoneState) {
         if let i = s.songs.firstIndex(where: { $0.id == id }) { s.songs[i].state = .removed; s.songs[i].candidate = false; s.songs[i].removedAt = now }
-        if s.selectedSongId == id { s.selectedSongId = nil }
         s.outbox.removeAll { $0.songId == id }
         s.outbox.append(removal)
     }

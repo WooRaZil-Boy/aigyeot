@@ -15,7 +15,6 @@ final class RecorderViewModel {
     enum Phase { case idle, recording, recorded }
 
     /// 화면에 보이는 최대 길이(3:00).
-    static let maxDuration: TimeInterval = 180
 
     private(set) var state: State = .idle
     private(set) var levels: [Float] = []

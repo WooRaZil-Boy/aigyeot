@@ -53,7 +53,6 @@ final class AppViewModel {
     /// 열려는 인계 알림 id(S19). 본문이 저장돼 있으면 상세가 열리고, 없으면 받을 때까지 기다린다(열지는 `ui`가 계산한다).
     /// 수명은 `forget`(L10): 연결이 바뀌거나 기록을 지우면 버리고, 본문을 못 받은 채 뒤로 가면 버린다.
     private var openAlertRequest: String?
-    @ObservationIgnored private var busyTask: Task<Void, Never>?
 
     init(state: PhoneStateRepository, pair: Pair, notices: Notices, lose: LoseConnection, connection: KeepConnected) {
         stateRepo = state
@@ -115,7 +114,7 @@ final class AppViewModel {
     /// `pair.busy`를 짧게 보인다. 그사이 다른 문구로 바뀌었으면 건드리지 않는다.
     private func showBusy() {
         linkError = CareText.pairBusy
-        busyTask = Task { [weak self] in
+        Task { [weak self] in
             try? await Task.sleep(for: .seconds(RetryPolicy.pairBusyNotice))
             if self?.linkError == CareText.pairBusy { self?.linkError = nil }
         }

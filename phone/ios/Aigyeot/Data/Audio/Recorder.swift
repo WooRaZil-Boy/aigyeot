@@ -32,7 +32,6 @@ final class AudioRecorder {
     static func requestPermission() async -> Bool { await AVAudioApplication.requestRecordPermission() }
 
     var isActive: Bool { recorder != nil }
-    var isRecording: Bool { recorder?.isRecording == true }
 
     struct StartFailed: Error {}
 
@@ -99,7 +98,6 @@ final class AudioPlayback: NSObject, AVAudioPlayerDelegate {
     /// 지금 플레이어가 끝까지 재생했다(세션은 이미 풀었다).
     var onEnded: (() -> Void)?
 
-    var isActive: Bool { player != nil }
 
     /// 재생을 시작하지 못했어도 세션을 풀어 준다. 시작했으면 true.
     func play(_ url: URL) -> Bool {

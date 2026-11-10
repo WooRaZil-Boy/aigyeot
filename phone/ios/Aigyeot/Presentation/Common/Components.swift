@@ -379,35 +379,11 @@ struct KpiRow: View {
 
 extension View {
     /// 기능 층(탭 바·떠 있는 버튼·시트·배너)에만 쓴다(HIG: 내용 층에는 쓰지 않는다).
-    @ViewBuilder func glass<S: Shape>(in shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
-        if #available(iOS 26, *) {
-            let g: Glass = tint.map { Glass.regular.tint($0) } ?? .regular
-            glassEffect(interactive ? g.interactive() : g, in: shape)
-        } else {
-            background(tint.map { AnyShapeStyle($0.opacity(0.85)) } ?? AnyShapeStyle(.ultraThinMaterial), in: shape)
-        }
+    @ViewBuilder func glass<S: Shape>(in shape: S) -> some View {
+        if #available(iOS 26, *) { glassEffect(.regular, in: shape) } else { background(.ultraThinMaterial, in: shape) }
     }
 }
 
-/// 원형 글래스 아이콘 버튼(44): 시트의 닫기·저장, 머리의 뒤로.
-struct GlassIconButton: View {
-    let icon: Ico
-    let label: String
-    var tint: Color? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            IconImage(icon, size: 20)
-                .foregroundStyle(tint == nil ? DS.textPrimary : DS.onAccent)
-                .frame(width: 44, height: 44)
-                .glass(in: Circle(), tint: tint, interactive: true)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-}
 
 // MARK: 시안에서 섞어 만든 색(토큰 둘을 섞은 값)
 

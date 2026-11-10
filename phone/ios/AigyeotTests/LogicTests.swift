@@ -2769,15 +2769,3 @@ final class StopTextTests: XCTestCase {
         XCTAssertEqual(stopText(s), "세션 20분 상한 · 휴게소에 들르자고 제안했어요 · 경유지 추가 · 다른 보호자에게 알림")
     }
 }
-
-final class MethodStatRowsTests: XCTestCase {
-    func test_모르는_소리_둘은_두_행() {
-        let rows = methodStatRows([
-            MethodStat(method: .unknown, label: "future_a", successes: 1, attempts: 3),
-            MethodStat(method: .unknown, label: "future_b", successes: 2, attempts: 2),
-        ])
-        XCTAssertEqual(rows.count, 2)
-        XCTAssertEqual(Set(rows.map(\.id)).count, 2)
-        XCTAssertEqual(rows.map(\.value), ["3번 중 1번 그침", "아직 모름"])
-    }
-}
