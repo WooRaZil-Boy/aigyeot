@@ -117,7 +117,7 @@ private fun TipHost(hits: List<Hit>, modifier: Modifier, height: Dp, content: @C
                     .graphicsLayer { alpha = shown; translationY = (1f - shown) * 4.dp.toPx() }
                     .onSizeChanged { w = it.width; h = it.height }
                     .clip(Radius.inner).background(p.textPrimary).padding(horizontal = 10.dp, vertical = 7.dp),
-                style = Type.tip,
+                style = Type.tag,
                 color = p.surface,
                 maxLines = 1,
             )
@@ -513,7 +513,7 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
             ) {
                 // 이름 칸은 80 이상(시안 74), 큰 글자에서는 이름 폭만큼 늘어 낱말 가운데서 끊기지 않게(R13).
                 // 144에서 멈춰 긴 부모 노래 이름(30자까지)은 줄을 바꾸고 점·횟수 자리를 남긴다.
-                Text(row.name, Modifier.widthIn(min = 80.dp, max = 144.dp), style = Type.option, color = if (row.known) p.textPrimary else p.textTertiary)
+                Text(row.name, Modifier.widthIn(min = 80.dp, max = 144.dp), style = Type.chip, color = if (row.known) p.textPrimary else p.textTertiary)
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     repeat(row.n) { i ->
                         val on = i < row.ok
@@ -530,15 +530,15 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
                 }
                 if (row.known) {
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text("${row.ok}", style = Type.headline.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), color = p.textPrimary)
-                        Text("/${row.n}번", style = Type.body.copy(fontSize = 14.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium), color = p.textTertiary)
+                        Text("${row.ok}", style = Type.strong.copy(fontFeatureSettings = "tnum"), color = p.textPrimary)
+                        Text("/${row.n}번", style = Type.meta, color = p.textTertiary)
                     }
-                } else Text("아직 모름", style = Type.label, color = p.textTertiary)
+                } else Text("아직 모름", style = Type.meta, color = p.textTertiary)
             }
             if (tip == r) Text(
                 "${row.name}: ${row.n}번 틀어서 ${row.ok}번 그침",
                 Modifier.clip(Radius.inner).background(p.textPrimary).padding(horizontal = 10.dp, vertical = 7.dp),
-                style = Type.tip,
+                style = Type.tag,
                 color = p.surface,
             )
         }

@@ -51,6 +51,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -89,9 +90,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.Role as SRole
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -232,7 +231,10 @@ fun CareTabs(go: (Route) -> Unit, tab: String, onTab: (String) -> Unit, vm: Care
                 }
             }
             SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(12.dp)) { d ->
-                Snackbar(d, shape = Radius.control, containerColor = p.textPrimary, contentColor = p.surface, actionColor = if (p.dark) p.accent else p.glow)
+                // 되돌리기 띠 글자는 iOS와 같은 역할(글 bodyMedium, 단추 action). Snackbar는 Material bodyMedium·labelLarge를 읽는다.
+                MaterialTheme(typography = MaterialTheme.typography.copy(bodyMedium = Type.bodyMedium, labelLarge = Type.action)) {
+                    Snackbar(d, shape = Radius.control, containerColor = p.textPrimary, contentColor = p.surface, actionColor = if (p.dark) p.accent else p.glow)
+                }
             }
         }
         BottomTabs(tabs, tab, onTab)
@@ -274,7 +276,7 @@ private fun BottomTabs(tabs: List<Tab>, selected: String, onSelect: (String) -> 
             ) {
                 AIcon(t.icon, Modifier.size(24.dp), c)
                 Spacer(Modifier.height(4.dp))
-                Text(t.name, style = Type.caption.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium), color = c)
+                Text(t.name, style = Type.navLabel, color = c)
             }
         }
     }
@@ -373,9 +375,9 @@ private fun RunCard(e: CareEvent, onOpen: () -> Unit) {
         LiveDot(kindColor(e.kind, p))
         Column(Modifier.weight(1f)) {
             Text(title, style = Type.rowTitle, color = p.textPrimary)
-            Text("${koClock(e.startAt, e.zoneOrDevice())}부터", style = Type.hint, color = p.textTertiary)
+            Text("${koClock(e.startAt, e.zoneOrDevice())}부터", style = Type.note, color = p.textTertiary)
         }
-        RollingText(timerText(e.elapsed(now)), Type.title.copy(fontSize = 28.sp, lineHeight = 32.sp, fontFeatureSettings = "tnum"), p.textPrimary)
+        RollingText(timerText(e.elapsed(now)), Type.runningTimer, p.textPrimary)
     }
 }
 
@@ -423,7 +425,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
         Text(
             listOfNotNull(koClock(last, mine.firstOrNull()?.zoneOrDevice() ?: deviceZone), side?.let(::sideName)).joinToString(" · "),
             Modifier.padding(top = 4.dp),
-            style = Type.meta,
+            style = Type.valueKey,
             color = p.textTertiary,
         )
         // 카드에 보인 그 수유를 이 폰이 보냈을 때만 전송 상태를 붙인다(계약 7.5). 차 값이 더 늦으면 붙이지 않는다.
@@ -437,8 +439,8 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
         meter?.let { (v, w) -> FeedMeter(v, w, Modifier.padding(top = 12.dp)) }
         window?.let { at ->
             Column(Modifier.padding(top = 12.dp)) {
-                Text("다음 수유 시간대 · ${koClock(at, deviceZone)}부터", style = Type.body.copy(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold), color = p.textPrimary)
-                Text("차에 정해 둔 간격 기준", style = Type.hint, color = p.textTertiary)
+                Text("다음 수유 시간대 · ${koClock(at, deviceZone)}부터", style = Type.chip, color = p.textPrimary)
+                Text("차에 정해 둔 간격 기준", style = Type.note, color = p.textTertiary)
             }
         }
     }
@@ -490,7 +492,7 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
                         AIcon(kindIcon(k), Modifier.size(24.dp), fg)
                     }
                     Spacer(Modifier.height(10.dp))
-                    Text(label, style = Type.caption.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = text)
+                    Text(label, style = Type.quickLabel, color = text)
                 }
             }
         }
@@ -500,7 +502,7 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
 /** 오늘 탭·차 탭의 차 타일(연결 안 됨, 7장): "차와 연결하면 수유 기록이 차에도 가요" + "차와 연결하기". */
 @Composable
 internal fun ConnectCarCard(go: (Route) -> Unit) = Block {
-    Text("차와 연결하면 수유 기록이 차에도 가요", Modifier.padding(bottom = 16.dp), style = Type.strong, color = Tokens.colors.textPrimary)
+    Text("차와 연결하면 수유 기록이 차에도 가요", Modifier.padding(bottom = 16.dp), style = Type.body, color = Tokens.colors.textPrimary)
     Btn("차와 연결하기", { go(Route.Connect) }, icon = R.drawable.ic_qr_code)
 }
 
@@ -531,7 +533,7 @@ internal fun CarTileBlock(s: PhoneState, online: Boolean, onOpen: (() -> Unit)? 
             if (right != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 AIcon(R.drawable.ic_smartphone, Modifier.size(16.dp), p.textTertiary)
                 Spacer(Modifier.width(4.dp))
-                Text(right, style = Type.label, color = p.textTertiary)
+                Text(right, style = Type.meta, color = p.textTertiary)
             } else if (onOpen != null) AIcon(R.drawable.ic_chevron_right, Modifier.size(20.dp), p.textTertiary)
         }
     }
@@ -599,7 +601,7 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                 // U14: R3 안내와 함께 끝 시각 고르기·끝 시각 모름으로 닫기.
                 Text(
                     if (e.kind == CareKind.FEED) "수유가 3시간째예요. 끝내는 걸 잊으셨나요?" else "잠이 16시간째예요. 끝내는 걸 잊으셨나요?", // timer.overMax.*(U36)
-                    style = Type.strong,
+                    style = Type.headline,
                     color = p.textPrimary,
                 )
                 Btn("끝 시각 고르기", { pick = TimerViewModel.TimeField.END }, big = true)
@@ -612,7 +614,7 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                 Spacer(Modifier.height(8.dp))
                 Btn("이 기록 지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
             }
-            (phase as? CareSheetViewModel.Phase.Failed)?.message?.let { Text(it, style = Type.error, color = p.danger) }
+            (phase as? CareSheetViewModel.Phase.Failed)?.message?.let { Text(it, style = Type.caption, color = p.danger) }
         }
     }
     pick?.let { which ->
@@ -658,7 +660,7 @@ private fun TimerRing(e: CareEvent, now: Long) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 RollingText(text, style, p.textPrimary)
                 Spacer(Modifier.height(12.dp))
-                Text(sub, style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = p.textTertiary)
+                Text(sub, style = Type.bodyMedium, color = p.textTertiary)
             }
         }
     }
@@ -684,7 +686,7 @@ internal fun AmountRow(ml: Int?, onChange: (Int?) -> Unit) {
         Modifier.fillMaxWidth().clip(Radius.large).background(p.textPrimary.copy(alpha = 0.04f)).padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("양", Modifier.weight(1f), style = Type.rowLabel, color = p.textPrimary)
+        Text("양", Modifier.weight(1f), style = Type.sheetRow, color = p.textPrimary)
         AmountStepper(ml, onChange)
     }
 }
@@ -695,7 +697,7 @@ internal fun AmountStepper(ml: Int?, onChange: (Int?) -> Unit) {
     val p = Tokens.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         StepButton(R.drawable.ic_minus, "빼기", enabled = ml != null) { onChange(ml?.let { (it - 10).coerceAtLeast(AMOUNT_ML.first) }) }
-        Text(ml?.let { "${it}ml" } ?: "", Modifier.widthIn(min = 72.dp), style = Type.headline.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(ml?.let { "${it}ml" } ?: "", Modifier.widthIn(min = 72.dp), style = Type.sheetValue.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         StepButton(R.drawable.ic_plus, "더하기") { onChange(((ml ?: 0) + 10).coerceAtMost(AMOUNT_ML.last)) }
     }
 }

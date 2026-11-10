@@ -76,6 +76,36 @@ class TokensTest {
     }
 
     @Test
+    fun `글자 역할은 iOS 표와 같은 값이고 크기·굵기 조합 하나에 이름 하나다`() {
+        // iOS 진행 기록 '결정 7' 표(크기/줄 높이/굵기). 두 앱이 같은 이름·값을 쓴다.
+        val roles: Map<String, Pair<TextStyle, Triple<Float, Float, Int>>> = mapOf(
+            "hourMark" to (Type.hourMark to Triple(11f, 14f, 600)), "micro" to (Type.micro to Triple(12f, 16f, 500)),
+            "footnote" to (Type.footnote to Triple(12.5f, 17f, 500)), "tag" to (Type.tag to Triple(12.5f, 16f, 600)),
+            "note" to (Type.note to Triple(13f, 18f, 400)), "introItem" to (Type.introItem to Triple(13.5f, 20f, 500)),
+            "rowSub" to (Type.rowSub to Triple(14f, 20f, 400)), "meta" to (Type.meta to Triple(14f, 20f, 500)),
+            "quickLabel" to (Type.quickLabel to Triple(14f, 18f, 600)), "metaStrong" to (Type.metaStrong to Triple(14f, 20f, 700)),
+            "eventTitle" to (Type.eventTitle to Triple(14.5f, 20f, 500)), "bannerTitle" to (Type.bannerTitle to Triple(14.5f, 20f, 700)),
+            "valueKey" to (Type.valueKey to Triple(15f, 22f, 400)), "bodyMedium" to (Type.bodyMedium to Triple(15f, 22f, 500)),
+            "chip" to (Type.chip to Triple(15f, 22f, 600)), "action" to (Type.action to Triple(15f, 20f, 700)),
+            "sheetRow" to (Type.sheetRow to Triple(15.5f, 21f, 500)), "sheetValue" to (Type.sheetValue to Triple(15.5f, 21f, 600)),
+            "lead" to (Type.lead to Triple(16f, 24f, 500)), "rowTitle" to (Type.rowTitle to Triple(16f, 22f, 600)),
+            "dateNumber" to (Type.dateNumber to Triple(17f, 22f, 500)), "strong" to (Type.strong to Triple(17f, 22f, 700)),
+            "strongLarge" to (Type.strongLarge to Triple(18f, 24f, 700)), "runningTimer" to (Type.runningTimer to Triple(28f, 32f, 700)),
+            "recordTimer" to (Type.recordTimer to Triple(44f, 48f, 600)),
+        )
+        for ((name, v) in roles) {
+            val (s, want) = v
+            assertEquals(name, want, Triple(s.fontSize.value, s.lineHeight.value, s.fontWeight!!.weight))
+            assertTrue(name, s.fontFamily === Pretendard)
+        }
+        // 단계 7 + 역할 25 + 안드로이드 화면에만 있는 자리: 크기·굵기가 같은 둘이 없다(같은 글자에 이름이 둘이면 화면마다 다르게 고른다).
+        val all = listOf(Type.hero, Type.display, Type.title, Type.headline, Type.body, Type.caption, Type.timer) +
+            roles.values.map { it.first } + listOf(Type.navLabel, Type.bannerAction, Type.barTitle, Type.inviteCode, Type.pairCode)
+        val keys = all.map { it.fontSize.value to it.fontWeight!!.weight }
+        assertEquals(keys.groupBy { it }.filterValues { it.size > 1 }.keys.toString(), keys.size, keys.toSet().size)
+    }
+
+    @Test
     fun `모서리는 폰 값과 같다`() {
         val src = json.getValue("radius").jsonObject.getValue("phone").jsonObject
         val mine = mapOf("rS" to Radius.rS, "rM" to Radius.rM, "rL" to Radius.rL, "rXL" to Radius.rXL)

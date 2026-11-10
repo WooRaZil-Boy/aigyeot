@@ -47,9 +47,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -192,10 +190,10 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Wave(take is Take.Recording)
             val sec = (elapsed / 1000).toInt()
-            Text("%d:%02d / 3:00".format(sec / 60, sec % 60), style = Type.hero.copy(fontSize = 44.sp, lineHeight = 50.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = p.textPrimary)
+            Text("%d:%02d / 3:00".format(sec / 60, sec % 60), style = Type.recordTimer, color = p.textPrimary)
             RecButton(take is Take.Recording, enabled = !s.sending, onClick = vm::toggleRecording) // 보내는 동안 그 원본을 바꾸는 녹음은 막는다
-            s.startError?.let { Text(it, style = Type.error, color = p.danger) }
-            if (take !is Take.Recorded) Text("평소 불러 주던 노래를 녹음해 보세요", style = Type.footNote, color = p.textTertiary) // 시안 .rec .foot-note
+            s.startError?.let { Text(it, style = Type.caption, color = p.danger) }
+            if (take !is Take.Recorded) Text("평소 불러 주던 노래를 녹음해 보세요", style = Type.footnote, color = p.textTertiary) // 시안 .rec .foot-note
         }
         if (take is Take.Recorded) {
             Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -211,7 +209,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
                     shape = Radius.field,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                s.sendError?.let { Text(it, style = Type.error, color = p.danger) }
+                s.sendError?.let { Text(it, style = Type.caption, color = p.danger) }
                 Btn(if (s.sending) "보내는 중" else "차로 보내기", { vm.send(name.trim(), replacing) }, enabled = name.isNotBlank() && !s.sending, big = true)
                 if (!online) Text("연결되면 보내요", style = Type.caption, color = p.textTertiary) // 7.2 우리 노래·오프라인(iOS 시트와 같음)
             }

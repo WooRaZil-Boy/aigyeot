@@ -47,7 +47,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,7 +92,7 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
         StaggerColumn(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), gap = 18.dp) {
             Column {
                 Text("아이곁", style = Type.display, color = p.textPrimary) // intro.title
-                Text("차의 아이곁과 이 휴대폰을 연결해요.", Modifier.padding(top = 6.dp), style = Type.body.copy(fontWeight = FontWeight.Medium), color = p.textSecondary)
+                Text("차의 아이곁과 이 휴대폰을 연결해요.", Modifier.padding(top = 6.dp), style = Type.lead, color = p.textSecondary)
             }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 IntroLine(R.drawable.ic_link, "주고받는 것: 수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장")
@@ -117,7 +116,7 @@ private fun IntroLine(@DrawableRes icon: Int, text: String, child: Boolean = fal
         Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(p.tonal), contentAlignment = Alignment.Center) {
             AIcon(icon, Modifier.size(18.dp), if (child) p.child else p.textSecondary)
         }
-        Text(text, Modifier.weight(1f).padding(top = 6.dp), style = Type.body.copy(fontSize = 13.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = p.textSecondary)
+        Text(text, Modifier.weight(1f).padding(top = 6.dp), style = Type.introItem, color = p.textSecondary)
     }
 }
 
@@ -145,7 +144,7 @@ private fun Checking() {
 
 /** 오류 한 줄(빨간 글, 바뀌면 화면 읽기가 읽는다). */
 @Composable
-private fun ErrorLine(text: String) = Text(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = Type.error, color = Tokens.colors.danger)
+private fun ErrorLine(text: String) = Text(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = Type.caption, color = Tokens.colors.danger)
 
 /**
  * 연결: QR 찍기 또는 코드 넣기(7.1). QR로 읽은 코드만 확인 화면으로 간다.
@@ -262,7 +261,7 @@ fun ConfirmScreen(code: String, onDone: (Role) -> Unit, onRetry: () -> Unit, vm:
     BackPage("확인", onBack = null) {
         Block {
             Text(confirmTitle(code), style = Type.title, color = p.textPrimary)
-            Text(shown, Modifier.padding(vertical = 14.dp), style = Type.hero.copy(fontSize = 36.sp, lineHeight = 44.sp, fontFeatureSettings = "tnum", letterSpacing = 0.08.sp), color = p.textPrimary)
+            Text(shown, Modifier.padding(vertical = 14.dp), style = Type.pairCode, color = p.textPrimary)
             if (isInviteCode(code)) Text("다른 보호자 초대 코드예요. 리포트와 인계 알림을 받아요.", style = Type.caption, color = p.textTertiary)
             if (replacing) Text("지금 연결된 차를 끊고 새 차에 연결할까요?", Modifier.padding(top = 8.dp), style = Type.body, color = p.textSecondary)
         }

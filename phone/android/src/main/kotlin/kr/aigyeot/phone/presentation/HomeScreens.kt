@@ -30,9 +30,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -87,7 +85,7 @@ internal fun GuardianAlerts(s: PhoneState, go: (Route) -> Unit) {
     for (a in s.alerts.asReversed().take(5)) key(a.id) { EnterNew(a.id !in known) {
         Block(padding = androidx.compose.foundation.layout.PaddingValues(18.dp), onClick = { go(Route.Alert(a.id)) }) {
             Badge("차에서 · ${agoText(instantOf(a.body.occurredAt) ?: a.receivedAt, now)}", R.drawable.ic_car_front, child = true) // U20 '~ 전'
-            Text(a.body.text, Modifier.padding(top = 10.dp), style = Type.alert, color = p.textPrimary)
+            Text(a.body.text, Modifier.padding(top = 10.dp), style = Type.headline, color = p.textPrimary)
         }
     } }
 }
@@ -104,7 +102,7 @@ fun AlertScreen(onBack: () -> Unit, vm: AlertViewModel = appViewModel()) {
         } else {
             Block {
                 Badge("차에서 · ${agoText(instantOf(alert.body.occurredAt) ?: alert.receivedAt, System.currentTimeMillis())}", R.drawable.ic_car_front, child = true)
-                Text(alert.body.text, Modifier.padding(top = 10.dp, bottom = 6.dp), style = Type.alert, color = p.textPrimary)
+                Text(alert.body.text, Modifier.padding(top = 10.dp, bottom = 6.dp), style = Type.headline, color = p.textPrimary)
                 alert.body.restName?.let { Text("쉼터: $it", style = Type.body, color = p.textSecondary) }
                 alert.body.minutesToArrival?.let { Text("도착까지 ${it}분", style = Type.body, color = p.textSecondary) }
                 Text(dateTime(alert.body.occurredAt), Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
@@ -144,7 +142,7 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
         } else {
             Block {
                 Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요.", style = Type.headline, color = p.textPrimary)
-                Text("초대 코드는 24시간 동안 한 번만 쓸 수 있어요. 받는 사람은 수유·노래를 보내지 못해요.", Modifier.padding(top = 6.dp, bottom = 16.dp), style = Type.label, color = p.textTertiary)
+                Text("초대 코드는 24시간 동안 한 번만 쓸 수 있어요. 받는 사람은 수유·노래를 보내지 못해요.", Modifier.padding(top = 6.dp, bottom = 16.dp), style = Type.meta, color = p.textTertiary)
                 if (ui.busy) Text("초대 코드를 만들고 있어요", Modifier.padding(bottom = 8.dp), style = Type.caption, color = p.textTertiary)
                 Btn("초대 코드 만들기", vm::makeInvite, enabled = !ui.busy && ui.online, icon = R.drawable.ic_users)
                 if (!ui.online) Text("인터넷이 필요해요", Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
@@ -152,7 +150,7 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
             ui.invite?.let { inv ->
                 Block {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(inv.display, style = Type.hero.copy(fontSize = 34.sp, lineHeight = 42.sp, fontFeatureSettings = "tnum", letterSpacing = 0.06.sp), color = p.textPrimary)
+                        Text(inv.display, style = Type.inviteCode, color = p.textPrimary)
                         Text("${dateTime(inv.expiresAt)}까지", Modifier.padding(bottom = 14.dp), style = Type.caption, color = p.textTertiary)
                         Box(Modifier.size(220.dp).clip(Radius.control).background(androidx.compose.ui.graphics.Color.White).padding(10.dp).semantics { contentDescription = "초대 QR" }, contentAlignment = Alignment.Center) {
                             Image(qr(inv.link).asImageBitmap(), null, Modifier.size(200.dp))
@@ -174,6 +172,6 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
                 )
             }
         }
-        ui.error?.let { Text(it, style = Type.body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), color = p.danger) }
+        ui.error?.let { Text(it, style = Type.caption, color = p.danger) }
     }
 }

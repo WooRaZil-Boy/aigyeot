@@ -95,16 +95,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kr.aigyeot.phone.R
 
 // 디자인 v6 부품(시안 css/phone.css의 v5 '한국 앱 결' 값). 화면은 이 부품만 조립한다(Material 꼴을 쓰지 않는다).
@@ -299,7 +296,7 @@ fun BlockHeader(title: String, link: String? = null, onLink: (() -> Unit)? = nul
                 Modifier.clip(Radius.small).pressable(onClick = onLink).heightIn(min = 32.dp).padding(start = 6.dp, end = 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(link, style = Type.label, color = p.textTertiary)
+                Text(link, style = Type.meta, color = p.textTertiary)
                 AIcon(R.drawable.ic_chevron_right, Modifier.size(16.dp), p.textTertiary)
             }
         }
@@ -312,23 +309,23 @@ fun BlockSub(text: String) {
     val p = Tokens.colors
     val s = buildAnnotatedString {
         text.split("**").forEachIndexed { i, part ->
-            if (i % 2 == 1) withStyle(SpanStyle(color = p.textPrimary, fontWeight = FontWeight.Bold)) { append(part) } else append(part)
+            if (i % 2 == 1) withStyle(Type.metaStrong.toSpanStyle().copy(color = p.textPrimary)) { append(part) } else append(part)
         }
     }
-    Text(s, Modifier.padding(top = 0.dp, bottom = 14.dp).offset(y = (-8).dp), style = Type.sub, color = p.textTertiary)
+    Text(s, Modifier.padding(top = 0.dp, bottom = 14.dp).offset(y = (-8).dp), style = Type.rowSub, color = p.textTertiary)
 }
 
 /** 블록 끝 안내(.bnote: 13/19, 흐림, 위 14). */
 @Composable
-fun BlockNote(text: String) = Text(text, Modifier.padding(top = 14.dp), style = Type.caption.copy(fontWeight = FontWeight.Normal, lineHeight = 19.sp), color = Tokens.colors.textTertiary)
+fun BlockNote(text: String) = Text(text, Modifier.padding(top = 14.dp), style = Type.note, color = Tokens.colors.textTertiary)
 
 /** 블록 밖 작은 안내(.foot-note: 12.5/18·500, 흐림). */
 @Composable
-fun FootNote(text: String) = Text(text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = Type.footNote, color = Tokens.colors.textTertiary)
+fun FootNote(text: String) = Text(text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = Type.footnote, color = Tokens.colors.textTertiary)
 
 /** 작은 라벨(.label: 14/20·500, 흐림). */
 @Composable
-fun Label(text: String, modifier: Modifier = Modifier) = Text(text, modifier, style = Type.label, color = Tokens.colors.textTertiary)
+fun Label(text: String, modifier: Modifier = Modifier) = Text(text, modifier, style = Type.meta, color = Tokens.colors.textTertiary)
 
 /** 목록 블록(.list: 안쪽 22/20/8). 머리가 있으면 그 아래에 64dp 행들. */
 @Composable
@@ -389,7 +386,7 @@ fun ListRow(
         }
         Column(Modifier.weight(1f)) {
             Text(title, style = Type.rowTitle, color = titleColor ?: if (add) p.accentInk else p.textPrimary)
-            sub?.let { Text(it, style = Type.sub, color = p.textTertiary) }
+            sub?.let { Text(it, style = Type.rowSub, color = p.textTertiary) }
         }
         trailing?.invoke()
     }
@@ -434,7 +431,7 @@ fun SettingRow(
         Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(19.dp), p.textTertiary) } // 시안 .grp .li: 아이콘은 늘 흐린 색, 위험 행은 글자만 빨강
         Column(Modifier.weight(1f)) {
             Text(title, style = Type.rowTitle, color = if (danger) p.danger else p.textPrimary)
-            sub?.let { Text(it, style = Type.sub, color = p.textTertiary) }
+            sub?.let { Text(it, style = Type.rowSub, color = p.textTertiary) }
         }
         trailing?.invoke()
     }
@@ -478,7 +475,7 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, mod
                             .selectable(i == selected, interactionSource = null, indication = null, role = Role.Tab, onClick = { onSelect(i) }),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(label, Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = Type.option, color = if (i == selected) p.textPrimary else p.textSecondary, maxLines = 2)
+                        Text(label, Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = Type.chip, color = if (i == selected) p.textPrimary else p.textSecondary, maxLines = 2)
                     }
                 }
             },
@@ -532,7 +529,7 @@ fun Btn(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let { AIcon(it, Modifier.size(20.dp), fg); Spacer(Modifier.width(8.dp)) }
-        Text(text, style = Type.body.copy(fontSize = if (big) 18.sp else 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold), color = fg)
+        Text(text, style = if (big) Type.strongLarge else Type.strong, color = fg)
     }
 }
 
@@ -551,7 +548,7 @@ fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifie
         modifier.graphicsLayer { scaleX = s; scaleY = s }.heightIn(min = 40.dp).clip(Radius.medium).background(bg)
             .selectable(selected, interactionSource = source, indication = null, role = Role.RadioButton, onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.option, color = fg) }
+    ) { Text(text, style = Type.chip, color = fg) }
 }
 
 /** 배지(.badge: 높이 24, 모서리 6, 12.5·600). 아이 신호면 childSoft/child. 뜻 하나에 색 하나. */
@@ -561,7 +558,7 @@ fun Badge(text: String, @DrawableRes icon: Int? = null, child: Boolean = false) 
     val (bg, fg) = if (child) p.childSoft to p.child else p.surfaceRaised to p.textSecondary
     Row(Modifier.heightIn(min = 24.dp).clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         icon?.let { AIcon(it, Modifier.size(14.dp), fg); Spacer(Modifier.width(4.dp)) }
-        Text(text, style = Type.caption.copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold), color = fg)
+        Text(text, style = Type.tag, color = fg)
     }
 }
 
@@ -576,8 +573,8 @@ fun KpiRow(items: List<Kpi>, modifier: Modifier = Modifier) {
             for (k in row) Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(k.label, style = Type.caption, color = p.textTertiary)
                 Text(k.value, style = Type.title.copy(fontFeatureSettings = "tnum"), color = p.textPrimary)
-                k.sub?.let { Text(it, style = Type.kpiSub, color = p.textTertiary) }
-                k.note?.let { Text(it, style = Type.kpiSub, color = p.textTertiary) }
+                k.sub?.let { Text(it, style = Type.micro, color = p.textTertiary) }
+                k.note?.let { Text(it, style = Type.micro, color = p.textTertiary) }
             }
             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }
@@ -594,10 +591,10 @@ fun BandCard(text: String, action: String? = null, onAction: () -> Unit = {}) {
             .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp).heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, Modifier.weight(1f).padding(vertical = 6.dp), style = Type.sub, color = p.textSecondary)
+        Text(text, Modifier.weight(1f).padding(vertical = 6.dp), style = Type.meta, color = p.textSecondary)
         if (action != null) {
             Box(Modifier.clip(Radius.inner).pressable(onClick = onAction).heightIn(min = 40.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-                Text(action, style = Type.body.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = p.accentInk)
+                Text(action, style = Type.metaStrong, color = p.accentInk)
             }
         }
     }
@@ -681,7 +678,7 @@ fun TopAction(text: String, enabled: Boolean = true, onClick: () -> Unit) {
         Modifier.heightIn(min = 48.dp).clip(Radius.medium).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
             .pressable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.strong, color = p.accentInk) }
+    ) { Text(text, style = Type.rowTitle, color = p.accentInk) }
 }
 
 /** 화면에 보이는지 알린다(굴려서 가려지면 거짓). 계속 도는 움직임을 보일 때만 돌리는 데 쓴다. */

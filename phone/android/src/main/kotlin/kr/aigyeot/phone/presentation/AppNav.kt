@@ -50,10 +50,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -293,10 +291,10 @@ private fun HandoffBanner(text: String, onOpen: () -> Unit, onClose: () -> Unit)
             Box(Modifier.size(22.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
                 AIcon(R.drawable.ic_stat_aigyeot, Modifier.size(16.dp), Color.White)
             }
-            Text("  아이곁 · 지금", style = Type.footNote, color = p.textSecondary)
+            Text("  아이곁 · 지금", style = Type.footnote, color = p.textSecondary)
         }
-        Text("인계 알림", Modifier.padding(top = 8.dp), style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
-        Text(text, style = Type.label, color = p.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Text("인계 알림", Modifier.padding(top = 8.dp), style = Type.action, color = p.textPrimary)
+        Text(text, style = Type.meta, color = p.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BannerAction("보기", onOpen)
             BannerAction("닫기", onClose)
@@ -310,5 +308,5 @@ private fun BannerAction(text: String, onClick: () -> Unit) {
     Box(
         Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(18.dp)).background(p.textPrimary.copy(alpha = 0.07f)).pressable(onClick = onClick).padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.body.copy(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold), color = p.textPrimary) }
+    ) { Text(text, style = Type.bannerAction, color = p.textPrimary) }
 }

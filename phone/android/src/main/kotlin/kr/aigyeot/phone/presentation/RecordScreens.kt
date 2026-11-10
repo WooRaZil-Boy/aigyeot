@@ -62,9 +62,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Instant
 import java.time.LocalDate
@@ -155,7 +153,7 @@ fun CareSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(start = 20.dp, end = 20.dp, bottom = 34.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(sheetTitle(d.kind, edit = d.original != null), style = Type.headline.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
+            Text(sheetTitle(d.kind, edit = d.original != null), style = Type.strongLarge, color = p.textPrimary)
             if (chooseKind && d.original == null) {
                 val kinds = quickKinds(care.sleepDiaperEnabled)
                 Segmented(kinds.map(::kindName), kinds.indexOf(d.kind), { i -> vm.setKind(kinds[i]) })
@@ -186,12 +184,12 @@ fun CareSheet(
                     BasicTextField(
                         value = d.note,
                         onValueChange = vm::setNote, // U17·U24: 200자에서 더 받지 않는다(도메인 규칙)
-                        textStyle = Type.body.copy(fontSize = 15.5.sp, color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.End),
+                        textStyle = Type.sheetRow.copy(color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.End),
                         cursorBrush = SolidColor(p.accent),
                         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "메모" },
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.CenterEnd) {
-                                if (d.note.isEmpty()) Text(ph, style = Type.body.copy(fontSize = 15.5.sp), color = p.textTertiary)
+                                if (d.note.isEmpty()) Text(ph, style = Type.sheetRow, color = p.textTertiary)
                                 inner()
                             }
                         },
@@ -209,7 +207,7 @@ fun CareSheet(
                 }
                 else -> Unit
             }
-            (phase as? CareSheetViewModel.Phase.Failed)?.message?.let { Text(it, style = Type.error, color = p.danger) }
+            (phase as? CareSheetViewModel.Phase.Failed)?.message?.let { Text(it, style = Type.caption, color = p.danger) }
             if (guardian) FootNote(GUARDIAN_ONLY)
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Btn("취소", ::close, Modifier.weight(1f), kind = BtnKind.TONAL)
@@ -270,7 +268,7 @@ private fun SheetRow(label: String, first: Boolean = false, value: @Composable (
     val p = Tokens.colors
     if (!first) androidx.compose.material3.HorizontalDivider(color = p.line)
     Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.padding(end = 12.dp), style = Type.rowLabel, color = p.textPrimary)
+        Text(label, Modifier.padding(end = 12.dp), style = Type.sheetRow, color = p.textPrimary)
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { value() }
     }
 }
@@ -286,7 +284,7 @@ private fun ValueChip(text: String, selected: Boolean, onClick: () -> Unit) {
         Modifier.clip(Radius.inner).background(if (selected) p.accent.copy(alpha = 0.1f) else p.textPrimary.copy(alpha = 0.08f))
             .selectable(selected, interactionSource = null, indication = null, role = Role.Button, onClick = onClick).heightIn(min = 36.dp).padding(horizontal = 10.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.body.copy(fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = if (selected) p.onAccentSoft else p.textSecondary) }
+    ) { Text(text, style = Type.sheetValue.copy(fontFeatureSettings = "tnum"), color = if (selected) p.onAccentSoft else p.textSecondary) }
 }
 
 // ---------------------------------------------------------------- 기록(C4·C5·C14)
@@ -367,8 +365,8 @@ private fun DayView(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
                 ) {
-                    Text(if (d == today) "오늘" else "월화수목금토일"[d.dayOfWeek.value - 1].toString(), style = Type.caption.copy(fontSize = 12.sp, lineHeight = 14.sp), color = if (on) p.bg.copy(alpha = 0.75f) else p.textTertiary)
-                    Text("${d.dayOfMonth}", style = Type.headline.copy(fontWeight = FontWeight.Medium, lineHeight = 20.sp, fontFeatureSettings = "tnum"), color = if (on) p.bg else p.textPrimary)
+                    Text(if (d == today) "오늘" else "월화수목금토일"[d.dayOfWeek.value - 1].toString(), style = Type.micro, color = if (on) p.bg.copy(alpha = 0.75f) else p.textTertiary)
+                    Text("${d.dayOfMonth}", style = Type.dateNumber, color = if (on) p.bg else p.textPrimary)
                 }
             }
         }
@@ -410,7 +408,7 @@ private fun HourHead(hour: Int) {
     val p = Tokens.colors
     val label = (if (hour < 12) "오전 " else "오후 ") + "${if (hour % 12 == 0) 12 else hour % 12}시"
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.padding(start = 4.dp, end = 8.dp), style = Type.caption.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold), color = p.textTertiary)
+        Text(label, Modifier.padding(start = 4.dp, end = 8.dp), style = Type.hourMark, color = p.textTertiary)
         Box(
             Modifier.weight(1f).height(1.dp).drawBehind {
                 drawLine(p.line, Offset(0f, 0f), Offset(size.width, 0f), size.height, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
@@ -448,9 +446,9 @@ private fun TimelineCard(kind: CareKind?, title: String, sub: String?, memo: Str
         ) {
             AIcon(kindIcon(kind), Modifier.size(18.dp), p.textTertiary)
             Column(Modifier.weight(1f)) {
-                Text(title, style = Type.body.copy(fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = p.textPrimary)
-                sub?.let { Text(it, style = Type.logSub, color = p.textSecondary) }
-                memo?.let { Text(it, style = Type.logSub, color = p.textTertiary) } // log.row.memoLine(U37)
+                Text(title, style = Type.eventTitle, color = p.textPrimary)
+                sub?.let { Text(it, style = Type.footnote, color = p.textSecondary) }
+                memo?.let { Text(it, style = Type.footnote, color = p.textTertiary) } // log.row.memoLine(U37)
             }
         }
     }

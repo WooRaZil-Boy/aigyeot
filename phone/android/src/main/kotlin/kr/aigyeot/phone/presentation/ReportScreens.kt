@@ -11,10 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.APP_ZONE
@@ -94,7 +92,7 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
                 BlockSub("$start ${triggerText(e.trigger)}부터" + if (e.result == EpisodeResult.SUCCESS) " 그칠 때까지" else "")
                 if (e.plays.isNotEmpty()) EpisodeStrip(remember(e, songs) { episodeBand(e, songs) }, Modifier.padding(bottom = 12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    val small = Type.sub
+                    val small = Type.rowSub
                     Text("음원: ${soundText(songs, e.sound, e.plays.firstOrNull()?.songId)} · 재생 ${seconds(e.playS)}" + (e.alarmLatencyS?.let { " · ${String.format(Locale.ROOT, "%.1f", it)}초 뒤 알림" } ?: ""), style = small, color = p.textSecondary)
                     for (pl in e.plays) Text("${purposeText(pl.purpose)} ${playName(songs, pl)} ${reportSpan(pl.startedAt, pl.endedAt, zone)} ${seconds(pl.playS)}", style = Type.caption, color = p.textTertiary)
                     Text("판정: ${judgeText(e.result)}" + (e.excludedReason?.let { " · 성적에서 뺌(${excludedText(it)})" } ?: ""), style = small, color = p.textSecondary)
@@ -156,8 +154,8 @@ private fun KeyValues(rows: List<Pair<String, String>>) {
     val p = Tokens.colors
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         for ((k, v) in rows) Row(Modifier.fillMaxWidth()) {
-            Text(k, Modifier.padding(end = 14.dp), style = Type.meta, color = p.textTertiary)
-            Text(v, Modifier.weight(1f), style = Type.body.copy(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = TextAlign.End)
+            Text(k, Modifier.padding(end = 14.dp), style = Type.valueKey, color = p.textTertiary)
+            Text(v, Modifier.weight(1f), style = Type.chip.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = TextAlign.End)
         }
     }
 }

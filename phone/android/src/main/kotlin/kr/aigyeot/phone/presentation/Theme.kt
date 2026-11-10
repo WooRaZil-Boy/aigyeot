@@ -156,7 +156,7 @@ private fun pretendard(w: Int) = Font(R.font.pretendard_variable, FontWeight(w),
 
 val Pretendard = FontFamily(listOf(300, 400, 500, 600, 650, 700).map(::pretendard))
 
-private fun style(size: Int, line: Int, weight: Int, tracking: Double = 0.0) = TextStyle(
+private fun style(size: Double, line: Int, weight: Int, tracking: Double = 0.0) = TextStyle(
     fontFamily = Pretendard,
     fontSize = size.sp,
     lineHeight = line.sp,
@@ -172,45 +172,78 @@ private fun style(size: Int, line: Int, weight: Int, tracking: Double = 0.0) = T
 
 /** 글자 단계(tokens.json type.phone: 크기/줄 높이/굵기). 자간은 시안 CSS의 em 값. `timer`는 고정폭 숫자(tnum). */
 object Type {
-    val hero = style(30, 38, 700, -0.03)
-    val display = style(26, 34, 700, -0.03)
-    val title = style(20, 28, 700, -0.02)
-    val headline = style(17, 24, 600)
-    val body = style(16, 24, 400)
-    val caption = style(13, 18, 500)
-    val timer = style(64, 72, 650, -0.03).copy(fontFeatureSettings = "tnum")
+    val hero = style(30.0, 38, 700, -0.03)
+    val display = style(26.0, 34, 700, -0.03)
+    val title = style(20.0, 28, 700, -0.02)
+    val headline = style(17.0, 24, 600)
+    val body = style(16.0, 24, 400)
+    val caption = style(13.0, 18, 500)
+    val timer = style(64.0, 72, 650, -0.03).copy(fontFeatureSettings = "tnum")
 
-    // 부품 글자(시안 phone.css 값 그대로). 두 곳 이상이 같은 역할로 쓰는 것만 여기 두고, 한 부품만 쓰는 크기는 그 부품 안에 둔다.
-    /** 목록·설정 행 제목, 진행 중 판·차 타일 머리(.lrow-p b 600 16/22). */
-    val rowTitle = body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp)
-    /** 판 안 굵은 한 줄(16/24·600). */
-    val strong = body.copy(fontWeight = FontWeight.SemiBold)
-    /** 행 둘째 줄·블록 부제·리포트 작은 글(14/20·400). */
-    val sub = body.copy(fontSize = 14.sp, lineHeight = 20.sp)
-    /** 흐린 라벨·블록 링크·짧은 안내(.label 14/20·500). */
-    val label = caption.copy(fontSize = 14.sp, lineHeight = 20.sp)
-    /** 화면 안 오류 한 줄(14·400). */
-    val error = body.copy(fontSize = 14.sp)
-    /** 값 옆 보조 글·키(15/22·400). */
-    val meta = body.copy(fontSize = 15.sp, lineHeight = 22.sp)
-    /** 세그먼트·칩·방법 이름(15/20·600). */
-    val option = body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
-    /** 시트 행 이름(.sheet .row 15.5·500). */
-    val rowLabel = body.copy(fontSize = 15.5.sp, fontWeight = FontWeight.Medium)
-    /** 블록 밖 작은 안내(.foot-note 12.5/18·500). */
-    val footNote = caption.copy(fontSize = 12.5.sp)
-    /** 기록 줄 둘째 줄·메모(12.5/17). */
-    val logSub = caption.copy(fontSize = 12.5.sp, lineHeight = 17.sp)
-    /** 숫자 칸 아래 글(.kpi small 12/16). */
-    val kpiSub = caption.copy(fontSize = 12.sp, lineHeight = 16.sp)
-    /** 흐린 한 줄(13/18·400). */
-    val hint = caption.copy(fontWeight = FontWeight.Normal)
-    /** 인계 알림 글(17/25·600). */
-    val alert = headline.copy(lineHeight = 25.sp)
+    // 글자 역할(iOS `DesignSystem.TextRole`과 같은 이름·값). 단계(위 7개)와 같은 조합은 단계를 쓰고, 시안 phone.css가 단계 사이 크기를 쓰는 자리만 역할이다.
+    // 크기·굵기 조합 하나에 이름 하나(시험이 겹침을 막는다). 화면은 단계·역할로만 고르고 크기·굵기를 직접 쓰지 않는다(고정폭 숫자·자간·색은 덧붙여도 된다).
+    /** 타임라인 시간 머리(.tl .hr span 11·600). */
+    val hourMark = style(11.0, 14, 600)
+    /** 숫자 칸 부제, 날짜 띠 요일(.datestrip span 12·500). */
+    val micro = style(12.0, 16, 500)
+    /** 줄 부제·덧붙임(.tl .ev span, .foot-note 12.5·500). */
+    val footnote = style(12.5, 17, 500)
+    /** 배지·말풍선(.badge, .ch-tip 12.5·600). */
+    val tag = style(12.5, 16, 600)
+    /** 흐린 안내 긴 글(.bnote 13·400). */
+    val note = style(13.0, 18, 400)
+    /** 첫 안내 목록(.ilist 13.5/20·500). */
+    val introItem = style(13.5, 20, 500)
+    /** 목록 줄 부제(.lrow span 14/20·400). 화면 안 오류는 iOS와 같이 caption. */
+    val rowSub = style(14.0, 20, 400)
+    /** 링크·흐린 머리·알림 글·안내 띠 글(.bh a, .anoti p 14/20·500). */
+    val meta = style(14.0, 20, 500)
+    /** 빠른 기록 이름(.qb 14·600). */
+    val quickLabel = style(14.0, 18, 600)
+    /** 띠 단추·부제 굵은 조각(14/20·700). */
+    val metaStrong = style(14.0, 20, 700)
+    /** 타임라인 줄 제목(.tl .ev b 14.5/20·500). */
+    val eventTitle = style(14.5, 20, 500)
+    /** 배너 앱 이름(.ncard b 14.5/20·700). */
+    val bannerTitle = style(14.5, 20, 700)
+    /** 이름·값 줄의 이름, 빈 목록 안내(15/22·400). */
+    val valueKey = style(15.0, 22, 400)
+    /** 타이머 상태·되돌리기 띠 글(15/22·500). */
+    val bodyMedium = style(15.0, 22, 500)
+    /** 칩·세그먼트·값(.chip, .segp span 15·600). */
+    val chip = style(15.0, 22, 600)
+    /** 알림 제목(.anoti b 15/20·700), 되돌리기 띠 단추. */
+    val action = style(15.0, 20, 700)
+    /** 시트 행 이름·입력(.sheet .row 15.5·500). */
+    val sheetRow = style(15.5, 21, 500)
+    /** 시트 값 칩(.sheet .row em 15.5·600). */
+    val sheetValue = style(15.5, 21, 600)
+    /** 첫 안내 첫 줄(.intro p.lead 16/24·500). */
+    val lead = style(16.0, 24, 500)
+    /** 목록 줄 제목·진행 중 판 제목(.lrow b, .run-c b 16/22·600). */
+    val rowTitle = style(16.0, 22, 600)
+    /** 날짜 띠 날(.datestrip b 17·500, 고정폭 숫자). */
+    val dateNumber = style(17.0, 22, 500).copy(fontFeatureSettings = "tnum")
+    /** 버튼(.pbtn 17·600 → 700), 방법별 성적 숫자(.dm b). */
+    val strong = style(17.0, 22, 700)
+    /** 큰 버튼, 시트 제목(18/24·700). */
+    val strongLarge = style(18.0, 24, 700)
+    /** 진행 중 판 시계(28/32·700, 고정폭 숫자). */
+    val runningTimer = style(28.0, 32, 700, -0.02).copy(fontFeatureSettings = "tnum")
+    /** 녹음 시간(.rec .rt 44·600, 고정폭 숫자). */
+    val recordTimer = style(44.0, 48, 600, -0.02).copy(fontFeatureSettings = "tnum")
+
+    // 안드로이드 화면에만 있는 자리(시안 .p-android 값).
+    /** 아래 내비게이션 이름(.p-android .nav button 11/14·500, 고른 칸도 색만 바뀐다). */
+    val navLabel = style(11.0, 14, 500)
+    /** 알림 행동 단추(.anoti .acts span 13.5·600). */
+    val bannerAction = style(13.5, 18, 600)
     /** 위 막대 제목·접힌 큰 제목(.p-android .ph-mini 22/28·600). */
-    val barTitle = TextStyle(fontFamily = Pretendard, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold)
-    /** 차트 말풍선(.ch-tip 12.5/16·600). */
-    val tip = TextStyle(fontFamily = Pretendard, fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+    val barTitle = style(22.0, 28, 600)
+    /** 초대 코드(고정폭 숫자·글자 사이를 띄움, iOS는 시스템 고정폭). */
+    val inviteCode = style(34.0, 42, 700).copy(fontFeatureSettings = "tnum", letterSpacing = 0.06.sp)
+    /** 연결 코드 확인(고정폭 숫자·글자 사이를 띄움). */
+    val pairCode = style(36.0, 44, 700).copy(fontFeatureSettings = "tnum", letterSpacing = 0.08.sp)
 }
 
 /** 모서리(tokens.json radius.phone). 흰 블록은 rL(20). */
@@ -356,7 +389,7 @@ fun AigyeotTheme(content: @Composable () -> Unit) {
             titleMedium = Type.headline,
             titleSmall = titleSmall.copy(fontFamily = Pretendard),
             bodyLarge = Type.body,
-            bodyMedium = Type.meta,
+            bodyMedium = Type.valueKey,
             bodySmall = Type.caption,
             labelLarge = labelLarge.copy(fontFamily = Pretendard, fontWeight = FontWeight.SemiBold),
             labelMedium = labelMedium.copy(fontFamily = Pretendard),
