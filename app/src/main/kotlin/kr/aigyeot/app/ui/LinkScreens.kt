@@ -72,9 +72,6 @@ import kr.aigyeot.app.link.LinkStatus
 import kr.aigyeot.app.ui.car3d.Light3d
 import kr.aigyeot.app.ui.car3d.Stage3d
 import kr.aigyeot.app.ui.car3d.View3d
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlin.math.floor
 import kotlin.math.sqrt
 
@@ -277,6 +274,3 @@ fun SongsScreen(rows: List<SongRow>, onSelect: (String) -> Unit, onBack: () -> U
         }
         Note("고른 곡은 다음 주행부터 써요")
     }
-
-private val HM = DateTimeFormatter.ofPattern("MM.dd HH:mm")
-internal fun hm(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(HM)

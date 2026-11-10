@@ -36,7 +36,6 @@ internal class ExecThread : Sched {
         handler.postDelayed(r, maxOf(ms, 0))
         return { handler.removeCallbacks(r) }
     }
-    fun quit() { thread.quitSafely(); binderThread.quitSafely() }
 }
 
 /** 실제 연결 묶음. [kr.aigyeot.app.exec.Exec]의 공개 생성자가 만든다. */

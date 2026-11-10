@@ -101,7 +101,7 @@ internal class Connection(
 
     // ---------------------------------------------------------------- 연결 상태(8.6)
 
-    private fun conn(c: LinkConn) = status.update { it.copy(conn = c, online = c == LinkConn.CONNECTED) }
+    private fun conn(c: LinkConn) = status.update { it.copy(conn = c) }
 
     private fun wantSocket() = pairingOpen() || dao.phoneCount() > 0   // C303 A13
 

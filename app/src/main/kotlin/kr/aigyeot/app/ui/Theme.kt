@@ -113,9 +113,6 @@ object CarRadius {
     val l = Tokens.carRadius.getValue("rL").dp; val xl = Tokens.carRadius.getValue("rXL").dp
 }
 
-/** 가장 작은 터치 영역(시안 6장 Small S 64). 머리 아이콘 버튼 80, 주 버튼 100. */
-val Touch = 64.dp
-
 /** Material 부품(입력칸·대화창)이 쓰는 글자도 차 위계로(24 미만 금지). */
 private val M3Type = Typography(
     displayLarge = CarType.numeral, displayMedium = CarType.numeral, displaySmall = CarType.headlineL,
@@ -260,18 +257,11 @@ fun IconBtn(icon: Int, desc: String, enabled: Boolean = true, onClick: () -> Uni
     }
 }
 
-/** 지난 판의 큰 버튼 자리(아직 새 화면으로 옮기지 않은 화면용). [primary]면 영웅(브랜드). */
-@Composable
-fun BigButton(text: String, enabled: Boolean = true, primary: Boolean = true, onClick: () -> Unit) =
-    CarButton(text, Modifier.fillMaxWidth(), if (primary) BtnKind.BRAND else BtnKind.PLAIN, enabled = enabled, onClick = onClick)
 
 /** 한 메시지는 3줄 이하(Pleos 가독성). */
 @Composable
 fun Body(text: String, color: Color = Color.Unspecified) =
     Text(text, style = CarType.bodyS, color = if (color == Color.Unspecified) LocalPalette.current.textSecondary else color, maxLines = 3, overflow = TextOverflow.Ellipsis)
-
-@Composable
-fun Label(text: String) = Text(text, style = CarType.label, color = LocalPalette.current.textTertiary)
 
 // ── 정차 화면 공용 부품(시안 car.css '다른 화면 공통') ──
 

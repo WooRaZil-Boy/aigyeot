@@ -237,7 +237,7 @@ class Link internal constructor(
 enum class LinkConn { NONE, CONNECTING, CONNECTED, BACKOFF }
 
 data class LinkStatus(
-    val registered: Boolean = false, val online: Boolean = false,
+    val registered: Boolean = false,
     val pairCode: String? = null, val pairUri: String? = null, val pairExpiresAt: Long? = null,
     val phones: List<LinkedPhone> = emptyList(), val error: String? = null,
     val conn: LinkConn = LinkConn.NONE,             // 8.6 정차 화면 표시

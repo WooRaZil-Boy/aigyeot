@@ -61,7 +61,6 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
-    implementation(libs.navigation.compose)
     implementation(libs.room.runtime)
     ksp(libs.room.compiler)
     implementation(libs.okhttp)
