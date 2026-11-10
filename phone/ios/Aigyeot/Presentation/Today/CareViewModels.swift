@@ -61,6 +61,14 @@ struct CareUiState {
     var lastFeedingStart: Date? { FeedRules.lastFeedingStart(phone, care) }
     func shownStart(_ e: CareEvent) -> Date { FeedRules.shownStart(e, in: phone) }
     func feedingRecord(for e: CareEvent) -> FeedingRecord? { FeedRules.record(for: e, in: phone) }
+
+    /// 마지막 수유 막대(오늘 카드): 차에 정해 둔 간격, 없으면 앞 6일 '평소'(CareStats). 둘 다 없으면 nil(안드로이드 feedMeter와 같다).
+    /// guardian은 차 값을 받지 않는다(U35).
+    func feedMeter(last: Int64, now: Int64) -> (value: Double, tick: Double?)? {
+        let f = guardian ? nil : phone.feeding
+        return ChartData.feedMeter(last: last, now: now, carLast: f?.lastStart.map(CareTime.ms), windowStart: f?.windowStartExpected.map(CareTime.ms),
+                                   usualMs: CareStats.usualFeedGapMs(care.events, now: now, zone: .current))
+    }
 }
 
 /// 오늘 탭(C1). guardian은 인계 알림·최근 리포트도 본다.
@@ -124,8 +132,51 @@ final class TimerViewModel {
 
     var ui: TimerUiState { timerUi(id: id, care: careRepo.care, connection: stateRepo.connection) }
 
-    /// 진행 중인 그 기록의 시작 시각·쪽·양을 고친다. 겹침·규칙은 결과로 돌려준다.
-    func save(_ e: CareEvent, allowOverlap: Bool) -> CareSaveResult { recordCare.saveEvent(e, allowOverlap: allowOverlap) }
+    /// 시트 안에 보일 저장 실패·규칙 글(띠의 다른 안내까지 옮기지 않는다).
+    private(set) var error: String?
+    /// 겹침을 물을 시각 고침(R4). '그래도 저장'이면 `confirmTime()`.
+    private(set) var pendingTime: CareEvent?
+
+    /// 쪽 고침(젖병이 아니면 양을 비운다, `CareRules.normalized`). 쪽·양은 시각을 바꾸지 않아 겹침을 묻지 않는다.
+    func setSide(_ side: FeedSide?) { change { $0.feedSide = side } }
+    func setAmount(_ ml: Int?) { change { $0.amountMl = ml } }
+
+    enum TimeField { case start, end }
+
+    /// 시작·끝 시각 고침. 겹치면 `pendingTime`에 두고 묻는다. 저장했으면 true.
+    @discardableResult
+    func setTime(_ field: TimeField, to picked: Date) -> Bool {
+        guard var e = ui.event else { return false }
+        switch field {
+        case .start: e.startAt = CareTime.ms(picked)
+        case .end: e.endAt = CareTime.ms(picked)
+        }
+        return commit(e, allowOverlap: false)
+    }
+
+    /// 겹침을 묻는 창에서 '그래도 저장'. 저장했으면 true.
+    @discardableResult
+    func confirmTime() -> Bool {
+        guard let e = pendingTime else { return false }
+        pendingTime = nil
+        return commit(e, allowOverlap: true)
+    }
+
+    func keepEditing() { pendingTime = nil }
+
+    private func change(_ edit: (inout CareEvent) -> Void) {
+        guard var e = ui.event else { return }
+        edit(&e)
+        commit(CareRules.normalized(e), allowOverlap: true)
+    }
+
+    @discardableResult
+    private func commit(_ e: CareEvent, allowOverlap: Bool) -> Bool {
+        let r = recordCare.saveEvent(e, allowOverlap: allowOverlap)
+        if r == .overlap { pendingTime = e; return false }
+        error = r == .notSaved ? NoticeRules.saveFailed : r.message(for: e.kind)
+        return r == .saved
+    }
     func end() { recordCare.end(id) }
     func endUnknown() { recordCare.endUnknown(id) }
     func delete() { recordCare.delete(id) }
@@ -133,43 +184,78 @@ final class TimerViewModel {
 
 // MARK: 빠른 기록·고치기 시트
 
-/// 빠른 기록·고치기 시트(C3·C4)의 저장 결과.
-enum SheetSave: Equatable {
-    case saved
-    /// 고치던 기록이 그사이 지워졌다: 저장하지 않고 닫는다(되살리지 않는다, R10).
-    case gone
-    /// 같은 종류와 시간이 겹친다(R4). '그래도 저장'이면 `allowOverlap`으로 다시 부른다.
-    case overlap
-    /// 저장하지 않았다. 시트 안에 보일 문구(규칙 위반, 또는 저장 실패 — 띠의 다른 안내까지 옮기지 않는다).
-    case failed(String?)
+/// 기록 시트가 고치는 것: 새 기록(종류, 기록 탭에서 고른 날) 또는 고칠 기록 id.
+enum CareSheetTarget: Equatable {
+    case new(CareKind, day: String?)
+    case edit(String)
 }
 
+/// 빠른 기록·고치기 시트(C3·C4). 입력은 `draft`(CareDraft)이고 시트는 그 값을 바꾸기만 한다. 저장 단계는 `phase`다
+/// (안드로이드 CareSheetViewModel과 같은 이름: 고치는 중 → 겹침 묻기 → 실패, 저장했거나 그사이 지워졌으면 닫힘).
 @MainActor
 @Observable
 final class CareSheetViewModel {
+    enum Phase: Equatable {
+        case editing
+        /// 같은 종류와 시간이 겹친다(R4). '그래도 저장'이면 `save(allowOverlap: true)`.
+        case confirmOverlap
+        /// 저장하지 않았다. 시트 안에 보일 문구(규칙 위반, 또는 저장 실패 — 띠의 다른 안내까지 옮기지 않는다). 문구가 없는 규칙도 있다.
+        case failed(String?)
+        /// 저장했거나, 고치던 기록이 그사이 지워졌다(되살리지 않는다, R10). 시트를 닫는다.
+        case closed
+    }
+
     @ObservationIgnored private let stateRepo: PhoneStateRepository
     @ObservationIgnored private let careRepo: CareRepository
     @ObservationIgnored private let recordCare: RecordCare
+    @ObservationIgnored private let now: () -> Date
+    /// 시트 입력. 고칠 기록을 찾지 못했으면 없다(시트를 그리지 않는다).
+    private(set) var draft: CareDraft?
+    private(set) var phase: Phase = .editing
 
-    init(state: PhoneStateRepository, care: CareRepository, recordCare: RecordCare) {
+    init(target: CareSheetTarget, state: PhoneStateRepository, care: CareRepository, recordCare: RecordCare, now: @escaping () -> Date) {
         stateRepo = state
         careRepo = care
         self.recordCare = recordCare
-    }
-
-    var care: CareFile { careRepo.care }
-    var guardian: Bool { stateRepo.role == .guardian }
-
-    func save(_ e: CareEvent, allowOverlap: Bool, editing: Bool) -> SheetSave {
-        if editing, !careRepo.care.events.contains(where: { $0.id == e.id && $0.deletedAt == nil }) { return .gone }
-        let r = recordCare.saveEvent(e, allowOverlap: allowOverlap)
-        switch r {
-        case .saved: return .saved
-        case .overlap: return .overlap
-        case .notSaved: return .failed(NoticeRules.saveFailed)
-        case .problem: return .failed(r.message(for: e.kind))
+        self.now = now
+        switch target {
+        case .new(let kind, let day): draft = .new(kind: kind, day: day, now: now())
+        case .edit(let id): draft = care.care.events.first { $0.id == id && $0.deletedAt == nil }.map(CareDraft.editing)
         }
     }
 
-    func delete(_ id: String) { recordCare.delete(id) }
+    var guardian: Bool { stateRepo.role == .guardian }
+
+    /// 입력 칸을 고친다(시트가 바꾸는 것은 이 값뿐). 실패 글은 다음 저장까지 그대로 둔다.
+    func edit(_ change: (inout CareDraft) -> Void) {
+        guard var d = draft else { return }
+        change(&d)
+        draft = d
+    }
+
+    /// 몇 분 전 칩. 누른 때 기준이다.
+    func pick(chip minutes: Int?) { edit { $0.pick(chip: minutes, now: now()) } }
+
+    func save(allowOverlap: Bool = false) {
+        guard let d = draft else { return }
+        let e = d.event(now: now())
+        if d.original != nil, !careRepo.care.events.contains(where: { $0.id == e.id && $0.deletedAt == nil }) { phase = .closed; return }
+        let r = recordCare.saveEvent(e, allowOverlap: allowOverlap)
+        switch r {
+        case .saved: phase = .closed
+        case .overlap: phase = .confirmOverlap
+        case .notSaved: phase = .failed(NoticeRules.saveFailed)
+        case .problem: phase = .failed(r.message(for: e.kind))
+        }
+    }
+
+    /// 겹침을 묻는 창에서 '고치기'.
+    func keepEditing() { if phase == .confirmOverlap { phase = .editing } }
+
+    /// 고치던 기록을 지운다(되돌리기 띠는 RecordCare가 띄운다).
+    func delete() {
+        guard let id = draft?.original?.id else { return }
+        recordCare.delete(id)
+        phase = .closed
+    }
 }

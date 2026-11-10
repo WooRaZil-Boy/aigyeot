@@ -120,7 +120,7 @@ private struct LastFeedCard: View {
                     .animation(reduceMotion ? nil : DS.Motion.roll, value: ago)   // 바뀐 자리만 굴러간다(roll)
                 Text(CareText.feedDetail(at: last, side: mine?.feedSide, zone: mine?.timeZone ?? .current))
                     .font(DS.font(15, 400)).monospacedDigit().foregroundStyle(DS.textTertiary).padding(.top, 4)
-                if let m = meter(last: CareTime.ms(last)) { FeedMeter(value: m.value, tick: m.tick).padding(.top, 18).padding(.bottom, 4) }
+                if let m = vm.ui.feedMeter(last: CareTime.ms(last), now: now) { FeedMeter(value: m.value, tick: m.tick).padding(.top, 18).padding(.bottom, 4) }
                 if vm.ui.owner, let e = mine, let r = vm.ui.feedingRecord(for: e) {
                     Text(feedStatusText(r)).font(DS.caption)
                         .foregroundStyle(r.status == .failed || r.status == .expired ? DS.danger : DS.textTertiary).padding(.top, 8)
@@ -157,14 +157,6 @@ private struct LastFeedCard: View {
             if new != nil, new != old, !reduceMotion { flashes += 1 }
         }
         .accessibilityElement(children: .contain)
-    }
-
-    /// 간격 막대: 차에 정해 둔 간격, 없으면 지난 7일 '평소'(안드로이드 feedMeter와 같다). 둘 다 없으면 그리지 않는다.
-    private func meter(last: Int64) -> (value: Double, tick: Double?)? {
-        let usual = ChartData.intervalWeek(care: vm.ui.care, now: now, zone: .current).usualMs
-        let f = vm.ui.guardian ? nil : vm.ui.phone.feeding
-        return ChartData.feedMeter(last: last, now: now, carLast: f?.lastStart.map(CareTime.ms),
-                                   windowStart: f?.windowStartExpected.map(CareTime.ms), usualMs: usual)
     }
 }
 

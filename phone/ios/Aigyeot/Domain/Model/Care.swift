@@ -202,9 +202,9 @@ struct CarePattern: Equatable {
     var feedDays: Int { days.filter { $0.feeds > 0 }.count }
     var sleepDays: Int { days.filter(\.sleepRecorded).count }
     var diaperDays: Int { days.filter { ($0.diapers ?? 0) > 0 }.count }
-    var feedsPerDay: Double? { feedDays == 0 ? nil : Double(days.map(\.feeds).reduce(0, +)) / Double(feedDays) }
-    var sleepMsPerDay: Int64? { sleepDays == 0 ? nil : days.compactMap(\.sleepMs).reduce(0, +) / Int64(sleepDays) }
-    var diapersPerDay: Double? { diaperDays == 0 ? nil : Double(days.compactMap(\.diapers).reduce(0, +)) / Double(diaperDays) }
+    var feedsPerDay: Double? { CareStats.perRecordedDay(days.map(\.feeds)) }
+    var sleepMsPerDay: Int64? { CareStats.perRecordedDay(days.map { $0.sleepRecorded ? $0.sleepMs ?? 0 : 0 }) }
+    var diapersPerDay: Double? { CareStats.perRecordedDay(days.map { $0.diapers ?? 0 }) }
     var carCries: Int { days.map(\.carEpisodes).reduce(0, +) }
 }
 

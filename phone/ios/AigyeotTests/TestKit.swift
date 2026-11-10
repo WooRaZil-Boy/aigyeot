@@ -86,7 +86,12 @@ final class FakeSongRecorder: SongRecorder {
     func durationS(_ url: URL, lastKnown: TimeInterval) -> TimeInterval { file = nil; return max(lastKnown, 12) }
     func play(_ url: URL, onEnded: @escaping () -> Void) -> Bool { true }
     func stopPlaying() {}
-    func cancel() { file = nil }
+    /// 지운 녹음 파일(시트 닫힘·다시 녹음).
+    private(set) var discarded: [URL] = []
+    func discard(_ url: URL?) {
+        file = nil
+        if let url { discarded.append(url); try? FileManager.default.removeItem(at: url) }
+    }
 }
 
 extension AppContainer {

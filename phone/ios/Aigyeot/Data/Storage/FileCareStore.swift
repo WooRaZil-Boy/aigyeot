@@ -56,3 +56,22 @@ extension CareExport {
         }
     }
 }
+
+// MARK: 고른 파일 읽기(기록 가져오기 U64)
+
+/// 파일 고르기 바로 뒤 한 곳(9.1): 보안 범위 접근 시작·끝, 파일 제공자와 맞춘 읽기(NSFileCoordinator), `limit` 바이트까지만.
+/// 빈 파일은 빈 데이터(읽기 실패와 구별), 열거나 읽지 못하면 nil.
+struct CoordinatedFileReader: PickedFileReader {
+    func read(_ url: URL, upTo limit: Int) -> Data? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        var data: Data?
+        var error: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { u in
+            guard let h = try? FileHandle(forReadingFrom: u) else { return }
+            defer { try? h.close() }
+            do { data = try h.read(upToCount: limit) ?? Data() } catch { data = nil }
+        }
+        return data
+    }
+}

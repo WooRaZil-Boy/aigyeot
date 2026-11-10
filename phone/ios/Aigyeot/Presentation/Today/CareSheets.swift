@@ -9,11 +9,8 @@ struct CareSheetView: View {
 
     var body: some View {
         switch sheet {
-        case .quick(let kind, let day): Scoped({ $0.careSheet() }) { _ in CareEditSheet(original: nil, kind: kind, day: day) }
-        case .edit(let id):
-            Scoped({ $0.careSheet() }) { vm in
-                if let e = vm.care.events.first(where: { $0.id == id }) { CareEditSheet(original: e, kind: e.kind) }
-            }
+        case .quick(let kind, let day): Scoped({ $0.careSheet(.new(kind, day: day)) }) { vm in if let d = vm.draft { CareEditSheet(draft: d) } }
+        case .edit(let id): Scoped({ $0.careSheet(.edit(id)) }) { vm in if let d = vm.draft { CareEditSheet(draft: d) } }
         case .timer(let id): Scoped({ $0.timer(id: id) }) { _ in TimerView() }
         }
     }
@@ -157,7 +154,7 @@ private struct PickerChip: View {
             .accessibilityLabel(a11y)
             .accessibilityValue(text)
             .popover(isPresented: $open) {
-                let limit = limitToNow ? Date().addingTimeInterval(60) : Date.distantFuture
+                let limit = limitToNow ? CareRules.latestPick(now: Date()) : Date.distantFuture
                 Group {
                     if components == .date {
                         DatePicker(a11y, selection: $date, in: ...limit, displayedComponents: components).datePickerStyle(.graphical)
@@ -183,9 +180,6 @@ struct TimerView: View {
     @State private var editingStart = false
     @State private var pickingEnd = false
     @State private var picked = Date()
-    @State private var error: String?
-    @State private var overlapping: CareEvent?
-    @State private var askOverlap = false
 
     private var event: CareEvent? { vm.ui.event }
 
@@ -212,7 +206,7 @@ struct TimerView: View {
                         }
                         .buttonStyle(.pillTonal)   // 시안 .pbtn.ton
                         if editingStart || pickingEnd { timePicker(e) }
-                        if let error { Text(error).font(DS.caption).foregroundStyle(DS.danger) }
+                        if let error = vm.error { Text(error).font(DS.caption).foregroundStyle(DS.danger) }
                         if vm.ui.guardian { Text(CareText.guardianNote).font(DS.caption).foregroundStyle(DS.textTertiary) }
                         Button(role: .destructive) { vm.delete(); dismiss() } label: { Text(CareText.deleteRecord) }
                             .buttonStyle(.pillDanger)
@@ -223,9 +217,10 @@ struct TimerView: View {
                 .navigationTitle(CareText.quickLabel(e.kind))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { SheetToolbar(cancel: { dismiss() }) }
-                .alert(CareSaveResult.overlap.message(for: e.kind) ?? "", isPresented: $askOverlap, presenting: overlapping) { x in
-                    Button(CareText.saveAnyway) { commitTime(x, allowOverlap: true) }
-                    Button(CareText.fix, role: .cancel) {}
+                .alert(CareSaveResult.overlap.message(for: e.kind) ?? "",
+                       isPresented: Binding(get: { vm.pendingTime != nil }, set: { if !$0 { vm.keepEditing() } })) {
+                    Button(CareText.saveAnyway) { if vm.confirmTime() { timeSaved() } }
+                    Button(CareText.fix, role: .cancel) { vm.keepEditing() }
                 }
             } else {
                 Color.clear.onAppear { dismiss() }   // 끝났거나 지워졌다
@@ -244,20 +239,9 @@ struct TimerView: View {
     }
 
     @ViewBuilder private func feedControls(_ e: CareEvent) -> some View {
-        Segmented(title: CareText.rowSide, options: FeedSide.allCases, label: { $0.label }, selection: Binding(get: { e.feedSide }, set: { side in
-            var x = e
-            x.feedSide = side
-            if side != .bottle { x.amountMl = nil }
-            show(vm.save(x, allowOverlap: true), kind: e.kind)
-        }))
+        Segmented(title: CareText.rowSide, options: FeedSide.allCases, label: { $0.label }, selection: Binding(get: { e.feedSide }, set: { vm.setSide($0) }))
         if e.feedSide == .bottle {
-            SheetRows {
-                AmountRow(amount: Binding(get: { e.amountMl }, set: { n in
-                    var x = e
-                    x.amountMl = n
-                    show(vm.save(x, allowOverlap: true), kind: e.kind)
-                }))
-            }
+            SheetRows { AmountRow(amount: Binding(get: { e.amountMl }, set: { vm.setAmount($0) })) }
         }
     }
 
@@ -265,33 +249,22 @@ struct TimerView: View {
         VStack(spacing: 12) {
             SheetRows {
                 SheetRow(name: editingStart ? CareText.rowStart : CareText.rowEnd) {
-                    DatePicker(editingStart ? CareText.rowStart : CareText.rowEnd, selection: $picked, in: ...Date().addingTimeInterval(60))
+                    DatePicker(editingStart ? CareText.rowStart : CareText.rowEnd, selection: $picked, in: ...CareRules.latestPick(now: Date()))
                         .labelsHidden().environment(\.timeZone, e.timeZone)   // R13: 목록처럼 그 기록의 시간대로 보인다
                 }
             }
             Button {
-                var x = e
-                if editingStart { x.startAt = CareTime.ms(picked) } else { x.endAt = CareTime.ms(picked) }
-                commitTime(x, allowOverlap: false)
+                // 시각을 바꾸면 겹침을 먼저 묻는다(R4, 뷰모델이 pendingTime에 둔다)
+                if vm.setTime(editingStart ? .start : .end, to: picked) { timeSaved() }
             } label: { Text(CareText.save) }
             .buttonStyle(.pillTonal)
         }
     }
 
-    /// 시각을 바꾸면 겹침을 먼저 묻는다(R4). 쪽·양은 시각을 바꾸지 않아 묻지 않는다.
-    private func commitTime(_ x: CareEvent, allowOverlap: Bool) {
-        let r = vm.save(x, allowOverlap: allowOverlap)
-        if r == .overlap { overlapping = x; askOverlap = true; return }
-        if show(r, kind: x.kind) {
-            editingStart = false
-            if pickingEnd { dismiss() }
-        }
-    }
-
-    @discardableResult
-    private func show(_ r: CareSaveResult, kind: CareKind) -> Bool {
-        error = r == .notSaved ? NoticeRules.saveFailed : r.message(for: kind)   // 저장 실패는 시트 안에서도 보인다(띠의 다른 안내까지 옮기지 않게)
-        return r == .saved
+    /// 시각을 저장했다: 시작 고침은 고르기를 닫고, 끝 고침(최대 길이를 넘은 기록)은 시트를 닫는다.
+    private func timeSaved() {
+        editingStart = false
+        if pickingEnd { dismiss() }
     }
 }
 
@@ -334,122 +307,93 @@ private struct TimerRing: View {
 
 // MARK: 빠른 기록·고치기 시트
 
-/// 빠른 기록(C3)·고치기(C4) 시트(시안 S.sheet): 행 묶음(시작·끝·메모) → 쪽 세그먼트(수유) → 지우기. 새 수유·잠은 시작만 적고 끝은 '끝 시각 모름'이 기본이다.
+/// 빠른 기록·고치기 시트(C3·C4, 시안 S.sheet): 몇 분 전 칩(새 기록·오늘) → 행 판(시작·끝·젖병 양·메모) → 쪽·기저귀 종류 → 지우기.
+/// 화면은 `CareDraft`를 그리고 바꾸기만 한다. 칩 규칙·끝 맞춤·저장할 기록 만들기는 CareDraft, 저장 단계는 CareSheetViewModel이 한다.
 struct CareEditSheet: View {
     @Environment(CareSheetViewModel.self) private var vm
     @Environment(\.dismiss) private var dismiss
-    let original: CareEvent?
-    let kind: CareKind
-    var day: String? = nil
+    /// 지금 입력(뷰모델의 값을 그대로 받는다).
+    let draft: CareDraft
 
-    @State private var chip: Int? = 0          // 몇 분 전(0 = 지금, nil = 직접)
-    @State private var start = Date()
-    @State private var end = Date()
-    @State private var endUnknown = true
-    @State private var side: FeedSide?
-    @State private var amount: Int?
-    @State private var diaper: DiaperKind?
-    @State private var note = ""
-    @State private var error: String?
-    @State private var askOverlap = false
-    @State private var loaded = false
+    private var editing: Bool { draft.original != nil }
+    private var zone: TimeZone { draft.zone }
 
-    private var hasDuration: Bool { kind == .feed || kind == .sleep }
-    /// R13: 고치는 기록은 그 기록의 시간대로 보인다(안드로이드 `zoneOrDevice`와 같다). 새 기록은 기기 시간대.
-    private var zone: TimeZone { original?.timeZone ?? .current }
-    /// 끝 칸이 자리 값이다: 새 기록이거나 끝 모름 기록을 고칠 때. 이때만 끝을 시작 뒤로 맞춘다(R3). 저장된 끝은 그대로 둔다
-    private var endIsPlaceholder: Bool { original?.endAt == nil }
-
-    /// 시작 날짜 칩: 날을 옮기면 끝도 같은 만큼 옮겨 길이를 지킨다(안드로이드와 같음).
-    private var startDay: Binding<Date> {
-        Binding(get: { start }, set: { moved in
-            end = end.addingTimeInterval(moved.timeIntervalSince(start))   // 끝 모름이어도 옮겨 둔다(다시 시각을 고를 때 옛 날이 남지 않게)
-            start = moved
-        })
-    }
-
-    /// 끝 시각 칩: 고른 시·분을 시작 뒤 처음 오는 그 시각으로 둔다(시작보다 이르면 다음 날).
-    /// 바퀴는 지금 뒤를 막지 않는다: 날을 맞추기 전 값이라 어제 밤 시각이 막힌다. 지금보다 늦은 끝은 저장 검사(R3)가 잡는다.
-    private var endAfterStart: Binding<Date> {
-        Binding(get: { end }, set: { end = afterStart($0) })
-    }
-
-    /// `picked`의 시·분이 시작 뒤 처음 오는 때. 시작과 같은 분이면 시작 그대로(초 때문에 다음 날로 넘기지 않는다), 이른 시각이면 다음 날.
-    private func afterStart(_ picked: Date) -> Date {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = zone
-        let hm = cal.dateComponents([.hour, .minute], from: picked)
-        guard let same = cal.date(bySettingHour: hm.hour ?? 0, minute: hm.minute ?? 0, second: 0, of: start),
-              let startMinute = cal.dateInterval(of: .minute, for: start)?.start else { return picked }
-        return same < startMinute ? (cal.date(byAdding: .day, value: 1, to: same) ?? same) : max(same, start)
+    /// 입력 칸 바인딩: 읽기는 받은 값, 쓰기는 뷰모델로.
+    private func field<T>(_ kp: WritableKeyPath<CareDraft, T>) -> Binding<T> {
+        Binding(get: { draft[keyPath: kp] }, set: { v in vm.edit { $0[keyPath: kp] = v } })
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if original == nil && day == nil { chips }   // 몇 분 전 칩은 오늘 기준이다
+                    if draft.showsAgoChips { chips }
                     SheetRows {
-                        if original != nil || chip == nil {
+                        if editing || draft.chip == nil {
                             // 시작(수유·잠) 또는 시각: 날짜 칩은 날을, 시각 칩은 시각을 고른다(시안 .sheet .row em, 안드로이드와 같음)
-                            let name = hasDuration ? CareText.rowStart : CareText.rowTime
+                            let name = draft.hasDuration ? CareText.rowStart : CareText.rowTime
                             SheetRow(name: name) {
                                 ChipLine {
-                                    PickerChip(text: CareText.dayTitle(CareRules.dayKey(CareTime.ms(start), zone), now: Date(), zone: zone),
-                                               a11y: name + " 날짜", date: startDay, components: .date, zone: zone)
-                                    PickerChip(text: CareFormat.clock(start, zone), a11y: name + " 시각", date: $start, components: .hourAndMinute, zone: zone)
+                                    PickerChip(text: CareText.dayTitle(CareRules.dayKey(CareTime.ms(draft.start), zone), now: Date(), zone: zone),
+                                               a11y: name + " 날짜",
+                                               date: Binding(get: { draft.start }, set: { d in vm.edit { $0.moveStartDay(to: d) } }),
+                                               components: .date, zone: zone)
+                                    PickerChip(text: CareFormat.clock(draft.start, zone), a11y: name + " 시각",
+                                               date: Binding(get: { draft.start }, set: { d in vm.edit { $0.setStart(d) } }),
+                                               components: .hourAndMinute, zone: zone)
                                 }
                             }
-                            .onChange(of: start) { _, s in if endIsPlaceholder { end = max(end, s) } }
                         }
-                        if hasDuration {
-                            // 끝: '끝 시각 모름' 칩과 시각 칩. 시각만 고르고 날은 시작 뒤 처음 오는 그 시각이다(자정을 넘긴 잠, 안드로이드 firstAtOrAfter)
+                        if draft.hasDuration {
+                            // 끝: '끝 시각 모름' 칩과 시각 칩. 시각만 고르고 날은 시작 뒤 처음 오는 그 시각이다(자정을 넘긴 잠)
                             SheetRow(name: CareText.rowEnd) {
                                 ChipLine {
-                                    ValueChip(text: CareText.endUnknown, selected: endUnknown) { endUnknown = true }
-                                    PickerChip(text: endUnknown ? CareText.chipCustom : CareFormat.clock(end, zone), selected: !endUnknown,
-                                               a11y: CareText.rowEnd + " 시각", date: endAfterStart, components: .hourAndMinute, zone: zone, limitToNow: false) {
-                                        // 끝 모름에서 돌아오면 보이는 시각을 시작 뒤로 맞춘다(시작을 그사이 옮겼어도)
-                                        if endUnknown { endUnknown = false; end = endIsPlaceholder ? max(end, start) : afterStart(end) }
+                                    ValueChip(text: CareText.endUnknown, selected: draft.endUnknown) { vm.edit { $0.endUnknown = true } }
+                                    PickerChip(text: draft.endUnknown ? CareText.chipCustom : CareFormat.clock(draft.end, zone), selected: !draft.endUnknown,
+                                               a11y: CareText.rowEnd + " 시각",
+                                               date: Binding(get: { draft.end }, set: { d in vm.edit { $0.setEnd(picked: d) } }),
+                                               components: .hourAndMinute, zone: zone, limitToNow: false) {
+                                        vm.edit { $0.useEndTime() }
                                     }
                                 }
                             }
                         }
-                        if kind == .feed, side == .bottle { AmountRow(amount: $amount) }
+                        if draft.kind == .feed, draft.side == .bottle { AmountRow(amount: field(\.amount)) }
                         SheetRow(name: CareText.rowNote) {
-                            TextField(CareText.notePlaceholder, text: $note, axis: .vertical)
+                            TextField(CareText.notePlaceholder, text: Binding(get: { draft.note }, set: { v in vm.edit { $0.note = CareRules.noteLimited(v) } }),
+                                      axis: .vertical)   // 200에서 더 받지 않는다(U17)
                                 .font(DS.font(15.5, 400)).multilineTextAlignment(.trailing)
                                 .accessibilityLabel(CareText.rowNote)
-                                .onChange(of: note) { _, v in let l = CareRules.noteLimited(v); if l != v { note = l } }   // 200에서 더 받지 않는다(U17)
                         }
                     }
-                    if kind == .feed {
-                        Segmented(title: CareText.rowSide, options: FeedSide.allCases, label: { $0.label }, selection: $side)
+                    if draft.kind == .feed {
+                        Segmented(title: CareText.rowSide, options: FeedSide.allCases, label: { $0.label }, selection: field(\.side))
                     }
-                    if kind == .diaper {
-                        Segmented(title: CareText.rowKind, options: DiaperKind.allCases, label: { CareText.diaperLabel($0) }, selection: $diaper)
+                    if draft.kind == .diaper {
+                        Segmented(title: CareText.rowKind, options: DiaperKind.allCases, label: { CareText.diaperLabel($0) }, selection: field(\.diaper))
                     }
-                    if let error { Text(error).font(DS.caption).foregroundStyle(DS.danger) }
+                    if case .failed(let m?) = vm.phase { Text(m).font(DS.caption).foregroundStyle(DS.danger) }
                     if vm.guardian { Text(CareText.guardianNote).font(DS.caption).foregroundStyle(DS.textTertiary) }
-                    if let e = original {
-                        Button(role: .destructive) { vm.delete(e.id); dismiss() } label: { Text(CareText.delete) }
+                    if editing {
+                        Button(role: .destructive) { vm.delete() } label: { Text(CareText.delete) }
                             .buttonStyle(.pillDanger).padding(.top, 8)
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 24)
             }
             .scrollContentBackground(.hidden).background(DS.surface)   // 시안 .sheet: 흰 면 위에 행 판(먹색 4%)
-            .navigationTitle(CareText.sheetTitle(kind, editing: original != nil))
+            .navigationTitle(CareText.sheetTitle(draft.kind, editing: editing))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                SheetToolbar(cancel: { dismiss() }, confirm: { save(allowOverlap: false) },
-                             confirmDisabled: kind == .note && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                SheetToolbar(cancel: { dismiss() }, confirm: { vm.save() },
+                             confirmDisabled: draft.kind == .note && draft.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .alert(CareSaveResult.overlap.message(for: kind) ?? "", isPresented: $askOverlap) {
-                Button(CareText.saveAnyway) { save(allowOverlap: true) }
-                Button(CareText.fix, role: .cancel) {}
+            .alert(CareSaveResult.overlap.message(for: draft.kind) ?? "",
+                   isPresented: Binding(get: { vm.phase == .confirmOverlap }, set: { if !$0 { vm.keepEditing() } })) {
+                Button(CareText.saveAnyway) { vm.save(allowOverlap: true) }
+                Button(CareText.fix, role: .cancel) { vm.keepEditing() }
             }
-            .onAppear(perform: load)
+            .onChange(of: vm.phase) { _, p in if p == .closed { dismiss() } }   // 저장했거나 그사이 지워졌다(R10)
         }
         .presentationDetents([.medium, .large])
     }
@@ -466,12 +410,8 @@ struct CareEditSheet: View {
 
     /// 칩 선택은 먹색 채움(k-style), 나머지는 회색.
     private func chipButton(_ title: String, _ minutes: Int?) -> some View {
-        let on = chip == minutes
-        return Button {
-            chip = minutes
-            // 누른 때 기준으로 시작을 정한다(처음 '지금'은 시트를 연 때). 끝 기본값보다 늦어지지 않는다. '직접'은 지금 값에서 고른다.
-            if let minutes { start = Date().addingTimeInterval(-Double(minutes * 60)); end = max(end, start) }   // 시트를 오래 열어 두어도 끝 ≥ 시작(R3)
-        } label: {
+        let on = draft.chip == minutes
+        return Button { vm.pick(chip: minutes) } label: {
             Text(title).font(DS.font(15, 600))
                 .foregroundStyle(on ? DS.onFill : DS.textSecondary)
                 .padding(.horizontal, 14).frame(minHeight: 44)
@@ -479,44 +419,5 @@ struct CareEditSheet: View {
         }
         .buttonStyle(.press)
         .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    private func load() {
-        guard !loaded else { return }
-        loaded = true
-        guard let e = original else {
-            if kind == .diaper { diaper = .wet }   // 새 기저귀는 소변으로 시작한다(안드로이드 CareScreens와 같다. 종류 없이 저장하지 않게)
-            // 기록 탭에서 다른 날을 골랐으면 그날 낮 12시에서 고른다(안드로이드와 같다).
-            if let day, let noon = CareRules.noon(day, .current) { chip = nil; start = CareTime.date(noon); end = start }
-            return
-        }
-        start = CareTime.date(e.startAt)
-        if let x = e.endAt { end = CareTime.date(x); endUnknown = false } else { end = start }
-        side = e.feedSide
-        amount = e.amountMl
-        diaper = e.diaper
-        note = e.note ?? ""
-    }
-
-    private func save(allowOverlap: Bool) {
-        let now = Date()
-        let t = CareTime.ms(now)
-        var e = original ?? CareEvent(id: ULID.generate(date: now), kind: kind, startAt: 0, zone: TimeZone.current.identifier,
-                                      createdAt: t, updatedAt: t)
-        e.startAt = CareTime.ms(start)
-        if hasDuration {
-            e.endAt = endUnknown ? nil : CareTime.ms(end)
-            e.endUnknown = endUnknown
-        }
-        e.feedSide = kind == .feed ? side : nil
-        e.amountMl = kind == .feed && side == .bottle ? amount : nil
-        e.diaper = kind == .diaper ? diaper : nil
-        let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        e.note = n.isEmpty ? nil : n
-        switch vm.save(e, allowOverlap: allowOverlap, editing: original != nil) {
-        case .saved, .gone: dismiss()   // 그사이 지워졌으면 되살리지 않고 닫는다(R10)
-        case .overlap: askOverlap = true
-        case .failed(let m): error = m   // 저장 실패는 시트 안에서도 보인다(띠의 다른 안내까지 옮기지 않게)
-        }
     }
 }

@@ -120,8 +120,7 @@ final class RecorderViewModel {
     func discard() {
         session += 1
         timer?.invalidate(); timer = nil
-        recorder.cancel()
-        if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+        recorder.discard(fileURL)
         levels = []
         state = .idle
     }

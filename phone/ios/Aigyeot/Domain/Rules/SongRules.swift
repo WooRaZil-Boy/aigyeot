@@ -5,13 +5,17 @@ enum SongRules {
     static let maxSongs = 3
     static let maxDurationS: Double = 180
     static let maxBytes = 2_000_000
+    static let maxNameLength = 30
 
     /// 이름은 앞뒤 공백을 빼고 1~30자(3.3).
     static func name(_ raw: String) throws -> String {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (1...30).contains(name.count) else { throw SongError.badName }
+        guard (1...maxNameLength).contains(name.count) else { throw SongError.badName }
         return name
     }
+
+    /// 입력 칸: 30자에서 더 받지 않는다(안드로이드 take(30)과 같다).
+    static func nameInput(_ v: String) -> String { v.count > maxNameLength ? String(v.prefix(maxNameLength)) : v }
 
     /// '다시 녹음'으로 바꿀 곡: 거절·실패한 곡만 바꾼다. 시트를 연 사이 차가 받아들였으면 바꾸지 않고 새 곡으로 넣는다(3곡 한도는 그대로 본다).
     static func replaceable(_ old: String?, in s: PhoneState) -> SongRow? {

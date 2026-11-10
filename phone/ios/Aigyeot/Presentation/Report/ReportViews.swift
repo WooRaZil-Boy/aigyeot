@@ -252,27 +252,15 @@ private struct SteeringView: View {
 
 // MARK: 문구
 
-/// 음원 표시 이름. 부모 노래는 곡 이름을 함께 보인다.
+/// 음원 표시 이름(CareText.method 한 곳). 부모 노래는 곡 이름을 덧붙인다.
 private func methodName(_ m: SoundMethod, _ song: String?) -> String {
-    switch m {
-    case .whiteNoise: return "백색소음"
-    case .lullaby: return "자장가"
-    case .parentSong: return song.map { "부모 노래(\($0))" } ?? "부모 노래"
-    case .womb: return "뱃속 소리"
-    case .unknown: return "기타"
-    }
+    let base = CareText.method(m)
+    return m == .parentSong ? song.map { "\(base)(\($0))" } ?? base : base
 }
 
-/// 방법별 성적 점 행렬 순서(시안 Charts.methods, 안드로이드와 같다): 3번 이상 튼 것(판정 가능) 먼저, 그 안은 그친 비율이 높은 순, 같으면 받은 순.
+/// 방법별 성적 점 행렬 줄(순서 규칙은 `CareStats.methodOrder` 한 곳, 안드로이드와 같다).
 func methodDotRows(_ stats: [MethodStat]) -> [MethodDots.Row] {
-    let rows = stats.enumerated().map { i, s in MethodDots.Row(id: i, name: soundLabel(s.method, s.label), ok: s.successes, n: s.attempts) }
-    func rate(_ r: MethodDots.Row) -> Double { r.n > 0 ? Double(r.ok) / Double(r.n) : 0 }
-    return rows.sorted { a, b in
-        let ka = a.n >= 3, kb = b.n >= 3
-        if ka != kb { return ka }
-        if rate(a) != rate(b) { return rate(a) > rate(b) }
-        return a.id < b.id
-    }
+    CareStats.methodOrder(stats).map { MethodDots.Row(id: $0.index, name: soundLabel($0.stat.method, $0.stat.label), ok: $0.stat.successes, n: $0.stat.attempts) }
 }
 
 /// 방법별 성적 행. 모르는 소리가 둘이어도 두 행(method를 행 id로 쓰지 않는다).

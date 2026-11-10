@@ -7,7 +7,7 @@ protocol ViewModelFactory: AnyObject {
     func connect() -> ConnectViewModel
     func today() -> TodayViewModel
     func timer(id: String) -> TimerViewModel
-    func careSheet() -> CareSheetViewModel
+    func careSheet(_ target: CareSheetTarget) -> CareSheetViewModel
     func records() -> RecordsViewModel
     func car() -> CarViewModel
     func songs() -> SongsViewModel

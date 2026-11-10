@@ -436,7 +436,7 @@ struct MethodDots: View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(rows) { m in
                 let base = rows.prefix { $0.id != m.id }.reduce(0) { $0 + $1.ok }   // 앞 줄들의 찬 점 수: 점은 모든 줄을 이어 0.02초씩 늦게 나온다
-                let known = m.n >= 3
+                let known = m.n >= CareStats.methodKnownAttempts
                 Group {
                     // 큰 글자, 또는 이름을 80으로 줄여도 한 줄에 점·횟수가 들어가지 않는 좁은 폭(320pt 등)이면 이름·값 한 줄, 그 아래 점
                     if typeSize.isAccessibilitySize { stacked(m, known: known, base: base) } else {

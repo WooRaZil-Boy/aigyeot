@@ -124,7 +124,7 @@ final class CareCsvTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("EXAMPLE-big.csv")
         try Data(count: CareCsv.maxBytes + 1).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
-        XCTAssertEqual(SettingsViewModel.read(url), .tooLarge)
+        XCTAssertEqual(CoordinatedFileReader().read(url, upTo: CareCsv.maxBytes + 1).map(CareCsv.read), .tooLarge)
         let vm = try kit().app.settings()
         vm.startImport()
         vm.picked(.success(url))

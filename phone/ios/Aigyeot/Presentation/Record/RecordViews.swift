@@ -307,16 +307,13 @@ private struct PatternView: View {
     let now: Date
 
     var body: some View {
-        let on = vm.ui.care.sleepDiaperEnabled
-        let ms = CareTime.ms(now)
-        let p = CareRules.pattern(vm.ui.care.events, reports: vm.ui.reports, now: ms, zone: .current, sleepDiaper: on)
-        let iw = ChartData.intervalWeek(care: vm.ui.care, now: ms, zone: .current)
-        let cw = ChartData.carCryWeek(reports: vm.ui.reports, now: ms, zone: .current)
+        let ui = vm.ui.pattern(now: CareTime.ms(now))
+        let iw = ui.interval, cw = ui.carCries
         // 블록마다 한 행(바깥 RecordsView의 List가 담는다). 행 사이 12, 옆 12(시안 `.pad`).
         Group {
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternHeader)
-                let kpis = kpiItems(p)
+                let kpis = kpiItems(ui)
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(0..<((kpis.count + 2) / 3), id: \.self) { r in KpiRow(items: Array(kpis[(r * 3)..<min(kpis.count, r * 3 + 3)])) }
                 }
@@ -336,8 +333,7 @@ private struct PatternView: View {
             }
             .block()
             .enterRise(2)
-            if on {
-                let g = ChartData.sleepGrid(care: vm.ui.care, now: ms, zone: .current)
+            if let g = ui.sleep {
                 VStack(alignment: .leading, spacing: 0) {
                     BlockHeader(title: CareText.sleepPattern)
                     if let avg = g.avgMs {
@@ -370,8 +366,8 @@ private struct PatternView: View {
     }
 
     /// 지난 7일 숫자 칸(결정 2): 하루 수유 "평균 n회"·"{n}일 기준", 수유 간격 "{기간}"·"중앙값", 차에서 울음 "{n}번"·"7일 동안", 켜면 하루 잠·하루 기저귀.
-    private func kpiItems(_ p: CarePattern) -> [KpiRow.Item] {
-        let trend = ChartData.feedTrend(care: vm.ui.care, now: CareTime.ms(now), zone: .current)
+    private func kpiItems(_ ui: PatternUi) -> [KpiRow.Item] {
+        let p = ui.numbers, trend = ui.feedTrend
         func days(_ n: Int?) -> String? { n.flatMap { $0 > 0 ? CareText.basedOn(days: $0) : nil } }
         var items = [
             // pattern.days는 늘 보이고, 앞 주와 견줄 수 있으면 그 아래 '지난주보다 …'(design.chart)

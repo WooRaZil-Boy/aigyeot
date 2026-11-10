@@ -1739,3 +1739,113 @@ final class CareTests: XCTestCase {
         XCTAssertEqual(s.todayFeedCount, 2, w, line: line)
     }
 }
+
+/// 기록 시트 입력(CareDraft)과 종류별 칸 정리(CareRules.normalized). 화면에서 옮긴 규칙이라 화면 없이 본다.
+final class CareDraftTests: XCTestCase {
+    private let now = Rfc3339.parse("2026-11-10T09:00:00+09:00")!
+
+    func test_새_기록은_지금에서_시작하고_다른_날이면_그날_낮_12시에서_직접_고른다() {
+        let d = CareDraft.new(kind: .diaper, day: nil, now: now)
+        XCTAssertEqual(d.chip, 0)
+        XCTAssertEqual(d.start, now)
+        XCTAssertEqual(d.diaper, .wet)          // 종류 없이 저장하지 않게 소변으로 시작
+        XCTAssertTrue(d.showsAgoChips)
+        let past = CareDraft.new(kind: .feed, day: "2026-11-08", now: now)
+        XCTAssertNil(past.chip)
+        XCTAssertFalse(past.showsAgoChips)
+        XCTAssertEqual(past.start, CareRules.noon("2026-11-08", .current).map(CareTime.date))   // 기기 시간대의 그날 낮 12시
+    }
+
+    func test_몇_분_전_칩은_누른_때_기준이고_끝이_시작보다_이르지_않다() {
+        var d = CareDraft.new(kind: .sleep, day: nil, now: now)
+        d.pick(chip: 30, now: now)
+        XCTAssertEqual(d.start, now.addingTimeInterval(-1800))
+        XCTAssertGreaterThanOrEqual(d.end, d.start)
+        d.pick(chip: nil, now: now)
+        XCTAssertNil(d.chip)
+        XCTAssertEqual(d.start, now.addingTimeInterval(-1800))   // '직접'은 지금 값에서 고른다
+    }
+
+    func test_끝_시각은_시작_뒤_처음_오는_그_시각이고_같은_분이면_시작이다() {
+        var e = CareEvent(id: "x", kind: .sleep, startAt: CareTime.ms(Rfc3339.parse("2026-11-09T23:00:30+09:00")!), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0)
+        e.endAt = CareTime.ms(Rfc3339.parse("2026-11-10T06:00:00+09:00")!)
+        var d = CareDraft.editing(e)
+        let at = { (s: String) in Rfc3339.parse(s)! }
+        d.setEnd(picked: at("2026-11-10T07:30:00+09:00"))
+        XCTAssertEqual(d.end, at("2026-11-10T07:30:00+09:00"))        // 이른 시각 → 다음 날(자정 넘김)
+        d.setEnd(picked: at("2026-11-10T23:30:00+09:00"))
+        XCTAssertEqual(d.end, at("2026-11-09T23:30:00+09:00"))        // 시작과 같은 날의 늦은 시각
+        d.setEnd(picked: at("2026-11-10T23:00:00+09:00"))
+        XCTAssertEqual(d.end, at("2026-11-09T23:00:30+09:00"))        // 같은 분 → 시작 그대로
+    }
+
+    func test_시작_날을_옮기면_끝도_같이_옮기고_끝_모름에서_돌아오면_시작_뒤로_맞춘다() {
+        var e = CareEvent(id: "x", kind: .feed, startAt: CareTime.ms(Rfc3339.parse("2026-11-09T12:00:00+09:00")!), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0)
+        e.endAt = CareTime.ms(Rfc3339.parse("2026-11-09T13:00:00+09:00")!)
+        var d = CareDraft.editing(e)
+        d.endUnknown = true
+        d.moveStartDay(to: Rfc3339.parse("2026-11-08T12:00:00+09:00")!)
+        d.useEndTime()
+        XCTAssertFalse(d.endUnknown)
+        XCTAssertEqual(d.end, Rfc3339.parse("2026-11-08T13:00:00+09:00"))   // 옛 날(9일)이 남지 않는다
+    }
+
+    func test_저장할_기록은_종류에_맞지_않는_칸을_비우고_메모_공백을_걷는다() {
+        var d = CareDraft.new(kind: .feed, day: nil, now: now)
+        d.side = .left
+        d.amount = 100                 // 젖병이 아니면 양을 버린다
+        d.note = "  트림  "
+        let e = d.event(now: now)
+        XCTAssertEqual(e.feedSide, .left)
+        XCTAssertNil(e.amountMl)
+        XCTAssertEqual(e.note, "트림")
+        XCTAssertTrue(e.endUnknown)    // 끝을 고르지 않은 새 수유
+        var sleep = CareDraft.new(kind: .sleep, day: nil, now: now)
+        sleep.side = .bottle
+        sleep.note = "   "
+        let s = sleep.event(now: now)
+        XCTAssertNil(s.feedSide)
+        XCTAssertNil(s.note)
+        let original = CareEvent(id: "keep", kind: .diaper, startAt: 0, zone: "Asia/Seoul", diaper: .dirty, createdAt: 1, updatedAt: 1)
+        XCTAssertEqual(CareDraft.editing(original).event(now: now).id, "keep")
+    }
+}
+
+/// 집계 공통 규칙(CareStats). 패턴 숫자 칸·7일 막대·오늘 막대가 같은 함수를 쓴다.
+final class CareStatsTests: XCTestCase {
+    private let seoul = TimeZone(identifier: "Asia/Seoul")!
+    private func ms(_ s: String) -> Int64 { CareTime.ms(Rfc3339.parse(s)!) }
+    private func feed(_ s: String, deleted: Bool = false) -> CareEvent {
+        CareEvent(id: s, kind: .feed, startAt: ms(s), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0, deletedAt: deleted ? 1 : nil)
+    }
+
+    func test_지난_며칠은_오늘을_포함해_오래된_날부터다() {
+        XCTAssertEqual(CareStats.lastDays(3, now: ms("2026-11-10T09:00:00+09:00"), zone: seoul), ["2026-11-08", "2026-11-09", "2026-11-10"])
+    }
+
+    func test_수유_간격은_지운_기록을_빼고_10시간_넘는_간격을_뺀다() {
+        let events = [feed("2026-11-10T01:00:00+09:00"), feed("2026-11-10T03:00:00+09:00"), feed("2026-11-10T04:00:00+09:00", deleted: true),
+                      feed("2026-11-10T15:00:00+09:00"), feed("2026-11-10T18:00:00+09:00")]
+        let starts = CareStats.feedStarts(events, until: ms("2026-11-10T20:00:00+09:00"))
+        XCTAssertEqual(starts.count, 4)
+        XCTAssertEqual(CareStats.feedGaps(starts).map(\.ms), [2 * 3_600_000, 3 * 3_600_000])   // 03시 → 15시(12시간)는 뺀다
+        XCTAssertEqual(CareStats.median([5, 1, 3]), 3)
+        XCTAssertEqual(CareStats.median([4, 1, 3, 2]), 2)                     // 짝수: 가운데 둘의 평균(내림)
+        XCTAssertNil(CareStats.usualGap([1, 2, 3, 4]))                        // 5개 미만이면 '평소' 없음(R14)
+        XCTAssertEqual(CareStats.usualGap([1, 2, 3, 4, 5]), 3)
+    }
+
+    func test_하루_평균은_기록한_날만_나눠_센다() {
+        XCTAssertEqual(CareStats.perRecordedDay([0, 4, 0, 6]), 5)
+        XCTAssertNil(CareStats.perRecordedDay([0, 0]))
+        XCTAssertEqual(CareStats.perRecordedDay([Int64(0), 3_000, 4_001]), 3_500)
+    }
+
+    func test_방법별_성적은_판정할_수_있는_것_먼저_그친_비율_높은_순이다() {
+        let s = [MethodStat(method: .lullaby, label: "자장가", successes: 1, attempts: 2),
+                 MethodStat(method: .womb, label: "뱃속 소리", successes: 3, attempts: 4),
+                 MethodStat(method: .whiteNoise, label: "백색소음", successes: 6, attempts: 7),
+                 MethodStat(method: .unknown, label: "?", successes: -2, attempts: 5)]
+        XCTAssertEqual(CareStats.methodOrder(s).map(\.index), [2, 1, 3, 0])
+    }
+}

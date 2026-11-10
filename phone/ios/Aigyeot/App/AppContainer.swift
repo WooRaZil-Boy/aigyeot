@@ -75,12 +75,16 @@ final class AppContainer {
                                                                           disconnect: disconnect)
     /// 정보·라이선스의 판 글자(앱 묶음에서 읽는다).
     private let version: String
+    /// 기록 가져오기에서 고른 파일 읽기(시험은 가짜로 바꿀 수 있다).
+    private let fileReader: PickedFileReader
 
     /// `baseURL`이 있으면 그 주소로 WebSocket을 붙인다(없으면 소켓 없음: 시험).
     init(relay: RelayClient, store stateStore: StateStore, credentials: CredentialStore, careStore: CareStore = MemoryCareStore(),
          baseURL: URL? = nil, network: NetworkWatcher? = nil, ongoing: OngoingNotice? = nil, marks: LinkMarks? = nil,
-         now: @escaping () -> Date = Date.init, sendsCareSummary: Bool = true, version: String = AppInfo.version) {
+         now: @escaping () -> Date = Date.init, sendsCareSummary: Bool = true, version: String = AppInfo.version,
+         fileReader: PickedFileReader = CoordinatedFileReader()) {
         self.relay = relay
+        self.fileReader = fileReader
         self.now = now
         self.sendsCareSummary = sendsCareSummary
         self.network = network
@@ -149,7 +153,9 @@ extension AppContainer: ViewModelFactory {
         TodayViewModel(state: state, care: care, notices: notices, connection: keepConnected, recordCare: recordCare)
     }
     func timer(id: String) -> TimerViewModel { TimerViewModel(id: id, state: state, care: care, recordCare: recordCare) }
-    func careSheet() -> CareSheetViewModel { CareSheetViewModel(state: state, care: care, recordCare: recordCare) }
+    func careSheet(_ target: CareSheetTarget) -> CareSheetViewModel {
+        CareSheetViewModel(target: target, state: state, care: care, recordCare: recordCare, now: now)
+    }
     func records() -> RecordsViewModel { RecordsViewModel(state: state, care: care, recordCare: recordCare) }
     func car() -> CarViewModel { CarViewModel(state: state, connection: keepConnected) }
     func songs() -> SongsViewModel {
@@ -163,7 +169,7 @@ extension AppContainer: ViewModelFactory {
     func alert(id: String) -> AlertViewModel { AlertViewModel(id: id, state: state) }
     func settings() -> SettingsViewModel {
         SettingsViewModel(state: state, care: care, connection: keepConnected, recordCare: recordCare, clearRecords: clearRecords,
-                          disconnect: disconnect, now: now, version: version)
+                          disconnect: disconnect, now: now, version: version, fileReader: fileReader)
     }
     func guardians() -> GuardiansViewModel {
         GuardiansViewModel(state: state, connection: keepConnected, invite: invite, setHandoffAlerts: setHandoffAlerts)

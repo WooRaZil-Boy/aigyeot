@@ -93,11 +93,7 @@ enum ChartData {
     struct Bar: Equatable { let day: String, label: String, value: Int64?, tip: String? }
 
     /// 지난 7일(오늘 포함, 오래된 것부터).
-    static func lastWeek(now: Int64, zone: TimeZone) -> [String] {
-        let cal = CareRules.calendar(zone)
-        let today = cal.startOfDay(for: CareTime.date(now))
-        return (0..<7).reversed().map { CareRules.dayKey(CareTime.ms(cal.date(byAdding: .day, value: -$0, to: today)!), zone) }
-    }
+    static func lastWeek(now: Int64, zone: TimeZone) -> [String] { CareStats.lastDays(7, now: now, zone: zone) }
 
     /// 막대 밑 이름: 요일 한 글자, 오늘은 "오늘".
     static func weekLabel(_ day: String, today: String) -> String { day == today ? "오늘" : CareRules.weekdayName(day) }
@@ -108,27 +104,19 @@ enum ChartData {
         return p.count == 3 ? "\(p[1])월 \(p[2])일" : day
     }
 
-    private static func median(_ xs: [Int64]) -> Int64? {
-        let s = xs.sorted()
-        if s.isEmpty { return nil }
-        return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2
-    }
-
     /// 수유 간격 7일 막대 + '평소'(앞 6일 모든 간격의 중앙값, R14와 같이 10시간 넘는 간격은 빼고 5개 이상일 때만).
     struct IntervalWeek: Equatable { let bars: [Bar], usualMs: Int64?, todayMs: Int64? }
 
     static func intervalWeek(care: CareFile, now: Int64, zone: TimeZone) -> IntervalWeek {
         let days = lastWeek(now: now, zone: zone)
         let today = days.last!
-        let starts = CareRules.live(care.events).filter { $0.kind == .feed && $0.startAt <= now }.map(\.startAt).sorted()
         // 간격은 뒤 수유가 시작한 날에 넣는다.
-        let pairs = zip(starts, starts.dropFirst()).map { (CareRules.dayKey($1, zone), $1 - $0) }.filter { $0.1 <= CareRules.gapMaxMs }
+        let gaps = CareStats.feedGaps(CareStats.feedStarts(care.events, until: now)).map { (day: CareRules.dayKey($0.end, zone), ms: $0.ms) }
         let bars = days.map { d -> Bar in
-            let v = median(pairs.filter { $0.0 == d }.map(\.1))
+            let v = CareStats.median(gaps.filter { $0.day == d }.map(\.ms))
             return Bar(day: d, label: weekLabel(d, today: today), value: v, tip: v.map { "\(monthDay(d)) · " + CareFormat.length($0) })
         }
-        let before = pairs.filter { days.dropLast().contains($0.0) }.map(\.1)
-        return IntervalWeek(bars: bars, usualMs: before.count >= CareRules.minGaps ? median(before) : nil, todayMs: bars.last?.value)
+        return IntervalWeek(bars: bars, usualMs: CareStats.usualFeedGapMs(care.events, now: now, zone: zone), todayMs: bars.last?.value)
     }
 
     /// 차에서 울음 7일 막대(리포트 울음 경보 에피소드 수) + 평균 감지 지연(초, 없으면 nil).
@@ -137,9 +125,7 @@ enum ChartData {
     static func carCryWeek(reports: [StoredReport], now: Int64, zone: TimeZone) -> CarCryWeek {
         let days = lastWeek(now: now, zone: zone)
         let today = days.last!
-        let eps = reports.flatMap(\.body.timeline).filter { $0.trigger == .cryAlarm }
-            .compactMap { e in Rfc3339.parse(e.startedAt).map { (CareRules.dayKey(CareTime.ms($0), zone), e) } }
-            .filter { days.contains($0.0) }
+        let eps = CareStats.cryAlarms(reports).map { (CareRules.dayKey(CareTime.ms($0.at), zone), $0.episode) }.filter { days.contains($0.0) }
         let bars = days.map { d -> Bar in
             let n = Int64(eps.filter { $0.0 == d }.count)
             return Bar(day: d, label: weekLabel(d, today: today), value: n, tip: "\(monthDay(d)) · \(n)번")
@@ -170,9 +156,8 @@ enum ChartData {
         }
         // U31·패턴 '하루 잠'과 같은 값: 지난 7일(오늘 포함) 중 끝난 잠이 그날에 걸친 시간이 0보다 큰 날의 평균(같은 화면에서 두 숫자가 어긋나지 않게).
         let all = days.map { CareRules.sleepMs(onDay: $0, in: care.events, zone: zone) }
-        let per = all.filter { $0 > 0 }
         return SleepGrid(days: days, labels: days.map { weekLabel($0, today: today) }, rows: rows,
-                         avgMs: per.isEmpty ? nil : per.reduce(0, +) / Int64(per.count), sleepDays: per.count, perDayMs: all)
+                         avgMs: CareStats.perRecordedDay(all), sleepDays: all.filter { $0 > 0 }.count, perDayMs: all)
     }
 
     /// '지난주보다 {n}회 많아요/적어요'(문구표 design.chart, 시안 S.pattern): 지난 7일 하루 평균 수유 − 그 앞 7일 하루 평균.
@@ -181,10 +166,7 @@ enum ChartData {
         let days = lastWeek(now: now, zone: zone)
         let cal = CareRules.calendar(zone)
         let feeds = CareRules.live(care.events).filter { $0.kind == .feed }.map { CareRules.dayKey($0.startAt, zone) }
-        func avg(_ ds: [String]) -> Double? {
-            let per = ds.map { d in feeds.filter { $0 == d }.count }.filter { $0 > 0 }
-            return per.isEmpty ? nil : Double(per.reduce(0, +)) / Double(per.count)
-        }
+        func avg(_ ds: [String]) -> Double? { CareStats.perRecordedDay(ds.map { d in feeds.filter { $0 == d }.count }) }
         let prevDays = days.compactMap { d -> String? in
             CareRules.dayRange(d, zone).flatMap { cal.date(byAdding: .day, value: -7, to: CareTime.date($0.0)) }.map { CareRules.dayKey(CareTime.ms($0), zone) }
         }

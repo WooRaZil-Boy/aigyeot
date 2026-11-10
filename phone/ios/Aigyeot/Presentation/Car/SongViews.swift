@@ -72,7 +72,7 @@ private struct CarContent: View {
     /// 우리 노래(owner만): 1~3곡 녹음·다시 듣기·지우기, 실험에 쓸 한 곡 고르기, 차로 보낸 상태.
     private var songs: some View {
         Section {
-            BlockHeader(title: "우리 노래", link: songsVM.ui.slotsUsed < 3 ? "녹음하기" : nil) { player.stop(); replacing = nil; recording = true }   // 7.1 car.section.songs(U39)
+            BlockHeader(title: "우리 노래", link: songsVM.ui.slotsUsed < SongRules.maxSongs ? "녹음하기" : nil) { player.stop(); replacing = nil; recording = true }   // 7.1 car.section.songs(U39)
                 .listRowInsets(Self.headInsets)
                 .enterRise(1)
             if songsVM.ui.songs.isEmpty {
@@ -85,7 +85,7 @@ private struct CarContent: View {
                     .enterRise(2)
                     .swipeActions { Button("지우기", role: .destructive) { songsVM.remove(row.id) } }
             }
-            if songsVM.ui.slotsUsed >= 3 {
+            if songsVM.ui.slotsUsed >= SongRules.maxSongs {
                 Text("노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요.").font(DS.font(13, 400)).foregroundStyle(DS.textTertiary).padding(.bottom, 8)
             }
         } footer: {
@@ -251,7 +251,7 @@ struct RecordSheet: View {
                         .padding(.horizontal, 14).frame(minHeight: 50)
                         .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM, style: .continuous))
                         .submitLabel(.done)   // 키보드의 '완료'로 닫는다
-                        .onChange(of: name) { _, v in sendError = nil; if v.count > 30 { name = String(v.prefix(30)) } }   // 고치면 옛 오류를 지운다. 30에서 더 받지 않는다(3.3, 안드로이드 take(30)과 같다)
+                        .onChange(of: name) { _, v in sendError = nil; let l = SongRules.nameInput(v); if l != v { name = l } }   // 고치면 옛 오류를 지운다. 30에서 더 받지 않는다(3.3)
                     HStack(spacing: 12) {
                         Button { if !rec.isPlaying { player.stop() }; rec.togglePlay() } label: {
                             Label { Text(rec.isPlaying ? "멈추기" : "다시 듣기") } icon: { IconImage(rec.isPlaying ? .square : .play, size: 18) }

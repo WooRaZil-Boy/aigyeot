@@ -84,8 +84,14 @@ protocol SongRecorder: AnyObject {
     /// 재생한다. 끝까지 들으면 `onEnded`. 시작했으면 true.
     func play(_ url: URL, onEnded: @escaping () -> Void) -> Bool
     func stopPlaying()
-    /// 녹음·재생을 버리고 오디오 세션을 푼다(시트 닫힘·다시 녹음).
-    func cancel()
+    /// 녹음·재생을 버리고 오디오 세션을 풀며, 그 녹음 파일(`start`가 만든 것)을 지운다(시트 닫힘·다시 녹음).
+    func discard(_ url: URL?)
+}
+
+/// 사용자가 고른 파일 읽기(기록 가져오기 U64, 두 앱 같은 이름). 구현은 Data/Storage(보안 범위 접근 + NSFileCoordinator).
+/// `limit` 바이트까지만 읽는다(크기를 몰라도 상한을 넘겨 올리지 않게). 열거나 읽지 못하면 nil. 메인 밖에서 부른다.
+protocol PickedFileReader: Sendable {
+    func read(_ url: URL, upTo limit: Int) -> Data?
 }
 
 /// 작은 표시 키(R11, D1). 값의 뜻과 쓰는 곳은 LinkSwitch가 정한다(화면은 이 표시를 보지 않는다).

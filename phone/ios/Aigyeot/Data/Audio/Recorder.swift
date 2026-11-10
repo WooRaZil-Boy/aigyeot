@@ -155,8 +155,9 @@ final class AudioSongRecorder: SongRecorder {
 
     func stopPlaying() { playback.stop() }
 
-    func cancel() {
+    func discard(_ url: URL?) {
         let recording = recorder.cancel(), playing = playback.cancel()
         if recording || playing { AudioSessionRelease.deactivate() }   // 객체를 먼저 멈춘 뒤 세션을 푼다
+        if let url { try? FileManager.default.removeItem(at: url) }
     }
 }

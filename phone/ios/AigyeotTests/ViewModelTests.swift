@@ -106,14 +106,14 @@ final class PresentationTests: XCTestCase {
         let today = app.today()
         today.start(.feed)
         let id = try! XCTUnwrap(CareRules.inProgress(.feed, in: today.ui.care.events)).id
-        app.careSheet().delete(id)
+        app.careSheet(.edit(id)).delete()
         XCTAssertEqual(app.careTabs.undo, .delete(id))
         app.careTabs.undo(.delete(id))
         XCTAssertNil(app.careTabs.undo)
         XCTAssertNotNil(CareRules.inProgress(.feed, in: today.ui.care.events))
         // 5초(띠 수명은 RecordCare 한 곳)가 지나면 그 띠만 걷힌다. 기록은 지운 그대로다.
         app.recordCare.undoMs = 0
-        app.careSheet().delete(id)
+        app.careSheet(.edit(id)).delete()
         XCTAssertEqual(app.careTabs.undo, .delete(id))
         let timer = app.recordCare.undoTask
         await timer?.value
@@ -274,19 +274,76 @@ final class ViewModelTests: XCTestCase {
 
     func test_시트_저장은_저장·지워짐·실패를_나눈다() {
         let kit = Kit()
-        let sheet = kit.app.careSheet()
-        let note = CareEvent(id: ULID.generate(), kind: .note, startAt: CareTime.ms(kit.clock) - 60_000, zone: "Asia/Seoul",
-                             note: "메모", createdAt: 0, updatedAt: 0)
-        XCTAssertEqual(sheet.save(note, allowOverlap: false, editing: false), .saved)
-        kit.app.recordCare.delete(note.id)
-        var edited = note
-        edited.note = "고침"
-        XCTAssertEqual(sheet.save(edited, allowOverlap: false, editing: true), .gone)   // 그사이 지워졌으면 되살리지 않는다
-        XCTAssertNotNil(kit.app.care.care.events.first { $0.id == note.id }?.deletedAt)
+        let sheet = kit.app.careSheet(.new(.note, day: nil))
+        sheet.edit { $0.note = "  메모  " }
+        sheet.save()
+        XCTAssertEqual(sheet.phase, .closed)
+        let saved = try! XCTUnwrap(kit.app.care.care.events.first { $0.kind == .note })
+        XCTAssertEqual(saved.note, "메모")   // 앞뒤 공백을 걷는다(CareRules.normalized)
+
+        let editing = kit.app.careSheet(.edit(saved.id))
+        XCTAssertEqual(editing.draft?.original?.id, saved.id)
+        kit.app.recordCare.delete(saved.id)
+        editing.edit { $0.note = "고침" }
+        editing.save()
+        XCTAssertEqual(editing.phase, .closed)   // 그사이 지워졌으면 되살리지 않고 닫는다(R10)
+        XCTAssertNotNil(kit.app.care.care.events.first { $0.id == saved.id }?.deletedAt)
+        XCTAssertNil(kit.app.careSheet(.edit(saved.id)).draft)   // 지운 기록은 시트를 그리지 않는다
+
         kit.careStore.failing = true
-        let other = CareEvent(id: ULID.generate(), kind: .note, startAt: CareTime.ms(kit.clock) - 30_000, zone: "Asia/Seoul",
-                              note: "다른", createdAt: 0, updatedAt: 0)
-        XCTAssertEqual(sheet.save(other, allowOverlap: false, editing: false), .failed(NoticeRules.saveFailed))
+        let other = kit.app.careSheet(.new(.note, day: nil))
+        other.edit { $0.note = "다른" }
+        other.save()
+        XCTAssertEqual(other.phase, .failed(NoticeRules.saveFailed))
+    }
+
+    /// 겹침은 묻고(R4) '고치기'면 고치는 중으로 돌아가며, '그래도 저장'이면 저장한다.
+    func test_시트는_겹치면_묻고_답에_따라_저장하거나_돌아간다() {
+        let kit = Kit()
+        // 끝 모름 잠 둘이 같은 시각에 시작하면 겹친다(R4 두 점)
+        let first = kit.app.careSheet(.new(.sleep, day: nil))
+        first.save()
+        XCTAssertEqual(first.phase, .closed)
+        let second = kit.app.careSheet(.new(.sleep, day: nil))
+        second.save()
+        XCTAssertEqual(second.phase, .confirmOverlap)
+        second.keepEditing()
+        XCTAssertEqual(second.phase, .editing)
+        second.save(allowOverlap: true)
+        XCTAssertEqual(second.phase, .closed)
+        XCTAssertEqual(kit.app.care.care.events.filter { $0.kind == .sleep && $0.deletedAt == nil }.count, 2)
+    }
+
+    /// 타이머의 쪽·양은 뷰모델이 고친다: 젖병이 아니면 양을 비우고(normalized), 시작 시각이 겹치면 묻는다.
+    func test_타이머는_쪽을_바꾸면_젖병이_아닐_때_양을_비우고_시각_겹침을_묻는다() {
+        let kit = Kit()
+        let today = kit.app.today()
+        today.start(.feed)
+        let id = try! XCTUnwrap(CareRules.inProgress(.feed, in: today.ui.care.events)).id
+        let timer = kit.app.timer(id: id)
+        timer.setSide(.bottle)
+        timer.setAmount(120)
+        XCTAssertEqual(timer.ui.event?.amountMl, 120)
+        timer.setSide(.left)
+        XCTAssertEqual(timer.ui.event?.feedSide, .left)
+        XCTAssertNil(timer.ui.event?.amountMl)
+        XCTAssertNil(timer.error)
+        // 시작을 앞으로 옮기면 R3 글이 시트 안에 보인다
+        XCTAssertFalse(timer.setTime(.start, to: kit.clock.addingTimeInterval(3600)))
+        XCTAssertEqual(timer.error, CareProblem.future.message(for: .feed))
+    }
+
+    /// 시트를 닫거나 다시 녹음하면 녹음 장치가 그 파일을 지운다(파일 지우기는 SongRecorder 한 곳).
+    func test_녹음을_버리면_녹음_장치가_그_파일을_지운다() async throws {
+        let recorder = FakeSongRecorder()
+        let rec = RecorderViewModel(recorder: recorder)
+        await rec.start()
+        rec.stop()
+        let url = try XCTUnwrap(rec.fileURL)
+        rec.discard()
+        XCTAssertEqual(recorder.discarded, [url])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(rec.phase, .idle)
     }
 
     func test_녹음_시트는_녹음·멈춤·보내기를_거쳐_커밋되면_닫힌다() async throws {

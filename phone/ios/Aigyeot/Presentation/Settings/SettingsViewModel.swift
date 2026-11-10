@@ -45,9 +45,11 @@ final class SettingsViewModel {
     @ObservationIgnored private let disconnect: Disconnect
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let version: String
+    @ObservationIgnored private let fileReader: PickedFileReader
 
     init(state: PhoneStateRepository, care: CareRepository, connection: KeepConnected, recordCare: RecordCare, clearRecords: ClearRecords,
-         disconnect: Disconnect, now: @escaping () -> Date, version: String) {
+         disconnect: Disconnect, now: @escaping () -> Date, version: String, fileReader: PickedFileReader) {
+        self.fileReader = fileReader
         stateRepo = state
         careRepo = care
         self.connection = connection
@@ -84,9 +86,11 @@ final class SettingsViewModel {
     /// 읽기·형식 판별은 메인 밖에서 한다(iCloud Drive 같은 파일 제공자는 내려받는 동안 멈출 수 있다).
     func picked(_ result: Result<URL, Error>) {
         let url = try? result.get()
+        let reader = fileReader
         runImport { [weak self] in
             var read: CsvRead?
-            if let url { read = await Task.detached(priority: .userInitiated) { Self.read(url) }.value }
+            // 상한 + 1바이트까지만 읽는다(넘었는지 알게). 열거나 읽지 못하면 nil(import.failed)
+            if let url { read = await Task.detached(priority: .userInitiated) { reader.read(url, upTo: CareCsv.maxBytes + 1).map(CareCsv.read) }.value }
             return await self?.loaded(read) ?? .idle
         }
     }
@@ -99,21 +103,6 @@ final class SettingsViewModel {
             guard !Task.isCancelled, let self else { return }
             self.importStep = next
         }
-    }
-
-    /// 파일 고르기 바로 뒤 한 곳(9.1): 보안 범위 접근 시작·끝, 파일 제공자와 맞춘 읽기(NSFileCoordinator),
-    /// 상한 + 1바이트까지만 읽는다(크기를 몰라도 상한을 넘겨 올리지 않게). 열거나 읽지 못하면 nil(import.failed). 메인 밖에서 부른다.
-    nonisolated static func read(_ url: URL) -> CsvRead? {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        var data: Data?
-        var error: NSError?
-        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { u in
-            guard let h = try? FileHandle(forReadingFrom: u) else { return }
-            defer { try? h.close() }
-            do { data = try h.read(upToCount: CareCsv.maxBytes + 1) ?? Data() } catch { data = nil }   // 빈 파일은 빈 글자(읽기 실패와 구별)
-        }
-        return data.map(CareCsv.read)
     }
 
     /// 읽은 결과 → 다음 단계. nil은 파일을 열거나 읽지 못한 IO 실패(import.failed), UTF-8이 아니면 import.unreadable(11-09 보충).

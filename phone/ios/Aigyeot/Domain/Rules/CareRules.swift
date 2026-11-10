@@ -4,6 +4,8 @@ import Foundation
 
 enum CareRules {
     static let futureSlackMs: Int64 = 60_000
+    /// 시각 고르기의 끝(지금 + R3 여유 1분). 화면의 고르기 범위도 이 값이다.
+    static func latestPick(now: Date) -> Date { now.addingTimeInterval(Double(futureSlackMs) / 1000) }
     static let feedMaxMs: Int64 = 3 * 3_600_000
     static let sleepMaxMs: Int64 = 16 * 3_600_000
     static let sendWindowMs: Int64 = 24 * 3_600_000
@@ -81,6 +83,18 @@ enum CareRules {
     }
 
     /// 메모 입력칸: 코드 포인트 200개에서 더 받지 않는다(U17·U24).
+    /// 종류에 맞지 않는 칸을 비운다: 쪽은 수유만, 양은 젖병 수유만, 기저귀 종류는 기저귀만, 메모는 앞뒤 공백을 걷고 비면 없음.
+    /// 기록 시트(`CareDraft.event`)와 타이머(쪽·양 고침)가 같은 규칙을 쓴다.
+    static func normalized(_ e: CareEvent) -> CareEvent {
+        var x = e
+        if x.kind != .feed { x.feedSide = nil }
+        if x.kind != .feed || x.feedSide != .bottle { x.amountMl = nil }
+        if x.kind != .diaper { x.diaper = nil }
+        let n = (x.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        x.note = n.isEmpty ? nil : n
+        return x
+    }
+
     static func noteLimited(_ s: String) -> String {
         s.unicodeScalars.count <= noteMax ? s : String(String.UnicodeScalarView(s.unicodeScalars.prefix(noteMax)))
     }
@@ -164,13 +178,11 @@ enum CareRules {
     // MARK: 패턴(R14)
 
     static func pattern(_ events: [CareEvent], reports: [StoredReport], now: Int64, zone: TimeZone, sleepDiaper: Bool) -> CarePattern {
-        let cal = calendar(zone)
-        let today = cal.startOfDay(for: CareTime.date(now))
-        let days = (0..<7).reversed().map { dayKey(CareTime.ms(cal.date(byAdding: .day, value: -$0, to: today)!), zone) }
+        let days = CareStats.lastDays(7, now: now, zone: zone)
         let windowStart = dayRange(days[0], zone)!.0   // 첫날의 0시(안드로이드 `days.first().atStartOfDay`)
         let alive = live(events)
-        let feeds = alive.filter { $0.kind == .feed && $0.startAt >= windowStart }.map(\.startAt).sorted()   // 횟수는 R3의 1분 여유 수유도 센다(기저귀·안드로이드 countPerDay와 같다)
-        let episodes = reports.flatMap(\.body.timeline).filter { $0.trigger == .cryAlarm }.compactMap { Rfc3339.parse($0.startedAt).map(CareTime.ms) }
+        let feeds = CareStats.feedStarts(alive, from: windowStart)   // 횟수는 R3의 1분 여유 수유도 센다(기저귀·안드로이드 countPerDay와 같다)
+        let episodes = CareStats.cryAlarms(reports).map { CareTime.ms($0.at) }
 
         let stats = days.map { day in
             let sleep = sleepDiaper ? sleepMs(onDay: day, in: alive, zone: zone) : nil
@@ -182,10 +194,7 @@ enum CareRules {
                         carEpisodes: episodes.filter { dayKey($0, zone) == day }.count)
         }
         let past = feeds.filter { $0 <= now }   // 간격은 지난 수유만(안드로이드 intervals와 같다)
-        let gaps = zip(past, past.dropFirst()).map { $1 - $0 }.filter { $0 <= gapMaxMs }.sorted()
-        let median: Int64? = gaps.count < minGaps ? nil
-            : gaps.count % 2 == 1 ? gaps[gaps.count / 2] : (gaps[gaps.count / 2 - 1] + gaps[gaps.count / 2]) / 2
-        return CarePattern(days: stats, feedIntervalMedianMs: median)
+        return CarePattern(days: stats, feedIntervalMedianMs: CareStats.usualGap(CareStats.feedGaps(past).map(\.ms)))
     }
 
     // MARK: 차 기록 줄(R17)

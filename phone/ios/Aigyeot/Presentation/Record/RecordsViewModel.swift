@@ -10,6 +10,25 @@ struct RecordsUiState {
     var guardian: Bool { connection.creds?.role == .guardian }
     var reports: [StoredReport] { phone.reports }
     func report(sessionId: String) -> StoredReport? { phone.reports.first { $0.body.sessionId == sessionId } }
+
+    /// 패턴 화면 값(C5): 그릴 때 계산한다(P4). 집계 규칙은 CareStats·CareRules.pattern 한 곳이고 막대·칸으로 바꾸는 것은 ChartData다.
+    func pattern(now: Int64) -> PatternUi {
+        let on = care.sleepDiaperEnabled
+        return PatternUi(numbers: CareRules.pattern(care.events, reports: reports, now: now, zone: .current, sleepDiaper: on),
+                         interval: ChartData.intervalWeek(care: care, now: now, zone: .current),
+                         carCries: ChartData.carCryWeek(reports: reports, now: now, zone: .current),
+                         sleep: on ? ChartData.sleepGrid(care: care, now: now, zone: .current) : nil,
+                         feedTrend: ChartData.feedTrend(care: care, now: now, zone: .current))
+    }
+}
+
+/// 패턴 화면 한 번 그릴 값: 지난 7일 숫자 칸, 수유 간격 막대, 차에서 울음 막대, 잠 패턴(잠·기저귀를 끄면 없음, R16), 지난주 대비 글.
+struct PatternUi {
+    let numbers: CarePattern
+    let interval: ChartData.IntervalWeek
+    let carCries: ChartData.CarCryWeek
+    let sleep: ChartData.SleepGrid?
+    let feedTrend: String?
 }
 
 @MainActor
