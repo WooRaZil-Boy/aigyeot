@@ -155,7 +155,55 @@ class ChartDataTest {
     }
 
     @Test
-    fun `에피소드 띠는 재생 구간과 듣기 틈과 표시를 리포트에서 만든다`() {
+    fun `차트를 누르면 칸 안의 점 표시가 칸보다 먼저 뽑힌다`() {
+        // 하루 띠 '차에서' 줄: 탑승 칸(0~200) 안에 울음 마름모(100±6). 칸을 먼저 넣어도 마름모를 누르면 마름모다(iOS와 같은 규칙).
+        val hits = listOf(
+            Hit(androidx.compose.ui.geometry.Rect(0f, 0f, 200f, 20f), "탑승"),
+            Hit(androidx.compose.ui.geometry.Rect(94f, 0f, 106f, 20f), "차에서 울음", point = true),
+        )
+        assertEquals(1, pickHit(hits, androidx.compose.ui.geometry.Offset(100f, 10f), reach = 24f))
+        // 칸 안이지만 마름모에서 닿는 범위 밖이면 칸.
+        assertEquals(0, pickHit(hits, androidx.compose.ui.geometry.Offset(180f, 10f), reach = 24f))
+        // 아무 데도 닿지 않으면 없음.
+        assertNull(pickHit(hits, androidx.compose.ui.geometry.Offset(300f, 80f), reach = 24f))
+        // 마름모보다 좁은 칸이 겹쳐도 점이 먼저.
+        val narrow = listOf(Hit(androidx.compose.ui.geometry.Rect(98f, 0f, 104f, 20f), "잠"), hits[1])
+        assertEquals(1, pickHit(narrow, androidx.compose.ui.geometry.Offset(100f, 10f), reach = 24f))
+        // 점이 없으면 둘 다 담는 칸 중 면적이 작은 것(iOS와 같은 다음 순서).
+        val nested = listOf(Hit(androidx.compose.ui.geometry.Rect(0f, 0f, 400f, 40f), "넓은 칸"), hits[0])
+        assertEquals(1, pickHit(nested, androidx.compose.ui.geometry.Offset(100f, 10f), reach = 24f))
+    }
+
+    @Test
+    fun `하루 띠는 같은 분 안에 끝난 기록에도 길이를 붙인다`() {
+        // 12:00:10~12:00:50 잠: 분 칸은 12:00–12:00이어도 기록 시각 차이(40초)가 있으니 기록 목록과 같은 "1분 미만"을 붙인다.
+        val e = CareEvent("s", CareKind.SLEEP, at(12, 0) + 10_000, endAt = at(12, 0) + 50_000, zone = zone.id, createdAt = now, updatedAt = now)
+        val tip = dayChart(CareFile(sleepDiaperEnabled = true, events = listOf(e)), emptyList(), today, now, zone, showCar = false).lanes.first { it.kind == LaneKind.SLEEP }.spans.single().tip
+        assertEquals("잠 12:00–12:00 · 1분 미만", tip)
+        // 시작과 끝이 같은 기록은 길이를 붙이지 않는다.
+        val zero = e.copy(endAt = e.startAt)
+        assertEquals("잠 12:00–12:00", dayChart(CareFile(sleepDiaperEnabled = true, events = listOf(zero)), emptyList(), today, now, zone, showCar = false).lanes.first { it.kind == LaneKind.SLEEP }.spans.single().tip)
+    }
+
+    @Test
+    fun `재생 사이 칸의 툴팁은 듣기 틈이라 단정하지 않고 초만 쓴다`() {
+        // 통화로 판정을 멈췄다가 같은 에피소드에서 다시 소리를 낸 경우도 리포트에는 그 사이를 알 칸이 없다(차 리포트 soundTip과 같은 글).
+        val t0 = at(13, 24)
+        val e = report().timeline.first().copy(
+            startedAt = iso(t0),
+            plays = listOf(
+                PlayEntry(PlayPurpose.AUTO_FIRST, SoundMethod.LULLABY, null, iso(t0 + 2000), iso(t0 + 20_000), 18),
+                PlayEntry(PlayPurpose.REQUEST, SoundMethod.WHITE_NOISE, null, iso(t0 + 140_000), iso(t0 + 170_000), 30),
+            ),
+        )
+        val b = episodeBand(e, emptyList())
+        assertEquals("120초", b.gaps.single().tip)
+        assertEquals(listOf("자장가 18초", "백색소음 30초"), b.sounds.map { it.tip })
+        assertTrue((b.sounds + b.gaps).none { "듣기" in it.tip })
+    }
+
+    @Test
+    fun `에피소드 띠는 재생 구간과 재생 사이 칸과 표시를 리포트에서 만든다`() {
         val base = report().timeline.first()
         val t0 = at(13, 24)
         val e = base.copy(
@@ -167,8 +215,8 @@ class ChartDataTest {
         )
         val b = episodeBand(e, emptyList())
         assertEquals(listOf(EpisodeSeg(2, 58, "자장가", 56), EpisodeSeg(66, 122, "백색소음", 56)), b.sounds)
-        assertEquals(listOf(EpisodeSeg(58, 66, "듣기 틈")), b.gaps)
-        // 툴팁·설명의 길이는 차가 보낸 play_s 그대로(00.200~10.800 재생은 칸이 0~10초여도 11초, 리포트 상세 글·iOS·차와 같다). 듣기 틈은 칸 길이.
+        assertEquals(listOf(EpisodeSeg(58, 66, null)), b.gaps)
+        // 툴팁·설명의 길이는 차가 보낸 play_s 그대로(00.200~10.800 재생은 칸이 0~10초여도 11초, 리포트 상세 글·iOS·차와 같다). 재생 사이 칸은 칸 길이.
         val frac = episodeBand(e.copy(plays = listOf(PlayEntry(PlayPurpose.AUTO_FIRST, SoundMethod.LULLABY, null, iso(t0 + 200), iso(t0 + 10_800), 11))), emptyList())
         assertEquals(0 to 10, frac.sounds.single().let { it.from to it.to })
         assertEquals(11, frac.sounds.single().seconds)

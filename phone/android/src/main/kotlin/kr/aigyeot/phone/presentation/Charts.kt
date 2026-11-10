@@ -75,20 +75,32 @@ private fun rememberReveal(ms: Int, curve: Curve): Animatable<Float, *> {
     return a
 }
 
-/** 표시 하나의 누를 자리와 말풍선 글. */
-private class Hit(val rect: Rect, val tip: String)
+/** 표시 하나의 누를 자리와 말풍선 글. [point]는 점 표시(하루 띠의 울음 마름모·기저귀 점처럼 칸 위에 얹는 것). */
+internal class Hit(val rect: Rect, val tip: String, val point: Boolean = false)
+
+/**
+ * 누른 자리의 표시 고르기(iOS `ChartHit.pick`과 같은 순서): 닿는 후보(칸이 담거나 칸까지 거리 [reach] 안) 중 점 표시가 있으면 점만, 없으면 칸에서
+ * 가장 가까운 것(담으면 거리 0) → 면적이 작은 것 → 가운데까지 가까운 것. 탑승 칸 안의 울음 마름모처럼 둘 다 거리 0이어도 점이 이긴다.
+ */
+internal fun pickHit(hits: List<Hit>, o: Offset, reach: Float): Int? {
+    fun dist(r: Rect): Float {
+        val dx = o.x - o.x.coerceIn(r.left, r.right)
+        val dy = o.y - o.y.coerceIn(r.top, r.bottom)
+        return dx * dx + dy * dy
+    }
+    return hits.indices.filter { dist(hits[it].rect) <= reach * reach }.minWithOrNull(
+        compareBy<Int>({ !hits[it].point }, { dist(hits[it].rect) }, { hits[it].rect.width * hits[it].rect.height }, { (hits[it].rect.center - o).getDistanceSquared() }),
+    )
+}
 
 /** 말풍선(.ch-tip: 먹색 바탕 · 흰 글자 12.5/600, 모서리 10) + 누르기·끌기. 고른 표시는 [selected]로 강조한다. */
 @Composable
 private fun TipHost(hits: List<Hit>, modifier: Modifier, height: Dp, content: @Composable (selected: Int?) -> Unit) {
     var sel by remember(hits.size) { mutableStateOf<Int?>(null) }
     val p = Tokens.colors
-    fun pick(o: Offset): Int? = hits.indices.minByOrNull { i ->
-        val r = hits[i].rect
-        val dx = (o.x - o.x.coerceIn(r.left, r.right)).let { it * it }
-        val dy = (o.y - o.y.coerceIn(r.top, r.bottom)).let { it * it }
-        dx + dy
-    }?.takeIf { i -> hits[i].rect.inflate(24f).contains(o) }
+    // 닿는 범위는 iOS ChartHit.pick(6pt)과 같은 6dp(밀도마다 같은 손가락 거리).
+    val reach = with(LocalDensity.current) { 6.dp.toPx() }
+    fun pick(o: Offset): Int? = pickHit(hits, o, reach)
     Box(
         modifier.fillMaxWidth().height(height)
             .pointerInput(hits) { detectTapGestures { o -> sel = pick(o).takeIf { it != sel } } }
@@ -205,7 +217,7 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier) {
         val hits = remember(data, w, two) {
             data.lanes.flatMapIndexed { i, l ->
                 l.spans.map { s -> Hit(Rect(x(s.from), trackY(i), x(s.from) + maxOf(6 * px, x(s.to) - x(s.from)), trackY(i) + th), s.tip) } +
-                    l.marks.map { mk -> Hit(Rect(x(mk.at) - 6 * px, trackY(i), x(mk.at) + 6 * px, trackY(i) + th), mk.tip) }
+                    l.marks.map { mk -> Hit(Rect(x(mk.at) - 6 * px, trackY(i), x(mk.at) + 6 * px, trackY(i) + th), mk.tip, point = true) }
             }
         }
         TipHost(hits, Modifier, with(d) { totalH.toDp() }) { selected ->
@@ -430,7 +442,7 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------- 에피소드 띠
 
 /**
- * 에피소드 띠(시안 Charts.episode). 소리 줄(먹색 막대 + 안에 방법 이름, 듣기 틈은 회색), 아래 표시(감지·다시 울음·쉼터 제안·그쳤어요).
+ * 에피소드 띠(시안 Charts.episode). 소리 줄(먹색 막대 + 안에 방법 이름, 재생 사이 칸은 회색·이름 없이 시간만), 아래 표시(감지·다시 울음·쉼터 제안·그쳤어요).
  * 리포트에 울음 구간이 없어 울음 줄은 그리지 않는다(결정 7).
  */
 @Composable
@@ -452,13 +464,13 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
     val laneW = remember(m, laneStyle) { m.measure("소리", laneStyle).size.width + 12 * px }
     Column(modifier) {
-    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "에피소드: " + (band.sounds.map { "${it.name} ${it.seconds}초" } + band.marks.map { it.label } + band.outcomes).joinToString(", ") }) {
+    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "에피소드: " + (band.sounds.map { it.tip } + band.marks.map { it.label } + band.outcomes).joinToString(", ") }) {
         val w = with(d) { maxWidth.toPx() }
         val left = laneW
         val right = w - 6 * px
         fun x(s: Int) = left + (right - left) * s / band.totalS.coerceAtLeast(1)
         val hits = remember(band, w) {
-            (band.sounds + band.gaps).map { s -> Hit(Rect(x(s.from), 2 * px, x(s.to), lh - 6 * px), "${s.name} ${s.seconds}초") }
+            (band.sounds + band.gaps).map { s -> Hit(Rect(x(s.from), 2 * px, x(s.to), lh - 6 * px), s.tip) }
         }
         TipHost(hits, Modifier, with(d) { totalH.toDp() }) { _ ->
             Canvas(Modifier.fillMaxWidth().height(with(d) { totalH.toDp() })) {
@@ -469,8 +481,10 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
                     band.sounds.forEach { s ->
                         val bw = maxOf(2 * px, x(s.to) - x(s.from) - 2 * px)
                         drawRoundRect(p.textPrimary, Offset(x(s.from), 2 * px), Size(bw, lh - 8 * px), CornerRadius(4 * px))
-                        val t = m.measure(s.name, inStyle)
-                        if (bw > t.size.width + 16 * px) text(m, s.name, inStyle, x(s.from) + 8 * px, 2 * px + (lh - 8 * px - t.size.height) / 2 + t.firstBaseline)
+                        s.name?.let { n ->
+                            val t = m.measure(n, inStyle)
+                            if (bw > t.size.width + 16 * px) text(m, n, inStyle, x(s.from) + 8 * px, 2 * px + (lh - 8 * px - t.size.height) / 2 + t.firstBaseline)
+                        }
                     }
                     band.marks.forEachIndexed { i, mk ->
                         val mx = minOf(right, x(mk.at))

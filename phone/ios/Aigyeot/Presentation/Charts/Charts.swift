@@ -10,7 +10,24 @@ private typealias DS = DesignSystem
 // MARK: 공통: 누른 자리의 툴팁과 처음 등장
 
 /// 누를 수 있는 표시 하나(차트 좌표의 사각형과 말).
-struct ChartHit: Equatable { let rect: CGRect; let tip: String }
+struct ChartHit: Equatable {
+    let rect: CGRect
+    let tip: String
+    /// 점 표시(하루 띠의 기저귀 점·울음 마름모). 칸과 함께 닿으면 점이 먼저다(좁은 탑승 칸 안의 마름모도 눌리게, 안드로이드와 같다).
+    var point = false
+
+    /// 누른 자리 `p`의 표시. 닿는 후보(담거나 6pt 안) 중 점이 있으면 점만, 없으면 칸에서 고른다:
+    /// 가장 가까운 것(담으면 0), 같으면 면적이 작은 것, 그래도 같으면 가운데가 가까운 것. 닿는 것이 없으면 nil.
+    static func pick(_ hits: [ChartHit], at p: CGPoint) -> ChartHit? {
+        func dist(_ r: CGRect) -> CGFloat { hypot(max(r.minX - p.x, 0, p.x - r.maxX), max(r.minY - p.y, 0, p.y - r.maxY)) }
+        func key(_ h: ChartHit) -> (CGFloat, CGFloat, CGFloat) {
+            (dist(h.rect), h.rect.width * h.rect.height, hypot(h.rect.midX - p.x, h.rect.midY - p.y))
+        }
+        let near = hits.filter { dist($0.rect) <= 6 }
+        let pool = near.contains(where: \.point) ? near.filter(\.point) : near
+        return pool.min { key($0) < key($1) }
+    }
+}
 
 /// 차트 위 툴팁: 누른 표시 위에 말풍선. 다시 누르거나 빈 곳을 누르면 닫는다.
 private struct TipOverlay: ViewModifier {
@@ -22,11 +39,7 @@ private struct TipOverlay: ViewModifier {
         content
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { p in
-                func dist(_ r: CGRect) -> CGFloat { hypot(max(r.minX - p.x, 0, p.x - r.maxX), max(r.minY - p.y, 0, p.y - r.maxY)) }
-                func area(_ r: CGRect) -> CGFloat { r.width * r.height }
-                // 겹치면 작은 표시가 먼저(탑승 칸 안의 울음 마름모 등), 담은 것이 없으면 6pt 안에서 가장 가까운 것
-                let hit = hits.filter { $0.rect.contains(p) }.min { area($0.rect) < area($1.rect) }
-                    ?? hits.filter { dist($0.rect) <= 6 }.min { dist($0.rect) < dist($1.rect) }
+                let hit = ChartHit.pick(hits, at: p)
                 shown = hit == shown ? nil : hit
             }
             .overlay {
@@ -171,7 +184,7 @@ private struct DayBandChartBody: View {
     private func hits(width w: CGFloat) -> [ChartHit] {
         data.lanes.enumerated().flatMap { i, l in
             l.spans.map { ChartHit(rect: spanRect($0, lane: i, w: w), tip: $0.tip) }
-                + l.marks.map { m in ChartHit(rect: CGRect(x: x(m.at, w) - th / 2, y: trY(i), width: th, height: th), tip: m.tip) }
+                + l.marks.map { m in ChartHit(rect: CGRect(x: x(m.at, w) - th / 2, y: trY(i), width: th, height: th), tip: m.tip, point: true) }
         }
     }
 
@@ -358,7 +371,7 @@ private struct SleepHeatChartBody: View {
 
 // MARK: 에피소드 띠
 
-/// 소리 줄(방법 이름, 먹색 칸)·듣기 틈(회색)·표시(감지·다시 울음·쉼터 제안·그쳤어요). 리포트에 울음 구간이 없어 울음 줄은 그리지 않는다.
+/// 소리 줄(방법 이름, 먹색 칸)·재생 사이(회색, 이름 없이 시간만)·표시(감지·다시 울음·쉼터 제안·그쳤어요). 리포트에 울음 구간이 없어 울음 줄은 그리지 않는다.
 private struct EpisodeBandChartBody: View {
     let band: ChartData.Episode
     let summary: String
@@ -386,7 +399,7 @@ private struct EpisodeBandChartBody: View {
     private func rect(_ s: ChartData.Seg, _ w: CGFloat) -> CGRect { CGRect(x: x(s.from, w), y: 2, width: max(2, x(s.to, w) - x(s.from, w) - 2), height: lh - 8) }
 
     private func hits(_ w: CGFloat) -> [ChartHit] {
-        (band.sounds + band.gaps).map { ChartHit(rect: rect($0, w), tip: "\($0.name) \($0.seconds)초") }
+        (band.sounds + band.gaps).map { ChartHit(rect: rect($0, w), tip: $0.tip) }
     }
 
     private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
@@ -397,7 +410,7 @@ private struct EpisodeBandChartBody: View {
         for s in band.sounds {
             let r = rect(s, w)
             ctx.fill(Path(roundedRect: r, cornerRadius: 4), with: .color(DS.textPrimary))
-            let t = ctx.resolve(Text(s.name).font(DS.fixedFont(fs, 600)).foregroundStyle(DS.surface))
+            let t = ctx.resolve(Text(s.name ?? "").font(DS.fixedFont(fs, 600)).foregroundStyle(DS.surface))
             let m = t.measure(in: CGSize(width: 400, height: 100))
             if r.width > m.width + 16 { ctx.draw(t, at: CGPoint(x: r.minX + 8, y: r.midY), anchor: .leading) }
         }

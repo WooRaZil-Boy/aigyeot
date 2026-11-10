@@ -189,7 +189,7 @@ private struct KeyValues: View {
     }
 }
 
-/// 에피소드 하나: 부제("오후 1:24 울음 감지부터 그칠 때까지") + 띠(소리·듣기 틈·표시) + 글 줄(감지 → 음원 → 재생 → 판정 → 재울음 → 정차).
+/// 에피소드 하나: 부제("오후 1:24 울음 감지부터 그칠 때까지") + 띠(소리·재생 사이·표시) + 글 줄(감지 → 음원 → 재생 → 판정 → 재울음 → 정차).
 private struct EpisodeView: View {
     let episode: TimelineEpisode
     let songName: (String?) -> String?
@@ -201,7 +201,7 @@ private struct EpisodeView: View {
             if !e.plays.isEmpty {
                 let band = ChartData.episode(e) { methodName($0.method, songName($0.songId)) }
                 // 화면 읽기: 재생마다 실제 길이(에피소드 끝 시각은 리포트에 없어 전체 길이는 말하지 않는다, 안드로이드와 같다)
-                EpisodeBandChart(band: band, summary: "에피소드: " + (band.sounds.map { "\($0.name) \($0.seconds)초" } + band.marks.map(\.label) + band.outcomes).joined(separator: ", "))
+                EpisodeBandChart(band: band, summary: "에피소드: " + (band.sounds.map(\.tip) + band.marks.map(\.label) + band.outcomes).joined(separator: ", "))
                 if !band.outcomes.isEmpty {
                     HStack(spacing: 6) { ForEach(band.outcomes, id: \.self) { Badge(text: $0) } }.padding(.top, 8).accessibilityHidden(true)
                 }

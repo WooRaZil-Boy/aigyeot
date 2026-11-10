@@ -76,7 +76,11 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
         // 끝 시각 모름은 끝을 만들지 않는다(7.1 log.row.feedUnknown과 같은 말).
         if (e.endAt == null && !e.isOngoing) DaySpan(a, a, "$name ${hhmm(a)} · 끝 시각 모름")
         // 길이 글은 그날에 든 기록 시각의 차이(분으로 내린 그림 좌표의 차이가 아니다: 기록 목록·잠 합계와 같은 값).
-        else DaySpan(a, b, "$name ${hhmm(a)}–${hhmm(b)}" + if (b > a) " · ${durationText(minOf(end(e), to) - maxOf(e.startAt, from))}" else "")
+        // 붙일지도 그 차이로 정한다: 같은 분 안에 끝난 기록도 길이가 있다(1분 미만이면 기록 목록과 같은 "1분 미만").
+        else {
+            val ms = minOf(end(e), to) - maxOf(e.startAt, from)
+            DaySpan(a, b, "$name ${hhmm(a)}–${hhmm(b)}" + if (ms > 0) " · ${durationText(ms)}" else "")
+        }
     }
     fun startedToday(kind: CareKind) = live.filter { it.kind == kind && it.startAt in from until to }
     val lanes = mutableListOf<DayLane>()
@@ -182,16 +186,25 @@ fun sleepGrid(care: CareFile, now: Long, zone: ZoneId): SleepGrid {
  * 결과(쉼터 제안·그쳤어요)는 리포트에 그 시각이 없어 축 밖 [outcomes]로 둔다(마지막 재생 끝에 찍으면 거짓 시각이 된다).
  */
 data class EpisodeBand(val sounds: List<EpisodeSeg>, val marks: List<EpisodeMarkAt>, val startAt: Long?, val outcomes: List<String> = emptyList()) {
-    /** 재생 사이 듣기 틈(P4: 소리 구간에서 계산). [sounds]는 시작 순서다. */
-    val gaps: List<EpisodeSeg> get() = sounds.zipWithNext { x, y -> if (y.from > x.to) EpisodeSeg(x.to, y.from, "듣기 틈") else null }.filterNotNull()
+    /**
+     * 재생 사이 칸(P4: 소리 구간에서 계산, 이름 없음). [sounds]는 시작 순서다. 그 사이 통화 등으로 판정을 멈췄을 수도 있고 리포트에는 그 사실을 알 칸이 없어
+     * '듣기 틈'이라 단정하지 않는다(차 리포트 soundTip과 같은 규칙, 시안 charts.js의 '듣기 틈' 라벨과 다르게 한 곳).
+     */
+    val gaps: List<EpisodeSeg> get() = sounds.zipWithNext { x, y -> if (y.from > x.to) EpisodeSeg(x.to, y.from, null) else null }.filterNotNull()
     /** 축 길이(초): 마지막 재생 끝, 적어도 1(P4: 소리 구간에서 계산). */
     val totalS: Int get() = maxOf(sounds.maxOfOrNull { it.to } ?: 0, 1)
 }
 
-/** 에피소드 띠 한 칸(초). [from]·[to]는 그림 좌표(시작·끝 시각, 최소 1초 폭), [playS]는 차가 보낸 재생 길이(iOS `Seg.playS`와 같다). */
-data class EpisodeSeg(val from: Int, val to: Int, val name: String, val playS: Int? = null) {
-    /** 툴팁·설명의 길이: 기록에 있는 재생 길이 그대로, 없으면(듣기 틈) 칸 길이. */
+/**
+ * 에피소드 띠 한 칸(초). [from]·[to]는 그림 좌표(시작·끝 시각, 최소 1초 폭), [name]은 재생 방법 이름(재생 사이 칸은 null),
+ * [playS]는 차가 보낸 재생 길이(iOS `Seg.playS`와 같다).
+ */
+data class EpisodeSeg(val from: Int, val to: Int, val name: String?, val playS: Int? = null) {
+    /** 툴팁·설명의 길이: 기록에 있는 재생 길이 그대로, 없으면(재생 사이 칸) 칸 길이. */
     val seconds: Int get() = playS ?: (to - from)
+
+    /** 툴팁·설명 글: 재생은 "{이름} {n}초", 재생 사이 칸은 "{n}초"(차 soundTip과 같다). */
+    val tip: String get() = name?.let { "$it ${seconds}초" } ?: "${seconds}초"
 }
 
 data class EpisodeMarkAt(val at: Int, val label: String)

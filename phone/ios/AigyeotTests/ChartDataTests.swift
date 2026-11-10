@@ -31,6 +31,22 @@ final class ChartDataTests: XCTestCase {
 
     private func stored(_ b: ReportSummaryBody) -> StoredReport { StoredReport(messageId: "m", seq: 1, receivedAt: Date(), body: b) }
 
+    /// 하루 띠 누르기: 닿는 후보 중 점(울음 마름모·기저귀 점)이 있으면 점, 없으면 가장 가까운 칸(같으면 작은 면적). 안드로이드와 같은 규칙.
+    func test_차트_누름은_닿는_점이_칸보다_먼저이고_닿는_것이_없으면_없다() {
+        let drive = ChartHit(rect: CGRect(x: 100, y: 10, width: 40, height: 14), tip: "탑승")
+        let cry = ChartHit(rect: CGRect(x: 110, y: 10, width: 14, height: 14), tip: "울음", point: true)
+        XCTAssertEqual(ChartHit.pick([drive, cry], at: CGPoint(x: 117, y: 17)), cry)     // 탑승 칸 안의 마름모
+        XCTAssertEqual(ChartHit.pick([drive, cry], at: CGPoint(x: 136, y: 17)), drive)   // 칸 안이지만 마름모에서 6pt 넘게 떨어짐
+        XCTAssertNil(ChartHit.pick([drive, cry], at: CGPoint(x: 300, y: 100)))
+        // 마름모 자리보다 좁은 탑승 칸(짧은 탑승): 둘 다 담아도 마름모(면적이 작은 칸이 이기지 않는다)
+        let narrow = ChartHit(rect: CGRect(x: 114, y: 10, width: 6, height: 14), tip: "짧은 탑승")
+        XCTAssertEqual(ChartHit.pick([narrow, cry], at: CGPoint(x: 117, y: 17)), cry)
+        // 점이 없으면 예전과 같다: 담은 칸 중 작은 것, 담은 것이 없으면 6pt 안에서 가까운 것
+        let wide = ChartHit(rect: CGRect(x: 0, y: 0, width: 200, height: 40), tip: "넓은 칸")
+        XCTAssertEqual(ChartHit.pick([wide, drive], at: CGPoint(x: 120, y: 17)), drive)
+        XCTAssertEqual(ChartHit.pick([drive], at: CGPoint(x: 144, y: 17)), drive)
+    }
+
     func test_차트_안_시각은_24시간제_HH_MM이다() {
         XCTAssertEqual(ChartData.hhmm(0), "00:00")
         XCTAssertEqual(ChartData.hhmm(14 * 60 + 13), "14:13")
@@ -113,6 +129,15 @@ final class ChartDataTests: XCTestCase {
         XCTAssertEqual(sleep.spans.first?.tip, "잠 00:00–01:00 · 1시간")
     }
 
+    func test_하루_띠에서_같은_분_안에_끝난_기록도_길이가_붙는다() {
+        var care = CareFile()
+        care.sleepDiaperEnabled = true
+        care.events = [ev(.sleep, at(12, 0) + 10_000, at(12, 0) + 50_000)]   // 12:00:10~12:00:50
+        let d = ChartData.day(care: care, reports: [], day: today, now: now, zone: zone, showCar: false)
+        XCTAssertEqual(d.lanes[0].spans.map { [$0.from, $0.to] }, [[720, 720]])
+        XCTAssertEqual(d.lanes[0].spans.first?.tip, "잠 12:00–12:00 · 1분 미만")   // 기록 목록과 같은 글(CareFormat.length)
+    }
+
     func test_수유_간격_막대는_날마다_중앙값이고_평소는_앞_6일_간격이_5개_이상일_때만이다() {
         let feeds = [at(0, 0, daysAgo: 1), at(3, 0, daysAgo: 1), at(6, 0, daysAgo: 1), at(9, 0, daysAgo: 1), at(2, 0), at(4, 30), at(20, 0)]
         var care = CareFile()
@@ -152,7 +177,22 @@ final class ChartDataTests: XCTestCase {
         XCTAssertTrue(g.summary.contains("일 3시간 10분"))   // 화면 읽기는 칸 수(3시간 30분)가 아니라 실제 길이(11월 8일은 일요일)
     }
 
-    func test_에피소드_띠는_재생_구간과_듣기_틈과_표시를_리포트에서_만든다() throws {
+    /// 재생 사이 칸은 그 사이 판정을 멈췄을 수도 있어(통화 등, 리포트에 그 칸이 없다) '듣기 틈'이라 단정하지 않고 시간만 쓴다(차 리포트와 같다).
+    func test_에피소드_띠의_재생_사이_칸은_이름_없이_초만_보인다() throws {
+        var e = try report().timeline[0]
+        let t0 = at(13, 24)
+        e.startedAt = iso(t0)
+        e.plays = [
+            PlayEntry(purpose: .autoFirst, method: .lullaby, songId: nil, startedAt: iso(t0 + 2000), endedAt: iso(t0 + 58_000), playS: 56),
+            PlayEntry(purpose: .request, method: .whiteNoise, songId: nil, startedAt: iso(t0 + 90_000), endedAt: iso(t0 + 100_000), playS: 10),
+        ]
+        let b = ChartData.episode(e, playName: { $0.method == .lullaby ? "자장가" : "백색소음" })
+        XCTAssertEqual(b.gaps.map(\.tip), ["32초"])
+        XCTAssertEqual(b.sounds.map(\.tip), ["자장가 56초", "백색소음 10초"])
+        XCTAssertFalse((b.gaps + b.sounds).contains { $0.tip.contains("듣기") })
+    }
+
+    func test_에피소드_띠는_재생_구간과_재생_사이와_표시를_리포트에서_만든다() throws {
         var e = try report().timeline[0]
         let t0 = at(13, 24)
         e.startedAt = iso(t0)
@@ -169,7 +209,7 @@ final class ChartDataTests: XCTestCase {
         var zero = e
         zero.plays = [PlayEntry(purpose: .autoFirst, method: .lullaby, songId: nil, startedAt: iso(t0 + 2000), endedAt: iso(t0 + 2000), playS: 0)]
         XCTAssertEqual(ChartData.episode(zero, playName: name).sounds.first?.seconds, 0)
-        XCTAssertEqual(b.gaps, [.init(from: 58, to: 66, name: "듣기 틈")])
+        XCTAssertEqual(b.gaps, [.init(from: 58, to: 66, name: nil)])
         XCTAssertEqual(b.totalS, 122)
         // 시간축에는 시각을 아는 것만(시작·자동 2차 시작), 결과는 축 밖.
         XCTAssertEqual(b.marks, [.init(at: 0, label: "감지 2.4초"), .init(at: 66, label: "다시 울음")])

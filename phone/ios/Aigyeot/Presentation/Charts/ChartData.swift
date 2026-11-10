@@ -45,8 +45,10 @@ enum ChartData {
                 let a = minuteIn(max(e.startAt, from), from: from), b = minuteIn(min(end(e), to), from: from)
                 // 끝 모름은 시작 점 하나(끝 시각을 만들어 보이지 않는다)
                 if e.endUnknown { return Span(from: a, to: a, tip: "\(name) \(hhmm(a)) · \(CareText.endUnknown)") }
-                // 길이 글은 그날에 든 기록 시각의 차이(분으로 내린 그림 좌표의 차이가 아니다: 기록 목록·잠 합계와 같은 값, 안드로이드와 같다)
-                return Span(from: a, to: b, tip: "\(name) \(hhmm(a))–\(hhmm(b))" + (b > a ? " · " + CareFormat.length(min(end(e), to) - max(e.startAt, from)) : ""))
+                // 길이 글은 그날에 든 기록 시각의 차이(분으로 내린 그림 좌표의 차이가 아니다: 기록 목록·잠 합계와 같은 값, 안드로이드와 같다).
+                // 붙일지도 그 차이로 본다(같은 분 안에 끝난 40초 잠도 '1분 미만'이 붙는다, 기록 목록과 같은 글)
+                let ms = min(end(e), to) - max(e.startAt, from)
+                return Span(from: a, to: b, tip: "\(name) \(hhmm(a))–\(hhmm(b))" + (ms > 0 ? " · " + CareFormat.length(ms) : ""))
             }
         }
         func startedToday(_ kind: CareKind) -> [CareEvent] { live.filter { $0.kind == kind && $0.startAt >= from && $0.startAt < to } }
@@ -183,10 +185,15 @@ enum ChartData {
     // MARK: 리포트(Charts.episode·methods·steer)
 
     struct Seg: Equatable {
-        let from: Int, to: Int, name: String
-        /// 재생이면 리포트의 `play_s`(보이는 길이는 이 값, 그림의 칸은 시각으로). 듣기 틈은 nil(칸 길이).
+        let from: Int, to: Int
+        /// 재생이면 소리 이름. 재생 사이 칸은 nil: 그 사이 통화 등으로 판정을 멈췄을 수도 있는데 리포트에는 그 칸이 없어
+        /// '듣기 틈'이라 단정하지 않는다(차 리포트 soundTip과 같다).
+        let name: String?
+        /// 재생이면 리포트의 `play_s`(보이는 길이는 이 값, 그림의 칸은 시각으로). 재생 사이 칸은 nil(칸 길이).
         var playS: Int? = nil
         var seconds: Int { playS ?? (to - from) }
+        /// 툴팁·화면 읽기 글: "자장가 56초", 재생 사이 칸은 "8초".
+        var tip: String { name.map { "\($0) \(seconds)초" } ?? "\(seconds)초" }
     }
     struct EpisodeMark: Equatable { let at: Int, label: String }
     /// 에피소드 띠. 초는 감지(에피소드 시작)부터. 리포트에 울음 구간이 없어(`totalCryS`만) 울음 줄은 그리지 않는다.
@@ -203,7 +210,7 @@ enum ChartData {
             return (p, Seg(from: a, to: max(b, a + 1), name: playName(p), playS: p.playS))   // 칸은 최소 1초 폭, 길이 글은 play_s 그대로
         }.sorted { $0.1.from < $1.1.from }
         let plays = timed.map(\.1)
-        let gaps = zip(plays, plays.dropFirst()).compactMap { x, y in y.from > x.to ? Seg(from: x.to, to: y.from, name: "듣기 틈") : nil }
+        let gaps = zip(plays, plays.dropFirst()).compactMap { x, y in y.from > x.to ? Seg(from: x.to, to: y.from, name: nil) : nil }
         let end = max(plays.map(\.to).max() ?? 0, 1)
         // 시작 표시: 울음 경보면 '감지 {지연}초', 소리 바꾸기 요청이면 그 이름(울음을 감지했다고 보이지 않게).
         var marks = [EpisodeMark(at: 0, label: e.trigger != .cryAlarm ? "소리 바꾸기 요청" : e.alarmLatencyS.map { "감지 " + seconds($0) } ?? "감지")]
