@@ -73,9 +73,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.code.scanner)
     implementation(libs.zxing.core) // 초대 QR 만들기
-    // 디자인 v6 실시간 3D 차(차 앱과 같은 판 1.77.3). 공용 버전 카탈로그는 조율 담당이 고치므로 여기서는 좌표를 직접 적는다.
-    implementation("com.google.android.filament:filament-android:1.77.3")
-    implementation("com.google.android.filament:gltfio-android:1.77.3")
+    // 디자인 v6 실시간 3D 차. 차 앱과 같은 판을 공용 버전 카탈로그 한 곳에서 쓴다.
+    implementation(libs.filament.android)
+    implementation(libs.filament.gltfio)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     debugImplementation(libs.compose.ui.tooling)
