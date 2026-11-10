@@ -69,6 +69,12 @@ data class Palette(
     val dark: Boolean,
 )
 
+/**
+ * 회색 바탕(bg) 위 옅은 판(톤 단추, 첫 안내 아이콘 칸, 3D '처음 자리로' 원, 타이머 고리). 라이트의 surfaceRaised는 bg와 같은 #F2F4F6이라
+ * 보이지 않아 먹색 8%(시안 .pbtn.ton 7%·세그먼트 판과 같은 결), 다크는 surfaceRaised. 흰 블록 위 판은 surfaceRaised 그대로(iOS DS.tonal과 같음).
+ */
+val Palette.tonal: Color get() = if (dark) surfaceRaised else textPrimary.copy(alpha = 0.08f)
+
 val LightPalette = Palette(
     bg = Color(0xFFF2F4F6),
     stage = Color(0xFFE9ECEF),

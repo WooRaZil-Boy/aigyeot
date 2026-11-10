@@ -338,15 +338,18 @@ private fun SheetRow(label: String, first: Boolean = false, value: @Composable (
     }
 }
 
-/** 값 칩(.sheet .row em: 고르면 브랜드 글자 + 브랜드 10% 바탕, 모서리 10). */
+/**
+ * 값 칩(.sheet .row em: 고르면 브랜드 글자 + 브랜드 10% 바탕, 모서리 10). 고른 글자는 onAccentSoft: 시안 accentInk(#2867E6)는 행 판 위
+ * 브랜드 10% 바탕(#E1E8F5)에서 4.08:1이라 4.5:1에 못 미친다(#1D4FC4는 5.7:1). 고르지 않은 칩은 먹색 8%(행 판 4% 위에서 라이트·다크 모두 보이게).
+ */
 @Composable
 private fun ValueChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val p = Tokens.colors
     Box(
-        Modifier.clip(RoundedCornerShape(10.dp)).background(if (selected) p.accent.copy(alpha = 0.1f) else p.surfaceRaised)
+        Modifier.clip(RoundedCornerShape(10.dp)).background(if (selected) p.accent.copy(alpha = 0.1f) else p.textPrimary.copy(alpha = 0.08f))
             .selectable(selected, interactionSource = null, indication = null, role = Role.Button, onClick = onClick).heightIn(min = 36.dp).padding(horizontal = 10.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.body.copy(fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = if (selected) p.accentInk else p.textSecondary) }
+    ) { Text(text, style = Type.body.copy(fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = if (selected) p.onAccentSoft else p.textSecondary) }
 }
 
 // ---------------------------------------------------------------- 기록(C4·C5·C14)

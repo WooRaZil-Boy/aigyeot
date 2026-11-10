@@ -110,7 +110,7 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
 private fun IntroLine(@DrawableRes icon: Int, text: String, child: Boolean = false) {
     val p = Tokens.colors
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(p.surfaceRaised), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(p.tonal), contentAlignment = Alignment.Center) {
             AIcon(icon, Modifier.size(18.dp), if (child) p.child else p.textSecondary)
         }
         Text(text, Modifier.weight(1f).padding(top = 6.dp), style = Type.body.copy(fontSize = 13.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = p.textSecondary)

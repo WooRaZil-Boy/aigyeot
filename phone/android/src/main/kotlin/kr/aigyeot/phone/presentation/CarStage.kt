@@ -66,7 +66,7 @@ fun CarStage(modifier: Modifier, preset: CarPreset) {
         )
         AnimatedVisibility(moved, Modifier.align(Alignment.BottomEnd).padding(10.dp), enter = fadeIn(Motion.base.spec()), exit = fadeOut(Motion.base.spec())) {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(p.surfaceRaised)
+                Modifier.size(40.dp).clip(CircleShape).background(p.tonal)
                     .pressable { view?.reset(animate = !reduced) }.semantics { contentDescription = "처음 자리로" },
                 contentAlignment = Alignment.Center,
             ) { AIcon(R.drawable.ic_locate_fixed, Modifier.size(20.dp), p.textSecondary) }

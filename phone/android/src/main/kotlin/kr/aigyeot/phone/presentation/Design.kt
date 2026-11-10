@@ -476,7 +476,7 @@ fun Btn(
     val p = Tokens.colors
     val (bg, fg) = when (kind) {
         BtnKind.PRIMARY -> p.accent to p.onAccent
-        BtnKind.TONAL -> p.surfaceRaised to p.textPrimary
+        BtnKind.TONAL -> p.tonal to p.textPrimary
         BtnKind.DANGER_TEXT -> Color.Transparent to p.danger
         BtnKind.TEXT -> Color.Transparent to p.accentInk
     }
