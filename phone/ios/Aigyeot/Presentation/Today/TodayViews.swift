@@ -65,6 +65,8 @@ struct TodayView: View {
                         }
                         RecentReports(owner: !vm.ui.guardian) { goTab(CareText.tabCar) }.enterRise(5)
                     }
+                    // 새 리포트(첫 리포트 포함)가 들어오면 그 줄·블록이 들어오고 위 블록이 비킨다(시안 '최근 리포트' .enter). 늘 있는 이 묶음에 건다
+                    .animation(reduceMotion ? nil : DS.Motion.smooth, value: vm.ui.phone.reports.prefix(3).map(\.id))
                 }
                 .screenPadding()
             }
@@ -300,6 +302,7 @@ private struct QuickBlock: View {
 private struct GuardianAlertCards: View {
     @Environment(TodayViewModel.self) private var vm
     @Environment(AppViewModel.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // '몇 분 전'은 화면을 연 채 두어도 매분 바뀐다(9장 '{n}분 전').
@@ -318,8 +321,10 @@ private struct GuardianAlertCards: View {
                     }
                     .buttonStyle(.press)
                     .simultaneousGesture(TapGesture().onEnded { app.userOpenedAlert(a.id) })   // 직접 고른 알림: 대기하던 다른 알림 열기는 버린다
+                    .transition(.cardEnter)   // 새 인계 알림 판(시안 .alert-c.enter)
                 }
             }
+            .animation(reduceMotion ? nil : DS.Motion.smooth, value: vm.ui.phone.alerts.prefix(5).map(\.id))
         }
     }
 }
@@ -419,9 +424,11 @@ private struct RecentReports: View {
                 }
                 ForEach(reports.prefix(3)) { r in   // 받을 때 시작 시각 늦은 순으로 둔다(InboxRules)
                     NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }.buttonStyle(.plain)
+                        .transition(.cardEnter)   // 새 리포트 줄(시안 '최근 리포트' .enter)
                 }
             }
             .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))
+            .transition(.cardEnter)
         }
     }
 }
