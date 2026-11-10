@@ -66,6 +66,7 @@ import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
 import kr.aigyeot.phone.R
 import kr.aigyeot.phone.domain.model.Connection
+import kr.aigyeot.phone.domain.model.creds
 import kr.aigyeot.phone.domain.model.DisconnectRun
 import kr.aigyeot.phone.domain.model.PAIR_BUSY
 import kr.aigyeot.phone.domain.model.PairRun
@@ -104,6 +105,9 @@ inline fun <reified T : ViewModel> appViewModel(): T = viewModel(factory = Local
 
 /** 뒤로 가기 기록을 비우고 이동한다. */
 private fun NavHostController.reset(route: Route) = navigate(route) { popUpTo(0) { inclusive = true } }
+
+/** 연결(이 휴대폰 기기 id)이 바뀌었으면 오늘 탭, 아니면 고른 탭 그대로. */
+internal fun homeTabAfter(tab: String, before: String?, now: String?) = if (before != now) "오늘" else tab
 
 @Composable
 fun AppRoot(app: AppViewModel) {
@@ -182,6 +186,13 @@ fun AppRoot(app: AppViewModel) {
 
     // 탭 고르기는 여기서 든다: 리포트·노래 녹음처럼 탭 밖 화면도 시안대로 아래 탭 막대를 보이고, 누르면 그 탭으로 돌아간다.
     var homeTab by rememberSaveable { mutableStateOf("오늘") }
+    // 연결이 바뀌면(새 연결 완료·끊김) 탭은 오늘부터(phone-care-plan 5장, iOS와 같다). 회전·프로세스 복원은 같은 연결이라 그대로 둔다.
+    val tabDevice = ui.connection.creds?.deviceId
+    var tabSeen by rememberSaveable { mutableStateOf(tabDevice) }
+    LaunchedEffect(tabDevice) {
+        homeTab = homeTabAfter(homeTab, tabSeen, tabDevice)
+        tabSeen = tabDevice
+    }
     val guardian = (ui.connection as? Connection.Paired)?.creds?.role == Role.GUARDIAN
     fun toTab(t: String) {
         homeTab = t

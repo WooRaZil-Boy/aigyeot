@@ -55,6 +55,12 @@ class ViewModelTest {
         assertEquals(CareTabsUiState(guardian = true, disconnectDone = false), careTabsUi(Connection.Paired(guardian), DisconnectRun.Running))
         assertEquals(CareTabsUiState(guardian = false, disconnectDone = true), careTabsUi(Connection.None, DisconnectRun.Done))
         assertEquals(CareTabsUiState(guardian = false, disconnectDone = false), careTabsUi(Connection.Gone("d"), DisconnectRun.Failed("x")))
+        // '기록만'으로 쓰다 차 탭에서 연결하고 완료하면 오늘 탭(phone-care-plan 5장). 끊겨도 오늘. 같은 연결(회전·복원)이면 고른 탭 그대로.
+        assertEquals("오늘", homeTabAfter("차", before = null, now = "d_new"))
+        assertEquals("오늘", homeTabAfter("차", before = "d_old", now = "d_new"))
+        assertEquals("오늘", homeTabAfter("설정", before = "d_old", now = null))
+        assertEquals("차", homeTabAfter("차", before = "d_old", now = "d_old"))
+        assertEquals("기록", homeTabAfter("기록", before = null, now = null))
     }
 
     @Test
