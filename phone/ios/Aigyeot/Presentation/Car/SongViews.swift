@@ -208,7 +208,7 @@ struct RecordSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button { dismiss() } label: { if #available(iOS 26, *) { IconImage(.x, size: 20) } else { Text(CareText.cancel) } }
+                        Button { dismiss() } label: { if #available(iOS 26, *) { IconImage(.x, size: 20).foregroundStyle(DS.textPrimary) } else { Text(CareText.cancel) } }   // 시안 .gbtn: 먹색 X(기록 시트와 같음)
                             .accessibilityLabel(CareText.cancel)
                     }
                 }
