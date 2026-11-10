@@ -146,11 +146,10 @@ private struct PickerChip: View {
     let zone: TimeZone
     /// 지금 뒤를 막는다(시작·시각). 끝 시각은 날을 맞추기 전 값이라 막지 않는다.
     var limitToNow = true
-    var beforeOpen: () -> Void = {}
     @State private var open = false
 
     var body: some View {
-        ValueChip(text: text, selected: selected) { beforeOpen(); open = true }
+        ValueChip(text: text, selected: selected) { open = true }
             .accessibilityLabel(a11y)
             .accessibilityValue(text)
             .popover(isPresented: $open) {
@@ -351,10 +350,8 @@ struct CareEditSheet: View {
                                     ValueChip(text: CareText.endUnknown, selected: draft.endUnknown) { vm.edit { $0.endUnknown = true } }
                                     PickerChip(text: draft.endUnknown ? CareText.chipCustom : CareFormat.clock(draft.end, zone), selected: !draft.endUnknown,
                                                a11y: CareText.rowEnd + " 시각",
-                                               date: Binding(get: { draft.end }, set: { d in vm.edit { $0.setEnd(picked: d) } }),
-                                               components: .hourAndMinute, zone: zone, limitToNow: false) {
-                                        vm.edit { $0.useEndTime() }
-                                    }
+                                               date: Binding(get: { draft.endShown }, set: { d in vm.edit { $0.setEnd(picked: d) } }),
+                                               components: .hourAndMinute, zone: zone, limitToNow: false)   // 열기만 하면 끝 모름 그대로, 고를 때 정한다
                                 }
                             }
                         }

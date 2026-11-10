@@ -296,6 +296,7 @@ struct RecordSheet: View {
         guard let url = rec.fileURL else { return }
         do {
             try vm.add(name: name, recording: url, durationS: rec.elapsed, replacing: replacing)   // '다시 녹음'이면 그 곡과 바꾼다
+            rec.sent()   // 닫히는 사이 또 눌러도 같은 녹음을 다시 보내지 않는다
             dismiss()
         } catch let e as SongError { sendError = e.message }
         catch { sendError = "노래를 저장하지 못했어요." }

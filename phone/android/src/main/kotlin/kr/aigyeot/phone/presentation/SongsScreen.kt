@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,7 +84,8 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
     if (!header && songs.isEmpty()) { FootNote("차에서는 다음 주행부터 써요."); return }
     ListBlock(if (header) "우리 노래" else null, if (header && onRecord != null && !ui.full) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
         if (songs.isEmpty()) Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Modifier.padding(bottom = 14.dp), style = Type.body, color = p.textTertiary)
-        for (e in songs) {
+        // 행 상태(메뉴 열림)는 곡 id에 묶는다: 곡 상태가 바뀌거나 다른 폰이 곡을 지워 자리가 달라져도 열린 메뉴가 다른 곡으로 옮겨 가지 않는다.
+        for (e in songs) key(e.songId) {
             var menu by remember { mutableStateOf(false) }
             Box {
                 ListRow(

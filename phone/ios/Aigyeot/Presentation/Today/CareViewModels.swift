@@ -227,8 +227,14 @@ final class CareSheetViewModel {
     /// 몇 분 전 칩. 누른 때 기준이다.
     func pick(chip minutes: Int?) { edit { $0.pick(chip: minutes, now: now()) } }
 
+    /// 저장(안드로이드와 같은 단계 규칙). 고치는 중·실패 뒤에만 저장하고, `allowOverlap`('그래도 저장')은 겹침을 묻는 중에만 받는다.
+    /// 저장해 닫히는 사이 또 누른 저장은 아무것도 하지 않는다. 새 기록 id는 시트를 열 때 정한 `draft.sheetId`라 다시 저장해도 같은 기록이다.
     func save(allowOverlap: Bool = false) {
         guard let d = draft else { return }
+        switch (phase, allowOverlap) {
+        case (.editing, false), (.failed, false), (.confirmOverlap, true): break
+        default: return
+        }
         let e = d.event(now: now())
         if d.original != nil, !careRepo.care.events.contains(where: { $0.id == e.id && $0.deletedAt == nil }) { phase = .closed; return }
         let r = recordCare.saveEvent(e, allowOverlap: allowOverlap)

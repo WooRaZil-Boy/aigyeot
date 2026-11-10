@@ -197,6 +197,24 @@ class PhoneStateTest {
     }
 
     @Test
+    fun 앞_곡_승인_상태가_와도_목록_순서는_그대로이고_새_곡은_끝에_붙는다() {
+        fun status(id: String, seq: Long, st: String = "accepted") = fixture("song_status").withSeq(seq).copy(body = buildJsonObject {
+            put("song_id", id); put("name", id); put("status", st); put("reason", null as String?); put("duration_s", 30.0); put("candidate", false)
+        })
+        val three = owner.addSong("s_A", "A", 30.0, "a.m4a", now).addSong("s_B", "B", 30.0, "b.m4a", now).addSong("s_C", "C", 30.0, "c.m4a", now)
+        // A 승인이 와도 A는 제자리(끝으로 옮기면 열린 행·메뉴가 다른 곡에 붙는다). 상태만 바뀐다.
+        val acc = three.receive(status("s_A", 700), now, live = true).state
+        assertEquals(listOf("s_A", "s_B", "s_C"), acc.songs.map { it.songId })
+        assertEquals(SongPhase.ACCEPTED, acc.songs.first().phase)
+        // 가운데 곡 거절도 제자리(자동 지움 요청은 그대로).
+        val rej = acc.receive(status("s_B", 701, "rejected"), now, live = true).state
+        assertEquals(listOf("s_A", "s_B", "s_C"), rej.songs.map { it.songId })
+        assertEquals("song_removed", rej.outbox.last().envelope.type)
+        // 다른 owner 폰이 올린 처음 보는 곡은 끝에 붙는다.
+        assertEquals(listOf("s_A", "s_B", "s_C", "s_D"), rej.receive(status("s_D", 702), now, live = true).state.songs.map { it.songId })
+    }
+
+    @Test
     fun report_summary는_세션마다_큰_seq가_이긴다() {
         val r = fixture("report_summary")
         val s = owner.receive(r, now, live = false).state

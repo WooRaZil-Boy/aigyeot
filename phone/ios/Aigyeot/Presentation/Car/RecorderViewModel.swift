@@ -11,10 +11,10 @@ final class RecorderViewModel {
         case idle
         case recording(url: URL, elapsed: TimeInterval)
         case recorded(url: URL, duration: TimeInterval, playing: Bool)
+        /// 보냈다(곡 목록이 사본을 가졌다). 시트가 닫히는 동안 녹음 뒤 화면 그대로 보이되 파일이 없어 다시 보낼 수 없다.
+        case sent(duration: TimeInterval)
     }
     enum Phase { case idle, recording, recorded }
-
-    /// 화면에 보이는 최대 길이(3:00).
 
     private(set) var state: State = .idle
     private(set) var levels: [Float] = []
@@ -35,13 +35,13 @@ final class RecorderViewModel {
     }
 
     var phase: Phase {
-        switch state { case .idle: .idle; case .recording: .recording; case .recorded: .recorded }
+        switch state { case .idle: .idle; case .recording: .recording; case .recorded, .sent: .recorded }
     }
     var elapsed: TimeInterval {
-        switch state { case .idle: 0; case .recording(_, let t): t; case .recorded(_, let d, _): d }
+        switch state { case .idle: 0; case .recording(_, let t): t; case .recorded(_, let d, _), .sent(let d): d }
     }
     var fileURL: URL? {
-        switch state { case .idle: nil; case .recording(let u, _), .recorded(let u, _, _): u }
+        switch state { case .idle, .sent: nil; case .recording(let u, _), .recorded(let u, _, _): u }
     }
     var isPlaying: Bool { if case .recorded(_, _, true) = state { true } else { false } }
 
@@ -114,6 +114,14 @@ final class RecorderViewModel {
 
     /// 권한 창을 기다리는 시작을 버린다(앱이 뒤로 감). 녹음 중·녹음 뒤 상태는 그대로 둔다.
     func cancelPendingStart() { if phase == .idle { session += 1 } }
+
+    /// 보내기를 마쳤다: 원본은 곡 목록에 사본을 두었으니 지우고(재생도 멈춘다), 같은 녹음을 다시 보내지 못하게 한다
+    /// (닫히는 사이 '보내기'를 또 누르면 다른 id로 곡이 하나 더 생겼다).
+    func sent() {
+        guard case .recorded(let url, let d, _) = state else { return }
+        recorder.discard(url)
+        state = .sent(duration: d)
+    }
 
     /// 다시 녹음 또는 닫기.
     func discard() {

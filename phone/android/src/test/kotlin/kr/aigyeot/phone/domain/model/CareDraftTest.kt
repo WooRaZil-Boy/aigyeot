@@ -34,6 +34,27 @@ class CareDraftTest {
     }
 
     @Test
+    fun `시작을 끝 뒤로 옮겨도 고른 끝은 그대로 두고 저장 검사가 알린다`() {
+        val ten = onDate(today, 10, 0, zone)
+        fun at(h: Int, m: Int) = onDate(today, h, m, zone)
+        // 새 수유: 30분 전(9:30) → 끝 9:50 → '지금'(10:00). 사용자가 고른 끝은 말없이 바꾸지 않고(0분 수유를 만들지 않게, C384) 저장 검사가 R3로 알린다.
+        val d = CareDraft.new("s", CareKind.FEED, day = null, now = ten).pick(30, ten).setEnd(9, 50).pick(0, ten)
+        assertEquals(ten, d.start)
+        assertEquals(at(9, 50), d.end)
+        assertEquals(EditCheck.Problem(CareProblem.END_BEFORE_START), CareFile().check(d.event(ten), ten))
+        // 직접 고른 시작도 같다. 끝 모름이면 끝을 만들지 않는다.
+        val manual = CareDraft.new("s", CareKind.FEED, day = null, now = ten).pick(30, ten).setEnd(9, 50).pick(null, ten).setStart(9, 55, ten)
+        assertEquals(at(9, 50), manual.end)
+        assertNull(CareDraft.new("s", CareKind.SLEEP, day = null, now = ten).pick(30, ten).pick(0, ten).end)
+        // 저장된 끝이 있는 기록을 고칠 때도 끝은 그대로 두고 저장 검사(R3)가 잡는다.
+        val e = CareEvent("e", CareKind.FEED, at(9, 0), endAt = at(9, 20), zone = zone.id, createdAt = ten, updatedAt = ten)
+        val edit = CareDraft.editing("s", e).setStart(9, 40, ten)
+        assertEquals(at(9, 40), edit.start)
+        assertEquals(at(9, 20), edit.end)
+        assertEquals(EditCheck.Problem(CareProblem.END_BEFORE_START), CareFile(events = listOf(e)).check(edit.event(ten, e), ten))
+    }
+
+    @Test
     fun `고치기는 그 기록의 날에 시각만 바꾸고 종류에 맞지 않는 칸은 비운다`() {
         val e = CareEvent("e", CareKind.FEED, onDate(today.minusDays(1), 23, 0, zone), endAt = onDate(today, 0, 20, zone), zone = zone.id,
             feedSide = FeedSide.BOTTLE, amountMl = 120, createdAt = now, updatedAt = now)

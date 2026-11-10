@@ -1756,11 +1756,11 @@ final class CareDraftTests: XCTestCase {
         XCTAssertEqual(past.start, CareRules.noon("2026-11-08", .current).map(CareTime.date))   // 기기 시간대의 그날 낮 12시
     }
 
-    func test_몇_분_전_칩은_누른_때_기준이고_끝이_시작보다_이르지_않다() {
+    func test_몇_분_전_칩은_누른_때_기준이고_끝_모름이면_보일_끝이_시작보다_이르지_않다() {
         var d = CareDraft.new(kind: .sleep, day: nil, now: now)
         d.pick(chip: 30, now: now)
         XCTAssertEqual(d.start, now.addingTimeInterval(-1800))
-        XCTAssertGreaterThanOrEqual(d.end, d.start)
+        XCTAssertGreaterThanOrEqual(d.endShown, d.start)
         d.pick(chip: nil, now: now)
         XCTAssertNil(d.chip)
         XCTAssertEqual(d.start, now.addingTimeInterval(-1800))   // '직접'은 지금 값에서 고른다
@@ -1779,15 +1779,59 @@ final class CareDraftTests: XCTestCase {
         XCTAssertEqual(d.end, at("2026-11-09T23:00:30+09:00"))        // 같은 분 → 시작 그대로
     }
 
-    func test_시작_날을_옮기면_끝도_같이_옮기고_끝_모름에서_돌아오면_시작_뒤로_맞춘다() {
+    func test_시작_날을_옮기면_끝도_같이_옮기고_끝_모름이면_보일_시각을_시작_뒤로_맞춘다() {
         var e = CareEvent(id: "x", kind: .feed, startAt: CareTime.ms(Rfc3339.parse("2026-11-09T12:00:00+09:00")!), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0)
         e.endAt = CareTime.ms(Rfc3339.parse("2026-11-09T13:00:00+09:00")!)
         var d = CareDraft.editing(e)
         d.endUnknown = true
         d.moveStartDay(to: Rfc3339.parse("2026-11-08T12:00:00+09:00")!)
-        d.useEndTime()
-        XCTAssertFalse(d.endUnknown)
-        XCTAssertEqual(d.end, Rfc3339.parse("2026-11-08T13:00:00+09:00"))   // 옛 날(9일)이 남지 않는다
+        XCTAssertEqual(d.endShown, Rfc3339.parse("2026-11-08T13:00:00+09:00"))   // 옛 날(9일)이 보이지 않는다
+        XCTAssertTrue(d.endUnknown)   // 보이기만 하고 끝 모름은 그대로
+    }
+
+    /// 끝 모름 기록의 끝 시각 고르기를 열었다 닫기만 하면 끝 모름 그대로 저장되고, 시각을 고르면 그 시각으로 저장된다(안드로이드 setEnd와 같다).
+    func test_끝_모름_기록은_끝_시각을_고를_때만_끝이_정해진다() {
+        let start = Rfc3339.parse("2026-11-09T21:00:00+09:00")!
+        var e = CareEvent(id: "x", kind: .sleep, startAt: CareTime.ms(start), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0)
+        e.endUnknown = true
+        var d = CareDraft.editing(e)
+        XCTAssertEqual(d.endShown, start)   // 고르기에 보일 값(자리 값 = 시작)
+        d.note = "메모만"
+        let kept = d.event(now: start.addingTimeInterval(3600))
+        XCTAssertNil(kept.endAt)
+        XCTAssertTrue(kept.endUnknown)
+        d.setEnd(picked: Rfc3339.parse("2026-11-10T06:30:00+09:00")!)
+        let picked = d.event(now: start.addingTimeInterval(12 * 3600))
+        XCTAssertFalse(picked.endUnknown)
+        XCTAssertEqual(picked.endAt, CareTime.ms(Rfc3339.parse("2026-11-10T06:30:00+09:00")!))
+    }
+
+    /// C384: 시작을 옮겨도(몇 분 전 칩·시작 시각) 고른 끝은 그대로 두고, 끝이 시작보다 빠르면 저장 검사(R3)가 알린다. 날짜 옮기기는 길이를 지킨다(안드로이드 같은 이름 시험).
+    func test_시작을_끝_뒤로_옮겨도_고른_끝은_그대로_두고_저장_검사가_알린다() {
+        let at = { (s: String) in Rfc3339.parse("2026-11-10T\(s):00+09:00")! }
+        let ten = at("10:00")
+        func check(_ d: CareDraft) -> CareProblem? { CareRules.problem(d.event(now: ten), now: CareTime.ms(ten)) }
+        var d = CareDraft.new(kind: .feed, day: nil, now: ten)
+        d.pick(chip: 30, now: ten)               // 9:30
+        d.setEnd(picked: at("09:50"))
+        d.pick(chip: 0, now: ten)                // 지금 10:00
+        XCTAssertEqual(d.end, at("09:50"))
+        XCTAssertEqual(check(d), .endBeforeStart)
+        d.setStart(at("09:55"))                  // 직접 시작
+        XCTAssertEqual(d.end, at("09:50"))
+        XCTAssertEqual(check(d), .endBeforeStart)
+        // 끝 모름은 끝 없음(보일 값만 시작 뒤로 계산한다)
+        var unknown = CareDraft.new(kind: .sleep, day: nil, now: ten)
+        unknown.setStart(ten.addingTimeInterval(30))
+        XCTAssertNil(unknown.event(now: ten).endAt)
+        XCTAssertEqual(unknown.endShown, ten.addingTimeInterval(30))
+        // 저장된 끝(9:00~9:20)을 고쳐 시작을 9:40으로
+        var e = CareEvent(id: "x", kind: .feed, startAt: CareTime.ms(at("09:00")), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0)
+        e.endAt = CareTime.ms(at("09:20"))
+        var edit = CareDraft.editing(e)
+        edit.setStart(at("09:40"))
+        XCTAssertEqual(edit.end, at("09:20"))
+        XCTAssertEqual(check(edit), .endBeforeStart)
     }
 
     func test_저장할_기록은_종류에_맞지_않는_칸을_비우고_메모_공백을_걷는다() {

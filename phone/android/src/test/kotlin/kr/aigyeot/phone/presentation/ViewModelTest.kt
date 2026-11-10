@@ -183,6 +183,26 @@ class ViewModelTest {
     }
 
     @Test
+    fun `고른 끝은 시작을 옮겨도 그대로이고 시작이 끝을 넘으면 저장하지 않는다`() = kitTest {
+        // iOS test_고른_끝은_시작을_옮겨도_그대로이고_시작이_끝을_넘으면_저장하지_않는다와 같은 순서(C384: 0분 수유를 말없이 저장하지 않게).
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        fun hm(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(APP_ZONE)
+        vm.open("n", CareSheetTarget.New(CareKind.FEED, day = null))
+        vm.pick(60)
+        val end = hm(NOW - 30 * MINUTE)
+        vm.setEnd(end.hour, end.minute)
+        val picked = onDate(end.toLocalDate(), end.hour, end.minute, APP_ZONE)
+        val later = hm(NOW - 15 * MINUTE)
+        vm.setStart(later.hour, later.minute)
+        assertEquals(picked, vm.sheet.value?.draft?.end)
+        vm.pick(0)
+        assertEquals(picked, vm.sheet.value?.draft?.end)
+        vm.save()
+        assertEquals(CareSheetViewModel.Phase.Failed("끝 시각이 시작보다 빨라요"), vm.sheet.value?.phase)
+        assertTrue(care.care.value.events.none { it.kind == CareKind.FEED })
+    }
+
+    @Test
     fun `시트와 타이머는 같은 검사로 미래 시각을 막고 겹침은 확인을 기다린다`() = kitTest {
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         // 먼저 수유 하나(30분 전~10분 전)
@@ -231,6 +251,7 @@ class ViewModelTest {
         val ten = java.time.Instant.ofEpochMilli(NOW - 10 * MINUTE).atZone(APP_ZONE)
         timer.setTime(TimerViewModel.TimeField.START, ten.hour, ten.minute)
         until("시작 옮김") { e().startAt == onDate(ten.toLocalDate(), ten.hour, ten.minute, APP_ZONE) }
+        until("저장 끝") { timer.phase.value == CareSheetViewModel.Phase.Editing } // 기록이 바뀐 뒤 단계가 Saving에서 돌아오기까지(그 사이 고른 시각은 받지 않는다)
         // 45분 전으로 옮기면 앞 수유와 겹친다: 확인을 기다리고, '고치기'면 그대로, 다시 골라 '그래도 저장'이면 저장한다.
         val overlap = java.time.Instant.ofEpochMilli(NOW - 45 * MINUTE).atZone(APP_ZONE)
         timer.setTime(TimerViewModel.TimeField.START, overlap.hour, overlap.minute)

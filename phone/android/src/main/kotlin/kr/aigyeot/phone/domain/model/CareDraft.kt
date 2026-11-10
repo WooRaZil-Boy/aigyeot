@@ -102,7 +102,10 @@ data class CareDraft(
     }
 }
 
-/** 몇 분 전 칩: 누른 때 기준으로 시작을 정한다. null('직접')이면 지금 값에서 날짜·시각을 고른다. */
+/**
+ * 몇 분 전 칩: 누른 때 기준으로 시작을 정한다. null('직접')이면 지금 값에서 날짜·시각을 고른다.
+ * 시작을 옮겨도 사용자가 고른 끝은 말없이 바꾸지 않는다: 끝이 시작보다 빠르면 저장 검사(R3)가 알린다(C384, setStart도 같다).
+ */
 fun CareDraft.pick(chip: Int?, now: Long) =
     if (chip == null) copy(chip = null) else copy(chip = chip, start = now - chip * MINUTE, datePicked = false)
 

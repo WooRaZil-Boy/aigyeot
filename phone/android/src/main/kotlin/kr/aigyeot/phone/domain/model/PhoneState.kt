@@ -405,7 +405,8 @@ private fun PhoneState.applySongStatus(b: SongStatusBody, seq: Long, now: Long, 
         b.status == SongStatusKind.ACCEPTED -> base.copy(phase = SongPhase.ACCEPTED, durationS = b.durationS ?: base.durationS, candidate = b.candidate)
         else -> base.copy(phase = SongPhase.REJECTED, reason = b.reason, candidate = false)
     }.copy(seq = seq, name = base.name ?: b.name).let { if (base.removedByMe) it else it.copy(error = null) } // 차의 최신 상태가 오면 보내기 실패 표시는 지운다
-    var s = copy(songs = songs.filter { it.songId != b.songId } + next)
+    // 있던 곡은 제자리에서 바꾸고(목록 순서를 지킨다, iOS InboxRules와 같다), 처음 보는 곡만 끝에 붙인다.
+    var s = copy(songs = if (cur != null) songs.map { if (it.songId == b.songId) next else it } else songs + next)
     // 새 거절이고 아직 지우지 않은 곡만(이미 지움이면 보내지 않는다, 3.2).
     if (next.phase == SongPhase.REJECTED && role == Role.OWNER && !base.removedByMe) {
         // 거절된 곡은 자리를 비우려고 같은 곡 id로 song_removed를 보낸다(7.4, 오프라인이면 보낼 함).

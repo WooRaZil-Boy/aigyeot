@@ -307,9 +307,55 @@ final class ViewModelTests: XCTestCase {
         XCTAssertEqual(second.phase, .confirmOverlap)
         second.keepEditing()
         XCTAssertEqual(second.phase, .editing)
+        second.save(allowOverlap: true)   // '그래도 저장'은 겹침을 묻는 중에만 받는다
+        XCTAssertEqual(second.phase, .editing)
+        second.save()
+        XCTAssertEqual(second.phase, .confirmOverlap)
+        second.save()   // 묻는 중의 보통 저장은 받지 않는다
+        XCTAssertEqual(second.phase, .confirmOverlap)
         second.save(allowOverlap: true)
+        second.save(allowOverlap: true)   // 닫히는 사이 또 눌렀다
         XCTAssertEqual(second.phase, .closed)
         XCTAssertEqual(kit.app.care.care.events.filter { $0.kind == .sleep && $0.deletedAt == nil }.count, 2)
+    }
+
+    /// 사용자가 고른 끝은 시작을 옮겨도 말없이 바뀌지 않는다(C384). 시작이 끝을 넘으면 저장하지 않고 R3 글을 보인다(안드로이드 같은 이름 시험).
+    func test_고른_끝은_시작을_옮겨도_그대로이고_시작이_끝을_넘으면_저장하지_않는다() throws {
+        let kit = Kit()
+        let sheet = kit.app.careSheet(.new(.feed, day: nil))
+        let now = kit.clock
+        sheet.edit { $0.setStart(now.addingTimeInterval(-3600)) }
+        sheet.edit { $0.setEnd(picked: now.addingTimeInterval(-1800)) }
+        let end = try XCTUnwrap(sheet.draft?.end)
+        sheet.edit { $0.setStart(now.addingTimeInterval(-900)) }   // 시작을 끝 뒤로
+        XCTAssertEqual(sheet.draft?.end, end)
+        sheet.pick(chip: 0)                                          // 몇 분 전 칩 '지금'도 끝을 당기지 않는다
+        XCTAssertEqual(sheet.draft?.end, end)
+        sheet.save()
+        XCTAssertEqual(sheet.phase, .failed("끝 시각이 시작보다 빨라요"))
+        XCTAssertTrue(kit.app.care.care.events.filter { $0.kind == .feed }.isEmpty)
+    }
+
+    /// 새 기록 id는 시트를 열 때 정한다(안드로이드 sheetId). 저장해 닫히는 사이 또 누른 저장은 아무것도 하지 않고, 실패 뒤 다시 저장해도 같은 기록이다.
+    func test_시트_저장을_빠르게_두_번_눌러도_기록은_하나다() throws {
+        let kit = Kit()
+        let sheet = kit.app.careSheet(.new(.diaper, day: nil))
+        let id = try XCTUnwrap(sheet.draft?.sheetId)
+        sheet.save()
+        sheet.save()
+        XCTAssertEqual(sheet.phase, .closed)
+        XCTAssertEqual(kit.app.care.care.events.filter { $0.kind == .diaper }.map(\.id), [id])
+
+        kit.careStore.failing = true
+        let note = kit.app.careSheet(.new(.note, day: nil))
+        note.edit { $0.note = "메모" }
+        note.save()
+        XCTAssertEqual(note.phase, .failed(NoticeRules.saveFailed))
+        kit.careStore.failing = false
+        note.save()   // 실패 뒤 다시 저장
+        note.save()
+        XCTAssertEqual(note.phase, .closed)
+        XCTAssertEqual(kit.app.care.care.events.filter { $0.kind == .note }.map(\.id), [note.draft?.sheetId])
     }
 
     /// 타이머의 쪽·양은 뷰모델이 고친다: 젖병이 아니면 양을 비우고(normalized), 시작 시각이 겹치면 묻는다.
@@ -358,8 +404,15 @@ final class ViewModelTests: XCTestCase {
         try songs.add(name: "자장가", recording: url, durationS: rec.elapsed, replacing: nil)
         XCTAssertEqual(songs.ui.songs.map(\.name), ["자장가"])
         XCTAssertTrue(kit.app.state.state.outbox.contains { $0.type == MessageType.songAdded })
+        rec.sent()
+        // 닫히는 사이: 녹음 뒤 화면 그대로(길이 유지), 파일은 지웠고 다시 보낼 녹음이 없다(RecordSheet.send는 fileURL이 없으면 멈춘다)
+        XCTAssertEqual(rec.phase, .recorded)
+        XCTAssertEqual(rec.elapsed, 12)
+        XCTAssertNil(rec.fileURL)
+        XCTAssertEqual(recorder.discarded, [url])
         rec.discard()   // 시트가 닫힐 때
         XCTAssertEqual(rec.phase, .idle)
         XCTAssertFalse(recorder.isActive)
+        XCTAssertEqual(songs.ui.songs.count, 1)
     }
 }
