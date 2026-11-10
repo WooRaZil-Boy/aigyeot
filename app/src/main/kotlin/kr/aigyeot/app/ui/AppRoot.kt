@@ -3,7 +3,6 @@ package kr.aigyeot.app.ui
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,9 +73,9 @@ fun AppRoot(g: Graph, app: AppViewModel, drive: Boolean, onBabyAboard: () -> Uni
     if (drive) {
         BackHandler { onExit() }
         val vm = viewModel<HomeViewModel>(factory = homeFactory(g))
-        return HomeScreen(vm.uiState.collectAsState().value, drive = true, onBabyAboard = {}, onFeedingNow = {}, onAsk = {}, onFeedingConfirm = {}, go = {})
+        return HomeScreen(vm.uiState.collectAsStateWithLifecycle().value, drive = true, onBabyAboard = {}, onFeedingNow = {}, onAsk = {}, onFeedingConfirm = {}, go = {})
     }
-    val profile = app.profile.collectAsState().value as? ProfileState.Loaded ?: return
+    val profile = app.profile.collectAsStateWithLifecycle().value as? ProfileState.Loaded ?: return
     val home = { move(Route.Home) }
     BackHandler { if (route == Route.Home || profile.needsSetup) onExit() else move(parentOf(route)) }
     if (profile.needsSetup) return saved.SaveableStateProvider("first-setup") { SetupScreen(profile.profile, g.clock, profile.noRearOutput, null) { app.saveProfile(it) } }
@@ -90,7 +89,7 @@ private fun ParkRoute(g: Graph, app: AppViewModel, route: Route, profile: Profil
         Route.Home -> {
             val vm = viewModel<HomeViewModel>(factory = homeFactory(g))
             HomeScreen(
-                vm.uiState.collectAsState().value, drive = false,
+                vm.uiState.collectAsStateWithLifecycle().value, drive = false,
                 onBabyAboard = onBabyAboard, onFeedingNow = vm::feedingNow, onAsk = vm::ask, onFeedingConfirm = app::feedingConfirm,
                 go = { go(it) },
             )
@@ -100,23 +99,22 @@ private fun ParkRoute(g: Graph, app: AppViewModel, route: Route, profile: Profil
         }
         Route.Connect -> {
             val vm = viewModel<ConnectViewModel>(factory = viewModelFactory { initializer { ConnectViewModel(g.link, g.clock) } })
-            ConnectScreen(vm.uiState.collectAsState().value, vm::open, vm::close, vm::disconnect, vm::refreshPhones, home)
+            ConnectScreen(vm.uiState.collectAsStateWithLifecycle().value, vm::open, vm::close, vm::disconnect, vm::refreshPhones, home)
         }
         Route.Songs -> {
             val vm = viewModel<SongsViewModel>(factory = viewModelFactory { initializer { SongsViewModel(g.store, g.host, g.link) } })
-            SongsScreen(vm.rows.collectAsState().value, vm::select) { go(Route.Setup) }   // 설정 안에서 들어온다(시안 9장 ③)
+            SongsScreen(vm.rows.collectAsStateWithLifecycle().value, vm::select) { go(Route.Setup) }   // 설정 안에서 들어온다(시안 9장 ③)
         }
         Route.Reports, is Route.Report -> {   // 넓은 창은 목록 + 상세 한 화면, 840 이하는 목록 → 상세(시안 reports())
             val vm = viewModel<ReportListViewModel>(factory = viewModelFactory { initializer { ReportListViewModel(g.store) } })
-            ReportsScreen(vm.rows.collectAsState().value, (r as? Route.Report)?.id, detail = { id ->
+            ReportsScreen(vm.rows.collectAsStateWithLifecycle().value, (r as? Route.Report)?.id, detail = { id ->
                 viewModel<ReportDetailViewModel>(key = Route.Report(id).key, factory = viewModelFactory { initializer { ReportDetailViewModel(g.store, g.clock, id) } })
-                    .uiState.collectAsState().value
+                    .uiState.collectAsStateWithLifecycle().value
             }, onOpen = { go(Route.Report(it)) }, onBack = { go(if (it) Route.Reports else Route.Home) })
         }
         Route.Demo, Route.DemoScenes -> {   // 장면 고르기는 시연·측정 화면 안으로 합쳤다(시안 demo()). DemoScenes는 저장된 경로를 위해 남긴다
             val vm = viewModel<DemoViewModel>(factory = viewModelFactory { initializer { DemoViewModel(g.scenario, g.events) } })
-            val scenes = remember { vm.scenes() }
-            DemoScreen(vm.uiState.collectAsStateWithLifecycle().value, scenes, vm::run, vm::stop, vm::checkVc, vm::clear) { go(Route.Setup) }   // 화면이 안 보이면 CPU·메모리 재기를 멈춘다
+            DemoScreen(vm.uiState.collectAsStateWithLifecycle().value, vm.scenes.collectAsStateWithLifecycle().value, vm::run, vm::stop, vm::checkVc, vm::clear) { go(Route.Setup) }   // 화면이 안 보이면 CPU·메모리 재기를 멈춘다
         }
     }
 }

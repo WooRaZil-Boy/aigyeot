@@ -120,7 +120,8 @@ fun CarStage(stage: Stage3d, modifier: Modifier = Modifier, interactive: Boolean
                     val callouts = stage.callouts.sortedBy { it.ordinal }
                     v.set(stage, animate = true) { shown = if (stage.drive) emptyList() else callouts }
                 }
-                v.onRender = { if (shown.isNotEmpty()) anchors = shown.map { c -> c.anchorsIn(stage).mapNotNull(v::project).minByOrNull { it[2] } } }
+                // 칩 자리는 값이 바뀔 때만 상태에 넣는다(FloatArray는 참조로 비교돼, 매 장 새 목록을 넣으면 칩이 떠 있는 동안 60fps로 다시 그린다)
+                v.onRender = { if (shown.isNotEmpty()) shown.map { c -> c.anchorsIn(stage).mapNotNull(v::project).minByOrNull { it[2] } }.let { if (!sameAnchors(anchors, it)) anchors = it } }
             },
             onRelease = { it.destroy(); view = null },
         )
@@ -190,3 +191,7 @@ private fun floorBrush(p: Palette): Brush = object : androidx.compose.ui.graphic
 }
 
 private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/** 칩 자리 둘이 값으로 같은가(투영 좌표 FloatArray는 내용으로 비교). */
+internal fun sameAnchors(a: List<FloatArray?>, b: List<FloatArray?>) =
+    a.size == b.size && a.indices.all { i -> val x = a[i]; val y = b[i]; if (x == null || y == null) x == null && y == null else x.contentEquals(y) }

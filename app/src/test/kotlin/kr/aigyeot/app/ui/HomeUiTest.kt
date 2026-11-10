@@ -311,6 +311,14 @@ class HomeUiTest {
         assertTrue(car?.lanes?.none { it.name == "차에서" } ?: true, "자정에 딱 끝난 세션은 '차에서' 칸이 없다")
     }
 
+    // 리뷰 L: 칩 자리는 값으로 비교한다(같은 값의 새 배열이면 상태를 바꾸지 않는다)
+    @Test fun sameAnchors_comparesByContent() {
+        assertTrue(sameAnchors(listOf(floatArrayOf(1f, 2f, 3f), null), listOf(floatArrayOf(1f, 2f, 3f), null)))
+        assertFalse(sameAnchors(listOf(floatArrayOf(1f, 2f, 3f)), listOf(floatArrayOf(1f, 2.5f, 3f))))
+        assertFalse(sameAnchors(listOf(floatArrayOf(1f, 2f, 3f)), listOf(null)))
+        assertFalse(sameAnchors(emptyList(), listOf(null)))
+    }
+
     @Test fun episodeFlow_recryOnlyBeforeAutoSecond_andSecondSuccessCounts() {
         fun play(purpose: kr.aigyeot.shared.PlayPurpose, m: kr.aigyeot.shared.SoundMethod) = kr.aigyeot.shared.PlayEntry(purpose, m, null, "2027-01-15T17:00:00+09:00", "2027-01-15T17:00:56+09:00", 56)
         fun ep(plays: List<kr.aigyeot.shared.PlayEntry>, result: kr.aigyeot.shared.EpisodeResult?, recried: Boolean, second: kr.aigyeot.shared.SecondAttempt?) =

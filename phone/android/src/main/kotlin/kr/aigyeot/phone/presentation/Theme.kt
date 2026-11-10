@@ -269,7 +269,8 @@ object Radius {
 
 /** 시간 곡선 하나(tokens.json motion: ms + cubic-bezier). linear는 (0,0,1,1). */
 data class Curve(val ms: Int, val x1: Float, val y1: Float, val x2: Float, val y2: Float) {
-    val easing: Easing get() = if (x1 == 0f && y1 == 0f && x2 == 1f && y2 == 1f) LinearEasing else CubicBezierEasing(x1, y1, x2, y2)
+    /** 만들 때 한 번만 계산한다(애니메이션이 매 프레임 읽는다). 생성자 값은 모두 val이라 바뀌지 않는다. */
+    val easing: Easing = if (x1 == 0f && y1 == 0f && x2 == 1f && y2 == 1f) LinearEasing else CubicBezierEasing(x1, y1, x2, y2)
     fun <T> spec(delayMs: Int = 0): TweenSpec<T> = tween(ms, delayMs, easing)
 }
 

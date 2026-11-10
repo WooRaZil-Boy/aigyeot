@@ -120,8 +120,9 @@ class DemoViewModel(
     ) { (running, progress, vcText), results, (cpu, pss), pts -> DemoUiState(running, progress, vcText, metrics(results, cpu, pss), pts) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DemoUiState(scenario.running.value, scenario.progress.value))
 
-    /** 장면 행(화면에 들어올 때마다 다시 읽는다: 흘려 넣은 장면). */
-    fun scenes(): List<SceneInfo> = scenario.list()
+    /** 장면 행. 파일 읽기·해석은 IO에서 한 번(화면은 그리기만). 화면을 5초 넘게 떠났다 들어오면 다시 읽는다(흘려 넣은 장면). */
+    val scenes: StateFlow<List<SceneInfo>> = flow { emit(scenario.list()) }.flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     fun run(id: String, repeat: Int?) = scenario.run(id, repeat)
     fun stop() = scenario.stop()
     fun checkVc() { viewModelScope.launch { vc.value = scenario.checkVc() } }
@@ -213,7 +214,8 @@ fun DemoScreen(
     ui: DemoUiState, scenes: List<SceneInfo>, onRun: (String, Int?) -> Unit, onStop: () -> Unit, onCheckVc: () -> Unit, onClear: () -> Unit, onBack: () -> Unit,
 ) {
     var ask by rememberSaveable { mutableStateOf(false) }
-    var sel by rememberSaveable { mutableStateOf(scenes.firstOrNull()?.id) }   // 화면 재생성(회전)에도 남긴다(명세서 11장)
+    var picked by rememberSaveable { mutableStateOf<String?>(null) }   // 화면 재생성(회전)에도 남긴다(명세서 11장)
+    val sel = picked ?: scenes.firstOrNull()?.id   // 고르기 전에는 첫 장면(장면 행은 IO에서 늦게 올 수 있다)
     var repeat by rememberSaveable { mutableStateOf<Int?>(null) }   // null = 장면 파일의 repeat
     val running = ui.running
     val base = scenes.firstOrNull { it.id == sel }?.repeat ?: 1   // 고른 장면 파일의 repeat
@@ -221,7 +223,7 @@ fun DemoScreen(
     val left: @Composable ColumnScope.(Modifier) -> Unit = { listModifier ->
         Sect("장면")
         LazyColumn(listModifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(scenes, key = { it.id }) { s -> SceneRow(s, s.id == sel, !running) { sel = s.id } }
+            items(scenes, key = { it.id }) { s -> SceneRow(s, s.id == sel, !running) { picked = s.id } }
         }
         Stepper(repeatText(repeat), Modifier.padding(top = 24.dp), minusEnabled = !running, plusEnabled = !running,
             onMinus = { repeat = repeatDown(repeat, base) }, onPlus = { repeat = repeatUp(repeat, base) })

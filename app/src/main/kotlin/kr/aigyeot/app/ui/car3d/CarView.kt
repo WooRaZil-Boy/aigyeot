@@ -12,6 +12,7 @@ import com.google.android.filament.Renderer
 import com.google.android.filament.SwapChain
 import com.google.android.filament.View
 import com.google.android.filament.Viewport
+import com.google.android.filament.android.FilamentHelper
 import com.google.android.filament.android.UiHelper
 import kotlin.math.max
 import kotlin.math.min
@@ -104,6 +105,12 @@ class CarView(context: Context, private val interactive: Boolean) : TextureView(
             if (width > 0 && height > 0) resized(width, height)
             invalidate3d()
         }
+    }
+
+    /** TextureView는 표면 크기를 바꾸기 전에 그리던 프레임을 끝내야 한다(FilamentHelper 안내: onResized에서는 늦다). 엔진 준비 전·놓은 뒤에는 부르지 않는다. */
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        if (ready && !destroyed) FilamentHelper.synchronizePendingFrames(engine)
+        super.onSizeChanged(w, h, oldw, oldh)
     }
 
     /** 상태를 바꾼다. 카메라 자리가 바뀌면 날아가고(정차 중·동작 켜짐 1.1초, 아니면 바로), 새로 켜진 열선·잠금은 한 번 움직인다. */

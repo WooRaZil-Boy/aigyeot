@@ -60,12 +60,12 @@ class Scenario(
     private val loudness = SourceLoudness { androidLufs(context, it) }   // 잰 음원은 반복마다 다시 재지 않는다
 
     /** 시연·측정 화면의 장면 행(id 순, assets/scenario + 흘려 넣은 장면). 부를 때마다 파일을 다시 본다. 읽지 못한 파일은 제목·녹음 없이 둔다. */
-    fun list(): List<SceneInfo> = files().entries.sortedBy { it.key }.map { (id, read) -> sceneInfo(id, runCatching { parseScene(read()) }.getOrNull()) }
+    fun list(): List<SceneInfo> = files().entries.sortedBy { it.key }.map { (id, f) -> sceneInfo(id, f.scene) }
 
     fun run(id: String, repeat: Int? = null) {
         if (job?.isCompleted == false) return   // 취소 중인 이전 실행의 정리가 끝나기 전에는 새로 시작하지 않는다
         val scene = try {
-            parseScene(files()[id]?.invoke() ?: throw SceneError("장면 '$id'가 없다"))
+            parseScene((files()[id] ?: throw SceneError("장면 '$id'가 없다")).text.getOrThrow())
         } catch (e: Exception) {
             _progress.value = ScenarioProgress(id, 0, 0, 0.0, null, "장면 파일 오류: ${e.message}")
             return
@@ -84,12 +84,16 @@ class Scenario(
         "session ${s.code} ${s.body.take(80)} · state ${st.code} ${st.body.take(120)}".also { Log.i(TAG, "VC $it") }
     }
 
-    /** 장면 id → 파일 읽기. 흘려 넣은 파일(CarPaths.scenarioDir)이 같은 id의 assets 파일을 덮는다. 읽지 못한 파일은 파일 이름으로 둔다(실행하면 오류를 보여 준다). */
-    private fun files(): Map<String, () -> String> {
-        val out = LinkedHashMap<String, () -> String>()
+    /** 장면 파일 하나: 읽은 글(읽기 실패면 그 예외)과 해석(못 하면 null). 파일마다 한 번 읽고 한 번 해석한다. */
+    private class SceneFile(val text: Result<String>, val scene: Scene?)
+
+    /** 장면 id → 파일. 흘려 넣은 파일(CarPaths.scenarioDir)이 같은 id의 assets 파일을 덮는다. 읽지 못한 파일은 파일 이름으로 둔다(실행하면 오류를 보여 준다). 파일 읽기라 IO에서 부른다. */
+    private fun files(): Map<String, SceneFile> {
+        val out = LinkedHashMap<String, SceneFile>()
         fun add(name: String, read: () -> String) {
-            val id = runCatching { parseScene(read()).id }.getOrElse { name.removeSuffix(".json") }
-            out[id] = read
+            val text = runCatching(read)
+            val scene = text.getOrNull()?.let { runCatching { parseScene(it) }.getOrNull() }
+            out[scene?.id ?: name.removeSuffix(".json")] = SceneFile(text, scene)
         }
         context.assets.list(ASSET_DIR).orEmpty().filter { it.endsWith(".json") }.sorted()
             .forEach { n -> add(n) { context.assets.open("$ASSET_DIR/$n").bufferedReader().use { it.readText() } } }

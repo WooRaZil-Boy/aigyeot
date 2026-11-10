@@ -95,5 +95,6 @@ data class Rgba(val r: Int, val g: Int, val b: Int, val a: Float) {
 
 class Motion(val ms: Int, private val bezier: FloatArray?) {
     val curve: FloatArray? get() = bezier?.copyOf()
-    val easing: Easing get() = bezier?.let { CubicBezierEasing(it[0], it[1], it[2], it[3]) } ?: LinearEasing
+    /** 만들 때 한 번만 계산한다(무한 애니메이션이 매 프레임 읽는다). bezier는 밖에서 바뀌지 않는다(curve는 복사본). */
+    val easing: Easing = bezier?.let { CubicBezierEasing(it[0], it[1], it[2], it[3]) } ?: LinearEasing
 }
