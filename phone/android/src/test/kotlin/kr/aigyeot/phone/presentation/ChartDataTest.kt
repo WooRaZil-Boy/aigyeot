@@ -104,6 +104,13 @@ class ChartDataTest {
         assertEquals(listOf(790 to 832), car.spans.map { it.from to it.to })
         assertEquals("탑승 13:10–13:52 · 42분", car.spans.single().tip) // 세션 구간은 중간 정차가 들어 있어 '주행'이라 하지 않는다(차 앱과 같음)
         assertEquals(listOf(804), car.marks.map { it.at })
+        // 길이 글은 기록 시각의 차이: 13:10:50~13:52:10은 그림 칸이 13:10~13:52여도 41분(분으로 내린 칸 차이 42분이 아니다). 합계도 같다.
+        val odd = r.copy(startedAt = iso(at(13, 10) + 50_000), endedAt = iso(at(13, 52) + 10_000))
+        val oddCar = dayChart(CareFile(), listOf(odd), today, now, zone, showCar = true).lanes[1]
+        assertEquals("탑승 13:10–13:52 · 41분", oddCar.spans.single().tip)
+        assertEquals("탑승 41분", oddCar.sub)
+        val feed = CareEvent("f", CareKind.FEED, at(13, 10) + 50_000, endAt = at(13, 52) + 10_000, zone = zone.id, createdAt = now, updatedAt = now)
+        assertEquals("수유 13:10–13:52 · 41분", dayChart(CareFile(events = listOf(feed)), emptyList(), today, now, zone, showCar = false).lanes.first { it.kind == LaneKind.FEED }.spans.single().tip)
         // 다른 날이면 지금 선이 없다.
         assertNull(dayChart(CareFile(), emptyList(), today.minusDays(1), now, zone, showCar = false).nowMin)
     }
@@ -159,8 +166,13 @@ class ChartDataTest {
             ),
         )
         val b = episodeBand(e, emptyList())
-        assertEquals(listOf(EpisodeSeg(2, 58, "자장가"), EpisodeSeg(66, 122, "백색소음")), b.sounds)
+        assertEquals(listOf(EpisodeSeg(2, 58, "자장가", 56), EpisodeSeg(66, 122, "백색소음", 56)), b.sounds)
         assertEquals(listOf(EpisodeSeg(58, 66, "듣기 틈")), b.gaps)
+        // 툴팁·설명의 길이는 차가 보낸 play_s 그대로(00.200~10.800 재생은 칸이 0~10초여도 11초, 리포트 상세 글·iOS·차와 같다). 듣기 틈은 칸 길이.
+        val frac = episodeBand(e.copy(plays = listOf(PlayEntry(PlayPurpose.AUTO_FIRST, SoundMethod.LULLABY, null, iso(t0 + 200), iso(t0 + 10_800), 11))), emptyList())
+        assertEquals(0 to 10, frac.sounds.single().let { it.from to it.to })
+        assertEquals(11, frac.sounds.single().seconds)
+        assertEquals(8, b.gaps.single().seconds)
         assertEquals(122, b.totalS)
         // 시간축에는 시각을 아는 것만(시작·자동 2차 시작), 결과는 축 밖.
         assertEquals(listOf(EpisodeMarkAt(0, "감지 2.4초"), EpisodeMarkAt(66, "다시 울음")), b.marks)

@@ -75,7 +75,8 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
         val b = minuteIn(minOf(end(e), to), from)
         // 끝 시각 모름은 끝을 만들지 않는다(7.1 log.row.feedUnknown과 같은 말).
         if (e.endAt == null && !e.isOngoing) DaySpan(a, a, "$name ${hhmm(a)} · 끝 시각 모름")
-        else DaySpan(a, b, "$name ${hhmm(a)}–${hhmm(b)}" + if (b > a) " · ${durationText((b - a) * MINUTE)}" else "")
+        // 길이 글은 그날에 든 기록 시각의 차이(분으로 내린 그림 좌표의 차이가 아니다: 기록 목록·잠 합계와 같은 값).
+        else DaySpan(a, b, "$name ${hhmm(a)}–${hhmm(b)}" + if (b > a) " · ${durationText(minOf(end(e), to) - maxOf(e.startAt, from))}" else "")
     }
     fun startedToday(kind: CareKind) = live.filter { it.kind == kind && it.startAt in from until to }
     val lanes = mutableListOf<DayLane>()
@@ -91,14 +92,16 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
     }
     if (showCar) {
         val lines = carLines(reports)
-        val drives = lines.filter { it.isDrive && inDay(it.startAt, it.endAt ?: it.startAt) }.map { l ->
-            val a = minuteIn(maxOf(l.startAt, from), from)
-            val b = minuteIn(minOf(l.endAt ?: l.startAt, to), from)
-            DaySpan(a, b, "탑승 ${hhmm(a)}–${hhmm(b)} · ${durationText((b - a) * MINUTE)}")
+        // 탑승 길이는 그날에 든 세션 시각의 차이(그림 좌표는 분으로 내림). 합계도 같은 값을 더한다.
+        val driveIn = lines.filter { it.isDrive && inDay(it.startAt, it.endAt ?: it.startAt) }.map { l -> maxOf(l.startAt, from) to minOf(l.endAt ?: l.startAt, to) }
+        val drives = driveIn.map { (s, e) ->
+            val a = minuteIn(s, from)
+            val b = minuteIn(e, from)
+            DaySpan(a, b, "탑승 ${hhmm(a)}–${hhmm(b)} · ${durationText(e - s)}")
         }
         val cries = lines.filter { !it.isDrive && it.startAt in from until to }.map { l -> minuteIn(l.startAt, from).let { DayMark(it, "차에서 울음 ${hhmm(it)}") } }
-        val driveMin = drives.sumOf { it.to - it.from }
-        lanes += DayLane(LaneKind.CAR, if (driveMin > 0) "탑승 ${durationText(driveMin * MINUTE)}" else null, "울음 ${cries.size}번", spans = drives, marks = cries)
+        val driveMs = driveIn.sumOf { (s, e) -> e - s }
+        lanes += DayLane(LaneKind.CAR, if (driveMs > 0) "탑승 ${durationText(driveMs)}" else null, "울음 ${cries.size}번", spans = drives, marks = cries)
     }
     val nowMin = if (now in from until to) minuteIn(now, from) else null
     return DayChartData(lanes, nowMin)
@@ -185,7 +188,11 @@ data class EpisodeBand(val sounds: List<EpisodeSeg>, val marks: List<EpisodeMark
     val totalS: Int get() = maxOf(sounds.maxOfOrNull { it.to } ?: 0, 1)
 }
 
-data class EpisodeSeg(val from: Int, val to: Int, val name: String)
+/** 에피소드 띠 한 칸(초). [from]·[to]는 그림 좌표(시작·끝 시각, 최소 1초 폭), [playS]는 차가 보낸 재생 길이(iOS `Seg.playS`와 같다). */
+data class EpisodeSeg(val from: Int, val to: Int, val name: String, val playS: Int? = null) {
+    /** 툴팁·설명의 길이: 기록에 있는 재생 길이 그대로, 없으면(듣기 틈) 칸 길이. */
+    val seconds: Int get() = playS ?: (to - from)
+}
 
 data class EpisodeMarkAt(val at: Int, val label: String)
 
@@ -195,7 +202,7 @@ fun episodeBand(e: TimelineEpisode, songs: List<SongEntry>): EpisodeBand {
     val timed = e.plays.mapNotNull { p ->
         val a = sec(p.startedAt) ?: return@mapNotNull null
         val b = sec(p.endedAt) ?: (a + p.playS)
-        p to EpisodeSeg(a, maxOf(b, a + 1), playName(songs, p))
+        p to EpisodeSeg(a, maxOf(b, a + 1), playName(songs, p), p.playS)
     }.sortedBy { it.second.from }
     val plays = timed.map { it.second }
     val marks = buildList {

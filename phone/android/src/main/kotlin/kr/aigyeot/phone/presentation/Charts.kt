@@ -452,13 +452,13 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
     val laneW = remember(m, laneStyle) { m.measure("소리", laneStyle).size.width + 12 * px }
     Column(modifier) {
-    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "에피소드: " + (band.sounds.map { "${it.name} ${it.to - it.from}초" } + band.marks.map { it.label } + band.outcomes).joinToString(", ") }) {
+    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "에피소드: " + (band.sounds.map { "${it.name} ${it.seconds}초" } + band.marks.map { it.label } + band.outcomes).joinToString(", ") }) {
         val w = with(d) { maxWidth.toPx() }
         val left = laneW
         val right = w - 6 * px
         fun x(s: Int) = left + (right - left) * s / band.totalS.coerceAtLeast(1)
         val hits = remember(band, w) {
-            (band.sounds + band.gaps).map { s -> Hit(Rect(x(s.from), 2 * px, x(s.to), lh - 6 * px), "${s.name} ${s.to - s.from}초") }
+            (band.sounds + band.gaps).map { s -> Hit(Rect(x(s.from), 2 * px, x(s.to), lh - 6 * px), "${s.name} ${s.seconds}초") }
         }
         TipHost(hits, Modifier, with(d) { totalH.toDp() }) { _ ->
             Canvas(Modifier.fillMaxWidth().height(with(d) { totalH.toDp() })) {
