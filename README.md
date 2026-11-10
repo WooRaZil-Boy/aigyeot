@@ -40,7 +40,7 @@
 | `phone/ios/` | iOS 휴대폰 앱(SwiftUI). 프로젝트 파일은 `project.yml`(XcodeGen)에서 만듭니다 |
 | `relay/` | 차·휴대폰 중계(Cloudflare Workers + Durable Objects). 로컬은 `wrangler dev` |
 | [tools/demo](tools/demo/) | 에뮬레이터 시연 준비 스크립트(설치·권한·Virtual Console·기준값) |
-| [tools/measure](tools/measure/) | 에뮬레이터 실측 기록 |
+| [tools/measure](tools/measure/) | 에뮬레이터 실측 기록(글). 측정 중 찍은 화면 캡처는 저장소에 넣지 않습니다 |
 | [tools/cry-retrain](tools/cry-retrain/) | 울음 판별층 재학습·평가 스크립트와 기기용 판별층 `cry_head24_rt.json`. YAMNet 점수 위에 얹는 로지스틱 판별층입니다 |
 | [tools/pleos-probe](tools/pleos-probe/) | Pleos 공식 에뮬레이터에서 소리·차량 제어·내비·부팅·마이크 동작을 잰 실측 앱 |
 | [tools/sim](tools/sim/) | 아이별 소리 고르기(톰슨 샘플링) 시뮬레이션과 차량 제어 실측 로그 |
