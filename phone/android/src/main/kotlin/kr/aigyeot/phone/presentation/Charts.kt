@@ -155,23 +155,26 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
-    val fs = 13f
-    val lane = chartStyle(fs, 600, p.textPrimary)
-    val sub = chartStyle(fs, 500, p.textTertiary)
-    val value = chartStyle(fs + 2, 700, p.textPrimary)
-    val tick = chartStyle(fs, 500, p.textTertiary)
-    val nowStyle = chartStyle(fs, 700, p.textPrimary)
-    // 줄 높이는 글자 크기(큰 글자 설정 포함)를 재서 정한다.
-    val headH = remember(m, value) { m.measure("가", value).size.height.toFloat() }
-    val tickH = remember(m, tick) { m.measure("0시", tick).size.height.toFloat() }
-    val px = with(d) { 1.dp.toPx() }
-    val th = 18 * px
-    val pad = 7 * px
-    val gap = 16 * px
     val n = data.lanes.size
     val reveal = rememberReveal(900, Motion.camera)
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = data.summary }) {
         val w = with(d) { maxWidth.toPx() }
+        // 시안 Charts.day는 폭 320 기준 SVG를 칸 폭에 맞춰 늘린다(412 폰의 흰 블록 안 348 → 1.09배). 같은 크기로 보이게 글자·간격에
+        // 같은 배율을 건다(좁은 화면에서 글자가 작아지지 않게 1 이상, 넓은 화면은 1.15에서 멈춤).
+        val k = (maxWidth.value / 320f).coerceIn(1f, 1.15f)
+        val fs = 13f * k
+        val lane = chartStyle(fs, 600, p.textPrimary)
+        val sub = chartStyle(fs, 500, p.textTertiary)
+        val value = chartStyle(fs + 2 * k, 700, p.textPrimary)
+        val tick = chartStyle(fs, 500, p.textTertiary)
+        val nowStyle = chartStyle(fs, 700, p.textPrimary)
+        // 줄 높이는 글자 크기(큰 글자 설정 포함)를 재서 정한다.
+        val headH = remember(m, value) { m.measure("가", value).size.height.toFloat() }
+        val tickH = remember(m, tick) { m.measure("0시", tick).size.height.toFloat() }
+        val px = with(d) { 1.dp.toPx() }
+        val th = 18 * k * px
+        val pad = 7 * k * px
+        val gap = 16 * k * px
         fun x(min: Int) = w * min / 1440f
         // 머리가 한 줄에 들지 않으면(큰 글자, R13) 이름 아래 줄에 부가·값을 둔다.
         val two = remember(data, w, headH) {

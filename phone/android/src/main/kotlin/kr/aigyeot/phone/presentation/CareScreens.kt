@@ -457,8 +457,9 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
 @Composable
 private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKind) -> Unit, go: (Route) -> Unit) {
     val p = Tokens.colors
-    Block(padding = PaddingValues(horizontal = 8.dp, vertical = 18.dp)) {
-        Row(Modifier.fillMaxWidth()) {
+    // 시안 렌더: .qblock(18/8)보다 .p-android .pcard(22/20)가 앞서 실제 안쪽 여백은 22/20, 칸 사이 8(.quick gap).
+    Block {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (k in quickKinds(care.sleepDiaperEnabled)) {
                 val running = care.ongoing(k)
                 val label = when {
@@ -519,7 +520,8 @@ internal fun CarTileBlock(s: PhoneState, online: Boolean, onOpen: (() -> Unit)? 
     val text = carTileText(s.devices, online, rememberNow(60_000))
     val head = text.substringBefore(" · ")
     val sub = text.substringAfter(" · ", "").ifEmpty { null }
-    Column(Modifier.fillMaxWidth().clip(Radius.large).background(p.surface)) {
+    // 시안 렌더: .car-tile의 padding 0보다 .p-android .pcard(22/20)가 앞서 무대가 안쪽 22/20에 들고, 글 줄은 그 안에서 다시 20 들어간다.
+    Column(Modifier.fillMaxWidth().clip(Radius.large).background(p.surface).padding(horizontal = 20.dp, vertical = 22.dp)) {
         CarStage(Modifier.fillMaxWidth().height(stageHeight), preset = CarPreset.TILE)
         Row(
             (if (onOpen != null) Modifier.pressable(scale = 0.98f, onClick = onOpen) else Modifier).fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 18.dp),

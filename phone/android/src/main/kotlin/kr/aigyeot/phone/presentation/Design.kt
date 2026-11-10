@@ -334,7 +334,7 @@ fun Label(text: String, modifier: Modifier = Modifier) = Text(text, modifier, st
 /** 목록 블록(.list: 안쪽 22/20/8). 머리가 있으면 그 아래에 64dp 행들. */
 @Composable
 fun ListBlock(title: String? = null, link: String? = null, onLink: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) =
-    Block(padding = PaddingValues(start = 20.dp, end = 20.dp, top = if (title != null) 22.dp else 6.dp, bottom = if (title != null) 8.dp else 6.dp)) {
+    Block(padding = PaddingValues(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 8.dp)) { // 시안 .list: 22/20/8(제목이 없어도 같다)
         if (title != null) BlockHeader(title, link, onLink)
         content()
     }

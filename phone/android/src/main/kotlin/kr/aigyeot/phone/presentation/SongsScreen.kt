@@ -70,7 +70,7 @@ import kotlin.math.sin
  * 오른쪽은 실험에 쓰는 곡이면 브랜드 체크, 아니면 재생 단추. `onRecord`가 있으면 머리에 '녹음하기'(3곡 미만).
  */
 @Composable
-fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = appViewModel(), recording: Boolean = false) {
+fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = appViewModel(), recording: Boolean = false, header: Boolean = true) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
     DisposableEffect(Unit) { onDispose { vm.stopAll() } }
@@ -80,7 +80,9 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
     fun play(e: SongEntry) {
         if (!vm.play(e)) android.widget.Toast.makeText(context, "녹음 파일을 읽지 못했어요.", android.widget.Toast.LENGTH_SHORT).show()
     }
-    ListBlock("우리 노래", if (onRecord != null && songs.size < 3) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
+    // 녹음 화면(시안 S.song)은 머리 없이 목록만 둔다(위 막대 제목이 '우리 노래'). 아직 곡이 없으면 위 안내가 대신한다.
+    if (!header && songs.isEmpty()) { FootNote("차에서는 다음 주행부터 써요."); return }
+    ListBlock(if (header) "우리 노래" else null, if (header && onRecord != null && songs.size < 3) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
         if (songs.isEmpty()) Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Modifier.padding(bottom = 14.dp), style = Type.body, color = p.textTertiary)
         for (e in songs) {
             var menu by remember { mutableStateOf(false) }
@@ -126,7 +128,7 @@ fun RecordScreen(replacing: String?, onBack: () -> Unit, vm: SongsViewModel = ap
         StatusBands()
         Recorder(vm, replacing, ui.online, onBack)
         val s by vm.sheetUi.collectAsStateWithLifecycle()
-        SongsBlock(onRecord = null, vm = vm, recording = s.take is Take.Recording)
+        SongsBlock(onRecord = null, vm = vm, recording = s.take is Take.Recording, header = false)
     }
 }
 
@@ -175,7 +177,8 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
         is Take.Idle -> take.ms
     }
     val p = Tokens.colors
-    Block(padding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 18.dp)) {
+    // 시안 .rec: 흰 블록 없이 바탕 위에(안쪽 10/20, 칸 사이 18).
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)) {
         if (!granted) {
             if (denied) {
                 Text("설정에서 마이크를 켜 주세요", Modifier.padding(bottom = 12.dp), style = Type.headline, color = p.textPrimary)
@@ -183,7 +186,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                 }, kind = BtnKind.TONAL)
             }
-            return@Block
+            return@Column
         }
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Wave(take is Take.Recording)
@@ -191,6 +194,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
             Text("%d:%02d / 3:00".format(sec / 60, sec % 60), style = Type.hero.copy(fontSize = 44.sp, lineHeight = 50.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = p.textPrimary)
             RecButton(take is Take.Recording, enabled = !s.sending, onClick = vm::toggleRecording) // 보내는 동안 그 원본을 바꾸는 녹음은 막는다
             s.startError?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+            if (take !is Take.Recorded) Text("평소 불러 주던 노래를 녹음해 보세요", style = Type.caption.copy(fontSize = 12.5.sp), color = p.textTertiary) // 시안 .rec .foot-note
         }
         if (take is Take.Recorded) {
             Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -222,7 +226,7 @@ private fun Wave(live: Boolean) {
     var shown by remember { mutableStateOf(true) }
     // 녹음 중이고 화면에 보일 때만 움직인다(굴려 가리면 멈춤).
     val t = if (live && !reduced && shown) rememberInfiniteTransition(label = "wave").animateFloat(0f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "wave").value else 0f
-    Canvas(Modifier.fillMaxWidth().height(96.dp).onScreen { shown = it }.semantics { contentDescription = if (live) "녹음 중" else "녹음 대기" }) {
+    Canvas(Modifier.fillMaxWidth().height(120.dp).onScreen { shown = it }.semantics { contentDescription = if (live) "녹음 중" else "녹음 대기" }) {
         val n = 44
         val bw = 4.dp.toPx()
         val gap = 3.dp.toPx()

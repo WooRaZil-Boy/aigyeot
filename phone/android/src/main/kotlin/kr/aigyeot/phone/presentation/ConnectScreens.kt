@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -78,15 +80,18 @@ import kr.aigyeot.shared.Role
 @Composable
 fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
     val p = Tokens.colors
+    // 시안 .intro-hero는 화면 맨 위(상태 막대 밑)부터 250이고 차는 위 40부터, 앱 아이콘은 위 62에 있다. 여기서는 상태 막대 아래에서
+    // 시작하므로 그 높이만큼 빼서 제목·차·아이콘이 시안과 같은 자리에 오게 한다.
+    val sb = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
         Box(
-            Modifier.fillMaxWidth().height(250.dp)
+            Modifier.fillMaxWidth().height((250.dp - sb).coerceAtLeast(190.dp))
                 .background(Brush.radialGradient(listOf(if (p.dark) Color(0xFF232931) else lerpColor(p.stage, Color.White, 0.6f), p.bg), radius = 700f)),
         ) {
-            CarStage(Modifier.fillMaxSize().padding(top = 40.dp), preset = CarPreset.PHONE)
-            Box(Modifier.padding(start = 20.dp, top = 16.dp)) { AppMark(52.dp, 16.dp) }
+            CarStage(Modifier.fillMaxSize().padding(top = (40.dp - sb).coerceAtLeast(0.dp)), preset = CarPreset.PHONE)
+            Box(Modifier.padding(start = 20.dp, top = (62.dp - sb).coerceAtLeast(8.dp))) { AppMark(52.dp, 16.dp) }
         }
-        StaggerColumn(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), gap = 18.dp) {
+        StaggerColumn(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), gap = 18.dp) {
             Column {
                 Text("아이곁", style = Type.display, color = p.textPrimary) // intro.title
                 Text("차의 아이곁과 이 휴대폰을 연결해요.", Modifier.padding(top = 6.dp), style = Type.body.copy(fontWeight = FontWeight.Medium), color = p.textSecondary)
