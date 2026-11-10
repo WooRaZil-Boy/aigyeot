@@ -29,6 +29,13 @@ struct CarPreset: Equatable {
         let a = az * .pi / 180, e = el * .pi / 180
         return SIMD3(cos(e) * cos(a), sin(e), -cos(e) * sin(a)) * d + target
     }
+
+    /// `from`에서 `to`로 짧은 쪽으로 도는 각도(−180 이상 180 미만). 음수 각도에도 맞는 나머지로 계산한다
+    /// (truncatingRemainder는 음수 부호를 남겨 594°에서 +126° 대신 −234°로 돌았다).
+    static func shortestTurn(from: Float, to: Float) -> Float {
+        let d = to - from + 180
+        return d - 360 * (d / 360).rounded(.down) - 180
+    }
 }
 
 /// 차 카드의 무대: 정지 그림(대기) ↔ 실시간 3D(손가락 회전·카메라 이동 중). 처음에는 '끌어서 돌려 보기' 대신 작은 회전 표시만(시안 .live3d::after).
@@ -328,6 +335,8 @@ final class CarStageView: UIView {
         switch g.state {
         case .began:
             dragging = true
+            flight?.invalidate()   // '처음 자리로' 복귀 중에 끌면 복귀를 멈춘다(끝나며 돌린 각도를 덮고 정지 그림을 예약하지 않게, 안드로이드와 같다)
+            flight = nil
             Task { await goLive() }
             if !reduceMotion { startDecay() }
         case .changed:
@@ -351,7 +360,7 @@ final class CarStageView: UIView {
     /// 시안 OrbitControls와 같은 양: 카드 높이만큼 끌면 0.55바퀴(rotateSpeed 0.55), 높이 6~86°(minPolar·maxPolar).
     private func rotate(dx: Float, dy: Float) {
         let perPoint = 360 * 0.55 / Float(max(1, bounds.height))
-        az -= dx * perPoint
+        az = (az - dx * perPoint).truncatingRemainder(dividingBy: 360)   // 한 바퀴 안으로(안드로이드 % 360f)
         el = min(86, max(6, el + dy * perPoint))
         pose()
         moved(true)
@@ -387,7 +396,7 @@ final class CarStageView: UIView {
     @objc private func fly() {
         let k = min(1, (CACurrentMediaTime() - flightStart) / DS.Motion.seconds("camera"))
         let e = Float(DS.Motion.curve("camera").value(at: k))   // motion.camera(1.1초, cubic-bezier .65,0,.35,1)
-        let daz = (preset.az - flightFrom.x + 540).truncatingRemainder(dividingBy: 360) - 180   // 짧은 쪽으로
+        let daz = CarPreset.shortestTurn(from: flightFrom.x, to: preset.az)
         az = flightFrom.x + daz * e
         el = flightFrom.y + (preset.el - flightFrom.y) * e
         pose()

@@ -2769,3 +2769,14 @@ final class StopTextTests: XCTestCase {
         XCTAssertEqual(stopText(s), "세션 20분 상한 · 휴게소에 들르자고 제안했어요 · 경유지 추가 · 다른 보호자에게 알림")
     }
 }
+
+/// 3D 카드 '처음 자리로'의 짧은 쪽 각도(음수·여러 바퀴에도 −180 이상 180 미만).
+final class CarPresetTests: XCTestCase {
+    func test_처음_자리로는_짧은_쪽으로_돈다() {
+        XCTAssertEqual(CarPreset.shortestTurn(from: 594, to: 0), 126)
+        XCTAssertEqual(CarPreset.shortestTurn(from: -594, to: 0), -126)
+        XCTAssertEqual(CarPreset.shortestTurn(from: 179, to: 0), -179)
+        XCTAssertEqual(CarPreset.shortestTurn(from: 181, to: 0), 179)
+        XCTAssertEqual(CarPreset.shortestTurn(from: 594, to: 34), 160)   // 카드 처음 자리(34°)
+    }
+}
