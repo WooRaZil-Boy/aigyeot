@@ -52,17 +52,17 @@ internal fun reportRows(sessions: List<SessionEntity>, cries: (String) -> Int? =
 /** U47: 0번이면 "울음 기록 없음". */
 internal fun cryText(n: Int) = if (n == 0) "울음 기록 없음" else "울음 ${n}번"
 
-/** U47: 울음 경보로 시작한 에피소드 수(소리 바꾸기로 연 에피소드는 세지 않는다). 폰 기록 탭 '차에서 울음'과 같은 수. */
-internal fun cryCount(b: ReportSummaryBody) = b.timeline.count { it.trigger == EpisodeTrigger.CRY_ALARM }
+/**
+ * 목록 '울음 n번'(U47·C381): 홈 '오늘 하루'와 같은 [Store.cryAlarms](규칙 isCryAlarm 하나). 리포트 본문으로 세지 않는다(64KB를 넘으면 앞 에피소드를 버린다).
+ * [reportRows]는 닫힌 세션만 묻고, 닫힌 세션의 에피소드 종류는 바뀌지 않으니 [cache]에 한 번만 센다.
+ */
+internal fun closedCries(store: Store, cache: MutableMap<String, Int>): (String) -> Int = { id -> cache.getOrPut(id) { store.cryAlarms(id).size } }
 
-class ReportListViewModel(store: Store, clock: () -> Long) : ViewModel() {
-    // 닫힌 세션의 울음 수는 바뀌지 않으니 한 번만 센다(다시 구독할 때 앞 흐름과 겹칠 수 있어 동시 맵)
-    // 한계: 세는 데 리포트 전체를 만든다(store에 세션별 울음 수 쿼리가 없음). 세션이 많아 느리면 store에 GROUP BY 쿼리를 더한다
-    private val cries = java.util.concurrent.ConcurrentHashMap<String, Int>()
+class ReportListViewModel(store: Store) : ViewModel() {
+    // 다시 구독할 때 앞 흐름과 겹칠 수 있어 동시 맵
+    private val cries = closedCries(store, java.util.concurrent.ConcurrentHashMap())
 
-    val rows: StateFlow<List<ReportRow>> = store.sessionsFlow().map { ss ->
-        reportRows(ss) { id -> cries[id] ?: store.readReport(id, clock()).first?.let(::cryCount)?.also { cries[id] = it } }
-    }.flowOn(Dispatchers.IO).retryOnDbError("report_list")
+    val rows: StateFlow<List<ReportRow>> = store.sessionsFlow().map { ss -> reportRows(ss, cries) }.flowOn(Dispatchers.IO).retryOnDbError("report_list")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 
@@ -159,7 +159,7 @@ internal fun reportStats(b: ReportSummaryBody): List<Stat> {
 /**
  * 에피소드 띠 하나(시안 Charts.episode). 0초 = 에피소드 시작(경보 시각, 소리 바꾸기면 요청 시각).
  * 리포트에 있는 사실만 그린다(폰 episodeBand와 같은 규칙):
- * - 소리 줄: 재생마다 방법 이름 칸(툴팁 초는 기록된 play_s), 재생 사이 빈틈은 '듣기 틈'.
+ * - 소리 줄: 재생마다 방법 이름 칸(툴팁 초는 기록된 play_s), 재생 사이 빈틈은 이름 없이 시간만(그 사이 판정을 멈췄을 수도 있어 '듣기 틈'이라 단정하지 않는다, [soundTip]).
  * - 울음 줄은 없다: report_summary에 울음 구간이 없고 경보 지연은 들은 울음 시간이 아니다(계약 G36·G37). 들은 울음 합은 [EpisodeChartData.outcomes]의 '울음 n초'.
  * - 시간축 표시는 시각을 아는 것만: 시작(감지 지연 초 또는 '소리 바꾸기'), 다시 울음(그 때문에 시작한 자동 2차 재생의 시작).
  * - 결과(쉼터 제안·그쳤어요)는 판정 시각이 리포트에 없어 축 밖 [EpisodeChartData.outcomes]로 둔다(재생 끝에 찍으면 거짓 시각, 명세 5장 성공 조건).

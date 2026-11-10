@@ -59,10 +59,6 @@ class ReportViewTest {
         assertEquals("", reportRows(listOf(s("b", ms("13:52:00"), null))).single().sub, "울음 수를 모르면 만들지 않는다")
     }
 
-    @Test fun cryCount_onlyAlarmEpisodes() {
-        assertEquals(1, cryCount(body(listOf(ep(), ep(trigger = EpisodeTrigger.SWITCH_SOUND, lat = null)))))
-    }
-
     @Test fun stats_fourCells_cryTimeIsTotalCrySumLikePhone() {
         val b = body(
             listOf(ep(listOf(first), result = EpisodeResult.SUCCESS)),
@@ -152,10 +148,10 @@ class ReportViewTest {
     }
 
     @Test fun dayTips_chartClockOnly() {
-        val car = DayLane("차에서", DataColor.CAR, "주행 42분", "울음 1번", blocks = listOf(790..832), diamonds = listOf(804))
-        assertEquals("탑승 13:10–13:52 · 42분", dayBlockTip(car, 790..832))
+        val car = DayLane("차에서", DataColor.CAR, "주행 42분", "울음 1번", blocks = listOf(DayBlock(790..832, 42 * 60_000L)), diamonds = listOf(804))
+        assertEquals("탑승 13:10–13:52 · 42분", dayBlockTip(car, car.blocks.single()))
         assertEquals("차에서 울음 13:24", dayDiamondTip(car, 804))
-        assertEquals("잠 00:00–03:10 · 3시간 10분", dayBlockTip(DayLane("잠", DataColor.SLEEP, "4번", "8시간 5분"), 0..190))
+        assertEquals("잠 00:00–03:10 · 3시간 10분", dayBlockTip(DayLane("잠", DataColor.SLEEP, "4번", "8시간 5분"), DayBlock(0..190, 190 * 60_000L)))
         assertEquals("기저귀 03:38", dayDotTip(DayLane("기저귀", DataColor.DIAPER, null, "4번"), 218))
     }
 

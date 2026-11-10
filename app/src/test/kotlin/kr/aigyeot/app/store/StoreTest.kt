@@ -965,6 +965,21 @@ class StoreTest {
         assertEquals(store.cryAlarms("S1").size, buildReport(dao, "S1", now)!!.timeline.count { it.trigger == kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM })
     }
 
+    // 코드 리뷰 6(C381): 리포트 목록 '울음 n번'은 홈과 같은 Store.cryAlarms로 센다. 본문이 64KB를 넘어 앞 에피소드를 버려도 줄지 않고, 기록만 한 경보는 세지 않는다
+    @Test fun reportList_cryCount_sameAsHomeCryAlarms_evenWhenReportTruncated() {
+        session()
+        val n = 3_000
+        for (i in 0 until n) {
+            dao.upsertEpisode(EpisodeEntity("E%05d".format(i), "S1", T0 + i * 1_000L, T0 + i * 1_000L + 500, "ALARM", T0 + i * 1_000L, 1_000, null, null, null, null,
+                null, null, null, null, null, null, false, false, 0, false, 0, emptyList()))
+        }
+        dao.insertAlarm(AlarmLogEntity(sessionId = "S1", firstAt = T0 + n * 1_000L + 10_000, lastAt = T0 + n * 1_000L + 20_000, reason = "WAITING"))
+        assertTrue(buildReport(dao, "S1", now)!!.timeline.size < n, "전제: 리포트 본문은 줄었다")
+        val row = kr.aigyeot.app.ui.reportRows(listOf(dao.session("S1")!!), kr.aigyeot.app.ui.closedCries(store, HashMap())).single()
+        assertEquals(kr.aigyeot.app.ui.cryText(store.cryAlarms("S1").size), row.sub)
+        assertEquals("울음 ${n}번", row.sub)
+    }
+
     // 제어 기록의 뜻은 한 함수(홈 3D 칩과 리포트 car_actions가 같이 쓴다)
     @Test fun controlAct_classifiesEachApiAndGoal() {
         val a = kr.aigyeot.app.store.db.ControlApi

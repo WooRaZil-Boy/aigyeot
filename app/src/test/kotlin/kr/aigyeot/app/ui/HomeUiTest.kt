@@ -40,6 +40,7 @@ import kr.aigyeot.engine.RouteView
 import kr.aigyeot.engine.SessionState
 import kr.aigyeot.engine.Sid
 import kr.aigyeot.engine.Stage
+import kr.aigyeot.engine.Unjudged
 import kr.aigyeot.engine.TryOutcome
 import kr.aigyeot.engine.TryRecord
 import kr.aigyeot.engine.TryResult
@@ -115,6 +116,25 @@ class HomeUiTest {
         assertEquals(Eyebrow("사람에게 넘김", Tone.CHILD), hand.eyebrow)
         assertEquals(listOf(StepMark.FAIL, StepMark.FAIL, StepMark.FAIL, StepMark.NONE), (hand.card as HomeCard.Track).marks, "쉼터 이름을 모르면 달래기 단계, 제안을 하지 않았으면 제안 칸은 비운다")
         assertEquals(Symbol.PIN, hand.drive.symbol)
+    }
+
+    // 코드 리뷰 3: 1차·듣기 틈 두 칸은 1차 결과 하나로 정한다. 1차가 미판정이면 2차 시도에서도 실패로 그리지 않고, 2차 시도 → 틈 → 확인 → 인계 내내 같은 값
+    @Test fun track_firstTwoSlots_followFirstResult_fromSecondAttemptToHandoff() {
+        val noise = Method(MethodKind.WHITE_NOISE)
+        fun marks(st: Stage, e: EpisodeState) = (ui(driving(ses(st, e))).card as HomeCard.Track).marks.take(2)
+        val w = JudgeWindow(T0, T0 + 8_000)
+        for ((first, want) in listOf(TryRecord(lullaby, null, TryOutcome.NotJudged(Unjudged.FEEDING_WINDOW)) to StepMark.DONE, TryRecord(lullaby, null, TryOutcome.Fail) to StepMark.FAIL)) {
+            val two = ep(first, TryRecord(noise, null, TryOutcome.Fail))
+            listOf(marks(Stage.Attempt(2, play(2, T0, noise)), ep(first)), marks(Stage.Gap(2, w), two), marks(Stage.Confirm(2, w), two), marks(Stage.Handoff(2), two))
+                .forEach { assertEquals(listOf(want, want), it, "1차 ${first.outcome}") }
+        }
+    }
+
+    // C382: 재생 시작 전(포커스를 받기 전)에는 튼다고 쓰지 않는다. 시작 뒤·일시 정지는 그대로
+    @Test fun attempt_beforePlaybackStarts_statusSaysPreparing() {
+        assertEquals("소리를 준비하고 있어요", ui(driving(ses(Stage.Attempt(1, play(1, null)), ep()))).status)
+        assertEquals("소리를 준비하고 있어요", ui(driving(ses(Stage.Attempt(1, play(1, null)), ep()).copy(output = OutputRoute.DEFAULT_FALLBACK))).status, "자리 없이")
+        assertEquals("뒷자리에서 소리를 틀고 있어요", ui(driving(ses(Stage.Attempt(1, play(1, T0)), ep()))).status)
     }
 
     @Test fun handoff_restOffer_cardAndAskHint_waypointAdded() {
@@ -235,7 +255,7 @@ class HomeUiTest {
         val s = fresh().copy(care = care, feedingStart = day0 + 772 * 60_000)
         val d = ui(s, car = listOf(CarSpan(day0 + 790 * 60_000, day0 + 832 * 60_000, listOf(day0 + 804 * 60_000)))).day!!
         assertEquals(listOf("잠", "수유", "기저귀", "차에서"), d.lanes.map { it.name })
-        assertEquals("8시간 5분", d.lanes[0].value); assertEquals(listOf(60..180), d.lanes[0].blocks)
+        assertEquals("8시간 5분", d.lanes[0].value); assertEquals(listOf(60..180), d.lanes[0].blocks.map { it.range })
         assertEquals("4번", d.lanes[1].value); assertEquals(listOf(772), d.lanes[1].dots)
         assertEquals("6번", d.lanes[2].value)
         assertEquals("탑승 42분", d.lanes[3].sub, "세션 구간(중간 정차 포함)이라 주행이 아니라 탑승"); assertEquals("울음 1번", d.lanes[3].value); assertEquals(listOf(804), d.lanes[3].diamonds)
@@ -245,10 +265,50 @@ class HomeUiTest {
         assertNull(ui(driving(ses(Stage.Listening)).copy(care = care)).day, "세션 중에는 오늘 하루 카드가 없다")
         // 잠든 중 띠는 요약 계산 시각(as_of)까지만(합계와 같은 기준). 지금(17:00)까지 늘이지 않는다
         val asleep = care.copy(asOf = day0 + 960 * 60_000, sleepingSince = day0 + 900 * 60_000)
-        assertEquals(listOf(60..180, 900..960), ui(fresh().copy(care = asleep)).day!!.lanes[0].blocks)
+        assertEquals(listOf(60..180, 900..960), ui(fresh().copy(care = asleep)).day!!.lanes[0].blocks.map { it.range })
         // 눈금 now(17:00)보다 늦게 계산한 요약(as_of 17:00:10)도 띠 끝이 시작보다 앞서지 않는다
         val late = care.copy(asOf = T0 + 10_000, sleepingSince = T0)
-        assertTrue(ui(fresh().copy(care = late)).day!!.lanes[0].blocks.all { it.first <= it.last })
+        assertTrue(ui(fresh().copy(care = late)).day!!.lanes[0].blocks.all { it.range.first <= it.range.last && it.ms >= 0 })
+    }
+
+    // 코드 리뷰 B: 툴팁·합계의 길이는 그날 안으로 자른 기록 시각의 차이(두 폰과 같은 규칙). 분으로 내린 칸 차이(42분)가 아니다
+    @Test fun dayChart_blockTipAndTotal_useRecordedTimes_notMinuteCells() {
+        val day0 = java.time.Instant.ofEpochMilli(T0).atZone(seoul).toLocalDate().atStartOfDay(seoul).toInstant().toEpochMilli()
+        fun at(h: Int, m: Int, sec: Int) = day0 + ((h * 60 + m) * 60 + sec) * 1_000L
+        val car = ui(fresh(), car = listOf(CarSpan(at(13, 10, 50), at(13, 52, 10), emptyList()))).day!!.lanes.single { it.name == "차에서" }
+        assertEquals("탑승 41분", car.sub)
+        assertEquals("탑승 13:10–13:52 · 41분", dayBlockTip(car, car.blocks.single()))
+        val care = CareView(T0 - 60_000, true, at(1, 0, 50), at(3, 10, 10), null, 129, 1, null, 0, 0)
+        val sleep = ui(fresh().copy(care = care)).day!!.lanes.single { it.name == "잠" }
+        assertEquals("잠 01:00–03:10 · 2시간 9분", dayBlockTip(sleep, sleep.blocks.single()))
+    }
+
+    // 리뷰 K·Q: 잠 줄 값은 합계가 먼저(길이), 합계가 0분이면 칸이 있을 때 '1분 미만'·없을 때 '0번'("0초"가 아니다)
+    @Test fun dayChart_sleepValue_matchesPhones() {
+        val day0 = java.time.Instant.ofEpochMilli(T0).atZone(seoul).toLocalDate().atStartOfDay(seoul).toInstant().toEpochMilli()
+        fun sleep(c: CareView) = ui(fresh().copy(care = c)).day!!.lanes.single { it.name == "잠" }
+        val none = CareView(T0 - 60_000, true, null, null, null, 0, 0, null, 0, 0)
+        assertEquals("0번", sleep(none).value); assertTrue(sleep(none).blocks.isEmpty())
+        val short = none.copy(lastSleepStartAt = day0 + 60 * 60_000, lastSleepEndAt = day0 + 60 * 60_000 + 40_000)   // 오늘 40초 잠
+        assertEquals("1분 미만", sleep(short).value); assertEquals(1, sleep(short).blocks.size)
+        val dozing = none.copy(sleepingSince = T0 - 60_000 + 0)   // 막 잠듦(요약 시각에 잠든 중)
+        assertEquals("1분 미만", sleep(dozing).value)
+        assertEquals("1시간 30분", sleep(none.copy(lastSleepStartAt = day0 + 60 * 60_000, lastSleepEndAt = day0 + 150 * 60_000, todaySleepMin = 90)).value)
+        // 리뷰 Q: 차는 오늘 잠 칸을 다 모른다. 요약 시각 뒤에 끝난 잠(12:00–13:11을 13:10:20에 저장)은 마지막 잠에 없어도 합계 70분이 사실
+        val unseen = none.copy(todaySleepMin = 70)
+        assertTrue(sleep(unseen).blocks.isEmpty()); assertEquals("1시간 10분", sleep(unseen).value)
+    }
+
+    // 리뷰 P: 칸은 그날과 실제로 겹치는 구간만(두 폰 inDay). 자정에 딱 끝난 전날 잠·세션은 오늘 칸(길이 0)이 아니다
+    @Test fun dayChart_midnightEnd_isNotTodayBlock() {
+        val day0 = java.time.Instant.ofEpochMilli(T0).atZone(seoul).toLocalDate().atStartOfDay(seoul).toInstant().toEpochMilli()
+        fun sleep(c: CareView) = ui(fresh().copy(care = c)).day!!.lanes.single { it.name == "잠" }
+        val base = CareView(T0 - 60_000, true, day0 - 60 * 60_000, day0, null, 0, 0, null, 0, 0)   // 전날 23:00 → 오늘 00:00
+        assertTrue(sleep(base).blocks.isEmpty()); assertEquals("0번", sleep(base).value)
+        val over = base.copy(lastSleepEndAt = day0 + 30 * 60_000, todaySleepMin = 30)   // 전날 23:00 → 오늘 00:30
+        assertEquals(listOf(0..30), sleep(over).blocks.map { it.range }); assertEquals("30분", sleep(over).value)
+        val car = ui(fresh(), car = listOf(CarSpan(day0 - 60 * 60_000, day0, emptyList()))).day
+        assertTrue(car?.lanes?.none { it.name == "차에서" } ?: true, "자정에 딱 끝난 세션은 '차에서' 칸이 없다")
     }
 
     @Test fun episodeFlow_recryOnlyBeforeAutoSecond_andSecondSuccessCounts() {

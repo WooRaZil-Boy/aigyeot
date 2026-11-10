@@ -83,17 +83,20 @@ enum class DataColor { SLEEP, FEED, DIAPER, CAR }
 
 /**
  * 오늘 하루 한 줄(시안 Charts.day): 머리 '이름 · 부가 · 값' + 0~24시 트랙. 시각은 그날 0시부터 분(0~1440).
- * [blocks]는 시작~끝 분 칸(CAR 줄이면 주행 칸, 연하게), [dots]는 트랙 안 점(기저귀), [diamonds]는 마름모(차에서 울음).
+ * [blocks]는 시작~끝 칸(CAR 줄이면 주행 칸, 연하게), [dots]는 트랙 안 점(기저귀), [diamonds]는 마름모(차에서 울음).
  */
 data class DayLane(
     val name: String,
     val color: DataColor,
     val sub: String?,
     val value: String,
-    val blocks: List<IntRange> = emptyList(),
+    val blocks: List<DayBlock> = emptyList(),
     val dots: List<Int> = emptyList(),
     val diamonds: List<Int> = emptyList(),
 )
+
+/** 띠 한 칸. [range]는 그림 칸(그날 안 분, 내림), [ms]는 툴팁 길이: 그날 안으로 자른 기록 시각의 차이(분으로 내린 칸 차이가 아니다. 합계·두 폰과 같은 값). */
+data class DayBlock(val range: IntRange, val ms: Long)
 
 /** 오늘 하루 띠. [nowMin]은 오늘이면 지금 분(지금 선·'지금 HH:MM'), 아니면 null. */
 data class DayChartData(val lanes: List<DayLane>, val nowMin: Int?)
@@ -104,7 +107,7 @@ data class DayChartData(val lanes: List<DayLane>, val nowMin: Int?)
  */
 data class EpisodeChartData(val totalS: Int, val sounds: List<SoundSeg>, val marks: List<ChartMark>, val outcomes: List<String> = emptyList())
 
-/** 소리 줄 한 칸. [name]이 null이면 듣기 틈. [secs]는 툴팁 초(재생은 기록된 play_s, 듣기 틈은 앞 재생 끝~다음 재생 시작). */
+/** 소리 줄 한 칸. [name]이 null이면 재생 사이 칸(그 사이 판정을 멈췄을 수도 있어 '듣기 틈'이라 단정하지 않는다, [soundTip]). [secs]는 툴팁 초(재생은 기록된 play_s, 재생 사이는 앞 재생 끝~다음 재생 시작). */
 data class SoundSeg(val from: Int, val to: Int, val name: String?, val secs: Int = to - from)
 
 data class ChartMark(val at: Int, val label: String)
@@ -119,8 +122,8 @@ data class MethodDots(val name: String, val ok: Int, val n: Int, val known: Bool
 
 internal fun hhmm(min: Int) = TimeText.clock(min / 60 % 24, min % 60, ClockMode.CHART)
 
-internal fun dayBlockTip(l: DayLane, r: IntRange) =
-    "${if (l.color == DataColor.CAR) "탑승" else l.name} ${hhmm(r.first)}–${hhmm(r.last)} · ${TimeText.duration((r.last - r.first) * 60_000L)}"
+internal fun dayBlockTip(l: DayLane, b: DayBlock) =
+    "${if (l.color == DataColor.CAR) "탑승" else l.name} ${hhmm(b.range.first)}–${hhmm(b.range.last)} · ${TimeText.duration(b.ms)}"
 
 internal fun dayDotTip(l: DayLane, m: Int) = "${l.name} ${hhmm(m)}"
 
@@ -183,7 +186,8 @@ private fun ChartCanvas(desc: String, key: Any, revealMs: Int, sweep: Boolean, m
                 detectTapGestures(onPress = { o ->
                     val h = g?.hits?.filter { o.x in it.rect.left - slop..it.rect.right + slop && o.y in it.rect.top - slop..it.rect.bottom + slop }
                         ?.minByOrNull { abs(it.rect.center.x - o.x) + abs(it.rect.center.y - o.y) / 4 }
-                    if (h != null) { tip = h; tryAwaitRelease(); tip = null }
+                    // 누르는 도중 g가 바뀌면 이 코루틴이 기다리는 자리에서 취소된다: finally로 툴팁을 늘 거둔다
+                    if (h != null) { tip = h; try { tryAwaitRelease() } finally { tip = null } }
                 })
             },
     ) {
@@ -290,8 +294,9 @@ private fun dayGeo(d: DayChartData, w: Float, u: Float, tm: TextMeasurer, p: Pal
         }
         val blockColor = if (l.color == DataColor.CAR) lerp(p.surfaceRaised, p.cCar, 0.22f) else c
         l.blocks.forEach { b ->
-            val bw = if (l.color == DataColor.CAR) x(b.last) - x(b.first) else max(6 * k, x(b.last) - x(b.first) - 2 * k)
-            val rect = Rect(x(b.first), y, x(b.first) + max(bw, 1f), y + th)
+            val r = b.range
+            val bw = if (l.color == DataColor.CAR) x(r.last) - x(r.first) else max(6 * k, x(r.last) - x(r.first) - 2 * k)
+            val rect = Rect(x(r.first), y, x(r.first) + max(bw, 1f), y + th)
             ops += { drawRoundRect(blockColor, rect.topLeft, rect.size, CornerRadius(rx)) }
             hits += Hit(rect, dayBlockTip(l, b))
         }

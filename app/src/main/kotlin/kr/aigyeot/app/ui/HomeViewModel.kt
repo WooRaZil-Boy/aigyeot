@@ -90,6 +90,9 @@ data class FeedCard(
 /** 수유 막대 끝 = 평소 간격의 1.25배(시안 feedCard). */
 internal const val FEED_BAR_SPAN = 1.25
 
+/** 홈 시계 눈금(수유 '방금'·'h:mm', 오늘 하루 지금 선을 다시 계산하는 간격). */
+private const val TICK_MS = 10_000L
+
 /** 마지막 수유 카드 값(시안 feedCard). 간격 시작 눈금은 판단 코어의 수유 시간대 시작(windowStartExpected, Params.feedingWindowStart)을 그대로 쓴다. */
 internal fun feedCard(start: Long?, intervalMin: Int?, now: Long, p: Params = Params()): FeedCard {
     if (start == null) return FeedCard(null, intervalMin)
@@ -236,6 +239,7 @@ internal fun statusText(s: EngineState?): String {
         Phase.LISTENING -> if (s.hears()) "아기 소리를 듣고 있어요" else MIC_OFF
         // 소리 사실은 soundNow 한 곳에서(3D 소리 결과 같은 값): 잠시 멈춤이면 튼다고 쓰지 않고, 뒷자리라고 확실할 때만 '뒷자리에서'
         Phase.ATTEMPT -> when (soundNow(x)) {
+            Sound.PENDING -> "소리를 준비하고 있어요"   // C382: 재생 시작 전(포커스 거절이면 틀지 않는다)에는 튼다고 쓰지 않는다
             Sound.PAUSED -> "잠시 소리를 멈췄어요"
             else -> if (rearSure(x)) "뒷자리에서 소리를 틀고 있어요" else "소리를 틀고 있어요"
         }
@@ -309,12 +313,14 @@ private fun card(s: EngineState?, said: Said?, heard: HeardText?, stepFrom: Long
 internal fun track(st: Stage, ep: kr.aigyeot.engine.EpisodeState?, p: Params, offered: Boolean = false): HomeCard.Track {
     val firstFail = ep?.first?.result == TryResult.FAIL
     val secondFail = ep?.second?.result == TryResult.FAIL
+    // 1차·듣기 틈 두 칸은 1차 결과 하나로 정한다: 2차 시도부터 인계까지 같은 값(1차가 미판정이면 실패로 그리지 않는다)
+    val afterFirst = if (firstFail) StepMark.FAIL else StepMark.DONE
     val marks = when (st) {
-        is Stage.Attempt -> if (st.n <= 1) listOf(StepMark.NOW, StepMark.NONE, StepMark.NONE, StepMark.NONE) else listOf(StepMark.FAIL, StepMark.FAIL, StepMark.NOW, StepMark.NONE)
-        is Stage.Gap, is Stage.Confirm -> if (st.n <= 1) listOf(StepMark.DONE, StepMark.NOW, StepMark.NONE, StepMark.NONE) else listOf(if (firstFail) StepMark.FAIL else StepMark.DONE, if (firstFail) StepMark.FAIL else StepMark.DONE, StepMark.DONE, StepMark.NONE)
+        is Stage.Attempt -> if (st.n <= 1) listOf(StepMark.NOW, StepMark.NONE, StepMark.NONE, StepMark.NONE) else listOf(afterFirst, afterFirst, StepMark.NOW, StepMark.NONE)
+        is Stage.Gap, is Stage.Confirm -> if (st.n <= 1) listOf(StepMark.DONE, StepMark.NOW, StepMark.NONE, StepMark.NONE) else listOf(afterFirst, afterFirst, StepMark.DONE, StepMark.NONE)
         is Stage.Handoff -> listOf(
-            if (firstFail) StepMark.FAIL else if (ep?.first != null) StepMark.DONE else StepMark.NONE,
-            if (firstFail) StepMark.FAIL else StepMark.NONE,
+            if (ep?.first != null) afterFirst else StepMark.NONE,
+            if (firstFail) StepMark.FAIL else if (ep?.second != null) StepMark.DONE else StepMark.NONE,   // 2차를 했으면 틈을 지났다
             if (secondFail) StepMark.FAIL else if (ep?.second != null) StepMark.DONE else StepMark.NONE,
             // 쉼터 칸은 쉼터를 실제로 물었거나 넣었을 때만(쉼터 없음·도착 안내·P 정차 인계는 쉼터 제안이 아니다, H2·H7)
             when { ep?.waypointAdded == true -> StepMark.DONE; offered -> StepMark.NOW; else -> StepMark.NONE },
@@ -421,30 +427,51 @@ private fun symbolOf(k: MethodKind) = when (k) { MethodKind.LULLABY -> Symbol.LU
 internal fun dayChart(s: EngineState?, car: List<CarSpan>, now: Long, zone: java.time.ZoneId): DayChartData? {
     val day0 = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
     fun min(t: Long) = ((t - day0) / 60_000).toInt().coerceIn(0, 1440)
-    fun today(t: Long?) = t != null && t >= day0 && t < day0 + 86_400_000L   // 오늘 날짜면(시계 눈금 now는 30초마다라 방금 기록이 그보다 늦을 수 있다)
+    fun today(t: Long?) = t != null && t >= day0 && t < day0 + 86_400_000L   // 오늘 날짜면(시계 눈금 now는 10초마다라 방금 기록이 그보다 늦을 수 있다)
+    // 칸 고르기 하나(두 폰 inDay와 같은 규칙): 그날과 실제로 겹치는 구간만. 자정에 딱 끝난 전날 구간(길이 0 칸)은 오늘 칸이 아니다.
+    // 그림은 분 칸, 길이는 그날 안으로 자른 기록 시각의 차이
+    fun dayBlock(a: Long, e: Long): DayBlock? {
+        val end0 = day0 + 86_400_000L
+        if (!(a < end0 && (e > day0 || (e == a && a >= day0)))) return null
+        val from = maxOf(a, day0); val to = minOf(e, end0)
+        return DayBlock(min(from)..min(to), to - from)
+    }
     val care = s?.care?.takeIf { it.freshAt(now) && today(it.asOf) }
     val lanes = buildList {
         if (care?.sleepDiaperEnabled == true) {
             val blocks = listOfNotNull(
-                care.lastSleepStartAt?.let { a -> care.lastSleepEndAt?.takeIf { e -> e >= a && today(e) }?.let { e -> min(maxOf(a, day0))..min(e) } },
-                care.sleepingSince?.let { a -> min(maxOf(a, day0))..min(maxOf(a, care.asOf)) },   // 잠든 중은 요약 계산 시각(as_of)까지만: 합계(todaySleepMin)와 같은 기준(연결 계약 돌봄 요약). 끝이 시작보다 앞서지 않게
+                care.lastSleepStartAt?.let { a -> care.lastSleepEndAt?.takeIf { e -> e >= a }?.let { e -> dayBlock(a, e) } },
+                care.sleepingSince?.let { a -> dayBlock(a, maxOf(a, care.asOf)) },   // 잠든 중은 요약 계산 시각(as_of)까지만: 합계(todaySleepMin)와 같은 기준(연결 계약 돌봄 요약). 끝이 시작보다 앞서지 않게
             )
-            care.todaySleepMin?.let { add(DayLane("잠", DataColor.SLEEP, null, TimeText.duration(it * 60_000L), blocks)) }
+            // 값은 합계가 먼저(차는 오늘 잠 칸을 다 모른다), 합계가 0분일 때만 칸으로 '1분 미만'·'0번'을 가른다([sleepValue])
+            care.todaySleepMin?.let { add(DayLane("잠", DataColor.SLEEP, null, sleepValue(it, blocks.isNotEmpty()), blocks)) }
         }
         val feedDots = listOfNotNull(s?.feedingStart?.takeIf(::today)?.let(::min))
         if (care != null) add(DayLane("수유", DataColor.FEED, null, "${care.todayFeedCount}번", dots = feedDots))
         else if (feedDots.isNotEmpty()) add(DayLane("수유", DataColor.FEED, null, "마지막 " + TimeText.clock(s!!.feedingStart!!, ClockMode.CHART), dots = feedDots))   // 차트 안 시각은 24시간제
         if (care?.sleepDiaperEnabled == true) care.todayDiaperCount?.let { n -> add(DayLane("기저귀", DataColor.DIAPER, null, "${n}번", dots = listOfNotNull(care.lastDiaperAt?.takeIf(::today)?.let(::min)))) }
-        val spans = car.filter { (it.to ?: now) >= day0 }
-        if (spans.isNotEmpty()) {
-            val driveMs = spans.sumOf { (it.to ?: now) - maxOf(it.from, day0) }
+        val inToday = car.mapNotNull { c -> dayBlock(c.from, c.to ?: now)?.let { c to it } }   // 자정에 딱 끝난 세션은 오늘 칸이 아니다
+        if (inToday.isNotEmpty()) {
+            val spans = inToday.map { it.first }
+            val drives = inToday.map { it.second }
+            val driveMs = drives.sumOf { it.ms }   // 합계와 툴팁이 같은 값
             val cries = spans.flatMap { it.alarms }.filter(::today)   // 울음 경보 에피소드마다 한 번(리포트 목록 '울음 n번'과 같은 수, C381)
             // 세션 구간(출발 D부터 도착 뒤 뒷문 열 때까지)이라 중간 정차도 들어 있다: '주행'이 아니라 아기가 타 있던 '탑승' 시간
             add(DayLane("차에서", DataColor.CAR, "탑승 " + TimeText.duration(driveMs), if (cries.isEmpty()) "울음 없음" else "울음 ${cries.size}번",
-                blocks = spans.map { min(maxOf(it.from, day0))..min(it.to ?: now) }, diamonds = cries.map(::min)))
+                blocks = drives, diamonds = cries.map(::min)))
         }
     }
     return if (lanes.isEmpty()) null else DayChartData(lanes, min(now))
+}
+
+/**
+ * 오늘 하루 잠 줄 값(U27·두 폰 하루 띠). 차는 오늘 잠 칸을 다 알지 못한다(폰 요약의 마지막 잠·잠든 중만, 막 저장한 잠은 요약 시각 뒤라 빠질 수 있다).
+ * 그래서 '잠이 있었나'의 사실은 합계 [todayMin]이고, 칸은 합계가 분으로 0일 때 '1분 미만'(칸 있음)과 '0번'(칸 없음)을 가르는 데만 쓴다.
+ */
+internal fun sleepValue(todayMin: Int, hasBlock: Boolean) = when {
+    todayMin > 0 -> TimeText.duration(todayMin * 60_000L)
+    hasBlock -> "1분 미만"
+    else -> "0번"
 }
 
 /** C303 ⑤(B7): 물어보기 버튼은 판단 코어가 AskButton을 받을 때만 켠다(말하는 중·통화·질문 창 등에서 눌러도 버려지지 않게). */
@@ -467,7 +494,7 @@ class HomeViewModel(
 ) : ViewModel() {
     // 시계 글자(수유 '방금'·'h:mm', 오늘 하루 지금 선)를 다시 계산하는 눈금. 홈은 눈금의 시각만 쓴다: 판단 코어가 Step을 낼 때마다 clock()을 읽으면
     // 수유 막대 몫이 매번 달라 HomeUi가 같지 않게 되고, 주행 중 Step마다 홈 전체를 다시 그린다(장면 B·C·E 앱 CPU 2배). 눈금보다 늦은 수유 기록은 agoText·fill이 0으로 막는다
-    private val ticker = flow { while (true) { emit(clock()); delay(10_000) } }
+    private val ticker = flow { while (true) { emit(clock()); delay(TICK_MS) } }
     private var lastKey: String? = null
     private var keyFrom = 0L
 
@@ -494,9 +521,12 @@ class HomeViewModel(
         steps.onEach { stepFrom(it?.state); lastQa(it?.state) }.launchIn(viewModelScope)
     }
 
-    /** 오늘 주행 구간(시뮬레이션 뺌)과 경보 시각. 세션 표가 바뀔 때만 다시 읽는다. */
+    /**
+     * 오늘 주행 구간(시뮬레이션 뺌)과 경보 시각. 세션 표가 바뀔 때만 다시 읽는다. 날짜는 주입 시계(눈금과 같은 출처)로 정한다.
+     * 이 앞 거름은 화면의 dayChart가 눈금 시각으로 다시 거르므로 넓어도 된다: 눈금 값은 지금보다 최대 [TICK_MS] 늦어, 그만큼 앞 시각의 날짜로 거른다(자정 직후에도 빠뜨리지 않게).
+     */
     private val carDay: Flow<List<CarSpan>> = store.sessionsFlow().map { list ->
-        val day0 = java.time.LocalDate.now(TimeText.zone).atStartOfDay(TimeText.zone).toInstant().toEpochMilli()
+        val day0 = java.time.Instant.ofEpochMilli(clock() - TICK_MS).atZone(TimeText.zone).toLocalDate().atStartOfDay(TimeText.zone).toInstant().toEpochMilli()
         list.filter { it.scenarioId == null && (it.endedAt ?: Long.MAX_VALUE) >= day0 }.map { CarSpan(it.startedAt, it.endedAt, store.cryAlarms(it.id)) }
     }.flowOn(Dispatchers.IO).retryOnDbError("home-day")   // 읽기 실패: 1초 뒤 다시, 그동안 직전 '오늘 하루'를 둔다('울음 없음'으로 바꾸지 않는다)
 

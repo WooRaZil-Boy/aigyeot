@@ -78,7 +78,7 @@ internal class Voice(
 
     fun listen(c: Listen) {
         if (!micRunning()) return post(Heard(clock(), c.listenId, null))
-        hear(c.ms) { text -> heardText(text)?.let { _heard.value = HeardText(c.listenId, it, clock()) }; post(Heard(clock(), c.listenId, heardText(text))) }   // C303 A22: Q3 두 자 미만은 판단 코어와 같은 함수
+        hear(c.ms) { text -> val h = heardText(text); h?.let { _heard.value = HeardText(c.listenId, it, clock()) }; post(Heard(clock(), c.listenId, h)) }   // C303 A22: Q3 두 자 미만은 판단 코어와 같은 함수. 화면과 사건이 같은 값
     }
 
     /** CancelSpeech: 말하기와 듣기를 끊는다. 돌려줄 사건은 없다(계약 4.1). */

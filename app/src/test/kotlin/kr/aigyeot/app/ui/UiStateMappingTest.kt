@@ -83,4 +83,25 @@ class UiStateMappingTest {
         for (r in listOf(Route.Home, Route.Setup, Route.Connect, Route.Songs, Route.Reports, Route.Report("S1"), Route.Demo, Route.DemoScenes)) assertEquals(r, Route.parse(r.key))
         assertEquals(Route.Home, Route.parse("모르는 값"))
     }
+
+    // 코드 리뷰 A: 화면을 옮기면 갈 화면과 그 위 화면(parentOf 사슬) 밖의 입력은 버린다. 저장하지 않고 나간 설정 입력이 다시 열 때 남지 않는다
+    @Test fun route_move_dropsLeftScreenInput_keepsParentWhileInChild() {
+        val home = Route.Home.key; val setup = Route.Setup.key; val songs = Route.Songs.key; val demo = Route.Demo.key
+        assertEquals(setOf(setup), keysToDrop(setOf(home, setup), Route.Home), "설정에서 저장하지 않고 홈으로(뒤로·닫기): 설정 입력을 버린다")
+        assertEquals(emptySet(), keysToDrop(setOf(home, setup), Route.Songs), "설정 → 노래: 설정 입력은 남아 돌아오면 이어 쓴다")
+        assertEquals(setOf(songs), keysToDrop(setOf(home, setup, songs), Route.Setup), "노래 → 설정: 노래 화면 상태만 버린다")
+        assertEquals(setOf(setup, demo), keysToDrop(setOf(home, setup, demo), Route.Home), "시연에서 홈으로: 위 화면(설정) 입력까지 버린다")
+        // 주행 중 화면 전환은 route를 바꾸지 않는다(C365): 지금 화면으로 '옮기면' 아무것도 버리지 않는다
+        assertEquals(emptySet(), keysToDrop(setOf(home, setup), Route.Setup))
+    }
+
+    // 리뷰 H: 리포트 목록과 리포트 하나는 한 화면 열쇠다. 넓은 창에서 다른 리포트를 골라도, 840 이하에서 상세 → 목록으로 돌아와도 목록 입력(스크롤)을 버리지 않는다
+    @Test fun route_reportsShareScreenKey_noDropBetweenReports() {
+        assertEquals(Route.Reports.screen, Route.Report("A").screen); assertEquals(Route.Report("A").screen, Route.Report("B").screen)
+        val seen = setOf(Route.Home.screen, Route.Report("A").screen)
+        assertEquals(emptySet(), keysToDrop(seen, Route.Report("B")), "넓은 창에서 A → B")
+        assertEquals(emptySet(), keysToDrop(seen, Route.Reports), "840 이하 상세 → 목록(뒤로)")
+        assertEquals(setOf(Route.Reports.screen), keysToDrop(seen, Route.Home), "리포트를 떠나면 버린다")
+        assertEquals(setOf(Route.Setup.screen), keysToDrop(setOf(Route.Home.screen, Route.Setup.screen), Route.Home), "설정 → 홈은 여전히 버린다")
+    }
 }

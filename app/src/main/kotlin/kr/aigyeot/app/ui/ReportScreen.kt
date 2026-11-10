@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -49,15 +51,17 @@ fun ReportsScreen(
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val narrow = maxWidth < NarrowPage   // 목록 560 + 상세 두 칸이 들어가는 폭(설정·시연과 같은 기준)이 아니면 목록과 상세를 따로
     val detailOnly = narrow && openId != null
+    // 목록 스크롤은 화면 맨 위에서 하나: 840 이하에서 상세를 보고 돌아와도, 넓은 창에서 다른 리포트를 골라도 그대로(목록이 컴포지션에서 빠져도 남는다)
+    val listState = rememberLazyListState()
     BackHandler(enabled = detailOnly) { onBack(true) }
     Column(Modifier.fillMaxSize()) {
         Header("주행 리포트", { onBack(detailOnly) })
         when {
             detailOnly -> key(openId) { Detail(detail(openId!!), narrow = true, Modifier.fillMaxSize()) }
-            narrow -> ReportList(rows, null, onOpen, Modifier.fillMaxSize())
+            narrow -> ReportList(rows, null, onOpen, listState, Modifier.fillMaxSize())
             else -> Row(Modifier.fillMaxSize()) {
                 val sel = openId ?: rows.firstOrNull { it.enabled }?.id
-                ReportList(rows, sel, onOpen, Modifier.width(560.dp + 44.dp + 18.dp).fillMaxHeight(), PaddingValues(start = 44.dp, end = 18.dp, top = 32.dp, bottom = 40.dp))
+                ReportList(rows, sel, onOpen, listState, Modifier.width(560.dp + 44.dp + 18.dp).fillMaxHeight(), PaddingValues(start = 44.dp, end = 18.dp, top = 32.dp, bottom = 40.dp))
                 if (sel != null) key(sel) { Detail(detail(sel), narrow = false, Modifier.weight(1f).fillMaxHeight(), PaddingValues(start = 18.dp, end = 44.dp, top = 32.dp, bottom = 40.dp)) }
             }
         }
@@ -71,9 +75,9 @@ private val PagePad = PaddingValues(start = 44.dp, end = 44.dp, top = 32.dp, bot
 
 /** 목록(시안 왼쪽): '주행' 제목 + 행(아이콘 route, '{날짜} {구간}', 부가 '울음 n번'). 열린 세션은 '주행 중'이라 열 수 없다. */
 @Composable
-private fun ReportList(rows: List<ReportRow>, selected: String?, onOpen: (String) -> Unit, modifier: Modifier, pad: PaddingValues = PagePad) {
+private fun ReportList(rows: List<ReportRow>, selected: String?, onOpen: (String) -> Unit, state: LazyListState, modifier: Modifier, pad: PaddingValues = PagePad) {
     val p = LocalPalette.current
-    LazyColumn(modifier, contentPadding = pad, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    LazyColumn(modifier, state = state, contentPadding = pad, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item { Sect("주행") }
         if (rows.isEmpty()) item { Body("아직 기록이 없어요") }
         items(rows, key = { it.id }) { r ->
