@@ -72,7 +72,7 @@ import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
-import kr.aigyeot.phone.domain.model.AGO_MINUTES
+import kr.aigyeot.phone.domain.model.AGO_CHIPS
 import kr.aigyeot.phone.domain.model.CarLine
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareKind
@@ -113,15 +113,13 @@ internal fun splitRow(text: String): Pair<String, String?> {
 // ---------------------------------------------------------------- 빠른 기록·고치기 시트(C3)
 
 /**
- * 새 기록(initial = null)과 고치기(시안 S.sheet: 모달 바텀 시트, 위 손잡이, 제목 18/24·700, 회색 행 묶음 + 값 칩, 세그먼트, 취소·저장 1:2).
- * 수유·잠은 '시작'·'끝'(끝 시각 모름 또는 고른 시각), 기저귀·메모는 '시각' 한 줄. `baseDate`가 있으면(기록 탭의 다른 날) 시각은 그 날의 시각이다.
+ * 새 기록([CareSheetTarget.New])과 고치기([CareSheetTarget.Edit])(시안 S.sheet: 모달 바텀 시트, 위 손잡이, 제목 18/24·700, 회색 행 묶음 + 값 칩, 세그먼트, 취소·저장 1:2).
+ * 수유·잠은 '시작'·'끝'(끝 시각 모름 또는 고른 시각), 기저귀·메모는 '시각' 한 줄. 새 기록의 `day`가 있으면(기록 탭의 다른 날) 시각은 그 날의 시각이다.
  * 입력·검사·저장 단계는 [CareSheetViewModel]이 갖고, 이 화면은 그리기와 동작 전달만 한다.
  */
 @Composable
 fun CareSheet(
-    kind: CareKind,
-    initial: CareEvent?,
-    baseDate: LocalDate?,
+    target: CareSheetTarget,
     chooseKind: Boolean = false,
     guardian: Boolean,
     vm: CareSheetViewModel = appViewModel(),
@@ -129,7 +127,7 @@ fun CareSheet(
 ) {
     // 시트 하나에 id 하나(화면을 다시 만들어도 같은 시트로 이어 쓴다). 새 기록의 id도 이것이다.
     val sheetId = rememberSaveable { ulid(System.currentTimeMillis()) }
-    LaunchedEffect(sheetId) { vm.open(sheetId, kind, initial, baseDate) }
+    LaunchedEffect(sheetId) { vm.open(sheetId, target) }
     val care by vm.careFile.collectAsStateWithLifecycle()
     val all by vm.sheet.collectAsStateWithLifecycle()
     // 이 시트의 입력·단계만 쓴다(앞 시트에서 남은 것이 비치거나 이 시트를 닫지 않게).
@@ -138,10 +136,10 @@ fun CareSheet(
         vm.close(sheetId)
         onClose()
     }
-    LaunchedEffect(mine?.stage) { if (mine?.stage == EditStage.Done) close() }
+    LaunchedEffect(mine?.phase) { if (mine?.phase == CareSheetViewModel.Phase.Closed) close() }
     val d = mine?.draft ?: return
-    val stage = mine.stage
-    val zone = d.zoneId
+    val phase = mine.phase
+    val zone = d.zone
     var pick by rememberSaveable { mutableStateOf<String?>(null) } // "start" | "end" 시각 고르기 창
     var pickDate by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -157,33 +155,33 @@ fun CareSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(start = 20.dp, end = 20.dp, bottom = 34.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(sheetTitle(d.kind, edit = d.editingId != null), style = Type.headline.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
-            if (chooseKind && d.editingId == null) {
+            Text(sheetTitle(d.kind, edit = d.original != null), style = Type.headline.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
+            if (chooseKind && d.original == null) {
                 val kinds = quickKinds(care.sleepDiaperEnabled)
                 Segmented(kinds.map(::kindName), kinds.indexOf(d.kind), { i -> vm.setKind(kinds[i]) })
             }
             // 순서는 iOS 시트와 같다: (새 기록·오늘) 몇 분 전 칩 → 행 묶음(시작·끝·양·메모) → 쪽·종류 → 오류 → 보호자 안내 → 단추.
-            if (d.showAgo) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (min in AGO_MINUTES) Chip(agoChipText(min), d.agoMin == min, { vm.pickAgo(min) })
-                Chip("직접", d.agoMin == null, vm::custom)
+            if (d.showsAgoChips) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (min in AGO_CHIPS) Chip(agoChipText(min), d.chip == min, { vm.pick(min) })
+                Chip("직접", d.chip == null, { vm.pick(null) })
             }
             SheetRows {
                 // 시작(수유·잠) 또는 시각(기저귀·메모). 날짜 칩은 날짜를, 시각 칩은 시각을 고른다(지난 기록을 다른 날로 옮길 수 있다).
                 // 몇 분 전 칩을 고른 동안은 칩이 시각을 말하므로 이 행을 숨기고, '직접'이면 보인다(iOS와 같음).
-                if (d.showStart) SheetRow(if (d.timed) "시작" else "시각", first = true) {
+                if (d.showsStart) SheetRow(if (d.hasDuration) "시작" else "시각", first = true) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ValueChip(dayLabel(Instant.ofEpochMilli(d.startAt).atZone(zone).toLocalDate(), LocalDate.now(zone)), selected = true) { pickDate = true }
-                        ValueChip(koClock(d.startAt, zone), selected = true) { pick = "start" }
+                        ValueChip(dayLabel(Instant.ofEpochMilli(d.start).atZone(zone).toLocalDate(), LocalDate.now(zone)), selected = true) { pickDate = true }
+                        ValueChip(koClock(d.start, zone), selected = true) { pick = "start" }
                     }
                 }
-                if (d.timed) SheetRow("끝", first = !d.showStart) {
+                if (d.hasDuration) SheetRow("끝", first = !d.showsStart) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ValueChip("끝 시각 모름", selected = d.endAt == null, onClick = vm::endUnknown)
-                        ValueChip(d.endAt?.let { koClock(it, zone) } ?: "직접", selected = d.endAt != null) { pick = "end" }
+                        ValueChip("끝 시각 모름", selected = d.endUnknown, onClick = vm::setEndUnknown)
+                        ValueChip(d.end?.let { koClock(it, zone) } ?: "직접", selected = !d.endUnknown) { pick = "end" }
                     }
                 }
-                if (d.kind == CareKind.FEED && d.side == FeedSide.BOTTLE) SheetRow("양") { AmountStepper(d.ml, vm::setAmount) }
-                SheetRow("메모", first = !d.showStart && !d.timed) {
+                if (d.kind == CareKind.FEED && d.side == FeedSide.BOTTLE) SheetRow("양") { AmountStepper(d.amount, vm::setAmount) }
+                SheetRow("메모", first = !d.showsStart && !d.hasDuration) {
                     val ph = "예: 트림 잘 함"
                     BasicTextField(
                         value = d.note,
@@ -211,29 +209,29 @@ fun CareSheet(
                 }
                 else -> Unit
             }
-            (stage as? EditStage.Editing)?.error?.let { Text(it, style = Type.error, color = p.danger) }
+            (phase as? CareSheetViewModel.Phase.Failed)?.message?.let { Text(it, style = Type.error, color = p.danger) }
             if (guardian) FootNote(GUARDIAN_ONLY)
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Btn("취소", ::close, Modifier.weight(1f), kind = BtnKind.TONAL)
-                Btn("저장", vm::save, Modifier.weight(2f), enabled = stage is EditStage.Editing && d.savable)
+                Btn("저장", { vm.save() }, Modifier.weight(2f), enabled = (phase is CareSheetViewModel.Phase.Editing || phase is CareSheetViewModel.Phase.Failed) && d.savable)
             }
-            if (d.editingId != null) Btn("지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
+            if (d.original != null) Btn("지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
         }
     }
     pick?.let { which ->
-        val ref = Instant.ofEpochMilli(if (which == "end") d.endAt ?: d.startAt else d.startAt).atZone(zone)
+        val ref = Instant.ofEpochMilli(if (which == "end") d.end ?: d.start else d.start).atZone(zone)
         TimeDialog(ref.hour, ref.minute, onDismiss = { pick = null }) { h, m ->
-            if (which == "end") vm.pickEnd(h, m) else vm.pickStart(h, m)
+            if (which == "end") vm.setEnd(h, m) else vm.setStart(h, m)
             pick = null
         }
     }
     if (pickDate) {
-        DateDialog(Instant.ofEpochMilli(d.startAt).atZone(zone).toLocalDate(), max = LocalDate.now(zone), onDismiss = { pickDate = false }) { day ->
-            vm.pickDate(day)
+        DateDialog(Instant.ofEpochMilli(d.start).atZone(zone).toLocalDate(), max = LocalDate.now(zone), onDismiss = { pickDate = false }) { day ->
+            vm.moveStartDay(day)
             pickDate = false
         }
     }
-    (stage as? EditStage.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = vm::confirmOverlap, onDismiss = vm::dismissOverlap) }
+    (phase as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = { vm.save(allowOverlap = true) }, onDismiss = vm::keepEditing) }
 }
 
 /** 날짜 고르기(플랫폼다움: Material 날짜 선택기). 오늘 뒤는 고를 수 없다(iOS `in: ...지금`과 같음). */
@@ -319,9 +317,9 @@ fun RecordsTab(go: (Route) -> Unit, vm: RecordsViewModel = appViewModel()) {
     val editing = editingId?.let { id -> ui.care.events.firstOrNull { it.id == id && it.deletedAt == null } }
     // 고치던 기록이 지워지면(기록 지우기 등) 시트를 닫는다.
     LaunchedEffect(ui.care, editingId) { if (editingId != null && editing == null) editingId = null }
-    editing?.let { e -> CareSheet(e.kind, initial = e, baseDate = null, guardian = ui.guardian) { editingId = null } }
+    editing?.let { e -> CareSheet(CareSheetTarget.Edit(e.id), guardian = ui.guardian) { editingId = null } }
     val day = LocalDate.ofEpochDay(dayEpoch)
-    if (adding) CareSheet(CareKind.FEED, initial = null, baseDate = day.takeIf { it != today }, chooseKind = true, guardian = ui.guardian) { adding = false }
+    if (adding) CareSheet(CareSheetTarget.New(CareKind.FEED, day.takeIf { it != today }), chooseKind = true, guardian = ui.guardian) { adding = false }
 }
 
 /** log.date.*: "오늘" / "어제" / "11월 5일(수)"(고른 날 제목, 날짜 칸의 화면 읽기 이름). */

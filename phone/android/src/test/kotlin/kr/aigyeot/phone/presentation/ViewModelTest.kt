@@ -12,6 +12,9 @@ import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.CareUndo
 import kr.aigyeot.phone.domain.model.HOUR
+import kr.aigyeot.phone.domain.model.FeedSide
+import kr.aigyeot.phone.domain.model.MINUTE
+import kr.aigyeot.phone.domain.model.onDate
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.DisconnectRun
@@ -138,38 +141,38 @@ class ViewModelTest {
         val saved = SavedStateHandle()
         val vm = CareSheetViewModel(care, notices, recordCare, clock, saved, vmScope())
         // 새 메모: 글이 없으면 저장하지 않는다. 저장하면 시트 id가 기록 id이고 닫힌다.
-        vm.open("01JXSHEET0000000000000000A", CareKind.NOTE, initial = null, baseDate = null)
+        vm.open("01JXSHEET0000000000000000A", CareSheetTarget.New(CareKind.NOTE, day = null))
         vm.save()
-        assertEquals(EditStage.Editing(), vm.sheet.value?.stage)
+        assertEquals(CareSheetViewModel.Phase.Editing, vm.sheet.value?.phase)
         vm.setNote("트림")
         vm.save()
-        until("저장") { vm.sheet.value?.stage == EditStage.Done }
+        until("저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed }
         assertEquals("01JXSHEET0000000000000000A", care.care.value.events.single().id)
         // 화면을 다시 만들면(같은 시트 id) 적던 것을 이어 쓰고, 프로세스가 죽은 뒤에도 화면 저장 상태에서 되살린다.
         vm.close("01JXSHEET0000000000000000A")
-        vm.open("s2", CareKind.NOTE, initial = null, baseDate = null)
+        vm.open("s2", CareSheetTarget.New(CareKind.NOTE, day = null))
         vm.setNote("반쯤 적음")
-        vm.open("s2", CareKind.NOTE, initial = null, baseDate = null)
+        vm.open("s2", CareSheetTarget.New(CareKind.NOTE, day = null))
         assertEquals("반쯤 적음", vm.sheet.value?.draft?.note)
         assertEquals("반쯤 적음", CareSheetViewModel(care, notices, recordCare, clock, saved, vmScope()).sheet.value?.draft?.note)
         // 저장 중에 닫고 새 시트를 열면 늦게 온 앞 시트의 저장 결과는 새 시트를 닫지 않는다.
         vm.save()
-        assertEquals(EditStage.Saving, vm.sheet.value?.stage)
+        assertEquals(CareSheetViewModel.Phase.Saving, vm.sheet.value?.phase)
         vm.close("s2")
-        vm.open("s3", CareKind.NOTE, initial = null, baseDate = null)
+        vm.open("s3", CareSheetTarget.New(CareKind.NOTE, day = null))
         until("앞 시트 저장") { care.care.value.events.size == 2 }
         settle()
         assertEquals("s3", vm.sheet.value?.sheetId)
-        assertEquals(EditStage.Editing(), vm.sheet.value?.stage)
+        assertEquals(CareSheetViewModel.Phase.Editing, vm.sheet.value?.phase)
         vm.close("s3")
         // 고치던 기록이 그사이 지워졌으면 저장하지 않고 닫는다(되살리지 않는다, R10).
         val e = care.care.value.events.first()
-        vm.open("s4", e.kind, initial = e, baseDate = null)
+        vm.open("s4", CareSheetTarget.Edit(e.id))
         recordCare.delete(e.id)
         until("지움") { care.care.value.events.first { it.id == e.id }.deletedAt != null }
         vm.setNote("고침")
         vm.save()
-        assertEquals(EditStage.Done, vm.sheet.value?.stage)
+        assertEquals(CareSheetViewModel.Phase.Closed, vm.sheet.value?.phase)
         assertTrue(care.care.value.events.first { it.id == e.id }.deletedAt != null)
     }
 
@@ -177,22 +180,22 @@ class ViewModelTest {
     fun `시트와 타이머는 같은 검사로 미래 시각을 막고 겹침은 확인을 기다린다`() = kitTest {
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         // 먼저 수유 하나(30분 전~10분 전)
-        vm.open("a", CareKind.FEED, initial = null, baseDate = null)
-        vm.pickAgo(30)
-        vm.pickEnd(java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).hour, java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).minute)
+        vm.open("a", CareSheetTarget.New(CareKind.FEED, day = null))
+        vm.pick(30)
+        vm.setEnd(java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).hour, java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).minute)
         vm.save()
-        until("첫 수유") { vm.sheet.value?.stage == EditStage.Done }
+        until("첫 수유") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed }
         vm.close("a")
         // 겹치는 새 수유(15분 전 시작, 끝 모름)는 확인을 기다리고, '그래도 저장'이면 저장한다.
-        vm.open("b", CareKind.FEED, initial = null, baseDate = null)
-        vm.pickAgo(15)
+        vm.open("b", CareSheetTarget.New(CareKind.FEED, day = null))
+        vm.pick(15)
         vm.save()
-        assertTrue(vm.sheet.value?.stage is EditStage.ConfirmOverlap)
-        vm.dismissOverlap()
-        assertEquals(EditStage.Editing(), vm.sheet.value?.stage)
+        assertTrue(vm.sheet.value?.phase is CareSheetViewModel.Phase.ConfirmOverlap)
+        vm.keepEditing()
+        assertEquals(CareSheetViewModel.Phase.Editing, vm.sheet.value?.phase)
         vm.save()
-        vm.confirmOverlap()
-        until("겹쳐도 저장") { vm.sheet.value?.stage == EditStage.Done }
+        vm.save(allowOverlap = true)
+        until("겹쳐도 저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed }
         assertEquals(2, care.care.value.events.size)
         // 타이머: 시작 시각을 앞으로 옮기면 R3 글이고 저장하지 않는다.
         recordCare.start(CareKind.SLEEP)
@@ -200,8 +203,41 @@ class ViewModelTest {
         val sleep = care.care.value.events.first { it.kind == CareKind.SLEEP }
         val timer = TimerViewModel(sleep.id, state, care, recordCare, clock, vmScope())
         val later = java.time.Instant.ofEpochMilli(NOW + 2 * HOUR).atZone(APP_ZONE)
-        timer.pickEnd(later.hour, later.minute)
-        assertEquals("앞으로의 시각은 적을 수 없어요", (timer.stage.value as EditStage.Editing).error)
+        timer.setTime(TimerViewModel.TimeField.END, later.hour, later.minute)
+        assertEquals("앞으로의 시각은 적을 수 없어요", (timer.phase.value as CareSheetViewModel.Phase.Failed).message)
+    }
+
+    @Test
+    fun `타이머는 쪽과 양을 바로 얹고 시작 시각은 검사해 겹치면 확인 뒤 저장한다`() = kitTest {
+        // 끝난 수유 하나(50분 전~40분 전)
+        val past = CareEvent("p", CareKind.FEED, NOW - 50 * MINUTE, endAt = NOW - 40 * MINUTE, zone = APP_ZONE.id, createdAt = NOW, updatedAt = NOW)
+        assertTrue(recordCare.saveEvent(past))
+        recordCare.start(CareKind.FEED)
+        until("수유 시작") { care.care.value.events.any { it.id != "p" } }
+        val id = care.care.value.events.first { it.id != "p" }.id
+        val timer = TimerViewModel(id, state, care, recordCare, clock, vmScope())
+        fun e() = care.care.value.events.first { it.id == id }
+        timer.setSide(FeedSide.BOTTLE)
+        until("젖병") { e().feedSide == FeedSide.BOTTLE }
+        timer.setAmount(60)
+        until("양") { e().amountMl == 60 }
+        // 10분 전으로 옮기면 겹치지 않아 바로 저장
+        val ten = java.time.Instant.ofEpochMilli(NOW - 10 * MINUTE).atZone(APP_ZONE)
+        timer.setTime(TimerViewModel.TimeField.START, ten.hour, ten.minute)
+        until("시작 옮김") { e().startAt == onDate(ten.toLocalDate(), ten.hour, ten.minute, APP_ZONE) }
+        // 45분 전으로 옮기면 앞 수유와 겹친다: 확인을 기다리고, '고치기'면 그대로, 다시 골라 '그래도 저장'이면 저장한다.
+        val overlap = java.time.Instant.ofEpochMilli(NOW - 45 * MINUTE).atZone(APP_ZONE)
+        timer.setTime(TimerViewModel.TimeField.START, overlap.hour, overlap.minute)
+        assertTrue(timer.phase.value is CareSheetViewModel.Phase.ConfirmOverlap)
+        timer.keepEditing()
+        assertEquals(CareSheetViewModel.Phase.Editing, timer.phase.value)
+        assertEquals(onDate(ten.toLocalDate(), ten.hour, ten.minute, APP_ZONE), e().startAt)
+        timer.setTime(TimerViewModel.TimeField.START, overlap.hour, overlap.minute)
+        timer.confirmTime()
+        until("겹쳐도 저장") { e().startAt == onDate(overlap.toLocalDate(), overlap.hour, overlap.minute, APP_ZONE) }
+        until("단계") { timer.phase.value == CareSheetViewModel.Phase.Editing }
+        assertEquals(FeedSide.BOTTLE, e().feedSide)
+        assertEquals(60, e().amountMl)
     }
 
     /** 가져오기 시험용 설정 ViewModel: 문서 주소 → 파일 내용(없으면 열지 못함). 값이 함수라 읽기를 붙잡아 둘 수 있다. */

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import kr.aigyeot.phone.domain.model.CareStats
 
 // 차트(시안 js/charts.js·css/charts.css를 Compose Canvas로). 규칙(dataviz): 막대 24 이하·위 4 둥근 끝·바닥 각짐, 격자 1 실선,
 // 글자는 글자 토큰(데이터 색 금지), 하나를 강조하고 나머지는 회색, 툴팁은 보조(값은 라벨에도 있다).
@@ -167,7 +168,7 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
     val n = data.lanes.size
-    val reveal = rememberReveal(Motion.reveal.ms, Motion.reveal)
+    val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = data.summary }) {
         val w = with(d) { maxWidth.toPx() }
         // 시안 Charts.day는 폭 320 기준 SVG를 칸 폭에 맞춰 늘린다(412 폰의 흰 블록 안 348 → 1.09배). 같은 크기로 보이게 글자·간격에
@@ -312,7 +313,7 @@ fun WeekBars(
     val tickH = remember(m, tick) { m.measure("오늘", tick).size.height.toFloat() }
     val px = with(d) { 1.dp.toPx() }
     // 막대마다 0.6초 enter 곡선, 0.04초씩 늦게(8개마다 다시). 전체 시간은 고르게 흐르고 곡선은 막대마다 건다(시안 charts.js grow).
-    val grow = rememberReveal(Motion.barGrow.ms + Motion.BAR_STEP_MS * 7, Curve(0, 0f, 0f, 1f, 1f))
+    val grow = rememberReveal(Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 7, Curve(0, 0f, 0f, 1f, 1f))
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = label + ": " + bars.joinToString(", ") { b -> "${b.label} ${b.value?.let(fmt) ?: "기록 없음"}" } }) {
         val w = with(d) { maxWidth.toPx() }
         val h = with(d) { height.toPx() }
@@ -340,8 +341,8 @@ fun WeekBars(
                     val v = b.value ?: return@forEachIndexed
                     // 오늘 값은 0이어도 기준선 위에 라벨을 남긴다(시안 charts.js week: 값 라벨은 막대와 따로).
                     if (isHot && v == 0L && grow.value >= 1f) text(m, fmt(v), valStyle, minOf(cx + bw / 2, size.width), base - 7 * px, TextAlign.End)
-                    val local = ((grow.value * (Motion.barGrow.ms + Motion.BAR_STEP_MS * 7) - Motion.BAR_STEP_MS * (i % 8)) / Motion.barGrow.ms.toFloat()).coerceIn(0f, 1f)
-                    val k = if (grow.value >= 1f) 1f else Motion.barGrow.easing.transform(local)
+                    val local = ((grow.value * (Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 7) - Motion.CHART_BAR_STAGGER_MS * (i % 8)) / Motion.chartBar.ms.toFloat()).coerceIn(0f, 1f)
+                    val k = if (grow.value >= 1f) 1f else Motion.chartBar.easing.transform(local)
                     val yy = y(v)
                     val full = base - yy
                     val barH = full * k
@@ -382,7 +383,7 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
     val cellH = maxOf(14 * px, remember(m, tickOn) { m.measure("오늘", tickOn).size.height.toFloat() })
     val rowsH = g.rows.size * (cellH + 2 * px)
     val totalH = rowsH + 6 * px + tickH
-    val reveal = rememberReveal(Motion.reveal.ms, Motion.reveal)
+    val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
     val leadW = remember(m, tickOn, g.labels) { g.labels.maxOf { m.measure(it, tickOn).size.width }.toFloat() }
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = g.summary }) {
         val w = with(d) { maxWidth.toPx() }
@@ -448,7 +449,7 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     val lh = maxOf(30 * px, inH + 16 * px)
     val markH = remember(m, markStyle) { m.measure("가", markStyle).size.height.toFloat() }
     val totalH = lh + 14 * px + (markH + 6 * px) * 2
-    val reveal = rememberReveal(Motion.reveal.ms, Motion.reveal)
+    val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
     val laneW = remember(m, laneStyle) { m.measure("소리", laneStyle).size.width + 12 * px }
     Column(modifier) {
     BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "에피소드: " + (band.sounds.map { "${it.name} ${it.to - it.from}초" } + band.marks.map { it.label } + band.outcomes).joinToString(", ") }) {
@@ -491,22 +492,19 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------- 방법별 성적
 
 /** 방법별 성적(시안 Charts.methods): 이름 · 점 행렬(튼 횟수만큼, 그친 만큼 채움, 먹색 한 색) · '6/7번', 3번 미만은 '아직 모름'. */
-/** 시안 점 튐: 강성 600·감쇠 30(질량 1) → 감쇠비 30 / (2·√600) ≈ 0.61. */
-private val DOT_POP = androidx.compose.animation.core.spring<Float>(dampingRatio = 30f / (2f * kotlin.math.sqrt(600f)), stiffness = 600f)
-
+/** 방법별 성적 한 줄. 순서는 [CareStats.methodOrder]가 정해 넘긴다. */
 data class MethodRow(val name: String, val ok: Int, val n: Int) {
-    val known get() = n >= 3
+    val known get() = n >= CareStats.methodKnownAttempts
 }
 
 @Composable
 fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
-    val sorted = rows.sortedWith(compareByDescending<MethodRow> { it.known }.thenByDescending { if (it.n == 0) 0.0 else it.ok.toDouble() / it.n })
     var tip by remember { mutableStateOf<Int?>(null) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        sorted.forEachIndexed { r, row ->
-            val before = sorted.take(r).sumOf { it.ok } // 찬 점은 모든 줄을 이어 0.02초씩 늦게 튄다(시안 charts.js: spring 강성 600·감쇠 30)
+        rows.forEachIndexed { r, row ->
+            val before = rows.take(r).sumOf { it.ok } // 찬 점은 모든 줄을 이어 0.02초씩 늦게 튄다(시안 charts.js: spring 강성 600·감쇠 30)
             Row(
                 Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "${row.name}: " + if (row.known) "${row.n}번 중 ${row.ok}번 그침" else "아직 모름" }
                     .pointerInput(r) { detectTapGestures { tip = if (tip == r) null else r } },
@@ -521,7 +519,7 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
                         val on = i < row.ok
                         val pop = remember { Animatable(if (reduced || !on) 1f else 0f) }
                         LaunchedEffect(reduced) {
-                            if (reduced) pop.snapTo(1f) else if (on && pop.value < 1f) { kotlinx.coroutines.delay(Motion.DOT_STEP_MS * (before + i)); pop.animateTo(1f, DOT_POP) }
+                            if (reduced) pop.snapTo(1f) else if (on && pop.value < 1f) { kotlinx.coroutines.delay(Motion.DOT_STAGGER_MS * (before + i)); pop.animateTo(1f, Motion.dotPop.spec()) }
                         }
                         Canvas(Modifier.size(12.dp)) {
                             val rr = size.minDimension / 2
@@ -564,7 +562,7 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
     val valDim = ct.valueDim
     val px = with(d) { 1.dp.toPx() }
     val height = 140.dp
-    val grow = rememberReveal(Motion.barGrow.ms + Motion.BAR_STEP_MS * 2, Curve(0, 0f, 0f, 1f, 1f)) // 막대 셋
+    val grow = rememberReveal(Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 2, Curve(0, 0f, 0f, 1f, 1f)) // 막대 셋
     BoxWithConstraints(
         modifier.fillMaxWidth().semantics {
             contentDescription = "1분당 큰 조향 보정: " + items.joinToString(", ") { (k, v, _) -> "$k ${v?.let(::perMinText) ?: "없음"}번" }
@@ -588,8 +586,8 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
             val cx = slot * i + slot / 2
             text(m, k, if (hotBar) tickOn else tick, cx, size.height - 5 * px, TextAlign.Center)
             v ?: return@forEachIndexed
-            val local = ((grow.value * (Motion.barGrow.ms + Motion.BAR_STEP_MS * 2) - Motion.BAR_STEP_MS * i) / Motion.barGrow.ms.toFloat()).coerceIn(0f, 1f)
-            val kk = if (grow.value >= 1f) 1f else Motion.barGrow.easing.transform(local)
+            val local = ((grow.value * (Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 2) - Motion.CHART_BAR_STAGGER_MS * i) / Motion.chartBar.ms.toFloat()).coerceIn(0f, 1f)
+            val kk = if (grow.value >= 1f) 1f else Motion.chartBar.easing.transform(local)
             val full = ((base - top) * v / max).toFloat()
             val bh = full * kk
             if (bh > 0f) {

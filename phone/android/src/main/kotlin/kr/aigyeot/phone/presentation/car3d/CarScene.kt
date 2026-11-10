@@ -38,7 +38,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
-import kr.aigyeot.phone.presentation.CarGlow
+import kr.aigyeot.phone.presentation.CarPaint
 import org.json.JSONObject
 
 /**
@@ -118,7 +118,7 @@ class CarScene private constructor() {
         scene.addEntity(key)
         shadow()
         // 듣는 중(listen): 실내 앰비언트 선 파랑 2.2(시안 applyState)
-        val g = lin(CarGlow.toArgb() and 0xFFFFFF)
+        val g = lin(CarPaint.ambientGlow.toArgb() and 0xFFFFFF)
         mats["Ambient"]?.let { mi -> if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", g[0] * 2.2f, g[1] * 2.2f, g[2] * 2.2f) }
     }
 

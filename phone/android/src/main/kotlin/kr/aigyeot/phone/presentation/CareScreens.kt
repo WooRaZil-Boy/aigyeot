@@ -101,6 +101,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
+import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.AMOUNT_ML
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareEvent
@@ -337,7 +338,7 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
             }
         }
     }
-    sheet?.let { k -> CareSheet(k, initial = null, baseDate = null, chooseKind = false, guardian = ui.guardian) { sheet = null } }
+    sheet?.let { k -> CareSheet(CareSheetTarget.New(k, day = null), chooseKind = false, guardian = ui.guardian) { sheet = null } }
 }
 
 /** 진행 중 기록(.run-c): 살아 있는 점 + "수유 중 · 왼쪽" + "오후 2:01부터" + 흐르는 시간(굵게 28). 누르면 타이머. */
@@ -431,7 +432,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
         }
         val window = if (guardian) null else instantOf(s.feeding?.value?.windowStartExpected) // U35: guardian은 feeding_state를 받지 못한다
         val meter = remember(care, last, now / MINUTE, window) {
-            feedMeter(last, now, instantOf(s.feeding?.value?.lastFeedingStart), window, intervalWeek(care, now, deviceZone).usualMs)
+            feedMeter(last, now, instantOf(s.feeding?.value?.lastFeedingStart), window, CareStats.usualFeedGapMs(care.events, now, deviceZone))
         }
         meter?.let { (v, w) -> FeedMeter(v, w, Modifier.padding(top = 12.dp)) }
         window?.let { at ->
@@ -576,10 +577,10 @@ fun CarTab(go: (Route) -> Unit, vm: CarViewModel = appViewModel()) {
 @Composable
 fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val stage by vm.stage.collectAsStateWithLifecycle()
+    val phase by vm.phase.collectAsStateWithLifecycle()
     val now = rememberNow(1_000)
     val e = ui.event
-    var pick by remember { mutableStateOf<String?>(null) } // "start" | "end" 시각 고르기 창
+    var pick by remember { mutableStateOf<TimerViewModel.TimeField?>(null) } // 시각 고르기 창
     // 끝났거나 지운 기록이면 화면을 닫는다(알림 '끝내기'로 닫힌 경우 등).
     LaunchedEffect(e?.isOngoing) { if (e == null || !e.isOngoing) onBack() }
     if (e == null || !e.isOngoing) return
@@ -601,28 +602,28 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                     style = Type.strong,
                     color = p.textPrimary,
                 )
-                Btn("끝 시각 고르기", { pick = "end" }, big = true)
+                Btn("끝 시각 고르기", { pick = TimerViewModel.TimeField.END }, big = true)
                 Btn("끝 시각 모름으로 닫기", vm::endUnknown, kind = BtnKind.TONAL)
             } else {
                 Btn("끝내기", { vm.end() }, icon = R.drawable.ic_square, big = true)
             }
             Column(Modifier.fillMaxWidth()) {
-                Btn("시작 시각 수정", { pick = "start" }, kind = BtnKind.TONAL, icon = R.drawable.ic_clock)
+                Btn("시작 시각 수정", { pick = TimerViewModel.TimeField.START }, kind = BtnKind.TONAL, icon = R.drawable.ic_clock)
                 Spacer(Modifier.height(8.dp))
                 Btn("이 기록 지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
             }
-            (stage as? EditStage.Editing)?.error?.let { Text(it, style = Type.error, color = p.danger) }
+            (phase as? CareSheetViewModel.Phase.Failed)?.message?.let { Text(it, style = Type.error, color = p.danger) }
         }
     }
     pick?.let { which ->
-        val ref = Instant.ofEpochMilli(if (which == "start") e.startAt else now).atZone(e.zoneOrDevice())
+        val ref = Instant.ofEpochMilli(if (which == TimerViewModel.TimeField.START) e.startAt else now).atZone(e.zoneOrDevice())
         TimeDialog(ref.hour, ref.minute, onDismiss = { pick = null }) { h, m ->
-            if (which == "start") vm.pickStart(h, m) else vm.pickEnd(h, m)
+            vm.setTime(which, h, m)
             pick = null
         }
     }
     // R4: 시트와 같은 경고
-    (stage as? EditStage.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = vm::confirmOverlap, onDismiss = vm::dismissOverlap) }
+    (phase as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = vm::confirmTime, onDismiss = vm::keepEditing) }
 }
 
 /** 타이머 고리(.tring): 회색 고리 3 + 종류 색 호(지난 분 / 60) + 초침 점(60초 한 바퀴, 동작 줄이기면 멈춤). */
@@ -634,7 +635,7 @@ private fun TimerRing(e: CareEvent, now: Long) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
     // 초침은 보일 때만 돈다(굴려 가리면 멈춤). 동작 줄이기면 지난 초 자리에 멈춘 점.
-    val sweep = if (reduced || !shown) (elapsed / 1000 % 60) / 60f else rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(Motion.sweep.spec<Float>(), RepeatMode.Restart), label = "sweep").value
+    val sweep = if (reduced || !shown) (elapsed / 1000 % 60) / 60f else rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(Motion.secondHand.spec<Float>(), RepeatMode.Restart), label = "sweep").value
     val sub = if (e.kind == CareKind.FEED) listOfNotNull("수유 중", e.feedSide?.let(::sideName)).joinToString(" · ") else "자는 중"
     // 고리 지름: 300, 좁은 화면이면 화면 폭 − 바깥 여백(12·2 + 8·2). BoxWithConstraints(SubcomposeLayout)를 공유 요소 위에 두면
     // 타이머에서 돌아갈 때 나가는 화면의 형제 칸(세그먼트·단추)이 오늘 화면 위에 남아 겹쳐 그려졌다(녹화로 확인).

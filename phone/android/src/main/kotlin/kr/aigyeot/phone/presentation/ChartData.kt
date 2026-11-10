@@ -7,25 +7,18 @@ import java.util.Locale
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.FeedGap
 import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.PATTERN_DAYS
 import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.carLines
-import kr.aigyeot.phone.domain.model.countPerDay
-import kr.aigyeot.phone.domain.model.cryAlarms
-import kr.aigyeot.phone.domain.model.dailyAverage
-import kr.aigyeot.phone.domain.model.dailyAverageMs
 import kr.aigyeot.phone.domain.model.durationOn
 import kr.aigyeot.phone.domain.model.durationText
-import kr.aigyeot.phone.domain.model.feedGaps
 import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.isOngoing
-import kr.aigyeot.phone.domain.model.lastDays
-import kr.aigyeot.phone.domain.model.median
 import kr.aigyeot.phone.domain.model.playName
 import kr.aigyeot.phone.domain.model.triggerText
-import kr.aigyeot.phone.domain.model.usualGap
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.HandoffKind
@@ -126,16 +119,16 @@ data class IntervalWeek(val bars: List<WeekBar>, val usualMs: Long?) {
 }
 
 fun intervalWeek(care: CareFile, now: Long, zone: ZoneId): IntervalWeek {
-    val days = lastDays(now, zone)
+    val days = CareStats.lastDays(PATTERN_DAYS, now, zone)
     val today = days.last()
     // 간격은 뒤 수유가 시작한 날에 넣는다.
-    fun dayOf(g: FeedGap) = Instant.ofEpochMilli(g.at).atZone(zone).toLocalDate()
-    val gaps = care.feedGaps(now)
+    fun dayOf(g: FeedGap) = Instant.ofEpochMilli(g.end).atZone(zone).toLocalDate()
+    val gaps = CareStats.feedGaps(CareStats.feedStarts(care.events, until = now))
     val bars = days.map { d ->
-        val v = median(gaps.filter { dayOf(it) == d }.map { it.ms })
+        val v = CareStats.median(gaps.filter { dayOf(it) == d }.map { it.ms })
         WeekBar(d, weekLabel(d, today), v, v?.let { "${monthDay(d)} · ${durationText(it)}" })
     }
-    return IntervalWeek(bars, usualGap(gaps.filter { dayOf(it) in days.dropLast(1) }))
+    return IntervalWeek(bars, CareStats.usualFeedGapMs(care.events, now, zone))
 }
 
 /** 차에서 울음 7일 막대(리포트 울음 경보 에피소드 수) + 평균 감지 지연(초, 없으면 null). */
@@ -145,11 +138,9 @@ data class CarCryWeek(val bars: List<WeekBar>, val avgLatencyS: Double?) {
 }
 
 fun carCryWeek(reports: Collection<ReportSummaryBody>, now: Long, zone: ZoneId): CarCryWeek {
-    val days = lastDays(now, zone)
+    val days = CareStats.lastDays(PATTERN_DAYS, now, zone)
     val today = days.last()
-    val eps = reports.flatMap { it.cryAlarms() }
-        .mapNotNull { e -> instantOf(e.startedAt)?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() to e } }
-        .filter { it.first in days }
+    val eps = CareStats.cryAlarms(reports).map { Instant.ofEpochMilli(it.at).atZone(zone).toLocalDate() to it.episode }.filter { it.first in days }
     val bars = days.map { d -> eps.count { it.first == d }.toLong().let { n -> WeekBar(d, weekLabel(d, today), n, "${monthDay(d)} · ${n}번") } }
     val lat = eps.mapNotNull { it.second.alarmLatencyS }
     return CarCryWeek(bars, if (lat.isEmpty()) null else lat.average())
@@ -163,14 +154,14 @@ fun carCryWeek(reports: Collection<ReportSummaryBody>, now: Long, zone: ZoneId):
 data class SleepGrid(val days: List<LocalDate>, val rows: List<BooleanArray>, val perDayMs: List<Long>) {
     val labels: List<String> get() = days.map { weekLabel(it, days.last()) }
     val sleepDays: Int get() = perDayMs.count { it > 0 }
-    val avgMs: Long? get() = dailyAverageMs(perDayMs)
+    val avgMs: Long? get() = CareStats.perRecordedDay(perDayMs)
 
     /** 화면 읽기용(날마다 끝난 잠이 그날에 걸친 실제 길이, U31). */
     val summary: String get() = "지난 7일 잠 패턴: " + labels.indices.joinToString(", ") { "${labels[it]} ${durationText(perDayMs[it])}" }
 }
 
 fun sleepGrid(care: CareFile, now: Long, zone: ZoneId): SleepGrid {
-    val days = lastDays(now, zone)
+    val days = CareStats.lastDays(PATTERN_DAYS, now, zone)
     val sleeps = care.events.filter { it.kind == CareKind.SLEEP && it.deletedAt == null && (it.endAt != null || it.isOngoing) }
     val rows = days.map { d ->
         val (from, _) = dayBounds(d, zone)
@@ -269,9 +260,9 @@ fun feedMeter(last: Long, now: Long, carLast: Long?, windowStart: Long?, usualMs
  * 평균은 패턴과 같은 규칙(그날 시작한 수유 수를 수유한 날 수로 나눔, 소수 첫째 자리). 앞 7일에 수유한 날이 없거나 차이가 0.0이면 null.
  */
 fun feedTrend(care: CareFile, now: Long, zone: ZoneId): String? {
-    val days = lastDays(now, zone)
-    val now7 = dailyAverage(care.countPerDay(CareKind.FEED, days, zone)) ?: return null
-    val prev7 = dailyAverage(care.countPerDay(CareKind.FEED, days.map { it.minusDays(PATTERN_DAYS.toLong()) }, zone)) ?: return null
+    val days = CareStats.lastDays(PATTERN_DAYS, now, zone)
+    val now7 = CareStats.perRecordedDay(CareStats.countPerDay(care.events, CareKind.FEED, days, zone)) ?: return null
+    val prev7 = CareStats.perRecordedDay(CareStats.countPerDay(care.events, CareKind.FEED, days.map { it.minusDays(PATTERN_DAYS.toLong()) }, zone)) ?: return null
     val d = now7 - prev7 // 평균끼리 뺀 뒤 마지막에만 반올림한다
     val n = String.format(Locale.ROOT, "%.1f", kotlin.math.abs(d))
     return when {

@@ -9,17 +9,13 @@ import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.onDate
 import kr.aigyeot.phone.domain.model.carePattern
 import kr.aigyeot.phone.domain.model.reportRowSub
-import kr.aigyeot.phone.domain.model.cryAlarms
-import kr.aigyeot.phone.domain.model.dailyAverageMs
-import kr.aigyeot.phone.domain.model.dailyAverage
-import kr.aigyeot.phone.domain.model.median
-import kr.aigyeot.phone.domain.model.usualGap
-import kr.aigyeot.phone.domain.model.feedGaps
+import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.FeedGap
 import kr.aigyeot.shared.CarAction
 import kr.aigyeot.shared.CarActionKind
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
+import kr.aigyeot.shared.MethodStat
 import kr.aigyeot.shared.HandoffKind
 import kr.aigyeot.shared.StopInfo
 import kr.aigyeot.shared.StopReason
@@ -229,29 +225,45 @@ class ChartDataTest {
     @Test
     fun `집계 공통 규칙 한 곳을 패턴 숫자와 7일 막대가 같이 쓴다`() {
         // 중앙값·하루 평균(U27·U31)
-        assertNull(median(emptyList()))
-        assertEquals(3L, median(listOf(5L, 1L, 3L)))
-        assertEquals(2L, median(listOf(1L, 3L, 4L, 1L)))
-        assertEquals(3.0, dailyAverage(listOf(0, 3, 3))!!, 0.0)
-        assertNull(dailyAverage(listOf(0, 0)))
-        assertEquals(90 * MINUTE, dailyAverageMs(listOf(0L, 60 * MINUTE, 120 * MINUTE)))
+        assertNull(CareStats.median(emptyList()))
+        assertEquals(3L, CareStats.median(listOf(5L, 1L, 3L)))
+        assertEquals(2L, CareStats.median(listOf(1L, 3L, 4L, 1L)))
+        assertEquals(3.0, CareStats.perRecordedDay(listOf<Int>(0, 3, 3))!!, 0.0)
+        assertNull(CareStats.perRecordedDay(listOf<Int>(0, 0)))
+        assertEquals(90 * MINUTE, CareStats.perRecordedDay(listOf(0L, 60 * MINUTE, 120 * MINUTE)))
         // R14 간격: 지운 것·지금 뒤로 찍힌 것·10시간 넘는 간격은 빼고, 간격은 뒤 수유에 속한다.
         fun feed(id: String, t: Long, deleted: Boolean = false) =
             CareEvent(id, CareKind.FEED, t, endAt = t + 10 * MINUTE, zone = APP_ZONE.id, createdAt = t, updatedAt = t, deletedAt = if (deleted) t else null)
         val base = now - 20 * HOUR
         val file = CareFile(events = listOf(feed("a", base), feed("b", base + 11 * HOUR), feed("x", base + 12 * HOUR, deleted = true), feed("c", base + 14 * HOUR), feed("f", now + MINUTE)))
-        assertEquals(listOf(FeedGap(base + 14 * HOUR, 3 * HOUR)), file.feedGaps(now))
-        assertNull(usualGap(List(4) { FeedGap(now, HOUR) }))
-        assertEquals(HOUR, usualGap(List(5) { FeedGap(now, HOUR) }))
+        assertEquals(listOf(FeedGap(base + 14 * HOUR, 3 * HOUR)), CareStats.feedGaps(CareStats.feedStarts(file.events, until = now)))
+        assertNull(CareStats.usualGap(List(4) { HOUR }))
+        assertEquals(HOUR, CareStats.usualGap(List(5) { HOUR }))
         // U47: 울음 경보 에피소드만 센다. 소리 바꾸기 요청이 섞여도 리포트 줄·패턴·7일 막대가 같은 수다.
         val r = report().let { b ->
             b.copy(startedAt = iso(at(9, 0)), endedAt = iso(at(9, 40)), timeline = b.timeline.map { it.copy(startedAt = iso(at(9, 10))) } +
                 b.timeline.first().copy(episodeId = "sw", trigger = EpisodeTrigger.SWITCH_SOUND, startedAt = iso(at(9, 20))))
         }
-        val cries = r.cryAlarms().size
+        val cries = CareStats.cryAlarms(listOf(r)).size
         assertEquals(1, cries)
         assertEquals("울음 ${cries}번", reportRowSub(r))
         assertEquals(cries, carePattern(CareFile(), listOf(r), now, zone).carCryEpisodes)
         assertEquals(cries, carCryWeek(listOf(r), now, zone).total)
+        // 시각을 읽지 못한 울음: 리포트 줄 수에는 들고(iOS reportSub와 같다), 시각이 필요한 집계에서는 빠진다.
+        val broken = r.copy(timeline = r.timeline.map { if (it.trigger == EpisodeTrigger.CRY_ALARM) it.copy(startedAt = "x") else it })
+        assertEquals("울음 1번", reportRowSub(broken))
+        assertEquals(0, CareStats.cryAlarms(listOf(broken)).size)
+    }
+
+    @Test
+    fun `방법 성적 순서는 판정할 수 있는 것 먼저 그친 비율 순 같으면 받은 순`() {
+        fun m(label: String, ok: Int, n: Int) = MethodStat(SoundMethod.WHITE_NOISE, label, ok, n)
+        val order = CareStats.methodOrder(
+            listOf(m("두 번", 2, 2), m("반", 2, 4), m("셋 다", 3, 3), m("넘침", 4, 3), m("음수", -1, 3), m("모두", 4, 4)),
+        )
+        // 3회 경계: 2회는 100%여도 뒤. 넘침(4/3)은 3/3으로 묶여 셋 다·모두와 같은 비율이라 받은 순, 음수는 0으로 묶여 맨 뒤(판정 가능 안에서).
+        assertEquals(listOf("셋 다", "넘침", "모두", "반", "음수", "두 번"), order.map { it.value.label })
+        assertEquals(listOf(2, 3, 5, 1, 4, 0), order.map { it.index })
+        assertTrue(CareStats.methodOrder(emptyList()).isEmpty())
     }
 }

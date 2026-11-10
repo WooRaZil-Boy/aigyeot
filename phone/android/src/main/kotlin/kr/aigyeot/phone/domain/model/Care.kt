@@ -10,7 +10,6 @@ import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.SoundMethod
-import kr.aigyeot.shared.TimelineEpisode
 
 // 돌봄 기록(phone-care-plan 6장). 폰 안에만 두는 care.json 한 파일이다. 키·값 글자는 iOS와 같다(13장).
 // 계획 0장 U14~U24(11-05 통일 결정)를 따른다: 최대 길이를 넘은 진행 중 기록을 빠른 길로 닫으면 끝 모름(U14), 차 기록 줄 글자(U15·U19),
@@ -270,74 +269,29 @@ data class CarePattern(
 
 /** 7.1 pattern.value: 횟수 "평균 {n}회"(소수 첫째 자리), 기록한 날이 없으면 "기록 없음"(U27). */
 fun avgCountText(perDay: List<Int>): String =
-    dailyAverage(perDay)?.let { "평균 ${String.format(java.util.Locale.ROOT, "%.1f", it)}회" } ?: "기록 없음"
+    CareStats.perRecordedDay(perDay)?.let { "평균 ${String.format(java.util.Locale.ROOT, "%.1f", it)}회" } ?: "기록 없음"
 
 /** 잠 "평균 {기간}"(U27 길이 형식). */
-fun avgDurationText(perDayMs: List<Long>): String = dailyAverageMs(perDayMs)?.let { "평균 ${durationText(it)}" } ?: "기록 없음"
+fun avgDurationText(perDayMs: List<Long>): String = CareStats.perRecordedDay(perDayMs)?.let { "평균 ${durationText(it)}" } ?: "기록 없음"
 
 /** 7.1 pattern.days: 값 아래 "{n}일 기준". 기록한 날이 없으면(값이 "기록 없음") 보이지 않는다. */
 fun daysText(days: Int): String? = if (days == 0) null else "${days}일 기준"
 
-// ---- 집계 공통 규칙(패턴 숫자·7일 막대·오늘 판이 같이 쓴다. 기간만 부르는 쪽이 정한다) ----
-
-/** 지난 [n]일(오늘 포함, 오래된 것부터, 기기 시간대). */
-fun lastDays(now: Long, zone: ZoneId, n: Int = PATTERN_DAYS): List<LocalDate> {
-    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
-    return (n - 1 downTo 0).map { today.minusDays(it.toLong()) }
-}
-
-/** 날마다 그 종류 기록이 그날 시작한 수(지운 것 뺌, R13·U27). */
-fun CareFile.countPerDay(kind: CareKind, days: List<LocalDate>, zone: ZoneId): List<Int> {
-    val starts = events.filter { it.kind == kind && it.deletedAt == null }.map { Instant.ofEpochMilli(it.startAt).atZone(zone).toLocalDate() }
-    return days.map { d -> starts.count { it == d } }
-}
-
-/** U27: 기록한 날(값이 0보다 큰 날)만 나눈 하루 평균. 기록한 날이 없으면 null. */
-fun dailyAverage(perDay: List<Int>): Double? = perDay.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()
-
-/** U31: 길이도 같은 규칙(0보다 큰 날만, 정수 나눗셈). */
-fun dailyAverageMs(perDayMs: List<Long>): Long? = perDayMs.filter { it > 0 }.takeIf { it.isNotEmpty() }?.let { it.sum() / it.size }
-
-/** 중앙값(짝수면 가운데 둘의 평균, 정수 나눗셈). 비면 null. */
-fun median(xs: List<Long>): Long? = xs.sorted().let { s ->
-    when {
-        s.isEmpty() -> null
-        s.size % 2 == 1 -> s[s.size / 2]
-        else -> (s[s.size / 2 - 1] + s[s.size / 2]) / 2
-    }
-}
-
-/** R14 수유 간격 하나. [at]은 뒤 수유의 시작(간격이 속한 날을 정한다), [ms]는 앞 수유 시작부터. */
-data class FeedGap(val at: Long, val ms: Long) {
-    val prevAt: Long get() = at - ms
-}
-
-/** R14: 이어진 수유 시작 사이의 간격(지운 것 뺌, R3의 1분 여유로 지금 뒤로 찍힌 수유 뺌), 10시간 넘는 간격은 뺀다. 오래된 것부터. */
-fun CareFile.feedGaps(now: Long): List<FeedGap> =
-    events.filter { it.kind == CareKind.FEED && it.deletedAt == null && it.startAt <= now }.map { it.startAt }.sorted()
-        .zipWithNext { a, b -> FeedGap(b, b - a) }.filter { it.ms <= MAX_INTERVAL_MS }
-
-/** R14 '평소 간격': 간격이 [MIN_INTERVALS]개 이상일 때만 중앙값. */
-fun usualGap(gaps: List<FeedGap>): Long? = gaps.takeIf { it.size >= MIN_INTERVALS }?.let { g -> median(g.map { it.ms }) }
-
-/** U47: 울음 경보로 시작한 에피소드. 소리 바꾸기 요청(switch_sound)은 울음이 없었을 수 있어 뺀다(11-05 결정). 리포트 줄·차 기록 줄·패턴이 같이 쓴다. */
-fun ReportSummaryBody.cryAlarms(): List<TimelineEpisode> = timeline.filter { it.trigger == EpisodeTrigger.CRY_ALARM }
-
 /** R14: 지난 7일(오늘 포함, 기기 시간대). 간격은 두 수유가 모두 7일 안에 있는 것의 중앙값. */
 fun carePattern(care: CareFile, reports: Collection<ReportSummaryBody>, now: Long, zone: ZoneId): CarePattern {
-    val days = lastDays(now, zone)
+    val days = CareStats.lastDays(PATTERN_DAYS, now, zone)
     val from = days.first().atStartOfDay(zone).toInstant().toEpochMilli()
     fun dayOf(t: Long) = Instant.ofEpochMilli(t).atZone(zone).toLocalDate()
     // U31: 잠은 끝난 잠이 그날(자정에서 나눔)에 걸친 시간.
     val sleepMs = days.map { durationOn(care.events, CareKind.SLEEP, it, zone) }
     return CarePattern(
         days = days,
-        feedsPerDay = care.countPerDay(CareKind.FEED, days, zone),
-        feedIntervalMs = usualGap(care.feedGaps(now).filter { it.prevAt >= from }),
+        feedsPerDay = CareStats.countPerDay(care.events, CareKind.FEED, days, zone),
+        feedIntervalMs = CareStats.usualGap(CareStats.feedGaps(CareStats.feedStarts(care.events, from = from, until = now)).map { it.ms }),
         sleepPerDayMs = if (care.sleepDiaperEnabled) sleepMs else null,
-        diapersPerDay = if (care.sleepDiaperEnabled) care.countPerDay(CareKind.DIAPER, days, zone) else null,
+        diapersPerDay = if (care.sleepDiaperEnabled) CareStats.countPerDay(care.events, CareKind.DIAPER, days, zone) else null,
         // 차 시계가 앞서 내일로 찍힌 것은 뺀다.
-        carCryEpisodes = reports.flatMap { it.cryAlarms() }.count { e -> instantOf(e.startedAt)?.let { dayOf(it) in days } == true },
+        carCryEpisodes = CareStats.cryAlarms(reports).count { dayOf(it.at) in days },
     )
 }
 
@@ -358,8 +312,7 @@ data class CarLine(
 fun carLines(reports: Collection<ReportSummaryBody>): List<CarLine> = reports.flatMap { r ->
     val start = instantOf(r.startedAt) ?: return@flatMap emptyList()
     listOf(CarLine(r.sessionId, null, start, instantOf(r.endedAt), null, null)) +
-        r.cryAlarms()
-            .mapNotNull { e -> instantOf(e.startedAt)?.let { CarLine(r.sessionId, e.episodeId, it, null, e.sound?.method, e.result) } }
+        CareStats.cryAlarms(listOf(r)).map { (at, e) -> CarLine(r.sessionId, e.episodeId, at, null, e.sound?.method, e.result) }
 }.sortedBy { it.startAt }
 
 /** "탑승 · 오후 1:10–1:52"(세션 구간: 중간 정차가 들어 있어 '주행'이라 하지 않는다), "차에서 울음 · {시각} · {소리} · {결과}"(7장·U37). 없는 값은 칸째 뺀다(U15). */
@@ -385,7 +338,7 @@ fun reportRowTitle(b: ReportSummaryBody, zone: ZoneId): String =
 
 /** report.row.sub "울음 {n}번". n은 울음 경보로 시작한 에피소드 수로, 차 기록 줄(R17)의 '차에서 울음' 줄 수와 같다. */
 fun reportRowSub(b: ReportSummaryBody): String {
-    val n = b.cryAlarms().size
+    val n = b.timeline.count { it.trigger == EpisodeTrigger.CRY_ALARM } // 시각을 읽지 못한 울음도 센다(iOS reportSub와 같다)
     return (if (n == 0) "울음 기록 없음" else "울음 ${n}번") + if (b.simulated) " · 시뮬레이션" else ""
 }
 

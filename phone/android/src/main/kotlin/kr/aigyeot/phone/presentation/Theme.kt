@@ -78,13 +78,16 @@ data class Palette(
 val Palette.tonal: Color get() = if (dark) surfaceRaised else textPrimary.copy(alpha = 0.08f)
 
 /** 세그먼트 고른 칸(시안 .segp .sthumb: 라이트 흰 면, 다크 .t-dark .segp .sthumb #3A3F46). */
-val Palette.segThumb: Color get() = if (dark) Color(0xFF3A3F46) else surface
+val Palette.segmentThumb: Color get() = if (dark) Color(0xFF3A3F46) else surface
 
 /** 첫 안내 무대 가운데 빛(시안 .intro-hero: 라이트 stage에 흰빛 60%, 다크 #232931). */
 val Palette.stageGlow: Color get() = if (dark) Color(0xFF232931) else lerp(stage, Color.White, 0.6f)
 
-/** 3D 실내 앰비언트 선 파랑(tokens.json 차 빛 glow). 라이트·다크 같은 빛이다. */
-val CarGlow: Color get() = LightPalette.glow
+/** 3D 차 색(iOS `CarPaint`와 같은 이름). 재질 표는 car3d `SPECS` 한 곳에 있다. */
+object CarPaint {
+    /** 실내 앰비언트 선 빛(tokens.json 차 빛 glow). 라이트·다크 같은 빛이다. */
+    val ambientGlow: Color get() = LightPalette.glow
+}
 
 val LightPalette = Palette(
     bg = Color(0xFFF2F4F6),
@@ -249,17 +252,18 @@ object Motion {
     val ripple = Curve(2400, 0.2f, 0.6f, 0.35f, 1f)
 
     // 부품 모션(시안 css·js 값 그대로, 위 곡선을 시간만 바꿔 쓴다).
-    /** 화면 교체 때 블록이 한 줄씩 올라오는 시작 지연과 간격(core.js enter: startDelay 0.06·stagger 0.05, 열째 줄부터 같이). */
-    const val STAGGER_DELAY_MS = 60
-    const val STAGGER_STEP_MS = 50
-    const val STAGGER_MAX_MS = 500
+    /** 화면 교체 때 블록이 한 줄씩 올라옴(rise): 시작 지연과 간격(core.js enter: startDelay 0.06·stagger 0.05, 열째 줄부터 같이). */
+    const val RISE_DELAY_MS = 60
+    const val RISE_STAGGER_MS = 50
+    const val RISE_MAX_MS = 500
     /** 차트가 왼쪽부터 드러남(charts.js grow 0.9초 cb(.65,0,.35,1)). */
-    val reveal = camera.copy(ms = 900)
+    val chartReveal = camera.copy(ms = 900)
     /** 막대 하나가 자람(0.6초 enter 곡선)과 막대 사이 간격(0.04초, 8개마다 다시). */
-    val barGrow = enter.copy(ms = 600)
-    const val BAR_STEP_MS = 40
-    /** 방법별 성적 점이 튀는 간격(0.02초). */
-    const val DOT_STEP_MS = 20L
+    val chartBar = enter.copy(ms = 600)
+    const val CHART_BAR_STAGGER_MS = 40
+    /** 방법별 성적 점이 튐(charts.js: spring 강성 600·감쇠 30 → 감쇠비 30 / (2·√600))과 점 사이 간격(0.02초). */
+    val dotPop = SpringToken(30f / (2f * kotlin.math.sqrt(600f)), 600f)
+    const val DOT_STAGGER_MS = 20L
     /** 차트 말풍선(.ch-tip 120ms linear). */
     val tip = press.copy(ms = 120)
     /** 새 수유가 들어올 때 판 둘레 빛(.flash 1.2초 base 곡선). */
@@ -269,7 +273,7 @@ object Motion {
     /** 녹음 소리 결 한 번(.wave i 1.2초). */
     val wave = base.copy(ms = 1200)
     /** 타이머 초침 한 바퀴(60초 linear). */
-    val sweep = press.copy(ms = 60_000)
+    val secondHand = press.copy(ms = 60_000)
     /** 인계 배너가 나감(.banner.out 260ms exit 곡선). */
     val bannerOut = exit.copy(ms = 260)
     /** 숫자 굴림의 새 글자 나타남·옛 글자 사라짐. */

@@ -15,7 +15,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareCsv
-import kr.aigyeot.phone.domain.model.CareEditDraft
+import kr.aigyeot.phone.domain.model.CareDraft
+import kr.aigyeot.phone.domain.model.toggleSide
+import kr.aigyeot.phone.domain.model.setStart
+import kr.aigyeot.phone.domain.model.setNote
+import kr.aigyeot.phone.domain.model.setEndUnknown
+import kr.aigyeot.phone.domain.model.setEnd
+import kr.aigyeot.phone.domain.model.pick
+import kr.aigyeot.phone.domain.model.moveStartDay
+import kr.aigyeot.phone.domain.model.event
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
@@ -34,21 +42,12 @@ import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SAVE_FAILED
 import kr.aigyeot.phone.domain.model.check
-import kr.aigyeot.phone.domain.model.custom
 import kr.aigyeot.phone.domain.model.exportFileName
 import kr.aigyeot.phone.domain.model.problemText
 import kr.aigyeot.phone.domain.model.toCsv
-import kr.aigyeot.phone.domain.model.toEvent
-import kr.aigyeot.phone.domain.model.toggledSide
-import kr.aigyeot.phone.domain.model.withAgo
-import kr.aigyeot.phone.domain.model.withDate
 import kr.aigyeot.phone.domain.model.withEndPicked
-import kr.aigyeot.phone.domain.model.withEndTime
-import kr.aigyeot.phone.domain.model.withEndUnknown
-import kr.aigyeot.phone.domain.model.withNote
 import kr.aigyeot.phone.domain.model.withSide
 import kr.aigyeot.phone.domain.model.withStartPicked
-import kr.aigyeot.phone.domain.model.withStartTime
 import kr.aigyeot.phone.domain.repository.CareRepository
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
@@ -134,21 +133,6 @@ data class TimerUiState(val id: String, val care: CareFile, val connected: Boole
 internal fun timerUi(id: String, care: CareFile, c: Connection) =
     TimerUiState(id, care, c is Connection.Paired, c.role == Role.GUARDIAN)
 
-/**
- * 기록 편집(시트·타이머) 단계. 화면은 이 값을 그리기만 한다(오류 글, 겹침 확인 창, 저장 중 막음, 끝나면 닫기).
- * [ConfirmOverlap]은 R4 겹침 경고를 띄운 채 사용자의 '그래도 저장'을 기다린다.
- */
-sealed interface EditStage {
-    data class Editing(val error: String? = null) : EditStage
-
-    data class ConfirmOverlap(val event: CareEvent) : EditStage
-
-    data object Saving : EditStage
-
-    /** 저장했거나(고치던 기록이 그사이 지워졌으면 저장하지 않고) 지웠다: 시트를 닫는다. */
-    data object Done : EditStage
-}
-
 class TimerViewModel(
     private val id: String,
     state: PhoneStateRepository,
@@ -159,40 +143,44 @@ class TimerViewModel(
 ) : ViewModel(scope) {
     val ui: StateFlow<TimerUiState> = derive(care.care, state.connection) { timerUi(id, care.care.value, state.connection.value) }
 
-    private val _stage = MutableStateFlow<EditStage>(EditStage.Editing())
-    val stage: StateFlow<EditStage> = _stage.asStateFlow()
+    /** 시작·끝 시각 고르기 단계(시트와 같은 [CareSheetViewModel.Phase], 닫힘은 쓰지 않는다: 기록이 끝나면 화면이 닫힌다). */
+    private val _phase = MutableStateFlow<CareSheetViewModel.Phase>(CareSheetViewModel.Phase.Editing)
+    val phase: StateFlow<CareSheetViewModel.Phase> = _phase.asStateFlow()
 
     fun setSide(side: FeedSide) { viewModelScope.launch { recordCare.editOngoing(id) { it.withSide(side) } } }
     fun setAmount(ml: Int?) { viewModelScope.launch { recordCare.editOngoing(id) { it.copy(amountMl = ml) } } }
 
-    /** 시작 시각 수정(타이머 '시작 시각 수정'). */
-    fun pickStart(hour: Int, minute: Int) = propose { it.withStartPicked(hour, minute, clock.now() + MINUTE) }
-
-    /** 끝 시각 고르기(최대 길이를 넘긴 기록, U14). */
-    fun pickEnd(hour: Int, minute: Int) = propose { it.withEndPicked(hour, minute) }
+    /** 어느 시각을 고르나(iOS `TimeField`): 시작 시각 수정, 끝 시각 고르기(최대 길이를 넘긴 기록, U14). */
+    enum class TimeField { START, END }
 
     /** 고른 시각을 검사한다: R3 문제면 글, R4 겹침이면 확인을 기다리고, 아니면 저장한다(시트와 같은 규칙). */
-    private fun propose(f: (CareEvent) -> CareEvent) {
+    fun setTime(field: TimeField, hour: Int, minute: Int) {
         val e = ui.value.event ?: return
-        if (_stage.value == EditStage.Saving) return
-        val next = f(e)
+        if (_phase.value == CareSheetViewModel.Phase.Saving) return
+        val next = when (field) {
+            TimeField.START -> e.withStartPicked(hour, minute, clock.now() + MINUTE)
+            TimeField.END -> e.withEndPicked(hour, minute)
+        }
         when (val c = care.care.value.check(next, clock.now())) {
-            is EditCheck.Problem -> _stage.value = EditStage.Editing(problemText(c.problem, e.kind))
-            EditCheck.Overlap -> _stage.value = EditStage.ConfirmOverlap(next)
+            is EditCheck.Problem -> _phase.value = CareSheetViewModel.Phase.Failed(problemText(c.problem, e.kind))
+            EditCheck.Overlap -> _phase.value = CareSheetViewModel.Phase.ConfirmOverlap(next)
             EditCheck.Ok -> save(next)
         }
     }
 
-    fun confirmOverlap() { (_stage.value as? EditStage.ConfirmOverlap)?.let { save(it.event) } }
-    fun dismissOverlap() { _stage.value = EditStage.Editing() }
+    /** 겹침을 묻는 창에서 '그래도 저장'. */
+    fun confirmTime() { (_phase.value as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { save(it.event) } }
 
-    /** 진행 중인 그 기록에 시작·끝만 얹는다. 저장하지 못하면 앞 오류 글을 둔다(띠가 실패를 말한다). */
+    /** 겹침을 묻는 창에서 '고치기'. */
+    fun keepEditing() { _phase.value = CareSheetViewModel.Phase.Editing }
+
+    /** 진행 중인 그 기록에 시작·끝만 얹는다. 저장하지 못하면 앞 실패 글을 둔다(띠가 실패를 말한다). */
     private fun save(next: CareEvent) {
-        val before = (_stage.value as? EditStage.Editing)?.error
-        _stage.value = EditStage.Saving
+        val before = _phase.value as? CareSheetViewModel.Phase.Failed
+        _phase.value = CareSheetViewModel.Phase.Saving
         viewModelScope.launch {
             val ok = recordCare.editOngoing(id) { it.copy(startAt = next.startAt, endAt = next.endAt) }
-            _stage.value = EditStage.Editing(if (ok) null else before)
+            _phase.value = if (ok || before == null) CareSheetViewModel.Phase.Editing else before
         }
     }
 
@@ -201,13 +189,20 @@ class TimerViewModel(
     fun delete() = recordCare.delete(id)
 }
 
-/** 열린 시트 하나: 입력과 단계를 한 값으로 둔다(저장 결과는 그 시트에만 닿는다, P5). */
-data class SheetState(val draft: CareEditDraft, val stage: EditStage = EditStage.Editing()) {
+/** 시트를 무엇으로 여나(iOS `CareSheetTarget`): 새 기록(기록 탭의 다른 날이면 그 날) 또는 고칠 기록 id. */
+sealed interface CareSheetTarget {
+    data class New(val kind: CareKind, val day: LocalDate?) : CareSheetTarget
+
+    data class Edit(val id: String) : CareSheetTarget
+}
+
+/** 열린 시트 하나: 입력과 단계를 한 값으로 둔다(늦게 끝난 저장 결과는 그 시트에만 닿는다, P5). */
+data class SheetState(val draft: CareDraft, val phase: CareSheetViewModel.Phase = CareSheetViewModel.Phase.Editing) {
     val sheetId: String get() = draft.sheetId
 }
 
 /**
- * 빠른 기록·고치기 시트(C3). 입력([CareEditDraft])과 단계([EditStage])를 여기서 갖고, 화면은 동작만 보낸다.
+ * 빠른 기록·고치기 시트(C3). 입력([CareDraft])과 단계([Phase])를 여기서 갖고, 화면은 동작만 보낸다(iOS `CareSheetViewModel`과 같은 이름).
  * 입력은 화면 저장 상태에도 둬 시스템이 화면만 없앤 뒤에도 이어 쓴다(옛 rememberSaveable과 같다). 어느 시트인지는 `sheetId`가 말하고,
  * 늦게 끝난 저장·닫기는 그 시트가 아직 열려 있을 때만 반영한다(닫고 새 시트를 열었으면 새 시트를 건드리지 않는다).
  */
@@ -219,17 +214,38 @@ class CareSheetViewModel(
     private val saved: SavedStateHandle,
     scope: CoroutineScope = vmScope(),
 ) : ViewModel(scope) {
+    /**
+     * 시트 단계(iOS `Phase{editing, confirmOverlap, failed, closed}`와 같은 이름). 안드로이드 저장은 비동기라 [Saving]이 더 있다.
+     * [ConfirmOverlap]은 R4 겹침 경고를 띄운 채 '그래도 저장'을 기다린다. [Failed]는 저장하지 않았다는 시트 안 글(규칙 위반·저장 실패, 없을 수도 있다).
+     */
+    sealed interface Phase {
+        data object Editing : Phase
+
+        data class ConfirmOverlap(val event: CareEvent) : Phase
+
+        data class Failed(val message: String?) : Phase
+
+        data object Saving : Phase
+
+        /** 저장했거나 지웠거나, 고치던 기록이 그사이 지워졌다(되살리지 않는다, R10): 시트를 닫는다. */
+        data object Closed : Phase
+    }
+
     val careFile: StateFlow<CareFile> = care.care
 
     private val _sheet = MutableStateFlow(
-        saved.get<String>(K_DRAFT)?.let { runCatching { ProtocolJson.decodeFromString(CareEditDraft.serializer(), it) }.getOrNull() }?.let { SheetState(it) },
+        saved.get<String>(K_DRAFT)?.let { runCatching { ProtocolJson.decodeFromString(CareDraft.serializer(), it) }.getOrNull() }?.let { SheetState(it) },
     )
     val sheet: StateFlow<SheetState?> = _sheet.asStateFlow()
 
-    /** 시트를 연다. 같은 시트를 다시 그리면(회전·복원) 적던 것을 그대로 둔다. */
-    fun open(sheetId: String, kind: CareKind, initial: CareEvent?, baseDate: LocalDate?) {
+    /** 시트를 연다. 같은 시트를 다시 그리면(회전·복원) 적던 것을 그대로 둔다. 고칠 기록을 찾지 못하면 열지 않는다. */
+    fun open(sheetId: String, target: CareSheetTarget) {
         if (_sheet.value?.sheetId == sheetId) return
-        set(SheetState(initial?.let { CareEditDraft.edit(sheetId, it) } ?: CareEditDraft.new(sheetId, kind, baseDate, clock.now(), APP_ZONE)))
+        val draft = when (target) {
+            is CareSheetTarget.New -> CareDraft.new(sheetId, target.kind, target.day, clock.now())
+            is CareSheetTarget.Edit -> care.care.value.events.firstOrNull { it.id == target.id && it.deletedAt == null }?.let { CareDraft.editing(sheetId, it) }
+        }
+        set(draft?.let { SheetState(it) })
     }
 
     /** 그 시트가 아직 열려 있을 때만 걷는다. */
@@ -240,83 +256,86 @@ class CareSheetViewModel(
     /** 시트 상태를 바꾸는 곳은 여기 하나다(P3): 메모리와 화면 저장 상태(입력만)를 함께 쓴다. */
     private fun set(s: SheetState?) {
         _sheet.value = s
-        saved[K_DRAFT] = s?.draft?.let { ProtocolJson.encodeToString(CareEditDraft.serializer(), it) }
+        saved[K_DRAFT] = s?.draft?.let { ProtocolJson.encodeToString(CareDraft.serializer(), it) }
     }
 
     /** 그 시트일 때만 단계를 바꾼다(늦게 온 저장 결과가 다른 시트를 닫지 않게). */
-    private fun stage(sheetId: String, st: EditStage) {
+    private fun phase(sheetId: String, ph: Phase) {
         val cur = _sheet.value ?: return
-        if (cur.sheetId == sheetId) set(cur.copy(stage = st))
+        if (cur.sheetId == sheetId) set(cur.copy(phase = ph))
     }
 
-    /** 입력을 고친다. 고치면 앞 오류 글은 걷는다. 저장 중·확인 중에는 바꾸지 않는다. */
-    private fun edit(f: (CareEditDraft) -> CareEditDraft) {
+    /** 입력 칸을 고친다. 고치면 앞 실패 글은 걷는다. 저장 중·겹침 확인 중에는 바꾸지 않는다. */
+    fun edit(change: (CareDraft) -> CareDraft) {
         val cur = _sheet.value ?: return
-        if (cur.stage !is EditStage.Editing) return
-        set(SheetState(f(cur.draft)))
+        if (cur.phase !is Phase.Editing && cur.phase !is Phase.Failed) return
+        set(SheetState(change(cur.draft)))
     }
 
     fun setKind(k: CareKind) = edit { it.copy(kind = k) }
-    fun pickAgo(min: Long) = edit { it.withAgo(min, clock.now()) }
-    fun custom() = edit { it.custom() }
-    fun pickDate(d: LocalDate) = edit { it.withDate(d) }
-    fun pickStart(hour: Int, minute: Int) = edit { it.withStartTime(hour, minute, clock.now()) }
-    fun pickEnd(hour: Int, minute: Int) = edit { it.withEndTime(hour, minute) }
-    fun endUnknown() = edit { it.withEndUnknown() }
-    fun toggleSide(s: FeedSide) = edit { it.toggledSide(s) }
-    fun setAmount(ml: Int?) = edit { it.copy(ml = ml) }
-    fun setDiaper(d: Diaper) = edit { it.copy(diaper = d) }
-    fun setNote(text: String) = edit { it.withNote(text) }
 
-    /** 저장: R3 문제면 글, R4 겹침이면 확인을 기다린다. 고치던 기록이 그사이 지워졌으면 저장하지 않고 닫는다(되살리지 않는다, R10). */
-    fun save() {
+    /** 몇 분 전 칩(null = 직접). 누른 때 기준이다. */
+    fun pick(chip: Int?) = edit { it.pick(chip, clock.now()) }
+    fun moveStartDay(to: LocalDate) = edit { it.moveStartDay(to) }
+    fun setStart(hour: Int, minute: Int) = edit { it.setStart(hour, minute, clock.now()) }
+    fun setEnd(hour: Int, minute: Int) = edit { it.setEnd(hour, minute) }
+    fun setEndUnknown() = edit { it.setEndUnknown() }
+    fun toggleSide(s: FeedSide) = edit { it.toggleSide(s) }
+    fun setAmount(ml: Int?) = edit { it.copy(amount = ml) }
+    fun setDiaper(d: Diaper) = edit { it.copy(diaper = d) }
+    fun setNote(text: String) = edit { it.setNote(text) }
+
+    /**
+     * 저장: R3 문제면 글, R4 겹침이면 확인을 기다린다([allowOverlap]이면 겹쳐도 저장, '그래도 저장').
+     * 고치던 기록이 그사이 지워졌으면 저장하지 않고 닫는다(되살리지 않는다, R10).
+     */
+    fun save(allowOverlap: Boolean = false) {
         val cur = _sheet.value ?: return
         val d = cur.draft
-        if (cur.stage !is EditStage.Editing || !d.savable) return
+        if (allowOverlap) {
+            val o = cur.phase as? Phase.ConfirmOverlap ?: return
+            return commit(cur.sheetId, o.event, editing = d.original != null)
+        }
+        if ((cur.phase !is Phase.Editing && cur.phase !is Phase.Failed) || !d.savable) return
         val now = clock.now()
-        val base = d.editingId?.let { eid -> care.care.value.events.firstOrNull { it.id == eid && it.deletedAt == null } }
-        if (d.editingId != null && base == null) return stage(d.sheetId, EditStage.Done)
-        val e = d.toEvent(base, now)
+        val base = d.original?.let { o -> care.care.value.events.firstOrNull { it.id == o.id && it.deletedAt == null } }
+        if (d.original != null && base == null) return phase(d.sheetId, Phase.Closed)
+        val e = d.event(now, base)
         when (val c = care.care.value.check(e, now)) {
-            is EditCheck.Problem -> stage(d.sheetId, EditStage.Editing(problemText(c.problem, e.kind)))
-            EditCheck.Overlap -> stage(d.sheetId, EditStage.ConfirmOverlap(e))
-            EditCheck.Ok -> commit(d.sheetId, e, editing = d.editingId != null)
+            is EditCheck.Problem -> phase(d.sheetId, Phase.Failed(problemText(c.problem, e.kind)))
+            EditCheck.Overlap -> phase(d.sheetId, Phase.ConfirmOverlap(e))
+            EditCheck.Ok -> commit(d.sheetId, e, editing = d.original != null)
         }
     }
 
-    fun confirmOverlap() {
+    /** 겹침을 묻는 창에서 '고치기'. */
+    fun keepEditing() {
         val cur = _sheet.value ?: return
-        val o = cur.stage as? EditStage.ConfirmOverlap ?: return
-        commit(cur.sheetId, o.event, editing = cur.draft.editingId != null)
-    }
-
-    fun dismissOverlap() {
-        val cur = _sheet.value ?: return
-        if (cur.stage is EditStage.ConfirmOverlap) stage(cur.sheetId, EditStage.Editing())
+        if (cur.phase is Phase.ConfirmOverlap) phase(cur.sheetId, Phase.Editing)
     }
 
     /** 저장은 앱 범위에서 끝까지 하고, 결과는 그 시트가 아직 열려 있을 때만 보인다. */
     private fun commit(sheetId: String, e: CareEvent, editing: Boolean) {
-        stage(sheetId, EditStage.Saving)
+        phase(sheetId, Phase.Saving)
         viewModelScope.launch {
-            stage(
+            phase(
                 sheetId,
                 when {
-                    recordCare.saveEvent(e, editing) -> EditStage.Done
-                    editing && care.care.value.events.none { it.id == e.id && it.deletedAt == null } -> EditStage.Done
+                    recordCare.saveEvent(e, editing) -> Phase.Closed
+                    editing && care.care.value.events.none { it.id == e.id && it.deletedAt == null } -> Phase.Closed
                     // 저장 실패는 시트 안에서도 보인다. 띠의 다른 줄(버림 안내)은 시트에 옮기지 않는다.
-                    else -> EditStage.Editing(SAVE_FAILED.takeIf { notices.notice.value?.lines()?.contains(it) == true })
+                    else -> Phase.Failed(SAVE_FAILED.takeIf { notices.notice.value?.lines()?.contains(it) == true })
                 },
             )
         }
     }
 
-    /** 고치던 기록 지우기(5초 되돌리기는 띠가 맡는다). */
+    /** 고치던 기록을 지운다(5초 되돌리기 띠는 RecordCare가 띄운다). */
     fun delete() {
         val cur = _sheet.value ?: return
-        val id = cur.draft.editingId ?: return
+        val id = cur.draft.original?.id ?: return
         recordCare.delete(id)
-        stage(cur.sheetId, EditStage.Done)
+        phase(cur.sheetId, Phase.Closed)
     }
 
     private companion object {

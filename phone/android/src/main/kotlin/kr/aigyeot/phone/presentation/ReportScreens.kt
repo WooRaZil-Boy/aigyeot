@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.actionText
 import kr.aigyeot.phone.domain.model.cabinTempText
@@ -107,7 +108,7 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
         b.methodStats?.let { stats ->
             Block {
                 BlockHeader("방법별 성적")
-                MethodDots(stats.map { MethodRow(soundLabel(it.method, it.label), it.successes, it.attempts) })
+                MethodDots(CareStats.methodOrder(stats).map { (_, s) -> MethodRow(soundLabel(s.method, s.label), s.successes, s.attempts) })
                 BlockNote("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요")
             }
         }

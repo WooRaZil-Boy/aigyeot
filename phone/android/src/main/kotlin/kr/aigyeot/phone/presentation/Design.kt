@@ -254,7 +254,7 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? =
                 // 형제 칸이 겹쳐 그려졌다(녹화로 확인).
                 if (done) pl.place(0, y) else pl.placeWithLayer(0, y) {
                     // i번째는 시작 지연 + i·간격 뒤 시작해 enter 시간에 걸쳐 올라온다(Motion.STAGGER_*).
-                    val start = (Motion.STAGGER_DELAY_MS + (i * Motion.STAGGER_STEP_MS).coerceAtMost(Motion.STAGGER_MAX_MS)).toFloat() / STAGGER_MS
+                    val start = (Motion.RISE_DELAY_MS + (i * Motion.RISE_STAGGER_MS).coerceAtMost(Motion.RISE_MAX_MS)).toFloat() / STAGGER_MS
                     val raw = ((t.value - start) / (Motion.enter.ms.toFloat() / STAGGER_MS)).coerceIn(0f, 1f)
                     val k = Motion.enter.easing.transform(raw)
                     alpha = k
@@ -272,7 +272,7 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? =
     }
 }
 
-private val STAGGER_MS = Motion.STAGGER_DELAY_MS + Motion.STAGGER_MAX_MS + Motion.enter.ms
+private val STAGGER_MS = Motion.RISE_DELAY_MS + Motion.RISE_MAX_MS + Motion.enter.ms
 
 // ---------------------------------------------------------------- 블록
 
@@ -463,7 +463,7 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, mod
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
     val pos by animateFloatAsState(selected.coerceAtLeast(0).toFloat(), if (reduced) tween(0) else Springs.snappy.spec(), label = "seg")
-    val thumb = p.segThumb
+    val thumb = p.segmentThumb
     Box(modifier.fillMaxWidth().clip(Radius.field).background(p.textPrimary.copy(alpha = 0.06f)).padding(4.dp)) {
         Layout(
             content = {
