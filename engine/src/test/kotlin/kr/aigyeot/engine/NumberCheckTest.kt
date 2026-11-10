@@ -62,6 +62,19 @@ class NumberCheckTest {
             "서른세 분 기다려 보세요.", "열한 번 울었어요.", "스물두 시간이에요.", "두 주의 적응 기간이 필요해요.", "생후 이십 주차예요.", "예순다섯 개예요.", "약열두 시간이에요.", "백한 번 정도예요.", "백열 분 기다려요.", "백쉰 번이에요.", "두 주로 잡으면 돼요.", "세 시도 가능해요.").forEach { assertFalse(noDigits(it), it) }
     }
 
+    // C383(C376의 퇴행): 수를 꾸미는 '몇'·'총' 뒤 한 음절 수와 어림수 '세네'·'너덧'은 숫자다. C376이 막은 낱말 끝은 그대로 통과
+    @Test fun c383_quantifierPrefixAndApproxAreNumbers() {
+        listOf("세네 번 울었어요.", "너덧 번 울었어요.", "몇천 명이 써요.", "몇만 명이 써요.", "몇십 분 걸려요.", "몇백 미터 앞이에요.", "총두 번 울었어요.", "총세 번이에요.")
+            .forEach { assertFalse(noDigits(it), it) }
+        listOf("죄송하지만 주변에 쉼터가 있어요.", "편안한 곳에서 쉬세요.", "약한 곳을 살펴보세요.", "간단한 곳이에요.", "애매한 곳이에요.").forEach { assertTrue(noDigits(it), it) }
+    }
+
+    // C383 덧붙임: 복합 고유어 수 꼴에서 '만한'은 낱말(갈 만한 곳·볼만한)이다. '백한 번' 같은 수는 그대로 숫자
+    @Test fun c383_manhanIsWordNotNumber() {
+        listOf("쉬어 갈 만한 곳이 있어요.", "볼만한 시간이에요.").forEach { assertTrue(noDigits(it), it) }
+        listOf("백한 번이요.", "서른세 번 울었어요.", "열한 시간이에요.", "만 번이요.").forEach { assertFalse(noDigits(it), it) }
+    }
+
     // C375: 군말 검사
     @Test fun c375_leakedEnglishAndToolWords() {
         listOf("answer 도구를 호출해 수유 주제를 고릅니다.", "answer를 호출합니다.", "stop_soothing을 호출합니다.", "Rendering the answer for the feeding question.", "Sleep 주제로 알려 드릴게요.",
