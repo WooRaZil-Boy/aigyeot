@@ -198,7 +198,8 @@ final class GuardiansViewModel {
     /// 요청 중. 요청이 겹치면 늦게 온 앞 응답이 나중 설정을 덮으니 한 번에 하나만 보낸다.
     private var busy = false
     private var error: String?
-    private var made: InviteResponse?
+    /// 만든 초대와 그때의 연결. 초대는 그 차의 것이라(끊으면 중계가 폐기, G38) 연결이 바뀌면 보이지 않는다(P5·P6).
+    private var made: (invite: InviteResponse, creds: Credentials?)?
 
     init(state: PhoneStateRepository, connection: KeepConnected, invite: Invite, setHandoffAlerts: SetHandoffAlerts) {
         stateRepo = state
@@ -208,17 +209,21 @@ final class GuardiansViewModel {
     }
 
     var ui: GuardiansUiState {
-        guardiansUi(stateRepo.state, creds: stateRepo.creds, online: connection.status.online, busy: busy, error: error, invite: made)
+        guardiansUi(stateRepo.state, creds: stateRepo.creds, online: connection.status.online, busy: busy, error: error,
+                    invite: made.flatMap { stateRepo.isCurrent($0.creds) ? $0.invite : nil })
     }
 
     func makeInvite() async {
         guard !busy else { return }
         busy = true; error = nil
-        switch await invite() {
-        case .success(let r): made = r
+        let c = stateRepo.creds
+        let result = await invite()
+        busy = false
+        guard stateRepo.isCurrent(c) else { return }   // 기다리는 사이 연결이 바뀌었으면 옛 차의 초대·오류를 버린다
+        switch result {
+        case .success(let r): made = (r, c)
         case .failure(let f): error = f.message
         }
-        busy = false
     }
 
     /// '인계 알림 받기'를 바꾼다. 바꿨으면 true(켤 때 알림 권한을 다시 묻는다, 7.3).
@@ -227,9 +232,11 @@ final class GuardiansViewModel {
         guard !busy else { return false }
         busy = true
         let c = stateRepo.creds
-        error = await setHandoffAlerts(on)
+        let failed = await setHandoffAlerts(on)
         busy = false
-        return error == nil && stateRepo.isCurrent(c)
+        guard stateRepo.isCurrent(c) else { return false }   // 옛 연결의 오류는 보이지 않는다(초대와 같다)
+        error = failed
+        return failed == nil
     }
 
     /// 연결된 폰 목록(owner, GET /v1/devices).

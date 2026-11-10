@@ -11,7 +11,9 @@ struct RootView: View {
             case .intro: IntroView()
             case .gone: GoneView()
             case .connect: Scoped({ $0.connect() }) { _ in ConnectView() }
-            case .main: MainView()   // 연결 안 됨도 탭을 쓴다(U7)
+            // 연결 안 됨도 탭을 쓴다(U7). 연결이 바뀌어도 탭 화면을 새로 만들지 않는다: 보내기 전 녹음(수명 표 L4 '끊기·새 연결에 그대로')이
+            // 시트와 함께 버려진다. 옛 연결의 화면 값은 뷰모델이 잡은 자격(P5)으로 가린다(초대·인계 알림 받기)
+            case .main: MainView()
             }
         }
         .sheet(item: $vm.pendingCode) { code in Scoped({ $0.connect() }) { _ in ConfirmView(code: code) } }

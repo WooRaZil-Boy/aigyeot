@@ -159,8 +159,11 @@ final class FakeRelay: RelayClient {
         if let on = r.handoffAlerts { storedHandoffAlerts = on }
         let response = PatchDeviceResponse(deviceId: "d", role: .guardian, platform: .ios, handoffAlerts: storedHandoffAlerts, pushTokenSet: false)
         await patchHook?()
+        if let e = patchError { throw e }
         return response
     }
+    /// 있으면 응답 대신 이 실패(hook 뒤).
+    var patchError: RelayError?
     /// 끊기 응답이 오기 전에 일어나는 일(중계는 204보다 먼저 그 폰의 소켓을 4001로 닫는다).
     var deleteHook: (() async -> Void)?
     var deletedTokens: [String] = []
@@ -177,7 +180,14 @@ final class FakeRelay: RelayClient {
         deleted = true
     }
     var inviteError: RelayError = .network
-    func createInvite(token: String) async throws -> InviteResponse { throw inviteError }
+    /// 있으면 초대를 만들어 준다(없으면 `inviteError`). `inviteHook`은 응답 전에 돈다(그사이 연결 바뀜 흉내).
+    var inviteResult: InviteResponse?
+    var inviteHook: (() async -> Void)?
+    func createInvite(token: String) async throws -> InviteResponse {
+        await inviteHook?()
+        if let r = inviteResult { return r }
+        throw inviteError
+    }
     func send(token: String, _ e: Envelope) async throws -> SendMessageResponse {
         await sendHook?()
         if let sendError { throw sendError }

@@ -55,6 +55,38 @@ final class PresentationTests: XCTestCase {
                        ["차 꺼짐 · 마지막 연락 방금", "차 꺼짐 · 마지막 연락 5분 전", "차 꺼짐 · 마지막 연락 1시간 전", "차 꺼짐 · 마지막 연락 1시간 15분 전"])
     }
 
+    /// 초대는 그 차의 것이다(끊으면 중계가 폐기, G38): 만든 연결에서만 보이고, 기다리는 사이 연결이 바뀌면 옛 차의 결과를 버린다(P5·P6).
+    func test_초대는_만든_연결에서만_보이고_기다리는_사이_연결이_바뀌면_버린다() async {
+        let made = InviteResponse(code: "ABCDE23456", display: "ABCDE-23456", expiresAt: "2027-01-16T08:00:00Z", link: "https://example.invalid/i/ABCDE23456")
+        make()
+        relay.inviteResult = made
+        let g = app.guardians()
+        await g.makeInvite()
+        XCTAssertEqual(g.ui.invite, made)
+        app.lose.lost(app.state.creds)
+        XCTAssertNil(g.ui.invite)
+
+        make()
+        relay.inviteResult = made
+        let app = self.app!
+        relay.inviteHook = { @MainActor in app.lose.lost(app.state.creds) }
+        let g2 = app.guardians()
+        await g2.makeInvite()
+        XCTAssertNil(g2.ui.invite)
+        XCTAssertNil(g2.ui.error)
+        XCTAssertFalse(g2.ui.busy)
+
+        // 인계 알림 받기도 같다: 기다리는 사이 연결이 바뀌면 옛 연결의 실패를 보이지 않는다
+        make()
+        let app3 = self.app!
+        relay.patchError = .network
+        relay.patchHook = { @MainActor in app3.lose.lost(app3.state.creds) }
+        let g3 = app3.guardians()
+        let changed = await g3.setHandoff(false)
+        XCTAssertFalse(changed)
+        XCTAssertNil(g3.ui.error)
+    }
+
     func test_배너는_그_배너가_떠_있을_때만_닫히고_상세는_뷰모델로_닫는다() async {
         make()
         app.notices.showBanner("M2")
