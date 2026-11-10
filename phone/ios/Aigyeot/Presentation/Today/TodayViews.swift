@@ -110,27 +110,27 @@ private struct LastFeedCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(CareText.lastFeed).font(DS.font(14, 500)).foregroundStyle(DS.textTertiary)
+            Text(CareText.lastFeed).typeStyle(.meta).foregroundStyle(DS.textTertiary)
             if let last = vm.ui.lastFeedingStart {
                 // 화면 값이 내 기록이면 쪽·보내기 상태를 함께 보인다. 차 값이 더 늦으면 시각만.
                 let mine = CareRules.latestFeed(vm.ui.care.events).flatMap { vm.ui.shownStart($0) == last ? $0 : nil }
                 let ago = CareText.ago(now - CareTime.ms(last))
                 Text(ago)
-                    .font(DS.hero).monospacedDigit().foregroundStyle(DS.textPrimary)
+                    .typeStyle(.hero).monospacedDigit().foregroundStyle(DS.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.6).padding(.top, 6)
                     .contentTransition(.numericText())
                     .animation(reduceMotion ? nil : DS.Motion.roll, value: ago)   // 바뀐 자리만 굴러간다(roll)
                 Text(CareText.feedDetail(at: last, side: mine?.feedSide, zone: mine?.timeZone ?? .current))
-                    .font(DS.font(15, 400)).monospacedDigit().foregroundStyle(DS.textTertiary).padding(.top, 4)
+                    .typeStyle(.valueKey).monospacedDigit().foregroundStyle(DS.textTertiary).padding(.top, 4)
                 if let m = vm.ui.feedMeter(last: CareTime.ms(last), now: now) { FeedMeter(value: m.value, tick: m.tick).padding(.top, 18).padding(.bottom, 4) }
                 if vm.ui.owner, let e = mine, let r = vm.ui.feedingRecord(for: e) {
-                    Text(feedStatusText(r)).font(DS.caption)
+                    Text(feedStatusText(r)).typeStyle(.caption)
                         .foregroundStyle(r.status == .failed || r.status == .expired ? DS.danger : DS.textTertiary).padding(.top, 8)
                 }
                 if !vm.ui.guardian, let w = vm.ui.phone.feeding.windowStartExpected {   // U35: guardian은 차 값을 받지 않는다
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(CareText.nextWindow(w)).font(DS.font(15, 600)).foregroundStyle(DS.textPrimary)
-                        Text(CareText.nextWindowNote).font(DS.font(13, 400)).foregroundStyle(DS.textTertiary)
+                        Text(CareText.nextWindow(w)).typeStyle(.chip).foregroundStyle(DS.textPrimary)
+                        Text(CareText.nextWindowNote).typeStyle(.note).foregroundStyle(DS.textTertiary)
                     }
                     .padding(.top, 14)
                 }
@@ -195,13 +195,13 @@ private struct RunningCard: View {
             HStack(spacing: 14) {
                 dot.frame(width: 12)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(title).font(DS.font(16, 600)).foregroundStyle(DS.textPrimary)
-                    Text(CareFormat.clock(CareTime.date(event.startAt), event.timeZone) + "부터").font(DS.font(13, 400)).foregroundStyle(DS.textTertiary)
+                    Text(title).typeStyle(.rowTitle).foregroundStyle(DS.textPrimary)
+                    Text(CareFormat.clock(CareTime.date(event.startAt), event.timeZone) + "부터").typeStyle(.note).foregroundStyle(DS.textTertiary)
                 }
                 Spacer(minLength: 8)
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
                     Text(CareFormat.timer(CareRules.elapsedMs(event, now: CareTime.ms(ctx.date))))
-                        .font(DS.font(28, 700)).monospacedDigit().foregroundStyle(DS.textPrimary)
+                        .typeStyle(.runningTimer).monospacedDigit().foregroundStyle(DS.textPrimary)
                 }
             }
             .padding(.horizontal, 20).padding(.vertical, 18)
@@ -271,7 +271,7 @@ private struct QuickBlock: View {
                         .animation(reduceMotion ? nil : DS.Motion.fast, value: pressed == kind)
                         .scaleEffect(pressed == kind && !reduceMotion ? 0.94 : 1)
                         .animation(DS.Motion.snappy, value: pressed == kind)
-                    Text(title).font(DS.font(14, 600)).foregroundStyle(running == nil ? DS.textSecondary : DS.textPrimary)
+                    Text(title).typeStyle(.quickLabel).foregroundStyle(running == nil ? DS.textSecondary : DS.textPrimary)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .frame(maxWidth: .infinity)
@@ -312,7 +312,7 @@ private struct GuardianAlertCards: View {
                     NavigationLink { AlertDetailView(id: a.id).onAppear { app.userOpenedAlert(a.id) } } label: {   // VoiceOver·키보드로 열어도 대기하던 알림 열기를 버린다
                         VStack(alignment: .leading, spacing: 10) {
                             Badge(text: CareText.fromCar + " · " + ago(a.body.occurredAt, now: ctx.date), icon: .carFront, child: true)
-                            Text(a.body.text).font(DS.font(17, 600)).lineSpacing(8).foregroundStyle(DS.textPrimary)
+                            Text(a.body.text).typeStyle(.headline).lineSpacing(8).foregroundStyle(DS.textPrimary)
                                 .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(18)
@@ -362,11 +362,11 @@ struct CarTile: View {
                 let t = text(now: ctx.date)
                 HStack(spacing: 6) {
                     if car?.online == true, !offline { Circle().fill(DS.active).frame(width: 8, height: 8) }
-                    Text(t).font(DS.font(16, 600)).monospacedDigit().foregroundStyle(DS.textPrimary)
+                    Text(t).typeStyle(.rowTitle).monospacedDigit().foregroundStyle(DS.textPrimary)
                 }
             }
             Spacer(minLength: 8)
-            if let phones { HStack(spacing: 4) { IconImage(.smartphone, size: 16); Text("\(phones)대").font(DS.font(14, 500)) }.foregroundStyle(DS.textTertiary) }
+            if let phones { HStack(spacing: 4) { IconImage(.smartphone, size: 16); Text("\(phones)대").typeStyle(.meta) }.foregroundStyle(DS.textTertiary) }
             if open != nil { Chevron() }
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 18)
@@ -415,7 +415,7 @@ private struct RecentReports: View {
                         Text(CareText.recentReports).typeStyle(.title).foregroundStyle(DS.textPrimary).accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 8)
                         NavigationLink { ReportListView() } label: {
-                            HStack(spacing: 2) { Text(CareText.all).font(DS.font(14, 500)); IconImage(.chevronRight, size: 16) }
+                            HStack(spacing: 2) { Text(CareText.all).typeStyle(.meta); IconImage(.chevronRight, size: 16) }
                                 .foregroundStyle(DS.textTertiary).frame(minHeight: 44).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)

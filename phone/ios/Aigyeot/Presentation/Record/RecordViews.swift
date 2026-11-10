@@ -180,9 +180,9 @@ private struct TimelineCard: View {
             HStack(spacing: 12) {
                 IconImage(icon, size: 18).foregroundStyle(DS.textTertiary).frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(DS.font(14.5, 500)).foregroundStyle(DS.textPrimary).multilineTextAlignment(.leading)
-                    if let sub { Text(sub).font(DS.font(12.5, 500)).foregroundStyle(DS.textSecondary).multilineTextAlignment(.leading) }
-                    if let memo { Text(memo).font(DS.font(12.5, 500)).foregroundStyle(DS.textTertiary).multilineTextAlignment(.leading) }
+                    Text(title).typeStyle(.eventTitle).foregroundStyle(DS.textPrimary).multilineTextAlignment(.leading)
+                    if let sub { Text(sub).typeStyle(.footnote).foregroundStyle(DS.textSecondary).multilineTextAlignment(.leading) }
+                    if let memo { Text(memo).typeStyle(.footnote).foregroundStyle(DS.textTertiary).multilineTextAlignment(.leading) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -203,7 +203,7 @@ private struct HourHead: View {
     var body: some View {
         HStack(spacing: 6) {
             Text((hour < 12 ? "오전 " : "오후 ") + "\(hour % 12 == 0 ? 12 : hour % 12)시")
-                .font(DS.font(11, 600)).foregroundStyle(DS.textTertiary).lineLimit(1).fixedSize()
+                .typeStyle(.hourMark).foregroundStyle(DS.textTertiary).lineLimit(1).fixedSize()
                 .padding(.horizontal, 2).background(DS.bg)
                 .frame(width: 52, alignment: .leading).padding(.leading, 14)
             Line().stroke(DS.line, style: StrokeStyle(lineWidth: 1, dash: [4, 4])).frame(height: 1)
@@ -227,9 +227,9 @@ struct UndoBar: View {
     var body: some View {
         if let u = vm.undo {
             HStack {
-                Text(CareText.undoText(u)).font(DS.font(15, 500))
+                Text(CareText.undoText(u)).typeStyle(.bodyMedium)
                 Spacer()
-                Button { vm.undo(u) } label: { Text(CareText.undo).font(DS.font(15, 700)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
+                Button { vm.undo(u) } label: { Text(CareText.undo).typeStyle(.action).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
             }
             .foregroundStyle(DS.surface)   // 글자·바탕을 뒤집어 밝음·어둠 모두 읽힌다
             .padding(.horizontal, 18).padding(.vertical, 6)
@@ -269,9 +269,9 @@ private struct DayStrip: View {
                         let on = key == selected
                         Button { selected = key } label: {
                             VStack(spacing: 5) {
-                                Text(key == todayKey ? CareText.today : CareRules.weekdayName(key)).font(DS.font(12, 500))
+                                Text(key == todayKey ? CareText.today : CareRules.weekdayName(key)).typeStyle(.micro)
                                     .foregroundStyle(on ? DS.bg.opacity(0.75) : DS.textTertiary)
-                                Text(String(Int(key.suffix(2)) ?? 0)).font(DS.font(17, 500)).monospacedDigit()   // 키(그레고리력)에서: 기기 달력이 달라도 칸과 날짜가 같다
+                                Text(String(Int(key.suffix(2)) ?? 0)).typeStyle(.dateNumber).monospacedDigit()   // 키(그레고리력)에서: 기기 달력이 달라도 칸과 날짜가 같다
                                     .foregroundStyle(on ? DS.bg : DS.textPrimary)
                             }
                             .frame(minWidth: 46, minHeight: 62)
@@ -322,7 +322,7 @@ private struct PatternView: View {
             .enterRise(1)
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternInterval)
-                let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).font(DS.font(14, 700)).foregroundColor(DS.textPrimary) },
+                let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).font(DS.font(.metaStrong)).foregroundColor(DS.textPrimary) },
                            iw.usualMs.map { Text("평소 " + CareFormat.length($0)) }].compactMap { $0 }
                 if !sub.isEmpty { BlockSub(text: sub.dropFirst().reduce(sub[0]) { $0 + Text(" · ") + $1 }) }
                 WeekBarsChart(items: iw.bars.enumerated().map { i, b in
@@ -337,7 +337,7 @@ private struct PatternView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     BlockHeader(title: CareText.sleepPattern)
                     if let avg = g.avgMs {
-                        BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).font(DS.font(14, 700)).foregroundColor(DS.textPrimary) + Text(" · " + CareText.basedOn(days: g.sleepDays)))
+                        BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).font(DS.font(.metaStrong)).foregroundColor(DS.textPrimary) + Text(" · " + CareText.basedOn(days: g.sleepDays)))
                     }
                     SleepHeatChart(grid: g)
                 }
@@ -346,7 +346,7 @@ private struct PatternView: View {
             }
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternCarCries)
-                BlockSub(text: [Text("7일 동안 ") + Text("\(cw.total)번").font(DS.font(14, 700)).foregroundColor(DS.textPrimary),
+                BlockSub(text: [Text("7일 동안 ") + Text("\(cw.total)번").font(DS.font(.metaStrong)).foregroundColor(DS.textPrimary),
                                 cw.avgLatencyS.map { Text("평균 감지 " + ChartData.seconds($0)) }].compactMap { $0 }
                     .reduce(Text("")) { $0 == Text("") ? $1 : $0 + Text(" · ") + $1 })
                 WeekBarsChart(items: cw.bars.enumerated().map { i, b in

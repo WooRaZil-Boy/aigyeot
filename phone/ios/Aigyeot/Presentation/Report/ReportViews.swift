@@ -77,9 +77,9 @@ private struct ReportDetailContent: View {
                 VStack(alignment: .leading, spacing: 0) {
                     let head = [Rfc3339.parse(b.startedAt).flatMap { s in Rfc3339.parse(b.endedAt).map { CareText.reportTitle(start: s, end: $0) } } ?? b.startedAt,
                                 ChartData.reportMinutes(b).map { "\($0)분" }].compactMap { $0 }.joined(separator: " · ")
-                    Text(head).font(DS.font(14, 500)).foregroundStyle(DS.textTertiary)
+                    Text(head).typeStyle(.meta).foregroundStyle(DS.textTertiary)
                     Text(CareText.reportSub(cries: b.timeline.filter { $0.trigger == .cryAlarm }.count, simulated: false))
-                        .font(DS.hero).foregroundStyle(DS.textPrimary).padding(.top, 6)
+                        .typeStyle(.hero).foregroundStyle(DS.textPrimary).padding(.top, 6)
                     if b.simulated { Badge(text: "시뮬레이션").padding(.top, 6) }
                     // 시안 '그칠 때까지'는 그친 시각이 리포트에 없어 쓰지 않고 '울음 시간'(totalCryS 합)을 쓴다(거짓 시간 방지, 안드로이드와 같다).
                     VStack(alignment: .leading, spacing: 16) {
@@ -128,7 +128,7 @@ private struct ReportDetailContent: View {
                         BlockHeader(title: "울음 직전 주행")
                         ForEach(Array(b.preCryContext.enumerated()), id: \.element.episodeId) { i, c in
                             if i > 0 { Rectangle().fill(DS.line).frame(height: 1).padding(.vertical, 12) }
-                            Text("울기 전 \(c.windowS)초").font(DS.font(13, 500)).foregroundStyle(DS.textTertiary).padding(.bottom, 6)
+                            Text("울기 전 \(c.windowS)초").typeStyle(.caption).foregroundStyle(DS.textTertiary).padding(.bottom, 6)
                             KeyValues(rows: [
                                 ("속도", "평균 \(Int(c.speedKmhAvg.rounded())) · 최고 \(Int(c.speedKmhMax.rounded())) km/h"),
                                 ("브레이크", "\(c.brakePresses)번"),
@@ -136,7 +136,7 @@ private struct ReportDetailContent: View {
                             ] + (c.cabinTempC.map { [("실내", String(format: "%.1f℃", $0))] } ?? []))
                             Text("기어 \(c.gear.rawValue)" + (c.turnSignalUsed ? ", 방향지시등 씀" : "") + (c.playing ? ", 소리 재생 중" : "")
                                  + (c.windowOpen == true ? ", 창 열림" : ""))
-                                .font(DS.font(13, 400)).foregroundStyle(DS.textTertiary).padding(.top, 8)
+                                .typeStyle(.note).foregroundStyle(DS.textTertiary).padding(.top, 8)
                         }
                     }
                     .block()
@@ -155,7 +155,7 @@ private struct ReportDetailContent: View {
                     ForEach(Array(b.controls.enumerated()), id: \.offset) { _, c in
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(c.api) · \(c.target)").font(.footnote.monospaced()).foregroundStyle(DS.textPrimary)
-                            Text("시도 \(c.attempts) · 성공 \(c.succeeded) · 실패 \(c.failed) · 다시 \(c.retries)").font(DS.font(13, 400)).foregroundStyle(DS.textTertiary)
+                            Text("시도 \(c.attempts) · 성공 \(c.succeeded) · 실패 \(c.failed) · 다시 \(c.retries)").typeStyle(.note).foregroundStyle(DS.textTertiary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -169,7 +169,7 @@ private struct ReportDetailContent: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func note(_ s: String) -> some View { Text(s).font(DS.caption).foregroundStyle(DS.textTertiary).padding(.top, 10) }
+    private func note(_ s: String) -> some View { Text(s).typeStyle(.caption).foregroundStyle(DS.textTertiary).padding(.top, 10) }
 }
 
 /// 이름 · 값 줄(시안 .kv): 이름 흐림, 값 굵게 오른쪽.
@@ -179,9 +179,9 @@ private struct KeyValues: View {
         VStack(spacing: 10) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text(r.0).font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
+                    Text(r.0).typeStyle(.valueKey).foregroundStyle(DS.textTertiary)
                     Spacer(minLength: 8)
-                    Text(r.1).font(DS.font(15, 600)).foregroundStyle(DS.textPrimary).multilineTextAlignment(.trailing)
+                    Text(r.1).typeStyle(.chip).foregroundStyle(DS.textPrimary).multilineTextAlignment(.trailing)
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -213,7 +213,7 @@ private struct EpisodeView: View {
                 line("재생", minSec(e.playS))
                 ForEach(Array(e.plays.enumerated()), id: \.offset) { _, p in
                     Text("· \(purposeText(p.purpose)) \(methodName(p.method, songName(p.songId))) \(span(p.startedAt, p.endedAt)) \(minSec(p.playS))")
-                        .font(DS.font(12.5, 500)).foregroundStyle(DS.textTertiary)
+                        .typeStyle(.footnote).foregroundStyle(DS.textTertiary)
                 }
                 line("판정", resultText(e.result, excluded: e.excludedReason))
                 if e.recried { line("다시 울었는지", "다시 울었어요") }
@@ -226,8 +226,8 @@ private struct EpisodeView: View {
 
     private func line(_ k: String, _ v: String) -> some View {
         HStack(alignment: .top) {
-            Text(k).font(DS.font(14, 400)).foregroundStyle(DS.textTertiary).frame(width: 84, alignment: .leading)
-            Text(v).font(DS.font(14, 500)).foregroundStyle(DS.textPrimary)
+            Text(k).typeStyle(.rowSub).foregroundStyle(DS.textTertiary).frame(width: 84, alignment: .leading)
+            Text(v).typeStyle(.meta).foregroundStyle(DS.textPrimary)
         }
         .accessibilityElement(children: .combine)
     }

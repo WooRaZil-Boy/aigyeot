@@ -63,13 +63,13 @@ private struct OwnerGuardians: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요").typeStyle(.body).foregroundStyle(DesignSystem.textPrimary)
-                Text("초대 코드는 24시간 동안, 한 번만 쓸 수 있어요.").font(DesignSystem.caption).foregroundStyle(DesignSystem.textTertiary)
+                Text("초대 코드는 24시간 동안, 한 번만 쓸 수 있어요.").typeStyle(.caption).foregroundStyle(DesignSystem.textTertiary)
                 if let invite = vm.ui.invite { InviteCard(invite: invite) }
-                if vm.ui.busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요").font(DesignSystem.body) } }
-                if let error = vm.ui.error { Text(error).font(DesignSystem.caption).foregroundStyle(DesignSystem.danger) }
+                if vm.ui.busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요").typeStyle(.body) } }
+                if let error = vm.ui.error { Text(error).typeStyle(.caption).foregroundStyle(DesignSystem.danger) }
                 Button { Task { await vm.makeInvite() } } label: { Label { Text("초대 만들기") } icon: { IconImage(.userPlus, size: 20) } }
                     .buttonStyle(.pill).disabled(vm.ui.busy || vm.ui.offline)
-                if vm.ui.offline { Text("인터넷이 필요해요").font(DesignSystem.caption).foregroundStyle(DesignSystem.textTertiary) }
+                if vm.ui.offline { Text("인터넷이 필요해요").typeStyle(.caption).foregroundStyle(DesignSystem.textTertiary) }
             }
             .block()
             VStack(alignment: .leading, spacing: 0) {
@@ -279,10 +279,10 @@ struct LicenseView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(entry.artifact).font(.footnote).foregroundStyle(DesignSystem.textSecondary)
+                Text(entry.artifact).typeStyle(.footnote).foregroundStyle(DesignSystem.textSecondary)
                 ForEach(entry.licenses, id: \.file) { l in
-                    Text(l.name).font(.headline)
-                    Text(OssEntry.text(l.file) ?? "").font(.caption).textSelection(.enabled)
+                    Text(l.name).typeStyle(.headline)
+                    Text(OssEntry.text(l.file) ?? "").typeStyle(.caption).textSelection(.enabled)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

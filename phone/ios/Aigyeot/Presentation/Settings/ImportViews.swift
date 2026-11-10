@@ -101,14 +101,14 @@ private struct PreviewText: View {
 
     var body: some View {
         Text(preview.title).typeStyle(.title).foregroundStyle(DS.textPrimary)
-        if let kinds = preview.kinds { Text(kinds).font(DS.body) }
-        if let latest = preview.latestFeed { Text(latest).font(DS.body) }
+        if let kinds = preview.kinds { Text(kinds).typeStyle(.body) }
+        if let latest = preview.latestFeed { Text(latest).typeStyle(.body) }
         if !preview.skips.isEmpty {
             VStack(alignment: .leading, spacing: DS.s1) {
-                Text(CareText.importSkipTitle).font(DS.headline)
-                ForEach(preview.skips, id: \.self) { Text($0).font(DS.body).foregroundStyle(DS.textSecondary) }
+                Text(CareText.importSkipTitle).typeStyle(.headline)
+                ForEach(preview.skips, id: \.self) { Text($0).typeStyle(.body).foregroundStyle(DS.textSecondary) }
             }
         }
-        if let note = preview.zoneNote { Text(note).font(DS.caption).foregroundStyle(DS.textSecondary) }
+        if let note = preview.zoneNote { Text(note).typeStyle(.caption).foregroundStyle(DS.textSecondary) }
     }
 }

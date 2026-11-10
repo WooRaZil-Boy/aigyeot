@@ -32,7 +32,7 @@ private struct TipOverlay: ViewModifier {
             .overlay {
                 if let s = shown {
                     TipPlacer(anchor: s.rect) {
-                        Text(s.tip).font(DS.font(12.5, 600)).foregroundStyle(DS.surface)
+                        Text(s.tip).typeStyle(.tag).foregroundStyle(DS.surface)
                             .padding(.horizontal, 10).padding(.vertical, 7)
                             .background(DS.textPrimary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .fixedSize()
@@ -480,15 +480,15 @@ struct MethodDots: View {
     }
 
     private func name(_ m: Row, known: Bool) -> some View {
-        Text(m.name).font(DS.font(15, 600)).foregroundStyle(known ? DS.textPrimary : DS.textTertiary)
+        Text(m.name).typeStyle(.chip).foregroundStyle(known ? DS.textPrimary : DS.textTertiary)
     }
 
     @ViewBuilder private func value(_ m: Row, known: Bool) -> some View {
         if known {
-            (Text("\(m.ok)").font(DS.font(17, 700)).foregroundStyle(DS.textPrimary) + Text("/\(m.n)번").font(DS.font(14, 500)).foregroundStyle(DS.textTertiary))
+            (Text("\(m.ok)").font(DS.font(.strong)).foregroundStyle(DS.textPrimary) + Text("/\(m.n)번").font(DS.font(.meta)).foregroundStyle(DS.textTertiary))
                 .monospacedDigit()
         } else {
-            Text("아직 모름").font(DS.font(14, 500)).foregroundStyle(DS.textTertiary)
+            Text("아직 모름").typeStyle(.meta).foregroundStyle(DS.textTertiary)
         }
     }
 

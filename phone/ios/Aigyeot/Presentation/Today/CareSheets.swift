@@ -57,10 +57,10 @@ private struct AmountRow: View {
 
     var body: some View {
         HStack {
-            Text(CareText.rowAmount).font(DS.font(15.5, 500)).foregroundStyle(DS.textPrimary)
+            Text(CareText.rowAmount).typeStyle(.sheetRow).foregroundStyle(DS.textPrimary)
             Spacer()
             Stepper {
-                Text(amount.map(CareText.ml) ?? "").font(DS.font(15.5, 600)).monospacedDigit().foregroundStyle(DS.textPrimary)   // 옅은 판 위 파랑 글자는 4.5:1 미만
+                Text(amount.map(CareText.ml) ?? "").typeStyle(.sheetValue).monospacedDigit().foregroundStyle(DS.textPrimary)   // 옅은 판 위 파랑 글자는 4.5:1 미만
             } onIncrement: {
                 amount = min(CareRules.amountRange.upperBound, (amount ?? 0) + 10)
             } onDecrement: {
@@ -96,7 +96,7 @@ private struct SheetRow<Value: View>: View {
     @ViewBuilder var value: () -> Value
     var body: some View {
         HStack {
-            Text(name).font(DS.font(15.5, 500)).foregroundStyle(DS.textPrimary)
+            Text(name).typeStyle(.sheetRow).foregroundStyle(DS.textPrimary)
             Spacer(minLength: 8)
             value()
         }
@@ -125,7 +125,7 @@ private struct ValueChip: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(text).font(DS.font(15.5, 600)).monospacedDigit()
+            Text(text).typeStyle(.sheetValue).monospacedDigit()
                 .foregroundStyle(selected ? DS.onAccentSoft : DS.textSecondary)
                 .padding(.horizontal, 10).padding(.vertical, 7).frame(minHeight: 36)
                 .background(selected ? DS.accent.opacity(0.1) : DS.textPrimary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -206,8 +206,8 @@ struct TimerView: View {
                         }
                         .buttonStyle(.pillTonal)   // 시안 .pbtn.ton
                         if editingStart || pickingEnd { timePicker(e) }
-                        if let error = vm.error { Text(error).font(DS.caption).foregroundStyle(DS.danger) }
-                        if vm.ui.guardian { Text(CareText.guardianNote).font(DS.caption).foregroundStyle(DS.textTertiary) }
+                        if let error = vm.error { Text(error).typeStyle(.caption).foregroundStyle(DS.danger) }
+                        if vm.ui.guardian { Text(CareText.guardianNote).typeStyle(.caption).foregroundStyle(DS.textTertiary) }
                         Button(role: .destructive) { vm.delete(); dismiss() } label: { Text(CareText.deleteRecord) }
                             .buttonStyle(.pillDanger)
                     }
@@ -289,11 +289,11 @@ private struct TimerRing: View {
                 .rotationEffect(.degrees(seconds * 6))
                 .animation(reduceMotion ? nil : DS.Motion.secondHand, value: seconds)
             VStack(spacing: 12) {
-                Text(CareFormat.timer(ms)).font(DS.timer).foregroundStyle(DS.textPrimary).lineLimit(1).minimumScaleFactor(0.5)
+                Text(CareFormat.timer(ms)).typeStyle(.timer, monospacedDigits: true).foregroundStyle(DS.textPrimary).lineLimit(1).minimumScaleFactor(0.5)
                     .contentTransition(.numericText())   // 1초마다 바뀐 자리만 굴러간다(시안 v4-7 4, roll)
                     .animation(reduceMotion ? nil : DS.Motion.roll, value: seconds)
                     .accessibilityLabel(CareFormat.duration(ms))
-                Text(title).font(DS.font(15, 500)).foregroundStyle(DS.textTertiary)
+                Text(title).typeStyle(.bodyMedium).foregroundStyle(DS.textTertiary)
             }
             .padding(.horizontal, 24)
         }
@@ -362,7 +362,7 @@ struct CareEditSheet: View {
                         SheetRow(name: CareText.rowNote) {
                             TextField(CareText.notePlaceholder, text: Binding(get: { draft.note }, set: { v in vm.edit { $0.note = CareRules.noteLimited(v) } }),
                                       axis: .vertical)   // 200에서 더 받지 않는다(U17)
-                                .font(DS.font(15.5, 400)).multilineTextAlignment(.trailing)
+                                .typeStyle(.sheetRow).multilineTextAlignment(.trailing)
                                 .accessibilityLabel(CareText.rowNote)
                         }
                     }
@@ -372,8 +372,8 @@ struct CareEditSheet: View {
                     if draft.kind == .diaper {
                         Segmented(title: CareText.rowKind, options: DiaperKind.allCases, label: { CareText.diaperLabel($0) }, selection: field(\.diaper))
                     }
-                    if case .failed(let m?) = vm.phase { Text(m).font(DS.caption).foregroundStyle(DS.danger) }
-                    if vm.guardian { Text(CareText.guardianNote).font(DS.caption).foregroundStyle(DS.textTertiary) }
+                    if case .failed(let m?) = vm.phase { Text(m).typeStyle(.caption).foregroundStyle(DS.danger) }
+                    if vm.guardian { Text(CareText.guardianNote).typeStyle(.caption).foregroundStyle(DS.textTertiary) }
                     if editing {
                         Button(role: .destructive) { vm.delete() } label: { Text(CareText.delete) }
                             .buttonStyle(.pillDanger).padding(.top, 8)
@@ -412,7 +412,7 @@ struct CareEditSheet: View {
     private func chipButton(_ title: String, _ minutes: Int?) -> some View {
         let on = draft.chip == minutes
         return Button { vm.pick(chip: minutes) } label: {
-            Text(title).font(DS.font(15, 600))
+            Text(title).typeStyle(.chip)
                 .foregroundStyle(on ? DS.onFill : DS.textSecondary)
                 .padding(.horizontal, 14).frame(minHeight: 44)
                 .background(on ? DS.fill : DS.tonal, in: Capsule())

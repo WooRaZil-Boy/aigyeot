@@ -32,7 +32,7 @@ struct BlockHeader: View {
             if let link, let action {
                 Button(action: action) {
                     HStack(spacing: 2) {
-                        Text(link).font(DS.font(14, 500))
+                        Text(link).typeStyle(.meta)
                         IconImage(.chevronRight, size: 16)
                     }
                     .foregroundStyle(DS.textTertiary)
@@ -49,14 +49,14 @@ struct BlockHeader: View {
 struct BlockSub: View {
     let text: Text
     var body: some View {
-        text.font(DS.font(14, 400)).foregroundStyle(DS.textTertiary).padding(.top, -8).padding(.bottom, 14)
+        text.typeStyle(.rowSub).foregroundStyle(DS.textTertiary).padding(.top, -8).padding(.bottom, 14)
     }
 }
 
 /// 블록 아래 덧붙임 글(13/400 흐림).
 struct BlockNote: View {
     let text: String
-    var body: some View { Text(text).font(DS.font(13, 400)).lineSpacing(6).foregroundStyle(DS.textTertiary).padding(.top, 14) }
+    var body: some View { Text(text).typeStyle(.note).lineSpacing(6).foregroundStyle(DS.textTertiary).padding(.top, 14) }
 }
 
 /// 블록 밖 작은 글(12.5/500 흐림, 시안 `.foot-note`).
@@ -64,7 +64,7 @@ struct FootNote: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(DS.font(12.5, 500)).foregroundStyle(DS.textTertiary)
+        Text(text).typeStyle(.footnote).foregroundStyle(DS.textTertiary)
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 4)
     }
 }
@@ -110,8 +110,8 @@ struct ListRow<Tail: View>: View {
                 .frame(width: 40, height: 40)
                 .background(add ? DS.accentSoft : DS.surfaceRaised, in: Circle())
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(DS.font(16, 600)).lineSpacing(6).foregroundStyle(add ? DS.accentInk : titleColor)
-                if let sub { Text(sub).font(DS.font(14, 400)).lineSpacing(6).foregroundStyle(DS.textTertiary) }
+                Text(title).typeStyle(.rowTitle).lineSpacing(6).foregroundStyle(add ? DS.accentInk : titleColor)
+                if let sub { Text(sub).typeStyle(.rowSub).lineSpacing(6).foregroundStyle(DS.textTertiary) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             tail()
@@ -150,8 +150,8 @@ struct SettingRow<Tail: View>: View {
         HStack(spacing: 12) {
             IconImage(icon, size: 19).foregroundStyle(DS.textTertiary).frame(width: 32)   // 시안 .grp .li: 아이콘은 늘 흐린 색, 뜻 색은 글자에만
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DS.font(16, 600)).foregroundStyle(tone)
-                if let sub { Text(sub).font(DS.font(14, 400)).foregroundStyle(DS.textTertiary) }
+                Text(title).typeStyle(.rowTitle).foregroundStyle(tone)
+                if let sub { Text(sub).typeStyle(.rowSub).foregroundStyle(DS.textTertiary) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             tail()
@@ -207,7 +207,7 @@ struct Segmented<T: Hashable>: View {
         return Button {
             withAnimation(reduceMotion ? nil : DS.Motion.snappy) { selection = o }
         } label: {
-            Text(label(o)).font(DS.font(15, 600))
+            Text(label(o)).typeStyle(.chip)
                 .foregroundStyle(on ? DS.textPrimary : DS.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background {
@@ -246,7 +246,7 @@ struct PillButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(DS.font(big ? 18 : 17, 700))
+                .typeStyle(big ? .strongLarge : .strong)
                 .foregroundStyle(fg)
                 .frame(maxWidth: .infinity, minHeight: kind == .danger ? 44 : (big ? 58 : 56))
                 .padding(.horizontal, 16)
@@ -343,7 +343,7 @@ struct Badge: View {
     var body: some View {
         HStack(spacing: 4) {
             if let icon { IconImage(icon, size: 14, relativeTo: .caption) }
-            Text(text).font(DS.font(12.5, 600))
+            Text(text).typeStyle(.tag)
         }
         .foregroundStyle(child ? DS.child : DS.textSecondary)
         .padding(.horizontal, 8).frame(minHeight: 24)
@@ -362,10 +362,10 @@ struct KpiRow: View {
         layout {
             ForEach(items, id: \.self) { i in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(i.name).font(DS.font(13, 500)).foregroundStyle(DS.textTertiary)
-                    Text(i.value).font(DS.font(20, 700)).foregroundStyle(DS.textPrimary).monospacedDigit()
-                    if let s = i.sub { Text(s).font(DS.font(12, 500)).foregroundStyle(DS.textTertiary) }
-                    if let n = i.note { Text(n).font(DS.font(12, 500)).foregroundStyle(DS.textTertiary) }
+                    Text(i.name).typeStyle(.caption).foregroundStyle(DS.textTertiary)
+                    Text(i.value).typeStyle(.title).foregroundStyle(DS.textPrimary).monospacedDigit()
+                    if let s = i.sub { Text(s).typeStyle(.micro).foregroundStyle(DS.textTertiary) }
+                    if let n = i.note { Text(n).typeStyle(.micro).foregroundStyle(DS.textTertiary) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)

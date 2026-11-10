@@ -94,4 +94,13 @@ final class DesignTokenTests: XCTestCase {
         XCTAssertEqual(DesignSystem.Motion.liveSeconds * DesignSystem.Motion.liveSpreadShare, 1.08, accuracy: 0.0001)
     }
 
+
+    /// 글자 역할은 값 하나에 이름 하나다(같은 크기·굵기를 두 이름이 갖지 않고, tokens 7단계와도 겹치지 않는다).
+    func test_글자_역할은_값_하나에_이름_하나다() {
+        let roles = DesignSystem.TextRole.allCases.map { "\($0.style.size)/\($0.style.weight)" }
+        XCTAssertEqual(Set(roles).count, roles.count)
+        let steps = Set(DesignSystem.typeScale.values.map { "\($0.size)/\($0.weight)" })
+        XCTAssertTrue(steps.isDisjoint(with: roles))
+    }
+
 }

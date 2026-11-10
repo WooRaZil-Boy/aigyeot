@@ -98,6 +98,7 @@ struct AigyeotApp: App {
                 .environment(app.appViewModel).environment(app.status).environment(app.careTabs)
                 .environment(\.viewModels, app)
                 .tint(DesignSystem.accentInk)
+                .typeStyle(.body)   // 글자를 따로 정하지 않은 글도 시스템 서체가 아니라 본문 단계(Pretendard)로
                 .environment(\.locale, Locale(identifier: "ko_KR"))   // 한국 전용(AGENTS 범위): 시각 고르기도 "오전 3:12"로
                 .onOpenURL { app.appViewModel.receive(link: $0) }   // aigyeot://pair?code=… (7.6)
                 .onAppear {

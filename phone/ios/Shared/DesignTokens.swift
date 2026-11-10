@@ -98,6 +98,93 @@ enum DesignSystem {
         "timer": TypeStyle(size: 64, line: 72, weight: 650, relativeTo: .largeTitle),
     ]
 
+    /// 글자 역할 표(두 앱 같은 표, 진행 기록 '단위 10 결정'). tokens.json 7단계(hero·display·title·headline·body·caption·timer)와 같은 값은 그 단계를 쓰고,
+    /// 시안 phone.css가 단계 사이 크기를 쓰는 자리만 역할 이름을 둔다. 값은 시안 CSS 그대로(크기·굵기·줄 높이), 동적 글자 크기는 본문 곡선.
+    enum TextRole: CaseIterable {
+        /// 11·600 타임라인 시간 머리(.tl .hr span) — caption 계열
+        case hourMark
+        /// 12·500 숫자 칸 부제·날짜 띠 요일(.datestrip span) — caption 계열
+        case micro
+        /// 12.5·500 줄 부제·덧붙임(.tl .ev span, .foot-note) — caption 계열
+        case footnote
+        /// 12.5·600 배지·말풍선(.badge, .ch-tip) — caption 계열
+        case tag
+        /// 13·400 흐린 안내 글(.foot-note 긴 글) — caption 계열
+        case note
+        /// 13.5·500 첫 안내 목록(.ilist) — caption 계열
+        case introItem
+        /// 14·400 목록 줄 부제·블록 부제(.lrow span) — body 계열
+        case rowSub
+        /// 14·500 링크·흐린 머리 글(.bh a, .hero-c small) — body 계열
+        case meta
+        /// 14·600 빠른 기록 이름(.qb) — body 계열
+        case quickLabel
+        /// 14·700 띠 단추·부제 굵은 조각 — body 계열
+        case metaStrong
+        /// 14.5·500 타임라인 줄 제목·알림 배너 글(.tl .ev b, .ncard p) — body 계열
+        case eventTitle
+        /// 14.5·700 알림 배너 앱 이름(.ncard b) — body 계열
+        case bannerTitle
+        /// 15·400 이름·값 줄의 이름, 빈 목록 안내 — body 계열
+        case valueKey
+        /// 15·500 되돌리기 띠 글·타이머 상태 — body 계열
+        case bodyMedium
+        /// 15·600 칩·세그먼트·값(.chip, .segp span) — body 계열
+        case chip
+        /// 15·700 띠의 글자 단추(되돌리기) — body 계열
+        case action
+        /// 15.5·500 시트 행 이름·입력(.sheet .row) — body 계열
+        case sheetRow
+        /// 15.5·600 시트 값 칩(.sheet .row em) — body 계열
+        case sheetValue
+        /// 16·500 첫 안내 첫 줄(.intro p.lead) — body 계열
+        case lead
+        /// 16·600 목록 줄 제목·진행 중 판 제목(.lrow b, .run-c b) — body 계열
+        case rowTitle
+        /// 17·500 날짜 띠 날(.datestrip b) — headline 계열
+        case dateNumber
+        /// 17·700 버튼 글자(.pbtn, v5 덮어쓰기 433행)·방법별 성적 숫자(.dm b) — headline 계열
+        case strong
+        /// 18·700 큰 버튼 글자(.pbtn.big, 434행) — headline 계열
+        case strongLarge
+        /// 28·700 진행 중 판 시계(.run-c .tm) — display 계열
+        case runningTimer
+        /// 44·600 녹음 시간(.rec .rt) — timer 계열
+        case recordTimer
+
+        var style: TypeStyle {
+            switch self {
+            case .hourMark: TypeStyle(size: 11, line: 14, weight: 600, relativeTo: .body)
+            case .micro: TypeStyle(size: 12, line: 16, weight: 500, relativeTo: .body)
+            case .footnote: TypeStyle(size: 12.5, line: 17, weight: 500, relativeTo: .body)
+            case .tag: TypeStyle(size: 12.5, line: 16, weight: 600, relativeTo: .body)
+            case .note: TypeStyle(size: 13, line: 18, weight: 400, relativeTo: .body)
+            case .introItem: TypeStyle(size: 13.5, line: 20, weight: 500, relativeTo: .body)
+            case .rowSub: TypeStyle(size: 14, line: 20, weight: 400, relativeTo: .body)
+            case .meta: TypeStyle(size: 14, line: 20, weight: 500, relativeTo: .body)
+            case .quickLabel: TypeStyle(size: 14, line: 18, weight: 600, relativeTo: .body)
+            case .metaStrong: TypeStyle(size: 14, line: 20, weight: 700, relativeTo: .body)
+            case .eventTitle: TypeStyle(size: 14.5, line: 20, weight: 500, relativeTo: .body)
+            case .bannerTitle: TypeStyle(size: 14.5, line: 20, weight: 700, relativeTo: .body)
+            case .valueKey: TypeStyle(size: 15, line: 22, weight: 400, relativeTo: .body)
+            case .bodyMedium: TypeStyle(size: 15, line: 22, weight: 500, relativeTo: .body)
+            case .chip: TypeStyle(size: 15, line: 22, weight: 600, relativeTo: .body)
+            case .action: TypeStyle(size: 15, line: 20, weight: 700, relativeTo: .body)
+            case .sheetRow: TypeStyle(size: 15.5, line: 21, weight: 500, relativeTo: .body)
+            case .sheetValue: TypeStyle(size: 15.5, line: 21, weight: 600, relativeTo: .body)
+            case .lead: TypeStyle(size: 16, line: 24, weight: 500, relativeTo: .body)
+            case .rowTitle: TypeStyle(size: 16, line: 22, weight: 600, relativeTo: .body)
+            case .dateNumber: TypeStyle(size: 17, line: 22, weight: 500, relativeTo: .body)
+            case .strong: TypeStyle(size: 17, line: 22, weight: 700, relativeTo: .body)
+            case .strongLarge: TypeStyle(size: 18, line: 24, weight: 700, relativeTo: .body)
+            case .runningTimer: TypeStyle(size: 28, line: 32, weight: 700, relativeTo: .body)
+            case .recordTimer: TypeStyle(size: 44, line: 48, weight: 600, relativeTo: .body)
+            }
+        }
+    }
+
+    static func font(_ r: TextRole, monospacedDigits: Bool = false) -> Font { font(r.style, monospacedDigits: monospacedDigits) }
+
     static var hero: Font { font(.hero) }
     static var headline: Font { font(.headline) }
     static var body: Font { font(.body) }
@@ -105,8 +192,8 @@ enum DesignSystem {
     /// 타이머 숫자는 고정폭 숫자(tnum).
     static var timer: Font { font(.timer, monospacedDigits: true) }
 
-    /// 표에 없는 자리 글자(시안 CSS의 15·14·12.5 등). 굵기는 가변 축 값 그대로(650 같은 중간 값도 된다).
-    static func font(_ size: CGFloat, _ weight: CGFloat = 400, relativeTo: UIFont.TextStyle = .body, monospacedDigits: Bool = false) -> Font {
+    /// 숫자로 바로 부르지 않는다: 화면은 단계(TypeStyle)나 역할(TextRole)로만 고른다. 굵기는 가변 축 값 그대로(650 같은 중간 값도 된다).
+    private static func font(_ size: CGFloat, _ weight: CGFloat = 400, relativeTo: UIFont.TextStyle = .body, monospacedDigits: Bool = false) -> Font {
         Font(uiFont(size, weight, relativeTo: relativeTo, monospacedDigits: monospacedDigits) as CTFont)
     }
 
@@ -314,9 +401,14 @@ extension UIColor {
 }
 
 extension View {
-    /// 글자 표의 한 단계(서체 + 줄 높이).
-    func typeStyle(_ s: DesignSystem.TypeStyle) -> some View {
-        font(DesignSystem.font(s)).lineSpacing(DesignSystem.lineSpacing(s))
+    /// 글자 표의 한 단계(서체 + 줄 높이). 줄 간격은 여러 줄일 때만 보인다.
+    func typeStyle(_ s: DesignSystem.TypeStyle, monospacedDigits: Bool = false) -> some View {
+        font(DesignSystem.font(s, monospacedDigits: monospacedDigits)).lineSpacing(DesignSystem.lineSpacing(s))
+    }
+
+    /// 글자 역할 하나(서체 + 줄 높이).
+    func typeStyle(_ r: DesignSystem.TextRole, monospacedDigits: Bool = false) -> some View {
+        typeStyle(r.style, monospacedDigits: monospacedDigits)
     }
 
     /// 화면 바탕을 `bg`로 깐다(목록·폼의 시스템 바탕을 걷는다).

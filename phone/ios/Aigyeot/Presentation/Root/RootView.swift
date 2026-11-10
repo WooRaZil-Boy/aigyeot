@@ -43,7 +43,7 @@ struct IntroView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(CareText.introTitle).typeStyle(.display).foregroundStyle(DesignSystem.textPrimary)
-                        Text(CareText.introLead).font(DesignSystem.font(16, 500)).foregroundStyle(DesignSystem.textSecondary)
+                        Text(CareText.introLead).typeStyle(.lead).foregroundStyle(DesignSystem.textSecondary)
                     }
                     VStack(alignment: .leading, spacing: 10) {
                         row(.link, CareText.introSends)
@@ -70,7 +70,7 @@ struct IntroView: View {
             IconImage(icon, size: 18).foregroundStyle(tone)
                 .frame(width: 34, height: 34)
                 .background(DesignSystem.tonal, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            Text(text).font(DesignSystem.font(13.5, 500)).lineSpacing(4).foregroundStyle(DesignSystem.textSecondary)   // 줄 높이 20
+            Text(text).typeStyle(.introItem).lineSpacing(4).foregroundStyle(DesignSystem.textSecondary)   // 줄 높이 20
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
@@ -124,7 +124,7 @@ struct ConnectView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("코드로 입력").typeStyle(.headline).foregroundStyle(DesignSystem.textPrimary)
                         TextField("6자리 숫자 또는 초대 코드", text: $code)
-                            .font(DesignSystem.font(20, 600, relativeTo: .title3, monospacedDigits: true))
+                            .typeStyle(.title, monospacedDigits: true)
                             .padding(.horizontal, 16).frame(minHeight: 56)
                             .background(DesignSystem.surface, in: RoundedRectangle(cornerRadius: DesignSystem.rM, style: .continuous))
                             .textInputAutocapitalization(.characters)
@@ -135,8 +135,8 @@ struct ConnectView: View {
                                 // 6자리를 다 넣으면 바로 연결한다.
                                 if v.filter(\.isNumber).count == 6, v.allSatisfy({ $0.isNumber || $0 == " " || $0 == "-" }) { submit() }   // 잠금 중이면 submit이 막는다
                             }
-                        if let e = inputError ?? failure ?? app.linkError { Text(e).font(DesignSystem.caption).foregroundStyle(DesignSystem.danger) }
-                        if connecting { HStack { ProgressView(); Text("확인하고 있어요").font(DesignSystem.body) } }
+                        if let e = inputError ?? failure ?? app.linkError { Text(e).typeStyle(.caption).foregroundStyle(DesignSystem.danger) }
+                        if connecting { HStack { ProgressView(); Text("확인하고 있어요").typeStyle(.body) } }
                         Button { submit() } label: { Text("확인") }.buttonStyle(.pillTonal).disabled(code.isEmpty || connecting || vm.ui.isLocked)
                     }
                 }
@@ -193,15 +193,15 @@ struct ScanView: View {
                     Image(systemName: "camera.fill").font(.largeTitle)
                     Text(allowed == false ? "카메라를 쓸 수 없어요. 설정에서 카메라를 켜거나 코드로 입력해 주세요."
                                           : "이 기기에서는 QR을 찍을 수 없어요. 코드로 입력해 주세요.")
-                        .multilineTextAlignment(.center)
+                        .typeStyle(.body).multilineTextAlignment(.center)
                 }
                 .foregroundStyle(.white).padding(32)
             }
             VStack {
                 Text(invalid ? "올바른 연결 QR이 아니에요" : "차 화면의 QR을 비춰 주세요")
-                    .font(.headline).foregroundStyle(.white).padding(.top, 60)
+                    .typeStyle(.headline).foregroundStyle(.white).padding(.top, 60)
                 Spacer()
-                Button { isPresented = false } label: { Text("코드로 입력").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 44pt(8장)
+                Button { isPresented = false } label: { Text("코드로 입력").typeStyle(.strong).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 44pt(8장)
                     .foregroundStyle(.white).padding(.bottom, 40)
             }
         }
@@ -237,13 +237,13 @@ struct ConfirmView: View {
                     Text(code.display).font(.system(size: codeSize, weight: .bold, design: .monospaced)).minimumScaleFactor(0.5).lineLimit(1)
                     if case .invite = code { Text("다른 보호자가 보낸 초대 코드예요. 리포트와 인계 알림을 받게 돼요.").typeStyle(.body).foregroundStyle(DesignSystem.textSecondary) }
                     if replacing { Text("지금 연결된 차를 끊고 새 차에 연결할까요?").typeStyle(.body).foregroundStyle(DesignSystem.textSecondary) }   // G16
-                    if let failure { Text(failure.message).font(DesignSystem.body).foregroundStyle(DesignSystem.danger) }
-                    if let e = app.linkError { Text(e).font(DesignSystem.caption).foregroundStyle(DesignSystem.textSecondary) }   // U52 pair.busy
+                    if let failure { Text(failure.message).typeStyle(.body).foregroundStyle(DesignSystem.danger) }
+                    if let e = app.linkError { Text(e).typeStyle(.caption).foregroundStyle(DesignSystem.textSecondary) }   // U52 pair.busy
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, DesignSystem.s6)
             }
-            if busy { HStack { ProgressView(); Text("확인하고 있어요").font(DesignSystem.body) } }
+            if busy { HStack { ProgressView(); Text("확인하고 있어요").typeStyle(.body) } }
             Button { connect() } label: { Text(replacing ? CareText.pairConfirmSwitch : CareText.pairConfirm) }   // U49
                 .buttonStyle(.pillBig).disabled(busy || vm.ui.isLocked)
             Button { dismiss() } label: { Text("아니에요") }.buttonStyle(.pillTonal).disabled(busy)

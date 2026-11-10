@@ -87,8 +87,8 @@ struct AlertBanner: View {
                         HStack(alignment: .top, spacing: 12) {
                             AppMark(size: 38)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(CareText.introTitle).font(DS.font(14.5, 700))
-                                Text(vm.ui.bannerText ?? "").font(DS.font(14.5, 500)).multilineTextAlignment(.leading).lineLimit(3)   // 큰 글자에서 화면을 덮지 않게. 전체는 눌러서 본다
+                                Text(CareText.introTitle).typeStyle(.bannerTitle)
+                                Text(vm.ui.bannerText ?? "").typeStyle(.eventTitle).multilineTextAlignment(.leading).lineLimit(3)   // 큰 글자에서 화면을 덮지 않게. 전체는 눌러서 본다
                             }
                             Spacer(minLength: 0)
                         }
@@ -170,7 +170,7 @@ struct StatusBands: View {
     private func band<B: View>(_ icon: Ico, _ text: String, tone: Color, @ViewBuilder button: () -> B) -> some View {
         HStack(spacing: 10) {
             IconImage(icon, size: 18).foregroundStyle(tone)
-            Text(text).font(DS.font(14, 500)).foregroundStyle(DS.textPrimary).padding(.vertical, 12)
+            Text(text).typeStyle(.meta).foregroundStyle(DS.textPrimary).padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             button()
         }
@@ -180,7 +180,7 @@ struct StatusBands: View {
 
     /// 터치 영역 44pt(8장): 글자 버튼 틀을 키우고 띠의 위아래 여백은 글에만 준다.
     private func bandButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(title).font(DS.font(14, 700)).foregroundStyle(DS.textPrimary).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+        Button(action: action) { Text(title).typeStyle(.metaStrong).foregroundStyle(DS.textPrimary).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
             .buttonStyle(.plain)
     }
 }
@@ -220,7 +220,7 @@ private struct AlertDetailContent: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 10) {
                         Badge(text: CareText.fromCar, icon: .carFront, child: true)
-                        Text(a.body.text).font(DS.font(19, 600)).lineSpacing(8).foregroundStyle(DS.textPrimary)
+                        Text(a.body.text).typeStyle(.headline).lineSpacing(8).foregroundStyle(DS.textPrimary)
                     }
                     .block()
                     VStack(alignment: .leading, spacing: 0) {
@@ -242,9 +242,9 @@ private struct AlertDetailContent: View {
 
     private func detailRow(_ k: String, _ v: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(k).font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
+            Text(k).typeStyle(.valueKey).foregroundStyle(DS.textTertiary)
             Spacer(minLength: 12)
-            Text(v).font(DS.font(15, 600)).foregroundStyle(DS.textPrimary).multilineTextAlignment(.trailing)
+            Text(v).typeStyle(.chip).foregroundStyle(DS.textPrimary).multilineTextAlignment(.trailing)
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)

@@ -41,7 +41,7 @@ private struct CarContent: View {
                     Section {   // 7.1 car.section.reports(U39)
                         BlockHeader(title: "리포트").listRowInsets(Self.headInsets).enterRise(3)
                         if vm.ui.reports.isEmpty {
-                            Text("주행이 끝나면 여기에 리포트가 와요").font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
+                            Text("주행이 끝나면 여기에 리포트가 와요").typeStyle(.valueKey).foregroundStyle(DS.textTertiary)
                                 .listRowInsets(Self.noteInsets)
                         }
                         ForEach(vm.ui.reports) { r in
@@ -76,7 +76,7 @@ private struct CarContent: View {
                 .listRowInsets(Self.headInsets)
                 .enterRise(1)
             if songsVM.ui.songs.isEmpty {
-                Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요").font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
+                Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요").typeStyle(.valueKey).foregroundStyle(DS.textTertiary)
                     .listRowInsets(Self.noteInsets)
             }
             ForEach(songsVM.ui.songs) { row in
@@ -86,10 +86,10 @@ private struct CarContent: View {
                     .swipeActions { Button("지우기", role: .destructive) { songsVM.remove(row.id) } }
             }
             if songsVM.ui.slotsUsed >= SongRules.maxSongs {
-                Text("노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요.").font(DS.font(13, 400)).foregroundStyle(DS.textTertiary).padding(.bottom, 8)
+                Text("노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요.").typeStyle(.note).foregroundStyle(DS.textTertiary).padding(.bottom, 8)
             }
         } footer: {
-            Text("차에서는 다음 주행부터 써요.").font(DS.font(12.5, 500)).foregroundStyle(DS.textTertiary)
+            Text("차에서는 다음 주행부터 써요.").typeStyle(.footnote).foregroundStyle(DS.textTertiary)
         }
         .listRowSeparator(.hidden)
         .listRowBackground(DS.surface)
@@ -137,9 +137,9 @@ struct SongRowView: View {
                 HStack(spacing: 12) {
                     IconImage(.song, size: 19).foregroundStyle(DS.textSecondary).frame(width: 40, height: 40).background(DS.surfaceRaised, in: Circle())
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(row.name).font(DS.font(16, 600)).foregroundStyle(DS.textPrimary)
+                        Text(row.name).typeStyle(.rowTitle).foregroundStyle(DS.textPrimary)
                         Text(([row.durationS.map(Self.duration)] + [statusText.isEmpty ? nil : statusText]).compactMap { $0 }.joined(separator: " · "))
-                            .font(DS.font(14, 400)).foregroundStyle(isProblem ? DS.danger : DS.textTertiary)
+                            .typeStyle(.rowSub).foregroundStyle(isProblem ? DS.danger : DS.textTertiary)
                             .multilineTextAlignment(.leading)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,7 +230,7 @@ struct RecordSheet: View {
         VStack(spacing: 18) {
             Waveform(levels: rec.levels).frame(height: 120)
             (Text(SongRowView.duration(rec.elapsed)).foregroundStyle(DS.textPrimary) + Text(" / 3:00").foregroundStyle(DS.textTertiary))
-                .font(DS.font(44, 600)).monospacedDigit()
+                .typeStyle(.recordTimer).monospacedDigit()
 
             if rec.permissionDenied {
                 VStack(spacing: 8) {
@@ -242,12 +242,12 @@ struct RecordSheet: View {
                 switch rec.phase {
                 case .idle:
                     recordButton(recording: false) { player.stop(); Task { await rec.start() } }.accessibilityLabel("녹음 시작")   // 목록 듣기가 녹음에 섞이지 않게
-                    Text("평소 불러 주던 노래를 녹음해 보세요").font(DS.font(12.5, 500)).foregroundStyle(DS.textTertiary).multilineTextAlignment(.center)
+                    Text("평소 불러 주던 노래를 녹음해 보세요").typeStyle(.footnote).foregroundStyle(DS.textTertiary).multilineTextAlignment(.center)
                 case .recording:
                     recordButton(recording: true) { rec.stop() }.accessibilityLabel("녹음 멈추기")
                 case .recorded:
                     TextField("노래 이름(30자까지)", text: $name)
-                        .font(DS.font(16, 400))
+                        .typeStyle(.body)
                         .padding(.horizontal, 14).frame(minHeight: 50)
                         .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM, style: .continuous))
                         .submitLabel(.done)   // 키보드의 '완료'로 닫는다
@@ -260,10 +260,10 @@ struct RecordSheet: View {
                         Button { sendError = nil; rec.discard() } label: { Text("다시 녹음") }.buttonStyle(.pillTonal)
                     }
                     Button { send() } label: { Text("보내기") }.buttonStyle(.pill)
-                    if vm.ui.offline { Text("연결되면 보내요").font(DS.caption).foregroundStyle(DS.textTertiary) }
+                    if vm.ui.offline { Text("연결되면 보내요").typeStyle(.caption).foregroundStyle(DS.textTertiary) }
                 }
             }
-            if let e = sendError ?? rec.error { Text(e).font(DS.caption).foregroundStyle(DS.danger) }
+            if let e = sendError ?? rec.error { Text(e).typeStyle(.caption).foregroundStyle(DS.danger) }
             if !vm.ui.songs.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(vm.ui.songs) { SongRowView(row: $0, player: player, beforePlay: { if rec.isPlaying { rec.togglePlay() } }) }
@@ -271,7 +271,7 @@ struct RecordSheet: View {
                 .block(padding: EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                 .disabled(rec.phase == .recording)
                 .padding(.top, 8)
-                Text("차에서는 다음 주행부터 써요.").font(DS.font(12.5, 500)).foregroundStyle(DS.textTertiary)
+                Text("차에서는 다음 주행부터 써요.").typeStyle(.footnote).foregroundStyle(DS.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
