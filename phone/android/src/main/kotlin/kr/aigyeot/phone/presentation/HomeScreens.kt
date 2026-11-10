@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -83,12 +84,14 @@ internal fun GuardianAlerts(s: PhoneState, go: (Route) -> Unit) {
     }
     val now = rememberNow(60_000)
     val p = Tokens.colors
-    for (a in s.alerts.asReversed().take(5)) {
+    // 화면이 떠 있는 동안 새로 온 인계 알림 판만 들어온다(시안 .alert-c.enter).
+    val known = remember { s.alerts.map { it.id }.toSet() }
+    for (a in s.alerts.asReversed().take(5)) key(a.id) { EnterNew(a.id !in known) {
         Block(padding = androidx.compose.foundation.layout.PaddingValues(18.dp), onClick = { go(Route.Alert(a.id)) }) {
             Badge("차에서 · ${agoText(instantOf(a.body.occurredAt) ?: a.receivedAt, now)}", R.drawable.ic_car_front, child = true) // U20 '~ 전'
             Text(a.body.text, Modifier.padding(top = 10.dp), style = Type.headline.copy(lineHeight = 25.sp), color = p.textPrimary)
         }
-    }
+    } }
 }
 
 /** 인계 알림 상세(guardian). */

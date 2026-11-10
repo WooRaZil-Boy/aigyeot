@@ -1,6 +1,10 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -40,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -55,8 +60,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kr.aigyeot.phone.domain.model.durationText
 import kotlin.math.roundToInt
+import kr.aigyeot.phone.domain.model.durationText
 
 // 차트(시안 js/charts.js·css/charts.css를 Compose Canvas로). 규칙(dataviz): 막대 24 이하·위 4 둥근 끝·바닥 각짐, 격자 1 실선,
 // 글자는 글자 토큰(데이터 색 금지), 하나를 강조하고 나머지는 회색, 툴팁은 보조(값은 라벨에도 있다).
@@ -94,7 +99,13 @@ private fun TipHost(hits: List<Hit>, modifier: Modifier, height: Dp, content: @C
             .pointerInput(hits) { detectHorizontalDragGestures(onDragEnd = { sel = null }, onDragCancel = { sel = null }) { c, _ -> sel = pick(c.position) } },
     ) {
         content(sel)
-        val i = sel ?: return@Box
+        // 말풍선은 아래 4에서 120ms linear로 나타나고 사라진다(시안 .ch-tip). 끄는 동안 다른 값으로 옮기면 자리만 바뀐다. 동작 줄이기면 바로.
+        val reduced = LocalReducedMotion.current
+        var lastSel by remember(hits.size) { mutableStateOf<Int?>(null) }
+        if (sel != null) lastSel = sel
+        val shown by animateFloatAsState(if (sel != null) 1f else 0f, if (reduced) snap() else tween(120, easing = LinearEasing), label = "tip")
+        if (shown == 0f) return@Box
+        val i = lastSel ?: return@Box
         val r = hits.getOrNull(i)?.rect ?: return@Box
         var w by remember { mutableStateOf(0) }
         var h by remember { mutableStateOf(0) }
@@ -106,6 +117,7 @@ private fun TipHost(hits: List<Hit>, modifier: Modifier, height: Dp, content: @C
             Text(
                 hits[i].tip,
                 Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }
+                    .graphicsLayer { alpha = shown; translationY = (1f - shown) * 4.dp.toPx() }
                     .onSizeChanged { w = it.width; h = it.height }
                     .clip(RoundedCornerShape(10.dp)).background(p.textPrimary).padding(horizontal = 10.dp, vertical = 7.dp),
                 style = TextStyle(fontFamily = Pretendard, fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold),
@@ -283,7 +295,8 @@ fun WeekBars(
     val tlab = chartStyle(fs, 600, p.textTertiary)
     val tickH = remember(m, tick) { m.measure("오늘", tick).size.height.toFloat() }
     val px = with(d) { 1.dp.toPx() }
-    val grow = rememberReveal(600 + 40 * 7, Motion.enter)
+    // 막대마다 0.6초 enter 곡선, 0.04초씩 늦게(8개마다 다시). 전체 시간은 고르게 흐르고 곡선은 막대마다 건다(시안 charts.js grow).
+    val grow = rememberReveal(600 + 40 * 7, Curve(0, 0f, 0f, 1f, 1f))
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = label + ": " + bars.joinToString(", ") { b -> "${b.label} ${b.value?.let(fmt) ?: "기록 없음"}" } }) {
         val w = with(d) { maxWidth.toPx() }
         val h = with(d) { height.toPx() }
@@ -311,7 +324,7 @@ fun WeekBars(
                     val v = b.value ?: return@forEachIndexed
                     // 오늘 값은 0이어도 기준선 위에 라벨을 남긴다(시안 charts.js week: 값 라벨은 막대와 따로).
                     if (isHot && v == 0L && grow.value >= 1f) text(m, fmt(v), valStyle, minOf(cx + bw / 2, size.width), base - 7 * px, TextAlign.End)
-                    val local = ((grow.value * (600f + 40f * bars.size) - 40f * i) / 600f).coerceIn(0f, 1f)
+                    val local = ((grow.value * (600f + 40f * 7) - 40f * (i % 8)) / 600f).coerceIn(0f, 1f)
                     val k = if (grow.value >= 1f) 1f else Motion.enter.easing.transform(local)
                     val yy = y(v)
                     val full = base - yy
@@ -461,6 +474,9 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------- 방법별 성적
 
 /** 방법별 성적(시안 Charts.methods): 이름 · 점 행렬(튼 횟수만큼, 그친 만큼 채움, 먹색 한 색) · '6/7번', 3번 미만은 '아직 모름'. */
+/** 시안 점 튐: 강성 600·감쇠 30(질량 1) → 감쇠비 30 / (2·√600) ≈ 0.61. */
+private val DOT_POP = androidx.compose.animation.core.spring<Float>(dampingRatio = 30f / (2f * kotlin.math.sqrt(600f)), stiffness = 600f)
+
 data class MethodRow(val name: String, val ok: Int, val n: Int) {
     val known get() = n >= 3
 }
@@ -473,6 +489,7 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
     var tip by remember { mutableStateOf<Int?>(null) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         sorted.forEachIndexed { r, row ->
+            val before = sorted.take(r).sumOf { it.ok } // 찬 점은 모든 줄을 이어 0.02초씩 늦게 튄다(시안 charts.js: spring 강성 600·감쇠 30)
             Row(
                 Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "${row.name}: " + if (row.known) "${row.n}번 중 ${row.ok}번 그침" else "아직 모름" }
                     .pointerInput(r) { detectTapGestures { tip = if (tip == r) null else r } },
@@ -487,7 +504,7 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
                         val on = i < row.ok
                         val pop = remember { Animatable(if (reduced || !on) 1f else 0f) }
                         LaunchedEffect(reduced) {
-                            if (reduced) pop.snapTo(1f) else if (on && pop.value < 1f) { kotlinx.coroutines.delay(20L * (r * 8 + i)); pop.animateTo(1f, Springs.snappy.spec()) }
+                            if (reduced) pop.snapTo(1f) else if (on && pop.value < 1f) { kotlinx.coroutines.delay(20L * (before + i)); pop.animateTo(1f, DOT_POP) }
                         }
                         Canvas(Modifier.size(12.dp)) {
                             val rr = size.minDimension / 2
@@ -529,7 +546,7 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
     val valDim = chartStyle(fs + 1, 600, p.textTertiary)
     val px = with(d) { 1.dp.toPx() }
     val height = 140.dp
-    val grow = rememberReveal(720, Motion.enter)
+    val grow = rememberReveal(600 + 40 * 2, Curve(0, 0f, 0f, 1f, 1f)) // 막대 셋: 막대마다 0.6초 enter 곡선, 0.04초 간격
     BoxWithConstraints(
         modifier.fillMaxWidth().semantics {
             contentDescription = "1분당 큰 조향 보정: " + items.joinToString(", ") { (k, v, _) -> "$k ${v?.let(::perMinText) ?: "없음"}번" }
@@ -553,7 +570,7 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
             val cx = slot * i + slot / 2
             text(m, k, if (hotBar) tickOn else tick, cx, size.height - 5 * px, TextAlign.Center)
             v ?: return@forEachIndexed
-            val local = ((grow.value * 720f - 40f * i) / 600f).coerceIn(0f, 1f)
+            val local = ((grow.value * 680f - 40f * i) / 600f).coerceIn(0f, 1f)
             val kk = if (grow.value >= 1f) 1f else Motion.enter.easing.transform(local)
             val full = ((base - top) * v / max).toFloat()
             val bh = full * kk

@@ -4,19 +4,25 @@ import android.os.Build
 import android.provider.Settings
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -61,8 +67,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -84,9 +91,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -94,6 +102,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -218,24 +227,36 @@ private fun CollapsedTitle(title: String, shown: Boolean) {
  * 블러는 API 31+만(R10), 그 아래는 페이드만. 움직임은 그림 층(layer)에서만 바뀌어 다시 그리기만 한다.
  */
 @Composable
-fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, content: @Composable () -> Unit) {
+fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? = null, animateFirst: Boolean = true, content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
-    val t = remember { Animatable(if (reduced) 1f else 0f) }
-    LaunchedEffect(reduced) { if (reduced) t.snapTo(1f) else if (t.value < 1f) t.animateTo(1f, tween(900, easing = androidx.compose.animation.core.LinearEasing)) }
+    // 화면이 처음 보일 때(탭 고름·새 화면)와 replay가 바뀔 때(하루·패턴)만 올라온다. 뒤로 가기로 돌아온 화면은 저장된 표시로 바로 보인다(iOS enterRise와 같음).
+    // animateFirst = false면 처음에는 바로 보이고 replay가 바뀔 때만 올라온다(바깥 칸이 이미 올라오는 안쪽 묶음).
+    val key = replay.toString()
+    var shownFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val t = remember(key) { Animatable(if (reduced || shownFor == key || (!animateFirst && shownFor == null)) 1f else 0f) }
+    LaunchedEffect(key, reduced) {
+        shownFor = key
+        if (reduced) t.snapTo(1f) else if (t.value < 1f) t.animateTo(1f, tween(STAGGER_MS, easing = LinearEasing))
+    }
     val rise = with(LocalDensity.current) { 16.dp.toPx() }
     val blurPx = with(LocalDensity.current) { 6.dp.toPx() }
     Layout(content, modifier) { measurables, constraints ->
         val c = constraints.copy(minHeight = 0)
         val placeables = measurables.map { it.measure(c) }
         val g = gap.roundToPx()
-        val h = placeables.sumOf { it.height } + g * (placeables.size - 1).coerceAtLeast(0)
+        // 높이 0인 칸(접힌 진행 중 판)은 간격도 없고, 펼쳐지는 동안은 간격도 높이만큼만 자라 아래 블록이 끊기지 않고 비킨다.
+        fun gapAfter(i: Int) = if (i == placeables.lastIndex) 0 else minOf(g, placeables[i].height)
+        val h = placeables.indices.sumOf { placeables[it].height + gapAfter(it) }
         layout(constraints.maxWidth, h) {
             var y = 0
+            val done = t.value >= 1f
             placeables.forEachIndexed { i, pl ->
-                pl.placeWithLayer(0, y) {
-                    // 900ms 안에서 i번째는 i·50ms 뒤 시작해 360ms(enter 곡선)에 걸쳐 올라온다.
-                    val start = (i * 50f).coerceAtMost(500f) / 900f
-                    val raw = ((t.value - start) / (360f / 900f)).coerceIn(0f, 1f)
+                // 다 올라온 뒤에는 층 없이 놓는다: 칸마다 층이 남아 있으면 공유 요소 전환(타이머 → 진행 중 판) 동안 나가는 화면의
+                // 형제 칸이 겹쳐 그려졌다(녹화로 확인).
+                if (done) pl.place(0, y) else pl.placeWithLayer(0, y) {
+                    // i번째는 60 + i·50ms 뒤 시작해 360ms(enter 곡선)에 걸쳐 올라온다(시안 core.js enter: startDelay 0.06·간격 0.05).
+                    val start = (60f + (i * 50f).coerceAtMost(500f)) / STAGGER_MS
+                    val raw = ((t.value - start) / (Motion.enter.ms.toFloat() / STAGGER_MS)).coerceIn(0f, 1f)
                     val k = Motion.enter.easing.transform(raw)
                     alpha = k
                     translationY = (1f - k) * rise
@@ -246,11 +267,13 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, content: @Comp
                         renderEffect = null
                     }
                 }
-                y += pl.height + g
+                y += pl.height + gapAfter(i)
             }
         }
     }
 }
+
+private const val STAGGER_MS = 60 + 500 + 360
 
 // ---------------------------------------------------------------- 블록
 
@@ -315,6 +338,23 @@ fun ListBlock(title: String? = null, link: String? = null, onLink: (() -> Unit)?
         if (title != null) BlockHeader(title, link, onLink)
         content()
     }
+
+/** 새로 생긴 판·줄이 들어오는 모양(시안 .enter phEnter): 위 10에서 0.98배·투명으로 spring.smooth, 자리도 펼쳐져 아래가 함께 비킨다. */
+fun cardEnter(rise: Int): EnterTransition =
+    expandVertically(Springs.smooth.spec(), expandFrom = Alignment.Top) + fadeIn(Springs.smooth.spec()) +
+        slideInVertically(Springs.smooth.spec()) { -rise } + scaleIn(Springs.smooth.spec(), initialScale = 0.98f)
+
+/**
+ * 화면이 떠 있는 동안 새로 들어온 판·줄(새 인계 알림, 새 리포트)만 [cardEnter]로 들어온다. 화면을 열 때 이미 있던 것([isNew] 거짓)은
+ * 그대로 보인다(목록 키 안에서 쓴다). 동작 줄이기면 바로.
+ */
+@Composable
+fun EnterNew(isNew: Boolean, content: @Composable () -> Unit) {
+    val reduced = LocalReducedMotion.current
+    val state = remember { MutableTransitionState(!isNew || reduced).apply { targetState = true } }
+    val rise = with(LocalDensity.current) { 10.dp.roundToPx() }
+    AnimatedVisibility(state, enter = cardEnter(rise)) { content() }
+}
 
 /** 행 아이콘 원(40, surfaceRaised). `add`면 브랜드 옅은 바탕. */
 @Composable
@@ -569,10 +609,12 @@ fun BandCard(text: String, action: String? = null, onAction: () -> Unit = {}) {
 fun LiveDot(color: Color, size: Dp = 10.dp) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
-    val ring = if (reduced || !shown) 0f else rememberInfiniteTransition(label = "live").animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = Motion.base.easing), RepeatMode.Restart), label = "live").value
+    // 시안 live: 1.8초마다 앞 60% 동안 둘레 빛이 0 → 12로 퍼지며(진하기 50% → 0, base 곡선) 사라지고 나머지는 쉰다(iOS와 같음).
+    val t = if (reduced || !shown) 1f else rememberInfiniteTransition(label = "live").animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "live").value
+    val ring = Motion.base.easing.transform((t / 0.6f).coerceAtMost(1f))
     Box(
         Modifier.size(size).onScreen { shown = it }.drawBehind {
-            if (ring > 0f) drawCircle(color.copy(alpha = 0.5f * (1f - ring)), radius = size.toPx() / 2 + ring * 8.dp.toPx())
+            if (ring < 1f) drawCircle(color.copy(alpha = 0.5f * (1f - ring)), radius = size.toPx() / 2 + ring * 12.dp.toPx())
             drawCircle(color)
         },
     )
@@ -580,7 +622,8 @@ fun LiveDot(color: Color, size: Dp = 10.dp) {
 
 /**
  * 숫자 굴림(README 4.7 roll: 자리마다, spring .85·632). 바뀐 자리만 아래에서 올라온다. 길이가 바뀌면 통째로 바꾼다.
- * 동작 줄이기면 바로 바뀐다.
+ * 글자를 한 줄 Row로 놓으므로, 큰 글자에서 폭을 넘으면 줄을 바꾸는 보통 글로 그린다(R13, iOS minimumScaleFactor 대신).
+ * 화면 읽기는 문구 하나로 읽는다. 동작 줄이기면 바로 바뀐다.
  */
 @Composable
 fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
@@ -589,18 +632,32 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
         Text(text, modifier, style = style, color = color)
         return
     }
-    Row(modifier.semantics(mergeDescendants = true) { contentDescription = text }) {
-        text.forEachIndexed { i, ch ->
-            androidx.compose.runtime.key(i, text.length) {
-                AnimatedContent(
-                    targetState = ch,
-                    modifier = Modifier.clipToBounds(),
-                    transitionSpec = {
-                        (slideInVertically(Springs.roll.spec()) { it / 2 } + fadeIn(tween(120))) togetherWith (slideOutVertically(Springs.roll.spec()) { -it / 2 } + fadeOut(tween(90)))
-                    },
-                    label = "roll",
-                ) { c -> Text(c.toString(), style = style, color = color) }
+    Layout(
+        content = {
+            Row {
+                text.forEachIndexed { i, ch ->
+                    androidx.compose.runtime.key(i, text.length) {
+                        AnimatedContent(
+                            targetState = ch,
+                            modifier = Modifier.clipToBounds(),
+                            transitionSpec = {
+                                (slideInVertically(Springs.roll.spec()) { it / 2 } + fadeIn(tween(120))) togetherWith (slideOutVertically(Springs.roll.spec()) { -it / 2 } + fadeOut(tween(90)))
+                            },
+                            label = "roll",
+                        ) { c -> Text(c.toString(), style = style, color = color) }
+                    }
+                }
             }
+            Text(text, style = style, color = color)
+        },
+        modifier = modifier.clearAndSetSemantics { contentDescription = text },
+    ) { measurables, constraints ->
+        val row = measurables[0].measure(constraints.copy(minWidth = 0, maxWidth = Constraints.Infinity))
+        if (row.width <= constraints.maxWidth) {
+            layout(row.width, row.height) { row.place(0, 0) }
+        } else {
+            val plain = measurables[1].measure(constraints.copy(minWidth = 0))
+            layout(plain.width, plain.height) { plain.place(0, 0) }
         }
     }
 }

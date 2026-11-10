@@ -1,44 +1,39 @@
 package kr.aigyeot.phone.presentation
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
-import kr.aigyeot.phone.R
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,12 +43,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,6 +67,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
+import kr.aigyeot.phone.R
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.DisconnectRun
 import kr.aigyeot.phone.domain.model.PAIR_BUSY
@@ -260,8 +262,11 @@ fun AppRoot(app: AppViewModel) {
         AnimatedVisibility(
             visible = ui.banner != null,
             modifier = Modifier.align(Alignment.TopCenter),
-            enter = if (reduced) EnterTransition.None else slideInVertically(Springs.bouncy.spec()) { -it } + fadeIn(Motion.base.spec()),
-            exit = if (reduced) ExitTransition.None else slideOutVertically(tween(260, easing = Motion.exit.easing)) { -it } + fadeOut(tween(260)),
+            // 시안 .banner: 위 140%에서 0.96배·투명으로 spring.bouncy, 나갈 때 위로 260ms motion.exit 곡선(iOS와 같음).
+            enter = if (reduced) EnterTransition.None else slideInVertically(Springs.bouncy.spec()) { -(it * 1.4f).toInt() } +
+                scaleIn(Springs.bouncy.spec(), initialScale = 0.96f, transformOrigin = TransformOrigin(0.5f, 0f)) + fadeIn(Springs.bouncy.spec()),
+            exit = if (reduced) ExitTransition.None else slideOutVertically(tween(260, easing = Motion.exit.easing)) { -(it * 1.4f).toInt() } +
+                fadeOut(tween(260, easing = Motion.exit.easing)),
         ) {
             var last by remember { mutableStateOf(ui.banner) }
             ui.banner?.let { last = it }

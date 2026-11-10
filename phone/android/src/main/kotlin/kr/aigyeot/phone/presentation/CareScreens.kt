@@ -8,15 +8,27 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -36,9 +48,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Snackbar
@@ -53,6 +65,7 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -64,15 +77,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.Role as SRole
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -83,6 +99,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
@@ -116,8 +134,6 @@ import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.text
 import kr.aigyeot.phone.domain.model.timerText
 import kr.aigyeot.shared.ReportSummaryBody
-import java.time.Instant
-import java.time.ZoneId
 
 // 돌봄 기록 화면(phone-care-plan 5·7·7.1장, 디자인 v6 시안 phone.js S.today·S.timer). 화면 글자는 7장·7.1 표 그대로이고,
 // 표에 없는 글자는 시안 IMPLEMENT 6장의 확정 라벨만 쓴다. 주석의 `tab.today` 같은 이름은 7.1 표의 ID다.
@@ -299,10 +315,11 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
     val start = rememberStarter(vm)
     var sheet by rememberSaveable { mutableStateOf<CareKind?>(null) } // 회전·다시 그리기에도 시트를 둔다
     val reports = remember(s.reports) { reportsNewestFirst(s.reports.values.map { it.body }) }
+    val knownReports = remember { s.reports.values.map { it.body.sessionId }.toSet() }
     TabPage(care.childNickname?.let { "${it}의 오늘" } ?: "오늘") { // today.header(U34)
         if (ui.guardian) GuardianAlerts(s, go) else StatusBands(connected = ui.connected)
         ui.careNotice?.let { BandCard(it, "닫기") { vm.clearCareNotice() } }
-        for (kind in listOf(CareKind.FEED, CareKind.SLEEP)) care.ongoing(kind)?.let { e -> RunCard(e) { go(Route.Timer(e.id)) } }
+        for (kind in listOf(CareKind.FEED, CareKind.SLEEP)) RunSlot(care.ongoing(kind)) { e -> go(Route.Timer(e.id)) }
         HeroFeed(care, s, owner = ui.owner, guardian = ui.guardian, now = now, onStart = { start(CareKind.FEED) })
         QuickBlock(care, start, { k -> sheet = k }, go)
         val showCar = ui.connected || s.reports.isNotEmpty()
@@ -322,7 +339,8 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
         if (reports.isNotEmpty()) {
             // today.recentReports: 새 것 셋. '전체'는 owner는 차 탭, guardian은 리포트 목록.
             ListBlock("최근 리포트", "전체", { if (ui.guardian) go(Route.Reports) else openTab("차") }) {
-                reports.take(3).forEach { ReportRow(it) { id -> go(Route.Report(id)) } }
+                // 화면이 떠 있는 동안 새로 온 리포트 줄만 들어온다(시안 .enter).
+                reports.take(3).forEach { r -> key(r.sessionId) { EnterNew(r.sessionId !in knownReports) { ReportRow(r) { id -> go(Route.Report(id)) } } } }
             }
         }
     }
@@ -330,6 +348,23 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
 }
 
 /** 진행 중 기록(.run-c): 살아 있는 점 + "수유 중 · 왼쪽" + "오후 2:01부터" + 흐르는 시간(굵게 28). 누르면 타이머. */
+/**
+ * 진행 중 판 자리. 기록을 시작하면 판이 위 10에서 0.98배·투명으로 들어오고(시안 .enter phEnter) 자리가 spring.smooth로 펼쳐져
+ * 아래 블록이 함께 비킨다(iOS cardEnter와 같음). 끝내면 흐려지며 접힌다. 화면을 열 때 이미 진행 중이면 그대로 보인다. 동작 줄이기면 바로.
+ */
+@Composable
+private fun RunSlot(e: CareEvent?, onOpen: (CareEvent) -> Unit) {
+    val reduced = LocalReducedMotion.current
+    var last by remember { mutableStateOf(e) }
+    if (e != null) last = e
+    val rise = with(LocalDensity.current) { 10.dp.roundToPx() }
+    AnimatedVisibility(
+        visible = e != null,
+        enter = if (reduced) EnterTransition.None else cardEnter(rise),
+        exit = if (reduced) ExitTransition.None else shrinkVertically(Springs.smooth.spec(), shrinkTowards = Alignment.Top) + fadeOut(Motion.exit.spec()),
+    ) { last?.let { RunCard(it) { onOpen(it) } } }
+}
+
 @Composable
 private fun RunCard(e: CareEvent, onOpen: () -> Unit) {
     val p = Tokens.colors
@@ -358,7 +393,28 @@ private fun RunCard(e: CareEvent, onOpen: () -> Unit) {
 private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Boolean, now: Long, onStart: () -> Unit) {
     val p = Tokens.colors
     val last = lastFeedingAt(care, s)
-    Block(padding = PaddingValues(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 20.dp)) {
+    val reduced = LocalReducedMotion.current
+    // 새 수유가 들어오면(화면이 떠 있는 동안 마지막 수유 시각이 바뀜) 판 둘레로 파란 빛이 1.2초 한 번 퍼진다(시안 .flash, iOS와 같음).
+    val flash = remember { Animatable(1f) }
+    var seen by remember { mutableStateOf(last) }
+    LaunchedEffect(last) {
+        if (last != null && last != seen && !reduced) { flash.snapTo(0f); flash.animateTo(1f, tween(1200, easing = Motion.base.easing)) }
+        seen = last
+    }
+    LaunchedEffect(reduced) { if (reduced) flash.snapTo(1f) }
+    val glow = Modifier.drawBehind {
+        val k = flash.value
+        if (k < 1f) {
+            val spread = 14.dp.toPx() * k
+            drawRoundRect(
+                p.accent.copy(alpha = 0.6f * (1f - k)),
+                Offset(-spread, -spread),
+                Size(size.width + spread * 2, size.height + spread * 2),
+                CornerRadius(20.dp.toPx() + spread),
+            )
+        }
+    }
+    Block(glow, padding = PaddingValues(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 20.dp)) {
         if (last == null) {
             Label("마지막 수유")
             Text("아직 수유 기록이 없어요", Modifier.padding(top = 6.dp, bottom = 16.dp), style = Type.headline, color = p.textPrimary)
@@ -366,7 +422,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
             return@Block
         }
         Label("마지막 수유")
-        Text(agoText(last, now), Modifier.padding(top = 6.dp), style = Type.hero, color = p.textPrimary)
+        RollingText(agoText(last, now), Type.hero, p.textPrimary, Modifier.padding(top = 6.dp)) // 바뀐 자리만 굴러간다(roll)
         // 그 시각의 손 기록이 있으면 그 기록의 시간대(R13)와 쪽을 쓴다. 차 값에는 둘 다 없다.
         val mine = care.events.filter { it.kind == CareKind.FEED && it.deletedAt == null && it.startAt == last }
         val side = mine.firstNotNullOfOrNull { it.feedSide }
@@ -410,9 +466,20 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
                     k == CareKind.FEED -> "수유 중"
                     else -> "자는 중"
                 }
+                // 시안 .qb: 누르면 원만 0.94배(spring.snappy)·바탕 조금 짙게, 진행 중이면 원이 먹색으로 뒤집힌다(색은 motion.fast). 동작 줄이기면 바로.
+                val source = remember { MutableInteractionSource() }
+                val pressed by source.collectIsPressedAsState()
+                val reduced = LocalReducedMotion.current
+                val colorSpec = if (reduced) snap<Color>() else Motion.fast.spec()
+                val bg by animateColorAsState(if (running != null) p.textPrimary else if (pressed) p.tonal else p.surfaceRaised, colorSpec, label = "qbBg")
+                val fg by animateColorAsState(if (running != null) p.surface else p.textPrimary, colorSpec, label = "qbFg")
+                val text by animateColorAsState(if (running != null) p.textPrimary else p.textSecondary, colorSpec, label = "qbText")
+                val scale by animateFloatAsState(if (pressed && !reduced) 0.94f else 1f, Springs.snappy.spec(), label = "qbPress")
                 Column(
-                    Modifier.weight(1f).pressable(
-                        scale = 0.94f,
+                    Modifier.weight(1f).combinedClickable(
+                        source,
+                        null,
+                        role = Role.Button,
                         onLongClick = { sheet(k) },
                         onClick = {
                             when {
@@ -424,12 +491,11 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
                     ).padding(vertical = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    val bg = if (running != null) p.textPrimary else p.surfaceRaised
-                    Box(Modifier.size(56.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
-                        AIcon(kindIcon(k), Modifier.size(24.dp), if (running != null) p.surface else p.textPrimary)
+                    Box(Modifier.size(56.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                        AIcon(kindIcon(k), Modifier.size(24.dp), fg)
                     }
                     Spacer(Modifier.height(10.dp))
-                    Text(label, style = Type.caption.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = if (running != null) p.textPrimary else p.textSecondary)
+                    Text(label, style = Type.caption.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = text)
                 }
             }
         }
@@ -590,8 +656,10 @@ private fun TimerRing(e: CareEvent, now: Long) {
     // 초침은 보일 때만 돈다(굴려 가리면 멈춤). 동작 줄이기면 지난 초 자리에 멈춘 점.
     val sweep = if (reduced || !shown) (elapsed / 1000 % 60) / 60f else rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(tween(60_000, easing = LinearEasing), RepeatMode.Restart), label = "sweep").value
     val sub = if (e.kind == CareKind.FEED) listOfNotNull("수유 중", e.feedSide?.let(::sideName)).joinToString(" · ") else "자는 중"
-    BoxWithConstraints(Modifier.fillMaxWidth().onScreen { shown = it }, contentAlignment = Alignment.Center) {
-        val d = minOf(300.dp, maxWidth)
+    // 고리 지름: 300, 좁은 화면이면 화면 폭 − 바깥 여백(12·2 + 8·2). BoxWithConstraints(SubcomposeLayout)를 공유 요소 위에 두면
+    // 타이머에서 돌아갈 때 나가는 화면의 형제 칸(세그먼트·단추)이 오늘 화면 위에 남아 겹쳐 그려졌다(녹화로 확인).
+    val d = minOf(300.dp, (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 40).dp)
+    Box(Modifier.fillMaxWidth().onScreen { shown = it }, contentAlignment = Alignment.Center) {
         Box(Modifier.sharedRun("run-${e.id}").size(d), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 val stroke = 3.dp.toPx()

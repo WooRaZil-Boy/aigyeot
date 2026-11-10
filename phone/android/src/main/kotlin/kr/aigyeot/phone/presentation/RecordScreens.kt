@@ -368,8 +368,11 @@ fun RecordsTab(go: (Route) -> Unit, vm: RecordsViewModel = appViewModel()) {
     TabPage("기록") {
         StatusBands(connected = ui.connection is Connection.Paired)
         Segmented(listOf("하루", "패턴"), if (pattern) 1 else 0, { pattern = it == 1 }) // log.segment
-        if (pattern) PatternView(ui, now)
-        else DayView(ui, today, LocalDate.ofEpochDay(dayEpoch), { dayEpoch = it.toEpochDay() }, go, vm::delete, { editingId = it }, { adding = true })
+        // 하루·패턴을 바꾸면 그 아래 새 블록만 한 줄씩 올라온다(세그먼트는 그대로, iOS와 같음).
+        StaggerColumn(replay = pattern, animateFirst = false) {
+            if (pattern) PatternView(ui, now)
+            else DayView(ui, today, LocalDate.ofEpochDay(dayEpoch), { dayEpoch = it.toEpochDay() }, go, vm::delete, { editingId = it }, { adding = true })
+        }
     }
     val editing = editingId?.let { id -> ui.care.events.firstOrNull { it.id == id && it.deletedAt == null } }
     // 고치던 기록이 지워지면(기록 지우기 등) 시트를 닫는다.
