@@ -83,7 +83,9 @@ class SetupLinkDemoTest {
 
     @Test fun sceneInfo_titleAndAudioFileNames() {
         val a = sceneInfo("A", parseScene(File("src/main/assets/scenario/A.json").readText()))
-        assertEquals(SceneInfo("A", "등원 20분: 출발 5분 뒤 울음, 1차에 그침", listOf("stop_40s.pcm")), a)
+        assertEquals(SceneInfo("A", "등원 20분: 출발 5분 뒤 울음, 1차에 그침", listOf("stop_40s.pcm"), 5), a)
+        // 반복 단추는 그 장면 파일의 repeat에서 한 칸(기본 1인 장면에서 줄이면 1, 늘리면 2)
+        assertEquals(1, repeatDown(null, 1)); assertEquals(2, repeatUp(null, 1)); assertEquals(4, repeatDown(null, 5)); assertEquals(3, repeatDown(4, 1))
         assertEquals(SceneInfo("X", null, emptyList()), sceneInfo("X", null))   // 읽지 못한 파일
     }
 
@@ -125,5 +127,20 @@ class SetupLinkDemoTest {
         assertEquals(listOf(0f, 1f), pts.map { it.x })
         assertEquals(listOf(0.9f, 0.4f), pts.map { it.p })
         assertEquals(emptyList<ProbPoint>(), probPoints(emptyList()))
+    }
+
+    // 설정 양식 규칙(SetupForm.kt): 오늘은 주입받은 시계로, 생년월은 이번 달을 넘지 않고, 수유 간격은 30분 칸·10시간 끝·한 칸 아래면 비움
+    @Test fun setupForm_rulesUseInjectedClock() {
+        val now = java.time.ZonedDateTime.of(2026, 11, 10, 9, 0, 0, 0, java.time.ZoneId.of("Asia/Seoul")).toInstant().toEpochMilli()
+        assertEquals(java.time.YearMonth.of(2026, 11), thisMonth(now))
+        assertNull(nextBirthMonth(java.time.YearMonth.of(2026, 11), now))
+        assertEquals(java.time.YearMonth.of(2026, 11), nextBirthMonth(java.time.YearMonth.of(2026, 10), now))
+        assertEquals(java.time.YearMonth.of(2026, 11), birthMonthOf(null, now)); assertEquals(java.time.YearMonth.of(2026, 2), birthMonthOf("2026-02", now))
+        assertNull(intervalDown(30)); assertEquals(150, intervalDown(180)); assertNull(intervalDown(null))
+        assertEquals(30, intervalUp(null)); assertEquals(600, intervalUp(590)); assertEquals("비움(수유 시계 꺼짐)", intervalStepText(null)); assertEquals("3시간 0분", intervalStepText(180))
+        assertTrue(ageNote(java.time.YearMonth.of(2026, 10), now)!!.startsWith("참고")); assertNull(ageNote(java.time.YearMonth.of(2026, 7), now)); assertEquals("비워 두면 수유 시계가 꺼져요", ageNote(java.time.YearMonth.of(2026, 5), now))
+        val e = profileEntity(null, " 하늘 ", java.time.YearMonth.of(2026, 8), CarSeat.CENTER, 180, sibling = false, song = false, front = true, noRearOutput = false, now = now)
+        assertEquals("하늘", e.nickname); assertEquals("2026-08", e.birthYm); assertEquals("뒷좌석 출력이 있으면 앞 재생 허용은 저장하지 않는다", false, e.frontFallbackAllowed)
+        assertEquals(listOf(kr.aigyeot.engine.MethodKind.WHITE_NOISE, kr.aigyeot.engine.MethodKind.WOMB, kr.aigyeot.engine.MethodKind.LULLABY), e.methods.map { it.kind }); assertEquals(now, e.consentAt)
     }
 }

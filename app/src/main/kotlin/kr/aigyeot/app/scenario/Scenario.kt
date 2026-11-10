@@ -272,7 +272,7 @@ data class ScenarioProgress(val id: String, val run: Int, val of: Int, val t: Do
 data class SceneResults(val id: String, val rows: List<RunRow>)
 
 /** 장면 행 하나: id, 제목, 장면이 트는 녹음 파일 이름(경로 빼고, 겹침 없이). */
-data class SceneInfo(val id: String, val title: String?, val audio: List<String>)
+data class SceneInfo(val id: String, val title: String?, val audio: List<String>, val repeat: Int = 1)
 
 internal fun sceneInfo(id: String, scene: Scene?) =
-    SceneInfo(id, scene?.title, scene?.steps.orEmpty().mapNotNull { (it.action as? Audio)?.file?.substringAfterLast('/') }.distinct())
+    SceneInfo(id, scene?.title, scene?.steps.orEmpty().mapNotNull { (it.action as? Audio)?.file?.substringAfterLast('/') }.distinct(), scene?.repeat ?: 1)

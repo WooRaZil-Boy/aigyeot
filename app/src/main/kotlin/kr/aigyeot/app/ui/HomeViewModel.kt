@@ -79,7 +79,29 @@ sealed interface HomeCard {
 data class FlowItem(val text: String, val tone: Tone)
 
 /** 마지막 수유 카드. [start] null이면 기록 없음. [intervalMin]은 평소 간격(없으면 막대 없음). */
-data class FeedCard(val start: Long?, val intervalMin: Int?)
+data class FeedCard(
+    val start: Long?, val intervalMin: Int?,
+    /** 지난 시간 'h:mm'(1분 미만 '방금'), 1분 미만이면 [fresh]('지난 시간' 꼬리 없음). */
+    val ago: String = "", val fresh: Boolean = false,
+    /** 막대(간격 × [FEED_BAR_SPAN]까지)에 찬 몫과 간격 시작 눈금 자리(판단 코어 windowStartExpected와 같은 값). 간격이 없으면 null. */
+    val fill: Float? = null, val windowMark: Float? = null,
+)
+
+/** 수유 막대 끝 = 평소 간격의 1.25배(시안 feedCard). */
+internal const val FEED_BAR_SPAN = 1.25
+
+/** 마지막 수유 카드 값(시안 feedCard). 간격 시작 눈금은 판단 코어의 수유 시간대 시작(windowStartExpected, Params.feedingWindowStart)을 그대로 쓴다. */
+internal fun feedCard(start: Long?, intervalMin: Int?, now: Long, p: Params = Params()): FeedCard {
+    if (start == null) return FeedCard(null, intervalMin)
+    val ago = now - start
+    val iv = intervalMin?.takeIf { it > 0 }
+    val full = iv?.let { it * 60_000.0 * FEED_BAR_SPAN }
+    return FeedCard(
+        start, intervalMin, agoText(ago), ago < 60_000,
+        fill = full?.let { (ago / it).toFloat().coerceIn(0f, 1f) },
+        windowMark = full?.let { f -> kr.aigyeot.engine.windowStartExpected(start, iv, p)?.let { ((it - start) / f).toFloat() } },
+    )
+}
 
 /** 버튼: 출발 전(아기 탔어요 영웅) / 그 밖(물어보기 + 지금 먹이기). [askHero]면 물어보기가 영웅(정차 중). */
 data class Cta(val board: Boolean, val askHero: Boolean)
@@ -175,7 +197,7 @@ fun homeUi(
         sub = sub(s, now),
         said = shownSaid,
         card = card,
-        feed = FeedCard(s?.feedingStart, s?.profile?.feedingIntervalMin),
+        feed = feedCard(s?.feedingStart, s?.profile?.feedingIntervalMin, now, p),
         showDay = x == null,
         // 마이크가 멈췄으면 세션·예약 중이어도 '아기 탔어요'로 다시 켤 수 있게(지금 앱 동작, 명세 11장)
         cta = Cta(board = (x == null && s?.ign?.reserved != true) || s?.car?.micRunning != true, askHero = parked || qa != null),
@@ -443,7 +465,8 @@ class HomeViewModel(
     steps: StateFlow<Step?>, private val events: EventSink, private val link: Link, private val clock: () -> Long,
     said: StateFlow<Said?>, private val heard: StateFlow<HeardText?>, private val store: Store,
 ) : ViewModel() {
-    private val ticker = flow { while (true) { emit(clock()); delay(30_000) } }
+    // 시계 글자(수유 '방금'·'h:mm', 오늘 하루 지금 선)를 다시 계산하는 눈금. 값은 계산할 때의 clock()을 쓴다(눈금보다 늦은 기록도 바로 맞게)
+    private val ticker = flow { while (true) { emit(Unit); delay(10_000) } }
     private var lastKey: String? = null
     private var keyFrom = 0L
 
@@ -480,7 +503,8 @@ class HomeViewModel(
     private val extras = combine(lastEpisode.onStart { emit(Tagged(null, null)) }, done.onStart { emit(Tagged(null, emptySet())) }, carDay.onStart { emit(emptyList()) }) { a, b, c -> Triple(a, b, c) }
 
     // 기록 지우기 시각도 같이 본다(지운 뒤 홈에 돌아오면 옛 물어보기 카드가 바로 내려가게)
-    val uiState: StateFlow<HomeUi> = combine(steps, link.status, ticker, combine(said, heard, store.clearedAt) { a, b, _ -> a to b }, extras) { s, st, now, sh, ex ->
+    val uiState: StateFlow<HomeUi> = combine(steps, link.status, ticker, combine(said, heard, store.clearedAt) { a, b, _ -> a to b }, extras) { s, st, _, sh, ex ->
+        val now = clock()
         val sid = s?.state?.session?.id
         homeUi(s?.state, now, st, sh.first, sh.second, stepFrom(s?.state), ex.first.of(sid), ex.second.of(sid) ?: emptySet(), ex.third, lastQa = lastQa(s?.state))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), homeUi(steps.value?.state, clock(), link.status.value, said.value, heard.value, stepFrom(steps.value?.state), null, lastQa = lastQa(steps.value?.state)))

@@ -200,6 +200,10 @@ internal fun progressText(p: ScenarioProgress) = "${p.id} ${p.run}/${p.of}회 ·
 /** 반복 단추 글(null = 장면 파일의 repeat). */
 internal fun repeatText(repeat: Int?) = "반복 ${repeat?.toString() ?: "장면 기본"}"
 
+/** 반복 줄이기·늘리기: 고른 값이 없으면 그 장면 파일의 repeat(계약 7.2)에서 한 칸. 1 아래로는 내리지 않는다. */
+internal fun repeatDown(repeat: Int?, sceneRepeat: Int) = ((repeat ?: sceneRepeat) - 1).coerceAtLeast(1)
+internal fun repeatUp(repeat: Int?, sceneRepeat: Int) = (repeat ?: sceneRepeat) + 1
+
 /**
  * 시연·측정(시안 demo()): 왼쪽 장면 목록·반복·실행·멈춤, 오른쪽 측정(장면 진행·Virtual Console 확인)과 모든 기록 지우기(C40) → 확인 창.
  * 울음 확률 선(감지기 구간, 기준선 = Params 경보 문턱)과 측정표 네 칸은 실제로 잰 값만 그린다. 없는 값은 '—', 확률이 아직 없으면 기준선만.
@@ -212,6 +216,7 @@ fun DemoScreen(
     var sel by rememberSaveable { mutableStateOf(scenes.firstOrNull()?.id) }   // 화면 재생성(회전)에도 남긴다(명세서 11장)
     var repeat by rememberSaveable { mutableStateOf<Int?>(null) }   // null = 장면 파일의 repeat
     val running = ui.running
+    val base = scenes.firstOrNull { it.id == sel }?.repeat ?: 1   // 고른 장면 파일의 repeat
 
     val left: @Composable ColumnScope.(Modifier) -> Unit = { listModifier ->
         Sect("장면")
@@ -219,7 +224,7 @@ fun DemoScreen(
             items(scenes, key = { it.id }) { s -> SceneRow(s, s.id == sel, !running) { sel = s.id } }
         }
         Stepper(repeatText(repeat), Modifier.padding(top = 24.dp), minusEnabled = !running, plusEnabled = !running,
-            onMinus = { repeat = ((repeat ?: 5) - 1).coerceAtLeast(1) }, onPlus = { repeat = (repeat ?: 5) + 1 })
+            onMinus = { repeat = repeatDown(repeat, base) }, onPlus = { repeat = repeatUp(repeat, base) })
         Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             CarButton("실행", Modifier.weight(1f), BtnKind.BRAND, icon = R.drawable.ic_play, enabled = sel != null && !running) { sel?.let { onRun(it, repeat) } }
             CarButton("멈춤", Modifier.weight(1f), icon = R.drawable.ic_square, enabled = running, onClick = onStop)

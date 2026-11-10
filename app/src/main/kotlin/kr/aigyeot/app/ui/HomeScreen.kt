@@ -440,25 +440,21 @@ private fun LevelBars(reduced: Boolean) {
     }
 }
 
-/** 마지막 수유(시안 feedCard): 지난 시간을 크게, 평소 간격의 1.25배까지 막대, 간격 시작(0.8) 눈금은 아이 신호 색. */
+/** 마지막 수유(시안 feedCard): 지난 시간을 크게, 막대와 간격 시작 눈금(아이 신호 색). 값은 ViewModel의 feedCard가 정한다(화면은 그리기만). */
 @Composable
 private fun FeedPanel(f: FeedCard) {
     val p = LocalPalette.current
-    val now by produceState(System.currentTimeMillis(), f.start) { while (true) { value = System.currentTimeMillis(); delay(30_000) } }
     Panel(label = "마지막 수유") {
         val start = f.start
         if (start == null) { Text("기록 없음", style = CarType.bodyL, color = p.textSecondary); return@Panel }
-        val ago = now - start
-        val fresh = ago < 60_000
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(agoText(ago), style = CarType.numeral.copy(letterSpacing = (-0.03).em, fontFeatureSettings = "tnum"), color = p.textPrimary)
-            if (!fresh) Text("지난 시간", style = CarType.bodyS, color = p.textTertiary, modifier = Modifier.padding(bottom = 10.dp))
+            Text(f.ago, style = CarType.numeral.copy(letterSpacing = (-0.03).em, fontFeatureSettings = "tnum"), color = p.textPrimary)
+            if (!f.fresh) Text("지난 시간", style = CarType.bodyS, color = p.textTertiary, modifier = Modifier.padding(bottom = 10.dp))
         }
-        f.intervalMin?.takeIf { it > 0 }?.let { iv ->
-            val full = iv * 1.25f * 60_000
+        if (f.fill != null && f.windowMark != null) {
             val e = Tokens.motion.getValue("enter")
-            val v by animateFloatAsState((ago / full).coerceIn(0f, 1f), tween(e.ms, easing = e.easing), label = "meter")   // 시안 .meter i: width var(--m-enter)
-            val w = 0.8f / 1.25f
+            val v by animateFloatAsState(f.fill, tween(e.ms, easing = e.easing), label = "meter")   // 시안 .meter i: width var(--m-enter)
+            val w = f.windowMark
             Box(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 16.dp).height(24.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(p.surfaceRaised)) {
                     Box(Modifier.fillMaxWidth(v).fillMaxHeight().clip(RoundedCornerShape(4.dp)).background(p.textSecondary))

@@ -273,4 +273,13 @@ class HomeUiTest {
         assertEquals("오후 2:13", TimeText.clock(14, 13, ClockMode.TEXT)); assertEquals("14:13", TimeText.clock(14, 13, ClockMode.CHART))
         assertEquals("오전 12:05", TimeText.clock(0, 5, ClockMode.TEXT)); assertEquals("오후 12:52", TimeText.clock(12, 52, ClockMode.TEXT))
     }
+
+    // 마지막 수유 카드 값은 ViewModel(feedCard)이 정한다: 간격 시작 눈금은 판단 코어 windowStartExpected(0.8)와 같은 자리
+    @Test fun feedCard_meterUsesEngineWindowStart() {
+        val f = feedCard(T0 - 90 * 60_000, 180, T0)
+        assertEquals("1:30", f.ago); assertFalse(f.fresh)
+        assertEquals(90f / 225f, f.fill!!, 1e-4f); assertEquals(144f / 225f, f.windowMark!!, 1e-4f)
+        assertEquals("방금", feedCard(T0 - 30_000, 180, T0).ago); assertTrue(feedCard(T0 - 30_000, 180, T0).fresh)
+        assertNull(feedCard(T0, null, T0).fill, "간격이 없으면 막대 없음"); assertEquals("", feedCard(null, 180, T0).ago)
+    }
 }

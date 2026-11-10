@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kr.aigyeot.app.R
-import kr.aigyeot.app.store.db.AI_NOTICE_VERSION
 import kr.aigyeot.app.store.db.ChildProfileEntity
 import kr.aigyeot.app.store.db.consentChecked
 import kr.aigyeot.app.ui.car3d.CarView
@@ -71,7 +70,6 @@ import kr.aigyeot.engine.CarSeat
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
 import java.time.YearMonth
-import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
 /** 이 폭보다 좁으면 분할 840 배치(시안 .narrow): 한 줄로 쌓는다. 단독 창은 1706. */
@@ -99,7 +97,7 @@ fun SetupScreen(
     old: ChildProfileEntity?, now: () -> Long, noRearOutput: Boolean, onBack: (() -> Unit)?,
     onSongs: (() -> Unit)? = null, onDemo: (() -> Unit)? = null, onSave: (ChildProfileEntity) -> Unit,
 ) = Column(Modifier.fillMaxSize()) {
-    val ym = old?.birthYm?.let { runCatching { YearMonth.parse(it) }.getOrNull() } ?: YearMonth.now()
+    val ym = birthMonthOf(old?.birthYm, now())
     var consent by rememberSaveable { mutableStateOf(old.consentChecked()) }
     var nickname by rememberSaveable { mutableStateOf(old?.nickname ?: "") }
     var year by rememberSaveable { mutableStateOf(ym.year) }
@@ -143,33 +141,26 @@ fun SetupScreen(
         }
         pair({ m -> Column(m) {
                 FieldLabel("태어난 해·달")
-                val next = YearMonth.of(year, month).plusMonths(1)
-                Stepper(fit = true, text = "${year}년 ${month}월", minusEnabled = true, plusEnabled = !next.isAfter(YearMonth.now()),
-                    onMinus = { if (month == 1) { year--; month = 12 } else month-- },
-                    onPlus = { if (!next.isAfter(YearMonth.now())) { year = next.year; month = next.monthValue } })
+                val birth = YearMonth.of(year, month)
+                val next = nextBirthMonth(birth, now())
+                Stepper(fit = true, text = birthMonthText(birth), minusEnabled = true, plusEnabled = next != null,
+                    onMinus = { birth.minusMonths(1).let { year = it.year; month = it.monthValue } },
+                    onPlus = { next?.let { year = it.year; month = it.monthValue } })
             } }, { m -> Column(m) {
                 FieldLabel("평소 수유 간격")
-                Stepper(fit = true, text = interval?.let { "${it / 60}시간 ${it % 60}분" } ?: "비움(수유 시계 꺼짐)", minusEnabled = interval != null, plusEnabled = (interval ?: 0) < 600,
-                    onMinus = { interval = interval?.let { if (it <= 30) null else it - 30 } },
-                    onPlus = { interval = ((interval ?: 0) + 30).coerceAtMost(600) })
+                Stepper(fit = true, text = intervalStepText(interval), minusEnabled = interval != null, plusEnabled = (interval ?: 0) < INTERVAL_MAX_MIN,
+                    onMinus = { interval = intervalDown(interval) },
+                    onPlus = { interval = intervalUp(interval) })
             } })
         }
-        // 앱이 간격을 정하지는 않는다. 0~1개월이면 참고 범위(명세서 10장)를, 6개월 이상이면 비워 둘 수 있다는 것만 알린다
-        val age = ChronoUnit.MONTHS.between(YearMonth.of(year, month), YearMonth.now())
-        if (age <= 1) Note("참고: 신생아 모유는 보통 2시간, 첫 몇 주는 2~4시간, 분유는 첫 달 말 3~4시간이에요")
-        else if (age >= 6) Note("비워 두면 수유 시계가 꺼져요")
+        ageNote(YearMonth.of(year, month), now())?.let { Note(it) }
         RowsCard(Modifier.padding(top = 24.dp)) {
             SwitchRow("형제·자매가 함께 타요", null, sibling, R.drawable.ic_users) { sibling = it }
             SwitchRow("휴대폰으로 받은 부모 노래도 써요", "음원: 백색소음·뱃속 소리·자장가는 늘 써요", song, R.drawable.ic_song) { song = it }
             if (noRearOutput) SwitchRow("뒷좌석 스피커가 없어 앞에서도 작게 틀어요", null, front, R.drawable.ic_speaker) { front = it }
         }
-        CarButton("저장", Modifier.fillMaxWidth().padding(top = 28.dp), BtnKind.BRAND, enabled = consent && nickname.isNotBlank()) {
-            onSave(ChildProfileEntity(
-                id = old?.id ?: "child", nickname = nickname.trim(), birthYm = YearMonth.of(year, month).toString(), carseat = seat.name,
-                feedingIntervalMin = interval, lastFeedingStart = old?.lastFeedingStart,
-                methods = listOfNotNull(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY), if (song) Method(MethodKind.SONG) else null),
-                hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now(), aiNoticeVersion = AI_NOTICE_VERSION,
-            ))
+        CarButton("저장", Modifier.fillMaxWidth().padding(top = 28.dp), BtnKind.BRAND, enabled = canSave(consent, nickname)) {
+            onSave(profileEntity(old, nickname, YearMonth.of(year, month), seat, interval, sibling, song, front, noRearOutput, now()))
         }
         if (onSongs != null || onDemo != null) RowsCard(Modifier.padding(top = 28.dp)) {
             val chev: @Composable () -> Unit = { LineIcon(R.drawable.ic_chevron_right, 36.dp, p.textTertiary) }
