@@ -121,7 +121,7 @@ private fun QrCard(code: String, uri: String?, remainingS: Long?) = BoxWithConst
     }
     body {
         // 다크에서도 흰 판 위 검은 무늬: 뒤집힌 QR은 찍지 못하는 카메라가 있다
-        val plate = RoundedCornerShape(32.dp)
+        val plate = RoundedCornerShape(CarRadius.l)
         Box(Modifier.width(qr).aspectRatio(1f).clip(plate).background(Color.White).border(2.dp, p.line, plate).padding(20.dp)) {
             uri?.let { u -> remember(u) { pairQr(u) }?.let { QrImage(it) } }
         }
@@ -129,13 +129,13 @@ private fun QrCard(code: String, uri: String?, remainingS: Long?) = BoxWithConst
             Text("휴대폰 앱에서 QR을 찍거나 코드를 넣어 주세요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.textTertiary)
             BasicText(
                 code.chunked(3).joinToString(" "), Modifier.padding(top = 10.dp),
-                style = TextStyle(fontFamily = AppFont, fontSize = 72.sp, lineHeight = 80.sp, fontWeight = FontWeight(300), letterSpacing = 0.08.em, fontFeatureSettings = "tnum", color = p.textPrimary),
-                maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = 48.sp, maxFontSize = 72.sp),
+                style = CarType.numeral.copy(lineHeight = 80.sp, fontWeight = FontWeight(300), letterSpacing = 0.08.em, fontFeatureSettings = "tnum", color = p.textPrimary),   // 시안 .code 300 72/80
+                maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = CarType.headlineS.fontSize, maxFontSize = CarType.numeral.fontSize),
             )
             remainingS?.let { s ->
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     LineIcon(R.drawable.ic_timer, 30.dp, p.textSecondary)
-                    Text(remainingText(s), style = CarType.label.copy(fontSize = 26.sp, fontWeight = FontWeight(600)), color = p.textSecondary)
+                    Text(remainingText(s), style = CarType.label.copy(fontSize = CarType.bodyS.fontSize, fontWeight = FontWeight(600)), color = p.textSecondary)
                 }
             }
         }
@@ -197,7 +197,7 @@ private fun Phones(st: LinkStatus, onDisconnect: (String) -> Unit, onRefresh: ()
 private fun LinkArt() {
     val p = LocalPalette.current
     val phase: State<Float>? = if (reducedMotion()) null
-        else rememberInfiniteTransition("link").animateFloat(0f, -DASH * 2, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "dash")
+        else rememberInfiniteTransition("link").animateFloat(0f, -DASH * 2, infiniteRepeatable(tween(Tokens.loopMs.getValue("dash"), easing = LinearEasing)), label = "dash")
     val glow = lerp(p.stage, Color.White, 0.45f)
     Box(
         Modifier.padding(top = 20.dp).fillMaxWidth().height(300.dp).clip(RoundedCornerShape(CarRadius.l))

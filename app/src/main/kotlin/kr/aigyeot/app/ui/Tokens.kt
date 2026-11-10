@@ -79,6 +79,12 @@ object Tokens {
     /** 스프링: 이름 → (감쇠비, 강성). */
     val spring: Map<String, Pair<Float, Float>> = mapOf("snappy" to (0.86f to 600f), "smooth" to (1.0f to 385f), "bouncy" to (0.78f to 420f))
 
+    /**
+     * 차 화면의 되풀이 움직임 한 주기(ms). tokens.json 밖, 시안 car.css 키프레임 값 그대로(한 곳에 둔다):
+     * live = 듣는 점 숨쉬기(@keyframes live 1.8s), micRing = 물어보기 마이크 테(2s), levels = 마이크 막대(@keyframes lv 1.1s), dash = 연결 그림 점선(1.2s).
+     */
+    val loopMs: Map<String, Int> = mapOf("live" to 1800, "micRing" to 2000, "levels" to 1100, "dash" to 1200)
+
     /** 주행 중 상태가 바뀔 때 한 번 쓰는 페이드(ms, 시안 4.7 차 규칙). */
     const val DRIVE_FADE_MS = 200
 }

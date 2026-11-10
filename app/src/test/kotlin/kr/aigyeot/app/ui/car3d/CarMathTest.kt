@@ -19,7 +19,8 @@ class CarMathTest {
     @Test fun lerp_turnsTheShortWay_andEaseIsSymmetric() {
         val a = Cam(350f, 10f, 9f, 27f, floatArrayOf(0f, 0f, 0f)); val b = Cam(10f, 20f, 7f, 30f, floatArrayOf(1f, 1f, 1f))
         assertEquals(360f, CarMath.lerp(a, b, 0.5f).az, 0.001f, "350° → 10°는 20°만 돈다")
-        assertEquals(0.5f, CarMath.ease(0.5f), 1e-6f); assertEquals(0f, CarMath.ease(0f)); assertEquals(1f, CarMath.ease(1f))
+        val ease = kr.aigyeot.app.ui.Tokens.motion.getValue("camera").easing   // 카메라 곡선은 토큰 하나(cubic-bezier(.65,0,.35,1))
+        assertEquals(0.5f, ease.transform(0.5f), 1e-3f); assertEquals(0f, ease.transform(0f)); assertEquals(1f, ease.transform(1f))
     }
 
     @Test fun eye_isTargetPlusSpherical() {

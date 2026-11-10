@@ -40,7 +40,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -226,8 +225,8 @@ private fun Rise(reduced: Boolean, delayMs: Long, ms: Int, dy: Dp, blur: Dp, con
 }
 
 /** 열 바꿈 곡선·시간(시안 core.js: EASE_IN [.2,.8,.2,1], swap 나감 0.15초 [.4,0,1,1]). */
-private val ENTER_EASE = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
-private val EXIT_EASE = CubicBezierEasing(0.4f, 0f, 1f, 1f)
+private val ENTER_EASE = Tokens.motion.getValue("enter").easing
+private val EXIT_EASE = Tokens.motion.getValue("exit").easing
 private const val COL_EXIT_MS = 150
 
 @Composable
@@ -240,9 +239,10 @@ private fun EyebrowRow(e: Eyebrow) {
             if (e.live && !reducedMotion()) {
                 // 듣는 중 점 숨쉬기(시안 @keyframes live 1.8초, 구간마다 cb(.4,0,.2,1)): 0% 테 0·40% → 60% 테 12·투명 → 100% 처음으로. 실제로 듣는 신호일 때만
                 val t = rememberInfiniteTransition(label = "live")
-                val r by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "r")
+                val r by t.animateFloat(0f, 1f, infiniteRepeatable(tween(Tokens.loopMs.getValue("live"), easing = LinearEasing), RepeatMode.Restart), label = "r")
                 Canvas(Modifier.size(14.dp)) {
-                    val ring = if (r < 0.6f) FastOutSlowInEasing.transform(r / 0.6f) else 1f - FastOutSlowInEasing.transform((r - 0.6f) / 0.4f)
+                    val base = Tokens.motion.getValue("base").easing   // 시안 animation: live 1.8s var(--e-base)
+                    val ring = if (r < 0.6f) base.transform(r / 0.6f) else 1f - base.transform((r - 0.6f) / 0.4f)
                     drawCircle(dot.copy(alpha = 0.4f * (1 - ring)), size.minDimension / 2 + 12.dp.toPx() * ring)
                     drawCircle(dot, size.minDimension / 2)
                 }
@@ -272,7 +272,7 @@ private fun SaidLine(text: String, ask: Boolean) {
 private fun YnHint(text: String, yes: Boolean) {
     val p = LocalPalette.current
     Row(
-        Modifier.heightIn(min = 72.dp).clip(RoundedCornerShape(36.dp)).background(if (yes) p.accent else p.surfaceRaised).padding(horizontal = 32.dp),
+        Modifier.heightIn(min = 72.dp).clip(RoundedCornerShape(percent = 50)).background(if (yes) p.accent else p.surfaceRaised).padding(horizontal = 32.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (yes) LineIcon(R.drawable.ic_mic, 30.dp, p.onAccent)
@@ -411,10 +411,11 @@ private fun MicDot(reduced: Boolean) {
     val ease = Tokens.motion.getValue("ripple").easing
     Box(Modifier.size(88.dp).drawBehind {
         // 둘째 테는 1초 기다렸다 시작(시안 ::after animation-delay 1s)
-        if (!reduced) for (delay in longArrayOf(0L, 1000L)) {
+        if (!reduced) for (delay in longArrayOf(0L, Tokens.loopMs.getValue("micRing") / 2L)) {
             val t = ms() - delay
             if (t < 0) continue
-            val k = ease.transform((t % 2000L) / 2000f)
+            val per = Tokens.loopMs.getValue("micRing")
+            val k = ease.transform((t % per) / per.toFloat())
             drawCircle(p.accent.copy(alpha = 0.6f * (1 - k)), size.minDimension / 2 * (1 + 0.6f * k), style = Stroke(2.dp.toPx()))
         }
     }.clip(CircleShape).background(p.accent), Alignment.Center) { LineIcon(R.drawable.ic_mic, 40.dp, p.onAccent) }
@@ -425,7 +426,7 @@ private fun MicDot(reduced: Boolean) {
 private fun LevelBars(reduced: Boolean) {
     val p = LocalPalette.current
     val ms = elapsedMs(!reduced)
-    val inOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+    val inOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)   // 시안 animation: lv 1.1s ease-in-out(토큰이 아닌 CSS 표준 곡선 정의)
     Canvas(Modifier.width(216.dp).height(56.dp)) {
         val bw = 6.dp.toPx(); val gap = 6.dp.toPx()
         val now = ms()
@@ -433,7 +434,7 @@ private fun LevelBars(reduced: Boolean) {
             // 막대마다 (i×97)%700ms 기다리는 동안은 멈춘 높이(시안 inline height), 그 뒤 1.1초 주기
             val t = now - i * 97 % 700
             val k = if (reduced || t < 0) 0.18f + kotlin.math.abs(kotlin.math.sin(i * 1.3f)) * 0.7f
-            else { val q = (t % 1100L) / 1100f; 0.18f + 0.72f * inOut.transform(if (q < 0.5f) q * 2 else (1 - q) * 2) }
+            else { val per = Tokens.loopMs.getValue("levels"); val q = (t % per) / per.toFloat(); 0.18f + 0.72f * inOut.transform(if (q < 0.5f) q * 2 else (1 - q) * 2) }
             val h = size.height * k
             drawRoundRect(p.textTertiary, Offset(i * (bw + gap), (size.height - h) / 2), androidx.compose.ui.geometry.Size(bw, h), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
         }

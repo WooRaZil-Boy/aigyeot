@@ -1,5 +1,6 @@
 package kr.aigyeot.app.ui.car3d
 
+import kr.aigyeot.app.ui.Tokens
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -83,9 +84,9 @@ class CarEngine private constructor(private val prep: Prep) {
 
 
 
-        /** 곁의 응답·아이의 신호 빛(tokens glow·childGlow). */
-        const val GLOW = 0x7AA5FF
-        const val CHILD_GLOW = 0xFF9A5C
+        /** 곁의 응답·아이의 신호 빛(토큰 glow·childGlow를 그대로 읽는다). */
+        val GLOW = (Tokens.color.getValue("glow").first and 0xFFFFFF).toInt()
+        val CHILD_GLOW = (Tokens.color.getValue("childGlow").first and 0xFFFFFF).toInt()
 
         /** 바깥 껍데기(X-ray에서 사라진다)·유령 겹(프레넬 테두리로 남는다). 이름 규칙은 시안 그대로. */
         private val SHELL = Regex("^(Body|Body_Roof|Door_F_|Door_R_|Door_Handle|Mirror_|DLO_|Belt_|Grille|Head_Lamp|Rear_Lamp|Rear_Stop|Panel_Gap|Fuel_Door|Opera_Glass|Glass_|Sunroof_Glass|WheelWell|Parcel_Shelf|Lamp_R_Pod|Door_Trim_|Door_Upper_|Armrest_R_)")

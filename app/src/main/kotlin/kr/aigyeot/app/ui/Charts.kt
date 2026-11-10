@@ -133,8 +133,8 @@ internal fun steerValue(v: Double) = "%.1f".format(v)
 
 // ── 공용 그리기 ──
 
-private val BAND_EASE = CubicBezierEasing(0.65f, 0f, 0.35f, 1f)
-private val BAR_EASE = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
+private val BAND_EASE = Tokens.motion.getValue("camera").easing   // 띠가 왼쪽에서 그려지는 곡선(시안 charts.js: camera 곡선)
+private val BAR_EASE = Tokens.motion.getValue("enter").easing    // 막대가 자라는 곡선(시안: enter 곡선)
 
 /** 툴팁을 띄울 수 있는 표시 하나. */
 private class Hit(val rect: Rect, val tip: String)
@@ -196,12 +196,12 @@ private fun ChartCanvas(desc: String, key: Any, revealMs: Int, sweep: Boolean, m
 
 /** 툴팁(시안 .ch-tip: 먹색 판, 흰 글자 24/600, 여백 12·16, 반경 16). 표시 위에, 위가 모자라면 아래에. */
 private fun DrawScope.drawTip(h: Hit, tm: TextMeasurer, p: Palette) {
-    val l = tm.measure(h.tip, TextStyle(fontFamily = AppFont, fontSize = 24.sp, lineHeight = 31.sp, fontWeight = FontWeight(600), color = p.surface))
+    val l = tm.measure(h.tip, CarType.label.copy(lineHeight = 31.sp, fontWeight = FontWeight(600), color = p.surface))
     val ph = 16.dp.toPx(); val pv = 12.dp.toPx(); val m = 4.dp.toPx(); val gap = 12.dp.toPx()
     val w = l.size.width + ph * 2; val ht = l.size.height + pv * 2
     val x = (h.rect.center.x - w / 2).coerceIn(m, max(m, size.width - w - m))
     val y = (h.rect.top - ht - gap).let { if (it < 0) h.rect.bottom + gap else it }
-    drawRoundRect(p.textPrimary, Offset(x, y), Size(w, ht), CornerRadius(16.dp.toPx()))
+    drawRoundRect(p.textPrimary, Offset(x, y), Size(w, ht), CornerRadius(CarRadius.s.toPx()))
     drawText(l, topLeft = Offset(x + ph, y + pv))
 }
 
@@ -228,8 +228,8 @@ private fun barPath(l: Float, r: Float, top: Float, base: Float, rad: Float) = P
 
 // ── 오늘 하루(24시간 띠, 차 크기: 글자 24·값 26) ──
 
-private const val DAY_FS = 24f
-private const val DAY_K = DAY_FS / 13f
+private val DAY_FS = CarType.label.fontSize.value   // 차 크기 띠 글자 24(토큰 label)
+private val DAY_K = DAY_FS / 13f
 private fun r(v: Float) = v.roundToInt().toFloat()
 private val DAY_TH = r(18 * DAY_K); private val DAY_HH = r(DAY_FS * 1.35f); private val DAY_PAD = r(7 * DAY_K)
 private val DAY_GAP = r(16 * DAY_K); private val DAY_TOP = r(DAY_FS * 0.4f)
@@ -274,7 +274,7 @@ private fun dayGeo(d: DayChartData, w: Float, u: Float, tm: TextMeasurer, p: Pal
         fun nameIn(c: Color) = tm.measure(buildAnnotatedString { withStyle(SpanStyle(color = c)) { append(l.name) } }, style(DAY_FS, 600, c), overflow = TextOverflow.Ellipsis, maxLines = 1, constraints = one)
         fun rightIn(sub: Color, value: Color) = tm.measure(buildAnnotatedString {
             l.sub?.let { withStyle(SpanStyle(color = sub, fontWeight = FontWeight(500))) { append("$it  ") } }
-            withStyle(SpanStyle(color = value, fontWeight = FontWeight(700), fontSize = 26.sp)) { append(l.value) }
+            withStyle(SpanStyle(color = value, fontWeight = FontWeight(700), fontSize = CarType.bodyS.fontSize)) { append(l.value) }
         }, style(DAY_FS, 500, sub), overflow = TextOverflow.Ellipsis, maxLines = 1, constraints = one)
         val name = nameIn(ink); val right = rightIn(p.textTertiary, ink)
         val nameHalo = nameIn(p.surface); val rightHalo = rightIn(p.surface, p.surface)   // 같은 글을 바탕색으로(테)
@@ -338,7 +338,7 @@ private fun dayGeo(d: DayChartData, w: Float, u: Float, tm: TextMeasurer, p: Pal
 
 // ── 에피소드 띠(소리 줄·표시 + 축 밖 결과) ──
 
-private const val EPI_FS = 24f
+private val EPI_FS = CarType.label.fontSize.value
 private const val EPI_LEAD = 96f
 private const val EPI_LH = 64f
 
@@ -451,7 +451,7 @@ internal fun StatRow(stats: List<Stat>, modifier: Modifier = Modifier) = android
                 row.forEach { s ->
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(s.label, style = CarType.label, color = p.textTertiary)
-                        Text(s.value, style = style(40f, 700, p.textPrimary).copy(lineHeight = 52.sp), maxLines = 2)
+                        Text(s.value, style = style(CarType.titleL.fontSize.value, 700, p.textPrimary).copy(lineHeight = CarType.titleL.lineHeight), maxLines = 2)
                         s.sub?.let { Text(it, style = CarType.label, color = p.textTertiary) }
                     }
                 }
@@ -486,10 +486,10 @@ internal fun MethodDotsChart(rows: List<MethodDots>, modifier: Modifier = Modifi
             }
             Text(
                 if (m.known) buildAnnotatedString {
-                    withStyle(SpanStyle(color = p.textPrimary, fontWeight = FontWeight(700), fontSize = 32.sp)) { append("${m.ok}") }
+                    withStyle(SpanStyle(color = p.textPrimary, fontWeight = FontWeight(700), fontSize = CarType.titleS.fontSize)) { append("${m.ok}") }
                     append("/${m.n}번")
                 } else buildAnnotatedString { append("아직 모름") },
-                style = style(24f, 500, p.textTertiary), maxLines = 1,
+                style = style(CarType.label.fontSize.value, 500, p.textTertiary), maxLines = 1,
             )
         }
     }

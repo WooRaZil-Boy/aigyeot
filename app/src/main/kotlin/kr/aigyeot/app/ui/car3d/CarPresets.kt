@@ -92,8 +92,6 @@ object CarMath {
         return Cam(a.az + daz * e, a.el + (b.el - a.el) * e, a.d + (b.d - a.d) * e, a.fov + (b.fov - a.fov) * e, FloatArray(3) { a.t[it] + (b.t[it] - a.t[it]) * e })
     }
 
-    /** 카메라 곡선 cubic-bezier(0.65, 0, 0.35, 1)(Tokens camera)과 같은 모양의 대칭 in-out(시안 웹은 cubic in-out). */
-    fun ease(k: Float): Float = if (k < 0.5f) 4 * k * k * k else 1 - (-2 * k + 2).toDouble().pow(3.0).toFloat() / 2
 }
 
 /**

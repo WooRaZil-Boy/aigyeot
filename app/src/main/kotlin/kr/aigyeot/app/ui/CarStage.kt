@@ -148,15 +148,15 @@ fun CarStage(stage: Stage3d, modifier: Modifier = Modifier, interactive: Boolean
         if (interactive && !stage.drive) {
             // 처음엔 안내, 돌린 뒤엔 '처음 자리로'(80, 유리)
             if (!moved) Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(p.surface.copy(alpha = 0.7f)).padding(horizontal = 20.dp),
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(percent = 50)).background(p.surface.copy(alpha = 0.7f)).padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 LineIcon(R.drawable.ic_rotate_3d, 28.dp, p.accentInk)
                 Text("끌어서 돌려 보기", style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.textSecondary)
             } else Box(
                 Modifier.align(Alignment.BottomStart).padding(36.dp).size(80.dp)
-                    .press(label = "처음 자리로", shape = RoundedCornerShape(24.dp), bg = p.glassFill, pressedBg = p.glassFill) { view?.reset() }
-                    .border(1.dp, p.line, RoundedCornerShape(24.dp)),
+                    .press(label = "처음 자리로", shape = RoundedCornerShape(CarRadius.m), bg = p.glassFill, pressedBg = p.glassFill) { view?.reset() }
+                    .border(1.dp, p.line, RoundedCornerShape(CarRadius.m)),
                 Alignment.Center,
             ) { LineIcon(R.drawable.ic_locate_fixed, 36.dp, p.textPrimary, "처음 자리로") }
         }

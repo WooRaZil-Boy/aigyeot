@@ -125,10 +125,10 @@ fun SetupScreen(
             }
         }
         FieldLabel("아기 별명")
-        val fieldShape = RoundedCornerShape(24.dp)
+        val fieldShape = RoundedCornerShape(CarRadius.m)
         BasicTextField(
             nickname, { nickname = it.take(20) }, singleLine = true,
-            textStyle = TextStyle(fontFamily = AppFont, fontSize = 32.sp, fontWeight = FontWeight(400), color = p.textPrimary),
+            textStyle = CarType.titleS.copy(fontWeight = FontWeight(400), lineHeight = CarType.titleS.fontSize, color = p.textPrimary),   // 시안 .field 400 32px/1
             cursorBrush = SolidColor(p.accent),
             modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).clip(fieldShape).background(p.surface).border(3.dp, p.line, fieldShape)
                 .semantics { contentDescription = "아기 별명" },

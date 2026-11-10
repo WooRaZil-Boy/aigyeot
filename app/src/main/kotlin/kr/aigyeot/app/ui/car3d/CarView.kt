@@ -1,5 +1,6 @@
 package kr.aigyeot.app.ui.car3d
 
+import kr.aigyeot.app.ui.Tokens
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.Choreographer
@@ -179,14 +180,14 @@ class CarView(context: Context, private val interactive: Boolean) : TextureView(
         val t = System.nanoTime()
         var more = false
         fly?.let { f ->
-            val k = min(1f, (t - f.start) / 1e6f / f.ms); val e = CarMath.ease(k)
+            val k = min(1f, (t - f.start) / 1e6f / f.ms); val e = CAMERA_EASE.transform(k)
             cam = CarMath.lerp(f.from, f.to, e); xray = f.x0 + (f.x1 - f.x0) * e
             if (k >= 1f) { fly = null; cam = f.to; xray = f.x1; f.done() } else more = true
         }
         val f = fx.at(t)
         if (f.running) more = true
         if (spin()) more = true
-        val ripple = if (state.ripple && state.motionOk) ((t - t0) / 1e9f / 2f) % 1f else null
+        val ripple = if (state.ripple && state.motionOk) ((t - t0) / 1e6f / RIPPLE_MS) % 1f else null   // 소리 결 한 주기 = 토큰 motion.ripple
         if (ripple != null) more = true
         val hvac = Callout3d.HVAC in state.callouts
         if (hvac && state.motionOk && xray > 0.3f) more = true   // 바람 결이 실제로 보일 때만(실내 보기) 다음 프레임
@@ -251,5 +252,10 @@ class CarView(context: Context, private val interactive: Boolean) : TextureView(
         }
     }
 
-    companion object { const val CAMERA_MS = 1100 }
+    companion object {
+        /** 카메라 이동(토큰 motion.camera: 1100ms, cubic-bezier(.65,0,.35,1)). */
+        val CAMERA_MS = Tokens.motion.getValue("camera").ms
+        private val CAMERA_EASE = Tokens.motion.getValue("camera").easing
+        private val RIPPLE_MS = Tokens.motion.getValue("ripple").ms.toFloat()
+    }
 }

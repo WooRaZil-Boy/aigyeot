@@ -132,7 +132,7 @@ private fun DidCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifi
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LineIcon(actionIcon(a.kind), 30.dp, p.textTertiary)
                     Column {
-                        Text(a.name, style = CarType.label.copy(fontSize = 26.sp, lineHeight = 32.sp), color = p.textPrimary)
+                        Text(a.name, style = CarType.label.copy(fontSize = CarType.bodyS.fontSize, lineHeight = 32.sp), color = p.textPrimary)
                         Text(a.extra, style = CarType.label, color = p.textTertiary)
                     }
                 }

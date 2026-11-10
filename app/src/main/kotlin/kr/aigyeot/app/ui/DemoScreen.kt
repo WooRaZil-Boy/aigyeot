@@ -319,7 +319,7 @@ private fun SceneRow(s: SceneInfo, on: Boolean, enabled: Boolean, onClick: () ->
 @Composable
 private fun Badge(id: String) {
     val p = LocalPalette.current
-    Box(Modifier.heightIn(min = 64.dp).widthIn(min = 64.dp).clip(RoundedCornerShape(32.dp)).background(p.surfaceRaised).padding(horizontal = 16.dp), Alignment.Center) {
+    Box(Modifier.heightIn(min = 64.dp).widthIn(min = 64.dp).clip(RoundedCornerShape(percent = 50)).background(p.surfaceRaised).padding(horizontal = 16.dp), Alignment.Center) {
         Text(id, style = CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(600)), color = p.textSecondary, maxLines = 1)
     }
 }

@@ -171,7 +171,7 @@ fun LineIcon(id: Int, size: Dp, tint: Color = LocalContentColor.current, desc: S
     Icon(painterResource(id), desc, Modifier.size(size), tint = tint)
 
 enum class BtnKind { PLAIN, BRAND, FILL, DANGER }
-enum class BtnSize(val h: Dp, val r: Dp, val pad: Dp, val icon: Dp) { L(100.dp, 32.dp, 40.dp, 38.dp), M(80.dp, 24.dp, 30.dp, 32.dp), S(64.dp, 20.dp, 24.dp, 28.dp) }
+enum class BtnSize(val h: Dp, val r: Dp, val pad: Dp, val icon: Dp) { L(100.dp, CarRadius.l, 40.dp, 38.dp), M(80.dp, CarRadius.m, 30.dp, 32.dp), S(64.dp, 20.dp, 24.dp, 28.dp) }
 
 /** 버튼(Pleos Large·Medium·Small). 그림자·빛 없음. 영웅 버튼(BRAND)은 화면에 하나만. */
 @Composable
@@ -189,7 +189,7 @@ fun CarButton(
     // 누름 면(시안 .btn:active 먹색 11%, .btn.brand:active 브랜드 86% + 먹색)
     // 브랜드는 라이트·다크 모두 어둡게 눌러 흰 글자 대비 4.5:1 이상을 지킨다(다크의 먹색은 밝아 대비가 떨어진다)
     val pressedBg = when (kind) { BtnKind.BRAND -> lerp(p.accent, Color.Black, 0.14f); BtnKind.FILL -> lerp(p.fill, p.onFill, 0.12f); BtnKind.DANGER -> p.surface; else -> p.ink(11) }
-    val style = when (size) { BtnSize.L -> CarType.titleS; BtnSize.M -> CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(600)); BtnSize.S -> CarType.label.copy(fontSize = 26.sp, fontWeight = FontWeight(600)) }
+    val style = when (size) { BtnSize.L -> CarType.titleS; BtnSize.M -> CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(600)); BtnSize.S -> CarType.label.copy(fontSize = CarType.bodyS.fontSize, fontWeight = FontWeight(600)) }
     val a = if (enabled) 1f else 0.38f
     Row(
         modifier.heightIn(min = size.h).press(enabled, label = text, shape = RoundedCornerShape(size.r), bg = bg.copy(alpha = bg.alpha * a), pressedBg = pressedBg, onClick = onClick)
@@ -232,7 +232,7 @@ fun Header(title: String, onBack: (() -> Unit)?, actions: @Composable () -> Unit
             Modifier.fillMaxWidth().heightIn(min = 112.dp).background(p.surface).padding(start = if (onBack != null) 28.dp else 44.dp, end = 32.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            if (onBack != null) Box(Modifier.size(80.dp).press(label = "뒤로", shape = RoundedCornerShape(24.dp), pressedBg = p.ink(8), onClick = onBack), Alignment.Center) {
+            if (onBack != null) Box(Modifier.size(80.dp).press(label = "뒤로", shape = RoundedCornerShape(CarRadius.m), pressedBg = p.ink(8), onClick = onBack), Alignment.Center) {
                 LineIcon(R.drawable.ic_chevron_left, 48.dp, p.textPrimary, "뒤로")
             } else AppMark(60.dp)
             Text(title, style = CarType.titleL, color = p.textPrimary, maxLines = 1, modifier = Modifier.weight(1f))
@@ -253,7 +253,7 @@ fun AppMark(size: Dp) {
 @Composable
 fun IconBtn(icon: Int, desc: String, enabled: Boolean = true, onClick: () -> Unit) {
     val p = LocalPalette.current
-    Box(Modifier.size(80.dp).press(enabled, label = desc, shape = RoundedCornerShape(24.dp), bg = p.ink(5), pressedBg = p.ink(11), onClick = onClick), Alignment.Center) {
+    Box(Modifier.size(80.dp).press(enabled, label = desc, shape = RoundedCornerShape(CarRadius.m), bg = p.ink(5), pressedBg = p.ink(11), onClick = onClick), Alignment.Center) {
         LineIcon(icon, 40.dp, p.textPrimary, desc)
     }
 }
@@ -303,7 +303,7 @@ fun ListRow(
 fun CarSwitch(on: Boolean) {
     val p = LocalPalette.current
     val x by animateFloatAsState(if (on) 32f else 0f, tween(Tokens.motion.getValue("fast").ms, easing = Tokens.motion.getValue("fast").easing), label = "sw")
-    Box(Modifier.size(80.dp, 48.dp).clip(RoundedCornerShape(24.dp)).background(if (on) p.active else p.ink(22))) {
+    Box(Modifier.size(80.dp, 48.dp).clip(RoundedCornerShape(percent = 50)).background(if (on) p.active else p.ink(22))) {
         Box(Modifier.padding(start = (4 + x).dp, top = 4.dp).size(40.dp).clip(RoundedCornerShape(20.dp)).background(Color.White))
     }
 }
@@ -329,7 +329,7 @@ fun <T> Segmented(items: List<Pair<T, String>>, selected: T, modifier: Modifier 
     val p = LocalPalette.current
     val fast = Tokens.motion.getValue("fast")
     // 바깥을 자르지 않는다: 고른 칸 그림자가 판 밖으로 번진다(시안 .segc는 overflow를 자르지 않음)
-    Row(modifier.fillMaxWidth().background(p.ink(5), RoundedCornerShape(32.dp)).padding(6.dp)) {
+    Row(modifier.fillMaxWidth().background(p.ink(5), RoundedCornerShape(CarRadius.l)).padding(6.dp)) {
         items.forEach { (k, label) ->
             val on = k == selected
             // 고른 칸 면·그림자는 fast(150ms)로 바뀐다(시안 .segc span: transition background var(--m-fast), .on 그림자 0 7 28 .14 + 0 2 2 .06)
@@ -355,12 +355,12 @@ fun <T> Segmented(items: List<Pair<T, String>>, selected: T, modifier: Modifier 
 @Composable
 fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, fit: Boolean = false, onMinus: () -> Unit, onPlus: () -> Unit) {
     val p = LocalPalette.current
-    val shape = RoundedCornerShape(32.dp)
+    val shape = RoundedCornerShape(CarRadius.l)
     Row(modifier.fillMaxWidth().heightIn(min = 100.dp).clip(shape).background(p.surface).border(2.dp, p.line, shape), verticalAlignment = Alignment.CenterVertically) {
         StepKey(R.drawable.ic_minus, "줄이기", minusEnabled, onMinus)
         if (fit) androidx.compose.foundation.text.BasicText(
             text, Modifier.weight(1f), style = CarType.titleM.copy(color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 1.25.em),
-            maxLines = 2, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 36.sp),
+            maxLines = 2, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = CarType.label.fontSize, maxFontSize = CarType.titleM.fontSize),
         ) else Text(text, style = CarType.titleM, color = p.textPrimary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
         StepKey(R.drawable.ic_plus, "늘리기", plusEnabled, onPlus)
     }
@@ -370,7 +370,7 @@ fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean =
 @Composable
 private fun StepKey(icon: Int, label: String, enabled: Boolean, onClick: () -> Unit) {
     val p = LocalPalette.current
-    Box(Modifier.size(100.dp).press(enabled, label = label, shape = RoundedCornerShape(32.dp), pressedBg = p.ink(8), onClick = onClick), Alignment.Center) {
+    Box(Modifier.size(100.dp).press(enabled, label = label, shape = RoundedCornerShape(CarRadius.l), pressedBg = p.ink(8), onClick = onClick), Alignment.Center) {
         LineIcon(icon, 40.dp, p.textPrimary.copy(alpha = if (enabled) 1f else 0.38f), label)
     }
 }
@@ -389,7 +389,7 @@ fun Pill(text: String, icon: Int? = null, live: Boolean = false) {
     val p = LocalPalette.current
     Row(Modifier.heightIn(min = 56.dp).clip(RoundedCornerShape(28.dp)).background(p.surfaceRaised).padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (live) Box(Modifier.size(24.dp), Alignment.Center) {
-            Box(Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).background(p.accent.copy(alpha = 0.22f)))
+            Box(Modifier.size(24.dp).clip(RoundedCornerShape(percent = 50)).background(p.accent.copy(alpha = 0.22f)))
             Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(p.accent))
         }
         if (icon != null) LineIcon(icon, 28.dp, p.textSecondary)
@@ -410,7 +410,7 @@ fun Popup(title: String, body: String, confirm: String, dismiss: String, onConfi
         LaunchedEffect(Unit) { k.animateTo(1f, tween(e.ms, easing = e.easing)) }
         Column(Modifier.graphicsLayer { alpha = k.value; val s = 0.96f + 0.04f * k.value; scaleX = s; scaleY = s }
             .widthIn(max = 808.dp).fillMaxWidth().clip(RoundedCornerShape(48.dp)).background(p.surface).padding(48.dp)) {
-            Text(title, style = TextStyle(fontFamily = AppFont, fontSize = 40.sp, lineHeight = 52.sp, fontWeight = FontWeight(700)), color = p.textPrimary)
+            Text(title, style = CarType.titleL.copy(fontWeight = FontWeight(700)), color = p.textPrimary)   // 시안 .popup h3 700 40/52
             Text(body, style = CarType.bodyL, color = p.textSecondary, modifier = Modifier.padding(top = 16.dp, bottom = 36.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 CarButton(confirm, Modifier.weight(1f), BtnKind.FILL, onClick = onConfirm)
