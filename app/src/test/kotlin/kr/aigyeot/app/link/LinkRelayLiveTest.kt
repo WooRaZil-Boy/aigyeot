@@ -98,10 +98,16 @@ class LinkRelayLiveTest {
             waitFor("state_request 답") { inbox().size > before }
             val stateMs = System.currentTimeMillis() - tReq
 
-            val tQa = System.currentTimeMillis()
-            link.handle(Qa("live", "다음 수유실 어디야?"))
-            waitFor("QaReply") { events.any { it.second is QaReply } }
-            val qaMs = events.first { it.second is QaReply }.first - tQa
+            // ④ 질문 셋(사실·도구·왜): 모델이 고른 주제(topics, 빈 글이면 문장은 판단 코어가 짠다)·도구 사건(tools, 오프라인 길은 도구를 내지 않는다)·글과 지연을 찍는다
+            var qaMs = 0L
+            for ((i, q) in listOf("다음 수유실 어디야?", "백색소음으로 바꿔 줘", "아기가 왜 자꾸 울까?").withIndex()) {
+                val tQa = System.currentTimeMillis()
+                link.handle(Qa("live$i", q))
+                waitFor("QaReply $i") { events.any { (it.second as? QaReply)?.listenId == "live$i" } }
+                val (at, r) = events.first { (it.second as? QaReply)?.listenId == "live$i" }
+                qaMs = at - tQa
+                println("LIVE qa q=\"$q\" ms=$qaMs llm=${(r as QaReply).llm} care=${r.careUsed} topics=${r.factTopics + r.fallbackTopics} tools=${events.filter { it.first >= tQa && it.second !is QaReply }.map { it.second::class.simpleName }} text=\"${r.text}\"")
+            }
 
             link.disconnect(phone)
             waitFor("차 끊기") { link.status.value.phones.none { it.deviceId == phone } }
