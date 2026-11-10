@@ -95,7 +95,7 @@ fun CarStage(stage: Stage3d, modifier: Modifier = Modifier, interactive: Boolean
     // 주행 중 상태가 바뀌면 200ms 페이드 한 번(시안 .cs.fade). 앞 상태는 시작할 때 바꿔 둔다: 페이드가 도중에 끊기고(A→B→A) 돌아와도 다시 끝까지 간다
     LaunchedEffect(stage) {
         val prev = last[0]; last[0] = stage
-        if (stage.drive && prev != null && prev != stage) { fade.snapTo(0f); fade.animateTo(1f, tween(Tokens.DRIVE_FADE_MS)) } else fade.snapTo(1f)
+        if (stage.drive && prev != null && prev != stage) { fade.snapTo(0f); fade.animateTo(1f, tween(Tokens.DRIVE_FADE_MS, easing = androidx.compose.animation.core.LinearEasing)) } else fade.snapTo(1f)
     }
     // 칩 등장(시안 .co coIn: 칩마다 90ms 늦게, 아래 10에서 올라오며 나타남, 선은 같이 페이드). 동작 줄이기면 바로
     val enter = Tokens.motion.getValue("enter")

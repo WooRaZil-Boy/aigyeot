@@ -29,6 +29,13 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.Animatable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -136,20 +143,24 @@ fun AppTheme(content: @Composable () -> Unit) {
     }
 }
 
+/** 누른 면 배율(Pleos Interaction 공식 95%). */
+const val PRESS_SCALE = 0.95f
+
 /**
- * 누름(시안 4.7 press·Pleos Interaction): 면 전체가 0.97배(90ms 선형)로 줄고, [pressedBg]가 있으면 누르는 동안 그 색. 영역 밖으로 끌면 취소된다(clickable 기본).
+ * 누름(Pleos Interaction 'Button interaction': 누르면 95%로 줄고 모드별 배경색, 영역 밖으로 나가면 취소): 면 전체가 0.95배(시안 press 90ms 선형)로 줄고,
+ * [pressedBg]가 있으면 누르는 동안 그 색. 영역 밖으로 끌면 취소된다(clickable 기본). 시안 0.97보다 Pleos 공식 95%가 우선(차 앱).
  * 모양·배경도 여기서 그려야 면까지 함께 준다(배경을 앞에 두면 글자만 줄어든다).
  */
 @Composable
 fun Modifier.press(
     enabled: Boolean = true, role: Role = Role.Button, label: String? = null,
-    shape: Shape? = null, bg: Color = Color.Transparent, pressedBg: Color? = null, onClick: () -> Unit,
+    shape: Shape? = null, bg: Color = Color.Transparent, pressedBg: Color? = null, decor: Modifier = Modifier, onClick: () -> Unit,
 ): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val m = Tokens.motion.getValue("press")
-    val k by animateFloatAsState(if (pressed) 0.97f else 1f, tween(m.ms, easing = m.easing), label = "press")
-    var out = graphicsLayer { scaleX = k; scaleY = k }
+    val k by animateFloatAsState(if (pressed) PRESS_SCALE else 1f, tween(m.ms, easing = m.easing), label = "press")
+    var out = graphicsLayer { scaleX = k; scaleY = k }.then(decor)   // [decor](그림자 등)도 면과 함께 줄어든다(Pleos: 버튼 전체가 95%)
     if (shape != null) out = out.clip(shape)
     val fill = if (pressed && pressedBg != null) pressedBg else bg
     if (fill != Color.Transparent) out = out.background(fill)
@@ -282,7 +293,7 @@ fun ListRow(
     val bg = if (selected) p.ink(6) else Color.Transparent
     val base = Modifier.fillMaxWidth().heightIn(min = 100.dp)
     Row(
-        (if (onClick != null) base.press(enabled, if (toggled != null) Role.Switch else Role.Button, title, shape, bg, p.ink(8), onClick) else base.clip(shape).background(bg))
+        (if (onClick != null) base.press(enabled, if (toggled != null) Role.Switch else Role.Button, title, shape, bg, p.ink(8), onClick = onClick) else base.clip(shape).background(bg))
             .semantics(mergeDescendants = true) { if (toggled != null) toggleableState = ToggleableState(toggled); if (selected) this.selected = true }   // 켜짐·고름 상태를 접근성에 알린다
             .padding(horizontal = 28.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp),
@@ -325,15 +336,23 @@ fun CheckBox(on: Boolean) {
 @Composable
 fun <T> Segmented(items: List<Pair<T, String>>, selected: T, modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
     val p = LocalPalette.current
-    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(p.ink(5)).padding(6.dp)) {
+    val fast = Tokens.motion.getValue("fast")
+    // 바깥을 자르지 않는다: 고른 칸 그림자가 판 밖으로 번진다(시안 .segc는 overflow를 자르지 않음)
+    Row(modifier.fillMaxWidth().background(p.ink(5), RoundedCornerShape(32.dp)).padding(6.dp)) {
         items.forEach { (k, label) ->
             val on = k == selected
+            // 고른 칸 면·그림자는 fast(150ms)로 바뀐다(시안 .segc span: transition background var(--m-fast), .on 그림자 0 7 28 .14 + 0 2 2 .06)
+            val selState = animateFloatAsState(if (on) 1f else 0f, tween(fast.ms, easing = fast.easing), label = "seg")
+            val sel = selState.value
+            val selK = remember(selState) { { selState.value } }   // 그릴 때 읽는다(전환 중에도 그림자 캐시를 다시 만들지 않게)
+            val face = if (p.isDark) Color(0xFF3A3F46) else p.surface
+            val shadow = remember(selK) { Modifier.cssShadow(RoundedCornerShape(26.dp), selK, CssShadow(7.dp, 28.dp, 0.14f), CssShadow(2.dp, 2.dp, 0.06f)) }
             Box(
                 Modifier.weight(1f).heightIn(min = 88.dp)
-                    .press(label = label, role = Role.RadioButton, shape = RoundedCornerShape(26.dp), bg = if (on) (if (p.isDark) Color(0xFF3A3F46) else p.surface) else Color.Transparent) { onSelect(k) }
+                    .press(label = label, role = Role.RadioButton, shape = RoundedCornerShape(26.dp), bg = face.copy(alpha = face.alpha * sel), decor = shadow) { onSelect(k) }
                     .semantics { this.selected = on },
                 Alignment.Center,
-            ) { Text(label, style = CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(700)), color = if (on) p.textPrimary else p.textSecondary, maxLines = 1) }
+            ) { Text(label, style = CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(700)), color = lerp(p.textSecondary, p.textPrimary, sel), maxLines = 1) }
         }
     }
 }
@@ -377,12 +396,47 @@ fun Pill(text: String, icon: Int? = null, live: Boolean = false) {
 fun Popup(title: String, body: String, confirm: String, dismiss: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val p = LocalPalette.current
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Column(Modifier.widthIn(max = 808.dp).fillMaxWidth().clip(RoundedCornerShape(48.dp)).background(p.surface).padding(48.dp)) {
+        // 바탕 가림(시안 .popup-scrim rgba(19,20,23,.4))은 창 흐림 0.4로, 창은 0.96배·투명에서 enter(360ms cb(.2,.8,.2,1))로 들어온다(시안 popIn)
+        (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setDimAmount(0.4f)
+        val e = Tokens.motion.getValue("enter")
+        val still = reducedMotion()
+        val k = remember { Animatable(if (still) 1f else 0f) }
+        LaunchedEffect(Unit) { k.animateTo(1f, tween(e.ms, easing = e.easing)) }
+        Column(Modifier.graphicsLayer { alpha = k.value; val s = 0.96f + 0.04f * k.value; scaleX = s; scaleY = s }
+            .widthIn(max = 808.dp).fillMaxWidth().clip(RoundedCornerShape(48.dp)).background(p.surface).padding(48.dp)) {
             Text(title, style = TextStyle(fontFamily = AppFont, fontSize = 40.sp, lineHeight = 52.sp, fontWeight = FontWeight(700)), color = p.textPrimary)
             Text(body, style = CarType.bodyL, color = p.textSecondary, modifier = Modifier.padding(top = 16.dp, bottom = 36.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 CarButton(confirm, Modifier.weight(1f), BtnKind.FILL, onClick = onConfirm)
                 CarButton(dismiss, Modifier.weight(1f), onClick = onDismiss)
+            }
+        }
+    }
+}
+
+/** CSS box-shadow 한 겹(dp): 아래로 [dy], 흐림 [blur](CSS 흐림 = 2σ), 검정 [alpha]. */
+data class CssShadow(val dy: Dp, val blur: Dp, val alpha: Float)
+
+/** 시안 box-shadow를 그대로(겹마다 setShadowLayer). [k]는 0~1 세기(그릴 때 읽는다). 윤곽·물감은 크기가 바뀔 때만 만든다(그릴 때 할당 없음). */
+fun Modifier.cssShadow(shape: Shape, k: () -> Float, vararg layers: CssShadow): Modifier = drawWithCache {
+    val outline = shape.createOutline(size, layoutDirection, this)
+    val path = androidx.compose.ui.graphics.Path().apply {
+        when (outline) {
+            is androidx.compose.ui.graphics.Outline.Rectangle -> addRect(outline.rect)
+            is androidx.compose.ui.graphics.Outline.Rounded -> addRoundRect(outline.roundRect)
+            is androidx.compose.ui.graphics.Outline.Generic -> addPath(outline.path)
+        }
+    }.asAndroidPath()
+    val paints = layers.map { androidx.compose.ui.graphics.Paint().asFrameworkPaint().apply { isAntiAlias = true; color = android.graphics.Color.TRANSPARENT } }
+    val radii = layers.map { ((it.blur.toPx() / 2f - 0.5f) / 0.57735f).coerceAtLeast(0.1f) }
+    val dys = layers.map { it.dy.toPx() }
+    onDrawBehind {
+        val kk = k()
+        if (kk <= 0f) return@onDrawBehind
+        drawIntoCanvas { c ->
+            layers.forEachIndexed { i, l ->
+                paints[i].setShadowLayer(radii[i], 0f, dys[i], android.graphics.Color.argb((l.alpha * kk * 255).toInt(), 0, 0, 0))
+                c.nativeCanvas.drawPath(path, paints[i])
             }
         }
     }

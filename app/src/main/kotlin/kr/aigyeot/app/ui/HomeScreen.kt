@@ -38,6 +38,14 @@ import androidx.compose.animation.core.animateFloat as animateFloatT
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -149,29 +157,39 @@ private fun StatusColumn(
     ui: HomeUi, reduced: Boolean, modifier: Modifier, connLine: String?,
     onBabyAboard: () -> Unit, onFeedingNow: () -> Unit, onAsk: () -> Unit, onFeedingConfirm: (Boolean) -> Unit,
 ) {
-    val enter = Tokens.motion.getValue("enter"); val exit = Tokens.motion.getValue("exit")
+    // 열 바꿈(시안 core.js swap): 열쇠가 바뀌면 옛 열이 0.15초 동안 흐려지며(블러 6·위로 6·투명) 빠진 뒤 새 열로 바꾸고, 새 열은 줄마다 Enter로 들어온다.
+    // 옛 열이 다 빠진 뒤에 바꾸므로 둘이 겹쳐 보이지 않는다. 빠지는 중에 또 바뀌면 이어서 빠진 뒤 가장 새 값으로 바꾼다. 같은 열쇠 안의 값(시계·숫자)은 그 자리에서 고쳐 그린다
+    val latest by rememberUpdatedState(ui)
+    val shown = remember { arrayOf(ui) }   // 지금 보이는 열의 가장 새 값(같은 열쇠 안의 갱신도 담아, 나가는 동안 옛 값으로 되돌아가지 않게)
+    var gen by remember { mutableStateOf(0) }
+    val leaveA = remember { Animatable(0f) }
+    val target = columnKey(ui)
+    LaunchedEffect(target) {
+        // 나가는 중에 원래 열쇠로 돌아오면 흐림을 거두고 그 열을 그대로 둔다
+        if (columnKey(shown[0]) == target) { leaveA.snapTo(0f); return@LaunchedEffect }
+        if (!reduced) leaveA.animateTo(1f, tween(COL_EXIT_MS, easing = EXIT_EASE))
+        shown[0] = latest; gen++; leaveA.snapTo(0f)
+    }
+    val u = if (columnKey(ui) == columnKey(shown[0])) ui.also { shown[0] = it } else shown[0]
     Column(modifier) {
-        AnimatedContent(
-            targetState = ui, contentKey = { columnKey(it) }, modifier = Modifier.weight(1f),
-            transitionSpec = { if (reduced) fadeIn(tween(0)) togetherWith fadeOut(tween(0)) else fadeIn(tween(1, delayMillis = exit.ms)) togetherWith fadeOut(tween(exit.ms, easing = exit.easing)) },
-            label = "column",
-        ) { u ->
-            // 나가는 열은 블러 6으로 흐려지며 빠진다(시안 4.7 ① exit 180ms). 들어오는 열은 줄마다 Enter가 맡는다
-            val leave by transition.animateFloat({ tween(exit.ms, easing = exit.easing) }, label = "leave") { if (it == androidx.compose.animation.EnterExitState.PostExit) 1f else 0f }
+        key(gen) {
+            val isFirst = gen == 0   // 홈에 처음 들어올 때만 첫 열(시안 enter first: 22에서 올라옴)
+            val leave = leaveA.value
             // 정차 화면이라 넘치면 스크롤(분할 840·카드가 많은 단계에서 마지막 수유가 잘리지 않게). 버튼은 아래 고정
-            Column(Modifier.fillMaxSize().blur((leave * 6).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            Column(Modifier.weight(1f).fillMaxWidth().graphicsLayer { translationY = -6.dp.toPx() * leave; alpha = 1f - leave }.blur((leave * 6).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                // 상태 한 줄(낱말)은 따로 들어오고 줄 순서에 끼지 않는다(시안 enter: kids는 headline을 뺀다)
                 var i = 0
-                Enter(i++, reduced) { EyebrowRow(u.eyebrow) }
+                Enter(i++, reduced, isFirst) { EyebrowRow(u.eyebrow) }
                 Column {
-                    Headline(u.status, i++, reduced)
-                    u.sub?.let { Enter(i++, reduced) { Text(it, style = CarType.bodyS, color = LocalPalette.current.textTertiary) } }
+                    Headline(u.status, reduced)
+                    u.sub?.let { Enter(i++, reduced, isFirst) { Text(it, style = CarType.bodyS, color = LocalPalette.current.textTertiary) } }
                 }
-                u.said?.let { s -> Enter(i++, reduced) { SaidLine(s.text, ask = u.drive.ask) } }
-                if (u.pausesWarning) Enter(i++, reduced) { Text("입력이 끊겨 판정을 잠시 멈췄어요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = LocalPalette.current.danger) }
-                if (u.confirmShown) Enter(i++, reduced) { ConfirmCard(onFeedingConfirm) }
-                u.card?.let { c -> Enter(i++, reduced) { ContextCard(c, reduced) } }
-                Enter(i++, reduced) { FeedPanel(u.feed) }
-                u.day?.let { d -> Enter(i++, reduced) { Panel(label = "오늘 하루") { DayChart(d) } } }
+                u.said?.let { s -> Enter(i++, reduced, isFirst) { SaidLine(s.text, ask = u.drive.ask) } }
+                if (u.pausesWarning) Enter(i++, reduced, isFirst) { Text("입력이 끊겨 판정을 잠시 멈췄어요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = LocalPalette.current.danger) }
+                if (u.confirmShown) Enter(i++, reduced, isFirst) { ConfirmCard(onFeedingConfirm) }
+                u.card?.let { c -> Enter(i++, reduced, isFirst) { ContextCard(c, reduced) } }
+                Enter(i++, reduced, isFirst) { FeedPanel(u.feed) }
+                u.day?.let { d -> Enter(i++, reduced, isFirst) { Panel(label = "오늘 하루") { DayChart(d) } } }
             }
         }
         LinkNotes(ui.link, connLine)
@@ -183,23 +201,34 @@ private fun StatusColumn(
 /** 열을 새로 들일지 정하는 열쇠(눈썹·상태·카드 종류·말한 문장이 바뀔 때만). 시계·숫자만 바뀌면 같은 열을 고쳐 그린다. */
 private fun columnKey(u: HomeUi) = listOf(u.eyebrow.text, u.status, u.card?.let { it::class.simpleName + ((it as? HomeCard.Rest)?.added ?: "") + ((it as? HomeCard.Ask)?.answer ?: "") }, u.said?.at, u.confirmShown, u.pausesWarning, u.day != null).joinToString("|")
 
-/** 상태 한 줄은 낱말마다 블러가 걷히며 나타난다(시안 4.7 ①, .headline .w). 낱말 단위로 줄바꿈(keep-all)이 되게 FlowRow로 둔다. */
+/** 상태 한 줄은 낱말마다 블러 8이 걷히며 아래 12에서 올라온다(시안 core.js enter words: 0.04초 간격, 0.5초). 낱말 단위로 줄바꿈(keep-all)이 되게 FlowRow로 둔다. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun Headline(text: String, index: Int, reduced: Boolean) {
+private fun Headline(text: String, reduced: Boolean) {
     val style = CarType.headlineS.copy(letterSpacing = (-0.025).em)
     FlowRow(Modifier.offset(y = (-8).dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        text.split(' ').forEachIndexed { w, word -> Enter(index + w, reduced) { Text(word, style = style, color = LocalPalette.current.textPrimary, maxLines = 1) } }
+        text.split(' ').forEachIndexed { w, word ->
+            Rise(reduced, delayMs = 40L * w, ms = 500, dy = 12.dp, blur = 8.dp) { Text(word, style = style, color = LocalPalette.current.textPrimary, maxLines = 1) }
+        }
     }
 }
 
-/** 한 줄 들어오기: 블러 6 → 0, 아래 12dp에서, 0.36초, 줄마다 0.05초 늦게(시안 enter). 동작 줄이기면 바로. */
+/** 한 줄 들어오기(시안 core.js enter kids): 블러 6 → 0, 아래 16(홈에 처음 들어올 때 22)에서, 0.42초 cb(.2,.8,.2,1), 0.06초 뒤 줄마다 0.05초 늦게. 동작 줄이기면 바로. */
 @Composable
-private fun Enter(index: Int, reduced: Boolean, content: @Composable () -> Unit) {
+private fun Enter(index: Int, reduced: Boolean, first: Boolean = false, content: @Composable () -> Unit) =
+    Rise(reduced, delayMs = 60L + 50L * index, ms = 420, dy = if (first) 22.dp else 16.dp, blur = 6.dp, content = content)
+
+@Composable
+private fun Rise(reduced: Boolean, delayMs: Long, ms: Int, dy: Dp, blur: Dp, content: @Composable () -> Unit) {
     val k = remember { Animatable(if (reduced) 1f else 0f) }
-    LaunchedEffect(Unit) { if (!reduced) { delay(50L * index); val e = Tokens.motion.getValue("enter"); k.animateTo(1f, tween(e.ms, easing = e.easing)) } }
-    Box(Modifier.graphicsLayer { alpha = k.value; translationY = (1 - k.value) * 12.dp.toPx() }.blur(((1 - k.value) * 6).dp)) { content() }
+    LaunchedEffect(Unit) { if (!reduced) { delay(delayMs); k.animateTo(1f, tween(ms, easing = ENTER_EASE)) } }
+    Box(Modifier.graphicsLayer { alpha = k.value; translationY = (1 - k.value) * dy.toPx() }.blur(blur * (1 - k.value))) { content() }
 }
+
+/** 열 바꿈 곡선·시간(시안 core.js: EASE_IN [.2,.8,.2,1], swap 나감 0.15초 [.4,0,1,1]). */
+private val ENTER_EASE = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
+private val EXIT_EASE = CubicBezierEasing(0.4f, 0f, 1f, 1f)
+private const val COL_EXIT_MS = 150
 
 @Composable
 private fun EyebrowRow(e: Eyebrow) {
@@ -209,12 +238,12 @@ private fun EyebrowRow(e: Eyebrow) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Box(Modifier.size(14.dp), Alignment.Center) {
             if (e.live && !reducedMotion()) {
-                // 듣는 중 점 숨쉬기(1.8초, 시안 @keyframes live): 실제로 듣는 신호일 때만
+                // 듣는 중 점 숨쉬기(시안 @keyframes live 1.8초, 구간마다 cb(.4,0,.2,1)): 0% 테 0·40% → 60% 테 12·투명 → 100% 처음으로. 실제로 듣는 신호일 때만
                 val t = rememberInfiniteTransition(label = "live")
-                val r by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Restart), label = "r")
+                val r by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "r")
                 Canvas(Modifier.size(14.dp)) {
-                    val ring = (r / 0.6f).coerceAtMost(1f)
-                    if (r < 0.6f) drawCircle(dot.copy(alpha = 0.4f * (1 - ring)), size.minDimension / 2 + 12.dp.toPx() * ring)
+                    val ring = if (r < 0.6f) FastOutSlowInEasing.transform(r / 0.6f) else 1f - FastOutSlowInEasing.transform((r - 0.6f) / 0.4f)
+                    drawCircle(dot.copy(alpha = 0.4f * (1 - ring)), size.minDimension / 2 + 12.dp.toPx() * ring)
                     drawCircle(dot, size.minDimension / 2)
                 }
             } else Box(Modifier.size(14.dp).clip(CircleShape).background(dot))
@@ -348,7 +377,7 @@ private fun AskCard(c: HomeCard.Ask, reduced: Boolean) {
     Panel(label = "물어보기") {
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (c.listening) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Box(Modifier.size(88.dp).clip(CircleShape).background(p.accent), Alignment.Center) { LineIcon(R.drawable.ic_mic, 40.dp, p.onAccent) }
+                MicDot(reduced)
                 LevelBars(reduced)
             }
             c.question?.let { q ->
@@ -362,17 +391,49 @@ private fun AskCard(c: HomeCard.Ask, reduced: Boolean) {
     }
 }
 
-/** 듣는 중 마이크 막대(실제로 듣는 동안만 움직인다, 정차 화면). */
+/** 처음 보인 뒤 지난 ms(그릴 때 읽는다). [on]이 아니면 0에 멈춘다. 시안 CSS 애니메이션의 양의 지연(기다리는 동안 멈춤)을 그대로 옮기려고 주기 대신 지난 시간을 쓴다. */
+@Composable
+private fun elapsedMs(on: Boolean): () -> Long {
+    val ms = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    LaunchedEffect(on) {
+        if (!on) return@LaunchedEffect
+        val t0 = androidx.compose.runtime.withFrameMillis { it }
+        while (true) androidx.compose.runtime.withFrameMillis { ms.longValue = it - t0 }
+    }
+    return { ms.longValue }
+}
+
+/** 듣는 중 마이크(시안 .mic .mc: 88 원 + 테 둘이 2초마다 1.6배로 퍼지며 사라짐, 1초 어긋남, 곡선 ripple). 동작 줄이기면 테 없음. */
+@Composable
+private fun MicDot(reduced: Boolean) {
+    val p = LocalPalette.current
+    val ms = elapsedMs(!reduced)
+    val ease = Tokens.motion.getValue("ripple").easing
+    Box(Modifier.size(88.dp).drawBehind {
+        // 둘째 테는 1초 기다렸다 시작(시안 ::after animation-delay 1s)
+        if (!reduced) for (delay in longArrayOf(0L, 1000L)) {
+            val t = ms() - delay
+            if (t < 0) continue
+            val k = ease.transform((t % 2000L) / 2000f)
+            drawCircle(p.accent.copy(alpha = 0.6f * (1 - k)), size.minDimension / 2 * (1 + 0.6f * k), style = Stroke(2.dp.toPx()))
+        }
+    }.clip(CircleShape).background(p.accent), Alignment.Center) { LineIcon(R.drawable.ic_mic, 40.dp, p.onAccent) }
+}
+
+/** 듣는 중 마이크 막대(시안 .lv: 18개, 높이 18%↔90% 1.1초 ease-in-out, 막대마다 (i×97)%700ms 늦게, 멈춰 있을 때 높이 18+|sin(1.3i)|×70%). */
 @Composable
 private fun LevelBars(reduced: Boolean) {
     val p = LocalPalette.current
-    val t = rememberInfiniteTransition(label = "lv")
-    val ph by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Restart), label = "ph")
+    val ms = elapsedMs(!reduced)
+    val inOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
     Canvas(Modifier.width(216.dp).height(56.dp)) {
         val bw = 6.dp.toPx(); val gap = 6.dp.toPx()
+        val now = ms()
         for (i in 0 until 18) {
-            val base = 0.18f + kotlin.math.abs(kotlin.math.sin(i * 1.3f)) * 0.7f
-            val k = if (reduced) base else (0.18f + 0.72f * (0.5f + 0.5f * kotlin.math.sin(((ph + (i * 97 % 700) / 1100f) * 2 * Math.PI).toFloat())))
+            // 막대마다 (i×97)%700ms 기다리는 동안은 멈춘 높이(시안 inline height), 그 뒤 1.1초 주기
+            val t = now - i * 97 % 700
+            val k = if (reduced || t < 0) 0.18f + kotlin.math.abs(kotlin.math.sin(i * 1.3f)) * 0.7f
+            else { val q = (t % 1100L) / 1100f; 0.18f + 0.72f * inOut.transform(if (q < 0.5f) q * 2 else (1 - q) * 2) }
             val h = size.height * k
             drawRoundRect(p.textTertiary, Offset(i * (bw + gap), (size.height - h) / 2), androidx.compose.ui.geometry.Size(bw, h), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
         }
@@ -395,7 +456,9 @@ private fun FeedPanel(f: FeedCard) {
         }
         f.intervalMin?.takeIf { it > 0 }?.let { iv ->
             val full = iv * 1.25f * 60_000
-            val v = (ago / full).coerceIn(0f, 1f); val w = 0.8f / 1.25f
+            val e = Tokens.motion.getValue("enter")
+            val v by animateFloatAsState((ago / full).coerceIn(0f, 1f), tween(e.ms, easing = e.easing), label = "meter")   // 시안 .meter i: width var(--m-enter)
+            val w = 0.8f / 1.25f
             Box(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 16.dp).height(24.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(p.surfaceRaised)) {
                     Box(Modifier.fillMaxWidth(v).fillMaxHeight().clip(RoundedCornerShape(4.dp)).background(p.textSecondary))
@@ -449,7 +512,9 @@ private fun DriveSay(ui: HomeUi, sym: Dp, icon: Dp, shape: androidx.compose.ui.g
     val p = LocalPalette.current
     val a = remember { Animatable(1f) }
     val key = ui.status + ui.drive + ui.pausesWarning
-    LaunchedEffect(key) { a.snapTo(0f); a.animateTo(1f, tween(Tokens.DRIVE_FADE_MS)) }
+    val seen = remember { arrayOfNulls<String>(1) }
+    // 상태가 바뀔 때만 200ms 선형 페이드 한 번(시안 swap drive: linear). 처음 보일 때는 바로
+    LaunchedEffect(key) { val prev = seen[0]; seen[0] = key; if (prev != null && prev != key) { a.snapTo(0f); a.animateTo(1f, tween(Tokens.DRIVE_FADE_MS, easing = LinearEasing)) } else a.snapTo(1f) }
     val child = ui.drive.symbol == Symbol.BABY
     val mc = if (child) p.child else p.accentInk
     Column(Modifier.graphicsLayer { alpha = a.value }, verticalArrangement = Arrangement.spacedBy(gap)) {

@@ -35,7 +35,7 @@ import kr.aigyeot.app.ui.car3d.View3d
 import kr.aigyeot.shared.CarActionKind
 
 // 주행 리포트(시안 car.js reports(): 왼쪽 목록 560 + 오른쪽 상세, 창 폭 840 이하면 목록과 상세를 한 줄로 따로).
-// 상세 순서: 날짜·구간 → 숫자 줄 → 에피소드 띠 → 자세히(시안에 자리가 없는 사실) → 차가 대신 한 일 | 평소 대비 조향 → 방법별 성적.
+// 상세 순서: 날짜·구간 → 숫자 줄 → 에피소드 띠 → 차가 대신 한 일 | 평소 대비 조향 → 방법별 성적 → 자세히(시안에 자리가 없는 사실).
 // 화면은 ReportView를 그리기만 한다(계산은 ReportViewModels.kt).
 
 /**
@@ -93,7 +93,6 @@ private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier,
         Text(v.title, style = CarType.titleS, color = p.textPrimary)
         Panel { StatRow(v.stats) }
         v.episodes.forEach { Panel(label = it.title) { EpisodeChart(it.chart) } }
-        Panel(label = "자세히") { v.details.forEach { DetailText(it) } }
         // 두 칸은 상세의 실제 폭이 두 칸을 받을 때만(창 1200처럼 상세가 좁으면 차 그림 200이 글자 칸을 다 먹는다)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             if (narrow || maxWidth < TwoCards) Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -108,6 +107,8 @@ private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier,
             MethodDotsChart(v.methods)
             Note("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.", Modifier.padding(top = 6.dp))
         }
+        // 시안 순서(car.js reports: 숫자 줄 → 에피소드 띠 → 차가 한 일 | 조향 → 방법별 성적)를 지키고, 시안에 자리가 없는 사실은 맨 아래에
+        Panel(label = "자세히") { v.details.forEach { DetailText(it) } }
     }
 }
 
