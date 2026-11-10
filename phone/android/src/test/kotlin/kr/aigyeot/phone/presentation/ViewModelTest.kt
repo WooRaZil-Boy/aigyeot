@@ -58,8 +58,9 @@ class ViewModelTest {
     fun `타이머는 그 기록과 연결 여부를 본다`() {
         val e = CareEvent("e1", CareKind.FEED, NOW, zone = "Asia/Seoul", createdAt = NOW, updatedAt = NOW)
         val care = CareFile(events = listOf(e))
-        assertEquals(TimerUiState(e, care, connected = true, guardian = false), timerUi("e1", care, Connection.Paired(OWNER)))
-        assertEquals(TimerUiState(null, care, connected = false, guardian = false), timerUi("x", care, Connection.Gone("d")))
+        assertEquals(e, timerUi("e1", care, Connection.Paired(OWNER)).event)
+        assertEquals(TimerUiState("e1", care, connected = true, guardian = false), timerUi("e1", care, Connection.Paired(OWNER)))
+        assertEquals(null, timerUi("x", care, Connection.Gone("d")).event)
     }
 
     @Test
@@ -67,7 +68,7 @@ class ViewModelTest {
         val kept = SongEntry("s1", "자장가", phase = SongPhase.ACCEPTED)
         val removed = SongEntry("s2", "옛 노래", phase = SongPhase.REMOVED)
         val s = PhoneState(songs = listOf(kept, removed), outbox = listOf(outboxItem(OutboxPayload.Message("song_selected", songRef("s1")), NOW)))
-        assertEquals(SongsUiState(listOf(kept), setOf("s1"), online = false, full = false), songsUi(s, online = false))
+        assertEquals(SongsUiState(listOf(kept), setOf("s1"), online = false), songsUi(s, online = false))
     }
 
     @Test

@@ -86,13 +86,16 @@ private fun CareEvent.closed(now: Long): CareEvent =
     else copy(endAt = maxOf(now, startAt), updatedAt = now)
 
 /** `closedPrevious`는 이번 시작으로 닫힌 앞 기록(닫힌 뒤 모양). 없으면 null. */
-data class Started(val file: CareFile, val event: CareEvent, val closedPrevious: CareEvent?)
+data class Started(val file: CareFile, val closedPrevious: CareEvent?) {
+    /** 새로 시작한 기록(P4: 파일 끝에 더한 그것). */
+    val event: CareEvent get() = file.events.last()
+}
 
 /** R1·R2·U21: 같은 종류의 진행 중 기록이 있으면 지금 시각으로 닫고 새로 시작한다. 수유 중에 잠을 시작할 수는 있다. */
 fun CareFile.start(kind: CareKind, now: Long, zone: String, side: FeedSide? = null, id: String = ulid(now)): Started {
     val prev = ongoing(kind)?.closed(now)
     val e = CareEvent(id, kind, now, zone = zone, feedSide = side, createdAt = now, updatedAt = now)
-    return Started(copy(events = events.map { if (it.id == prev?.id) prev else it } + e), e, prev)
+    return Started(copy(events = events.map { if (it.id == prev?.id) prev else it } + e), prev)
 }
 
 /** R2·U21 띠: "앞 수유를 끝냈어요", 끝 모름으로 닫았으면 " · 끝 시각 모름"을 붙인다. */
@@ -256,11 +259,12 @@ data class CarePattern(
     val sleepPerDayMs: List<Long>?,
     val diapersPerDay: List<Int>?,
     val carCryEpisodes: Int,
-    /** U27·U31: 평균의 분모. 수유·기저귀는 그 종류 기록이 그날 시작한 날, 잠은 끝난 잠이 그날에 걸친 시간이 0보다 큰 날. */
-    val feedDays: Int = 0,
-    val sleepDays: Int = 0,
-    val diaperDays: Int = 0,
-)
+) {
+    /** U27·U31: 평균의 분모(P4: 날별 값에서 계산). 수유·기저귀는 그 종류 기록이 그날 시작한 날, 잠은 끝난 잠이 그날에 걸친 시간이 0보다 큰 날. */
+    val feedDays: Int get() = feedsPerDay.count { it > 0 }
+    val sleepDays: Int get() = sleepPerDayMs?.count { it > 0 } ?: 0
+    val diaperDays: Int get() = diapersPerDay?.count { it > 0 } ?: 0
+}
 
 /** 7.1 pattern.value: 횟수 "평균 {n}회"(소수 첫째 자리), 기록한 날이 없으면 "기록 없음"(U27). */
 fun avgCountText(perDay: List<Int>, days: Int): String =
@@ -291,7 +295,6 @@ fun carePattern(care: CareFile, reports: Collection<ReportSummaryBody>, now: Lon
     val diapers = countPerDay(CareKind.DIAPER)
     // U31: 잠은 끝난 잠이 그날(자정에서 나눔)에 걸친 시간이 0보다 큰 날을 센다.
     val sleepMs = days.map { durationOn(care.events, CareKind.SLEEP, it, zone) }
-    val sleepDays = sleepMs.count { it > 0 }
     return CarePattern(
         days = days,
         feedsPerDay = feeds,
@@ -299,9 +302,6 @@ fun carePattern(care: CareFile, reports: Collection<ReportSummaryBody>, now: Lon
         sleepPerDayMs = if (care.sleepDiaperEnabled) sleepMs else null,
         diapersPerDay = if (care.sleepDiaperEnabled) diapers else null,
         carCryEpisodes = carLines(reports).count { !it.isDrive && dayOf(it.startAt) in days }, // 차 시계가 앞서 내일로 찍힌 것은 뺀다
-        feedDays = feeds.count { it > 0 },
-        sleepDays = if (care.sleepDiaperEnabled) sleepDays else 0,
-        diaperDays = if (care.sleepDiaperEnabled) diapers.count { it > 0 } else 0,
     )
 }
 

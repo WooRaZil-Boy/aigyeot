@@ -40,9 +40,12 @@ data class DaySpan(val from: Int, val to: Int, val tip: String)
 data class DayMark(val at: Int, val tip: String)
 
 /** 줄 하나: 머리('이름 · 부가 · 값')와 트랙 위 표시. */
-data class DayLane(val kind: LaneKind, val name: String, val sub: String?, val value: String, val spans: List<DaySpan> = emptyList(), val marks: List<DayMark> = emptyList())
+data class DayLane(val kind: LaneKind, val sub: String?, val value: String, val spans: List<DaySpan> = emptyList(), val marks: List<DayMark> = emptyList()) {
+    val name: String get() = kind.label
+}
 
-enum class LaneKind { SLEEP, FEED, DIAPER, CAR }
+/** 줄 종류와 머리 이름(design.day.*). */
+enum class LaneKind(val label: String) { SLEEP("잠"), FEED("수유"), DIAPER("기저귀"), CAR("차에서") }
 
 /** 오늘 하루 띠(시안 Charts.day). `nowMin`은 오늘이면 지금 분, 아니면 null. */
 data class DayChartData(val lanes: List<DayLane>, val nowMin: Int?) {
@@ -79,12 +82,12 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
     if (care.sleepDiaperEnabled) {
         val s = spans(CareKind.SLEEP, "잠")
         val total = durationOn(live, CareKind.SLEEP, day, zone)
-        lanes += DayLane(LaneKind.SLEEP, "잠", if (s.isEmpty()) null else "${s.size}번", if (s.isEmpty()) "0번" else durationText(total), spans = s)
+        lanes += DayLane(LaneKind.SLEEP, if (s.isEmpty()) null else "${s.size}번", if (s.isEmpty()) "0번" else durationText(total), spans = s)
     }
-    lanes += DayLane(LaneKind.FEED, "수유", null, "${startedToday(CareKind.FEED).size}번", spans = spans(CareKind.FEED, "수유"))
+    lanes += DayLane(LaneKind.FEED, null, "${startedToday(CareKind.FEED).size}번", spans = spans(CareKind.FEED, "수유"))
     if (care.sleepDiaperEnabled) {
         val d = startedToday(CareKind.DIAPER).sortedBy { it.startAt }
-        lanes += DayLane(LaneKind.DIAPER, "기저귀", null, "${d.size}번", marks = d.map { e -> minuteIn(e.startAt, from).let { DayMark(it, "기저귀 ${hhmm(it)}") } })
+        lanes += DayLane(LaneKind.DIAPER, null, "${d.size}번", marks = d.map { e -> minuteIn(e.startAt, from).let { DayMark(it, "기저귀 ${hhmm(it)}") } })
     }
     if (showCar) {
         val lines = carLines(reports)
@@ -95,7 +98,7 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
         }
         val cries = lines.filter { !it.isDrive && it.startAt in from until to }.map { l -> minuteIn(l.startAt, from).let { DayMark(it, "차에서 울음 ${hhmm(it)}") } }
         val driveMin = drives.sumOf { it.to - it.from }
-        lanes += DayLane(LaneKind.CAR, "차에서", if (driveMin > 0) "탑승 ${durationText(driveMin * MINUTE)}" else null, "울음 ${cries.size}번", spans = drives, marks = cries)
+        lanes += DayLane(LaneKind.CAR, if (driveMin > 0) "탑승 ${durationText(driveMin * MINUTE)}" else null, "울음 ${cries.size}번", spans = drives, marks = cries)
     }
     val nowMin = if (now in from until to) minuteIn(now, from) else null
     return DayChartData(lanes, nowMin)
@@ -124,7 +127,10 @@ private fun median(xs: List<Long>): Long? = xs.sorted().let { s ->
 }
 
 /** 수유 간격 7일 막대 + '평소'(앞 6일 모든 간격의 중앙값, R14와 같이 10시간 넘는 간격은 빼고 5개 이상일 때만). */
-data class IntervalWeek(val bars: List<WeekBar>, val usualMs: Long?, val todayMs: Long?)
+data class IntervalWeek(val bars: List<WeekBar>, val usualMs: Long?) {
+    /** 오늘 막대 값(P4: 막대에서 계산). */
+    val todayMs: Long? get() = bars.lastOrNull()?.value
+}
 
 fun intervalWeek(care: CareFile, now: Long, zone: ZoneId): IntervalWeek {
     val days = lastWeek(now, zone)
@@ -137,11 +143,14 @@ fun intervalWeek(care: CareFile, now: Long, zone: ZoneId): IntervalWeek {
         WeekBar(d, weekLabel(d, today), v, v?.let { "${monthDay(d)} · ${durationText(it)}" })
     }
     val before = pairs.filter { it.first in days.dropLast(1) }.map { it.second }
-    return IntervalWeek(bars, if (before.size >= MIN_INTERVALS) median(before) else null, bars.last().value)
+    return IntervalWeek(bars, if (before.size >= MIN_INTERVALS) median(before) else null)
 }
 
 /** 차에서 울음 7일 막대(리포트 울음 경보 에피소드 수) + 평균 감지 지연(초, 없으면 null). */
-data class CarCryWeek(val bars: List<WeekBar>, val total: Int, val avgLatencyS: Double?)
+data class CarCryWeek(val bars: List<WeekBar>, val avgLatencyS: Double?) {
+    /** 7일 합(P4: 막대에서 계산). */
+    val total: Int get() = bars.sumOf { it.value ?: 0L }.toInt()
+}
 
 fun carCryWeek(reports: Collection<ReportSummaryBody>, now: Long, zone: ZoneId): CarCryWeek {
     val days = lastWeek(now, zone)
@@ -151,18 +160,25 @@ fun carCryWeek(reports: Collection<ReportSummaryBody>, now: Long, zone: ZoneId):
         .filter { it.first in days }
     val bars = days.map { d -> eps.count { it.first == d }.toLong().let { n -> WeekBar(d, weekLabel(d, today), n, "${monthDay(d)} · ${n}번") } }
     val lat = eps.mapNotNull { it.second.alarmLatencyS }
-    return CarCryWeek(bars, eps.size, if (lat.isEmpty()) null else lat.average())
+    return CarCryWeek(bars, if (lat.isEmpty()) null else lat.average())
 }
 
 /** 잠 패턴 히트맵: 7일 × 48칸(30분). 잠 기록(끝난 것, 진행 중은 지금까지)과 겹친 칸이 참. */
-data class SleepGrid(val days: List<LocalDate>, val labels: List<String>, val rows: List<BooleanArray>, val avgMs: Long?, val sleepDays: Int, val perDayMs: List<Long> = emptyList()) {
+/**
+ * [perDayMs]: 날마다 끝난 잠이 그날에 걸친 길이(U31). 평균·분모는 여기서 계산한다(P4).
+ * U31·패턴 '하루 잠'과 같은 값: 지난 7일(오늘 포함) 중 그 길이가 0보다 큰 날의 평균(같은 화면에서 두 숫자가 어긋나지 않게).
+ */
+data class SleepGrid(val days: List<LocalDate>, val rows: List<BooleanArray>, val perDayMs: List<Long>) {
+    val labels: List<String> get() = days.map { weekLabel(it, days.last()) }
+    val sleepDays: Int get() = perDayMs.count { it > 0 }
+    val avgMs: Long? get() = perDayMs.filter { it > 0 }.takeIf { it.isNotEmpty() }?.let { it.sum() / it.size }
+
     /** 화면 읽기용(날마다 끝난 잠이 그날에 걸친 실제 길이, U31). */
-    val summary: String get() = "지난 7일 잠 패턴: " + labels.indices.joinToString(", ") { "${labels[it]} ${durationText(perDayMs.getOrElse(it) { 0L })}" }
+    val summary: String get() = "지난 7일 잠 패턴: " + labels.indices.joinToString(", ") { "${labels[it]} ${durationText(perDayMs[it])}" }
 }
 
 fun sleepGrid(care: CareFile, now: Long, zone: ZoneId): SleepGrid {
     val days = lastWeek(now, zone)
-    val today = days.last()
     val sleeps = care.events.filter { it.kind == CareKind.SLEEP && it.deletedAt == null && (it.endAt != null || it.isOngoing) }
     val rows = days.map { d ->
         val (from, _) = dayBounds(d, zone)
@@ -172,17 +188,19 @@ fun sleepGrid(care: CareFile, now: Long, zone: ZoneId): SleepGrid {
             sleeps.any { e -> e.startAt < b && (e.endAt ?: now) > a }
         }
     }
-    // U31·패턴 '하루 잠'과 같은 값: 지난 7일(오늘 포함) 중 끝난 잠이 그날에 걸친 시간이 0보다 큰 날의 평균(같은 화면에서 두 숫자가 어긋나지 않게).
-    val all = days.map { durationOn(care.events, CareKind.SLEEP, it, zone) }
-    val per = all.filter { it > 0 }
-    return SleepGrid(days, days.map { weekLabel(it, today) }, rows, if (per.isEmpty()) null else per.sum() / per.size, per.size, all)
+    return SleepGrid(days, rows, days.map { durationOn(care.events, CareKind.SLEEP, it, zone) })
 }
 
 /**
  * 에피소드 띠(시안 Charts.episode). 초는 감지(에피소드 시작)부터. 시간축 표시([marks])는 시각을 아는 것만(시작, 자동 2차 시작),
  * 결과(쉼터 제안·그쳤어요)는 리포트에 그 시각이 없어 축 밖 [outcomes]로 둔다(마지막 재생 끝에 찍으면 거짓 시각이 된다).
  */
-data class EpisodeBand(val totalS: Int, val sounds: List<EpisodeSeg>, val gaps: List<EpisodeSeg>, val marks: List<EpisodeMarkAt>, val startAt: Long?, val outcomes: List<String> = emptyList())
+data class EpisodeBand(val sounds: List<EpisodeSeg>, val marks: List<EpisodeMarkAt>, val startAt: Long?, val outcomes: List<String> = emptyList()) {
+    /** 재생 사이 듣기 틈(P4: 소리 구간에서 계산). [sounds]는 시작 순서다. */
+    val gaps: List<EpisodeSeg> get() = sounds.zipWithNext { x, y -> if (y.from > x.to) EpisodeSeg(x.to, y.from, "듣기 틈") else null }.filterNotNull()
+    /** 축 길이(초): 마지막 재생 끝, 적어도 1(P4: 소리 구간에서 계산). */
+    val totalS: Int get() = maxOf(sounds.maxOfOrNull { it.to } ?: 0, 1)
+}
 
 data class EpisodeSeg(val from: Int, val to: Int, val name: String)
 
@@ -197,8 +215,6 @@ fun episodeBand(e: TimelineEpisode, songs: List<SongEntry>): EpisodeBand {
         p to EpisodeSeg(a, maxOf(b, a + 1), playName(songs, p))
     }.sortedBy { it.second.from }
     val plays = timed.map { it.second }
-    val gaps = plays.zipWithNext { x, y -> if (y.from > x.to) EpisodeSeg(x.to, y.from, "듣기 틈") else null }.filterNotNull()
-    val end = maxOf(plays.maxOfOrNull { it.to } ?: 0, 1)
     val marks = buildList {
         // 시작 표시: 울음 경보면 '감지 {지연}초', 소리 바꾸기 요청이면 그 이름(triggerText, 울음을 감지했다고 보이지 않게).
         add(
@@ -216,7 +232,7 @@ fun episodeBand(e: TimelineEpisode, songs: List<SongEntry>): EpisodeBand {
         if (e.stop?.let { it.mode == HandoffKind.REST_OFFER && it.toldDriver != false } == true) add("쉼터 제안")
         if (e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS) add("그쳤어요")
     }
-    return EpisodeBand(end, plays, gaps, marks, t0, outcomes)
+    return EpisodeBand(plays, marks, t0, outcomes)
 }
 
 /** 리포트 숫자 줄(결정 6). [cryS]는 울음 시간 합(그친 시각은 리포트에 없어 '그칠 때까지'로 쓰지 않는다). */

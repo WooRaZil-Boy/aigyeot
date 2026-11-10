@@ -104,10 +104,13 @@ class TodayViewModel(
 }
 
 /** 타이머(C2). 끝났거나 지운 기록이면 `event`가 null이고 화면이 닫힌다. */
-data class TimerUiState(val event: CareEvent?, val care: CareFile, val connected: Boolean, val guardian: Boolean)
+data class TimerUiState(val id: String, val care: CareFile, val connected: Boolean, val guardian: Boolean) {
+    /** 이 타이머의 기록(P4: 돌봄 파일에서 찾는다). 지웠으면 null. */
+    val event: CareEvent? get() = care.events.find { it.id == id }
+}
 
 internal fun timerUi(id: String, care: CareFile, c: Connection) =
-    TimerUiState(care.events.find { it.id == id }, care, c is Connection.Paired, c.role == Role.GUARDIAN)
+    TimerUiState(id, care, c is Connection.Paired, c.role == Role.GUARDIAN)
 
 class TimerViewModel(
     private val id: String,
