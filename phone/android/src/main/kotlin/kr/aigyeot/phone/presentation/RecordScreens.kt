@@ -72,15 +72,15 @@ import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
+import kr.aigyeot.phone.domain.model.AGO_MINUTES
 import kr.aigyeot.phone.domain.model.CarLine
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareKind
-import kr.aigyeot.phone.domain.model.CareSource
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Diaper
 import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.MINUTE
-import kr.aigyeot.phone.domain.model.NOTE_MAX
+import kr.aigyeot.phone.domain.model.agoChipText
 import kr.aigyeot.phone.domain.model.avgCountText
 import kr.aigyeot.phone.domain.model.avgDurationText
 import kr.aigyeot.phone.domain.model.carLines
@@ -89,17 +89,11 @@ import kr.aigyeot.phone.domain.model.dayEvents
 import kr.aigyeot.phone.domain.model.daysText
 import kr.aigyeot.phone.domain.model.diaperName
 import kr.aigyeot.phone.domain.model.durationText
-import kr.aigyeot.phone.domain.model.firstAtOrAfter
 import kr.aigyeot.phone.domain.model.isOngoing
 import kr.aigyeot.phone.domain.model.koClock
 import kr.aigyeot.phone.domain.model.koDate
-import kr.aigyeot.phone.domain.model.latestAtOrBefore
 import kr.aigyeot.phone.domain.model.logRowText
 import kr.aigyeot.phone.domain.model.memoLine
-import kr.aigyeot.phone.domain.model.onDate
-import kr.aigyeot.phone.domain.model.overlaps
-import kr.aigyeot.phone.domain.model.problem
-import kr.aigyeot.phone.domain.model.problemText
 import kr.aigyeot.phone.domain.model.quickKinds
 import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.text
@@ -118,12 +112,10 @@ internal fun splitRow(text: String): Pair<String, String?> {
 
 // ---------------------------------------------------------------- 빠른 기록·고치기 시트(C3)
 
-private val agoChips = listOf("지금" to 0L, "5분 전" to 5L, "15분 전" to 15L, "30분 전" to 30L, "1시간 전" to 60L)
-
 /**
  * 새 기록(initial = null)과 고치기(시안 S.sheet: 모달 바텀 시트, 위 손잡이, 제목 18/24·700, 회색 행 묶음 + 값 칩, 세그먼트, 취소·저장 1:2).
  * 수유·잠은 '시작'·'끝'(끝 시각 모름 또는 고른 시각), 기저귀·메모는 '시각' 한 줄. `baseDate`가 있으면(기록 탭의 다른 날) 시각은 그 날의 시각이다.
- * 저장 전에 R3 안내, R4 겹침 경고를 보인다.
+ * 입력·검사·저장 단계는 [CareSheetViewModel]이 갖고, 이 화면은 그리기와 동작 전달만 한다.
  */
 @Composable
 fun CareSheet(
@@ -135,66 +127,27 @@ fun CareSheet(
     vm: CareSheetViewModel = appViewModel(),
     onClose: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
+    // 시트 하나에 id 하나(화면을 다시 만들어도 같은 시트로 이어 쓴다). 새 기록의 id도 이것이다.
+    val sheetId = rememberSaveable { ulid(System.currentTimeMillis()) }
+    LaunchedEffect(sheetId) { vm.open(sheetId, kind, initial, baseDate) }
     val care by vm.careFile.collectAsStateWithLifecycle()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    // 화면을 다시 만들어도(회전·글자 크기·어두운 화면) 적던 내용이 남게 저장 가능한 상태로 둔다.
-    val opened = rememberSaveable { System.currentTimeMillis() }
-    val zone = initial?.zoneOrDevice() ?: deviceZone
-    var k by rememberSaveable { mutableStateOf(initial?.kind ?: kind) }
-    var startAt by rememberSaveable { mutableStateOf(initial?.startAt ?: baseDate?.let { onDate(it, 12, 0, zone) } ?: opened) }
-    var chip by rememberSaveable { mutableStateOf(if (initial == null && baseDate == null) "지금" else "직접") }
-    var endAt by rememberSaveable { mutableStateOf(initial?.endAt) }
-    var side by rememberSaveable { mutableStateOf(initial?.feedSide) }
-    var ml by rememberSaveable { mutableStateOf(initial?.amountMl) }
-    var diaper by rememberSaveable { mutableStateOf(initial?.diaper ?: Diaper.WET) }
-    var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
-    var pick by rememberSaveable { mutableStateOf<String?>(null) }
+    val all by vm.sheet.collectAsStateWithLifecycle()
+    // 이 시트의 입력·단계만 쓴다(앞 시트에서 남은 것이 비치거나 이 시트를 닫지 않게).
+    val mine = all?.takeIf { it.sheetId == sheetId }
+    fun close() {
+        vm.close(sheetId)
+        onClose()
+    }
+    LaunchedEffect(mine?.stage) { if (mine?.stage == EditStage.Done) close() }
+    val d = mine?.draft ?: return
+    val stage = mine.stage
+    val zone = d.zoneId
+    var pick by rememberSaveable { mutableStateOf<String?>(null) } // "start" | "end" 시각 고르기 창
     var pickDate by rememberSaveable { mutableStateOf(false) }
-    var datePicked by rememberSaveable { mutableStateOf(false) } // 날짜를 직접 골랐으면 시각을 골라도 그 날에 둔다
-    var error by remember { mutableStateOf<String?>(null) }
-    var overlap by remember { mutableStateOf<CareEvent?>(null) }
-    val timed = k == CareKind.FEED || k == CareKind.SLEEP
-
-    val newId = rememberSaveable { ulid(System.currentTimeMillis()) } // 시트 하나에 새 기록 하나(빠르게 두 번 눌러도 같은 id라 하나만 생긴다)
-    var saving by remember { mutableStateOf(false) }
-    fun build(now: Long): CareEvent {
-        val base = initial ?: CareEvent(newId, k, startAt, zone = zone.id, source = CareSource.PHONE, createdAt = now, updatedAt = now)
-        return base.copy(
-            kind = k,
-            startAt = startAt,
-            endAt = if (timed) endAt else null,
-            endUnknown = timed && endAt == null, // 끝을 고르지 않은 수유·잠은 '끝 시각 모름'
-            feedSide = if (k == CareKind.FEED) side else null,
-            amountMl = if (k == CareKind.FEED && side == FeedSide.BOTTLE) ml else null,
-            diaper = if (k == CareKind.DIAPER) diaper else null,
-            note = note.trim().ifEmpty { null }, // U37: 수유·잠·기저귀에도 메모를 달 수 있다
-        )
-    }
-
-    fun save(e: CareEvent) {
-        if (saving) return
-        saving = true
-        scope.launch {
-            when (val r = vm.save(e, editing = initial != null)) {
-                SheetSave.Saved, SheetSave.Gone -> onClose()
-                is SheetSave.Failed -> error = r.error
-            }
-            saving = false
-        }
-    }
-
-    fun trySave() {
-        val now = System.currentTimeMillis()
-        if (k == CareKind.NOTE && note.isBlank()) return
-        val e = build(now)
-        e.problem(now)?.let { error = problemText(it, e.kind); return }
-        if (care.overlaps(e, now)) overlap = e else save(e)
-    }
-
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val p = Tokens.colors
     ModalBottomSheet(
-        onDismissRequest = onClose,
+        onDismissRequest = ::close,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = p.surface,
@@ -204,100 +157,83 @@ fun CareSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(start = 20.dp, end = 20.dp, bottom = 34.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(sheetTitle(k, edit = initial != null), style = Type.headline.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
-            if (chooseKind && initial == null) {
+            Text(sheetTitle(d.kind, edit = d.editingId != null), style = Type.headline.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
+            if (chooseKind && d.editingId == null) {
                 val kinds = quickKinds(care.sleepDiaperEnabled)
-                Segmented(kinds.map(::kindName), kinds.indexOf(k), { i -> k = kinds[i]; error = null })
+                Segmented(kinds.map(::kindName), kinds.indexOf(d.kind), { i -> vm.setKind(kinds[i]) })
             }
             // 순서는 iOS 시트와 같다: (새 기록·오늘) 몇 분 전 칩 → 행 묶음(시작·끝·양·메모) → 쪽·종류 → 오류 → 보호자 안내 → 단추.
-            if (initial == null && baseDate == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((label, min) in agoChips) Chip(label, chip == label, { chip = label; startAt = System.currentTimeMillis() - min * MINUTE; datePicked = false; error = null })
-                Chip("직접", chip == "직접", { chip = "직접"; error = null })
+            if (d.showAgo) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (min in AGO_MINUTES) Chip(agoChipText(min), d.agoMin == min, { vm.pickAgo(min) })
+                Chip("직접", d.agoMin == null, vm::custom)
             }
-            // 새 기록에서 몇 분 전 칩을 고른 동안은 칩이 시각을 말하므로 시작 행을 숨기고, '직접'이면 보인다(iOS와 같음).
-            val showStart = initial != null || baseDate != null || chip == "직접"
             SheetRows {
                 // 시작(수유·잠) 또는 시각(기저귀·메모). 날짜 칩은 날짜를, 시각 칩은 시각을 고른다(지난 기록을 다른 날로 옮길 수 있다).
-                if (showStart) SheetRow(if (timed) "시작" else "시각", first = true) {
+                // 몇 분 전 칩을 고른 동안은 칩이 시각을 말하므로 이 행을 숨기고, '직접'이면 보인다(iOS와 같음).
+                if (d.showStart) SheetRow(if (d.timed) "시작" else "시각", first = true) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ValueChip(dayLabel(Instant.ofEpochMilli(startAt).atZone(zone).toLocalDate(), LocalDate.now(zone)), selected = true) { pickDate = true }
-                        ValueChip(koClock(startAt, zone), selected = true) { pick = "start" }
+                        ValueChip(dayLabel(Instant.ofEpochMilli(d.startAt).atZone(zone).toLocalDate(), LocalDate.now(zone)), selected = true) { pickDate = true }
+                        ValueChip(koClock(d.startAt, zone), selected = true) { pick = "start" }
                     }
                 }
-                if (timed) SheetRow("끝", first = !showStart) {
+                if (d.timed) SheetRow("끝", first = !d.showStart) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ValueChip("끝 시각 모름", selected = endAt == null) { endAt = null; error = null }
-                        ValueChip(endAt?.let { koClock(it, zone) } ?: "직접", selected = endAt != null) { pick = "end" }
+                        ValueChip("끝 시각 모름", selected = d.endAt == null, onClick = vm::endUnknown)
+                        ValueChip(d.endAt?.let { koClock(it, zone) } ?: "직접", selected = d.endAt != null) { pick = "end" }
                     }
                 }
-                if (k == CareKind.FEED && side == FeedSide.BOTTLE) SheetRow("양") { AmountStepper(ml) { ml = it } }
-                SheetRow("메모", first = !showStart && !timed) {
+                if (d.kind == CareKind.FEED && d.side == FeedSide.BOTTLE) SheetRow("양") { AmountStepper(d.ml, vm::setAmount) }
+                SheetRow("메모", first = !d.showStart && !d.timed) {
                     val ph = "예: 트림 잘 함"
                     BasicTextField(
-                        value = note,
-                        // U17·U24: 200자(코드 포인트)에서 더 받지 않는다.
-                        onValueChange = { if (it.codePointCount(0, it.length) <= NOTE_MAX) note = it },
+                        value = d.note,
+                        onValueChange = vm::setNote, // U17·U24: 200자에서 더 받지 않는다(도메인 규칙)
                         textStyle = Type.body.copy(fontSize = 15.5.sp, color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.End),
                         cursorBrush = SolidColor(p.accent),
                         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "메모" },
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.CenterEnd) {
-                                if (note.isEmpty()) Text(ph, style = Type.body.copy(fontSize = 15.5.sp), color = p.textTertiary)
+                                if (d.note.isEmpty()) Text(ph, style = Type.body.copy(fontSize = 15.5.sp), color = p.textTertiary)
                                 inner()
                             }
                         },
                     )
                 }
             }
-            when (k) {
+            when (d.kind) {
                 CareKind.FEED -> {
                     val sides = FeedSide.entries
-                    // 쪽은 고르지 않아도 된다: 고른 칸을 다시 누르면 비운다.
-                    Segmented(sides.map(::sideName), sides.indexOf(side), { i -> side = if (side == sides[i]) null else sides[i] })
+                    Segmented(sides.map(::sideName), sides.indexOf(d.side), { i -> vm.toggleSide(sides[i]) })
                 }
                 CareKind.DIAPER -> {
                     val kinds = Diaper.entries
-                    Segmented(kinds.map(::diaperName), kinds.indexOf(diaper), { i -> diaper = kinds[i] })
+                    Segmented(kinds.map(::diaperName), kinds.indexOf(d.diaper), { i -> vm.setDiaper(kinds[i]) })
                 }
                 else -> Unit
             }
-            error?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+            (stage as? EditStage.Editing)?.error?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
             if (guardian) FootNote(GUARDIAN_ONLY)
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Btn("취소", onClose, Modifier.weight(1f), kind = BtnKind.TONAL)
-                Btn("저장", { trySave() }, Modifier.weight(2f), enabled = !saving && (k != CareKind.NOTE || note.isNotBlank()))
+                Btn("취소", ::close, Modifier.weight(1f), kind = BtnKind.TONAL)
+                Btn("저장", vm::save, Modifier.weight(2f), enabled = stage is EditStage.Editing && d.savable)
             }
-            if (initial != null) Btn("지우기", { vm.delete(initial.id); onClose() }, kind = BtnKind.DANGER_TEXT)
+            if (d.editingId != null) Btn("지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
         }
     }
     pick?.let { which ->
-        val ref = Instant.ofEpochMilli(if (which == "end") endAt ?: startAt else startAt).atZone(zone)
+        val ref = Instant.ofEpochMilli(if (which == "end") d.endAt ?: d.startAt else d.startAt).atZone(zone)
         TimeDialog(ref.hour, ref.minute, onDismiss = { pick = null }) { h, m ->
-            val now = System.currentTimeMillis()
-            when {
-                which == "end" -> endAt = firstAtOrAfter(h, m, startAt, zone)
-                // 고치는 기록·다른 날 기록·날짜를 고른 기록은 지금 보이는 날 그대로 시각만 바꾼다.
-                initial != null || baseDate != null || datePicked -> startAt = onDate(Instant.ofEpochMilli(startAt).atZone(zone).toLocalDate(), h, m, zone)
-                else -> startAt = latestAtOrBefore(h, m, now + MINUTE, zone)
-            }
-            if (which == "start") chip = "직접"
-            error = null
+            if (which == "end") vm.pickEnd(h, m) else vm.pickStart(h, m)
             pick = null
         }
     }
     if (pickDate) {
-        val t = Instant.ofEpochMilli(startAt).atZone(zone)
-        DateDialog(t.toLocalDate(), max = LocalDate.now(zone), onDismiss = { pickDate = false }) { d ->
-            val moved = onDate(d, t.hour, t.minute, zone)
-            endAt = endAt?.let { it + (moved - startAt) } // 날을 옮기면 끝도 같이 옮겨 길이를 지킨다
-            startAt = moved
-            chip = "직접"
-            datePicked = true
-            error = null
+        DateDialog(Instant.ofEpochMilli(d.startAt).atZone(zone).toLocalDate(), max = LocalDate.now(zone), onDismiss = { pickDate = false }) { day ->
+            vm.pickDate(day)
             pickDate = false
         }
     }
-    overlap?.let { e -> OverlapDialog(e.kind, onSave = { overlap = null; save(e) }, onDismiss = { overlap = null }) }
+    (stage as? EditStage.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = vm::confirmOverlap, onDismiss = vm::dismissOverlap) }
 }
 
 /** 날짜 고르기(플랫폼다움: Material 날짜 선택기). 오늘 뒤는 고를 수 없다(iOS `in: ...지금`과 같음). */
@@ -570,12 +506,12 @@ private fun PatternView(ui: RecordsUiState, now: Long) {
         KpiRow(
             buildList {
                 // pattern.days는 늘 보이고, 앞 주와 견줄 수 있으면 그 아래 '지난주보다 …'(design.chart).
-                add(Kpi("하루 수유", avgCountText(p.feedsPerDay, p.feedDays), daysText(p.feedDays), trend))
+                add(Kpi("하루 수유", avgCountText(p.feedsPerDay), daysText(p.feedDays), trend))
                 // 간격 중앙값이 아직 없으면(5개 미만, R14) 7장 문구를 값 아래에 그대로 보인다.
                 add(Kpi("수유 간격", p.feedIntervalMs?.let(::durationText) ?: "—", if (p.feedIntervalMs != null) "중앙값" else "기록이 더 쌓이면 보여 드려요"))
                 add(Kpi("차에서 울음", "${p.carCryEpisodes}번", "7일 동안"))
-                p.sleepPerDayMs?.let { add(Kpi("하루 잠", avgDurationText(it, p.sleepDays), daysText(p.sleepDays))) }
-                p.diapersPerDay?.let { add(Kpi("하루 기저귀", avgCountText(it, p.diaperDays), daysText(p.diaperDays))) }
+                p.sleepPerDayMs?.let { add(Kpi("하루 잠", avgDurationText(it), daysText(p.sleepDays))) }
+                p.diapersPerDay?.let { add(Kpi("하루 기저귀", avgCountText(it), daysText(p.diaperDays))) }
             },
         )
     }

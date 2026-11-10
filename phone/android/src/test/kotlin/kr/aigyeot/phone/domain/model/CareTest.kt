@@ -1,10 +1,14 @@
 package kr.aigyeot.phone.domain.model
 
-import kr.aigyeot.phone.domain.usecase.BuildCareSummary
+import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kr.aigyeot.shared.CareSummaryBody
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStateBody
 import kr.aigyeot.shared.ProtocolJson
@@ -16,10 +20,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 /**
  * 돌봄 기록 규칙 R1~R17, 표준 예제, 내보내기(U29)(phone-care-plan 6·13장). 시험 이름은 13장 글자 그대로다(iOS는 `test_` + 같은 글자).
@@ -440,10 +440,10 @@ class CareTest {
         assertEquals(listOf(0, 0, 0, 0, 0, 2, 3), p4.feedsPerDay)
         // U27: 평균은 그 종류 기록이 있는 날만 나눠 센다(5개 ÷ 2일). 기록한 날이 없으면 "기록 없음"이고 "n일 기준"은 보이지 않는다.
         assertEquals(2, p4.feedDays)
-        assertEquals("평균 2.5회", avgCountText(p4.feedsPerDay, p4.feedDays))
+        assertEquals("평균 2.5회", avgCountText(p4.feedsPerDay))
         assertEquals("2일 기준", daysText(p4.feedDays))
-        assertEquals("평균 3.0회", avgCountText(listOf(0, 3, 3), 2))
-        assertEquals("기록 없음", avgCountText(List(7) { 0 }, 0))
+        assertEquals("평균 3.0회", avgCountText(listOf(0, 3, 3)))
+        assertEquals("기록 없음", avgCountText(List(7) { 0 }))
         assertNull(daysText(0))
         assertNull(p4.feedIntervalMs) // 쓸 간격 3개(3h, 2h, 2h30m): 5개 미만
         assertNull(carePattern(CareFile(events = feeds + feed("f", day(5, 8, 30))), emptyList(), now, seoul).feedIntervalMs) // 꼭 4개도 숨김
@@ -504,11 +504,11 @@ class CareTest {
         // U31: 자정을 넘는 잠은 걸친 두 날을 모두 센다(23시~2시 → 11-04·11-05). 길이는 그날 몫만 더한다.
         val cross = carePattern(CareFile(events = listOf(ev("x", CareKind.SLEEP, at(2026, 11, 4, 23), at(2026, 11, 5, 2))), sleepDiaperEnabled = true), emptyList(), now, seoul)
         assertEquals(2, cross.sleepDays)
-        assertEquals("평균 1시간 30분", avgDurationText(cross.sleepPerDayMs!!, cross.sleepDays))
-        assertEquals("평균 1시간", avgDurationText(on.sleepPerDayMs, on.sleepDays))
-        assertEquals("평균 1.0회", avgCountText(on.diapersPerDay!!, on.diaperDays))
+        assertEquals("평균 1시간 30분", avgDurationText(cross.sleepPerDayMs!!))
+        assertEquals("평균 1시간", avgDurationText(on.sleepPerDayMs))
+        assertEquals("평균 1.0회", avgCountText(on.diapersPerDay!!))
         assertEquals(0, off.sleepDays + carePattern(CareFile(sleepDiaperEnabled = true), emptyList(), now, seoul).sleepDays)
-        assertEquals("기록 없음", avgDurationText(List(7) { 0L }, 0))
+        assertEquals("기록 없음", avgDurationText(List(7) { 0L }))
         assertEquals(1, on.diapersPerDay!!.last())
         // 이미 적은 기록은 지우지 않고 타임라인에는 계속 보인다.
         assertEquals(listOf("s", "d"), CareFile(events = events).dayEvents(LocalDate.of(2026, 11, 5), seoul).map { it.id })
@@ -597,7 +597,7 @@ class CareTest {
         // 13장 표준 예제: 입력·기대 파일은 저장소 경로 그대로 읽는다(복사본 없음). 키 순서는 따지지 않고 null 키도 같아야 한다.
         val input = CareJson.decodeFromString(CareFile.serializer(), File("../../shared/src/test/resources/care/summary_input.json").readText())
         fun expected(name: String) = Json.parseToJsonElement(File("../../shared/src/test/resources/protocol/$name.json").readText()).jsonObject["body"]
-        fun body(f: CareFile) = ProtocolJson.encodeToJsonElement(CareSummaryBody.serializer(), BuildCareSummary(f, 1793944800000, seoul))
+        fun body(f: CareFile) = ProtocolJson.encodeToJsonElement(CareSummaryBody.serializer(), careSummary(f, 1793944800000, seoul))
         assertEquals(expected("care_summary"), body(input))
         // 잠·기저귀 끔: 잠·기저귀 칸은 모두 null, 수유 수는 센다.
         assertEquals(expected("care_summary_off"), body(input.copy(sleepDiaperEnabled = false)))

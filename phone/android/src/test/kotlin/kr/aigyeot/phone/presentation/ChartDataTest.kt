@@ -4,8 +4,18 @@ import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.HOUR
 import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.onDate
+import kr.aigyeot.phone.domain.model.carePattern
+import kr.aigyeot.phone.domain.model.reportRowSub
+import kr.aigyeot.phone.domain.model.cryAlarms
+import kr.aigyeot.phone.domain.model.dailyAverageMs
+import kr.aigyeot.phone.domain.model.dailyAverage
+import kr.aigyeot.phone.domain.model.median
+import kr.aigyeot.phone.domain.model.usualGap
+import kr.aigyeot.phone.domain.model.feedGaps
+import kr.aigyeot.phone.domain.model.FeedGap
 import kr.aigyeot.shared.CarAction
 import kr.aigyeot.shared.CarActionKind
 import kr.aigyeot.shared.EpisodeResult
@@ -214,5 +224,34 @@ class ChartDataTest {
         val a = (1..6).flatMap { feeds(it, 1) } + feeds(0, 2)
         val b = feeds(7, 2) + (8..12).flatMap { feeds(it, 1) }
         assertNull(feedTrend(CareFile(events = a + b), now, zone))
+    }
+
+    @Test
+    fun `집계 공통 규칙 한 곳을 패턴 숫자와 7일 막대가 같이 쓴다`() {
+        // 중앙값·하루 평균(U27·U31)
+        assertNull(median(emptyList()))
+        assertEquals(3L, median(listOf(5L, 1L, 3L)))
+        assertEquals(2L, median(listOf(1L, 3L, 4L, 1L)))
+        assertEquals(3.0, dailyAverage(listOf(0, 3, 3))!!, 0.0)
+        assertNull(dailyAverage(listOf(0, 0)))
+        assertEquals(90 * MINUTE, dailyAverageMs(listOf(0L, 60 * MINUTE, 120 * MINUTE)))
+        // R14 간격: 지운 것·지금 뒤로 찍힌 것·10시간 넘는 간격은 빼고, 간격은 뒤 수유에 속한다.
+        fun feed(id: String, t: Long, deleted: Boolean = false) =
+            CareEvent(id, CareKind.FEED, t, endAt = t + 10 * MINUTE, zone = APP_ZONE.id, createdAt = t, updatedAt = t, deletedAt = if (deleted) t else null)
+        val base = now - 20 * HOUR
+        val file = CareFile(events = listOf(feed("a", base), feed("b", base + 11 * HOUR), feed("x", base + 12 * HOUR, deleted = true), feed("c", base + 14 * HOUR), feed("f", now + MINUTE)))
+        assertEquals(listOf(FeedGap(base + 14 * HOUR, 3 * HOUR)), file.feedGaps(now))
+        assertNull(usualGap(List(4) { FeedGap(now, HOUR) }))
+        assertEquals(HOUR, usualGap(List(5) { FeedGap(now, HOUR) }))
+        // U47: 울음 경보 에피소드만 센다. 소리 바꾸기 요청이 섞여도 리포트 줄·패턴·7일 막대가 같은 수다.
+        val r = report().let { b ->
+            b.copy(startedAt = iso(at(9, 0)), endedAt = iso(at(9, 40)), timeline = b.timeline.map { it.copy(startedAt = iso(at(9, 10))) } +
+                b.timeline.first().copy(episodeId = "sw", trigger = EpisodeTrigger.SWITCH_SOUND, startedAt = iso(at(9, 20))))
+        }
+        val cries = r.cryAlarms().size
+        assertEquals(1, cries)
+        assertEquals("울음 ${cries}번", reportRowSub(r))
+        assertEquals(cries, carePattern(CareFile(), listOf(r), now, zone).carCryEpisodes)
+        assertEquals(cries, carCryWeek(listOf(r), now, zone).total)
     }
 }

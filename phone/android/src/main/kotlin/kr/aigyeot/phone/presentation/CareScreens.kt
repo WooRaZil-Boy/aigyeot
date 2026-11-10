@@ -69,7 +69,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -116,18 +115,13 @@ import kr.aigyeot.phone.domain.model.agoText
 import kr.aigyeot.phone.domain.model.carTileText
 import kr.aigyeot.phone.domain.model.elapsed
 import kr.aigyeot.phone.domain.model.feedingSendText
-import kr.aigyeot.phone.domain.model.firstAtOrAfter
 import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.isOngoing
 import kr.aigyeot.phone.domain.model.koClock
 import kr.aigyeot.phone.domain.model.lastFeedingAt
-import kr.aigyeot.phone.domain.model.nearestAtOrBefore
 import kr.aigyeot.phone.domain.model.ongoing
 import kr.aigyeot.phone.domain.model.overMax
 import kr.aigyeot.phone.domain.model.overlapText
-import kr.aigyeot.phone.domain.model.overlaps
-import kr.aigyeot.phone.domain.model.problem
-import kr.aigyeot.phone.domain.model.problemText
 import kr.aigyeot.phone.domain.model.quickKinds
 import kr.aigyeot.phone.domain.model.reportRowSub
 import kr.aigyeot.phone.domain.model.reportRowTitle
@@ -584,14 +578,10 @@ fun CarTab(go: (Route) -> Unit, vm: CarViewModel = appViewModel()) {
 @Composable
 fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val care = ui.care
+    val stage by vm.stage.collectAsStateWithLifecycle()
     val now = rememberNow(1_000)
-    val scope = rememberCoroutineScope()
     val e = ui.event
-    var pick by remember { mutableStateOf<String?>(null) } // "start" | "end"
-    var error by remember { mutableStateOf<String?>(null) }
-    var overlap by remember { mutableStateOf<CareEvent?>(null) }
-    fun save(next: CareEvent) = scope.launch { if (vm.edit { it.copy(startAt = next.startAt, endAt = next.endAt) }) error = null }
+    var pick by remember { mutableStateOf<String?>(null) } // "start" | "end" 시각 고르기 창
     // 끝났거나 지운 기록이면 화면을 닫는다(알림 '끝내기'로 닫힌 경우 등).
     LaunchedEffect(e?.isOngoing) { if (e == null || !e.isOngoing) onBack() }
     if (e == null || !e.isOngoing) return
@@ -603,11 +593,8 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
             TimerRing(e, now)
             if (e.kind == CareKind.FEED) {
                 val sides = FeedSide.entries
-                Segmented(sides.map(::sideName), sides.indexOf(e.feedSide), { i -> // timer.side
-                    val side = sides[i]
-                    scope.launch { vm.edit { it.copy(feedSide = side, amountMl = if (side == FeedSide.BOTTLE) it.amountMl else null) } }
-                })
-                if (e.feedSide == FeedSide.BOTTLE) AmountRow(e.amountMl) { ml -> scope.launch { vm.edit { it.copy(amountMl = ml) } } }
+                Segmented(sides.map(::sideName), sides.indexOf(e.feedSide), { i -> vm.setSide(sides[i]) }) // timer.side
+                if (e.feedSide == FeedSide.BOTTLE) AmountRow(e.amountMl, vm::setAmount)
             }
             if (e.overMax(now)) {
                 // U14: R3 안내와 함께 끝 시각 고르기·끝 시각 모름으로 닫기.
@@ -626,26 +613,18 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                 Spacer(Modifier.height(8.dp))
                 Btn("이 기록 지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
             }
-            error?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+            (stage as? EditStage.Editing)?.error?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
         }
     }
     pick?.let { which ->
-        val zone = e.zoneOrDevice()
-        val ref = Instant.ofEpochMilli(if (which == "start") e.startAt else now).atZone(zone)
+        val ref = Instant.ofEpochMilli(if (which == "start") e.startAt else now).atZone(e.zoneOrDevice())
         TimeDialog(ref.hour, ref.minute, onDismiss = { pick = null }) { h, m ->
-            val next = if (which == "start") e.copy(startAt = nearestAtOrBefore(h, m, e.startAt, System.currentTimeMillis() + MINUTE, zone))
-            else e.copy(endAt = firstAtOrAfter(h, m, e.startAt, zone))
-            val t = System.currentTimeMillis()
-            val prob = next.problem(t)
+            if (which == "start") vm.pickStart(h, m) else vm.pickEnd(h, m)
             pick = null
-            when {
-                prob != null -> error = problemText(prob, e.kind)
-                care.overlaps(next, t) -> overlap = next // R4: 시트와 같은 경고
-                else -> save(next)
-            }
         }
     }
-    overlap?.let { o -> OverlapDialog(o.kind, onSave = { overlap = null; save(o) }, onDismiss = { overlap = null }) }
+    // R4: 시트와 같은 경고
+    (stage as? EditStage.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = vm::confirmOverlap, onDismiss = vm::dismissOverlap) }
 }
 
 /** 타이머 고리(.tring): 회색 고리 3 + 종류 색 호(지난 분 / 60) + 초침 점(60초 한 바퀴, 동작 줄이기면 멈춤). */

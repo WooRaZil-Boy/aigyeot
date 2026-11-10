@@ -1,14 +1,16 @@
 package kr.aigyeot.phone.domain.model
 
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kr.aigyeot.shared.CareSummaryBody
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.SoundMethod
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
+import kr.aigyeot.shared.TimelineEpisode
 
 // 돌봄 기록(phone-care-plan 6장). 폰 안에만 두는 care.json 한 파일이다. 키·값 글자는 iOS와 같다(13장).
 // 계획 0장 U14~U24(11-05 통일 결정)를 따른다: 최대 길이를 넘은 진행 중 기록을 빠른 길로 닫으면 끝 모름(U14), 차 기록 줄 글자(U15·U19),
@@ -267,41 +269,75 @@ data class CarePattern(
 }
 
 /** 7.1 pattern.value: 횟수 "평균 {n}회"(소수 첫째 자리), 기록한 날이 없으면 "기록 없음"(U27). */
-fun avgCountText(perDay: List<Int>, days: Int): String =
-    if (days == 0) "기록 없음" else "평균 ${String.format(java.util.Locale.ROOT, "%.1f", perDay.sum().toDouble() / days)}회"
+fun avgCountText(perDay: List<Int>): String =
+    dailyAverage(perDay)?.let { "평균 ${String.format(java.util.Locale.ROOT, "%.1f", it)}회" } ?: "기록 없음"
 
 /** 잠 "평균 {기간}"(U27 길이 형식). */
-fun avgDurationText(perDayMs: List<Long>, days: Int): String = if (days == 0) "기록 없음" else "평균 ${durationText(perDayMs.sum() / days)}"
+fun avgDurationText(perDayMs: List<Long>): String = dailyAverageMs(perDayMs)?.let { "평균 ${durationText(it)}" } ?: "기록 없음"
 
 /** 7.1 pattern.days: 값 아래 "{n}일 기준". 기록한 날이 없으면(값이 "기록 없음") 보이지 않는다. */
 fun daysText(days: Int): String? = if (days == 0) null else "${days}일 기준"
 
-/** R14: 지난 7일(오늘 포함, 기기 시간대). 간격 = 이어진 수유 시작 사이의 중앙값(짝수면 가운데 둘의 평균, 정수 나눗셈), 10시간 넘는 간격은 뺀다. */
-fun carePattern(care: CareFile, reports: Collection<ReportSummaryBody>, now: Long, zone: ZoneId): CarePattern {
+// ---- 집계 공통 규칙(패턴 숫자·7일 막대·오늘 판이 같이 쓴다. 기간만 부르는 쪽이 정한다) ----
+
+/** 지난 [n]일(오늘 포함, 오래된 것부터, 기기 시간대). */
+fun lastDays(now: Long, zone: ZoneId, n: Int = PATTERN_DAYS): List<LocalDate> {
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
-    val days = (PATTERN_DAYS - 1 downTo 0).map { today.minusDays(it.toLong()) }
+    return (n - 1 downTo 0).map { today.minusDays(it.toLong()) }
+}
+
+/** 날마다 그 종류 기록이 그날 시작한 수(지운 것 뺌, R13·U27). */
+fun CareFile.countPerDay(kind: CareKind, days: List<LocalDate>, zone: ZoneId): List<Int> {
+    val starts = events.filter { it.kind == kind && it.deletedAt == null }.map { Instant.ofEpochMilli(it.startAt).atZone(zone).toLocalDate() }
+    return days.map { d -> starts.count { it == d } }
+}
+
+/** U27: 기록한 날(값이 0보다 큰 날)만 나눈 하루 평균. 기록한 날이 없으면 null. */
+fun dailyAverage(perDay: List<Int>): Double? = perDay.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()
+
+/** U31: 길이도 같은 규칙(0보다 큰 날만, 정수 나눗셈). */
+fun dailyAverageMs(perDayMs: List<Long>): Long? = perDayMs.filter { it > 0 }.takeIf { it.isNotEmpty() }?.let { it.sum() / it.size }
+
+/** 중앙값(짝수면 가운데 둘의 평균, 정수 나눗셈). 비면 null. */
+fun median(xs: List<Long>): Long? = xs.sorted().let { s ->
+    when {
+        s.isEmpty() -> null
+        s.size % 2 == 1 -> s[s.size / 2]
+        else -> (s[s.size / 2 - 1] + s[s.size / 2]) / 2
+    }
+}
+
+/** R14 수유 간격 하나. [at]은 뒤 수유의 시작(간격이 속한 날을 정한다), [ms]는 앞 수유 시작부터. */
+data class FeedGap(val at: Long, val ms: Long) {
+    val prevAt: Long get() = at - ms
+}
+
+/** R14: 이어진 수유 시작 사이의 간격(지운 것 뺌, R3의 1분 여유로 지금 뒤로 찍힌 수유 뺌), 10시간 넘는 간격은 뺀다. 오래된 것부터. */
+fun CareFile.feedGaps(now: Long): List<FeedGap> =
+    events.filter { it.kind == CareKind.FEED && it.deletedAt == null && it.startAt <= now }.map { it.startAt }.sorted()
+        .zipWithNext { a, b -> FeedGap(b, b - a) }.filter { it.ms <= MAX_INTERVAL_MS }
+
+/** R14 '평소 간격': 간격이 [MIN_INTERVALS]개 이상일 때만 중앙값. */
+fun usualGap(gaps: List<FeedGap>): Long? = gaps.takeIf { it.size >= MIN_INTERVALS }?.let { g -> median(g.map { it.ms }) }
+
+/** U47: 울음 경보로 시작한 에피소드. 소리 바꾸기 요청(switch_sound)은 울음이 없었을 수 있어 뺀다(11-05 결정). 리포트 줄·차 기록 줄·패턴이 같이 쓴다. */
+fun ReportSummaryBody.cryAlarms(): List<TimelineEpisode> = timeline.filter { it.trigger == EpisodeTrigger.CRY_ALARM }
+
+/** R14: 지난 7일(오늘 포함, 기기 시간대). 간격은 두 수유가 모두 7일 안에 있는 것의 중앙값. */
+fun carePattern(care: CareFile, reports: Collection<ReportSummaryBody>, now: Long, zone: ZoneId): CarePattern {
+    val days = lastDays(now, zone)
     val from = days.first().atStartOfDay(zone).toInstant().toEpochMilli()
     fun dayOf(t: Long) = Instant.ofEpochMilli(t).atZone(zone).toLocalDate()
-    val live = care.events.filter { it.deletedAt == null && it.startAt >= from }
-    fun countPerDay(kind: CareKind) = days.map { d -> live.count { it.kind == kind && dayOf(it.startAt) == d } }
-    val intervals = live.filter { it.kind == CareKind.FEED && it.startAt <= now }.map { it.startAt }.sorted() // R3의 1분 여유로 내일에 걸친 수유는 뺀다
-        .zipWithNext { a, b -> b - a }.filter { it <= MAX_INTERVAL_MS }.sorted()
-    val median = when {
-        intervals.size < MIN_INTERVALS -> null
-        intervals.size % 2 == 1 -> intervals[intervals.size / 2]
-        else -> (intervals[intervals.size / 2 - 1] + intervals[intervals.size / 2]) / 2
-    }
-    val feeds = countPerDay(CareKind.FEED)
-    val diapers = countPerDay(CareKind.DIAPER)
-    // U31: 잠은 끝난 잠이 그날(자정에서 나눔)에 걸친 시간이 0보다 큰 날을 센다.
+    // U31: 잠은 끝난 잠이 그날(자정에서 나눔)에 걸친 시간.
     val sleepMs = days.map { durationOn(care.events, CareKind.SLEEP, it, zone) }
     return CarePattern(
         days = days,
-        feedsPerDay = feeds,
-        feedIntervalMs = median,
+        feedsPerDay = care.countPerDay(CareKind.FEED, days, zone),
+        feedIntervalMs = usualGap(care.feedGaps(now).filter { it.prevAt >= from }),
         sleepPerDayMs = if (care.sleepDiaperEnabled) sleepMs else null,
-        diapersPerDay = if (care.sleepDiaperEnabled) diapers else null,
-        carCryEpisodes = carLines(reports).count { !it.isDrive && dayOf(it.startAt) in days }, // 차 시계가 앞서 내일로 찍힌 것은 뺀다
+        diapersPerDay = if (care.sleepDiaperEnabled) care.countPerDay(CareKind.DIAPER, days, zone) else null,
+        // 차 시계가 앞서 내일로 찍힌 것은 뺀다.
+        carCryEpisodes = reports.flatMap { it.cryAlarms() }.count { e -> instantOf(e.startedAt)?.let { dayOf(it) in days } == true },
     )
 }
 
@@ -322,8 +358,7 @@ data class CarLine(
 fun carLines(reports: Collection<ReportSummaryBody>): List<CarLine> = reports.flatMap { r ->
     val start = instantOf(r.startedAt) ?: return@flatMap emptyList()
     listOf(CarLine(r.sessionId, null, start, instantOf(r.endedAt), null, null)) +
-        // 울음 경보로 시작한 에피소드만. 소리 바꾸기 요청(switch_sound)은 울음이 없었을 수 있다(11-05 결정).
-        r.timeline.filter { it.trigger == EpisodeTrigger.CRY_ALARM }
+        r.cryAlarms()
             .mapNotNull { e -> instantOf(e.startedAt)?.let { CarLine(r.sessionId, e.episodeId, it, null, e.sound?.method, e.result) } }
 }.sortedBy { it.startAt }
 
@@ -350,7 +385,7 @@ fun reportRowTitle(b: ReportSummaryBody, zone: ZoneId): String =
 
 /** report.row.sub "울음 {n}번". n은 울음 경보로 시작한 에피소드 수로, 차 기록 줄(R17)의 '차에서 울음' 줄 수와 같다. */
 fun reportRowSub(b: ReportSummaryBody): String {
-    val n = b.timeline.count { it.trigger == EpisodeTrigger.CRY_ALARM }
+    val n = b.cryAlarms().size
     return (if (n == 0) "울음 기록 없음" else "울음 ${n}번") + if (b.simulated) " · 시뮬레이션" else ""
 }
 
@@ -448,21 +483,37 @@ fun sideName(s: FeedSide) = when (s) {
 
 // ---- 돌봄 요약(U45, R18): 숫자와 시각만. 메모 글·기저귀 종류·젖병 양·수유 쪽·별명은 넣지 않는다 ----
 
-// shortcut: shared의 CareSummaryBody가 main에 들어오기 전이라 같은 칸·같은 이름으로 둔다. rebase 뒤 이것을 지우고 kr.aigyeot.shared.CareSummaryBody를 쓴다.
-@Serializable
-data class CareSummaryBody(
-    val asOf: String,
-    val zone: String,
-    val sleepDiaperEnabled: Boolean,
-    val lastSleepStartAt: String?,
-    val lastSleepEndAt: String?,
-    val sleepingSince: String?,
-    val todaySleepMin: Int?,
-    val nightWakeups: Int?,
-    val lastDiaperAt: String?,
-    val todayDiaperCount: Int?,
-    val todayFeedCount: Int,
-)
+/**
+ * R18(U45) 돌봄 요약 계산: 숫자와 시각만. 메모 글·기저귀 종류·젖병 양·수유 쪽·별명은 넣지 않는다. 저장소가 없는 순수 계산이다.
+ * '오늘 0시'·'어제 22시'·'오늘 6시'는 `asOf`를 `zone` 벽시계로 본 날 기준이다. 시각은 그 순간의 `zone` 오프셋, 초까지.
+ */
+fun careSummary(care: CareFile, asOf: Long, zone: ZoneId): CareSummaryBody {
+    val live = care.events.filter { it.deletedAt == null && it.startAt <= asOf }
+    val today = Instant.ofEpochMilli(asOf).atZone(zone).toLocalDate()
+    fun at(d: LocalDate, h: Int) = d.atTime(h, 0).atZone(zone).toInstant().toEpochMilli()
+    val midnight = at(today, 0)
+    val feeds = live.count { it.kind == CareKind.FEED && it.startAt >= midnight } // 끝 모름 수유도 센다
+    if (!care.sleepDiaperEnabled) return CareSummaryBody(rfc3339(asOf, zone), zone.id, false, null, null, null, null, null, null, null, feeds)
+    fun t(ms: Long?) = ms?.let { rfc3339(it, zone) }
+    val sleeps = live.filter { it.kind == CareKind.SLEEP && !it.endUnknown } // 끝 모름 잠은 모든 잠 칸에서 뺀다
+    val ended = sleeps.filter { it.endAt != null && it.endAt <= asOf }
+    val last = ended.maxWithOrNull(compareBy({ it.endAt }, { it.startAt }))
+    val sleepMs = sleeps.sumOf { (minOf(it.endAt ?: asOf, asOf) - maxOf(it.startAt, midnight)).coerceAtLeast(0) }
+    val diapers = live.filter { it.kind == CareKind.DIAPER }
+    return CareSummaryBody(
+        asOf = rfc3339(asOf, zone),
+        zone = zone.id,
+        sleepDiaperEnabled = true,
+        lastSleepStartAt = t(last?.startAt),
+        lastSleepEndAt = t(last?.endAt),
+        sleepingSince = t(sleeps.filter { it.endAt == null }.maxOfOrNull { it.startAt }),
+        todaySleepMin = (sleepMs / MINUTE).toInt(), // 합을 낸 뒤 내림
+        nightWakeups = ended.count { it.endAt!! >= at(today.minusDays(1), 22) && it.endAt < at(today, 6) },
+        lastDiaperAt = t(diapers.maxOfOrNull { it.startAt }),
+        todayDiaperCount = diapers.count { it.startAt >= midnight },
+        todayFeedCount = feeds,
+    )
+}
 
 /**
  * U61: 기록에서 온 값이 하나도 없는 요약(오늘 수유 0회, 잠·기저귀 칸이 비었거나 0). 메모만·옛 기록만 있는 폰의 요약도 그렇다.

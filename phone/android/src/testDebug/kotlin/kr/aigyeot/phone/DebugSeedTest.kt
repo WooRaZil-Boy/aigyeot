@@ -4,7 +4,7 @@ import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.MINUTE
-import kr.aigyeot.phone.domain.usecase.BuildCareSummary
+import kr.aigyeot.phone.domain.model.careSummary
 import kr.aigyeot.phone.domain.model.carePattern
 import kr.aigyeot.phone.domain.model.lastFeedStart
 import kr.aigyeot.phone.domain.model.overlaps
@@ -87,7 +87,7 @@ class DebugSeedTest {
 
     private fun assertU50(f: CareFile, t: Long, zone: ZoneId = seoul) {
         val m = t / MINUTE * MINUTE
-        val s = BuildCareSummary(f, t, zone)
+        val s = careSummary(f, t, zone)
         val at = rfc3339(t, zone)
         assertEquals(at, rfc3339(m - 210 * MINUTE, zone), s.lastSleepStartAt)
         assertEquals(at, rfc3339(m - 150 * MINUTE, zone), s.lastSleepEndAt)

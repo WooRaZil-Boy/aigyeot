@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.model
 
+import java.time.ZoneId
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -7,10 +8,11 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kr.aigyeot.shared.CareSummaryBody
 import kr.aigyeot.shared.DeviceInfo
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStateBody
@@ -26,8 +28,6 @@ import kr.aigyeot.shared.SongRejectReason
 import kr.aigyeot.shared.SongStatusBody
 import kr.aigyeot.shared.SongStatusKind
 import kr.aigyeot.shared.UnpairedBody
-import kr.aigyeot.phone.domain.usecase.BuildCareSummary
-import java.time.ZoneId
 
 // 폰의 지금 상태와 받은 메시지 처리(계약 3.2 '받는 쪽 규칙', 5.6, 7.4·7.5). 안드로이드 없이 JVM에서 시험한다.
 // 단순화: 계약 7.4는 Room이지만 양이 작아(리포트 90일, 곡 3개) 한 JSON 파일로 둔다. 커지면 Room으로 옮긴다.
@@ -621,7 +621,7 @@ fun PhoneState.reconciledFeeding(events: List<CareEvent>, now: Long, id: String 
  */
 fun PhoneState.reconciledCareSummary(care: CareFile, now: Long, zone: ZoneId, id: String = ulid(now), sending: String? = null): PhoneState {
     if (role != Role.OWNER || carId == null || !care.migratedFeedings || clearingCareIds != null) return this
-    val summary = BuildCareSummary(care, now, zone)
+    val summary = careSummary(care, now, zone)
     // 기록에서 온 값이 없는 요약이고 이 연결에서 요약을 넣은 적도 없으면 보내지 않는다: 같은 차의 다른 owner 폰 요약을 빈 요약으로 덮지 않게(U61).
     // 판단은 보낼 요약 그대로 본다(메모만·옛 기록만 있어도 빈 요약이다). 기록을 지운 뒤에는 넣은 적이 있으니 빈 요약을 보낸다(R10).
     // '넣은 적'(`maxSentCareAsOf`)은 기록 지우기에도 남고 연결 끊기(R9)에서만 사라진다.
