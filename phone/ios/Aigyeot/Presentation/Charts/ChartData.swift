@@ -45,7 +45,8 @@ enum ChartData {
                 let a = minuteIn(max(e.startAt, from), from: from), b = minuteIn(min(end(e), to), from: from)
                 // 끝 모름은 시작 점 하나(끝 시각을 만들어 보이지 않는다)
                 if e.endUnknown { return Span(from: a, to: a, tip: "\(name) \(hhmm(a)) · \(CareText.endUnknown)") }
-                return Span(from: a, to: b, tip: "\(name) \(hhmm(a))–\(hhmm(b))" + (b > a ? " · " + CareFormat.length(Int64(b - a) * minute) : ""))
+                // 길이 글은 그날에 든 기록 시각의 차이(분으로 내린 그림 좌표의 차이가 아니다: 기록 목록·잠 합계와 같은 값, 안드로이드와 같다)
+                return Span(from: a, to: b, tip: "\(name) \(hhmm(a))–\(hhmm(b))" + (b > a ? " · " + CareFormat.length(min(end(e), to) - max(e.startAt, from)) : ""))
             }
         }
         func startedToday(_ kind: CareKind) -> [CareEvent] { live.filter { $0.kind == kind && $0.startAt >= from && $0.startAt < to } }
@@ -63,13 +64,16 @@ enum ChartData {
         }
         if showCar {
             var drives: [Span] = [], cries: [Mark] = []
+            var driveMs: Int64 = 0   // 탑승 합계도 그날에 든 세션 시각의 차이를 더한다(그림 좌표는 분으로 내림)
             for r in reports {
                 let b = r.body
                 if let s = Rfc3339.parse(b.startedAt).map(CareTime.ms) {
                     let e = Rfc3339.parse(b.endedAt).map(CareTime.ms) ?? s
                     if inDay(s, e) {
-                        let a = minuteIn(max(s, from), from: from), z = minuteIn(min(e, to), from: from)
-                        drives.append(Span(from: a, to: z, tip: "탑승 \(hhmm(a))–\(hhmm(z)) · " + CareFormat.length(Int64(z - a) * minute)))
+                        let inS = max(s, from), inE = min(e, to)
+                        let a = minuteIn(inS, from: from), z = minuteIn(inE, from: from)
+                        drives.append(Span(from: a, to: z, tip: "탑승 \(hhmm(a))–\(hhmm(z)) · " + CareFormat.length(inE - inS)))
+                        driveMs += inE - inS
                     }
                 }
                 for ep in b.timeline where ep.trigger == .cryAlarm {
@@ -80,8 +84,7 @@ enum ChartData {
             }
             drives.sort { $0.from < $1.from }
             cries.sort { $0.at < $1.at }
-            let driveMin = drives.reduce(0) { $0 + $1.to - $1.from }
-            lanes.append(Lane(kind: .car, name: "차에서", sub: driveMin > 0 ? "탑승 " + CareFormat.length(Int64(driveMin) * minute) : nil,
+            lanes.append(Lane(kind: .car, name: "차에서", sub: driveMs > 0 ? "탑승 " + CareFormat.length(driveMs) : nil,
                               value: "울음 \(cries.count)번", spans: drives, marks: cries))
         }
         return Day(lanes: lanes, nowMin: now >= from && now < to ? minuteIn(now, from: from) : nil)

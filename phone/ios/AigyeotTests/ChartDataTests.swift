@@ -92,6 +92,27 @@ final class ChartDataTests: XCTestCase {
         XCTAssertNil(ChartData.day(care: CareFile(), reports: [], day: "2026-11-08", now: now, zone: zone, showCar: false).nowMin)
     }
 
+    func test_하루_띠의_길이_글과_탑승_합계는_분으로_내린_칸이_아니라_기록_시각의_차이다() throws {
+        // 13:10:50~13:52:10은 기록 목록처럼 41분(칸 차이로 세면 42분). 그림 칸은 분으로 내린 그대로다.
+        var b = try report()
+        b.startedAt = iso(at(13, 10) + 50_000)
+        b.endedAt = iso(at(13, 52) + 10_000)
+        var care = CareFile()
+        care.sleepDiaperEnabled = true
+        care.events = [ev(.feed, at(3, 15) + 50_000, at(3, 35) + 10_000), ev(.sleep, at(23, 0, daysAgo: 1) + 30_000, at(1, 0) + 20_000)]
+        let d = ChartData.day(care: care, reports: [stored(b)], day: today, now: now, zone: zone, showCar: true)
+        let car = try XCTUnwrap(d.lanes.first { $0.kind == .car })
+        XCTAssertEqual(car.spans.map { [$0.from, $0.to] }, [[790, 832]])
+        XCTAssertEqual(car.spans.first?.tip, "탑승 13:10–13:52 · 41분")
+        XCTAssertEqual(car.sub, "탑승 41분")
+        let feed = try XCTUnwrap(d.lanes.first { $0.kind == .feed })
+        XCTAssertEqual(feed.spans.map { [$0.from, $0.to] }, [[195, 215]])
+        XCTAssertEqual(feed.spans.first?.tip, "수유 03:15–03:35 · 19분")
+        // 어제 밤 잠은 오늘에 든 부분(00:00~01:00:20)의 길이
+        let sleep = try XCTUnwrap(d.lanes.first { $0.kind == .sleep })
+        XCTAssertEqual(sleep.spans.first?.tip, "잠 00:00–01:00 · 1시간")
+    }
+
     func test_수유_간격_막대는_날마다_중앙값이고_평소는_앞_6일_간격이_5개_이상일_때만이다() {
         let feeds = [at(0, 0, daysAgo: 1), at(3, 0, daysAgo: 1), at(6, 0, daysAgo: 1), at(9, 0, daysAgo: 1), at(2, 0), at(4, 30), at(20, 0)]
         var care = CareFile()
