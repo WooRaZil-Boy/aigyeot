@@ -715,8 +715,14 @@ val SongEntry.replaceable: Boolean get() = phase == SongPhase.REJECTED || (phase
  */
 fun PhoneState.replaceable(songId: String?): String? = songId?.takeIf { id -> songs.any { it.songId == id && it.replaceable } }
 
-/** 우리 노래 3곡이 찼다(바꿀 곡 `replacing`은 빼고 센다, G40). */
-fun PhoneState.songsFull(replacing: String? = null) = visibleSongs.count { it.songId != replacing } >= 3
+/** 우리 노래 한도(명세서 5장·12장, G40). */
+const val MAX_SONGS = 3
+
+/**
+ * 우리 노래 3곡이 찼다(바꿀 곡 `replacing`은 빼고 센다, G40). 거절된 곡은 줄은 보이지만 자동 지움(song_removed)을 이미 보낼 함에 넣어
+ * 새 곡보다 먼저 처리되므로 자리를 차지하지 않는다(8.4, iOS `songSlots`와 같음). 화면의 '녹음하기'·한도 안내와 저장이 같은 규칙을 쓴다.
+ */
+fun PhoneState.songsFull(replacing: String? = null) = visibleSongs.count { it.songId != replacing && it.phase != SongPhase.REJECTED } >= MAX_SONGS
 
 /** 노래면 올릴 곡 id, 노래 지움·고르기면 body의 곡 id. */
 val OutboxItem.songId: String? get() = (payload as? OutboxPayload.Song)?.songId ?: (body["song_id"] as? JsonPrimitive)?.contentOrNull

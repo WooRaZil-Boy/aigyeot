@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -12,6 +13,7 @@ import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.OutboxItem
 import kr.aigyeot.phone.domain.model.OutboxPayload
+import kr.aigyeot.phone.domain.model.SONGS_FULL
 import kr.aigyeot.phone.domain.model.SendResult
 import kr.aigyeot.phone.domain.model.SongSend
 import kr.aigyeot.phone.domain.model.removeSong
@@ -27,7 +29,6 @@ import kr.aigyeot.phone.domain.repository.RelayClient
 import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.phone.domain.repository.SongFileStore
 import kr.aigyeot.phone.domain.state.Notices
-import java.io.File
 
 // 우리 노래(owner, 명세서 5·12장, 계약 7.4·9장 '노래 거절').
 
@@ -127,7 +128,7 @@ class RecordSong(
                 } && added -> null
                 full -> {
                     songs.delete(songs.file(fileName))
-                    "노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요."
+                    SONGS_FULL
                 }
                 else -> {
                     songs.delete(songs.file(fileName))

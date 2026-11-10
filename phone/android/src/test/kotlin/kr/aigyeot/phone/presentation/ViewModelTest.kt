@@ -67,7 +67,7 @@ class ViewModelTest {
         val kept = SongEntry("s1", "자장가", phase = SongPhase.ACCEPTED)
         val removed = SongEntry("s2", "옛 노래", phase = SongPhase.REMOVED)
         val s = PhoneState(songs = listOf(kept, removed), outbox = listOf(outboxItem(OutboxPayload.Message("song_selected", songRef("s1")), NOW)))
-        assertEquals(SongsUiState(listOf(kept), setOf("s1"), online = false), songsUi(s, online = false))
+        assertEquals(SongsUiState(listOf(kept), setOf("s1"), online = false, full = false), songsUi(s, online = false))
     }
 
     @Test

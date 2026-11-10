@@ -23,6 +23,9 @@ import java.time.ZoneId
 
 // 화면 문구 고르기(P1: 규칙 하나 함수 하나). 리포트·노래·차 타일·수유 전송 상태. 화면은 이 함수의 글을 그리기만 한다.
 
+
+/** car.songs.full(7.1)·거절 이유 `limit_reached`(9장): 3곡이 찼을 때 목록 아래 안내와 거절 글이 같다(iOS와 같음). */
+const val SONGS_FULL = "노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요."
 // ---- 리포트 상세(명세서 11장) ----
 
 /** 조향 비교 불가 사유 문구(7.2). */
@@ -151,7 +154,7 @@ fun rejectText(r: SongRejectReason?) = when (r) {
     SongRejectReason.BAD_FORMAT -> "파일을 읽지 못했어요. 다시 녹음해 주세요."
     SongRejectReason.TOO_LONG -> "3분이 넘어요. 3분 안으로 다시 녹음해 주세요."
     SongRejectReason.TOO_LARGE -> "파일이 너무 커요. 다시 녹음해 주세요."
-    SongRejectReason.LIMIT_REACHED -> "노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요."
+    SongRejectReason.LIMIT_REACHED -> SONGS_FULL
     SongRejectReason.DOWNLOAD_FAILED -> "차가 파일을 받지 못했어요. 다시 보내 주세요."
     null -> "차가 받지 않았어요."
 }

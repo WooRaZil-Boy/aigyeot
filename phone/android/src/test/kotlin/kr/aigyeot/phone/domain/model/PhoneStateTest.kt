@@ -139,10 +139,13 @@ class PhoneStateTest {
         val gone = one.removeSong("s_OLD", now)
         assertEquals(1, gone.replacedSong("s_OLD", "s_NEW", "새 노래", 40.0, "s_NEW.m4a", now + 1).outbox.count { it.envelope.type == "song_removed" })
         // 3곡이 찼는지는 바꿀 곡을 빼고 센다(G40, iOS와 같음).
-        val three = one.addSong("s_B", "b", 1.0, "b.m4a", now).addSong("s_C", "c", 1.0, "c.m4a", now)
-        assertTrue(three.songsFull())
-        assertFalse(three.songsFull(replacing = "s_OLD"))
+        val fullThree = owner.addSong("s_A", "a", 1.0, "a.m4a", now).addSong("s_B", "b", 1.0, "b.m4a", now).addSong("s_C", "c", 1.0, "c.m4a", now)
+        assertTrue(fullThree.songsFull())
+        assertFalse(fullThree.songsFull(replacing = "s_A"))
         assertFalse(one.songsFull())
+        // 거절된 곡은 줄은 보여도 자동 지움이 먼저 가므로 자리를 차지하지 않는다(8.4, iOS songSlots와 같음).
+        val three = one.addSong("s_B", "b", 1.0, "b.m4a", now).addSong("s_C", "c", 1.0, "c.m4a", now)
+        assertFalse(three.songsFull())
         // 시트를 연 사이 차가 받아들였으면 바꾸지 않고 새 곡으로 넣고, 3곡 한도는 그 곡까지 센다(iOS와 같음).
         val accepted = one.copy(songs = one.songs.map { it.copy(phase = SongPhase.ACCEPTED) })
         assertNull(accepted.replaceable("s_OLD"))

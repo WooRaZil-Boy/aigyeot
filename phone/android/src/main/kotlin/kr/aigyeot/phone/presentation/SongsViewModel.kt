@@ -10,6 +10,7 @@ import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.SongSend
 import kr.aigyeot.phone.domain.model.selecting
+import kr.aigyeot.phone.domain.model.songsFull
 import kr.aigyeot.phone.domain.model.visibleSongs
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
@@ -31,11 +32,12 @@ sealed interface Take {
     data class Recorded(val ms: Long) : Take
 }
 
-data class SongsUiState(val songs: List<SongEntry>, val selecting: Set<String>, val online: Boolean)
+/** `full`: 3곡이 찼다(거절된 곡은 세지 않는다, `songsFull`). */
+data class SongsUiState(val songs: List<SongEntry>, val selecting: Set<String>, val online: Boolean, val full: Boolean)
 
 /** 보이는 곡(지운 곡 뺌)과, 고른 뒤 아직 차로 보내지 못한 곡. */
 internal fun songsUi(s: PhoneState, online: Boolean) =
-    SongsUiState(s.visibleSongs, s.visibleSongs.filter { s.selecting(it.songId) }.mapTo(HashSet()) { it.songId }, online)
+    SongsUiState(s.visibleSongs, s.visibleSongs.filter { s.selecting(it.songId) }.mapTo(HashSet()) { it.songId }, online, s.songsFull())
 
 data class SheetUiState(
     /** 시트마다 고유한 임시 파일. 앞 시트의 보내기(복사·원본 지우기)가 늦어도 새 녹음과 섞이지 않는다. 시트가 없으면 null. */

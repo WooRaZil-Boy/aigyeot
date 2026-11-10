@@ -54,14 +54,15 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.abs
+import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kr.aigyeot.phone.R
+import kr.aigyeot.phone.domain.model.SONGS_FULL
 import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.SongPhase
 import kr.aigyeot.phone.domain.model.replaceable
 import kr.aigyeot.phone.domain.model.songStatusText
-import kotlin.math.abs
-import kotlin.math.sin
 
 // 우리 노래(owner): 차 탭 '우리 노래' 블록(U39)과 노래 녹음 화면(시안 S.song: 위 녹음, 아래 목록).
 
@@ -82,7 +83,7 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
     }
     // 녹음 화면(시안 S.song)은 머리 없이 목록만 둔다(위 막대 제목이 '우리 노래'). 아직 곡이 없으면 위 안내가 대신한다.
     if (!header && songs.isEmpty()) { FootNote("차에서는 다음 주행부터 써요."); return }
-    ListBlock(if (header) "우리 노래" else null, if (header && onRecord != null && songs.size < 3) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
+    ListBlock(if (header) "우리 노래" else null, if (header && onRecord != null && !ui.full) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
         if (songs.isEmpty()) Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Modifier.padding(bottom = 14.dp), style = Type.body, color = p.textTertiary)
         for (e in songs) {
             var menu by remember { mutableStateOf(false) }
@@ -111,7 +112,7 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
                 }
             }
         }
-        if (songs.size >= 3) Text("노래는 3곡까지예요", Modifier.padding(bottom = 12.dp), style = Type.caption, color = p.textTertiary)
+        if (ui.full) Text(SONGS_FULL, Modifier.padding(bottom = 12.dp), style = Type.caption, color = p.textTertiary) // car.songs.full(7.1)
     }
     FootNote("차에서는 다음 주행부터 써요.") // car.songs.note(문구표, 확정 시안 그대로. 3분 한도는 녹음 화면 "0:00 / 3:00"이 보인다)
 }
