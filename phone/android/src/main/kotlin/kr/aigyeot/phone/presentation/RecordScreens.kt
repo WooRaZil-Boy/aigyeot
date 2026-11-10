@@ -209,22 +209,29 @@ fun CareSheet(
                 val kinds = quickKinds(care.sleepDiaperEnabled)
                 Segmented(kinds.map(::kindName), kinds.indexOf(k), { i -> k = kinds[i]; error = null })
             }
-            if (guardian) FootNote(GUARDIAN_ONLY)
+            // 순서는 iOS 시트와 같다: (새 기록·오늘) 몇 분 전 칩 → 행 묶음(시작·끝·양·메모) → 쪽·종류 → 오류 → 보호자 안내 → 단추.
+            if (initial == null && baseDate == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((label, min) in agoChips) Chip(label, chip == label, { chip = label; startAt = System.currentTimeMillis() - min * MINUTE; datePicked = false; error = null })
+                Chip("직접", chip == "직접", { chip = "직접"; error = null })
+            }
+            // 새 기록에서 몇 분 전 칩을 고른 동안은 칩이 시각을 말하므로 시작 행을 숨기고, '직접'이면 보인다(iOS와 같음).
+            val showStart = initial != null || baseDate != null || chip == "직접"
             SheetRows {
-                // 시작(수유·잠) 또는 시각(기저귀·메모). 날짜 칩은 날짜를, 시각 칩은 시각을 고른다(iOS 날짜·시각 선택기와 같은 기능: 지난 기록을 다른 날로 옮길 수 있다).
-                SheetRow(if (timed) "시작" else "시각", first = true) {
+                // 시작(수유·잠) 또는 시각(기저귀·메모). 날짜 칩은 날짜를, 시각 칩은 시각을 고른다(지난 기록을 다른 날로 옮길 수 있다).
+                if (showStart) SheetRow(if (timed) "시작" else "시각", first = true) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         ValueChip(dayLabel(Instant.ofEpochMilli(startAt).atZone(zone).toLocalDate(), LocalDate.now(zone)), selected = true) { pickDate = true }
                         ValueChip(koClock(startAt, zone), selected = true) { pick = "start" }
                     }
                 }
-                if (timed) SheetRow("끝") {
+                if (timed) SheetRow("끝", first = !showStart) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ValueChip("끝 시각 모름", selected = endAt == null) { endAt = null; error = null }
                         ValueChip(endAt?.let { koClock(it, zone) } ?: "직접", selected = endAt != null) { pick = "end" }
                     }
                 }
-                SheetRow("메모") {
+                if (k == CareKind.FEED && side == FeedSide.BOTTLE) SheetRow("양") { AmountStepper(ml) { ml = it } }
+                SheetRow("메모", first = !showStart && !timed) {
                     val ph = "예: 트림 잘 함"
                     BasicTextField(
                         value = note,
@@ -242,16 +249,11 @@ fun CareSheet(
                     )
                 }
             }
-            if (initial == null && baseDate == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((label, min) in agoChips) Chip(label, chip == label, { chip = label; startAt = System.currentTimeMillis() - min * MINUTE; datePicked = false; error = null })
-                Chip("직접", chip == "직접", { pick = "start" })
-            }
             when (k) {
                 CareKind.FEED -> {
                     val sides = FeedSide.entries
                     // 쪽은 고르지 않아도 된다: 고른 칸을 다시 누르면 비운다.
                     Segmented(sides.map(::sideName), sides.indexOf(side), { i -> side = if (side == sides[i]) null else sides[i] })
-                    if (side == FeedSide.BOTTLE) AmountRow(ml) { ml = it }
                 }
                 CareKind.DIAPER -> {
                     val kinds = Diaper.entries
@@ -260,6 +262,7 @@ fun CareSheet(
                 else -> Unit
             }
             error?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+            if (guardian) FootNote(GUARDIAN_ONLY)
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Btn("취소", onClose, Modifier.weight(1f), kind = BtnKind.TONAL)
                 Btn("저장", { trySave() }, Modifier.weight(2f), enabled = !saving && (k != CareKind.NOTE || note.isNotBlank()))

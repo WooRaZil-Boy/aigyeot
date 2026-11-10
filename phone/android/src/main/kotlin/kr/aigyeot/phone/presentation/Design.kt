@@ -432,7 +432,7 @@ fun SettingRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(19.dp), if (danger) p.danger else p.textTertiary) }
+        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(19.dp), p.textTertiary) } // 시안 .grp .li: 아이콘은 늘 흐린 색, 위험 행은 글자만 빨강
         Column(Modifier.weight(1f)) {
             Text(title, style = Type.body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp), color = if (danger) p.danger else p.textPrimary)
             sub?.let { Text(it, style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textTertiary) }

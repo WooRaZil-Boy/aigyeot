@@ -104,6 +104,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
+import kr.aigyeot.phone.domain.model.AMOUNT_ML
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
@@ -706,9 +707,18 @@ internal fun AmountRow(ml: Int?, onChange: (Int?) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("양", Modifier.weight(1f), style = Type.body.copy(fontSize = 15.5.sp, fontWeight = FontWeight.Medium), color = p.textPrimary)
-        StepButton(R.drawable.ic_minus, "빼기", enabled = ml != null) { onChange(ml?.let { (it - 10).coerceAtLeast(0) }) }
+        AmountStepper(ml, onChange)
+    }
+}
+
+/** 젖병 양 −/＋(±10ml, 빈 값에서 +는 10ml, U39). 범위는 도메인 `AMOUNT_ML`. 타이머 행과 기록 시트 행이 같이 쓴다. */
+@Composable
+internal fun AmountStepper(ml: Int?, onChange: (Int?) -> Unit) {
+    val p = Tokens.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StepButton(R.drawable.ic_minus, "빼기", enabled = ml != null) { onChange(ml?.let { (it - 10).coerceAtLeast(AMOUNT_ML.first) }) }
         Text(ml?.let { "${it}ml" } ?: "", Modifier.widthIn(min = 72.dp), style = Type.headline.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        StepButton(R.drawable.ic_plus, "더하기") { onChange(((ml ?: 0) + 10).coerceAtMost(400)) }
+        StepButton(R.drawable.ic_plus, "더하기") { onChange(((ml ?: 0) + 10).coerceAtMost(AMOUNT_ML.last)) }
     }
 }
 
