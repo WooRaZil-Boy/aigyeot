@@ -14,7 +14,6 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -50,7 +49,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Snackbar
@@ -233,7 +231,7 @@ fun CareTabs(go: (Route) -> Unit, tab: String, onTab: (String) -> Unit, vm: Care
                 }
             }
             SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(12.dp)) { d ->
-                Snackbar(d, shape = RoundedCornerShape(16.dp), containerColor = p.textPrimary, contentColor = p.surface, actionColor = if (p.dark) p.accent else p.glow)
+                Snackbar(d, shape = Radius.control, containerColor = p.textPrimary, contentColor = p.surface, actionColor = if (p.dark) p.accent else p.glow)
             }
         }
         BottomTabs(tabs, tab, onTab)
@@ -268,7 +266,7 @@ private fun BottomTabs(tabs: List<Tab>, selected: String, onSelect: (String) -> 
             val on = t.name == selected
             val c = if (on) p.textPrimary else p.textTertiary
             Column(
-                Modifier.weight(1f).heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp))
+                Modifier.weight(1f).heightIn(min = 56.dp).clip(Radius.field)
                     .selectable(on, interactionSource = null, indication = null, role = SRole.Tab) { onSelect(t.name) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -373,8 +371,8 @@ private fun RunCard(e: CareEvent, onOpen: () -> Unit) {
     ) {
         LiveDot(kindColor(e.kind, p))
         Column(Modifier.weight(1f)) {
-            Text(title, style = Type.body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp), color = p.textPrimary)
-            Text("${koClock(e.startAt, e.zoneOrDevice())}부터", style = Type.caption.copy(fontWeight = FontWeight.Normal), color = p.textTertiary)
+            Text(title, style = Type.rowTitle, color = p.textPrimary)
+            Text("${koClock(e.startAt, e.zoneOrDevice())}부터", style = Type.hint, color = p.textTertiary)
         }
         RollingText(timerText(e.elapsed(now)), Type.title.copy(fontSize = 28.sp, lineHeight = 32.sp, fontFeatureSettings = "tnum"), p.textPrimary)
     }
@@ -393,7 +391,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
     val flash = remember { Animatable(1f) }
     var seen by remember { mutableStateOf(last) }
     LaunchedEffect(last) {
-        if (last != null && last != seen && !reduced) { flash.snapTo(0f); flash.animateTo(1f, tween(1200, easing = Motion.base.easing)) }
+        if (last != null && last != seen && !reduced) { flash.snapTo(0f); flash.animateTo(1f, Motion.flash.spec()) }
         seen = last
     }
     LaunchedEffect(reduced) { if (reduced) flash.snapTo(1f) }
@@ -405,7 +403,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
                 p.accent.copy(alpha = 0.6f * (1f - k)),
                 Offset(-spread, -spread),
                 Size(size.width + spread * 2, size.height + spread * 2),
-                CornerRadius(20.dp.toPx() + spread),
+                CornerRadius(Radius.rL.toPx() + spread), // 흰 블록 모서리를 따라 퍼진다
             )
         }
     }
@@ -424,7 +422,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
         Text(
             listOfNotNull(koClock(last, mine.firstOrNull()?.zoneOrDevice() ?: deviceZone), side?.let(::sideName)).joinToString(" · "),
             Modifier.padding(top = 4.dp),
-            style = Type.body.copy(fontSize = 15.sp, lineHeight = 22.sp),
+            style = Type.meta,
             color = p.textTertiary,
         )
         // 카드에 보인 그 수유를 이 폰이 보냈을 때만 전송 상태를 붙인다(계약 7.5). 차 값이 더 늦으면 붙이지 않는다.
@@ -439,7 +437,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
         window?.let { at ->
             Column(Modifier.padding(top = 12.dp)) {
                 Text("다음 수유 시간대 · ${koClock(at, deviceZone)}부터", style = Type.body.copy(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold), color = p.textPrimary)
-                Text("차에 정해 둔 간격 기준", style = Type.caption.copy(fontWeight = FontWeight.Normal), color = p.textTertiary)
+                Text("차에 정해 둔 간격 기준", style = Type.hint, color = p.textTertiary)
             }
         }
     }
@@ -501,7 +499,7 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
 /** 오늘 탭·차 탭의 차 타일(연결 안 됨, 7장): "차와 연결하면 수유 기록이 차에도 가요" + "차와 연결하기". */
 @Composable
 internal fun ConnectCarCard(go: (Route) -> Unit) = Block {
-    Text("차와 연결하면 수유 기록이 차에도 가요", Modifier.padding(bottom = 16.dp), style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = Tokens.colors.textPrimary)
+    Text("차와 연결하면 수유 기록이 차에도 가요", Modifier.padding(bottom = 16.dp), style = Type.strong, color = Tokens.colors.textPrimary)
     Btn("차와 연결하기", { go(Route.Connect) }, icon = R.drawable.ic_qr_code)
 }
 
@@ -525,14 +523,14 @@ internal fun CarTileBlock(s: PhoneState, online: Boolean, onOpen: (() -> Unit)? 
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (head == "연결됨") Box(Modifier.padding(end = 6.dp).size(8.dp).clip(CircleShape).background(p.active))
-                    Text(head, style = Type.body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp), color = p.textPrimary)
+                    Text(head, style = Type.rowTitle, color = p.textPrimary)
                 }
                 sub?.let { Text(it, style = Type.caption, color = p.textSecondary) }
             }
             if (right != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 AIcon(R.drawable.ic_smartphone, Modifier.size(16.dp), p.textTertiary)
                 Spacer(Modifier.width(4.dp))
-                Text(right, style = Type.caption.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textTertiary)
+                Text(right, style = Type.label, color = p.textTertiary)
             } else if (onOpen != null) AIcon(R.drawable.ic_chevron_right, Modifier.size(20.dp), p.textTertiary)
         }
     }
@@ -600,7 +598,7 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                 // U14: R3 안내와 함께 끝 시각 고르기·끝 시각 모름으로 닫기.
                 Text(
                     if (e.kind == CareKind.FEED) "수유가 3시간째예요. 끝내는 걸 잊으셨나요?" else "잠이 16시간째예요. 끝내는 걸 잊으셨나요?", // timer.overMax.*(U36)
-                    style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                    style = Type.strong,
                     color = p.textPrimary,
                 )
                 Btn("끝 시각 고르기", { pick = "end" }, big = true)
@@ -613,7 +611,7 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                 Spacer(Modifier.height(8.dp))
                 Btn("이 기록 지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
             }
-            (stage as? EditStage.Editing)?.error?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+            (stage as? EditStage.Editing)?.error?.let { Text(it, style = Type.error, color = p.danger) }
         }
     }
     pick?.let { which ->
@@ -636,7 +634,7 @@ private fun TimerRing(e: CareEvent, now: Long) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
     // 초침은 보일 때만 돈다(굴려 가리면 멈춤). 동작 줄이기면 지난 초 자리에 멈춘 점.
-    val sweep = if (reduced || !shown) (elapsed / 1000 % 60) / 60f else rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(tween(60_000, easing = LinearEasing), RepeatMode.Restart), label = "sweep").value
+    val sweep = if (reduced || !shown) (elapsed / 1000 % 60) / 60f else rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(Motion.sweep.spec<Float>(), RepeatMode.Restart), label = "sweep").value
     val sub = if (e.kind == CareKind.FEED) listOfNotNull("수유 중", e.feedSide?.let(::sideName)).joinToString(" · ") else "자는 중"
     // 고리 지름: 300, 좁은 화면이면 화면 폭 − 바깥 여백(12·2 + 8·2). BoxWithConstraints(SubcomposeLayout)를 공유 요소 위에 두면
     // 타이머에서 돌아갈 때 나가는 화면의 형제 칸(세그먼트·단추)이 오늘 화면 위에 남아 겹쳐 그려졌다(녹화로 확인).
@@ -673,7 +671,7 @@ internal fun OverlapDialog(kind: CareKind, onSave: () -> Unit, onDismiss: () -> 
         text = { Text(overlapText(kind), style = Type.body) },
         confirmButton = { TextButton(onClick = onSave) { Text("그래도 저장") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("고치기") } },
-        shape = RoundedCornerShape(24.dp),
+        shape = Radius.dialog,
     )
 }
 
@@ -682,10 +680,10 @@ internal fun OverlapDialog(kind: CareKind, onSave: () -> Unit, onDismiss: () -> 
 internal fun AmountRow(ml: Int?, onChange: (Int?) -> Unit) {
     val p = Tokens.colors
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(p.textPrimary.copy(alpha = 0.04f)).padding(horizontal = 14.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().clip(Radius.large).background(p.textPrimary.copy(alpha = 0.04f)).padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("양", Modifier.weight(1f), style = Type.body.copy(fontSize = 15.5.sp, fontWeight = FontWeight.Medium), color = p.textPrimary)
+        Text("양", Modifier.weight(1f), style = Type.rowLabel, color = p.textPrimary)
         AmountStepper(ml, onChange)
     }
 }
@@ -719,6 +717,6 @@ internal fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onPick: (
         confirmButton = { TextButton(onClick = { onPick(state.hour, state.minute) }) { Text(stringResource(android.R.string.ok)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
         text = { TimePicker(state) },
-        shape = RoundedCornerShape(28.dp),
+        shape = Radius.xl,
     )
 }

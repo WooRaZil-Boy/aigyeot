@@ -1,8 +1,10 @@
 package kr.aigyeot.phone.presentation.car3d
 
+
 import android.content.Context
 import android.util.Log
 import androidx.annotation.MainThread
+import androidx.compose.ui.graphics.toArgb
 import com.google.android.filament.Box
 import com.google.android.filament.ColorGrading
 import com.google.android.filament.Engine
@@ -23,6 +25,12 @@ import com.google.android.filament.gltfio.Gltfio
 import com.google.android.filament.gltfio.MaterialProvider
 import com.google.android.filament.gltfio.ResourceLoader
 import com.google.android.filament.gltfio.UbershaderProvider
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.math.abs
+import kotlin.math.ln
+import kotlin.math.pow
+import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -30,14 +38,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import kr.aigyeot.phone.presentation.CarGlow
 import org.json.JSONObject
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import kotlin.math.abs
-import kotlin.math.ln
-
-import kotlin.math.pow
-import kotlin.math.sqrt
 
 /**
  * 폰 3D 장면 하나(프로세스 수명, Filament 호출은 메인 스레드): GLB(assets/car/aigyeot_car.glb), 재질 덮어쓰기(이름이 계약), 스튜디오 환경광, 열쇠 빛, 바닥 그림자.
@@ -65,7 +67,6 @@ class CarScene private constructor() {
         }.also { loading = it }
 
         /** 곁의 응답 빛(tokens glow). */
-        private const val GLOW = 0x7AA5FF
     }
 
     /** 작업 스레드에서 미리 만드는 것: GLB 바이트, 노드별 COLOR_0 여부, 환경광 큐브맵 단계별 면 픽셀(라이트·다크). */
@@ -117,7 +118,7 @@ class CarScene private constructor() {
         scene.addEntity(key)
         shadow()
         // 듣는 중(listen): 실내 앰비언트 선 파랑 2.2(시안 applyState)
-        val g = lin(GLOW)
+        val g = lin(CarGlow.toArgb() and 0xFFFFFF)
         mats["Ambient"]?.let { mi -> if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", g[0] * 2.2f, g[1] * 2.2f, g[2] * 2.2f) }
     }
 

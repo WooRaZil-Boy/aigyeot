@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -198,7 +197,7 @@ fun TopBar(title: String, onBack: (() -> Unit)?, trailing: @Composable RowScope.
         } else {
             Spacer(Modifier.width(12.dp))
         }
-        Text(title, Modifier.weight(1f).semantics { heading() }, style = TextStyle(fontFamily = Pretendard, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold), color = p.textPrimary, maxLines = 2)
+        Text(title, Modifier.weight(1f).semantics { heading() }, style = Type.barTitle, color = p.textPrimary, maxLines = 2)
         trailing()
     }
 }
@@ -218,7 +217,7 @@ private fun CollapsedTitle(title: String, shown: Boolean) {
     val a by animateFloatAsState(if (shown) 1f else 0f, Motion.fast.spec(), label = "mini")
     if (a == 0f) return
     Box(Modifier.fillMaxWidth().graphicsLayer { alpha = a }.background(p.bg).padding(horizontal = 20.dp, vertical = 14.dp)) {
-        Text(title, style = TextStyle(fontFamily = Pretendard, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold), color = p.textPrimary, maxLines = 1)
+        Text(title, style = Type.barTitle, color = p.textPrimary, maxLines = 1)
     }
 }
 
@@ -254,8 +253,8 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? =
                 // 다 올라온 뒤에는 층 없이 놓는다: 칸마다 층이 남아 있으면 공유 요소 전환(타이머 → 진행 중 판) 동안 나가는 화면의
                 // 형제 칸이 겹쳐 그려졌다(녹화로 확인).
                 if (done) pl.place(0, y) else pl.placeWithLayer(0, y) {
-                    // i번째는 60 + i·50ms 뒤 시작해 360ms(enter 곡선)에 걸쳐 올라온다(시안 core.js enter: startDelay 0.06·간격 0.05).
-                    val start = (60f + (i * 50f).coerceAtMost(500f)) / STAGGER_MS
+                    // i번째는 시작 지연 + i·간격 뒤 시작해 enter 시간에 걸쳐 올라온다(Motion.STAGGER_*).
+                    val start = (Motion.STAGGER_DELAY_MS + (i * Motion.STAGGER_STEP_MS).coerceAtMost(Motion.STAGGER_MAX_MS)).toFloat() / STAGGER_MS
                     val raw = ((t.value - start) / (Motion.enter.ms.toFloat() / STAGGER_MS)).coerceIn(0f, 1f)
                     val k = Motion.enter.easing.transform(raw)
                     alpha = k
@@ -273,7 +272,7 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? =
     }
 }
 
-private const val STAGGER_MS = 60 + 500 + 360
+private val STAGGER_MS = Motion.STAGGER_DELAY_MS + Motion.STAGGER_MAX_MS + Motion.enter.ms
 
 // ---------------------------------------------------------------- 블록
 
@@ -297,10 +296,10 @@ fun BlockHeader(title: String, link: String? = null, onLink: (() -> Unit)? = nul
         Text(title, Modifier.weight(1f).semantics { heading() }, style = Type.title, color = p.textPrimary)
         if (link != null && onLink != null) {
             Row(
-                Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onLink).heightIn(min = 32.dp).padding(start = 6.dp, end = 0.dp),
+                Modifier.clip(Radius.small).pressable(onClick = onLink).heightIn(min = 32.dp).padding(start = 6.dp, end = 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(link, style = Type.caption.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textTertiary)
+                Text(link, style = Type.label, color = p.textTertiary)
                 AIcon(R.drawable.ic_chevron_right, Modifier.size(16.dp), p.textTertiary)
             }
         }
@@ -316,7 +315,7 @@ fun BlockSub(text: String) {
             if (i % 2 == 1) withStyle(SpanStyle(color = p.textPrimary, fontWeight = FontWeight.Bold)) { append(part) } else append(part)
         }
     }
-    Text(s, Modifier.padding(top = 0.dp, bottom = 14.dp).offset(y = (-8).dp), style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textTertiary)
+    Text(s, Modifier.padding(top = 0.dp, bottom = 14.dp).offset(y = (-8).dp), style = Type.sub, color = p.textTertiary)
 }
 
 /** 블록 끝 안내(.bnote: 13/19, 흐림, 위 14). */
@@ -325,11 +324,11 @@ fun BlockNote(text: String) = Text(text, Modifier.padding(top = 14.dp), style = 
 
 /** 블록 밖 작은 안내(.foot-note: 12.5/18·500, 흐림). */
 @Composable
-fun FootNote(text: String) = Text(text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = Type.caption.copy(fontSize = 12.5.sp), color = Tokens.colors.textTertiary)
+fun FootNote(text: String) = Text(text, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = Type.footNote, color = Tokens.colors.textTertiary)
 
 /** 작은 라벨(.label: 14/20·500, 흐림). */
 @Composable
-fun Label(text: String, modifier: Modifier = Modifier) = Text(text, modifier, style = Type.caption.copy(fontSize = 14.sp, lineHeight = 20.sp), color = Tokens.colors.textTertiary)
+fun Label(text: String, modifier: Modifier = Modifier) = Text(text, modifier, style = Type.label, color = Tokens.colors.textTertiary)
 
 /** 목록 블록(.list: 안쪽 22/20/8). 머리가 있으면 그 아래에 64dp 행들. */
 @Composable
@@ -380,7 +379,7 @@ fun ListRow(
     val p = Tokens.colors
     val base = Modifier.fillMaxWidth().heightIn(min = 64.dp)
     Row(
-        (if (onClick != null) base.clip(RoundedCornerShape(12.dp)).pressable(scale = 0.98f, onClick = onClick) else base).padding(vertical = 10.dp),
+        (if (onClick != null) base.clip(Radius.medium).pressable(scale = 0.98f, onClick = onClick) else base).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -389,8 +388,8 @@ fun ListRow(
             icon != null -> RowIcon(icon, add)
         }
         Column(Modifier.weight(1f)) {
-            Text(title, style = Type.body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp), color = titleColor ?: if (add) p.accentInk else p.textPrimary)
-            sub?.let { Text(it, style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textTertiary) }
+            Text(title, style = Type.rowTitle, color = titleColor ?: if (add) p.accentInk else p.textPrimary)
+            sub?.let { Text(it, style = Type.sub, color = p.textTertiary) }
         }
         trailing?.invoke()
     }
@@ -434,8 +433,8 @@ fun SettingRow(
     ) {
         Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(19.dp), p.textTertiary) } // 시안 .grp .li: 아이콘은 늘 흐린 색, 위험 행은 글자만 빨강
         Column(Modifier.weight(1f)) {
-            Text(title, style = Type.body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp), color = if (danger) p.danger else p.textPrimary)
-            sub?.let { Text(it, style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textTertiary) }
+            Text(title, style = Type.rowTitle, color = if (danger) p.danger else p.textPrimary)
+            sub?.let { Text(it, style = Type.sub, color = p.textTertiary) }
         }
         trailing?.invoke()
     }
@@ -464,22 +463,22 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, mod
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
     val pos by animateFloatAsState(selected.coerceAtLeast(0).toFloat(), if (reduced) tween(0) else Springs.snappy.spec(), label = "seg")
-    val thumb = if (p.dark) Color(0xFF3A3F46) else p.surface // 시안 .t-dark .segp .sthumb
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.textPrimary.copy(alpha = 0.06f)).padding(4.dp)) {
+    val thumb = p.segThumb
+    Box(modifier.fillMaxWidth().clip(Radius.field).background(p.textPrimary.copy(alpha = 0.06f)).padding(4.dp)) {
         Layout(
             content = {
                 Box(
                     Modifier
-                        .drawBehind { drawRoundRect(Color.Black.copy(alpha = 0.06f), topLeft = Offset(0f, 2.dp.toPx()), size = size, cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx())) }
-                        .clip(RoundedCornerShape(10.dp)).background(thumb),
+                        .drawBehind { drawRoundRect(Color.Black.copy(alpha = 0.06f), topLeft = Offset(0f, 2.dp.toPx()), size = size, cornerRadius = androidx.compose.ui.geometry.CornerRadius(Radius.rInner.toPx())) }
+                        .clip(Radius.inner).background(thumb),
                 )
                 options.forEachIndexed { i, label ->
                     Box(
-                        Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(10.dp))
+                        Modifier.heightIn(min = 40.dp).clip(Radius.inner)
                             .selectable(i == selected, interactionSource = null, indication = null, role = Role.Tab, onClick = { onSelect(i) }),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(label, Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold), color = if (i == selected) p.textPrimary else p.textSecondary, maxLines = 2)
+                        Text(label, Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = Type.option, color = if (i == selected) p.textPrimary else p.textSecondary, maxLines = 2)
                     }
                 }
             },
@@ -526,7 +525,7 @@ fun Btn(
         else -> 56.dp
     }
     Row(
-        modifier.fillMaxWidth().heightIn(min = h).clip(RoundedCornerShape(16.dp)).background(bg)
+        modifier.fillMaxWidth().heightIn(min = h).clip(Radius.control).background(bg)
             .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
             .pressable(enabled = enabled, scale = 0.98f, onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
@@ -549,10 +548,10 @@ fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifie
     val pressed by source.collectIsPressedAsState()
     val s by animateFloatAsState(if (pressed && !reduced) 0.97f else 1f, Motion.press.spec(), label = "chipPress")
     Box(
-        modifier.graphicsLayer { scaleX = s; scaleY = s }.heightIn(min = 40.dp).clip(RoundedCornerShape(12.dp)).background(bg)
+        modifier.graphicsLayer { scaleX = s; scaleY = s }.heightIn(min = 40.dp).clip(Radius.medium).background(bg)
             .selectable(selected, interactionSource = source, indication = null, role = Role.RadioButton, onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold), color = fg) }
+    ) { Text(text, style = Type.option, color = fg) }
 }
 
 /** 배지(.badge: 높이 24, 모서리 6, 12.5·600). 아이 신호면 childSoft/child. 뜻 하나에 색 하나. */
@@ -577,8 +576,8 @@ fun KpiRow(items: List<Kpi>, modifier: Modifier = Modifier) {
             for (k in row) Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(k.label, style = Type.caption, color = p.textTertiary)
                 Text(k.value, style = Type.title.copy(fontFeatureSettings = "tnum"), color = p.textPrimary)
-                k.sub?.let { Text(it, style = Type.caption.copy(fontSize = 12.sp, lineHeight = 16.sp), color = p.textTertiary) }
-                k.note?.let { Text(it, style = Type.caption.copy(fontSize = 12.sp, lineHeight = 16.sp), color = p.textTertiary) }
+                k.sub?.let { Text(it, style = Type.kpiSub, color = p.textTertiary) }
+                k.note?.let { Text(it, style = Type.kpiSub, color = p.textTertiary) }
             }
             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }
@@ -591,13 +590,13 @@ fun BandCard(text: String, action: String? = null, onAction: () -> Unit = {}) {
     val p = Tokens.colors
     // 새로 뜨거나 바뀐 안내는 화면 읽기가 알아서 읽는다(포커스가 다른 곳에 있어도).
     Row(
-        Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }.clip(RoundedCornerShape(16.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(16.dp))
+        Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }.clip(Radius.control).background(p.surface).border(1.dp, p.line, Radius.control)
             .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp).heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, Modifier.weight(1f).padding(vertical = 6.dp), style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textSecondary)
+        Text(text, Modifier.weight(1f).padding(vertical = 6.dp), style = Type.sub, color = p.textSecondary)
         if (action != null) {
-            Box(Modifier.clip(RoundedCornerShape(10.dp)).pressable(onClick = onAction).heightIn(min = 40.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.clip(Radius.inner).pressable(onClick = onAction).heightIn(min = 40.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
                 Text(action, style = Type.body.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = p.accentInk)
             }
         }
@@ -610,8 +609,8 @@ fun LiveDot(color: Color, size: Dp = 10.dp) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
     // 시안 live: 1.8초마다 앞 60% 동안 둘레 빛이 0 → 12로 퍼지며(진하기 50% → 0, base 곡선) 사라지고 나머지는 쉰다(iOS와 같음).
-    val t = if (reduced || !shown) 1f else rememberInfiniteTransition(label = "live").animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "live").value
-    val ring = Motion.base.easing.transform((t / 0.6f).coerceAtMost(1f))
+    val t = if (reduced || !shown) 1f else rememberInfiniteTransition(label = "live").animateFloat(0f, 1f, infiniteRepeatable(tween(Motion.live.ms, easing = LinearEasing), RepeatMode.Restart), label = "live").value
+    val ring = Motion.live.easing.transform((t / 0.6f).coerceAtMost(1f))
     Box(
         Modifier.size(size).onScreen { shown = it }.drawBehind {
             if (ring < 1f) drawCircle(color.copy(alpha = 0.5f * (1f - ring)), radius = size.toPx() / 2 + ring * 12.dp.toPx())
@@ -641,7 +640,7 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
                             targetState = ch,
                             modifier = Modifier.clipToBounds(),
                             transitionSpec = {
-                                (slideInVertically(Springs.roll.spec()) { it / 2 } + fadeIn(tween(120))) togetherWith (slideOutVertically(Springs.roll.spec()) { -it / 2 } + fadeOut(tween(90)))
+                                (slideInVertically(Springs.roll.spec()) { it / 2 } + fadeIn(Motion.rollIn.spec())) togetherWith (slideOutVertically(Springs.roll.spec()) { -it / 2 } + fadeOut(Motion.rollOut.spec()))
                             },
                             label = "roll",
                         ) { c -> Text(c.toString(), style = style, color = color) }
@@ -679,10 +678,10 @@ fun ProvideMotion(content: @Composable () -> Unit) = CompositionLocalProvider(Lo
 fun TopAction(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     val p = Tokens.colors
     Box(
-        Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
+        Modifier.heightIn(min = 48.dp).clip(Radius.medium).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
             .pressable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = p.accentInk) }
+    ) { Text(text, style = Type.strong, color = p.accentInk) }
 }
 
 /** 화면에 보이는지 알린다(굴려서 가려지면 거짓). 계속 도는 움직임을 보일 때만 돌리는 데 쓴다. */

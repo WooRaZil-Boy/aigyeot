@@ -103,7 +103,7 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
                         }
                     },
                 )
-                DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp), containerColor = p.surface) {
+                DropdownMenu(menu, { menu = false }, shape = Radius.control, containerColor = p.surface) {
                     if (e.file != null) DropdownMenuItem({ Text("듣기") }, { menu = false; play(e) })
                     if (e.phase == SongPhase.ACCEPTED && !e.candidate) DropdownMenuItem({ Text("실험에 쓰기") }, { menu = false; vm.select(e.songId) })
                     // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다(9장 '노래 거절', iOS와 같음).
@@ -194,8 +194,8 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
             val sec = (elapsed / 1000).toInt()
             Text("%d:%02d / 3:00".format(sec / 60, sec % 60), style = Type.hero.copy(fontSize = 44.sp, lineHeight = 50.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = p.textPrimary)
             RecButton(take is Take.Recording, enabled = !s.sending, onClick = vm::toggleRecording) // 보내는 동안 그 원본을 바꾸는 녹음은 막는다
-            s.startError?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
-            if (take !is Take.Recorded) Text("평소 불러 주던 노래를 녹음해 보세요", style = Type.caption.copy(fontSize = 12.5.sp), color = p.textTertiary) // 시안 .rec .foot-note
+            s.startError?.let { Text(it, style = Type.error, color = p.danger) }
+            if (take !is Take.Recorded) Text("평소 불러 주던 노래를 녹음해 보세요", style = Type.footNote, color = p.textTertiary) // 시안 .rec .foot-note
         }
         if (take is Take.Recorded) {
             Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -208,10 +208,10 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
                     onValueChange = { name = it.take(30) },
                     label = { Text("노래 이름(30자까지)") },
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = Radius.field,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                s.sendError?.let { Text(it, style = Type.body.copy(fontSize = 14.sp), color = p.danger) }
+                s.sendError?.let { Text(it, style = Type.error, color = p.danger) }
                 Btn(if (s.sending) "보내는 중" else "차로 보내기", { vm.send(name.trim(), replacing) }, enabled = name.isNotBlank() && !s.sending, big = true)
                 if (!online) Text("연결되면 보내요", style = Type.caption, color = p.textTertiary) // 7.2 우리 노래·오프라인(iOS 시트와 같음)
             }
@@ -226,7 +226,7 @@ private fun Wave(live: Boolean) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
     // 녹음 중이고 화면에 보일 때만 움직인다(굴려 가리면 멈춤).
-    val t = if (live && !reduced && shown) rememberInfiniteTransition(label = "wave").animateFloat(0f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "wave").value else 0f
+    val t = if (live && !reduced && shown) rememberInfiniteTransition(label = "wave").animateFloat(0f, 1f, infiniteRepeatable(Motion.wave.spec<Float>(), RepeatMode.Restart), label = "wave").value else 0f
     Canvas(Modifier.fillMaxWidth().height(120.dp).onScreen { shown = it }.semantics { contentDescription = if (live) "녹음 중" else "녹음 대기" }) {
         val n = 44
         val bw = 4.dp.toPx()

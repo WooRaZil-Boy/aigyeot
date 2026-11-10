@@ -5,6 +5,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -74,6 +76,15 @@ data class Palette(
  * 보이지 않아 먹색 8%(시안 .pbtn.ton 7%·세그먼트 판과 같은 결), 다크는 surfaceRaised. 흰 블록 위 판은 surfaceRaised 그대로(iOS DS.tonal과 같음).
  */
 val Palette.tonal: Color get() = if (dark) surfaceRaised else textPrimary.copy(alpha = 0.08f)
+
+/** 세그먼트 고른 칸(시안 .segp .sthumb: 라이트 흰 면, 다크 .t-dark .segp .sthumb #3A3F46). */
+val Palette.segThumb: Color get() = if (dark) Color(0xFF3A3F46) else surface
+
+/** 첫 안내 무대 가운데 빛(시안 .intro-hero: 라이트 stage에 흰빛 60%, 다크 #232931). */
+val Palette.stageGlow: Color get() = if (dark) Color(0xFF232931) else lerp(stage, Color.White, 0.6f)
+
+/** 3D 실내 앰비언트 선 파랑(tokens.json 차 빛 glow). 라이트·다크 같은 빛이다. */
+val CarGlow: Color get() = LightPalette.glow
 
 val LightPalette = Palette(
     bg = Color(0xFFF2F4F6),
@@ -165,16 +176,38 @@ object Type {
     val body = style(16, 24, 400)
     val caption = style(13, 18, 500)
     val timer = style(64, 72, 650, -0.03).copy(fontFeatureSettings = "tnum")
-}
 
-/** 간격(4의 배수). */
-object Space {
-    val s1 = 4.dp
-    val s2 = 8.dp
-    val s3 = 12.dp
-    val s4 = 16.dp
-    val s5 = 24.dp
-    val s6 = 32.dp
+    // 부품 글자(시안 phone.css 값 그대로). 두 곳 이상이 같은 역할로 쓰는 것만 여기 두고, 한 부품만 쓰는 크기는 그 부품 안에 둔다.
+    /** 목록·설정 행 제목, 진행 중 판·차 타일 머리(.lrow-p b 600 16/22). */
+    val rowTitle = body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp)
+    /** 판 안 굵은 한 줄(16/24·600). */
+    val strong = body.copy(fontWeight = FontWeight.SemiBold)
+    /** 행 둘째 줄·블록 부제·리포트 작은 글(14/20·400). */
+    val sub = body.copy(fontSize = 14.sp, lineHeight = 20.sp)
+    /** 흐린 라벨·블록 링크·짧은 안내(.label 14/20·500). */
+    val label = caption.copy(fontSize = 14.sp, lineHeight = 20.sp)
+    /** 화면 안 오류 한 줄(14·400). */
+    val error = body.copy(fontSize = 14.sp)
+    /** 값 옆 보조 글·키(15/22·400). */
+    val meta = body.copy(fontSize = 15.sp, lineHeight = 22.sp)
+    /** 세그먼트·칩·방법 이름(15/20·600). */
+    val option = body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+    /** 시트 행 이름(.sheet .row 15.5·500). */
+    val rowLabel = body.copy(fontSize = 15.5.sp, fontWeight = FontWeight.Medium)
+    /** 블록 밖 작은 안내(.foot-note 12.5/18·500). */
+    val footNote = caption.copy(fontSize = 12.5.sp)
+    /** 기록 줄 둘째 줄·메모(12.5/17). */
+    val logSub = caption.copy(fontSize = 12.5.sp, lineHeight = 17.sp)
+    /** 숫자 칸 아래 글(.kpi small 12/16). */
+    val kpiSub = caption.copy(fontSize = 12.sp, lineHeight = 16.sp)
+    /** 흐린 한 줄(13/18·400). */
+    val hint = caption.copy(fontWeight = FontWeight.Normal)
+    /** 인계 알림 글(17/25·600). */
+    val alert = headline.copy(lineHeight = 25.sp)
+    /** 위 막대 제목·접힌 큰 제목(.p-android .ph-mini 22/28·600). */
+    val barTitle = TextStyle(fontFamily = Pretendard, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold)
+    /** 차트 말풍선(.ch-tip 12.5/16·600). */
+    val tip = TextStyle(fontFamily = Pretendard, fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
 }
 
 /** 모서리(tokens.json radius.phone). 흰 블록은 rL(20). */
@@ -187,12 +220,21 @@ object Radius {
     val medium = RoundedCornerShape(rM)
     val large = RoundedCornerShape(rL)
     val xl = RoundedCornerShape(rXL)
+    /** 알림창(확인·겹침·가져오기). */
+    val dialog = RoundedCornerShape(24.dp)
+    /** 단추·띠·스낵바·메뉴(.pbtn 16). */
+    val control = RoundedCornerShape(16.dp)
+    /** 입력 칸·세그먼트 판·탭 칸(14). */
+    val field = RoundedCornerShape(14.dp)
+    /** 판 안 작은 칸: 세그먼트 고른 칸·값 칩·말풍선·띠 행동(10). 그림자처럼 그려 쓰는 곳은 [rInner]. */
+    val rInner: Dp = 10.dp
+    val inner = RoundedCornerShape(rInner)
 }
 
 /** 시간 곡선 하나(tokens.json motion: ms + cubic-bezier). linear는 (0,0,1,1). */
 data class Curve(val ms: Int, val x1: Float, val y1: Float, val x2: Float, val y2: Float) {
     val easing: Easing get() = if (x1 == 0f && y1 == 0f && x2 == 1f && y2 == 1f) LinearEasing else CubicBezierEasing(x1, y1, x2, y2)
-    fun <T> spec(delayMs: Int = 0): FiniteAnimationSpec<T> = tween(ms, delayMs, easing)
+    fun <T> spec(delayMs: Int = 0): TweenSpec<T> = tween(ms, delayMs, easing)
 }
 
 /** 모션 표(시안 README 4.7). 시스템 애니메이션이 꺼져 있으면 바로 바뀐다. */
@@ -205,6 +247,34 @@ object Motion {
     val camera = Curve(1100, 0.65f, 0f, 0.35f, 1f)
     val light = Curve(900, 0.4f, 0f, 0.2f, 1f)
     val ripple = Curve(2400, 0.2f, 0.6f, 0.35f, 1f)
+
+    // 부품 모션(시안 css·js 값 그대로, 위 곡선을 시간만 바꿔 쓴다).
+    /** 화면 교체 때 블록이 한 줄씩 올라오는 시작 지연과 간격(core.js enter: startDelay 0.06·stagger 0.05, 열째 줄부터 같이). */
+    const val STAGGER_DELAY_MS = 60
+    const val STAGGER_STEP_MS = 50
+    const val STAGGER_MAX_MS = 500
+    /** 차트가 왼쪽부터 드러남(charts.js grow 0.9초 cb(.65,0,.35,1)). */
+    val reveal = camera.copy(ms = 900)
+    /** 막대 하나가 자람(0.6초 enter 곡선)과 막대 사이 간격(0.04초, 8개마다 다시). */
+    val barGrow = enter.copy(ms = 600)
+    const val BAR_STEP_MS = 40
+    /** 방법별 성적 점이 튀는 간격(0.02초). */
+    const val DOT_STEP_MS = 20L
+    /** 차트 말풍선(.ch-tip 120ms linear). */
+    val tip = press.copy(ms = 120)
+    /** 새 수유가 들어올 때 판 둘레 빛(.flash 1.2초 base 곡선). */
+    val flash = base.copy(ms = 1200)
+    /** 살아 있는 점(live 1.8초, 앞 60% 동안 퍼짐). */
+    val live = base.copy(ms = 1800)
+    /** 녹음 소리 결 한 번(.wave i 1.2초). */
+    val wave = base.copy(ms = 1200)
+    /** 타이머 초침 한 바퀴(60초 linear). */
+    val sweep = press.copy(ms = 60_000)
+    /** 인계 배너가 나감(.banner.out 260ms exit 곡선). */
+    val bannerOut = exit.copy(ms = 260)
+    /** 숫자 굴림의 새 글자 나타남·옛 글자 사라짐. */
+    val rollIn = base.copy(ms = 120)
+    val rollOut = base.copy(ms = 90)
 }
 
 /** 스프링 하나(tokens.json spring: Compose 감쇠비·강성 그대로). */
@@ -282,7 +352,7 @@ fun AigyeotTheme(content: @Composable () -> Unit) {
             titleMedium = Type.headline,
             titleSmall = titleSmall.copy(fontFamily = Pretendard),
             bodyLarge = Type.body,
-            bodyMedium = Type.body.copy(fontSize = 15.sp, lineHeight = 22.sp),
+            bodyMedium = Type.meta,
             bodySmall = Type.caption,
             labelLarge = labelLarge.copy(fontFamily = Pretendard, fontWeight = FontWeight.SemiBold),
             labelMedium = labelMedium.copy(fontFamily = Pretendard),

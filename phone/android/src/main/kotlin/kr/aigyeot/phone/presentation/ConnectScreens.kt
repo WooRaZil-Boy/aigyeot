@@ -42,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -86,7 +85,7 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
         Box(
             Modifier.fillMaxWidth().height((250.dp - sb).coerceAtLeast(190.dp))
-                .background(Brush.radialGradient(listOf(if (p.dark) Color(0xFF232931) else lerpColor(p.stage, Color.White, 0.6f), p.bg), radius = 700f)),
+                .background(Brush.radialGradient(listOf(p.stageGlow, p.bg), radius = 700f)),
         ) {
             CarStage(Modifier.fillMaxSize().padding(top = (40.dp - sb).coerceAtLeast(0.dp)), preset = CarPreset.PHONE)
             Box(Modifier.padding(start = 20.dp, top = (62.dp - sb).coerceAtLeast(8.dp))) { AppMark(52.dp, 16.dp) }
@@ -146,7 +145,7 @@ private fun Checking() {
 
 /** 오류 한 줄(빨간 글, 바뀌면 화면 읽기가 읽는다). */
 @Composable
-private fun ErrorLine(text: String) = Text(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = Type.body.copy(fontSize = 14.sp), color = Tokens.colors.danger)
+private fun ErrorLine(text: String) = Text(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = Type.error, color = Tokens.colors.danger)
 
 /**
  * 연결: QR 찍기 또는 코드 넣기(7.1). QR로 읽은 코드만 확인 화면으로 간다.
@@ -222,7 +221,7 @@ fun ConnectScreen(onCode: (String) -> Unit, onPaired: (Role) -> Unit, onCancel: 
                 singleLine = true,
                 textStyle = Type.title.copy(fontFeatureSettings = "tnum", letterSpacing = 0.1.sp),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                shape = RoundedCornerShape(14.dp),
+                shape = Radius.field,
                 colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = p.textTertiary.copy(alpha = 0.4f)),
                 modifier = Modifier.fillMaxWidth(),
             )

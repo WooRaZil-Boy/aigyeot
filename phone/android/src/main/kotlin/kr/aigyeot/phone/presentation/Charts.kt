@@ -1,7 +1,6 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -61,7 +58,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
-import kr.aigyeot.phone.domain.model.durationText
 
 // 차트(시안 js/charts.js·css/charts.css를 Compose Canvas로). 규칙(dataviz): 막대 24 이하·위 4 둥근 끝·바닥 각짐, 격자 1 실선,
 // 글자는 글자 토큰(데이터 색 금지), 하나를 강조하고 나머지는 회색, 툴팁은 보조(값은 라벨에도 있다).
@@ -103,7 +99,7 @@ private fun TipHost(hits: List<Hit>, modifier: Modifier, height: Dp, content: @C
         val reduced = LocalReducedMotion.current
         var lastSel by remember(hits.size) { mutableStateOf<Int?>(null) }
         if (sel != null) lastSel = sel
-        val shown by animateFloatAsState(if (sel != null) 1f else 0f, if (reduced) snap() else tween(120, easing = LinearEasing), label = "tip")
+        val shown by animateFloatAsState(if (sel != null) 1f else 0f, if (reduced) snap() else Motion.tip.spec(), label = "tip")
         if (shown == 0f) return@Box
         val i = lastSel ?: return@Box
         val r = hits.getOrNull(i)?.rect ?: return@Box
@@ -119,8 +115,8 @@ private fun TipHost(hits: List<Hit>, modifier: Modifier, height: Dp, content: @C
                 Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }
                     .graphicsLayer { alpha = shown; translationY = (1f - shown) * 4.dp.toPx() }
                     .onSizeChanged { w = it.width; h = it.height }
-                    .clip(RoundedCornerShape(10.dp)).background(p.textPrimary).padding(horizontal = 10.dp, vertical = 7.dp),
-                style = TextStyle(fontFamily = Pretendard, fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold),
+                    .clip(Radius.inner).background(p.textPrimary).padding(horizontal = 10.dp, vertical = 7.dp),
+                style = Type.tip,
                 color = p.surface,
                 maxLines = 1,
             )
@@ -143,6 +139,21 @@ private fun DrawScope.text(m: TextMeasurer, s: String, style: TextStyle, x: Floa
 private fun chartStyle(size: Float, weight: Int = 500, color: Color) =
     TextStyle(fontFamily = Pretendard, fontSize = size.sp, lineHeight = (size * 1.3f).sp, fontWeight = FontWeight(weight), color = color, fontFeatureSettings = "tnum")
 
+/** 차트 글자 기본 크기(7일 막대·히트맵·에피소드·조향). 하루 띠는 칸 폭 배율을 곱해 쓴다. */
+private const val CHART_FS = 12f
+
+/**
+ * 차트 글자 역할(시안 charts.js: 눈금 500, 오늘·강조 700, 값 fs+1, 이름 600). 모든 차트가 이것을 쓴다.
+ * [fs]는 기준 크기(하루 띠는 칸 폭 배율을 곱한 값).
+ */
+private class ChartText(fs: Float, p: Palette) {
+    val tick = chartStyle(fs, 500, p.textTertiary)
+    val tickOn = chartStyle(fs, 700, p.textPrimary)
+    val value = chartStyle(fs + 1, 700, p.textPrimary)
+    val valueDim = chartStyle(fs + 1, 600, p.textTertiary)
+    val name = chartStyle(fs, 600, p.textTertiary)
+}
+
 // ---------------------------------------------------------------- 오늘 하루(24시간 띠)
 
 /**
@@ -156,18 +167,20 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
     val n = data.lanes.size
-    val reveal = rememberReveal(900, Motion.camera)
+    val reveal = rememberReveal(Motion.reveal.ms, Motion.reveal)
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = data.summary }) {
         val w = with(d) { maxWidth.toPx() }
         // 시안 Charts.day는 폭 320 기준 SVG를 칸 폭에 맞춰 늘린다(412 폰의 흰 블록 안 348 → 1.09배). 같은 크기로 보이게 글자·간격에
         // 같은 배율을 건다(좁은 화면에서 글자가 작아지지 않게 1 이상, 넓은 화면은 1.15에서 멈춤).
         val k = (maxWidth.value / 320f).coerceIn(1f, 1.15f)
         val fs = 13f * k
+        val ct = ChartText(fs, p)
+        // 하루 띠 머리는 시안 Charts.day 값(줄 이름 먹색 600, 값 fs+2).
         val lane = chartStyle(fs, 600, p.textPrimary)
-        val sub = chartStyle(fs, 500, p.textTertiary)
+        val sub = ct.tick
         val value = chartStyle(fs + 2 * k, 700, p.textPrimary)
-        val tick = chartStyle(fs, 500, p.textTertiary)
-        val nowStyle = chartStyle(fs, 700, p.textPrimary)
+        val tick = ct.tick
+        val nowStyle = ct.tickOn
         // 줄 높이는 글자 크기(큰 글자 설정 포함)를 재서 정한다.
         val headH = remember(m, value) { m.measure("가", value).size.height.toFloat() }
         val tickH = remember(m, tick) { m.measure("0시", tick).size.height.toFloat() }
@@ -291,15 +304,15 @@ fun WeekBars(
     val p = Tokens.colors
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
-    val fs = 12f
-    val tick = chartStyle(fs, 500, p.textTertiary)
-    val tickOn = chartStyle(fs, 700, p.textPrimary)
-    val valStyle = chartStyle(fs + 1, 700, p.textPrimary)
-    val tlab = chartStyle(fs, 600, p.textTertiary)
+    val ct = ChartText(CHART_FS, p)
+    val tick = ct.tick
+    val tickOn = ct.tickOn
+    val valStyle = ct.value
+    val tlab = ct.name
     val tickH = remember(m, tick) { m.measure("오늘", tick).size.height.toFloat() }
     val px = with(d) { 1.dp.toPx() }
     // 막대마다 0.6초 enter 곡선, 0.04초씩 늦게(8개마다 다시). 전체 시간은 고르게 흐르고 곡선은 막대마다 건다(시안 charts.js grow).
-    val grow = rememberReveal(600 + 40 * 7, Curve(0, 0f, 0f, 1f, 1f))
+    val grow = rememberReveal(Motion.barGrow.ms + Motion.BAR_STEP_MS * 7, Curve(0, 0f, 0f, 1f, 1f))
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = label + ": " + bars.joinToString(", ") { b -> "${b.label} ${b.value?.let(fmt) ?: "기록 없음"}" } }) {
         val w = with(d) { maxWidth.toPx() }
         val h = with(d) { height.toPx() }
@@ -327,8 +340,8 @@ fun WeekBars(
                     val v = b.value ?: return@forEachIndexed
                     // 오늘 값은 0이어도 기준선 위에 라벨을 남긴다(시안 charts.js week: 값 라벨은 막대와 따로).
                     if (isHot && v == 0L && grow.value >= 1f) text(m, fmt(v), valStyle, minOf(cx + bw / 2, size.width), base - 7 * px, TextAlign.End)
-                    val local = ((grow.value * (600f + 40f * 7) - 40f * (i % 8)) / 600f).coerceIn(0f, 1f)
-                    val k = if (grow.value >= 1f) 1f else Motion.enter.easing.transform(local)
+                    val local = ((grow.value * (Motion.barGrow.ms + Motion.BAR_STEP_MS * 7) - Motion.BAR_STEP_MS * (i % 8)) / Motion.barGrow.ms.toFloat()).coerceIn(0f, 1f)
+                    val k = if (grow.value >= 1f) 1f else Motion.barGrow.easing.transform(local)
                     val yy = y(v)
                     val full = base - yy
                     val barH = full * k
@@ -360,16 +373,16 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
-    val fs = 12f
-    val tick = chartStyle(fs, 500, p.textTertiary)
-    val tickOn = chartStyle(fs, 700, p.textPrimary)
+    val ct = ChartText(CHART_FS, p)
+    val tick = ct.tick
+    val tickOn = ct.tickOn
     val px = with(d) { 1.dp.toPx() }
     val tickH = remember(m, tick) { m.measure("0시", tick).size.height.toFloat() }
     // 칸 높이 14(시안), 큰 글자에서는 요일 글자 높이만큼 늘려 줄끼리 겹치지 않게 한다(R13).
     val cellH = maxOf(14 * px, remember(m, tickOn) { m.measure("오늘", tickOn).size.height.toFloat() })
     val rowsH = g.rows.size * (cellH + 2 * px)
     val totalH = rowsH + 6 * px + tickH
-    val reveal = rememberReveal(900, Motion.camera)
+    val reveal = rememberReveal(Motion.reveal.ms, Motion.reveal)
     val leadW = remember(m, tickOn, g.labels) { g.labels.maxOf { m.measure(it, tickOn).size.width }.toFloat() }
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = g.summary }) {
         val w = with(d) { maxWidth.toPx() }
@@ -424,7 +437,8 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
-    val fs = 12f
+    val fs = CHART_FS
+    // 에피소드 띠만의 색(줄 이름·막대 안 글·표시는 시안 .ch-ep 값).
     val laneStyle = chartStyle(fs + 1, 600, p.textSecondary)
     val inStyle = chartStyle(fs, 600, p.surface)
     val markStyle = chartStyle(fs, 600, p.textSecondary)
@@ -434,7 +448,7 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     val lh = maxOf(30 * px, inH + 16 * px)
     val markH = remember(m, markStyle) { m.measure("가", markStyle).size.height.toFloat() }
     val totalH = lh + 14 * px + (markH + 6 * px) * 2
-    val reveal = rememberReveal(900, Motion.camera)
+    val reveal = rememberReveal(Motion.reveal.ms, Motion.reveal)
     val laneW = remember(m, laneStyle) { m.measure("소리", laneStyle).size.width + 12 * px }
     Column(modifier) {
     BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "에피소드: " + (band.sounds.map { "${it.name} ${it.to - it.from}초" } + band.marks.map { it.label } + band.outcomes).joinToString(", ") }) {
@@ -501,13 +515,13 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
             ) {
                 // 이름 칸은 80 이상(시안 74), 큰 글자에서는 이름 폭만큼 늘어 낱말 가운데서 끊기지 않게(R13).
                 // 144에서 멈춰 긴 부모 노래 이름(30자까지)은 줄을 바꾸고 점·횟수 자리를 남긴다.
-                Text(row.name, Modifier.widthIn(min = 80.dp, max = 144.dp), style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold), color = if (row.known) p.textPrimary else p.textTertiary)
+                Text(row.name, Modifier.widthIn(min = 80.dp, max = 144.dp), style = Type.option, color = if (row.known) p.textPrimary else p.textTertiary)
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     repeat(row.n) { i ->
                         val on = i < row.ok
                         val pop = remember { Animatable(if (reduced || !on) 1f else 0f) }
                         LaunchedEffect(reduced) {
-                            if (reduced) pop.snapTo(1f) else if (on && pop.value < 1f) { kotlinx.coroutines.delay(20L * (before + i)); pop.animateTo(1f, DOT_POP) }
+                            if (reduced) pop.snapTo(1f) else if (on && pop.value < 1f) { kotlinx.coroutines.delay(Motion.DOT_STEP_MS * (before + i)); pop.animateTo(1f, DOT_POP) }
                         }
                         Canvas(Modifier.size(12.dp)) {
                             val rr = size.minDimension / 2
@@ -521,12 +535,12 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
                         Text("${row.ok}", style = Type.headline.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), color = p.textPrimary)
                         Text("/${row.n}번", style = Type.body.copy(fontSize = 14.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium), color = p.textTertiary)
                     }
-                } else Text("아직 모름", style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = p.textTertiary)
+                } else Text("아직 모름", style = Type.label, color = p.textTertiary)
             }
             if (tip == r) Text(
                 "${row.name}: ${row.n}번 틀어서 ${row.ok}번 그침",
-                Modifier.clip(RoundedCornerShape(10.dp)).background(p.textPrimary).padding(horizontal = 10.dp, vertical = 7.dp),
-                style = TextStyle(fontFamily = Pretendard, fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold),
+                Modifier.clip(Radius.inner).background(p.textPrimary).padding(horizontal = 10.dp, vertical = 7.dp),
+                style = Type.tip,
                 color = p.surface,
             )
         }
@@ -542,14 +556,15 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
     val items = listOf(Triple("평소", baseline, false), Triple("울음 중", during, true), Triple("대응 뒤", after, false))
-    val fs = 12f
-    val tick = chartStyle(fs, 500, p.textTertiary)
-    val tickOn = chartStyle(fs, 700, p.textPrimary)
-    val valOn = chartStyle(fs + 1, 700, p.textPrimary)
-    val valDim = chartStyle(fs + 1, 600, p.textTertiary)
+    val fs = CHART_FS
+    val ct = ChartText(fs, p)
+    val tick = ct.tick
+    val tickOn = ct.tickOn
+    val valOn = ct.value
+    val valDim = ct.valueDim
     val px = with(d) { 1.dp.toPx() }
     val height = 140.dp
-    val grow = rememberReveal(600 + 40 * 2, Curve(0, 0f, 0f, 1f, 1f)) // 막대 셋: 막대마다 0.6초 enter 곡선, 0.04초 간격
+    val grow = rememberReveal(Motion.barGrow.ms + Motion.BAR_STEP_MS * 2, Curve(0, 0f, 0f, 1f, 1f)) // 막대 셋
     BoxWithConstraints(
         modifier.fillMaxWidth().semantics {
             contentDescription = "1분당 큰 조향 보정: " + items.joinToString(", ") { (k, v, _) -> "$k ${v?.let(::perMinText) ?: "없음"}번" }
@@ -573,8 +588,8 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
             val cx = slot * i + slot / 2
             text(m, k, if (hotBar) tickOn else tick, cx, size.height - 5 * px, TextAlign.Center)
             v ?: return@forEachIndexed
-            val local = ((grow.value * 680f - 40f * i) / 600f).coerceIn(0f, 1f)
-            val kk = if (grow.value >= 1f) 1f else Motion.enter.easing.transform(local)
+            val local = ((grow.value * (Motion.barGrow.ms + Motion.BAR_STEP_MS * 2) - Motion.BAR_STEP_MS * i) / Motion.barGrow.ms.toFloat()).coerceIn(0f, 1f)
+            val kk = if (grow.value >= 1f) 1f else Motion.barGrow.easing.transform(local)
             val full = ((base - top) * v / max).toFloat()
             val bh = full * kk
             if (bh > 0f) {

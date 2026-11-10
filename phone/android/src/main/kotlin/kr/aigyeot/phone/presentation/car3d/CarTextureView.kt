@@ -22,6 +22,7 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.tan
+import kr.aigyeot.phone.presentation.Motion
 
 /** 카메라 자리(시안 js/car3d.js PRESET 중 폰이 쓰는 둘. 차 좌표: 앞 +X, 위 +Y, 오른쪽 +Z, az는 앞에서 왼쪽으로 도는 각). */
 enum class CarPose(val az: Float, val el: Float, val d: Float, val r: Float, val fov: Float, val tx: Float, val ty: Float, val tz: Float) {
@@ -146,8 +147,8 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
         val sc = swapChain ?: return
         var more = false
         back?.let { b ->
-            val k = min(1f, (System.nanoTime() - b.start) / 1e6f / CAMERA_MS)
-            val e = if (k < 0.5f) 4 * k * k * k else 1 - (-2 * k + 2).toDouble().pow(3.0).toFloat() / 2 // 시안 카메라 cubic in-out
+            val k = min(1f, (System.nanoTime() - b.start) / 1e6f / Motion.camera.ms)
+            val e = Motion.camera.easing.transform(k) // 시안 카메라 cb(.65,0,.35,1)
             az = b.from + (b.to - b.from) * e
             if (k >= 1f) { back = null; az = pose.az } else more = true
         }
@@ -183,7 +184,6 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
     }
 
     companion object {
-        const val CAMERA_MS = 1100
         private const val FRAME_MS = 1000f / 60f
     }
 }

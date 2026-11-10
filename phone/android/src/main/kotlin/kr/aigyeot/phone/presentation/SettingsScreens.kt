@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -22,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -103,7 +101,7 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
                 }) { Text(if (what == "clear") "지우기" else "끊기", color = Tokens.colors.danger) }
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("취소") } },
-            shape = RoundedCornerShape(24.dp),
+            shape = Radius.dialog,
         )
     }
     if (nicknameOpen) NicknameDialog(care.childNickname.orEmpty(), onSave = { vm.setNickname(it); nicknameOpen = false }) { nicknameOpen = false }
@@ -126,13 +124,13 @@ private fun NicknameDialog(current: String, onSave: (String) -> Unit, onDismiss:
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { save() }),
-                shape = RoundedCornerShape(14.dp),
+                shape = Radius.field,
                 modifier = Modifier.fillMaxWidth(),
             )
         },
         confirmButton = { TextButton(onClick = { save() }) { Text("저장") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
-        shape = RoundedCornerShape(24.dp),
+        shape = Radius.dialog,
     )
 }
 
@@ -142,7 +140,7 @@ private val CSV_TYPES = arrayOf("text/csv", "text/comma-separated-values", "text
 /** 기록 가져오기(U64~U68) 대화창. 단계는 [ImportUi]가 정하고 글은 7.1 import.* 그대로다(미리 보기 글은 [importPreview]가 고른다). */
 @Composable
 private fun ImportDialog(ui: ImportUi, vm: SettingsViewModel) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = Radius.dialog
     when (ui) {
         ImportUi.Closed -> Unit
         // 읽는 중(클라우드 파일은 오래 걸릴 수 있다): 새 글자 없이 진행 표시와 '취소'만(iOS와 같음). 취소하면 읽던 결과는 버린다.

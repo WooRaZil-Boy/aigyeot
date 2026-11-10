@@ -6,7 +6,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -158,7 +157,7 @@ fun AppRoot(app: AppViewModel) {
             text = { Text("이 휴대폰의 연결 정보를 지우고 새로 연결할까요? 돌봄 기록은 그대로 남아요. 전에 연결했던 이 휴대폰은 차 화면에서 지워 주세요.") },
             confirmButton = { TextButton(onClick = { app.resetAndPair(r.code) }) { Text("지우고 연결하기") } },
             dismissButton = { TextButton(onClick = app::clearPairRun) { Text("취소") } },
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            shape = Radius.dialog,
         )
     }
     // U25 b: 설정에서 끊기가 끝나면, 그사이 다른 화면을 열었어도 탭으로 돌아간다. 이력에 탭이 없으면 새로 간다. 오늘 탭 고르기는 CareTabs가 한다.
@@ -265,8 +264,8 @@ fun AppRoot(app: AppViewModel) {
             // 시안 .banner: 위 140%에서 0.96배·투명으로 spring.bouncy, 나갈 때 위로 260ms motion.exit 곡선(iOS와 같음).
             enter = if (reduced) EnterTransition.None else slideInVertically(Springs.bouncy.spec()) { -(it * 1.4f).toInt() } +
                 scaleIn(Springs.bouncy.spec(), initialScale = 0.96f, transformOrigin = TransformOrigin(0.5f, 0f)) + fadeIn(Springs.bouncy.spec()),
-            exit = if (reduced) ExitTransition.None else slideOutVertically(tween(260, easing = Motion.exit.easing)) { -(it * 1.4f).toInt() } +
-                fadeOut(tween(260, easing = Motion.exit.easing)),
+            exit = if (reduced) ExitTransition.None else slideOutVertically(Motion.bannerOut.spec()) { -(it * 1.4f).toInt() } +
+                fadeOut(Motion.bannerOut.spec()),
         ) {
             var last by remember { mutableStateOf(ui.banner) }
             ui.banner?.let { last = it }
@@ -278,23 +277,26 @@ fun AppRoot(app: AppViewModel) {
 /**
  * 인계 알림 배너(시안 .anoti): 흰 카드(모서리 26), 머리 '● 아이곁 · 지금'(브랜드 원 안 흰 표지), 제목 '인계 알림', 글 3줄, '보기'·'닫기'.
  */
+/** 앱 안 배너 모서리(시안 .anoti 26). */
+private val BannerShape = RoundedCornerShape(26.dp)
+
 @Composable
 private fun HandoffBanner(text: String, onOpen: () -> Unit, onClose: () -> Unit) {
     val p = Tokens.colors
     Column(
         Modifier.fillMaxWidth().padding(8.dp)
-            .shadow(16.dp, RoundedCornerShape(26.dp), ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
-            .clip(RoundedCornerShape(26.dp)).background(p.surface).padding(horizontal = 16.dp, vertical = 14.dp)
+            .shadow(16.dp, BannerShape, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
+            .clip(BannerShape).background(p.surface).padding(horizontal = 16.dp, vertical = 14.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(22.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
                 AIcon(R.drawable.ic_stat_aigyeot, Modifier.size(16.dp), Color.White)
             }
-            Text("  아이곁 · 지금", style = Type.caption.copy(fontSize = 12.5.sp), color = p.textSecondary)
+            Text("  아이곁 · 지금", style = Type.footNote, color = p.textSecondary)
         }
         Text("인계 알림", Modifier.padding(top = 8.dp), style = Type.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold), color = p.textPrimary)
-        Text(text, style = Type.body.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium), color = p.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Text(text, style = Type.label, color = p.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BannerAction("보기", onOpen)
             BannerAction("닫기", onClose)
