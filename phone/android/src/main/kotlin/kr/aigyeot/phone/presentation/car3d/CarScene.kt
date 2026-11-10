@@ -32,6 +32,7 @@ import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,25 +47,36 @@ import org.json.JSONObject
  * 폰은 바깥 보기(PRESET tile·phone, X-ray 0)만 쓰므로 유령 껍데기·제어 표시는 없다(차 앱 레시피 1~8·11·12, progress-1110-car '3D 레시피').
  * 빛 상태는 시안 phone.js의 data-light="listen"(실내 앰비언트 선이 곁의 응답 파랑으로 켜짐) 하나다.
  */
-class CarScene private constructor() {
+class CarScene private constructor(val engine: Engine) {
     companion object {
         private const val TAG = "CarScene"
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        private var loading: Deferred<CarScene>? = null
+        private var loading: Deferred<CarScene?>? = null
 
         /**
          * 장면을 한 번 만든다(프로세스 수명). 파일 읽기·GLB 이름표·환경광 픽셀 계산은 작업 스레드에서,
          * Filament 객체 만들기는 메인 스레드에서 단계마다 한 프레임씩 양보하며 한다(첫 화면이 멈추지 않게).
+         * 준비가 실패하면(자산 읽기·메모리 부족·Filament 단계 예외) 로그를 남기고 만든 것까지 놓고 null: 3D 칸은 빈 무대로 두고 앱은 그대로,
+         * 다음에 3D 칸을 열 때 처음부터 다시 시도한다(차 앱 CarEngine.whenReady와 같은 방침).
          */
         @MainThread
-        fun load(ctx: Context): Deferred<CarScene> = loading ?: scope.async {
+        fun load(ctx: Context): Deferred<CarScene?> = loading ?: scope.async(start = CoroutineStart.LAZY) {
             val app = ctx.applicationContext
             val t0 = System.nanoTime()
-            val prep = withContext(Dispatchers.Default) { Prep.read(app) }
-            Log.i(TAG, "준비 계산 ${(System.nanoTime() - t0) / 1_000_000}ms")
-            Gltfio.init()
-            CarScene().also { it.build(prep); Log.i(TAG, "3D 준비 ${(System.nanoTime() - t0) / 1_000_000}ms, 렌더러블 ${it.asset.renderableEntities.size}") }
-        }.also { loading = it }
+            try {
+                val prep = withContext(Dispatchers.Default) { Prep.read(app) }
+                Log.i(TAG, "준비 계산 ${(System.nanoTime() - t0) / 1_000_000}ms")
+                Gltfio.init()
+                val engine = Engine.create()
+                val made = try { CarScene(engine) } catch (t: Throwable) { runCatching { engine.destroy() }; throw t }
+                try { made.build(prep) } catch (t: Throwable) { made.release(); throw t }
+                made.also { Log.i(TAG, "3D 준비 ${(System.nanoTime() - t0) / 1_000_000}ms, 렌더러블 ${it.asset.renderableEntities.size}") }
+            } catch (t: Throwable) {
+                Log.e(TAG, "3D 준비 실패: 3D 칸을 비워 두고 다음에 다시 시도한다", t)
+                loading = null
+                null
+            }
+        }.also { loading = it; it.start() } // 실패해 비우기 전에 먼저 걸어 둔다(실패한 것이 남아 다시 시도를 막지 않게)
 
         /** 곁의 응답 빛(tokens glow). */
     }
@@ -80,7 +92,6 @@ class CarScene private constructor() {
         }
     }
 
-    val engine: Engine = Engine.create()
     val scene: Scene = engine.createScene()
     private val em = EntityManager.get()
     private val rm get() = engine.renderableManager
@@ -120,6 +131,14 @@ class CarScene private constructor() {
         // 듣는 중(listen): 실내 앰비언트 선 파랑 2.2(시안 applyState)
         val g = lin(CarPaint.ambientGlow.toArgb() and 0xFFFFFF)
         mats["Ambient"]?.let { mi -> if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", g[0] * 2.2f, g[1] * 2.2f, g[2] * 2.2f) }
+    }
+
+    /** 준비 실패 때 만든 것까지 놓는다(엔진을 지우면 엔진이 만든 재질 인스턴스·텍스처·빛·장면도 함께 놓인다). */
+    private fun release() {
+        runCatching { if (::asset.isInitialized) loader.destroyAsset(asset) }
+        runCatching { loader.destroy() }
+        runCatching { provider.destroyMaterials(); provider.destroy() }
+        runCatching { engine.destroy() }
     }
 
     /** 그리기 전에 테마에 맞는 환경광을 건다(라이트·다크는 방 밝기만 다르다). */

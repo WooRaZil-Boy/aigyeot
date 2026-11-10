@@ -46,7 +46,7 @@ import kotlin.math.sqrt
  * 제어 표시(고리·소리 결·그림자), X-ray 유령 껍데기를 든다. 보기([CarView])는 그리기 전에 자기 상태를 [apply]로 장면에 얹는다.
  * 시안 js/car3d.js의 makeScene·applyState·studio를 Filament로 옮겼다.
  */
-class CarEngine private constructor(private val prep: Prep) {
+class CarEngine private constructor(private val prep: Prep, val engine: Engine) {
     companion object {
         private const val TAG = "CarEngine"
         private var inst: CarEngine? = null
@@ -75,7 +75,9 @@ class CarEngine private constructor(private val prep: Prep) {
                 main.post {
                     try {
                         Utils.init(); Gltfio.init()
-                        val e = CarEngine(prep)
+                        // 생성자(재질 공급·자산 읽개·색 보정)가 실패하면 만든 Engine을 바로 놓는다: 남기면 이 프로세스에서 다음 Engine.create가 막혀 3D가 다시 뜨지 않는다
+                        val engine = Engine.create()
+                        val e = try { CarEngine(prep, engine) } catch (t: Throwable) { runCatching { engine.destroy() }; throw t }
                         e.build(main, { t -> e.release(); failed(t) }) { inst = e; loading = false; waiting.toList().also { waiting.clear() }.forEach { it(e) } }
                     } catch (t: Throwable) { failed(t) }
                 }
@@ -94,7 +96,6 @@ class CarEngine private constructor(private val prep: Prep) {
         private val CHILD = Regex("^ChildSeat")
     }
 
-    val engine: Engine = Engine.create()
     val scene: Scene = engine.createScene()
     private val em = EntityManager.get()
     private val rm get() = engine.renderableManager
