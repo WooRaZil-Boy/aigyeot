@@ -128,6 +128,9 @@ private val EXCLUDED = mapOf(
     "SUSPEND" to ExcludedReason.SUSPEND, "SESSION_END" to ExcludedReason.SESSION_END,
 )
 
+/** C381: 울음 횟수의 규칙 하나(U47). 울음 경보로 연 에피소드만 '울음'이다(소리 바꾸기 요청·기록만 한 경보·판정 창의 다시 울음은 아니다). 리포트 timeline의 cry_alarm과 홈 '오늘 하루'가 같이 쓴다. */
+internal fun isCryAlarm(e: EpisodeEntity) = e.trigger == "ALARM"
+
 internal fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (String?) -> String?): TimelineEpisode {
     val started = plays.filter { it.startedAt != null }.sortedBy { it.startedAt }   // 시작하지 못한 재생은 plays에 넣지 않는다
     val entries = started.map {
@@ -150,7 +153,7 @@ internal fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (S
     ) else null
     return TimelineEpisode(
         episodeId = e.id,
-        trigger = if (e.trigger == "ALARM") EpisodeTrigger.CRY_ALARM else EpisodeTrigger.SWITCH_SOUND,
+        trigger = if (isCryAlarm(e)) EpisodeTrigger.CRY_ALARM else EpisodeTrigger.SWITCH_SOUND,
         startedAt = iso(e.alarmAt ?: e.startedAt),
         alarmLatencyS = e.alarmDelayMs?.let { it / 1000.0 },
         sound = started.firstOrNull()?.let { sound(it.method, it.songId, songName) },

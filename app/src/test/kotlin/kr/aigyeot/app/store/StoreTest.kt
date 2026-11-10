@@ -951,14 +951,18 @@ class StoreTest {
         assertEquals(4.0, buildReport(dao, "S1", now)!!.steering.afterResponsePerMin)
     }
 
-    // C378 홈 '오늘 하루': 울음 경보만 센다(리포트 목록 U47과 같은 정의). 판정 창에서 다시 운 것은 경보가 아니고 시각 기록도 없다
-    @Test fun c378_cryRuns_countsAlarmsOnly_notRecryInJudgeWindow() {
+    // C381(U47): 울음 횟수는 울음 경보로 연 에피소드 수 하나. 첫 경보 뒤 '그만'으로 멈추고 대기 중 다시 운 경보(기록만, alarm_log)·
+    // 판정 창에서 다시 운 것·소리 바꾸기 요청은 세지 않는다. 홈 '오늘 하루'와 리포트 timeline(폰이 세는 값)이 같은 수
+    @Test fun c381_cryAlarms_sameCountAsReportTimeline_loggedOnlyAlarmNotCounted() {
         session()
         dao.upsertEpisode(EpisodeEntity("E1", "S1", T0 + 60_000, T0 + 300_000, "ALARM", T0 + 60_000, 2_400, "LULLABY", null, "SUCCESS", null,
             "OTHER_SOUND", "WHITE_NOISE", null, "SUCCESS", null, null, false, false, 61_000, true, 112_000, emptyList()))
         dao.upsertPlay(PlayLogEntity("P2", "S1", "E1", "AUTO_SECOND", "WHITE_NOISE", null, T0 + 127_000, T0 + 183_000, 56_000, "DEADLINE"))
-        dao.insertAlarm(AlarmLogEntity(sessionId = "S1", firstAt = T0 + 400_000, lastAt = T0 + 410_000, reason = "WAITING"))
-        assertEquals(listOf(T0 + 60_000, T0 + 400_000), store.cryRuns("S1"))
+        dao.insertAlarm(AlarmLogEntity(sessionId = "S1", firstAt = T0 + 310_000, lastAt = T0 + 320_000, reason = "WAITING"))   // '그만' 뒤 대기 중 다시 운 경보
+        dao.upsertEpisode(EpisodeEntity("E2", "S1", T0 + 400_000, T0 + 460_000, "SWITCH_SOUND", null, null, "WHITE_NOISE", null, null, null,
+            null, null, null, null, null, null, false, false, 0, false, 56_000, emptyList()))
+        assertEquals(listOf(T0 + 60_000), store.cryAlarms("S1"))
+        assertEquals(store.cryAlarms("S1").size, buildReport(dao, "S1", now)!!.timeline.count { it.trigger == kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM })
     }
 
     // 제어 기록의 뜻은 한 함수(홈 3D 칩과 리포트 car_actions가 같이 쓴다)

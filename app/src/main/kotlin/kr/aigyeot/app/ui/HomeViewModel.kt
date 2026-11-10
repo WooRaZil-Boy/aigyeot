@@ -438,7 +438,7 @@ internal fun dayChart(s: EngineState?, car: List<CarSpan>, now: Long, zone: java
         val spans = car.filter { (it.to ?: now) >= day0 }
         if (spans.isNotEmpty()) {
             val driveMs = spans.sumOf { (it.to ?: now) - maxOf(it.from, day0) }
-            val cries = spans.flatMap { it.alarms }.filter(::today)   // 이어진 울음 하나는 한 번(CarSpan.alarms가 이미 합쳤다)
+            val cries = spans.flatMap { it.alarms }.filter(::today)   // 울음 경보 에피소드마다 한 번(리포트 목록 '울음 n번'과 같은 수, C381)
             // 세션 구간(출발 D부터 도착 뒤 뒷문 열 때까지)이라 중간 정차도 들어 있다: '주행'이 아니라 아기가 타 있던 '탑승' 시간
             add(DayLane("차에서", DataColor.CAR, "탑승 " + TimeText.duration(driveMs), if (cries.isEmpty()) "울음 없음" else "울음 ${cries.size}번",
                 blocks = spans.map { min(maxOf(it.from, day0))..min(it.to ?: now) }, diamonds = cries.map(::min)))
@@ -497,7 +497,7 @@ class HomeViewModel(
     /** 오늘 주행 구간(시뮬레이션 뺌)과 경보 시각. 세션 표가 바뀔 때만 다시 읽는다. */
     private val carDay: Flow<List<CarSpan>> = store.sessionsFlow().map { list ->
         val day0 = java.time.LocalDate.now(TimeText.zone).atStartOfDay(TimeText.zone).toInstant().toEpochMilli()
-        list.filter { it.scenarioId == null && (it.endedAt ?: Long.MAX_VALUE) >= day0 }.map { CarSpan(it.startedAt, it.endedAt, store.cryRuns(it.id)) }
+        list.filter { it.scenarioId == null && (it.endedAt ?: Long.MAX_VALUE) >= day0 }.map { CarSpan(it.startedAt, it.endedAt, store.cryAlarms(it.id)) }
     }.flowOn(Dispatchers.IO).retryOnDbError("home-day")   // 읽기 실패: 1초 뒤 다시, 그동안 직전 '오늘 하루'를 둔다('울음 없음'으로 바꾸지 않는다)
 
     // Room에서 읽는 덧붙임 셋은 처음 값을 먼저 낸다: 첫 읽기가 실패해 다시 하는 동안에도 판단 코어·연결 상태는 화면에 바로 간다(카드·칩·오늘 하루만 늦게)
