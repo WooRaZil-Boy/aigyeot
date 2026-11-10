@@ -178,6 +178,7 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .enterRise(0)
                         Group26 {
                             SettingRow(icon: .moon, title: CareText.sleepDiaperToggle, sub: CareText.sleepDiaperToggleNote) {
                                 Toggle(CareText.sleepDiaperToggle, isOn: Binding(get: { vm.ui.care.sleepDiaperEnabled }, set: { vm.setSleepDiaper($0) }))
@@ -185,6 +186,7 @@ struct SettingsView: View {
                             }
                             .accessibilityElement(children: .combine)
                         }
+                        .enterRise(1)
                         Group26 {
                             // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다. U33: 공유 시트 제목은 비운다
                             ShareLink(item: CareExportFile(export: { [vm] in vm.export() }), preview: SharePreview("")) {
@@ -195,6 +197,7 @@ struct SettingsView: View {
                             Button { vm.startImport() } label: { SettingRow(icon: .fileUp, title: CareText.importEntry, sub: CareText.importEntrySub) }
                                 .buttonStyle(.plain)
                         }
+                        .enterRise(2)
                         Group26 {
                             if vm.ui.connected {
                                 // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서 인터넷이 필요하다). 초대 만들기와 같다
@@ -210,11 +213,13 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .enterRise(3)
                         if let error { FootNote(error).foregroundStyle(DesignSystem.danger) }
                         Group26 {
                             NavigationLink { AboutView(version: vm.ui.version) } label: { SettingRow(icon: .info, title: CareText.about) }
                                 .buttonStyle(.plain)
                         }
+                        .enterRise(4)
                     }
                     .screenPadding()
                 }

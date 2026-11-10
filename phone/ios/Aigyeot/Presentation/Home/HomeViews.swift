@@ -8,10 +8,12 @@ struct MainView: View {
     @Environment(AppViewModel.self) private var app
     @Environment(CareTabsViewModel.self) private var tabs
     @State private var tab = CareText.tabToday
+    /// 탭을 고른 때: 이때 나타난 블록이 한 줄씩 올라온다(`enterRise`). 처음 열 때도 같다.
+    @State private var tabShownAt = Date()
 
     var body: some View {
-        TabView(selection: $tab) {
-            Scoped({ $0.today() }) { _ in TodayView { tab = $0 } }.undoBar().tabItem { tabLabel(CareText.tabToday, .house) }.tag(CareText.tabToday)
+        TabView(selection: Binding(get: { tab }, set: select)) {
+            Scoped({ $0.today() }) { _ in TodayView(goTab: select) }.undoBar().tabItem { tabLabel(CareText.tabToday, .house) }.tag(CareText.tabToday)
             Scoped({ $0.records() }) { _ in RecordsView() }.undoBar().tabItem { tabLabel(CareText.tabLog, .list) }.tag(CareText.tabLog)
             if !tabs.ui.guardian {
                 Scoped({ $0.car() }) { _ in CarView() }.undoBar().tabItem { tabLabel(CareText.tabCar, .carFront) }.tag(CareText.tabCar)
@@ -19,17 +21,24 @@ struct MainView: View {
             Scoped({ $0.settings() }) { _ in SettingsView() }.undoBar().tabItem { tabLabel(CareText.tabSettings, .settings) }.tag(CareText.tabSettings)
         }
         .tint(DS.textPrimary)   // 탭 막대 고른 칸은 먹색(시안 .tabbar button.on). 탭 안 내용은 다시 파랑 글자(accentInk)
+        .environment(\.tabShownAt, tabShownAt)
         .modifier(MinimizeTabBar())
         // U25: 끊기면 연결 안 됨의 오늘로. 5장: 연결 흐름이 끝나도 오늘로(링크는 확인 시트만 띄워 이 화면과 탭이 그대로 남는다. 안드로이드는 nav.reset)
-        .onChange(of: app.ui.isPaired) { _, _ in tab = CareText.tabToday }
+        .onChange(of: app.ui.isPaired) { _, _ in select(CareText.tabToday) }
         // M3: 설정 끊기가 끝나면 오늘·띠를 한 번 그렸다고 알린다(끝남 표시를 걷는다)
         .onChange(of: tabs.ui.disconnectDone, initial: true) { _, done in
-            if done { tab = CareText.tabToday; tabs.disconnectShown() }
+            if done { select(CareText.tabToday); tabs.disconnectShown() }
         }
         .overlay(alignment: .top) { AlertBanner().padding(.horizontal, 8) }
         .sheet(item: Binding(get: { app.ui.openAlert.map(IdBox.init) }, set: { _ in app.closeAlert() })) { box in
             NavigationStack { AlertDetailView(id: box.id) }
         }
+    }
+
+    /// 탭 옮기기는 모두 여기로(누름·오늘의 링크·연결·끊기): 고른 때를 함께 남긴다.
+    private func select(_ t: String) {
+        tab = t
+        tabShownAt = Date()
     }
 
     private func tabLabel(_ title: String, _ icon: Ico) -> some View {
@@ -95,7 +104,10 @@ struct AlertBanner: View {
                 }
                 .foregroundStyle(DS.textPrimary)
                 .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                // 시안 .banner: 들어올 때 위에서 0.96배로 spring.bouncy, 나갈 때 위로 260ms motion.exit 곡선
+                .transition(reduceMotion ? .opacity : .asymmetric(
+                    insertion: .move(edge: .top).combined(with: .scale(scale: 0.96, anchor: .top)).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity).animation(.timingCurve(0.4, 0, 1, 1, duration: 0.26))))
                 .task(id: id) {
                     try? await Task.sleep(nanoseconds: RetryPolicy.bannerNanos)
                     vm.dismissBanner(id)

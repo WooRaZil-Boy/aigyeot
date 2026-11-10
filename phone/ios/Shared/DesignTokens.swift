@@ -224,6 +224,8 @@ enum DesignSystem {
         static let smooth = spring("smooth")
         /// spring.bouncy: 탭 렌즈·알림 배너만 조금.
         static let bouncy = spring("bouncy")
+        /// roll(README 4.7 표, tokens.json에는 없음): 숫자 굴림 spring 감쇠 .85·강성 632 → 응답 2π/√632초.
+        static let roll = Animation.spring(response: 2 * .pi / 632.0.squareRoot(), dampingFraction: 0.85)
 
         /// "linear" 또는 "cubic-bezier(a, b, c, d)" → Animation.
         static func animation(_ name: String) -> Animation {

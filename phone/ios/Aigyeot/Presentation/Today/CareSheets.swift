@@ -254,6 +254,8 @@ private struct TimerRing: View {
                 .animation(reduceMotion ? nil : .linear(duration: 1), value: seconds)
             VStack(spacing: 12) {
                 Text(CareFormat.timer(ms)).font(DS.timer).foregroundStyle(DS.textPrimary).lineLimit(1).minimumScaleFactor(0.5)
+                    .contentTransition(.numericText())   // 1초마다 바뀐 자리만 굴러간다(시안 v4-7 4, roll)
+                    .animation(reduceMotion ? nil : DS.Motion.roll, value: seconds)
                     .accessibilityLabel(CareFormat.duration(ms))
                 Text(title).font(DS.font(15, 500)).foregroundStyle(DS.textTertiary)
             }

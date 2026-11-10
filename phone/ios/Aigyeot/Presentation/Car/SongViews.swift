@@ -34,17 +34,18 @@ private struct CarContent: View {
                         } else { ConnectCarTile() }
                     }
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                    .enterRise(0)
                 }
                 if vm.ui.owner { songs }
                 if vm.ui.isPaired {
                     Section {   // 7.1 car.section.reports(U39)
-                        BlockHeader(title: "리포트").listRowInsets(Self.headInsets)
+                        BlockHeader(title: "리포트").listRowInsets(Self.headInsets).enterRise(3)
                         if vm.ui.reports.isEmpty {
                             Text("주행이 끝나면 여기에 리포트가 와요").font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
                                 .listRowInsets(Self.noteInsets)
                         }
                         ForEach(vm.ui.reports) { r in
-                            NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r, chevron: false) }
+                            NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r, chevron: false) }.enterRise(4)
                         }
                     }
                     .listRowSeparator(.hidden)
@@ -73,6 +74,7 @@ private struct CarContent: View {
         Section {
             BlockHeader(title: "우리 노래", link: songsVM.ui.slotsUsed < 3 ? "녹음하기" : nil) { player.stop(); replacing = nil; recording = true }   // 7.1 car.section.songs(U39)
                 .listRowInsets(Self.headInsets)
+                .enterRise(1)
             if songsVM.ui.songs.isEmpty {
                 Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요").font(DS.font(15, 400)).foregroundStyle(DS.textTertiary)
                     .listRowInsets(Self.noteInsets)
@@ -80,6 +82,7 @@ private struct CarContent: View {
             ForEach(songsVM.ui.songs) { row in
                 SongRowView(row: row, player: player, rerecord: { player.stop(); replacing = row.id; recording = true },
                             remove: { songsVM.remove(row.id) })
+                    .enterRise(2)
                     .swipeActions { Button("지우기", role: .destructive) { songsVM.remove(row.id) } }
             }
             if songsVM.ui.slotsUsed >= 3 {

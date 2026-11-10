@@ -20,6 +20,7 @@ struct TodayView: View {
     let goTab: (String) -> Void
     @State private var sheet: CareSheet?
     @Namespace private var zoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
@@ -27,7 +28,7 @@ struct TodayView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     StatusBands(gap: 12)   // 띠가 없으면 높이 0이고 간격도 없다
                     VStack(alignment: .leading, spacing: 12) {
-                        if vm.ui.guardian { GuardianAlertCards() }
+                        if vm.ui.guardian { GuardianAlertCards().enterRise(0) }
                         // 경과는 분 단위라 1분마다 다시 그린다(R15: 저장하지 않고 계산). 진행 중 카드의 초는 그 카드만 1초마다.
                         TimelineView(.everyMinute) { ctx in
                             let now = CareTime.ms(ctx.date)
@@ -36,24 +37,33 @@ struct TodayView: View {
                                     if let e = CareRules.inProgress(k, in: vm.ui.care.events) {
                                         RunningCard(event: e) { sheet = .timer(e.id) }
                                             .modifier(ZoomSource(id: e.id, ns: zoom))
+                                            .transition(.cardEnter)
+                                            .enterRise(0)
                                     }
                                 }
-                                LastFeedCard(now: now)
-                                QuickBlock(sheet: $sheet)
+                                LastFeedCard(now: now).enterRise(1)
+                                QuickBlock(sheet: $sheet).enterRise(2)
                                 VStack(alignment: .leading, spacing: 0) {
                                     BlockHeader(title: CareText.todayDay, link: CareText.tabLog) { goTab(CareText.tabLog) }
                                     let today = CareRules.dayKey(now, .current)
                                     DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now, zone: .current, showCar: vm.ui.isPaired))
                                 }
                                 .block()
+                                .enterRise(3)
                             }
+                            // 진행 중 판이 생기거나 사라질 때 아래 블록이 함께 움직인다(시안 v4-7 6 기록 순간, spring.smooth)
+                            .animation(reduceMotion ? nil : DS.Motion.smooth, value: CareRules.inProgress(.feed, in: vm.ui.care.events)?.id)
+                            .animation(reduceMotion ? nil : DS.Motion.smooth, value: CareRules.inProgress(.sleep, in: vm.ui.care.events)?.id)
                         }
                         // U35: guardian은 기기 목록을 받을 수 없어(계약 1.3) 차 카드를 그리지 않는다.
                         if !vm.ui.guardian {
-                            if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) { goTab(CareText.tabCar) } }
-                            else { ConnectCarTile() }
+                            Group {
+                                if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) { goTab(CareText.tabCar) } }
+                                else { ConnectCarTile() }
+                            }
+                            .enterRise(4)
                         }
-                        RecentReports(owner: !vm.ui.guardian) { goTab(CareText.tabCar) }
+                        RecentReports(owner: !vm.ui.guardian) { goTab(CareText.tabCar) }.enterRise(5)
                     }
                 }
                 .screenPadding()
@@ -91,7 +101,10 @@ private struct ZoomDestination: ViewModifier {
 /// 없으면 "아직 수유 기록이 없어요" + '수유 시작'.
 private struct LastFeedCard: View {
     @Environment(TodayViewModel.self) private var vm
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let now: Int64
+    /// 새 수유가 들어오면 판 둘레로 파란 빛이 한 번 퍼진다(시안 .flash 1.2초 motion.base 곡선). 늘면 한 번 돈다.
+    @State private var flashes = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -99,10 +112,12 @@ private struct LastFeedCard: View {
             if let last = vm.ui.lastFeedingStart {
                 // 화면 값이 내 기록이면 쪽·보내기 상태를 함께 보인다. 차 값이 더 늦으면 시각만.
                 let mine = CareRules.latestFeed(vm.ui.care.events).flatMap { vm.ui.shownStart($0) == last ? $0 : nil }
-                Text(CareText.ago(now - CareTime.ms(last)))
+                let ago = CareText.ago(now - CareTime.ms(last))
+                Text(ago)
                     .font(DS.hero).monospacedDigit().foregroundStyle(DS.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.6).padding(.top, 6)
                     .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : DS.Motion.roll, value: ago)   // 바뀐 자리만 굴러간다(roll)
                 Text(CareText.feedDetail(at: last, side: mine?.feedSide, zone: mine?.timeZone ?? .current))
                     .font(DS.font(15, 400)).monospacedDigit().foregroundStyle(DS.textTertiary).padding(.top, 4)
                 if let m = meter(last: CareTime.ms(last)) { FeedMeter(value: m.value, tick: m.tick).padding(.top, 18).padding(.bottom, 4) }
@@ -124,6 +139,23 @@ private struct LastFeedCard: View {
             }
         }
         .block(padding: EdgeInsets(top: 22, leading: 22, bottom: 20, trailing: 22))
+        .keyframeAnimator(initialValue: 1.0, trigger: flashes) { card, p in
+            // p 0 → 1: 빛 두께 0 → 14, 진하기 60% → 0(box-shadow 퍼짐과 같은 꼴). 쉬는 동안은 1이라 보이지 않는다
+            card.overlay {
+                if !reduceMotion {   // 도는 중에 동작 줄이기를 켜면 바로 걷는다
+                    RoundedRectangle(cornerRadius: DS.rL + 14 * p, style: .continuous)
+                        .strokeBorder(DS.accent.opacity(0.6 * (1 - p)), lineWidth: 14 * p)
+                        .padding(-14 * p)
+                        .allowsHitTesting(false)
+                }
+            }
+        } keyframes: { _ in
+            MoveKeyframe(0)
+            LinearKeyframe(1, duration: 1.2, timingCurve: .bezier(startControlPoint: UnitPoint(x: 0.4, y: 0), endControlPoint: UnitPoint(x: 0.2, y: 1)))
+        }
+        .onChange(of: vm.ui.lastFeedingStart) { old, new in
+            if new != nil, new != old, !reduceMotion { flashes += 1 }
+        }
         .accessibilityElement(children: .contain)
     }
 
@@ -163,16 +195,11 @@ private struct RunningCard: View {
     let event: CareEvent
     let open: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
 
     var body: some View {
         Button(action: open) {
             HStack(spacing: 14) {
-                Circle().fill(DS.color(event.kind)).frame(width: 10, height: 10)
-                    .overlay {   // 동작 줄이기면 고리를 빼서(도중에 켜도) 반복을 멈춘다
-                        if !reduceMotion { Circle().stroke(DS.color(event.kind).opacity(pulse ? 0 : 0.5), lineWidth: pulse ? 8 : 0) }
-                    }
-                    .frame(width: 12)
+                dot.frame(width: 12)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title).font(DS.font(16, 600)).foregroundStyle(DS.textPrimary)
                     Text(CareFormat.clock(CareTime.date(event.startAt), event.timeZone) + "부터").font(DS.font(13, 400)).foregroundStyle(DS.textTertiary)
@@ -191,16 +218,22 @@ private struct RunningCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(a11y)
         .accessibilityAddTraits(.isButton)
-        .onAppear { startPulse() }
-        .onChange(of: reduceMotion) { _, _ in startPulse() }
     }
 
-    private func startPulse() {
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) { pulse = false }
-        guard !reduceMotion else { return }
-        withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) { pulse = true }
+    /// 살아 있는 점(시안 live: 1.8초마다, 앞 60% 동안 둘레 빛이 0 → 12로 퍼지며 사라지고 나머지는 쉼, motion.base 곡선).
+    /// 동작 줄이기면 빛 없이 점만(도중에 켜도 반복이 멈춘다).
+    @ViewBuilder private var dot: some View {
+        let c = DS.color(event.kind)
+        let core = Circle().fill(c).frame(width: 10, height: 10)
+        if reduceMotion { core } else {
+            core.keyframeAnimator(initialValue: 0.0, repeating: true) { v, p in
+                v.overlay { Circle().strokeBorder(c.opacity(0.5 * (1 - p)), lineWidth: 12 * p).padding(-12 * p) }
+            } keyframes: { _ in
+                MoveKeyframe(0)   // 되풀이는 앞 주기 끝값(1)에서 이어지므로 주기마다 0에서 시작한다
+                LinearKeyframe(1, duration: 1.08, timingCurve: .bezier(startControlPoint: UnitPoint(x: 0.4, y: 0), endControlPoint: UnitPoint(x: 0.2, y: 1)))
+                LinearKeyframe(1, duration: 0.72)
+            }
+        }
     }
 
     /// 화면 제목 "수유 중 · 왼쪽"(design.label) / "자는 중".
@@ -221,7 +254,10 @@ private struct QuickBlock: View {
     @Environment(TodayViewModel.self) private var vm
     @Binding var sheet: CareSheet?
     @State private var started = 0
+    /// 누르고 있는 칸(시안 .qb:active: 원 0.94배 spring.snappy, 바탕 조금 짙게 motion.fast).
+    @State private var pressed: CareKind?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let kinds = CareRules.quickKinds(sleepDiaper: vm.ui.care.sleepDiaperEnabled)
@@ -236,14 +272,18 @@ private struct QuickBlock: View {
                     IconImage(DS.icon(kind), size: 24)
                         .foregroundStyle(running == nil ? DS.textPrimary : DS.surface)
                         .frame(width: 56, height: 56)
-                        .background(running == nil ? DS.surfaceRaised : DS.textPrimary, in: Circle())
+                        .background(running != nil ? DS.textPrimary : pressed == kind ? DS.tonal : DS.surfaceRaised, in: Circle())
+                        .animation(reduceMotion ? nil : DS.Motion.fast, value: running == nil)   // 진행 중이면 원이 반전된다
+                        .animation(reduceMotion ? nil : DS.Motion.fast, value: pressed == kind)
+                        .scaleEffect(pressed == kind && !reduceMotion ? 0.94 : 1)
+                        .animation(DS.Motion.snappy, value: pressed == kind)
                     Text(title).font(DS.font(14, 600)).foregroundStyle(running == nil ? DS.textSecondary : DS.textPrimary)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture { tap(kind, running: running) }
-                .onLongPressGesture(minimumDuration: 0.5) { sheet = .quick(kind) }
+                .onLongPressGesture(minimumDuration: 0.5) { sheet = .quick(kind) } onPressingChanged: { pressed = $0 ? kind : nil }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(.isButton)

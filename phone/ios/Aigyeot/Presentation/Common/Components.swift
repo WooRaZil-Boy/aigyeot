@@ -292,6 +292,48 @@ extension ButtonStyle where Self == PressStyle {
     static var press: PressStyle { PressStyle() }
 }
 
+// MARK: 화면 교체 때 한 줄씩 올라옴
+
+extension EnvironmentValues {
+    /// 탭을 고른 때(MainView). 이 때 바로 나타난 블록만 올라온다.
+    @Entry var tabShownAt = Date.distantPast
+}
+
+extension View {
+    /// 탭을 바꿔 화면이 나타날 때 블록이 한 줄씩 올라온다(시안 v4-7 5, core.js UI.enter: 아래 16 → 0, 블러 6 → 0, motion.enter,
+    /// 0.06초 뒤 `order`마다 0.05초). 탭을 고른 직후에 나타난 것만이고, 뒤로 가기·목록을 굴려 새로 보이는 줄은 바로 보인다. 동작 줄이기면 없음.
+    func enterRise(_ order: Int) -> some View { modifier(EnterRise(order: order)) }
+}
+
+extension AnyTransition {
+    /// 새 판이 생길 때(시안 .enter phEnter: 위 10 · 0.98배 · 투명에서, spring.smooth로). 나갈 때는 흐려지기만.
+    static var cardEnter: AnyTransition {
+        .asymmetric(insertion: .opacity.combined(with: .offset(y: -10)).combined(with: .scale(scale: 0.98)), removal: .opacity)
+    }
+}
+
+private struct EnterRise: ViewModifier {
+    let order: Int
+    @Environment(\.tabShownAt) private var shownAt
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        // 동작 줄이기면(오르는 중에 켜도) 늘 다 올라온 모습
+        let up = shown || reduceMotion
+        content
+            .opacity(up ? 1 : 0)
+            .offset(y: up ? 0 : 16)
+            .blur(radius: up ? 0 : 6)
+            .onAppear {
+                guard !reduceMotion, Date().timeIntervalSince(shownAt) < 0.5 else { shown = true; return }
+                // 같은 갱신 안에서 거짓 → 참이면 움직이지 않는다. 다음 차례에 올린다
+                Task { @MainActor in withAnimation(DS.Motion.enter.delay(0.06 + 0.05 * Double(order))) { shown = true } }
+            }
+            .onDisappear { shown = false }
+    }
+}
+
 // MARK: 배지·숫자 줄·스위치 색
 
 /// 배지(뜻 하나에 색 하나). `child`면 아이 신호 주황.

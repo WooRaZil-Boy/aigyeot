@@ -16,6 +16,7 @@ struct ChartHit: Equatable { let rect: CGRect; let tip: String }
 private struct TipOverlay: ViewModifier {
     let hits: [ChartHit]
     @State private var shown: ChartHit?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
@@ -36,11 +37,11 @@ private struct TipOverlay: ViewModifier {
                             .background(DS.textPrimary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .fixedSize()
                     }
-                    .transition(.opacity)
+                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 4)))   // 시안 .ch-tip: 아래 4에서 120ms linear(동작 줄이기면 바로)
                     .allowsHitTesting(false)
                 }
             }
-            .animation(.linear(duration: 0.12), value: shown)
+            .animation(reduceMotion ? nil : .linear(duration: 0.12), value: shown)
             .onChange(of: hits) { _, _ in shown = nil }   // 기록이 바뀌면(지움·진행 중 시간) 옛 값 툴팁을 닫는다
     }
 }
@@ -75,9 +76,17 @@ private struct Appear: ViewModifier {
     }
 }
 
-/// 띠·히트맵·에피소드: 0.9초 cubic(.65,0,.35,1)로 왼쪽에서 그려진다. 막대: 0.6초 바닥에서 자란다.
+/// 띠·히트맵·에피소드: 0.9초 cubic(.65,0,.35,1)로 왼쪽에서 그려진다(시안 charts.js grow).
 private let revealCurve = Animation.timingCurve(0.65, 0, 0.35, 1, duration: 0.9)
-private let growCurve = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.9)
+/// 막대: 막대마다 0.6초 cubic(.2,.8,.2,1)로 바닥에서 자라고, 0.04초씩 늦게 시작한다(8개마다 다시). t는 전체 시간에 걸쳐 고르게 흐르고
+/// 막대마다 곡선은 `barGrow`가 건다.
+private let growStep = 0.04, growEach = 0.6, growTotal = growEach + growStep * 7
+private let growCurve = Animation.linear(duration: growTotal)
+private let growEase = UnitCurve.bezier(startControlPoint: UnitPoint(x: 0.2, y: 0.8), endControlPoint: UnitPoint(x: 0.2, y: 1))
+private func barGrow(_ t: Double, index i: Int) -> Double {
+    let local = min(1, max(0, (t * growTotal - growStep * Double(i % 8)) / growEach))
+    return growEase.value(at: local)
+}
 
 /// 진행 값을 프레임마다 받는 Canvas(Canvas는 그 자체로 애니메이션 값을 보간하지 않는다).
 private struct GrowCanvas: View, Animatable {
@@ -280,9 +289,7 @@ struct WeekBarsChartBody: View {
             ctx.label(target.label, at: CGPoint(x: 0, y: y - 4), anchor: .bottomLeading, size: fs, weight: 600, color: DS.textTertiary)
         }
         for (i, b) in layout(size).enumerated() {
-            let delay = Double(i % 8) * 0.04 / 0.9   // 0.04초 간격(전체 0.9초 안에서)
-            let grow = min(1, max(0, (t - delay) / (1 - 7 * 0.04 / 0.9)))
-            let h = b.bar.height * CGFloat(grow)
+            let h = b.bar.height * CGFloat(barGrow(t, index: i))
             if b.item.value != nil, h > 0 {
                 let r = min(4, h / 2)
                 let rect = CGRect(x: b.bar.minX, y: base - h, width: b.bar.width, height: h)
@@ -420,7 +427,7 @@ struct MethodDots: View {
         }
     }
     let rows: [Row]
-    @State private var t: Double = 0
+    @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -428,18 +435,19 @@ struct MethodDots: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(rows) { m in
+                let base = rows.prefix { $0.id != m.id }.reduce(0) { $0 + $1.ok }   // 앞 줄들의 찬 점 수: 점은 모든 줄을 이어 0.02초씩 늦게 나온다
                 let known = m.n >= 3
                 Group {
                     // 큰 글자, 또는 이름을 80으로 줄여도 한 줄에 점·횟수가 들어가지 않는 좁은 폭(320pt 등)이면 이름·값 한 줄, 그 아래 점
-                    if typeSize.isAccessibilitySize { stacked(m, known: known) } else {
+                    if typeSize.isAccessibilitySize { stacked(m, known: known, base: base) } else {
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 12) {
                                 WidthIn(lo: 80, hi: 144) { name(m, known: known) }   // 긴 부모 노래 이름은 줄을 바꾸고 점·횟수 자리를 남긴다(안드로이드 widthIn 80~144)
-                                dots(m, known: known)
+                                dots(m, known: known, base: base)
                                 Spacer(minLength: 4)
                                 value(m, known: known)
                             }
-                            stacked(m, known: known)
+                            stacked(m, known: known, base: base)
                         }
                     }
                 }
@@ -447,13 +455,13 @@ struct MethodDots: View {
                 .accessibilityLabel(known ? "\(m.name): \(m.n)번 틀어서 \(m.ok)번 그침" : "\(m.name): 아직 모름, \(m.n)번 틀었어요")
             }
         }
-        .onAppear { if reduceMotion { t = 1 } else { withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { t = 1 } } }
+        .onAppear { shown = true }
     }
 
-    private func stacked(_ m: Row, known: Bool) -> some View {
+    private func stacked(_ m: Row, known: Bool, base: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack { name(m, known: known); Spacer(minLength: 8); value(m, known: known) }
-            dots(m, known: known)
+            dots(m, known: known, base: base)
         }
     }
 
@@ -484,7 +492,8 @@ struct MethodDots: View {
         }
     }
 
-    private func dots(_ m: Row, known: Bool) -> some View {
+    /// 찬 점은 처음 보일 때 0 → 1로 튄다(시안 charts.js: spring 강성 600·감쇠 30, 점마다 0.02초 늦게). 동작 줄이기면 바로.
+    private func dots(_ m: Row, known: Bool, base: Int) -> some View {
         // 점이 많으면 줄을 넘긴다(한 줄 10개)
         let cols = Array(repeating: GridItem(.fixed(12), spacing: 5), count: min(10, max(1, m.n)))
         return LazyVGrid(columns: cols, alignment: .leading, spacing: 5) {
@@ -493,7 +502,8 @@ struct MethodDots: View {
                     .fill(i < m.ok ? DS.textPrimary : .clear)
                     .overlay(Circle().strokeBorder(DS.textPrimary.opacity(i < m.ok ? 0 : (known ? 0.26 : 0.14)), lineWidth: 1.5))
                     .frame(width: 12, height: 12)
-                    .scaleEffect(i < m.ok ? CGFloat(t) : 1)
+                    .scaleEffect(i < m.ok && !shown && !reduceMotion ? 0 : 1)
+                    .animation(reduceMotion || i >= m.ok ? nil : .interpolatingSpring(stiffness: 600, damping: 30).delay(0.02 * Double(base + i)), value: shown)
             }
         }
         .fixedSize()

@@ -220,6 +220,28 @@ final class DesignTour: XCTestCase {
     }
 
     /// 3D 측정용(캡처 아님): 첫 안내의 3D 차를 6초 동안 손가락으로 돌린 뒤 8초 둔다. 맥에서 같은 때 앱의 CPU·메모리를 잰다.
+    /// 움직임 확인용(화면 녹화와 함께 돌린다): 첫 화면 올라옴 → 수유 시작(진행 중 판·빛) → 타이머(확대 전환·숫자 굴림) → 끝내기
+    /// → 탭 바꾸기(한 줄씩 올라옴) → 하루·패턴 → 설정 → 오늘. 장면 사이 2초.
+    func test_v6_모션() {
+        if app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10) {
+            sleep(2)
+            app.buttons["먼저 기록만 쓸게요"].tap()
+        }
+        XCTAssert(app.buttons["오늘"].waitForExistence(timeout: 5))
+        sleep(2)
+        app.buttons["수유"].firstMatch.tap()
+        sleep(3)
+        label(beginsWith: "수유 중").tap()
+        XCTAssert(app.buttons["끝내기"].waitForExistence(timeout: 5))
+        sleep(4)
+        app.buttons["끝내기"].tap()
+        sleep(3)
+        for t in ["기록", "패턴", "설정", "오늘"] {
+            if t == "패턴" { app.buttons["패턴"].firstMatch.tap() } else { tab(t) }
+            sleep(2)
+        }
+    }
+
     func test_v6_3d_돌리기() {
         XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
         sleep(4)   // 대기(정지 그림)

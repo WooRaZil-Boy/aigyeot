@@ -13,11 +13,14 @@ struct RecordsView: View {
     /// 자정을 넘기면 날짜 띠·제목·'지난 7일'이 바뀐다. 화면을 연 채 두어도 매분 같은 기준 시각으로 다시 그린다(안드로이드 rememberNow).
     /// TimelineView로 감싸지 않는다: 목록·스크롤이 내비게이션의 바로 아래여야 큰 제목이 접힌다.
     @State private var now = Date()
+    /// 하루·패턴을 바꾼 때: 새로 나온 블록도 탭을 바꿀 때처럼 한 줄씩 올라온다(`enterRise`).
+    @State private var segmentAt = Date.distantPast
+    @Environment(\.tabShownAt) private var tabShownAt
 
     var body: some View {
         let today = CareRules.dayKey(CareTime.ms(now), .current)
         let segment = Segmented(title: CareText.tabLog, options: [false, true], label: { $0 ? CareText.segmentPattern : CareText.segmentDay },
-                                selection: Binding(get: { pattern }, set: { pattern = $0 ?? false }))
+                                selection: Binding(get: { pattern }, set: { pattern = $0 ?? false; segmentAt = Date() }))
         NavigationStack {
             // 하루·패턴은 한 List 안에서 내용만 바꾼다. 스크롤 뷰를 통째로 바꾸면 큰 제목이 새 스크롤을 따라 접히지 않고 내용 위에 남았다.
             List {
@@ -27,6 +30,7 @@ struct RecordsView: View {
                         segment
                     }
                     .padding(.horizontal, 16).padding(.top, 4)
+                    .enterRise(0)
                     if pattern {
                         PatternView(now: now)
                     } else {
@@ -41,6 +45,7 @@ struct RecordsView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .environment(\.tabShownAt, max(tabShownAt, segmentAt))
             .screenBackground()
             .navigationTitle(CareText.tabLog)
             .sheet(item: $sheet) { CareSheetView(sheet: $0) }
@@ -94,18 +99,19 @@ private struct DayView: View {
         let list = items(day, car)
         // 행만 낸다(바깥 RecordsView의 List가 담는다)
         Group {
-            DayStrip(selected: $day, span: keys.min().flatMap { a in keys.max().map { (a, $0) } }, records: keys, now: now)
+            DayStrip(selected: $day, span: keys.min().flatMap { a in keys.max().map { (a, $0) } }, records: keys, now: now).enterRise(1)
             // 고른 날 제목(log.date.*: "오늘"·"어제"·"11월 5일(수)"). 띠는 요일·날짜 숫자뿐이라 달이 바뀌어도 어느 날인지 보이게
             Text(CareText.dayTitle(day, now: now, zone: .current)).typeStyle(.headline).foregroundStyle(DS.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, 2)
                 .accessibilityAddTraits(.isHeader)
+                .enterRise(2)
             if list.isEmpty { FootNote(CareText.emptyDay).padding(.horizontal, 16) }
             ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
                 let bucket = hourBucket(item)
-                if i == 0 || hourBucket(list[i - 1]) != bucket { HourHead(hour: bucket) }
+                if i == 0 || hourBucket(list[i - 1]) != bucket { HourHead(hour: bucket).enterRise(3 + min(i, 5)) }
                 switch item {
-                case .care(let e): careRow(e)
-                case .car(let r): carRow(r)
+                case .care(let e): careRow(e, order: 3 + min(i, 5))
+                case .car(let r): carRow(r, order: 3 + min(i, 5))
                 }
             }
             ListRow(icon: .plus, title: CareText.quickPast, add: true)
@@ -127,24 +133,26 @@ private struct DayView: View {
         CareRules.calendar(item.zone).component(.hour, from: CareTime.date(item.at)) / 3 * 3
     }
 
-    private func careRow(_ e: CareEvent) -> some View {
+    private func careRow(_ e: CareEvent, order: Int) -> some View {
         let (title, sub) = CareText.splitRow(CareText.row(e))
         return Button { sheet = e.inProgress ? .timer(e.id) : .edit(e.id) } label: {
             TimelineCard(icon: DS.icon(e.kind), dot: DS.color(e.kind), title: title, sub: sub, memo: e.kind != .note ? e.note : nil)
         }
         .buttonStyle(.press)
+        .enterRise(order)   // 밀어 지우기보다 안쪽(줄의 밀기 동작은 바깥에 남긴다)
         .swipeActions {
             Button(CareText.delete, role: .destructive) { vm.delete(e.id) }
         }
     }
 
-    @ViewBuilder private func carRow(_ r: CarRow) -> some View {
+    @ViewBuilder private func carRow(_ r: CarRow, order: Int) -> some View {
         if vm.ui.report(sessionId: r.sessionId) != nil {
             let (title, sub) = CareText.splitRow(r.text)
             Button { report = r.sessionId } label: {
                 TimelineCard(icon: .carFront, dot: DS.cCar, title: title, sub: sub, memo: nil)
             }
             .buttonStyle(.press)
+            .enterRise(order)
         }
     }
 }
@@ -314,6 +322,7 @@ private struct PatternView: View {
                 }
             }
             .block()
+            .enterRise(1)
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternInterval)
                 let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).bold().foregroundColor(DS.textPrimary) },
@@ -326,6 +335,7 @@ private struct PatternView: View {
                               summary: "지난 7일 수유 간격 중앙값")
             }
             .block()
+            .enterRise(2)
             if on {
                 let g = ChartData.sleepGrid(care: vm.ui.care, now: ms, zone: .current)
                 VStack(alignment: .leading, spacing: 0) {
@@ -336,6 +346,7 @@ private struct PatternView: View {
                     SleepHeatChart(grid: g)
                 }
                 .block()
+                .enterRise(3)
             }
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternCarCries)
@@ -348,6 +359,7 @@ private struct PatternView: View {
                 }, hot: DS.cCar, height: 110, summary: "지난 7일 차에서 울음 횟수")
             }
             .block()
+            .enterRise(4)
             FootNote(CareText.patternFootnote).padding(.bottom, 24)
         }
         .padding(.top, 12)
