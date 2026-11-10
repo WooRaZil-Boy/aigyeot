@@ -1,6 +1,8 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,11 +15,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.actionText
 import kr.aigyeot.phone.domain.model.cabinTempText
+import kr.aigyeot.phone.domain.model.controlStatsText
+import kr.aigyeot.phone.domain.model.controlTitle
 import kr.aigyeot.phone.domain.model.excludedText
 import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.judgeText
@@ -141,9 +146,14 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
             if (b.carActions.isEmpty()) Text("없어요", style = Type.body, color = p.textTertiary)
             else KeyValues(b.carActions.map { a -> actionText(a.action) to ("${a.count}번" + (a.totalS?.let { " · ${seconds(it)}" } ?: "")) })
         }
-        if (b.controls.isNotEmpty()) Block {
+        // 제어 기록(iOS와 같다): 기록이 없어도 블록을 보인다. 줄마다 'API · 대상'(고정폭 작은 글)과 '시도 · 성공 · 실패 · 다시'(흐린 글) 두 줄.
+        Block {
             BlockHeader("제어 기록")
-            KeyValues(b.controls.map { c -> "${c.api} ${c.target}" to ("${c.succeeded}/${c.attempts} 성공" + if (c.retries > 0) " · 다시 ${c.retries}번" else "") })
+            if (b.controls.isEmpty()) Text("없어요", style = Type.body, color = p.textTertiary)
+            for (c in b.controls) Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(controlTitle(c), style = Type.footnote.copy(fontFamily = FontFamily.Monospace), color = p.textPrimary) // 고정폭 식별자(iOS .footnote.monospaced())
+                Text(controlStatsText(c), style = Type.note, color = p.textTertiary)
+            }
         }
     }
 }
@@ -152,10 +162,15 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
 @Composable
 private fun KeyValues(rows: List<Pair<String, String>>) {
     val p = Tokens.colors
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        for ((k, v) in rows) Row(Modifier.fillMaxWidth()) {
-            Text(k, Modifier.padding(end = 14.dp), style = Type.valueKey, color = p.textTertiary)
-            Text(v, Modifier.weight(1f), style = Type.chip.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = TextAlign.End)
+    // 값 우선, 이름 하한: 값(weight 없음)이 먼저 자기 폭으로 재지되 줄의 65%를 넘지 않고, 이름은 남은 폭(최소 35%)을 쓴다.
+    // 짧은 이름 + 긴 값은 값이 한 줄, 긴 이름 + 짧은 값은 이름이 줄을 바꾸고, 둘 다 길어도 어느 쪽도 0폭이 되지 않는다.
+    BoxWithConstraints {
+        val cap = maxWidth * 0.65f
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            for ((k, v) in rows) Row(Modifier.fillMaxWidth()) {
+                Text(k, Modifier.weight(1f).padding(end = 14.dp), style = Type.valueKey, color = p.textTertiary)
+                Text(v, Modifier.widthIn(max = cap), style = Type.chip.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = TextAlign.End)
+            }
         }
     }
 }

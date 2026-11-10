@@ -10,6 +10,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class StopTextTest {
+    @Test
+    fun `제어 기록 두 줄은 iOS와 같은 글이다`() {
+        val c = kr.aigyeot.shared.ControlRecord("requestAudioFocus", "01M73SSW3K-2", attempts = 2, succeeded = 1, failed = 1, retries = 1)
+        assertEquals("requestAudioFocus · 01M73SSW3K-2", controlTitle(c))
+        assertEquals("시도 2 · 성공 1 · 실패 1 · 다시 1", controlStatsText(c))
+    }
+
     @Test fun `리포트 출력 경로·울음 직전 덧줄·실내 온도는 문구표와 iOS 글 그대로`() {
         assertEquals("소리 나간 곳 · 뒷좌석", outputRouteText(OutputRoute.REAR_ZONE))
         assertEquals("소리 나간 곳 · 앞에서도 들림", outputRouteText(OutputRoute.DEFAULT_ZONE_FALLBACK))

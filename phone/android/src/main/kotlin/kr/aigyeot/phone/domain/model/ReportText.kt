@@ -1,6 +1,7 @@
 package kr.aigyeot.phone.domain.model
 
 import kr.aigyeot.shared.CarActionKind
+import kr.aigyeot.shared.ControlRecord
 import kr.aigyeot.shared.DeviceInfo
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
@@ -140,6 +141,12 @@ fun actionText(a: CarActionKind) = when (a) {
     CarActionKind.ARRIVAL_NOTICE -> "도착 안내"
     CarActionKind.GUARDIAN_ALERT -> "다른 보호자 알림"
 }
+
+/** 리포트 '제어 기록' 한 줄의 첫 줄(API 이름 · 대상, iOS ReportViews와 같은 글). */
+fun controlTitle(c: ControlRecord) = "${c.api} · ${c.target}"
+
+/** 리포트 '제어 기록' 한 줄의 둘째 줄(iOS ReportViews와 같은 글). */
+fun controlStatsText(c: ControlRecord) = "시도 ${c.attempts} · 성공 ${c.succeeded} · 실패 ${c.failed} · 다시 ${c.retries}"
 
 // ---- 우리 노래(계약 3.3 표, 7.2) ----
 
