@@ -30,7 +30,7 @@ enum CareCsv {
     static let duplicateMs: Int64 = 60_000    // U67 ⑤ 60초
     static let mlPerOz = 29.57
     static let zone = "Asia/Seoul"
-    private static let seoulOffsetS: Int64 = 9 * 3600   // 한국 전용 범위(AGENTS): 서머타임 없음
+    private static let seoulOffsetS: Int64 = 9 * 3600   // 한국 전용 범위: 서머타임 없음
 
     /// 5MB·2만 줄을 넘으면 `tooLarge`, UTF-8이 아니면 `unreadable`. 앞 BOM은 버린다.
     static func read(_ data: Data) -> CsvRead {
