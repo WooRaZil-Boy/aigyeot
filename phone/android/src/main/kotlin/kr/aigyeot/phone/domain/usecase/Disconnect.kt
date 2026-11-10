@@ -168,8 +168,6 @@ class Disconnect(
         }
     }
 
-    fun clearRun() = link.clearDisconnectRun()
-
     /** 설정을 떠나면 지난 끊기 실패 글을 걷는다. 끝남 표시는 탭 이동이 쓰니 둔다. */
     fun dismissError() {
         if (!link.disconnectActive() && link.disconnectRun.value is DisconnectRun.Failed) link.setDisconnectRun(null)

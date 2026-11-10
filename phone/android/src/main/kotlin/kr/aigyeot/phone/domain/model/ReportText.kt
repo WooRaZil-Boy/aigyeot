@@ -6,7 +6,6 @@ import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.ExcludedReason
 import kr.aigyeot.shared.HandoffKind
-import kr.aigyeot.shared.MethodStat
 import kr.aigyeot.shared.OutputRoute
 import kr.aigyeot.shared.PlayEntry
 import kr.aigyeot.shared.PlayPurpose
@@ -141,9 +140,6 @@ fun actionText(a: CarActionKind) = when (a) {
     CarActionKind.ARRIVAL_NOTICE -> "도착 안내"
     CarActionKind.GUARDIAN_ALERT -> "다른 보호자 알림"
 }
-
-/** 소리별 성적 한 줄. 3번 미만이면 모른다. */
-fun methodStatText(m: MethodStat) = "${soundLabel(m.method, m.label)}: " + if (m.attempts < 3) "아직 모름" else "${m.attempts}번 중 ${m.successes}번 그침"
 
 // ---- 우리 노래(계약 3.3 표, 7.2) ----
 

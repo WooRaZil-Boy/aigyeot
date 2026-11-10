@@ -56,7 +56,6 @@ data class Banner(val text: String, val alertId: String)
 data class LinkStatus(
     /** 중계에 닿는가. 거짓이면 오프라인 띠. */
     val online: Boolean = true,
-    val socket: Boolean = false,
     /** 중계 시계 − 폰 시계(분). 2분 넘게 다르면 경고 띠. */
     val clockSkewMin: Long? = null,
 )

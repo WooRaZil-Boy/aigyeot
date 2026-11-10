@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """폰 앱 아이콘 자원을 만든다(디자인 v6).
 
-1) 선 아이콘: Lucide SVG(ISC) + 직접 그린 4개(젖병·기저귀·부모 노래·카시트) → res/drawable/ic_*.xml(VectorDrawable).
+1) 선 아이콘: Lucide SVG(ISC) + 직접 그린 셋(젖병·기저귀·부모 노래. 시안의 넷째 카시트는 폰 화면에 쓰지 않아 뺐다) → res/drawable/ic_*.xml(VectorDrawable).
    Lucide의 circle·rect·line·polyline·polygon·ellipse는 path로 바꾼다. 선 2, 둥근 끝·이음, 24 칸 그대로.
 2) 앱 아이콘: 앞 층 SVG(초승달 + 아이 점) → 적응형 앞 층·단색(monochrome)·알림 작은 아이콘(흰 실루엣).
    적응형 앞 층은 시안 시스템 탭 '안드로이드 · 원'(1024 원본을 원으로 자름)과 같게, 원본 전체를 런처가 보이는
@@ -17,18 +17,17 @@ from pathlib import Path
 
 # 화면에서 쓰는 아이콘만 넣는다. 더 필요하면 이름을 더하고 다시 돌린다.
 NAMES = [
-    "arrow-left", "baby", "bell", "car-front", "check", "chevron-down", "chevron-right", "circle-check", "clock",
-    "download", "file-up", "heart-pulse", "house", "info", "link", "list", "locate-fixed", "lock", "mic", "minus",
-    "moon", "moon-star", "notebook-pen", "pause", "play", "plus", "qr-code", "rotate-3d", "route", "settings",
-    "share", "shield-check", "smartphone", "sparkles", "square", "trash-2", "unlink", "users", "waves", "x",
+    "arrow-left", "baby", "bell", "car-front", "check", "chevron-right", "circle-check", "clock",
+    "download", "file-up", "house", "info", "link", "list", "locate-fixed", "minus",
+    "moon", "notebook-pen", "play", "plus", "qr-code", "rotate-3d", "route", "settings",
+    "share", "shield-check", "smartphone", "sparkles", "square", "trash-2", "unlink", "users", "x",
 ]
 
-# 직접 그린 4개(시안 scripts/build.py CUSTOM과 같은 글자)
+# 직접 그린 셋(시안 scripts/build.py CUSTOM과 같은 글자, 카시트는 폰에 쓰지 않음)
 CUSTOM = {
     "bottle": '<path d="M9 2h6"/><path d="M10 2v3.2L8.4 7.4A3 3 0 0 0 8 9v10a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3V9a3 3 0 0 0-.4-1.6L14 5.2V2"/><path d="M8 12h3"/><path d="M8 16h3"/>',
     "diaper": '<path d="M3 6h18v3a9 9 0 0 1-6.2 8.6L14 18h-4l-.8-.4A9 9 0 0 1 3 9z"/><path d="M3 9c2.5 0 4 1.5 5 4"/><path d="M21 9c-2.5 0-4 1.5-5 4"/>',
     "song": '<path d="M9 2a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M15 10a6 6 0 0 1-12 0"/><path d="M9 16v4"/><path d="M19.6 13.8c-.9.9-2.6 2.3-2.6 2.3s-1.7-1.4-2.6-2.3a1.5 1.5 0 0 1 2.1-2.1l.5.5.5-.5a1.5 1.5 0 0 1 2.1 2.1z"/>',
-    "carseat": '<path d="M4 15a8 8 0 0 0 16 0z"/><path d="M5.5 15a6.5 6.5 0 0 1 13 0"/><path d="M7 19.5 5.5 22"/><path d="M17 19.5 18.5 22"/>',
 }
 
 

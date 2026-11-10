@@ -86,9 +86,9 @@ class CareTest {
     @Test
     fun `새 수유가 진행 중 수유를 끝낸다`() {
         val first = CareFile().start(CareKind.FEED, now, zone, FeedSide.LEFT)
-        assertFalse(first.endedPrevious)
+        assertNull(first.closedPrevious)
         val second = first.file.start(CareKind.FEED, now + 20 * MINUTE, zone)
-        assertTrue(second.endedPrevious)
+        assertNotNull(second.closedPrevious)
         assertEquals("앞 수유를 끝냈어요", restartNotice(second.closedPrevious!!))
         val prev = second.file.events.single { it.id == first.event.id }
         assertEquals(now + 20 * MINUTE, prev.endAt)
@@ -308,7 +308,7 @@ class CareTest {
     fun `이 휴대폰의 기록 지우기는 돌봄 기록도 지운다`() {
         val file = CareFile(events = listOf(feed("a", now - HOUR)), childNickname = "콩이", sleepDiaperEnabled = true, migratedFeedings = true)
         val state = owner.reconciledFeeding(file.events, now)
-        val cleared = file.cleared()
+        val cleared = file.withoutCleared(file.idsToClear(shown = setOf("a"), pressedAt = now))
         assertTrue(cleared.events.isEmpty())
         assertTrue(cleared.migratedFeedings) // 지운 수유 기록을 다시 옮겨 오지 않는다
         val clearedState = state.clearedRecords()
@@ -445,8 +445,6 @@ class CareTest {
         assertEquals("평균 3.0회", avgCountText(listOf(0, 3, 3), 2))
         assertEquals("기록 없음", avgCountText(List(7) { 0 }, 0))
         assertNull(daysText(0))
-        assertEquals("기록이 더 쌓이면 보여 드려요", intervalText(p4.feedIntervalMs))
-        assertEquals("중앙값 2시간 30분", intervalText(150 * MINUTE))
         assertNull(p4.feedIntervalMs) // 쓸 간격 3개(3h, 2h, 2h30m): 5개 미만
         assertNull(carePattern(CareFile(events = feeds + feed("f", day(5, 8, 30))), emptyList(), now, seoul).feedIntervalMs) // 꼭 4개도 숨김
         val more = feeds + feed("f", day(5, 8, 30)) + feed("g", day(5, 10, 30))
@@ -473,11 +471,7 @@ class CareTest {
         val e = started.event
         // 저장하지 않고 지금 시각으로만 계산한다: 같은 기록이 시각에 따라 다르게 보인다.
         assertEquals(12 * MINUTE, e.elapsed(now + 12 * MINUTE))
-        assertEquals("수유 중 · 12분 · 왼쪽", ongoingText(e, now + 12 * MINUTE))
-        assertEquals("수유 중 · 2시간 10분 · 왼쪽", ongoingText(e, now + 130 * MINUTE))
-        assertEquals("자는 중 · 40분", ongoingText(ev("s", CareKind.SLEEP, now), now + 40 * MINUTE))
-        assertEquals("수유 중 · 방금", ongoingText(e.copy(feedSide = null), now - MINUTE)) // 시계가 뒤로 가도 음수가 아니다(U20 1분 미만)
-        assertEquals("수유 중 · 1분 · 왼쪽", ongoingText(e, now + MINUTE))
+        assertEquals(0L, e.elapsed(now - MINUTE)) // 시계가 뒤로 가도 음수가 아니다
         assertEquals("12:34", timerText(12 * MINUTE + 34_000))
         assertEquals("0:40", timerText(40_000))
         assertEquals("1:02:34", timerText(HOUR + 2 * MINUTE + 34_000))

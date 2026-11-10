@@ -86,9 +86,7 @@ private fun CareEvent.closed(now: Long): CareEvent =
     else copy(endAt = maxOf(now, startAt), updatedAt = now)
 
 /** `closedPrevious`는 이번 시작으로 닫힌 앞 기록(닫힌 뒤 모양). 없으면 null. */
-data class Started(val file: CareFile, val event: CareEvent, val closedPrevious: CareEvent?) {
-    val endedPrevious get() = closedPrevious != null
-}
+data class Started(val file: CareFile, val event: CareEvent, val closedPrevious: CareEvent?)
 
 /** R1·R2·U21: 같은 종류의 진행 중 기록이 있으면 지금 시각으로 닫고 새로 시작한다. 수유 중에 잠을 시작할 수는 있다. */
 fun CareFile.start(kind: CareKind, now: Long, zone: String, side: FeedSide? = null, id: String = ulid(now)): Started {
@@ -219,9 +217,6 @@ fun CareFile.migrated(feedings: List<FeedingRecord>, zone: String): CareFile {
     return copy(events = events + moved, migratedFeedings = true)
 }
 
-/** R10: '이 휴대폰의 기록 지우기'. 옮기기 표시는 남겨 지운 수유 기록을 다시 옮겨 오지 않는다. */
-fun CareFile.cleared() = copy(events = emptyList(), migratedFeedings = true)
-
 /** R12: 지우지 않은 수유 중 가장 늦은 시작과 차의 마지막 수유 시작 중 늦은 것. */
 fun lastFeedingAt(care: CareFile, state: PhoneState): Long? =
     listOfNotNull(care.lastFeedStart(), instantOf(state.feeding?.value?.lastFeedingStart)).maxOrNull()
@@ -273,9 +268,6 @@ fun avgCountText(perDay: List<Int>, days: Int): String =
 
 /** 잠 "평균 {기간}"(U27 길이 형식). */
 fun avgDurationText(perDayMs: List<Long>, days: Int): String = if (days == 0) "기록 없음" else "평균 ${durationText(perDayMs.sum() / days)}"
-
-/** 간격 "중앙값 {기간}". 5개 미만이면 7장 문구. */
-fun intervalText(ms: Long?): String = ms?.let { "중앙값 ${durationText(it)}" } ?: "기록이 더 쌓이면 보여 드려요"
 
 /** 7.1 pattern.days: 값 아래 "{n}일 기준". 기록한 날이 없으면(값이 "기록 없음") 보이지 않는다. */
 fun daysText(days: Int): String? = if (days == 0) null else "${days}일 기준"
@@ -452,12 +444,6 @@ fun sideName(s: FeedSide) = when (s) {
     FeedSide.RIGHT -> "오른쪽"
     FeedSide.BOTH -> "양쪽"
     FeedSide.BOTTLE -> "젖병"
-}
-
-/** "수유 중 · 12분 · 왼쪽", "자는 중 · 40분"(7장). */
-fun ongoingText(e: CareEvent, now: Long): String = when (e.kind) {
-    CareKind.SLEEP -> "자는 중 · ${elapsedText(e.elapsed(now))}"
-    else -> listOfNotNull("수유 중", elapsedText(e.elapsed(now)), e.feedSide?.let(::sideName)).joinToString(" · ")
 }
 
 // ---- 돌봄 요약(U45, R18): 숫자와 시각만. 메모 글·기저귀 종류·젖병 양·수유 쪽·별명은 넣지 않는다 ----

@@ -1,8 +1,6 @@
 package kr.aigyeot.phone.presentation
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.text.TextStyle
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.koClock
@@ -20,10 +18,6 @@ fun seconds(s: Int) = if (s >= 60) "${s / 60}분 ${s % 60}초" else "${s}초"
 /** 위쪽 띠(오프라인·경고, 7.2). 화면 읽기 알림은 [BandCard]가 맡는다. */
 @Composable
 fun Band(text: String, action: String? = null, onAction: () -> Unit = {}) = BandCard(text, action, onAction)
-
-/** 보조 글자(13장 caption, 흐림). 빈 화면 안내처럼 본문 크기로 두는 줄은 `Type.body`를 넘긴다. */
-@Composable
-fun Muted(text: String, style: TextStyle = Type.caption) = Text(text, style = style, color = Tokens.colors.textTertiary)
 
 /** 화면의 액티비티(감싼 Context를 벗겨 찾는다). */
 internal tailrec fun android.content.Context.findActivity(): android.app.Activity? = when (this) {

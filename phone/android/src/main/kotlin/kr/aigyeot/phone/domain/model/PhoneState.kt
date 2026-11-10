@@ -250,7 +250,6 @@ data class PhoneState(
     val reports: Map<String, StoredReport> = emptyMap(),
     val alerts: List<StoredAlert> = emptyList(),
     val devices: List<DeviceInfo> = emptyList(),
-    val devicesAt: Long? = null,
     val deviceMarks: Map<String, DeviceMark> = emptyMap(),
     /** 마지막으로 적용한 기기 목록의 `snapshot_seq`. 목록·표시와 한 상태로 함께 저장한다. */
     val devicesSnapshotSeq: Long? = null,
@@ -425,7 +424,7 @@ fun songRef(songId: String): JsonObject = buildJsonObject { put("song_id", songI
  * 응답을 기다리는 사이 소켓으로 더 새 `paired`·`unpaired`(seq > snapshot_seq)를 적용했으면 그 결과를 그대로 둔다.
  * 끊김 표시가 있는 기기는 목록에 있어도 되살리지 않는다. 차 행(online·마지막 연락)은 늘 목록 값을 쓴다.
  */
-fun PhoneState.mergeDevices(snapshotSeq: Long, list: List<DeviceInfo>, now: Long, carLiveAt: Long? = null): PhoneState {
+fun PhoneState.mergeDevices(snapshotSeq: Long, list: List<DeviceInfo>, carLiveAt: Long? = null): PhoneState {
     // 이미 적용한 것보다 오래된 목록 응답(늦게 온 것)은 버린다.
     if (devicesSnapshotSeq != null && snapshotSeq < devicesSnapshotSeq) return this
     val marks = deviceMarks.toMutableMap()
@@ -453,7 +452,7 @@ fun PhoneState.mergeDevices(snapshotSeq: Long, list: List<DeviceInfo>, now: Long
             marks[d.deviceId] = DeviceMark(maxOf(snapshotSeq, m?.seq ?: 0), removed = true)
         }
     }
-    return copy(devices = out, devicesAt = now, deviceMarks = marks, devicesSnapshotSeq = snapshotSeq)
+    return copy(devices = out, deviceMarks = marks, devicesSnapshotSeq = snapshotSeq)
 }
 
 /**

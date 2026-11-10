@@ -674,13 +674,13 @@ class PhoneStateTest {
         val g = "d_8HN1X0Q4M8T1V6B5R3H2CD7F3A"
         val car = DeviceInfo("d_19BE4W7Y2P5S8K1M3N6Q9T0VXA", Role.CAR, Platform.PLEOS, "2026-11-05T07:59:00Z", "2026-11-05T08:21:40Z", true)
         val guardianRow = DeviceInfo(g, Role.GUARDIAN, Platform.IOS, "2026-11-05T09:01:44Z", null, false, true)
-        val withG = owner.mergeDevices(90, listOf(car, guardianRow), now)
+        val withG = owner.mergeDevices(90, listOf(car, guardianRow))
         assertEquals(listOf(Role.CAR, Role.GUARDIAN), withG.devices.map { it.role })
 
         // 목록을 기다리는 사이 소켓으로 unpaired(seq 101)를 적용 → snapshot_seq 100 응답이 와도 되살리지 않는다
         val unpaired = fixture("unpaired").withSeq(101) // d_8HN1… guardian
         val gone = withG.receive(unpaired, now, live = true).state
-        val merged = gone.mergeDevices(100, listOf(car.copy(online = false), guardianRow), now)
+        val merged = gone.mergeDevices(100, listOf(car.copy(online = false), guardianRow))
         assertEquals(listOf(Role.CAR), merged.devices.map { it.role })
         assertFalse(merged.devices.single().online) // 차 행은 늘 목록 값
         // 끊긴 기기의 늦은 paired도 되살리지 않는다
@@ -691,15 +691,15 @@ class PhoneStateTest {
 
         // paired(seq 105, 알림 끔)를 먼저 적용 → snapshot 100(알림 켬)은 그 기기를 덮어쓰지 않는다
         val offAlerts = latePaired.copy(id = ulid(), seq = 105, body = buildJsonObject { put("device_id", g); put("role", "guardian"); put("platform", "ios"); put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", false) })
-        val fresh = owner.mergeDevices(90, listOf(car), now).receive(offAlerts, now, live = true).state
-        assertEquals(false, fresh.mergeDevices(100, listOf(car, guardianRow), now).devices.single { it.deviceId == g }.handoffAlerts)
+        val fresh = owner.mergeDevices(90, listOf(car)).receive(offAlerts, now, live = true).state
+        assertEquals(false, fresh.mergeDevices(100, listOf(car, guardianRow)).devices.single { it.deviceId == g }.handoffAlerts)
         // 목록보다 늦게 붙은 기기는 목록에 없어도 남고, snapshot 이하에서 붙은 기기는 목록에 없으면 빠진다
-        assertTrue(fresh.mergeDevices(100, listOf(car), now).devices.any { it.deviceId == g })
-        val at200 = fresh.mergeDevices(200, listOf(car), now)
+        assertTrue(fresh.mergeDevices(100, listOf(car)).devices.any { it.deviceId == g })
+        val at200 = fresh.mergeDevices(200, listOf(car))
         assertFalse(at200.devices.any { it.deviceId == g })
         assertEquals(200L, at200.devicesSnapshotSeq)
         // 200을 적용한 뒤 늦게 온 목록 100은 버린다(목록·snapshot_seq 그대로)
-        val stale = at200.mergeDevices(100, listOf(car, guardianRow), now)
+        val stale = at200.mergeDevices(100, listOf(car, guardianRow))
         assertEquals(at200, stale)
         // 적용한 snapshot_seq 이하의 연결 변경도 버린다
         val newG = "d_NEWG0Q4M8T1V6B5R3H2CD7F3AK"
@@ -709,7 +709,7 @@ class PhoneStateTest {
         assertFalse(at200.receive(pairedAt(150), now, live = true).state.devices.any { it.deviceId == newG })
         assertTrue(at200.receive(pairedAt(201), now, live = true).state.devices.any { it.deviceId == newG })
         // snapshot 뒤 작은 seq의 늦은 paired는 버리고, 더 큰 seq는 적용한다
-        val snap = owner.mergeDevices(100, listOf(car, guardianRow), now)
+        val snap = owner.mergeDevices(100, listOf(car, guardianRow))
         assertEquals(true, snap.receive(offAlerts.copy(id = ulid(), seq = 90), now, live = true).state.devices.single { it.deviceId == g }.handoffAlerts)
         assertEquals(false, snap.receive(offAlerts.copy(id = ulid(), seq = 120), now, live = true).state.devices.single { it.deviceId == g }.handoffAlerts)
     }
@@ -948,9 +948,9 @@ class PhoneStateTest {
     fun `늦게 온 기기 목록은 그사이 받은 차의 연결을 덮지 않는다`() {
         // 7.2: 실시간으로 받은 차의 봉투는 그 자리에서 차 행을 켠다. 그 전에 요청한 목록이 늦게 와 '꺼짐'으로 되돌리면 안 된다.
         val car = DeviceInfo(deviceId = "d_CAR", role = Role.CAR, platform = Platform.PLEOS, pairedAt = rfc3339(now - DAY), lastSeenAt = rfc3339(now - HOUR), online = false)
-        val stale = owner.mergeDevices(5, listOf(car), now)
+        val stale = owner.mergeDevices(5, listOf(car))
         assertFalse(stale.devices.single().online)
-        val kept = owner.mergeDevices(5, listOf(car), now, carLiveAt = now - 1_000)
+        val kept = owner.mergeDevices(5, listOf(car), carLiveAt = now - 1_000)
         assertTrue(kept.devices.single().online)
         assertEquals(rfc3339(now - 1_000), kept.devices.single().lastSeenAt)
     }

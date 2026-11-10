@@ -42,7 +42,6 @@ import kr.aigyeot.phone.domain.repository.SocketHandle
 import kr.aigyeot.phone.domain.repository.SocketListener
 import kr.aigyeot.phone.domain.state.AppVisibility
 import kr.aigyeot.shared.Role
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -108,7 +107,6 @@ class KeepConnected(
         loop?.cancel()
         open?.close(1000)
         open = null
-        _status.update { it.copy(socket = false) }
     }
 
     /**
@@ -219,7 +217,7 @@ class KeepConnected(
                     if (s.devicesSnapshotSeq != null && seq < s.devicesSnapshotSeq) return@commit s // 더 오래된 목록
                     if (seq == appliedDevices.first && ticket < appliedDevices.second) return@commit s // 같은 목록의 앞선 요청
                     merged = true
-                    s.mergeDevices(seq, r.value.devices, clock.now(), inbox.carLiveSince(carMark))
+                    s.mergeDevices(seq, r.value.devices, inbox.carLiveSince(carMark))
                 }
                 if (!saved) return false
                 ok = true
@@ -292,8 +290,7 @@ class KeepConnected(
      * 소켓으로 들어온 프레임은 모두 실시간이다(iOS와 같음). 붙으면 받은 함을 HTTPS로 다 받고, 받은 함에서 이미 저장한 id는 receive가 거른다.
      */
     private suspend fun runSocket(c: Credentials, onOpen: () -> Unit): Int {
-        val frames = Channel<kotlin.Pair<Int, String>>(Channel.UNLIMITED)
-        val received = AtomicInteger(0)
+        val frames = Channel<String>(Channel.UNLIMITED)
         var closeCode = -1
         // 4001·업그레이드 401은 콜백에서 바로 앱 범위로 넘긴다. 받은 함 처리 중이거나 화면이 뒤로 가 이 반복이 취소돼도 잃지 않는다(7.1).
         fun lostIf(code: Int) {
@@ -303,11 +300,11 @@ class KeepConnected(
             c.token,
             object : SocketListener {
                 override fun onOpen() {
-                    frames.trySend(received.getAndIncrement() to OPENED)
+                    frames.trySend(OPENED)
                 }
 
                 override fun onMessage(text: String) {
-                    frames.trySend(received.getAndIncrement() to text)
+                    frames.trySend(text)
                 }
 
                 override fun onClosing(code: Int) {
@@ -349,11 +346,10 @@ class KeepConnected(
             }
         }
         try {
-            for ((index, text) in frames) {
+            for (text in frames) {
                 if (!state.isCurrent(c)) break
                 when (text) {
                     OPENED -> {
-                        _status.update { it.copy(socket = true) }
                         observedBySocket(c, true)
                         disconnect.stillPaired(c)
                         // 도는 받기(푸시 등)는 이 접속 전 것이라 끝난 뒤 한 번 더 받는다. 실패하면 끊고 기다림 뒤 다시 붙는다
@@ -376,7 +372,6 @@ class KeepConnected(
             devicePoll.cancel()
             ws.cancel()
             if (open === ws) open = null
-            if (state.isCurrent(c)) _status.update { it.copy(socket = false) }
         }
         return closeCode
     }
