@@ -348,10 +348,12 @@ struct CarTile: View {
     }
 
     var body: some View {
+        // 시안 렌더(.p-ios): .car-tile의 padding 0보다 뒤의 .pcard(22/20)가 이겨 무대가 안쪽 22/20에 들고, 글 줄은 .car-tile .ct-b(v5 덮어쓰기, 4/20/18)로 다시 든다
         VStack(spacing: 0) {
             CarStageCard(preset: .tile).frame(height: stageHeight)
             row
         }
+        .padding(.horizontal, 20).padding(.vertical, 22)
         .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
     }

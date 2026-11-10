@@ -264,16 +264,17 @@ struct RecordSheet: View {
                 }
             }
             if let e = sendError ?? rec.error { Text(e).typeStyle(.caption).foregroundStyle(DS.danger) }
+            // 시안 S.song: 머리 없는 곡 목록(.pcard.list, iOS 렌더 22/20/8) + 덧붙임. 곡이 없으면 덧붙임만(안드로이드와 같다)
             if !vm.ui.songs.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(vm.ui.songs) { SongRowView(row: $0, player: player, beforePlay: { if rec.isPlaying { rec.togglePlay() } }) }
                 }
-                .block(padding: EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))
                 .disabled(rec.phase == .recording)
                 .padding(.top, 8)
-                Text("차에서는 다음 주행부터 써요.").typeStyle(.footnote).foregroundStyle(DS.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            Text("차에서는 다음 주행부터 써요.").typeStyle(.footnote).foregroundStyle(DS.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
     }

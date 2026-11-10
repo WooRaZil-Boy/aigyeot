@@ -25,7 +25,7 @@ struct ReportListView: View {
                             NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }.buttonStyle(.press)
                         }
                     }
-                    .block(padding: EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))   // 시안 .list(iOS 렌더 22/20/8, 제목이 없어도 같다)
                 }
                 .screenPadding()
             }
