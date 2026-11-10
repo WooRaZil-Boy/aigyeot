@@ -1,0 +1,25 @@
+# 중계 배포(답 모델 Sonnet 5.5)와 실제 중계 종단 확인
+
+## 1. 배포
+- 커밋 4763d26의 relay를 `npx wrangler deploy`로 올림. 새 버전 d3ad99f3, 주소 https://aigyeot-relay.byuncorry.workers.dev
+- 바인딩: CAR_ROOM·DIRECTORY(Durable Object), LLM_MODEL "claude-sonnet-5-5". 배포 전 시험: tools/check.sh의 relay 121개 통과
+- 비밀값 이름은 배포 뒤에도 ANTHROPIC_API_KEY 하나(값은 보지 않음). FCM 세 개는 없음(원격 푸시 보류, push=false)
+- GET /v1/health → {"ok":true,"version":"0.1.0","llm":true,"push":false}
+
+## 2. 차 ④ 경로 JVM 종단(배포한 중계·실제 모델) — 통과 1/1
+- `AIGYEOT_RELAY=https://aigyeot-relay.byuncorry.workers.dev ./gradlew :app:testDebugUnitTest --tests '*LinkRelayLiveTest'`
+  | 질문 | 지연 | 결과 |
+  | --- | --- | --- |
+  | 다음 수유실 어디야? | 2,464 ms | 주제 next_rest(사실 주제라 문장은 판단 코어가 짠다, 빈 글) |
+  | 백색소음으로 바꿔 줘 | 2,186 ms | 도구 SwitchSound + "소리를 바꿀게요." |
+  | 아기가 왜 자꾸 울까? | 3,009 ms | 주제 why, 글은 호스트가 짠다(빈 글). 지연은 질문을 보낸 때부터 QaReply까지라, 3초 대기(qaReplyWaitMs)를 넘겨 오프라인 답이 나갔는지 모델 답인지는 이 값으로 가를 수 없다(미판정, 11-10 Haiku 때 3,013 ms와 같은 상황) |
+- 연결·수유: pair 898 ms, 폰 수유 → 차 154 ms, 차 feeding_state → 폰 332 ms, state_request 456 ms(로컬 중계보다 느림: 배포 주소까지 왕복)
+- llm=false는 '모델 글을 쓰지 않았다'는 뜻이다: 사실 주제는 차가 문장을 짜고, answer 없이 도구만 오면 모델 글을 쓰지 않으며(C206), why 주제는 호스트가 문장을 짠다. 답이 중계에서 왔는지(시간 초과 여부)는 이 값으로 알 수 없다. 끝 줄의 qa_offline_ms는 마지막 질문의 지연을 찍은 이름일 뿐이다
+
+## 3. /v1/llm 직접 호출 한 번(차 등록 → api_llm_request.json)
+- HTTP 200, 3.08초, model claude-sonnet-5-5, prompt p6, stop_reason tool_use
+- 응답 text가 "answer 도구를 호출합니다."(도구를 부르기 전 군말). 차는 '도구'·'호출'·영문 4자 이상이 든 글을 버리고(noLeak) 정해 둔 문장을 말하므로 운전자에게 나가지 않는다
+
+## 4. 미판정
+- (해결) 울음이 있는 실제 주행의 차·폰 리포트 일치는 같은 날 e2e_cry_drive_1111.txt에서 쟀다(가상 오디오 장치로 에뮬레이터 마이크에 울음 입력, 차 3곳·폰 2곳 값 일치)
+- Sonnet은 직접 호출 3.08초로 3초 대기와 가깝다. 질문이 대기 시간을 넘겨 오프라인 답으로 넘어가는지·그 비율은 재지 않았다(미판정)
