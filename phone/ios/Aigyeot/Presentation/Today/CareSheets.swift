@@ -287,7 +287,7 @@ private struct TimerRing: View {
             Circle().fill(color).frame(width: 12, height: 12)
                 .offset(y: -d / 2)
                 .rotationEffect(.degrees(seconds * 6))
-                .animation(reduceMotion ? nil : .linear(duration: 1), value: seconds)
+                .animation(reduceMotion ? nil : DS.Motion.secondHand, value: seconds)
             VStack(spacing: 12) {
                 Text(CareFormat.timer(ms)).font(DS.timer).foregroundStyle(DS.textPrimary).lineLimit(1).minimumScaleFactor(0.5)
                     .contentTransition(.numericText())   // 1초마다 바뀐 자리만 굴러간다(시안 v4-7 4, roll)

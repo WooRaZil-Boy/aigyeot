@@ -187,7 +187,6 @@ struct Segmented<T: Hashable>: View {
     @Environment(\.dynamicTypeSize) private var size
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static var thumb: Color { Color(lightHex: "#FFFFFF", darkHex: "#3A3F46") }
 
     var body: some View {
         Group {
@@ -213,7 +212,7 @@ struct Segmented<T: Hashable>: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background {
                     if on {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Self.thumb)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous).fill(DS.segmentThumb)
                             .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
                             .padding(.vertical, 2)
                             .matchedGeometryEffect(id: "thumb", in: ns)
@@ -328,7 +327,7 @@ private struct EnterRise: ViewModifier {
             .onAppear {
                 guard !reduceMotion, Date().timeIntervalSince(shownAt) < 0.5 else { shown = true; return }
                 // 같은 갱신 안에서 거짓 → 참이면 움직이지 않는다. 다음 차례에 올린다
-                Task { @MainActor in withAnimation(DS.Motion.enter.delay(0.06 + 0.05 * Double(order))) { shown = true } }
+                Task { @MainActor in withAnimation(DS.Motion.enter.delay(DS.Motion.riseDelay + DS.Motion.riseStagger * Double(order))) { shown = true } }
             }
             .onDisappear { shown = false }
     }
@@ -386,8 +385,3 @@ extension View {
 
 
 // MARK: 시안에서 섞어 만든 색(토큰 둘을 섞은 값)
-
-extension DesignSystem {
-    /// 소개 무대 빛(시안 .intro-hero: 흰 60% + stage, 다크 #232931).
-    static let stageGlow = Color(lightHex: "#F6F7F9", darkHex: "#232931")
-}

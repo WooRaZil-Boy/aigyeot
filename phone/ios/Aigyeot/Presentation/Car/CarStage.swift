@@ -199,7 +199,7 @@ final class CarStageView: UIView {
                     switch mat.name {
                     case "Paint"?:
                         var p = PhysicallyBasedMaterial()
-                        p.baseColor = .init(tint: UIColor(hex: "#E9EAEC"))
+                        p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.body))
                         p.roughness = 0.3
                         p.metallic = 0.06
                         p.clearcoat = .init(floatLiteral: 1)
@@ -207,12 +207,12 @@ final class CarStageView: UIView {
                         return p
                     case "Ambient"?:   // 상태 빛 '듣는 중': 실내 앰비언트 선이 곁의 응답 파랑(tokens glow)으로 빛난다(시안 applyState listen 2.2)
                         var p = PhysicallyBasedMaterial()
-                        p.baseColor = .init(tint: UIColor(hex: "#1D2023"))
-                        p.emissiveColor = .init(color: UIColor(hex: "#7AA5FF"))
+                        p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.ambientBase))
+                        p.emissiveColor = .init(color: UIColor(hex: DS.CarPaint.ambientGlow))
                         p.emissiveIntensity = 2.2
                         return p
-                    case "Head_L_All"?: return UnlitMaterial(color: UIColor(hex: "#F2F7FF"))
-                    case "Rear_L_Pos"?: return UnlitMaterial(color: UIColor(hex: "#FF3326"))
+                    case "Head_L_All"?: return UnlitMaterial(color: UIColor(hex: DS.CarPaint.headLamp))
+                    case "Rear_L_Pos"?: return UnlitMaterial(color: UIColor(hex: DS.CarPaint.tailLamp))
                     default: return mat
                     }
                 }
@@ -229,8 +229,8 @@ final class CarStageView: UIView {
     private static func glowAmbientByEntityName(_ e: Entity) {
         if e.name.hasPrefix("Ambient"), var m = e.components[ModelComponent.self] {
             var p = PhysicallyBasedMaterial()
-            p.baseColor = .init(tint: UIColor(hex: "#1D2023"))
-            p.emissiveColor = .init(color: UIColor(hex: "#7AA5FF"))
+            p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.ambientBase))
+            p.emissiveColor = .init(color: UIColor(hex: DS.CarPaint.ambientGlow))
             p.emissiveIntensity = 2.2
             m.materials = m.materials.map { _ in p }
             e.components.set(m)
@@ -363,7 +363,7 @@ final class CarStageView: UIView {
         onMoved?(m)
     }
 
-    /// 처음 자리로: 카메라가 1.1초 동안 돌아간다(모션 camera, cubic in-out). 동작 줄이기면 바로.
+    /// 처음 자리로: 카메라가 motion.camera(1.1초) 곡선으로 돌아간다. 동작 줄이기면 바로.
     @objc private func backToStart() {
         dragging = false
         pending = .zero
@@ -385,8 +385,8 @@ final class CarStageView: UIView {
     }
 
     @objc private func fly() {
-        let k = Float(min(1, (CACurrentMediaTime() - flightStart) / 1.1))
-        let e = k < 0.5 ? 4 * k * k * k : 1 - pow(-2 * k + 2, 3) / 2
+        let k = min(1, (CACurrentMediaTime() - flightStart) / DS.Motion.seconds("camera"))
+        let e = Float(DS.Motion.curve("camera").value(at: k))   // motion.camera(1.1초, cubic-bezier .65,0,.35,1)
         let daz = (preset.az - flightFrom.x + 540).truncatingRemainder(dividingBy: 360) - 180   // 짧은 쪽으로
         az = flightFrom.x + daz * e
         el = flightFrom.y + (preset.el - flightFrom.y) * e

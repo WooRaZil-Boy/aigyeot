@@ -38,7 +38,6 @@ enum DesignSystem {
 
     /// 바탕은 회색, 블록은 흰 면(한국 앱 결). 숫자·진행은 먹색(textPrimary), 브랜드 파랑은 행동(버튼·선택·스위치)에만.
     static let bg = token("bg")
-    static let stage = token("stage")
     static let surface = token("surface")
     static let surfaceRaised = token("surfaceRaised")
     /// 바탕(bg) 위에도 놓이는 옅은 판: 톤 버튼·타이머 고리 바탕·시트 칩·안내 아이콘 판. surfaceRaised는 라이트에서 bg와 같은 색이라
@@ -54,7 +53,6 @@ enum DesignSystem {
     static let onAccent = token("onAccent")
     static let accentSoft = token("accentSoft")
     static let onAccentSoft = token("onAccentSoft")
-    static let glow = token("glow")
     /// 아이의 신호(주황): 울음·경보·인계 알림.
     static let child = token("child")
     static let childSoft = token("childSoft")
@@ -188,7 +186,23 @@ enum DesignSystem {
 
     static let s1: CGFloat = 4, s2: CGFloat = 8, s3: CGFloat = 12, s4: CGFloat = 16, s5: CGFloat = 24, s6: CGFloat = 32
     static let radius: [String: CGFloat] = ["rS": 8, "rM": 12, "rL": 20, "rXL": 28]
-    static let rS = radius["rS"]!, rM = radius["rM"]!, rL = radius["rL"]!, rXL = radius["rXL"]!
+    static let rM = radius["rM"]!, rL = radius["rL"]!
+
+    // MARK: 시안 부품 색 — tokens.json에 이름이 없고 시안 CSS·JS에만 있는 값(이름 하나에 값 하나)
+
+    /// 세그먼트 엄지(.segp .sthumb): 라이트 흰색, 다크 #3A3F46.
+    static let segmentThumb = Color(lightHex: "#FFFFFF", darkHex: "#3A3F46")
+    /// 첫 안내 무대 빛(.intro-hero: 흰 60% + stage, 다크 #232931).
+    static let stageGlow = Color(lightHex: "#F6F7F9", darkHex: "#232931")
+    /// 잠금 화면 진행 중 점(.live-act .ri).
+    static let liveActivityDot = Color(lightHex: "#DDB08F", darkHex: "#DDB08F")
+    /// 잠금 화면 진행 중 판(.live-act 바탕 rgba(20,22,26)). 흰 잠금 화면에서도 흰 글자 대비가 나게 92% 불투명.
+    static let liveActivityPanel = Color(lightHex: "#14161AEB", darkHex: "#14161AEB")
+    /// 3D 차 재질(car3d.js): 차체 도장, 실내 앰비언트 선 바탕, 전조등, 미등. 앰비언트 빛은 tokens `glow`.
+    enum CarPaint {
+        static let body = "#E9EAEC", ambientBase = "#1D2023", headLamp = "#F2F7FF", tailLamp = "#FF3326"
+        static var ambientGlow: String { palette["glow"]![0] }
+    }
 
     // MARK: 모션 — tokens.json `motion`(ms·곡선)·`spring`
 
@@ -213,8 +227,8 @@ enum DesignSystem {
 
     /// 동작 줄이기면 화면이 nil 애니메이션을 쓴다.
     enum Motion {
-        static let press = animation("press"), fast = animation("fast"), base = animation("base"), enter = animation("enter")
-        static let exit = animation("exit"), light = animation("light"), camera = animation("camera")
+        /// 표 그대로 쓰는 것만 이름을 둔다. base·exit·camera 곡선은 시안 부품 값(아래)이 `animation(_:seconds:)`·`curve(_:)`로 읽는다.
+        static let press = animation("press"), fast = animation("fast"), enter = animation("enter")
         /// spring.snappy: 세그먼트 엄지·버튼 모양.
         static let snappy = spring("snappy")
         /// spring.smooth: 시트·공유 요소·화면 교체.
@@ -223,6 +237,42 @@ enum DesignSystem {
         static let bouncy = spring("bouncy")
         /// roll(README 4.7 표, tokens.json에는 없음): 숫자 굴림 spring 감쇠 .85·강성 632 → 응답 2π/√632초.
         static let roll = Animation.spring(response: 2 * .pi / 632.0.squareRoot(), dampingFraction: 0.85)
+
+        // 시안 부품 움직임(tokens.json에 이름이 없고 시안 JS·CSS에만 있는 값). 곡선은 위 motion 표의 이름에서 가져온다.
+        /// 띠·히트맵·에피소드가 왼쪽부터 그려짐(charts.js grow: 0.9초, camera 곡선).
+        static let chartReveal = animation("camera", seconds: 0.9)
+        /// 막대 하나가 바닥에서 자람(charts.js: 0.6초, enter 곡선). 막대마다 `chartBarStagger`초 늦게.
+        static let chartBarSeconds = 0.6, chartBarStagger = 0.04
+        /// 방법별 성적 점이 튐(charts.js: spring 강성 600·감쇠 30). 점마다 `dotStagger`초 늦게.
+        static let dotPop = Animation.interpolatingSpring(stiffness: 600, damping: 30)
+        static let dotStagger = 0.02
+        /// 차트 말풍선(.ch-tip: 120ms linear).
+        static let tip = Animation.linear(duration: 0.12)
+        /// 알림 배너가 나감(.banner.out dropOut: 260ms, exit 곡선).
+        static let bannerOut = animation("exit", seconds: 0.26)
+        /// 진행 중 점의 살아 있는 빛(live: 1.8초 주기, 앞 60% 퍼짐, base 곡선).
+        static let liveSeconds = 1.8, liveSpreadShare = 0.6
+        /// 새 수유가 들어온 판 둘레 빛(.flash: 1.2초, base 곡선).
+        static let flashSeconds = 1.2
+        /// 타이머 초침 점(.sweep: 60초 한 바퀴 linear, 초마다 1초씩).
+        static let secondHand = Animation.linear(duration: 1)
+        /// 화면 교체 때 한 줄씩 올라옴(core.js UI.enter: 0.06초 뒤 0.05초 간격, motion.enter).
+        static let riseDelay = 0.06, riseStagger = 0.05
+
+        /// 표의 곡선을 다른 길이로(시안이 같은 곡선을 다른 시간에 쓰는 자리).
+        static func animation(_ name: String, seconds: Double) -> Animation {
+            let p = numbers(motion[name]!.curve)
+            return p.count == 4 ? .timingCurve(p[0], p[1], p[2], p[3], duration: seconds) : .linear(duration: seconds)
+        }
+
+        /// 표의 곡선(키프레임·UIKit 프레임 계산이 직접 값을 읽는 자리). linear면 직선.
+        static func curve(_ name: String) -> UnitCurve {
+            let p = numbers(motion[name]!.curve)
+            return p.count == 4 ? .bezier(startControlPoint: UnitPoint(x: p[0], y: p[1]), endControlPoint: UnitPoint(x: p[2], y: p[3])) : .linear
+        }
+
+        /// 표의 길이(초).
+        static func seconds(_ name: String) -> Double { Double(motion[name]!.ms) / 1000 }
 
         /// "linear" 또는 "cubic-bezier(a, b, c, d)" → Animation.
         static func animation(_ name: String) -> Animation {

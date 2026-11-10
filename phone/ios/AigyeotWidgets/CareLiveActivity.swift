@@ -16,7 +16,7 @@ struct CareLiveActivity: Widget {
         ActivityConfiguration(for: CareActivityAttributes.self) { context in
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
-                    Circle().fill(Color(lightHex: "#DDB08F", darkHex: "#DDB08F")).frame(width: 10, height: 10).padding(.leading, 6)   // 시안 .live-act .ri
+                    Circle().fill(DesignSystem.liveActivityDot).frame(width: 10, height: 10).padding(.leading, 6)   // 시안 .live-act .ri
                     VStack(alignment: .leading, spacing: 0) {
                         Text(title(context.attributes)).font(DesignSystem.namedFont(16, 700))
                         if let side = context.state.side { Text(side).font(DesignSystem.namedFont(13, 500)).opacity(0.8) }
@@ -33,7 +33,7 @@ struct CareLiveActivity: Widget {
             .foregroundStyle(.white)
             .padding(16)
             // 시안은 어두운 글래스(42%)지만 흰 잠금 화면 위에서 흰 글자가 4.5:1을 밑돈다. 거의 불투명한 어두운 판으로 둔다
-            .activityBackgroundTint(Color(red: 20 / 255, green: 22 / 255, blue: 26 / 255).opacity(0.92))
+            .activityBackgroundTint(DesignSystem.liveActivityPanel)
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {

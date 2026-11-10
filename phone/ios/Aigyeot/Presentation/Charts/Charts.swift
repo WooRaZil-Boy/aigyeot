@@ -41,7 +41,7 @@ private struct TipOverlay: ViewModifier {
                     .allowsHitTesting(false)
                 }
             }
-            .animation(reduceMotion ? nil : .linear(duration: 0.12), value: shown)
+            .animation(reduceMotion ? nil : DS.Motion.tip, value: shown)
             .onChange(of: hits) { _, _ in shown = nil }   // 기록이 바뀌면(지움·진행 중 시간) 옛 값 툴팁을 닫는다
     }
 }
@@ -77,12 +77,12 @@ private struct Appear: ViewModifier {
 }
 
 /// 띠·히트맵·에피소드: 0.9초 cubic(.65,0,.35,1)로 왼쪽에서 그려진다(시안 charts.js grow).
-private let revealCurve = Animation.timingCurve(0.65, 0, 0.35, 1, duration: 0.9)
+private let revealCurve = DS.Motion.chartReveal
 /// 막대: 막대마다 0.6초 cubic(.2,.8,.2,1)로 바닥에서 자라고, 0.04초씩 늦게 시작한다(8개마다 다시). t는 전체 시간에 걸쳐 고르게 흐르고
 /// 막대마다 곡선은 `barGrow`가 건다.
-private let growStep = 0.04, growEach = 0.6, growTotal = growEach + growStep * 7
+private let growStep = DS.Motion.chartBarStagger, growEach = DS.Motion.chartBarSeconds, growTotal = growEach + growStep * 7
 private let growCurve = Animation.linear(duration: growTotal)
-private let growEase = UnitCurve.bezier(startControlPoint: UnitPoint(x: 0.2, y: 0.8), endControlPoint: UnitPoint(x: 0.2, y: 1))
+private let growEase = DS.Motion.curve("enter")
 private func barGrow(_ t: Double, index i: Int) -> Double {
     let local = min(1, max(0, (t * growTotal - growStep * Double(i % 8)) / growEach))
     return growEase.value(at: local)
@@ -503,7 +503,7 @@ struct MethodDots: View {
                     .overlay(Circle().strokeBorder(DS.textPrimary.opacity(i < m.ok ? 0 : (known ? 0.26 : 0.14)), lineWidth: 1.5))
                     .frame(width: 12, height: 12)
                     .scaleEffect(i < m.ok && !shown && !reduceMotion ? 0 : 1)
-                    .animation(reduceMotion || i >= m.ok ? nil : .interpolatingSpring(stiffness: 600, damping: 30).delay(0.02 * Double(base + i)), value: shown)
+                    .animation(reduceMotion || i >= m.ok ? nil : DS.Motion.dotPop.delay(DS.Motion.dotStagger * Double(base + i)), value: shown)
             }
         }
         .fixedSize()

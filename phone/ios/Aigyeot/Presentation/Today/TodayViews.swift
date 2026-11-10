@@ -151,7 +151,7 @@ private struct LastFeedCard: View {
             }
         } keyframes: { _ in
             MoveKeyframe(0)
-            LinearKeyframe(1, duration: 1.2, timingCurve: .bezier(startControlPoint: UnitPoint(x: 0.4, y: 0), endControlPoint: UnitPoint(x: 0.2, y: 1)))
+            LinearKeyframe(1, duration: DS.Motion.flashSeconds, timingCurve: DS.Motion.curve("base"))
         }
         .onChange(of: vm.ui.lastFeedingStart) { old, new in
             if new != nil, new != old, !reduceMotion { flashes += 1 }
@@ -222,8 +222,8 @@ private struct RunningCard: View {
                 v.overlay { Circle().strokeBorder(c.opacity(0.5 * (1 - p)), lineWidth: 12 * p).padding(-12 * p) }
             } keyframes: { _ in
                 MoveKeyframe(0)   // 되풀이는 앞 주기 끝값(1)에서 이어지므로 주기마다 0에서 시작한다
-                LinearKeyframe(1, duration: 1.08, timingCurve: .bezier(startControlPoint: UnitPoint(x: 0.4, y: 0), endControlPoint: UnitPoint(x: 0.2, y: 1)))
-                LinearKeyframe(1, duration: 0.72)
+                LinearKeyframe(1, duration: DS.Motion.liveSeconds * DS.Motion.liveSpreadShare, timingCurve: DS.Motion.curve("base"))
+                LinearKeyframe(1, duration: DS.Motion.liveSeconds * (1 - DS.Motion.liveSpreadShare))
             }
         }
     }

@@ -107,7 +107,7 @@ struct AlertBanner: View {
                 // 시안 .banner: 들어올 때 위에서 0.96배로 spring.bouncy, 나갈 때 위로 260ms motion.exit 곡선
                 .transition(reduceMotion ? .opacity : .asymmetric(
                     insertion: .move(edge: .top).combined(with: .scale(scale: 0.96, anchor: .top)).combined(with: .opacity),
-                    removal: .move(edge: .top).combined(with: .opacity).animation(.timingCurve(0.4, 0, 1, 1, duration: 0.26))))
+                    removal: .move(edge: .top).combined(with: .opacity).animation(DS.Motion.bannerOut)))
                 .task(id: id) {
                     try? await Task.sleep(nanoseconds: RetryPolicy.bannerNanos)
                     vm.dismissBanner(id)

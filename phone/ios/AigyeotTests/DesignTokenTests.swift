@@ -83,4 +83,15 @@ final class DesignTokenTests: XCTestCase {
         XCTAssertTrue(OssEntry.all.contains { $0.licenses.contains { $0.file == "OFL-Pretendard" } })
         XCTAssertTrue(OssEntry.all.contains { $0.licenses.contains { $0.file == "ISC-Lucide" } })
     }
+
+    /// 시안 부품 움직임은 표의 곡선 이름을 읽는다(같은 이름의 움직임이 다른 곡선을 갖지 않게).
+    func test_시안_부품_움직임은_표의_곡선을_쓴다() {
+        XCTAssertEqual(DesignSystem.Motion.seconds("camera"), 1.1)
+        let camera = DesignSystem.Motion.curve("camera")
+        XCTAssertEqual(camera.value(at: 0.5), 0.5, accuracy: 0.001)          // cubic-bezier(.65,0,.35,1)는 가운데에서 반
+        XCTAssertLessThan(camera.value(at: 0.25), 0.25)                       // 처음은 느리게
+        XCTAssertEqual(DesignSystem.Motion.curve("press"), .linear)
+        XCTAssertEqual(DesignSystem.Motion.liveSeconds * DesignSystem.Motion.liveSpreadShare, 1.08, accuracy: 0.0001)
+    }
+
 }
