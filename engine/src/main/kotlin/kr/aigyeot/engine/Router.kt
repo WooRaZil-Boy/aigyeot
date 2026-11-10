@@ -137,6 +137,6 @@ internal fun Tx.wakeAt(): Long? {
         if (routePending()) listOfNotNull(s.bootAt, s.car.route?.restsPendingSince).forEach { c += it + p.routeWaitMs }   // 지난 쪽은 아래에서 빠진다
         if (gearP && x.driveFrom != null) s.car.gearSince?.let { c += it + p.longDriveResetParkMs }
     }
-    s.ign.nursingStop?.let { ns -> if (ns.firstPAt != null && !ns.confirmShown && gearP) c += ns.firstPAt + p.feedingParkConfirmMs }
+    (s.ign.nursingStop as? NursingStop.Parked)?.let { ns -> if (!ns.confirmShown && gearP) c += ns.firstPAt + p.feedingParkConfirmMs }
     return c.filter { it > now }.minOrNull()
 }

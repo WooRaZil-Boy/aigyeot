@@ -222,7 +222,7 @@ class LifetimeTest {
     }
 
     @Test fun lifetime_nursingStop() {
-        val ns = NursingStop("r1", null, null, false)
+        val ns = NursingStop.Requested("r1")
         val sim = session()
         sim.s = sim.s.copy(ign = sim.s.ign.copy(nursingStop = ns))
         for (l in Life.entries - Life.SESSION_OPEN - Life.SCENE_END) assertEquals(ns, apply(l, sim.s).s.ign.nursingStop, "$l: 결정 ① 시동 단위")

@@ -40,6 +40,7 @@ import kr.aigyeot.engine.RouteView
 import kr.aigyeot.engine.SessionState
 import kr.aigyeot.engine.Sid
 import kr.aigyeot.engine.Stage
+import kr.aigyeot.engine.TryOutcome
 import kr.aigyeot.engine.TryRecord
 import kr.aigyeot.engine.TryResult
 import kr.aigyeot.engine.WaypointPending
@@ -58,7 +59,7 @@ class HomeUiTest {
     private val seoul = ZoneId.of("Asia/Seoul")
     private fun fresh() = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
     private val lullaby = Method(MethodKind.LULLABY)
-    private fun play(n: Int, started: Long?, m: Method = lullaby) = Play("p$n", PlayKind.AUTO, if (n == 1) PlayPurpose.AUTO_FIRST else PlayPurpose.AUTO_SECOND, m, started, (started ?: T0) + 56_000, PlayMode.NORMAL)
+    private fun play(n: Int, started: Long?, m: Method = lullaby) = Play("p$n", if (n == 1) PlayPurpose.AUTO_FIRST else PlayPurpose.AUTO_SECOND, m, started, (started ?: T0) + 56_000, PlayMode.NORMAL)
     private fun ep(first: TryRecord? = null, second: TryRecord? = null, wp: Boolean = false) =
         EpisodeState("E1", EpisodeTrigger.ALARM, T0, T0, 2_400, 0, first, second, false, null, emptyList(), 0, false, wp)
     private fun ses(stage: Stage, episode: EpisodeState? = null, offers: OfferState = OfferState(), controls: ControlState = ControlState()) = SessionState(
@@ -102,15 +103,15 @@ class HomeUiTest {
     }
 
     @Test fun gap_thenSecondAfterFail_thenHandoffMarks() {
-        val gap = ui(driving(ses(Stage.Gap(1, JudgeWindow(T0, T0 + 8_000)), ep(TryRecord(lullaby, null, null, null)))))
+        val gap = ui(driving(ses(Stage.Gap(1, JudgeWindow(T0, T0 + 8_000)), ep(TryRecord(lullaby, null)))))
         assertEquals(Eyebrow("듣기 틈 · 8초", Tone.ACCENT, live = true), gap.eyebrow)
         assertEquals(listOf(StepMark.DONE, StepMark.NOW, StepMark.NONE, StepMark.NONE), (gap.card as HomeCard.Track).marks)
         assertTrue(gap.stage.listen)
         val noise = Method(MethodKind.WHITE_NOISE)
-        val second = ui(driving(ses(Stage.Attempt(2, play(2, T0, noise)), ep(TryRecord(lullaby, null, TryResult.FAIL, null)))))
+        val second = ui(driving(ses(Stage.Attempt(2, play(2, T0, noise)), ep(TryRecord(lullaby, null, TryOutcome.Fail)))))
         assertEquals("2차 · 백색소음", second.eyebrow.text)
         assertEquals(listOf(StepMark.FAIL, StepMark.FAIL, StepMark.NOW, StepMark.NONE), (second.card as HomeCard.Track).marks)
-        val hand = ui(driving(ses(Stage.Handoff(2), ep(TryRecord(lullaby, null, TryResult.FAIL, null), TryRecord(noise, null, TryResult.FAIL, null)))))
+        val hand = ui(driving(ses(Stage.Handoff(2), ep(TryRecord(lullaby, null, TryOutcome.Fail), TryRecord(noise, null, TryOutcome.Fail)))))
         assertEquals(Eyebrow("사람에게 넘김", Tone.CHILD), hand.eyebrow)
         assertEquals(listOf(StepMark.FAIL, StepMark.FAIL, StepMark.FAIL, StepMark.NONE), (hand.card as HomeCard.Track).marks, "쉼터 이름을 모르면 달래기 단계, 제안을 하지 않았으면 제안 칸은 비운다")
         assertEquals(Symbol.PIN, hand.drive.symbol)

@@ -177,7 +177,7 @@ data class RoomFacts(
 
 @Serializable
 data class Play(
-    val id: String, val kind: PlayKind,
+    val id: String,
     val purpose: PlayPurpose,
     val method: Method,
     val startedAt: Long?,                 // null = PlaybackStarted를 기다림
@@ -185,7 +185,10 @@ data class Play(
     val mode: PlayMode,
     val action: SecondAction? = null,     // 2차 시도: 시작할 때 정한 행동(C81). PlaybackStarted는 이 값만 따른다
     val fromQa: Boolean = false,          // V18(P5): ④ 도구로 연 요청 재생. 거절(18d·Q5a)은 지금 질문 창이 아니라 이 값을 본다
-)
+) {
+    /** 자동 시도·요청(2.2). 목적에서 계산한다(P1·P4: 저장하지 않는다). */
+    val kind: PlayKind get() = if (purpose == PlayPurpose.REQUEST) PlayKind.REQUEST else PlayKind.AUTO
+}
 
 @Serializable
 data class EpisodeState(
@@ -205,9 +208,27 @@ data class EpisodeState(
 data class TryRecord(
     val method: Method,
     val action: SecondAction?,            // 2차만
-    val result: TryResult?,               // null = 아직 정해지지 않음
-    val unjudged: Unjudged?,
-)
+    val outcome: TryOutcome? = null,      // null = 아직 정해지지 않음. 결과와 미판정 이유가 한 칸이라 '그침인데 미판정 이유' 같은 조합이 생기지 않는다(C380)
+) {
+    /** 읽기 투영(기록·화면이 읽는 이름 그대로). */
+    val result: TryResult? get() = when (outcome) { TryOutcome.Success -> TryResult.SUCCESS; TryOutcome.Fail -> TryResult.FAIL; is TryOutcome.NotJudged -> TryResult.UNJUDGED; null -> null }
+    val unjudged: Unjudged? get() = (outcome as? TryOutcome.NotJudged)?.reason
+
+    companion object {
+        /** Room 행(결과·이유 두 칸) → 결과 하나. 복원 대조(Room 사실)에서만 쓴다. */
+        fun outcomeOf(result: TryResult?, unjudged: Unjudged?): TryOutcome? = when (result) {
+            TryResult.SUCCESS -> TryOutcome.Success; TryResult.FAIL -> TryOutcome.Fail; TryResult.UNJUDGED -> TryOutcome.NotJudged(unjudged); null -> null
+        }
+    }
+}
+
+/** 시도 결과: 그침 · 실패 · 미판정(이유). 이유는 미판정에만 있다. */
+@Serializable sealed interface TryOutcome {
+    @Serializable @kotlinx.serialization.SerialName("SUCCESS") data object Success : TryOutcome
+    @Serializable @kotlinx.serialization.SerialName("FAIL") data object Fail : TryOutcome
+    /** [reason]은 판단 코어가 정할 때 늘 있다. Room 행에서 되살릴 때만 비어 있을 수 있다. */
+    @Serializable @kotlinx.serialization.SerialName("UNJUDGED") data class NotJudged(val reason: Unjudged?) : TryOutcome
+}
 
 // 필드는 6.1 episode의 handoff_cause·handoff_kind. 확정 칸(말함·쉼터 이름)은 SettleHandoff, guardian_notified는 link, 경유지는 EpisodeState.waypointAdded(결정 ③·V6·V15)
 @Serializable
@@ -278,12 +299,21 @@ data class HandoffRecord(
     val restLogIndex: Int? = null,        // 이 요청을 낸 휴식 기록 줄(SessionState.restLog의 위치). 결과는 그 줄에만 붙인다
     val restName: String? = null,         // C269: 요청할 때의 쉼터 이름(S09). 결과가 올 때 쉼터 목록이 비어(다시 받는 중) 있어도 id를 읽지 않게. 스냅숏 호환 기본값 null
 )
-@Serializable data class NursingStop(
-    val restId: String,
-    val addedAt: Long?,
-    val firstPAt: Long?,
-    val confirmShown: Boolean,
-)
+/**
+ * 수유실 들름 단계(C380): 요청 → 경유지 들어감 → 그 뒤 첫 P(수유 확인은 이 단계에서만). 앞 단계의 칸 없이 뒤 단계 칸이 생기지 않는다.
+ * 읽는 쪽은 addedAt·firstPAt·confirmShown 이름 그대로 읽는다(단계에 없으면 null·false).
+ */
+@Serializable sealed interface NursingStop {
+    val restId: String
+    val addedAt: Long? get() = null
+    val firstPAt: Long? get() = null
+    val confirmShown: Boolean get() = false
+
+    @Serializable @kotlinx.serialization.SerialName("REQUESTED") data class Requested(override val restId: String) : NursingStop
+    @Serializable @kotlinx.serialization.SerialName("ADDED") data class Added(override val restId: String, override val addedAt: Long) : NursingStop
+    @Serializable @kotlinx.serialization.SerialName("PARKED")
+    data class Parked(override val restId: String, override val addedAt: Long, override val firstPAt: Long, override val confirmShown: Boolean = false) : NursingStop
+}
 @Serializable data class SpeechQueue(
     val speaking: String?, val lastDoneAt: Long?, val queue: List<Line>,
     val qa: QaWindow? = null,

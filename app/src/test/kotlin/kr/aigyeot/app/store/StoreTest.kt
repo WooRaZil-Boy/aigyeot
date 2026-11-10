@@ -664,7 +664,7 @@ class StoreTest {
 
     private fun stateWith(playing: Boolean): EngineState {
         val base = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
-        val play = Play("P", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.LULLABY), if (playing) T0 + 5_200 else null, T0 + 60_000, PlayMode.NORMAL)
+        val play = Play("P", PlayPurpose.AUTO_FIRST, Method(MethodKind.LULLABY), if (playing) T0 + 5_200 else null, T0 + 60_000, PlayMode.NORMAL)
         val ses = SessionState(
             id = "S1", openedAt = T0, trigger = OpenTrigger.DOOR_THEN_D, methods = emptyList(), stage = Stage.Attempt(1, play),
             episode = null, playedMs = 0, offers = OfferState(), controls = ControlState(),

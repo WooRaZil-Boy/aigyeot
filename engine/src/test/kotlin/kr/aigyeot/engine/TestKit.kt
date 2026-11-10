@@ -53,7 +53,7 @@ class Sim(var s: EngineState, private val eng: Engine = Engine()) {
 fun SessionState.withStage(phase: Phase): SessionState = copy(
     stage = when (phase) {
         Phase.LISTENING -> Stage.Listening
-        Phase.ATTEMPT -> Stage.Attempt(maxOf(attemptNo, 1), play ?: Play("$id-test", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, WN, null, openedAt + P.attemptMs, PlayMode.NORMAL))
+        Phase.ATTEMPT -> Stage.Attempt(maxOf(attemptNo, 1), play ?: Play("$id-test", PlayPurpose.AUTO_FIRST, WN, null, openedAt + P.attemptMs, PlayMode.NORMAL))
         Phase.GAP -> Stage.Gap(attemptNo, null)
         Phase.CONFIRM -> Stage.Confirm(attemptNo, null)
         Phase.WAIT -> Stage.Wait(attemptNo)

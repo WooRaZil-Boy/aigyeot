@@ -57,22 +57,22 @@ internal fun Tx.cryRun() {
     ses { copy(alarmRun = live?.copy(last = now) ?: AlarmRun(now, now), cryRuns = cryRuns + if (live == null) 1 else 0) }
 }
 
-private fun TryRecord?.decide(r: TryResult) = this?.let { if (it.result == null) it.copy(result = r) else it }
+private fun TryRecord?.decide(r: TryOutcome) = this?.let { if (it.outcome == null) it.copy(outcome = r) else it }
 
 internal fun Tx.recry() {
     if (ses!!.attemptNo <= 1) {
-        ep { copy(recried = true, first = first.decide(TryResult.FAIL)) }                         // C55
+        ep { copy(recried = true, first = first.decide(TryOutcome.Fail)) }                         // C55
         saveEpisode()
         startAttempt(2)
     } else {
-        ep { copy(second = second.decide(TryResult.FAIL)) }
+        ep { copy(second = second.decide(TryOutcome.Fail)) }
         handoff(HandoffCause.TWO_ATTEMPTS)
     }
 }
 
 internal fun Tx.success() {
-    if (ses!!.attemptNo <= 1) ep { copy(first = first.decide(TryResult.SUCCESS)) }
-    else ep { copy(second = second.decide(TryResult.SUCCESS)) }
+    if (ses!!.attemptNo <= 1) ep { copy(first = first.decide(TryOutcome.Success)) }
+    else ep { copy(second = second.decide(TryOutcome.Success)) }
     closeEpisode()
 }
 
@@ -101,7 +101,7 @@ internal fun Tx.startAttempt(n: Int, alarm: PendingAlarm? = null) {
     val id = newId()
     out += StartPlayback(id, PlayKind.AUTO, method, end, p.fadeMs)
     val purpose = if (n == 1) PlayPurpose.AUTO_FIRST else PlayPurpose.AUTO_SECOND
-    enter(Stage.Attempt(n, Play(id, PlayKind.AUTO, purpose, method, null, end, PlayMode.NORMAL, action), alarm))
+    enter(Stage.Attempt(n, Play(id, purpose, method, null, end, PlayMode.NORMAL, action), alarm))
 }
 
 /** [pa]는 1차 시작 전 경보 시각(ATTEMPT의 alarm, C36). 에피소드로 옮기면 단계에서 지운다. */
@@ -127,7 +127,7 @@ internal fun Tx.started(e: PlaybackStarted) {
         PlayPurpose.AUTO_FIRST -> {                                                             // 4b·4e·5b
             val fw = feeding()
             val un = if (gearP) Unjudged.PARKED_ALARM else if (fw) Unjudged.FEEDING_WINDOW else null
-            openEpisode(EpisodeTrigger.ALARM, TryRecord(pl.method, null, un?.let { TryResult.UNJUDGED }, un), alarm)
+            openEpisode(EpisodeTrigger.ALARM, TryRecord(pl.method, null, un?.let { TryOutcome.NotJudged(it) }), alarm)
             s.car.pauses.forEach { unjudge(Unjudged.valueOf(it.name)) }                         // 21a: 시작 대기 중 끊긴 입력(C80)
             saveEpisode()
             captureContext()
@@ -137,7 +137,7 @@ internal fun Tx.started(e: PlaybackStarted) {
         }
         PlayPurpose.AUTO_SECOND -> {                                                            // 42a·42b·42c
             val action = pl.action ?: SecondAction.OTHER
-            ep { copy(second = TryRecord(pl.method, action, null, null)) }
+            ep { copy(second = TryRecord(pl.method, action)) }
             when (action) {
                 SecondAction.COMFORT -> lowerHvac(pl.id)                                        // Control. S04는 결과가 ok로 온 뒤(42g, C102)
                 SecondAction.FEEDING -> {
@@ -229,7 +229,7 @@ internal fun Tx.unjudge(r: Unjudged) = ep {
     val f = first
     when {
         f == null -> this
-        f.result == null -> copy(first = f.copy(result = TryResult.UNJUDGED, unjudged = r))
+        f.outcome == null -> copy(first = f.copy(outcome = TryOutcome.NotJudged(r)))
         r in laterReasons -> this
         else -> copy(laterReasons = laterReasons + r)
     }
@@ -285,7 +285,7 @@ internal fun Tx.matchRoom(r: RoomFacts): Boolean {
     ep {
         val f = first
         copy(playedMs = maxOf(playedMs, r.episodePlayedMs),
-            first = if (f != null && f.result == null && room?.firstResult != null) f.copy(result = room.firstResult, unjudged = room.firstUnjudged) else f)
+            first = if (f != null && f.outcome == null && room?.firstResult != null) f.copy(outcome = TryRecord.outcomeOf(room.firstResult, room.firstUnjudged)) else f)
     }
     return false
 }
@@ -321,7 +321,7 @@ internal fun Tx.requestPlay(m: Method) {
     val id = newId()
     out += StartPlayback(id, PlayKind.REQUEST, m, now + len, p.fadeMs)                          // 18a·18b
     // 요청 재생은 WAIT에서만 연다(switchSound). fromQa = ④ 도구 사건으로 열었나(V18: 거절이 이 값을 본다)
-    enter(ses!!.stage.withPlay(Play(id, PlayKind.REQUEST, PlayPurpose.REQUEST, m, null, now + len, PlayMode.NORMAL, fromQa = qaTool)))
+    enter(ses!!.stage.withPlay(Play(id, PlayPurpose.REQUEST, m, null, now + len, PlayMode.NORMAL, fromQa = qaTool)))
 }
 
 internal fun Tx.focus(e: FocusChanged) {

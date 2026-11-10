@@ -830,7 +830,7 @@ class S58DriveTest {
         val add = sim.step<AddWaypoint>().single()
         assertEquals(WaypointPending(add.cmdId, "n", sim.ses.id, sim.ep.id, fromQa = true, restLogIndex = 0, restName = "n 휴게소"), sim.ses.waypointPending)
         assertTrue(sim.qa.ruleSaid)
-        assertEquals(NursingStop("n", null, null, false), sim.s.ign.nursingStop)
+        assertEquals(NursingStop.Requested("n"), sim.s.ign.nursingStop)
         sim.ev(WaypointResult(sim.t, add.cmdId, "n", true))
         assertEquals(Line(Sid.S09, mapOf("restName" to "n 휴게소"), null, qaAnswer = true), sim.s.speech.queue.first().copy(queuedAt = null, sessionId = null))
     }

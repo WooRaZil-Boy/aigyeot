@@ -417,7 +417,7 @@ class S57HandoffTest {
         assertEquals("n", add.restId)
         assertNull(sim.ses.pendingAsk)
         assertEquals(WaypointPending(add.cmdId, "n", sim.ses.id, sim.ep.id, restLogIndex = 0, restName = "n 휴게소"), sim.ses.waypointPending)
-        assertEquals(NursingStop("n", null, null, false), sim.s.ign.nursingStop)
+        assertEquals(NursingStop.Requested("n"), sim.s.ign.nursingStop)
     }
 
     @Test fun h4a_yesAfterPark_discarded() {

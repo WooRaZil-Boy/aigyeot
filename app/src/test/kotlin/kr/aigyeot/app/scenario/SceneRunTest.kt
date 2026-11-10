@@ -479,7 +479,7 @@ class SceneRunTest {
         val w = FakeWorld()
         val t0 = w.now
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, t0)
-        val play = Play("p", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE, null), t0 + 100, t0 + 60_000, PlayMode.NORMAL)
+        val play = Play("p", PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE, null), t0 + 100, t0 + 60_000, PlayMode.NORMAL)
         w.now = t0 + 100
         r.onStep(base.withSession { it.copy(stage = Stage.Attempt(1, play), playedMs = 0, openedAt = t0 + 1) })
         assertEquals(0L, r.row().sessionPlayMs)   // 시계가 안 갔다

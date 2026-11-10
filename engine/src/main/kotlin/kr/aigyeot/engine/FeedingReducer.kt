@@ -55,10 +55,14 @@ internal fun Tx.feedingConfirmed(yes: Boolean) {                                
 // ---- 수유실 들름(H4·H5·F7~F9, 결정 ①: 시동 단위) ----
 
 /** H4·F5h·Q5b: 수유실 휴게소 경유지를 요청했다(결과 전). */
-internal fun Tx.nursingRequested(restId: String) = nursing(NursingStop(restId, null, null, false))
+internal fun Tx.nursingRequested(restId: String) = nursing(NursingStop.Requested(restId))
 
 /** H5: 그 경유지가 들어갔다. */
-internal fun Tx.nursingAdded() = nursing(s.ign.nursingStop?.copy(addedAt = now))
+internal fun Tx.nursingAdded() = nursing(when (val ns = s.ign.nursingStop) {
+    null -> null
+    is NursingStop.Parked -> ns.copy(addedAt = now)
+    else -> NursingStop.Added(ns.restId, now)
+})
 
 /** H5a(그 쉼터 실패)·수명 표 Nursing 행의 DROP. */
 internal fun Tx.dropNursing() = nursing(null)
@@ -66,7 +70,7 @@ internal fun Tx.dropNursing() = nursing(null)
 /** F7: 경유지를 넣은 뒤 처음 P. */
 internal fun Tx.nursingParked() {
     val ns = s.ign.nursingStop
-    if (ns?.addedAt != null && ns.firstPAt == null) nursing(ns.copy(firstPAt = now))
+    if (ns is NursingStop.Added) nursing(NursingStop.Parked(ns.restId, ns.addedAt, now))
 }
 
 /** F9: 첫 P 뒤 P에서 나오면 수유 확인을 버린다. */
@@ -75,7 +79,7 @@ internal fun Tx.nursingLeftPark() { if (s.ign.nursingStop?.firstPAt != null) nur
 /** F8: 첫 P에서 오래 서 있으면 수유 확인을 띄운다. */
 internal fun Tx.nursingTimer() {
     val ns = s.ign.nursingStop
-    if (ns?.firstPAt != null && !ns.confirmShown && gearP && now - ns.firstPAt >= p.feedingParkConfirmMs) {
+    if (ns is NursingStop.Parked && !ns.confirmShown && gearP && now - ns.firstPAt >= p.feedingParkConfirmMs) {
         nursing(ns.copy(confirmShown = true))
         out += ShowNotice(Notice.FEEDING_CONFIRM)
     }

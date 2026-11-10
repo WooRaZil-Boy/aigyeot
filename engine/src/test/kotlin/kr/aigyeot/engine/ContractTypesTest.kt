@@ -31,7 +31,7 @@ class ContractTypesTest {
     @Test fun sessionStateRoundTrip() {
         val s = state.copy(session = SessionState(
             "s-1", 1L, OpenTrigger.DOOR_THEN_D, state.methodsNext,
-            stage = Stage.Attempt(1, Play("s-1-1", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL)),
+            stage = Stage.Attempt(1, Play("s-1-1", PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL)),
             episode = EpisodeState("e-1", EpisodeTrigger.ALARM, 1L, 1L, 0L, 0L, null, null, false,
                 HandoffRecord(HandoffCause.TWO_ATTEMPTS, HandoffKind.PARKED), emptyList(), 0L, false),
             playedMs = 0L, offers = OfferState(spokenAt = mapOf(Sid.S10 to 3L), leftParkAt = 2L),
@@ -43,12 +43,20 @@ class ContractTypesTest {
 
     /** D5: 단계(sealed Stage)가 종류마다 JSON으로 썼다 다시 읽어도 같다. 읽기 투영(phase 등)은 직렬화되지 않는다. */
     @Test fun stageRoundTrip() {
-        val pl = Play("s-1-1", PlayKind.AUTO, PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL)
+        val pl = Play("s-1-1", PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL)
         val stages = listOf(
             Stage.Listening, Stage.Attempt(1, pl, PendingAlarm(5L, 1L)), Stage.Gap(1, JudgeWindow(2L, 8_002L)), Stage.Gap(1, null),
-            Stage.Confirm(2, JudgeWindow(2L, 30_002L)), Stage.Wait(2, 3L, pl.copy(kind = PlayKind.REQUEST, purpose = PlayPurpose.REQUEST)), Stage.Handoff(2, 4L),
+            Stage.Confirm(2, JudgeWindow(2L, 30_002L)), Stage.Wait(2, 3L, pl.copy(purpose = PlayPurpose.REQUEST)), Stage.Handoff(2, 4L),
         )
         stages.forEach { st -> assertEquals(st, json.decodeFromString<Stage>(json.encodeToString(st))) }
+        // 재생 종류는 목적에서 계산한다(저장하지 않음): 요청 목적이면 REQUEST, 자동 1·2차면 AUTO. 옛 스냅숏의 kind 칸은 읽을 때 버린다(ignoreUnknownKeys)
+        assertEquals(PlayKind.AUTO, pl.kind); assertEquals(PlayKind.REQUEST, pl.copy(purpose = PlayPurpose.REQUEST).kind)
+        // 시도 결과는 한 칸(C380): 미판정 이유는 미판정에만. JSON으로 썼다 읽어도 같다
+        val tries = listOf(TryRecord(pl.method, null), TryRecord(pl.method, null, TryOutcome.Success), TryRecord(pl.method, null, TryOutcome.NotJudged(Unjudged.FOCUS_LOSS)))
+        tries.forEach { assertEquals(it, json.decodeFromString<TryRecord>(json.encodeToString(it))) }
+        assertEquals(listOf(null, TryResult.SUCCESS, TryResult.UNJUDGED), tries.map { it.result }); assertEquals(listOf(null, null, Unjudged.FOCUS_LOSS), tries.map { it.unjudged })
+        assertEquals(TryOutcome.NotJudged(Unjudged.FOCUS_LOSS), TryRecord.outcomeOf(TryResult.UNJUDGED, Unjudged.FOCUS_LOSS)); assertEquals(TryOutcome.Fail, TryRecord.outcomeOf(TryResult.FAIL, null))
+        assertEquals(false, json.encodeToString(pl).contains("\"kind\":\"AUTO\""), "재생 종류 칸은 쓰지 않는다(음원 method.kind는 따로 있다)")
         assertEquals("""{"type":"GAP","n":1,"window":null}""", json.encodeToString<Stage>(Stage.Gap(1, null)))
     }
 
