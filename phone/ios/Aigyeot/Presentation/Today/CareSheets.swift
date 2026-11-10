@@ -209,10 +209,8 @@ struct TimerView: View {
                         }
                         Button { picked = CareTime.date(e.startAt); editingStart = true; pickingEnd = false } label: {
                             Label { Text(CareText.editStart) } icon: { IconImage(.clock, size: 20) }
-                                .font(DS.font(17, 700)).foregroundStyle(DS.textPrimary)
-                                .frame(minHeight: 44).contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pillTonal)   // 시안 .pbtn.ton
                         if editingStart || pickingEnd { timePicker(e) }
                         if let error { Text(error).font(DS.caption).foregroundStyle(DS.danger) }
                         if vm.ui.guardian { Text(CareText.guardianNote).font(DS.caption).foregroundStyle(DS.textTertiary) }

@@ -310,7 +310,11 @@ struct Waveform: View {
                 ForEach(Array(levels.suffix(Self.barCount(fitting: g.size.width)).enumerated()), id: \.offset) { _, l in
                     Capsule().fill(DS.accentInk).frame(width: 4, height: max(4, CGFloat(l) * g.size.height))
                 }
-                if levels.isEmpty { Capsule().fill(DS.tonal).frame(height: 4) }
+                if levels.isEmpty {   // 녹음 전: 시안 .wave 모양을 옅게 멈춰 둔다(녹음하면 실제 소리 크기로 바뀐다)
+                    ForEach(0..<min(44, Self.barCount(fitting: g.size.width)), id: \.self) { i in
+                        Capsule().fill(DS.accentInk.opacity(0.3)).frame(width: 4, height: (0.2 + abs(sin(Double(i) * 0.7)) * 0.7) * g.size.height)
+                    }
+                }
             }
             .frame(width: g.size.width, height: g.size.height)
         }
