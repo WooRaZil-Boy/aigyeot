@@ -30,10 +30,13 @@ fun steeringUnavailableText(noCry: Boolean) = if (noCry) "울음이 없어 비�
 
 fun triggerText(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM) "울음 감지" else "소리 바꾸기 요청"
 
-/** 재생이 없었으면 출력 경로를 보이지 않는다(null). */
+/**
+ * report.route(문구표, iOS와 같음). 폴백은 한 번이라도 앞에서 들렸다는 뜻이라 원인·전부를 말하지 않는다.
+ * 재생이 없었으면 출력 경로를 보이지 않는다(null).
+ */
 fun outputRouteText(r: OutputRoute): String? = when (r) {
-    OutputRoute.REAR_ZONE -> "소리는 뒷좌석으로 나갔어요"
-    OutputRoute.DEFAULT_ZONE_FALLBACK -> "뒷좌석 출력이 없어 앞에서도 들렸어요"
+    OutputRoute.REAR_ZONE -> "소리 나간 곳 · 뒷좌석"
+    OutputRoute.DEFAULT_ZONE_FALLBACK -> "소리 나간 곳 · 앞에서도 들림"
     OutputRoute.NO_PLAYBACK -> null
 }
 
@@ -54,8 +57,12 @@ fun soundText(songs: List<SongEntry>, r: SoundRef?, songId: String? = null): Str
 fun playName(songs: List<SongEntry>, p: PlayEntry): String =
     if (p.method == SoundMethod.PARENT_SONG) songs.find { it.songId == p.songId }?.name?.let { "부모 노래($it)" } ?: "부모 노래" else methodName(p.method)
 
+/** report.preCry.more(문구표, iOS와 같음): 기어 → 방향지시등 → 소리 재생 → 창 순서, 거짓·null은 쓰지 않는다. */
 fun preCryDrive(p: PreCryContext) =
-    "기어 ${p.gear.name}" + (if (p.turnSignalUsed) ", 방향지시등 씀" else "") + (if (p.windowOpen == true) ", 창 열림" else "")
+    "기어 ${p.gear.name}" + (if (p.turnSignalUsed) ", 방향지시등 씀" else "") + (if (p.playing) ", 소리 재생 중" else "") + (if (p.windowOpen == true) ", 창 열림" else "")
+
+/** 울음 직전 실내 온도: 소수 한 자리 + ℃(iOS "%.1f℃"와 같음). */
+fun cabinTempText(c: Double) = String.format(java.util.Locale.ROOT, "%.1f℃", c)
 
 fun secondText(songs: List<SongEntry>, sec: SecondAttempt): String {
     val what = when (sec.action) {

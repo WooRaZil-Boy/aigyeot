@@ -111,7 +111,7 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
         }
         if (songs.size >= 3) Text("노래는 3곡까지예요", Modifier.padding(bottom = 12.dp), style = Type.caption, color = p.textTertiary)
     }
-    FootNote("녹음은 3분까지예요. 차가 받으면 다음 주행부터 써요.")
+    FootNote("차에서는 다음 주행부터 써요.") // car.songs.note(문구표, 확정 시안 그대로. 3분 한도는 녹음 화면 "0:00 / 3:00"이 보인다)
 }
 
 /**

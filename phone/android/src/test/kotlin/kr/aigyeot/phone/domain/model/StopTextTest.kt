@@ -1,12 +1,26 @@
 package kr.aigyeot.phone.domain.model
 
+import kr.aigyeot.shared.Gear
 import kr.aigyeot.shared.HandoffKind
+import kr.aigyeot.shared.OutputRoute
+import kr.aigyeot.shared.PreCryContext
 import kr.aigyeot.shared.StopInfo
 import kr.aigyeot.shared.StopReason
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class StopTextTest {
+    @Test fun `리포트 출력 경로·울음 직전 덧줄·실내 온도는 문구표와 iOS 글 그대로`() {
+        assertEquals("소리 나간 곳 · 뒷좌석", outputRouteText(OutputRoute.REAR_ZONE))
+        assertEquals("소리 나간 곳 · 앞에서도 들림", outputRouteText(OutputRoute.DEFAULT_ZONE_FALLBACK))
+        assertEquals(null, outputRouteText(OutputRoute.NO_PLAYBACK))
+        val c = PreCryContext("e", 30, 58.0, 71.0, 2, 1, turnSignalUsed = true, gear = Gear.D, cabinTempC = 27.5, windowOpen = true, playing = true)
+        assertEquals("기어 D, 방향지시등 씀, 소리 재생 중, 창 열림", preCryDrive(c))
+        assertEquals("기어 D", preCryDrive(c.copy(turnSignalUsed = false, windowOpen = null, playing = false)))
+        assertEquals("27.5℃", cabinTempText(27.5))
+        assertEquals("24.0℃", cabinTempText(24.0))
+    }
+
     private fun t(m: HandoffKind, told: Boolean?) = stopText(StopReason.ATTEMPT_LIMIT, m, "휴게소", told)
 
     @Test fun `운전자에게 말하지 못한 인계는 제안했다고 보이지 않는다`() {

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.actionText
+import kr.aigyeot.phone.domain.model.cabinTempText
 import kr.aigyeot.phone.domain.model.excludedText
 import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.judgeText
@@ -130,10 +131,10 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
                         "속도" to "평균 ${"%.0f".format(c.speedKmhAvg)} · 최고 ${"%.0f".format(c.speedKmhMax)} km/h",
                         "브레이크" to "${c.brakePresses}번",
                         "큰 조향 반전" to "${c.steeringReversals}번",
-                        c.cabinTempC?.let { "실내" to "${it}°C" },
+                        c.cabinTempC?.let { "실내" to cabinTempText(it) },
                     ),
                 )
-                Text(preCryDrive(c) + if (c.playing) " · 재생 중" else "", Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
+                Text(preCryDrive(c), Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
             }
         }
         Block {
