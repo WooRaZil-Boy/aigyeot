@@ -114,99 +114,132 @@ extension AppContainer {
 }
 
 /// 가짜 중계. 요청마다 결과·실패·끼어들 일(hook)을 정한다.
+/// 요청은 여러 작업에서 동시에 온다(nonisolated async). 상태는 시험이 쓰는 이름 그대로(`relay.sent`) 읽고 쓰되 모두 잠금 하나를 거친다 —
+/// 잠금 없이 두 작업이 `sent`에 함께 붙이다 배열이 깨져 시험 앱이 죽었다. hook은 잠금 밖에서 부른다.
+@dynamicMemberLookup
 final class FakeRelay: RelayClient {
-    var sent: [Envelope] = []
-    var acked: [String] = []
-    var uploaded: [String] = []
-    var inboxPages: [InboxResponse] = []
-    var sendError: RelayError?
-    var inboxError: RelayError?
-    var pairResult: Result<PairResponse, RelayError> = .failure(.network)
-    var sendBody: JSONValue?
-    var deleted = false
-    var deleteError: RelayError?
-    var inboxCalls = 0
-    var sendHook: (() async -> Void)?
-    var pairHook: (() async -> Void)?
-    var pairCalls = 0
-    var putHook: (() async -> Void)?
-    /// inbox 응답이 오기 전에 일어나는 일(연결이 바뀌는 상황 흉내).
-    var inboxHook: (() async -> Void)?
+    struct State {
+        var sent: [Envelope] = []
+        var acked: [String] = []
+        var uploaded: [String] = []
+        var inboxPages: [InboxResponse] = []
+        var sendError: RelayError?
+        var inboxError: RelayError?
+        var pairResult: Result<PairResponse, RelayError> = .failure(.network)
+        var sendBody: JSONValue?
+        var deleted = false
+        var deleteError: RelayError?
+        var inboxCalls = 0
+        var sendHook: (() async -> Void)?
+        var pairHook: (() async -> Void)?
+        var pairCalls = 0
+        var putHook: (() async -> Void)?
+        /// inbox 응답이 오기 전에 일어나는 일(연결이 바뀌는 상황 흉내).
+        var inboxHook: (() async -> Void)?
+        var devicesResult = DevicesResponse(snapshotSeq: 1, devices: [])
+        var devicesError: RelayError?
+        var devicesHook: (() async -> Void)?
+        var devicesCalls = 0
+        /// 요청 번호(1부터)마다 응답을 정한다. 요청마다 따로 멈췄다 풀어 끝나는 순서를 만들 때 쓴다.
+        var devicesResponder: ((Int) async -> DevicesResponse)?
+        var patchCalls = 0
+        var patchHook: (() async -> Void)?
+        var patches: [PatchDeviceRequest] = []
+        /// 중계에 저장된 인계 알림 받기(요청에 값이 없을 때 응답에 싣는다).
+        var storedHandoffAlerts = true
+        /// 있으면 응답 대신 이 실패(hook 뒤).
+        var patchError: RelayError?
+        /// 끊기 응답이 오기 전에 일어나는 일(중계는 204보다 먼저 그 폰의 소켓을 4001로 닫는다).
+        var deleteHook: (() async -> Void)?
+        var deletedTokens: [String] = []
+        var deleteTokenError: RelayError?
+        var inviteError: RelayError = .network
+        /// 있으면 초대를 만들어 준다(없으면 `inviteError`). `inviteHook`은 응답 전에 돈다(그사이 연결 바뀜 흉내).
+        var inviteResult: InviteResponse?
+        var inviteHook: (() async -> Void)?
+        var ackHook: (() async -> Void)?
+        var putError: RelayError?
+    }
+    private let lock = NSLock()
+    private var state = State()
+    subscript<T>(dynamicMember key: WritableKeyPath<State, T>) -> T {
+        get { lock.withLock { state[keyPath: key] } }
+        set { lock.withLock { state[keyPath: key] = newValue } }
+    }
+    private func locked<R>(_ f: (inout State) throws -> R) rethrows -> R { try lock.withLock { try f(&state) } }
 
     func pair(code: String, pushToken: String?) async throws -> PairResponse {
-        pairCalls += 1
-        await pairHook?()
-        return try pairResult.get()
+        let hook = locked { s in s.pairCalls += 1; return s.pairHook }
+        await hook?()
+        return try locked { $0.pairResult }.get()
     }
-    var devicesResult = DevicesResponse(snapshotSeq: 1, devices: [])
-    var devicesError: RelayError?
-    var devicesHook: (() async -> Void)?
-    var devicesCalls = 0
-    /// 요청 번호(1부터)마다 응답을 정한다. 요청마다 따로 멈췄다 풀어 끝나는 순서를 만들 때 쓴다.
-    var devicesResponder: ((Int) async -> DevicesResponse)?
     func devices(token: String) async throws -> DevicesResponse {
-        devicesCalls += 1
-        let n = devicesCalls
-        await devicesHook?()
-        if let devicesError { throw devicesError }
-        if let devicesResponder { return await devicesResponder(n) }
-        return devicesResult
+        let (n, hook) = locked { s in s.devicesCalls += 1; return (s.devicesCalls, s.devicesHook) }
+        await hook?()
+        let (error, responder, result) = locked { ($0.devicesError, $0.devicesResponder, $0.devicesResult) }
+        if let error { throw error }
+        if let responder { return await responder(n) }
+        return result
     }
-    var patchCalls = 0
-    var patchHook: (() async -> Void)?
-    var patches: [PatchDeviceRequest] = []
-    /// 중계에 저장된 인계 알림 받기(요청에 값이 없을 때 응답에 싣는다).
-    var storedHandoffAlerts = true
     func patchMe(token: String, _ r: PatchDeviceRequest) async throws -> PatchDeviceResponse {
-        patchCalls += 1
-        patches.append(r)
         // 중계는 받은 때 처리하고 그때의 값을 응답에 싣는다. 응답이 늦게 닿는 일은 hook이 흉내 낸다
-        if let on = r.handoffAlerts { storedHandoffAlerts = on }
-        let response = PatchDeviceResponse(deviceId: "d", role: .guardian, platform: .ios, handoffAlerts: storedHandoffAlerts, pushTokenSet: false)
-        await patchHook?()
-        if let e = patchError { throw e }
+        let (response, hook) = locked { s in
+            s.patchCalls += 1
+            s.patches.append(r)
+            if let on = r.handoffAlerts { s.storedHandoffAlerts = on }
+            return (PatchDeviceResponse(deviceId: "d", role: .guardian, platform: .ios, handoffAlerts: s.storedHandoffAlerts, pushTokenSet: false),
+                    s.patchHook)
+        }
+        await hook?()
+        if let e = locked({ $0.patchError }) { throw e }
         return response
     }
-    /// 있으면 응답 대신 이 실패(hook 뒤).
-    var patchError: RelayError?
-    /// 끊기 응답이 오기 전에 일어나는 일(중계는 204보다 먼저 그 폰의 소켓을 4001로 닫는다).
-    var deleteHook: (() async -> Void)?
-    var deletedTokens: [String] = []
-    var deleteTokenError: RelayError?
     /// 연결 응답의 토큰이면 저장하지 못한 연결 되돌리기(`deletedTokens`), 아니면 설정 끊기(`deleted`)로 본다.
     func deleteMe(token: String) async throws {
-        if case .success(let p) = pairResult, p.deviceToken == token {
-            if let deleteTokenError { throw deleteTokenError }
-            deletedTokens.append(token)
-            return
+        let rolledBack = try locked { s in
+            guard case .success(let p) = s.pairResult, p.deviceToken == token else { return false }
+            if let e = s.deleteTokenError { throw e }
+            s.deletedTokens.append(token)
+            return true
         }
-        await deleteHook?()
-        if let deleteError { throw deleteError }
-        deleted = true
+        if rolledBack { return }
+        await locked({ $0.deleteHook })?()
+        try locked { s in
+            if let e = s.deleteError { throw e }
+            s.deleted = true
+        }
     }
-    var inviteError: RelayError = .network
-    /// 있으면 초대를 만들어 준다(없으면 `inviteError`). `inviteHook`은 응답 전에 돈다(그사이 연결 바뀜 흉내).
-    var inviteResult: InviteResponse?
-    var inviteHook: (() async -> Void)?
     func createInvite(token: String) async throws -> InviteResponse {
-        await inviteHook?()
-        if let r = inviteResult { return r }
-        throw inviteError
+        await locked({ $0.inviteHook })?()
+        let (result, error) = locked { ($0.inviteResult, $0.inviteError) }
+        if let result { return result }
+        throw error
     }
     func send(token: String, _ e: Envelope) async throws -> SendMessageResponse {
-        await sendHook?()
-        if let sendError { throw sendError }
-        sent.append(e)
-        return SendMessageResponse(id: e.id, seq: Int64(sent.count), recipients: 1, body: sendBody ?? e.body)
+        await locked({ $0.sendHook })?()
+        return try locked { s in
+            if let error = s.sendError { throw error }
+            s.sent.append(e)
+            return SendMessageResponse(id: e.id, seq: Int64(s.sent.count), recipients: 1, body: s.sendBody ?? e.body)
+        }
     }
     func inbox(token: String, car: String, afterSeq: Int64?) async throws -> InboxResponse {
-        inboxCalls += 1
-        await inboxHook?()
-        if let inboxError { throw inboxError }
-        return inboxPages.isEmpty ? InboxResponse(messages: [], more: false) : inboxPages.removeFirst()
+        let hook = locked { s in s.inboxCalls += 1; return s.inboxHook }
+        await hook?()
+        return try locked { s in
+            if let error = s.inboxError { throw error }
+            return s.inboxPages.isEmpty ? InboxResponse(messages: [], more: false) : s.inboxPages.removeFirst()
+        }
     }
-    var ackHook: (() async -> Void)?
-    func ack(token: String, ids: [String]) async throws { await ackHook?(); acked += ids }
-    var putError: RelayError?
-    func putSong(token: String, id: String, file: URL) async throws { await putHook?(); if let putError { throw putError }; uploaded.append(id) }
+    func ack(token: String, ids: [String]) async throws {
+        await locked({ $0.ackHook })?()
+        locked { $0.acked += ids }
+    }
+    func putSong(token: String, id: String, file: URL) async throws {
+        await locked({ $0.putHook })?()
+        try locked { s in
+            if let error = s.putError { throw error }
+            s.uploaded.append(id)
+        }
+    }
 }
