@@ -6,14 +6,14 @@ import java.math.RoundingMode
 import kotlinx.serialization.json.Json
 import kr.aigyeot.app.link.rfc3339
 import kr.aigyeot.app.link.soundMethod
-import kr.aigyeot.app.store.db.ContextSampleEntity
 import kr.aigyeot.app.store.db.EpisodeEntity
 import kr.aigyeot.app.store.db.PlayLogEntity
-import kr.aigyeot.app.store.db.SteerWindowEntity
 import kr.aigyeot.app.store.db.StoreDao
 import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.RestLogEntry
+import kr.aigyeot.engine.SteerWindowRecord
+import kr.aigyeot.engine.TurnSignal
 import kr.aigyeot.engine.methodLabel
 import kr.aigyeot.engine.speaks
 import kr.aigyeot.engine.statSince
@@ -70,13 +70,14 @@ fun buildReport(dao: StoreDao, sessionId: String, now: Long, p: Params = Params(
     val plays = dao.plays(sessionId)
     val songName = { id: String? -> id?.let { dao.song(it)?.name } }
     val timeline = episodes.map { timeline(it, plays.filter { pl -> pl.episodeId == it.id }, songName) }
-    val context = episodes.filter { it.alarmAt != null }.mapNotNull { e -> preCry(e, dao.context(e.id)) }
+    val context = episodes.mapNotNull { e -> e.alarmAt?.let { preCry(e.id, it, dao.context(e.id).map { r -> r.toSample() }) } }
     val windows = dao.steerWindows(sessionId)
     val full = ReportSummaryBody(
         sessionId = s.id, startedAt = iso(s.startedAt), endedAt = iso(endedAt), simulated = s.scenarioId != null,
         outputRoute = when (s.outputRoute) { "REAR_ZONE" -> OutputRoute.REAR_ZONE; "DEFAULT_FALLBACK" -> OutputRoute.DEFAULT_ZONE_FALLBACK; else -> OutputRoute.NO_PLAYBACK }, // C85
         timeline = timeline, preCryContext = context,
-        steering = steering(windows, dao.baselineWindows(s.driverUserId), responseStartAt(plays, episodes, dao.firstAlarmLogAt(sessionId))),
+        steering = steering(windows.map { it.toRecord() }, dao.baselineWindows(s.driverUserId).map { it.toRecord() },
+            responseStartAt(episodes.mapNotNull { it.alarmAt } + listOfNotNull(dao.firstAlarmLogAt(sessionId)), plays.mapNotNull { it.startedAt })),
         carActions = carActions(s.outputRoute, plays, episodes, settled, s.restLog, dao.controls(sessionId).filter { it.ok }),
         controls = dao.controls(sessionId).groupBy { it.api to it.target }.map { (k, rows) ->
             ControlRecord(k.first, k.second, rows.size, rows.count { it.ok }, rows.count { !it.ok }, rows.sumOf { it.retries })
@@ -88,9 +89,9 @@ fun buildReport(dao: StoreDao, sessionId: String, now: Long, p: Params = Params(
 
 /** C345: 대응 시작 = 처음 경보한 시각 이후에 시작한 재생 기록의 가장 이른 시각. 경보 없는 에피소드(소리 바꾸기 요청 등)의 재생·경보 전 재생은 대응이 아니다. 없으면 null */
 /** C346: 재생 없이 기록만 한 경보(대기·통화·포커스 거절·상한)는 alarm_log에만 남으므로 그 첫 시각도 함께 본다 */
-internal fun responseStartAt(plays: List<PlayLogEntity>, episodes: List<EpisodeEntity>, alarmLogFirst: Long?): Long? {
-    val firstAlarm = (episodes.mapNotNull { it.alarmAt } + listOfNotNull(alarmLogFirst)).minOrNull() ?: return null
-    return plays.mapNotNull { it.startedAt }.filter { it >= firstAlarm }.minOrNull()
+internal fun responseStartAt(alarmAts: List<Long>, playStarts: List<Long>): Long? {
+    val firstAlarm = alarmAts.minOrNull() ?: return null
+    return playStarts.filter { it >= firstAlarm }.minOrNull()
 }
 
 private fun truncate(b: ReportSummaryBody): ReportSummaryBody {
@@ -163,18 +164,17 @@ internal fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (S
 }
 
 /** 2. pre_cry_context: 경보 −30초 ~ 0초의 1초 표본 요약. 표본이 없으면 뺀다. */
-internal fun preCry(e: EpisodeEntity, rows: List<ContextSampleEntity>, p: Params = Params()): PreCryContext? {
-    val alarm = e.alarmAt ?: return null
+internal fun preCry(episodeId: String, alarm: Long, rows: List<ContextSample>, p: Params = Params()): PreCryContext? {
     val w = rows.filter { it.at >= alarm - p.contextHalfMs && it.at <= alarm }.sortedBy { it.at }
     val atAlarm = w.lastOrNull() ?: return null
     return PreCryContext(
-        episodeId = e.id, windowS = (p.contextHalfMs / 1000).toInt(),
+        episodeId = episodeId, windowS = (p.contextHalfMs / 1000).toInt(),
         speedKmhAvg = round1(w.map { it.speedKmh }.average()),
         speedKmhMax = round1(w.maxOf { it.speedKmh }),
         brakePresses = w.zipWithNext().count { (a, b) -> !a.brake && b.brake },
         steeringReversals = reversals(w.map { it.steeringDeg }, p.steerReversalDeg),
-        turnSignalUsed = w.any { it.turnSignal != "NONE" },
-        gear = Gear.valueOf(atAlarm.gear),
+        turnSignalUsed = w.any { it.turnSignal != TurnSignal.NONE },
+        gear = Gear.valueOf(atAlarm.gear.name),
         cabinTempC = atAlarm.cabinC, windowOpen = null,   // 창 위치를 읽는 API 미확인(G39)
         playing = atAlarm.playback != null,
     )
@@ -200,9 +200,9 @@ internal fun reversals(angles: List<Double>, deg: Double): Int {
  * 3. steering: 이 세션의 울음 창을 같은 운전자·같은 속도대의 평소 창 중앙값과 견준다(G38).
  * 속도대마다 견준 뒤 울음 창의 속도대 비중으로 합친다(명세서 17장 C97).
  */
-internal fun steering(session: List<SteerWindowEntity>, baseline: List<SteerWindowEntity>, responseAt: Long?): Steering {
+internal fun steering(session: List<SteerWindowRecord>, baseline: List<SteerWindowRecord>, responseAt: Long?): Steering {
     // C341: 창의 역할을 한 곳에서 가른다. cryPresent는 본 울음만 세우니 관측이 일부여도 울음 창이다(자동 시도 재생이 울음 3초 뒤 시작해 첫 울음 창은 거의 늘 미관측). 조용함은 관측하고 울음이 없을 때만(C312·C338)
-    fun SteerWindowEntity.role() = when {
+    fun SteerWindowRecord.role() = when {
         excluded -> SteerRole.SKIP
         cryPresent -> SteerRole.CRY
         observed -> SteerRole.QUIET

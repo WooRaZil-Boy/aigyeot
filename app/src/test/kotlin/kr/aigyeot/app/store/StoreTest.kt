@@ -686,7 +686,7 @@ class StoreTest {
         val rows = dao.context("E1")
         assertTrue(rows.any { it.at > alarm && it.playback != null }, "경보 뒤 칸에는 재생 중이 담겼다(전제)")
         assertTrue(rows.any { it.at <= alarm }, "경보 이전 줄이 있다(전제)")
-        assertEquals(false, preCry(ep, rows)!!.playing)
+        assertEquals(false, preCry(ep.id, alarm, rows.map { it.toSample() })!!.playing)
     }
 
     @Test fun contextRecorder_clear_dropsOpenBucket() {
@@ -719,20 +719,20 @@ class StoreTest {
     }
 
     @Test fun steering_afterResponse_onlyLaterSameBandPlayingWindows() {
-        val cry = SteerWindowEntity("S1", T0, 2, false, true, false, 6)
-        val ok = SteerWindowEntity("S1", T0 + 60_000, 2, false, false, true, 8)
+        val cry = SteerWindowRecord("S1", T0, 2, false, true, false, 6)
+        val ok = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, true, 8)
         val otherBand = ok.copy(startAt = T0 + 120_000, speedBand = 4, reversals = 100)
         val before = ok.copy(startAt = T0 - 60_000, reversals = 50)
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
         val s = steering(listOf(before, cry, ok, otherBand), base, responseAt = ok.startAt)
         assertTrue(s.available && before.startAt < cry.startAt && otherBand.speedBand !in setOf(cry.speedBand))
         assertEquals(8.0, s.afterResponsePerMin, "울음 창 뒤, 같은 속도대 창만 센다")
     }
 
     @Test fun steering_reasonNoCry_onlyWhenSessionHasNoCryWindow() {                  // C112
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
-        val noCry = SteerWindowEntity("S1", T0, 2, false, false, false, 4)
-        val excludedCry = SteerWindowEntity("S1", T0, 2, true, true, false, 6)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val noCry = SteerWindowRecord("S1", T0, 2, false, false, false, 4)
+        val excludedCry = SteerWindowRecord("S1", T0, 2, true, true, false, 6)
         assertEquals(SteeringUnavailableReason.NO_CRY, steering(listOf(noCry), base, null).unavailableReason)
         // C330: 관측한 창이 없으면(창 0개·모두 observed=false) 울음이 없었다고 말할 수 없다
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(emptyList(), base, null).unavailableReason)
@@ -744,26 +744,26 @@ class StoreTest {
     }
 
     @Test fun steering_cryWindowUnobserved_plusQuietObserved_isNoComparableWindow() {   // C331: 울음 중 재생이 시작된 창(cryPresent·미관측)이 있으면 울음이 없었다고 말할 수 없다. C341: 그 창이 울음 창이라 비교로 간다(NO_CRY 아님)
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
-        val cryUnobserved = SteerWindowEntity("S1", T0, 2, false, true, false, 6).copy(observed = false)
-        val quiet = SteerWindowEntity("S1", T0 + 60_000, 2, false, false, false, 4)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val cryUnobserved = SteerWindowRecord("S1", T0, 2, false, true, false, 6).copy(observed = false)
+        val quiet = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 4)
         val s = steering(listOf(cryUnobserved, quiet), base, null)
         assertTrue(s.available); assertEquals(null, s.unavailableReason)
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(cryUnobserved.copy(excluded = true), quiet), base, null).unavailableReason)
     }
 
     @Test fun c338_steering_micOnLater_unobservedThenQuietObserved_isNoComparableWindow() {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
-        val off = (0 until 3).map { SteerWindowEntity("S1", T0 + it * 60_000L, 2, false, false, false, 4, observed = false) }
-        val on = (3 until 6).map { SteerWindowEntity("S1", T0 + it * 60_000L, 2, false, false, false, 4) }
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val off = (0 until 3).map { SteerWindowRecord("S1", T0 + it * 60_000L, 2, false, false, false, 4, observed = false) }
+        val on = (3 until 6).map { SteerWindowRecord("S1", T0 + it * 60_000L, 2, false, false, false, 4) }
         val s = steering(off + on, base, null)
         assertEquals(false, s.available)
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, s.unavailableReason)
     }
 
     @Test fun c338_steering_allObservedQuiet_withExcluded_isNoCry() {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
-        val quiet = SteerWindowEntity("S1", T0, 2, false, false, false, 4)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val quiet = SteerWindowRecord("S1", T0, 2, false, false, false, 4)
         val s = steering(listOf(quiet, quiet.copy(startAt = T0 + 60_000, excluded = true), quiet.copy(startAt = T0 + 120_000)), base, null)
         assertEquals(false, s.available)
         assertEquals(SteeringUnavailableReason.NO_CRY, s.unavailableReason)
@@ -779,15 +779,15 @@ class StoreTest {
     @Test fun preCry_speedRoundedToOneDecimal() {                                      // C112
         val alarm = T0 + 5_000
         val ep = EpisodeEntity("E1", "S1", T0, null, "ALARM", alarm, 1_000, null, null, null, null, null, null, null, null, null, null, false, false, 0, false, 0, emptyList())
-        fun row(at: Long, v: Double) = ContextSampleEntity("E1", at, v, false, 0.0, "NONE", "D", 24.0, null, null, null)
-        val c = preCry(ep, listOf(row(alarm - 1_000, 80.00000381469727), row(alarm, 58.25)))!!
+        fun row(at: Long, v: Double) = ContextSample("E1", at, v, false, 0.0, TurnSignal.NONE, kr.aigyeot.engine.Gear.D, 24.0, null, null)
+        val c = preCry(ep.id, alarm, listOf(row(alarm - 1_000, 80.00000381469727), row(alarm, 58.25)))!!
         assertEquals(80.0, c.speedKmhMax)
         assertEquals(69.1, c.speedKmhAvg)      // (80.0000038 + 58.25) / 2 = 69.125
     }
 
     @Test fun steering_comparesSameBandBaseline() {
-        val cry = SteerWindowEntity("S1", T0, 2, false, true, false, 6)
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val cry = SteerWindowRecord("S1", T0, 2, false, true, false, 6)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
         val s = steering(listOf(cry), base, null)
         assertTrue(s.available); assertEquals(3.0, s.baselinePerMin); assertEquals(6.0, s.duringCryPerMin)
         assertEquals(false, steering(listOf(cry), base.map { it.copy(speedBand = 4) }, null).available)
@@ -823,7 +823,7 @@ class StoreTest {
     }
 
     @Test fun steering_perBand_noChangeWhenOnlyBandMixDiffers() {
-        fun w(at: Int, band: Int, r: Int, cry: Boolean = false, play: Boolean = false) = SteerWindowEntity("S1", T0 + at * 60_000L, band, false, cry, play, r)
+        fun w(at: Int, band: Int, r: Int, cry: Boolean = false, play: Boolean = false) = SteerWindowRecord("S1", T0 + at * 60_000L, band, false, cry, play, r)
         val base = (1..6).map { w(-it, 2, 2) } + (7..8).map { w(-it, 4, 20) }       // 속도대 2가 훨씬 많다
         val s = listOf(w(0, 2, 2, cry = true)) + (1..4).map { w(it, 4, 20, cry = true) } + w(9, 4, 20, play = true)
         val r = steering(s, base, responseAt = T0 + 9 * 60_000L)
@@ -834,7 +834,7 @@ class StoreTest {
 
     // C354: 속도대가 섞인 기준선(중앙값 2·10 → 6)에서 대응 뒤 값은 공식대로 가되 0 아래로 내려가지 않는다
     private fun multiBand(afterReversals: Int): kr.aigyeot.shared.Steering {
-        fun w(at: Int, band: Int, r: Int, cry: Boolean = false, play: Boolean = false) = SteerWindowEntity("S1", T0 + at * 60_000L, band, false, cry, play, r)
+        fun w(at: Int, band: Int, r: Int, cry: Boolean = false, play: Boolean = false) = SteerWindowRecord("S1", T0 + at * 60_000L, band, false, cry, play, r)
         val base = (1..5).map { w(-it, 2, 2) } + (6..10).map { w(-it, 4, 10) }
         val s = listOf(w(0, 2, 2, cry = true), w(1, 4, 10, cry = true), w(2, 4, afterReversals))
         return steering(s, base, responseAt = T0 + 2 * 60_000L)
@@ -851,11 +851,11 @@ class StoreTest {
     }
 
     // C341: 자동 달래기 주행. 울음 창은 재생이 시작돼 관측이 일부뿐이고, 재생이 끝난 뒤 조용한 창이 대응 뒤다
-    private fun autoSoothe(): Pair<List<SteerWindowEntity>, List<SteerWindowEntity>> {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, 2) }
-        val w1 = SteerWindowEntity("S1", T0, 2, false, true, true, 6, observed = false)
-        val w2 = SteerWindowEntity("S1", T0 + 60_000, 2, false, false, true, 20, observed = false)
-        val w3 = SteerWindowEntity("S1", T0 + 120_000, 2, false, false, false, 4)
+    private fun autoSoothe(): Pair<List<SteerWindowRecord>, List<SteerWindowRecord>> {
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
+        val w1 = SteerWindowRecord("S1", T0, 2, false, true, true, 6, observed = false)
+        val w2 = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, true, 20, observed = false)
+        val w3 = SteerWindowRecord("S1", T0 + 120_000, 2, false, false, false, 4)
         return listOf(w1, w2, w3) to base
     }
 
@@ -884,33 +884,33 @@ class StoreTest {
     @Test fun c343_playbackBeforeCryOnly_notAfterResponse() {
         val (s, base) = autoSoothe()
         val (w1, _, w3) = s
-        val earlyPlay = SteerWindowEntity("S1", T0 - 60_000, 2, false, false, true, 3)
+        val earlyPlay = SteerWindowRecord("S1", T0 - 60_000, 2, false, false, true, 3)
         val quiet = (3..5).map { w3.copy(startAt = T0 + it * 60_000L) }
         assertEquals(null, steering(listOf(earlyPlay, w1.copy(playing = false)) + quiet, base, null).afterResponsePerMin)
     }
 
     @Test fun c344_requestEndedThenCrySameWindow_noResponse_afterNull() {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, 2) }
-        val cry = SteerWindowEntity("S1", T0, 2, false, true, true, 6)           // 운전자가 튼 재생이 끝난 뒤 같은 창에서 울음 (playing·cryPresent 둘 다 참)
-        val quiet = SteerWindowEntity("S1", T0 + 60_000, 2, false, false, false, 4)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
+        val cry = SteerWindowRecord("S1", T0, 2, false, true, true, 6)           // 운전자가 튼 재생이 끝난 뒤 같은 창에서 울음 (playing·cryPresent 둘 다 참)
+        val quiet = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 4)
         assertEquals(null, steering(listOf(cry, quiet), base, null).afterResponsePerMin)
     }
 
     @Test fun c344_responseStartsAfterCry_quietWindowsAfterResponseCount() {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, 2) }
-        val cry = SteerWindowEntity("S1", T0, 2, false, true, false, 6)
-        val early = SteerWindowEntity("S1", T0 + 60_000, 2, false, false, false, 50)
-        val late = SteerWindowEntity("S1", T0 + 120_000, 2, false, false, false, 4)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
+        val cry = SteerWindowRecord("S1", T0, 2, false, true, false, 6)
+        val early = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 50)
+        val late = SteerWindowRecord("S1", T0 + 120_000, 2, false, false, false, 4)
         assertEquals(4.0, steering(listOf(cry, early, late), base, responseAt = T0 + 90_000).afterResponsePerMin, "responseAt 앞에 시작한 창은 빠진다")
         assertEquals(27.0, steering(listOf(cry, early, late), base, responseAt = T0 + 30_000).afterResponsePerMin, "responseAt이 앞이면 둘 다 든다")
     }
 
     // C347: 첫 울음 창이 기준선 없는 속도대여도 '대응 뒤'의 앞 경계다
     @Test fun c347_firstCryInBandWithoutBaseline_stillAnchorsAfter() {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, 2) }
-        val firstCry = SteerWindowEntity("S1", T0, 3, false, true, false, 9)            // 기준선 없는 속도대
-        val quiet = SteerWindowEntity("S1", T0 + 60_000, 2, false, false, false, 4)      // 대응 뒤 조용한 창
-        val laterCry = SteerWindowEntity("S1", T0 + 120_000, 2, false, true, false, 6)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
+        val firstCry = SteerWindowRecord("S1", T0, 3, false, true, false, 9)            // 기준선 없는 속도대
+        val quiet = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 4)      // 대응 뒤 조용한 창
+        val laterCry = SteerWindowRecord("S1", T0 + 120_000, 2, false, true, false, 6)
         assertEquals(4.0, steering(listOf(firstCry, quiet, laterCry), base, responseAt = T0 + 30_000).afterResponsePerMin)
     }
 
@@ -972,19 +972,19 @@ class StoreTest {
     }
 
     @Test fun c312_unobservedWindowsExcludedFromAfterResponse() {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, 2) }
-        val cry = SteerWindowEntity("S1", T0, 2, false, true, false, 2)
-        val seen = SteerWindowEntity("S1", T0 + 60_000, 2, false, false, true, 4)
-        val unseen = SteerWindowEntity("S1", T0 + 120_000, 2, false, false, true, 20, observed = false)
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
+        val cry = SteerWindowRecord("S1", T0, 2, false, true, false, 2)
+        val seen = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, true, 4)
+        val unseen = SteerWindowRecord("S1", T0 + 120_000, 2, false, false, true, 20, observed = false)
         assertEquals(4.0, steering(listOf(cry, seen), base, seen.startAt).afterResponsePerMin)
         assertEquals(4.0, steering(listOf(cry, seen, unseen), base, seen.startAt).afterResponsePerMin, "보지 못한 playing 창은 '대응 뒤'에 들지 않는다")
         assertEquals(null, steering(listOf(cry, unseen), base, seen.startAt).afterResponsePerMin)
     }
 
     @Test fun steering_ignoresCryWindowsInBandsWithoutBaseline() {
-        val base = (1..5).map { SteerWindowEntity("S0", T0 - it * 60_000, 2, false, false, false, it) }
-        val cry = listOf(SteerWindowEntity("S1", T0, 2, false, true, false, 2)) +
-            (1..2).map { SteerWindowEntity("S1", T0 + it * 60_000, 4, false, true, false, 20) }
+        val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
+        val cry = listOf(SteerWindowRecord("S1", T0, 2, false, true, false, 2)) +
+            (1..2).map { SteerWindowRecord("S1", T0 + it * 60_000, 4, false, true, false, 20) }
         assertTrue(cry.any { it.speedBand == 4 } && base.none { it.speedBand == 4 }, "평소 창 없는 속도대의 울음 창이 있다(전제)")
         val s = steering(cry, base, null)
         assertEquals(2.0, s.duringCryPerMin)

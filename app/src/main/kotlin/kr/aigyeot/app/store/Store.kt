@@ -32,6 +32,7 @@ import kr.aigyeot.engine.EpisodeRecord
 import kr.aigyeot.engine.EpisodeTrigger
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.FirstTry
+import kr.aigyeot.engine.Gear
 import kr.aigyeot.engine.HandoffCause
 import kr.aigyeot.engine.HandoffKind
 import kr.aigyeot.engine.LogAlarm
@@ -55,6 +56,8 @@ import kr.aigyeot.engine.SavePlay
 import kr.aigyeot.engine.SaveSession
 import kr.aigyeot.engine.SaveSnapshot
 import kr.aigyeot.engine.SaveSteerWindow
+import kr.aigyeot.engine.SteerWindowRecord
+import kr.aigyeot.engine.TurnSignal
 import kr.aigyeot.engine.fresh
 import kr.aigyeot.shared.ProtocolJson
 
@@ -112,8 +115,8 @@ class Store(
             is SettleHandoff -> dao.settleHandoff(cmd.episodeId, cmd.kind.name, cmd.toldDriver, cmd.restName)
             is SavePlay -> dao.upsertPlay(cmd.record.toEntity())
             is LogAlarm -> logAlarm(cmd)
-            is CaptureContext -> dao.insertContext(context.capture(cmd.episodeId, cmd.alarmAt))
-            is SaveSteerWindow -> with(cmd.record) { dao.upsertSteer(SteerWindowEntity(sessionId, startAt, speedBand, excluded, cryPresent, playing, reversals, observed)) }
+            is CaptureContext -> dao.insertContext(context.capture(cmd.episodeId, cmd.alarmAt).map { it.toEntity() })
+            is SaveSteerWindow -> dao.upsertSteer(cmd.record.toEntity())
             is CloseSession -> closeSession(cmd.sessionId)   // C211: 90일 정리(G40)는 묶음 트랜잭션 밖에서 purgeOld로(안에서 삼킨 실패가 바깥 묶음을 몰래 되돌린다)
             is SaveSnapshot -> saveSnapshot(cmd.state)
             is SaveFeedingStart -> dao.saveFeedingStart(cmd.at)
@@ -161,16 +164,16 @@ class Store(
 
     /** 맥락 기록기(F17)에 사건마다 넣는다. 붙잡아 둔 캡처가 있으면 이번에 마감된 초를 쓴다. */
     fun observe(e: Event, s: EngineState) {
-        var once: List<ContextSampleEntity>? = null   // 기록기는 사건마다 한 번만 먹인다(다시 할 때는 저장만 다시)
+        var once: List<ContextSample>? = null   // 기록기는 사건마다 한 번만 먹인다(다시 할 때는 저장만 다시)
         bestEffort("context_sample") {   // C302 A. C274: 부모 조회부터 저장까지 전부 부수 일. 실패가 Step을 끊지 않는다
             insertLive(once ?: context.observe(e, s).also { once = it })
         }
     }
 
     /** C262: 부모 에피소드 행이 없는(지운·정리된) 캡처는 입구에서 버린다. 한 줄이 외래키를 어기면 같은 묶음의 다른 에피소드 줄까지 잃는다. */
-    private fun insertLive(rows: List<ContextSampleEntity>) {
+    private fun insertLive(rows: List<ContextSample>) {
         val live = rows.filter { r -> (dao.episode(r.episodeId) != null).also { if (!it) { context.drop(r.episodeId); Log.w(TAG, "부모 에피소드 없음: 버림 ${r.episodeId}") } } }
-        if (live.isNotEmpty()) dao.insertContext(live)
+        if (live.isNotEmpty()) dao.insertContext(live.map { it.toEntity() })
     }
 
     // ---- 처음 상태·복원 대조에 쓰는 Room 값 ----
@@ -349,6 +352,17 @@ private fun EpisodeRecord.toEntity(old: EpisodeEntity?) = EpisodeEntity(
 private fun kr.aigyeot.engine.PlayRecord.toEntity() = PlayLogEntity(
     id, sessionId, episodeId, purpose.name, method.name, songId, startedAt, endedAt, playedMs, endReason.name,
 )
+
+private fun SteerWindowRecord.toEntity() = SteerWindowEntity(sessionId, startAt, speedBand, excluded, cryPresent, playing, reversals, observed)
+
+/** Room 행 → 조향 창 기록(리포트 계산 입력). [toEntity]의 거꾸로. */
+internal fun SteerWindowEntity.toRecord() = SteerWindowRecord(sessionId, startAt, speedBand, excluded, cryPresent, playing, reversals, observed)
+
+/** 맥락 표본 → 행. 창 위치는 읽는 API 미확인(G39)이라 비운다. */
+private fun ContextSample.toEntity() = ContextSampleEntity(episodeId, at, speedKmh, brake, steeringDeg, turnSignal.name, gear.name, cabinC, windowPos = null, playback, cryP)
+
+/** Room 행 → 맥락 표본(리포트 계산 입력). [toEntity]의 거꾸로. 행은 [toEntity]만 쓰므로 이름은 늘 enum 값이다. */
+internal fun ContextSampleEntity.toSample() = ContextSample(episodeId, at, speedKmh, brake, steeringDeg, TurnSignal.valueOf(turnSignal), Gear.valueOf(gear), cabinC, playback, cryP)
 
 /** report_summary body를 outbox body_json으로. 시각은 이미 +09:00 문자열이라 link는 그대로 봉투에 넣는다. */
 fun encodeReport(b: kr.aigyeot.shared.ReportSummaryBody): String = ProtocolJson.encodeToString(kr.aigyeot.shared.ReportSummaryBody.serializer(), b)
