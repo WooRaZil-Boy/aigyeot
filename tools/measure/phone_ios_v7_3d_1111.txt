@@ -1,0 +1,80 @@
+iOS 폰 3D 새 그랜저 모델(v7) 반영 — 옛 모델(v6)과 준비 시간·프레임·메모리 비교
+==========================================================================
+
+환경
+- Xcode 27.2, iPhoneSimulator 27.2 SDK, 시뮬레이터 iPhone 17 Pro(iOS 27.0, 1206x2622). 단위 시험은 Aigyeot Test 시뮬레이터.
+- 옛 모델: phone/ios/Aigyeot/Resources/aigyeot_car.usdz 8,456,563바이트(시안 v6).
+- 새 모델: 시안 docs/design/1109-unified-v3/assets/car/aigyeot_car.usdz 3,358,265바이트(v7, 11-11). usdchecker --arkit 통과.
+- 렌더러: 옛 = v6 값(도장 #E9EAEC·거칠기 0.3·금속 0.06, 다크 환경광 2^-0.6), 새 = 아래 '옮긴 값'(v7).
+
+방법(phone_ios_v6_3d.txt 6절과 같은 시나리오)
+- UI 시험 DesignTour/test_v6_3d_돌리기: 첫 안내 3D가 보이면 4초 대기(정지 그림) → 손가락으로 6번 끌어 돌림 → 8초 대기(감쇠 뒤 정지 그림).
+- 측정 동안만 CarStage에 DEBUG 로그를 넣었다(재고 나서 지움, 코드에 남지 않음):
+  - 준비 시간: 모델 읽기 시작 → 읽기·재질 덮어쓰기 끝(loaded), → 첫 Update(first-frame), ms.
+  - 프레임: ARView scene.subscribe(SceneEvents.Update) 초당 횟수.
+  - 메모리: task_info(TASK_VM_INFO).phys_footprint, 1초마다(MB).
+- CPU: 맥 호스트 ps %cpu, 0.5초 간격(시뮬레이터 앱은 맥 프로세스라 실기기 값이 아니다. 비교용).
+- 맥 부하를 기다리지 않고 쟀다. 부하(1분 평균)를 같이 적는다. 옛 1·2회차(부하 126·120)는 다른 세션 빌드와 겹쳐 아래 표에서 뺐다.
+
+결과(공식 예산이 없어 비교만 한다)
+
+| 항목 | 옛 v6(3회차·4회차) | 새 v7(1회차·2회차) |
+| --- | --- | --- |
+| 부하(시작→끝, 1분 평균) | 70→36 · 8.6→11.9 | 15.8→13.0 · 11.1→8.8 |
+| 모델 읽기 끝(ms) | 3669 · 3801 | 3427 · 3411 |
+| 첫 그림(ms) | 4559 · 4869 | 4372 · 4304 |
+| 읽기 직후 메모리(MB) | 67.9 · 68.5 | 59.9 · 58.2 |
+| 대기(정지 그림) 메모리(MB) | 88.6 · 90.2 | 78.7 · 77.7 |
+| 돌리는 중 최고 메모리(MB) | 92.1 · 91.7 | 80.2 · 81.3 |
+| 돌리는 중 프레임(초당 Update, 30 넘는 초) | 41·59·60·60·52 / 57·60·59·60 | 60·59·60·60 / 55·60·59·59·40 |
+| 대기 프레임 | 0 | 0 |
+| 맥 CPU %: 시작(앱 실행·읽기·첫 그림) 최고 | 128 · 112 | 103 · 107 |
+| 맥 CPU %: 돌리는 중 평균(최고) | 23.2(40.8) · 23.5(39.5) | 22.5(41.1) · 21.9(31.7) |
+| 맥 CPU %: 정지 그림 뒤 | 0.0 · 0.1 | 0.1 · 0.1 |
+
+- 정리: 새 모델은 읽기 약 0.3~0.4초 빠르고, 메모리는 대기·최고 모두 약 11MB 적다. 돌릴 때 프레임은 둘 다 60 근처, 대기 0프레임(정지 그림 + ARView 떼기)은 그대로다.
+  CPU는 차이가 부하 흔들림 안이다.
+- 새 렌더러는 모든 재질을 양면으로 그린다(아래). 그래도 돌리는 중 프레임·CPU가 옛 모델보다 나쁘지 않다(삼각형 243,022 → 83,324, 그리기 153 → 65, README v7 수치).
+- 원시 로그: 측정 세션 임시 폴더의 m3d-old3·old4·new1·new2(.log, -cpu.log). 숫자는 위 표에 옮겼다.
+
+이름 약속 대조(앱이 찾는 이름)
+- usdtree로 옛·새 USDZ를 대조: 재질 38 → 35개. 빠진 셋(Brake·Caliper·Headliner)은 앱이 쓰지 않는다. 새로 생긴 재질 이름은 없다.
+- 실행 중 대조(덮어쓰기 전 RealityKit Material.name, iOS 27): 앱이 덮어쓰는 10개 Paint·Chrome·Glass_Front·Glass_Rear·Glass_Side·Sunroof_Glass·Roofglass_Shade·Ambient·Head_L_All·Rear_L_Pos 모두 있음(빠짐 0).
+- iOS 17 길(엔티티 이름 머리말 Ambient): Ambient_Lines(Xform·Mesh) 있음. 앵커 Anchor_* 11개 있음(폰은 쓰지 않음). 엔티티 95개.
+- 바뀐 노드(Cabin·Door_Trim_Lining·Ambient_Lines·ChildSeat_Body·Lamp_R_Lens)는 앱이 이름으로 찾지 않는다(Ambient 머리말만 씀).
+
+옮긴 값(시안 js/car3d.js v7, README v7 '시안 렌더러에서 같이 바꾼 것')
+- 도장 Paint: #E4E7EA, 거칠기 0.42, 금속성 0.26, 클리어코트 1(거칠기 0.03).
+- 크롬 Chrome: #E2E6EA, 거칠기 0.08, 금속성 1(옛 iOS는 USDZ 재질 그대로였다).
+- 유리 Glass_Front·Glass_Rear·Glass_Side·Sunroof_Glass: 거칠기 0.03, 정반사(specular) 0.25. 색·불투명도는 USDZ 그대로.
+- 선루프 가림막 Roofglass_Shade: #0E1013, 거칠기 0.92.
+- 양면: 모든 PhysicallyBasedMaterial faceCulling = .none(iOS 15+), UnlitMaterial은 18+ API라 18 이상에서만.
+- 다크 조명 0.55배: 시안처럼 환경(방·바닥·조명 판)에만 준다 → 기본 환경광 intensityExponent = log2(0.55)(옛 -0.6). 주광은 테마와 무관하게 2600 그대로
+  (시안 DirectionalLight 1.4·안드로이드와 같다. 처음에는 주광까지 0.55배로 낮췄다가 검토 지적으로 고침, 캡처 24-owner-car-dark-keylight.png).
+- 근거: Apple PhysicallyBasedMaterial(https://developer.apple.com/documentation/realitykit/physicallybasedmaterial), Specular(…/physicallybasedmaterial/specular-swift.struct), faceCulling(…/physicallybasedmaterial/faceculling-swift.property, "끄면 덜 효율적" — 위 측정에서 프레임 저하 없음).
+
+옮기지 못한 값과 가장 가까운 방법
+- 크롬 환경광 1.5배, 유리 환경광 1.0배: RealityKit PhysicallyBasedMaterial에 재질마다 환경광 배율이 없다. 크롬은 시안 색·거칠기·금속성만 옮겼다.
+- 스튜디오 띠 조명(천장 띠 셋·벽 띠·바닥 밝은 자리): 시안은 빛나는 판으로 환경 지도를 만든다. 여기는 RealityKit 기본 환경광 + 주광 하나라
+  보닛·지붕의 띠 모양 반사는 없다. 맞추려면 띠 조명을 구운 HDR 환경 그림(EnvironmentResource)을 만들어 넣어야 한다(이번에는 하지 않음).
+- 정반사 0.25: 시안 three.js specularIntensity는 반사율(F0 0.04)에 곱하는 값이다. RealityKit specular의 정확한 대응식은 공식 문서에 없다.
+  Filament 관례(반사율 = 0.16 × s²)면 0.25가 F0 0.01로 시안과 같다. 대응식은 미판정.
+- 유리 투과(transmission): USDZ 유리는 짙은 불투명 그대로(폰은 바깥 보기만이라 틴트 유리처럼 보인다, v6와 같음).
+- X-ray(유령 껍데기 0.014·0.86·2.9, Panel_Gap·DLO_Chrome 빛 선): 폰 카드는 X-ray를 쓰지 않아 해당 없음.
+
+화면 확인(iPhone 17 Pro, tools/measure/screens_v7_ios/, PNG는 공개하지 않음)
+- 01-intro-light·dark·ax5(첫 안내 3D, 가장 큰 글자 포함), 24-owner-car-light·dark(차 카드 3D), 40-3d-rotated-light·dark(돌려 보기).
+- compare-v6-v7-*.png: 옛(screens_v6_ios) ↔ 새 나란히. compare-card-vs-design-v7-closeups.png: 차 카드 ↔ 시안 shots/v7-closeups.png.
+- 견줘 본 것: 새 차체(검정 유리 지붕 한 판, 마름모 격자 그릴, 15날 휠, 손잡이·문 선)가 그려지고 다크에서도 차가 보인다.
+  시안과 다른 점은 위 '옮기지 못한 값'의 띠 반사(보닛·어깨의 빛 줄)가 없는 것.
+- 시안 shots에는 iOS 쪽 v7 캡처가 없다(v7-car-home-light·xray·closeups·compare·roof-trunk만). 그래서 시안 v7 클로즈업·차 홈과 견줬다.
+
+시험
+- xcodebuild test(Aigyeot, Aigyeot Test 시뮬레이터) 412개 통과, 실패 0.
+- DesignTour 기록만(라이트·다크·AX5)·3D 돌리기(라이트·다크)·연결(라이트·다크) 통과.
+
+미판정
+- 실기기 프레임·전력·메모리(시뮬레이터는 맥 GPU로 그린다).
+- iOS 17 런타임에서 그리기(맥에 17 런타임 없음). 17은 재질 이름 API가 없어 도장·크롬·유리는 USDZ 값 그대로다.
+- specular 0.25의 정확한 대응(위).
+- 화면 캡처는 측정용 DEBUG 로그가 들어 있던 빌드로 찍었다(그리기 코드는 같다). 로그를 지운 최종 코드는 단위 시험으로만 돌렸다.
