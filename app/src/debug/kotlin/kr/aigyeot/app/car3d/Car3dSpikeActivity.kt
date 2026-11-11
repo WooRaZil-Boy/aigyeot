@@ -7,6 +7,10 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.widget.FrameLayout
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import kr.aigyeot.app.ui.car3d.CarEngine
 import kr.aigyeot.app.ui.car3d.CarView
 import kr.aigyeot.app.ui.car3d.Callout3d
@@ -39,7 +43,7 @@ class Car3dSpikeActivity : Activity() {
         apply(intent)
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); apply(intent) }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); apply(intent) }
 
     private fun apply(i: Intent) {
         val s = Stage3d(
@@ -64,4 +68,36 @@ class Car3dSpikeActivity : Activity() {
     override fun onDestroy() { car.destroy(); super.onDestroy() }
 
     private companion object { const val TAG = "CAR3D" }
+}
+
+/**
+ * debug 전용(화면 대조): 홈 무대 그리기([CarStage], 칩·지시선 포함)를 같은 크기로 띄운다. 정차 중 달래기 X-ray처럼 실제 흐름으로 만들기 어려운 그림을 찍는다.
+ *   am start --user 10 -n kr.aigyeot.app/.car3d.Car3dStageActivity --es view rear --es light soothe --es callouts heat,lock,dim --ez ripple true
+ * 다크는 시스템 설정(cmd uimode night yes)을 따른다.
+ */
+class Car3dStageActivity : androidx.activity.ComponentActivity() {
+    private val stage = androidx.compose.runtime.mutableStateOf(Stage3d())
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        stage.value = stageOf(intent)
+        setContent {
+            kr.aigyeot.app.ui.AppTheme {
+                val d = androidx.compose.ui.platform.LocalDensity.current
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(kr.aigyeot.app.ui.LocalPalette.current.stage)) {
+                    kr.aigyeot.app.ui.CarStage(stage.value, with(d) { androidx.compose.ui.Modifier.size((1706 - 600 - 36).toDp(), (1210 - 112).toDp()) })
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); stage.value = stageOf(intent) }
+
+    private fun stageOf(i: Intent) = Stage3d(
+        view = View3d.valueOf((i.getStringExtra("view") ?: "hero").uppercase()),
+        light = Light3d.valueOf((i.getStringExtra("light") ?: "base").uppercase()),
+        ripple = i.getBooleanExtra("ripple", false),
+        callouts = i.getStringExtra("callouts").orEmpty().split(',').filter { it.isNotBlank() }.map { Callout3d.valueOf(it.uppercase()) }.toSet(),
+        drive = i.getBooleanExtra("drive", false),
+    )
 }

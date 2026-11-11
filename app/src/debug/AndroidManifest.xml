@@ -13,5 +13,11 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <!-- 홈 무대 그리기(칩·지시선 포함) 화면 대조: adb로만 연다 -->
+        <activity
+            android:name=".car3d.Car3dStageActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
     </application>
 </manifest>
