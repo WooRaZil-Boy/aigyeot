@@ -15,10 +15,17 @@ data class Preset(val az: Float, val el: Float, val d: Float, val r: Float, val 
     val seatTarget get() = t == null
 }
 
-enum class View3d(val preset: Preset) {
+/** [event]: 사건 시점(울음 감지~넘김). 소리 결·바람 결처럼 계속 움직이는 표현은 이 시점에서만 돌린다([Stage3d.live]). */
+enum class View3d(val preset: Preset, val event: Boolean = false) {
     HERO(Preset(38f, 15f, 9.4f, 3.0f, 27f, floatArrayOf(0.1f, 0.62f, 0f), 0f)),
+    /**
+     * 차 앱 기본(정차 홈·듣는 중·기다림·주행 중·연결 화면): 뒷좌석 실내 X-ray. 왼쪽 Driving view가 차 바깥 모습을 늘 보여 주어(앱이 숨길 수 없는 시스템 영역)
+     * 같은 바깥 모습을 또 두지 않는다(기준 문서 13장 11-11). 뒷줄 가운데를 보고 REAR보다 높고 넓게 잡아, 울음 감지 때 아기 자리로 다가가는 이동이 보이게 한다.
+     * 거리 9.0은 넓고 낮은 상자(연결 화면 타일·좁은 창 무대)에서도 차 앞뒤가 위아래로 잘리지 않게 고른 값이다(세로로 긴 홈 무대는 반폭 2.8로 물러난다).
+     */
+    CABIN(Preset(210f, 50f, 9.0f, 2.8f, 30f, floatArrayOf(-0.4f, 0.55f, 0f), 1f)),
     /** X-ray: 아기 자리 쪽 뒤·위에서 실내를 내려다본다(뒷문 스피커·뒷창·열선·독서등·송풍구가 한 화면에). */
-    REAR(Preset(222f, 40f, 6.4f, 2.45f, 30f, null, 1f)),
+    REAR(Preset(222f, 40f, 6.4f, 2.45f, 30f, null, 1f), event = true),
     TOP(Preset(180f, 87f, 10.5f, 1.25f, 30f, floatArrayOf(-0.15f, 0.5f, 0f), 1f)),
     SIDE(Preset(90f, 6f, 10.5f, 2.9f, 27f, floatArrayOf(0f, 0.62f, 0f), 0f)),
     PHONE(Preset(34f, 14f, 10.6f, 3.0f, 26f, floatArrayOf(0.05f, 0.6f, 0f), 0f)),
@@ -49,7 +56,7 @@ enum class Callout3d(val anchors: List<String>) {
 
 /** 무대 한 장면의 상태(화면 층이 계산해 넘긴다). [ripple]은 소리가 실제로 나갈 때만. [drive]면 조작·카메라 이동·움직임 없음. */
 data class Stage3d(
-    val view: View3d = View3d.HERO,
+    val view: View3d = View3d.CABIN,
     val light: Light3d = Light3d.BASE,
     val ripple: Boolean = false,
     val listen: Boolean = false,
@@ -62,6 +69,15 @@ data class Stage3d(
 ) {
     /** 움직임을 써도 되는가(정차 중·동작 켜짐). */
     val motionOk get() = !drive && !reducedMotion
+    /**
+     * 계속 움직이는 표현(소리 결·바람 결)을 돌려도 되는가: 움직임을 쓸 수 있고 사건 시점일 때만. 기본 실내(CABIN) 같은 대기 시점에서는 멈춘 그림으로 두어
+     * 정차해 기다리는 동안 3D가 쉬지 않고 그리지 않게 한다(명세서 15장 CPU 예산). 한 번 움직이는 효과(열선·잠금·맥박)와 카메라 이동은 따로다.
+     */
+    val live get() = motionOk && view.event
+    /** 소리 결이 돈다(소리가 실제로 나가고 [live]). 아니면 멈춘 고리. */
+    val rippling get() = ripple && live
+    /** 바람 결이 흐른다(공조 칩이 있고 [live]이며 실내가 보일 때, [xray] = 지금 껍데기 투명도). 아니면 멈춘 줄. */
+    fun flowing(xray: Float) = Callout3d.HVAC in callouts && live && xray > 0.3f
 }
 
 /** 카메라 구면 좌표(도·m) + 목표. */
@@ -79,6 +95,12 @@ object CarMath {
     }
 
     fun cam(v: View3d, seat: Seat3d, aspect: Float) = v.preset.let { Cam(it.az, it.el, fitD(it, aspect), it.fov, it.t?.copyOf() ?: seatTarget(seat)) }
+
+    /**
+     * [w0]×[h0]에서 찍은 [v] 시점 정지 그림을 [w]×[h] 칸에 그릴 배율(가운데 맞춤). 목표점에서 한 m가 차지하는 화소는 세로 화각이 같으므로
+     * 높이 ÷ 거리([fitD])에 비례한다. 같은 크기면 1(화소 그대로). 비율이 다르면 크기는 맞지만 거리가 달라 원근이 조금 다르다(교차 페이드가 덮는다).
+     */
+    fun posterScale(v: View3d, w0: Int, h0: Int, w: Float, h: Float): Float = (h / fitD(v.preset, w / h)) / (h0 / fitD(v.preset, w0.toFloat() / h0))
 
     /** 카메라 위치(목표 + 구면). */
     fun eye(c: Cam): FloatArray {

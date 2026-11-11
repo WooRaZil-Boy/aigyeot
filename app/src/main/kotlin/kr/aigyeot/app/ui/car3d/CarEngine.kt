@@ -52,24 +52,31 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         private var inst: CarEngine? = null
         /** 실측용(debug 3D 실측 액티비티): 참이면 구운 AO(COLOR_0)를 빼고 그려 곱해지는지 견준다. */
         var debugNoAo = false
+        /** 홈 정지 그림 찍기용(debug Car3dSpikeActivity `--ez noseat true`): 참이면 카시트를 그리지 않는다(정지 그림은 지금 자리를 담지 않는다). */
+        var debugNoChildSeat = false
 
-        private val waiting = ArrayList<(CarEngine) -> Unit>()
+        /** 기다리는 보기: 준비되면 첫째, 실패하면 둘째를 부른다. */
+        private val waiting = ArrayList<Pair<(CarEngine) -> Unit, () -> Unit>>()
         private var loading = false
 
         /**
-         * 엔진이 준비되면 [cb](메인 스레드). 처음이면 GLB 읽기·JSON·환경광 픽셀 계산은 작업 스레드에서, Filament 단계(모델·자원·재질·장면·환경광·효과)는
+         * 엔진이 준비되면 [cb](메인 스레드), 준비가 실패하면 [onFail]. 처음이면 GLB 읽기·JSON·환경광 픽셀 계산은 작업 스레드에서, Filament 단계(모델·자원·재질·장면·환경광·효과)는
          * 메인 스레드에서 단계마다 한 번씩 양보하며 만든다(화면 전환·주행 중 화면이 오래 막히지 않게, Filament는 메인 스레드에서만).
+         * 준비는 첫 보기가 붙을 때 시작한다. 앱 시작(MainActivity.onCreate)에서 미리 돌려 보니 앱 시작 일과 CPU를 나눠 홈(정지 그림)이 약 0.2초 늦게 뜨고
+         * 3D 첫 장은 빨라지지 않았다(car3d_cabin_1111.txt 12절). 대신 작업 스레드 준비 자체를 줄였다(환경광 계산).
+         * 셰이더 미리 컴파일(Material.compile)도 쓰지 않는다: Filament 1.77.3은 병렬 셰이더 컴파일을 쓸 수 있을 때만 미리 만들고,
+         * 이 에뮬레이터 EGL에는 EGL_KHR_surfaceless_context·GL_KHR_parallel_shader_compile이 없어 동기 모드라 아무것도 하지 않는다(12절)
          */
-        @MainThread fun whenReady(ctx: Context, cb: (CarEngine) -> Unit) {
+        @MainThread fun whenReady(ctx: Context, onFail: () -> Unit = {}, cb: (CarEngine) -> Unit) {
             inst?.let { return cb(it) }
-            waiting += cb
+            waiting += cb to onFail
             if (loading) return
             loading = true
             val app = ctx.applicationContext
             val main = Handler(Looper.getMainLooper())
-            // 준비가 실패하면(자산 읽기·재질 컴파일·Filament 단계 예외) 로그만 남기고 3D 칸은 비워 둔다(앱은 그대로, 다음 보기가 다시 시도)
-            // 기다리던 보기는 버린다(그 보기들은 비운 채로 두고, 새로 열리는 보기가 처음부터 다시 부른다)
-            fun failed(t: Throwable) { Log.e(TAG, "3D 준비 실패: 3D 칸을 비워 둔다", t); loading = false; waiting.clear() }
+            // 준비가 실패하면(자산 읽기·재질 컴파일·Filament 단계 예외) 로그를 남기고 기다리던 보기에 알린다(그 칸은 실패 정지 표시, 앱은 그대로).
+            // 다음에 붙는 보기가 처음부터 다시 부른다
+            fun failed(t: Throwable) { Log.e(TAG, "3D 준비 실패: 3D 칸을 비워 둔다", t); loading = false; waiting.toList().also { waiting.clear() }.forEach { it.second() } }
             Thread({
                 val prep = try { Prep.load(app) } catch (t: Throwable) { main.post { failed(t) }; return@Thread }
                 main.post {
@@ -78,7 +85,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
                         // 생성자(재질 공급·자산 읽개·색 보정)가 실패하면 만든 Engine을 바로 놓는다: 남기면 이 프로세스에서 다음 Engine.create가 막혀 3D가 다시 뜨지 않는다
                         val engine = Engine.create()
                         val e = try { CarEngine(prep, engine) } catch (t: Throwable) { runCatching { engine.destroy() }; throw t }
-                        e.build(main, { t -> e.release(); failed(t) }) { inst = e; loading = false; waiting.toList().also { waiting.clear() }.forEach { it(e) } }
+                        e.build(main, { t -> e.release(); failed(t) }) { inst = e; loading = false; waiting.toList().also { waiting.clear() }.forEach { it.first(e) } }
                     } catch (t: Throwable) { failed(t) }
                 }
             }, "car3d-prep").start()
@@ -94,6 +101,13 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         private val SHELL = Regex("^(Body|Body_Roof|Door_F_|Door_R_|Door_Handle|Mirror_|DLO_|Belt_|Grille|Head_Lamp|Rear_Lamp|Rear_Stop|Panel_Gap|Fuel_Door|Opera_Glass|Glass_|Sunroof_Glass|WheelWell|Parcel_Shelf|Lamp_R_Pod|Door_Trim_|Door_Upper_|Armrest_R_)")
         private val GHOST = Regex("^(Body|Body_Roof|Mirror_Head|Door_F_.*Window|Door_R_.*Window|Opera_Glass|Glass_Front|Glass_Rear|Sunroof_Glass)")
         private val CHILD = Regex("^ChildSeat")
+        /**
+         * 흐리는 껍데기의 투명 그리기 차례: 안쪽(문 안감·휠 하우스) 3 → 바깥 판 4 → 유리 5. 실내는 기본 4, 효과 고리 5, 유령 겹 6·7.
+         * Filament는 같은 차례 안의 투명 물체를 물체 중심 거리로 정렬한다. 문 안감(Door_Trim_Lining, 양쪽 문이 한 물체)과 차체(Body)는 중심이 거의 같아
+         * 카메라가 돌 때 앞뒤가 뒤바뀌며 검은 안감이 차체 위로 덮였다 사라졌다(깜빡임, car3d_cabin_1111.txt 9절). 바깥에서 보면 이 차례가 늘 맞으므로 고정한다.
+         */
+        private val SHELL_INNER = Regex("^(Door_Trim_|Door_Upper_|Armrest_R_|Parcel_Shelf|WheelWell)")
+        private val SHELL_GLASS = Regex("^(Glass_|Opera_Glass|Sunroof_Glass|Door_[FR]_[LR]_Window)")
         /** X-ray에서 가는 빛 선으로 남길 짜임(시안 v7 LINES). */
         private val LINES = Regex("^(Panel_Gap|DLO_Chrome)")
         /** 유령 껍데기 바탕 불투명도(시안 v7 uBase). */
@@ -205,7 +219,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             try { steps[i++]() } catch (e: Throwable) { return fail(e) }
             ((System.nanoTime() - t) / 1_000_000).let { each += it; loadMs += it }
             if (i < steps.size) main.post { next() }
-            else { Log.i(TAG, "3D 준비 메인 ${loadMs}ms(단계 ${each.joinToString("·")}ms, 작업 스레드 ${prep.ms}ms), 렌더러블 ${asset.renderableEntities.size}, 껍데기 ${shellRenderables.size}, 유령 ${ghostRenderables.size}"); done() }
+            else { Log.i(TAG, "3D 준비 메인 ${loadMs}ms(단계 ${each.joinToString("·")}ms, 작업 스레드 ${prep.ms}ms: ${prep.detail}), 렌더러블 ${asset.renderableEntities.size}, 껍데기 ${shellRenderables.size}, 유령 ${ghostRenderables.size}"); done() }
         }
         next()
     }
@@ -272,7 +286,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             mi.setParameter("baseColorFactor", b[0], b[1], b[2], 0.25f + 0.65f * k)
             if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", c[0] * i, c[1] * i, c[2] * i)
         }
-        // 바람 결(공조 낮춤): 실내 보기에서만, 정차 중이면 흐른다(시간 [flowT]), 주행 중이면 멈춘 줄
+        // 바람 결(공조 낮춤): 실내 보기에서만, 사건 시점·정차 중이면 흐른다(시간 [flowT], Stage3d.flowing), 그 밖에는 멈춘 줄
         val hvac = Callout3d.HVAC in on
         flows.forEach { visible(it, hvac && k > 0.3f) }
         flowMi.setParameter("k", if (hvac) k else 0f); flowMi.setParameter("time", flowT)
@@ -357,7 +371,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
                     heatPads[e] = sideIn(e, "Heat_Pad")
                 }
             }
-            if (shell) shellRenderables += e
+            if (shell) { shellRenderables += e; rm.setPriority(ri, when { named(e, SHELL_INNER) -> 3; named(e, SHELL_GLASS) -> 5; else -> 4 }) }
             rm.setCastShadows(ri, false); rm.setReceiveShadows(ri, false)
         }
         scene.addEntities(main.entities)
@@ -427,6 +441,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
     private fun moveChildSeat(seat: Seat3d) {
         val local = childSeatLocal ?: return
         val m = local.copyOf().also { it[14] = local[14] + seat.z - Seat3d.RR.z }
+        if (debugNoChildSeat) for (i in 0..10) if (i % 4 != 3) m[i] = 0f   // 회전·크기 3×3을 0으로(자식 렌더러블까지 안 보임)
         tm.setTransform(tm.getInstance(childSeat), m)
         if (childSeatGhost != 0) tm.setTransform(tm.getInstance(childSeatGhost), m)
     }
@@ -609,6 +624,8 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
  */
 class Prep private constructor(
     val glb: ByteArray, val colors: Map<String, List<Boolean>>, val cube: Map<Boolean, List<ByteBuffer>>, val mats: Map<String, ByteBuffer>, val ms: Long,
+    /** 작업 스레드 시간 나눔(로그용): GLB 읽기·JSON, 환경광 계산. */
+    val detail: String,
 ) {
     companion object {
         fun load(ctx: Context): Prep {
@@ -617,12 +634,16 @@ class Prep private constructor(
             val colors = HashMap<String, List<Boolean>>()
             readGlbJson(bytes, colors)
             if (CarEngine.debugNoAo) whitenColors(bytes)
-            val cube = mapOf(false to cubeLevels(false), true to cubeLevels(true))
+            val t1 = System.nanoTime()
+            // 라이트·다크 환경광은 서로 기대지 않아 다크를 다른 스레드에서 같이 만든다(작업 스레드 시간이 첫 3D 장까지의 기다림에 그대로 더해진다)
+            val darkCube = java.util.concurrent.FutureTask { cubeLevels(true) }.also { Thread(it, "car3d-ibl").start() }
+            val cube = mapOf(false to cubeLevels(false), true to darkCube.get())
+            val t2 = System.nanoTime()
             // 맞춤 재질은 빌드 때 matc(Filament 1.77.3)로 컴파일한 꾸러미(assets/materials, 원본 src/main/materials/*.mat). 실행 중 컴파일(filamat-jni, ABI당 약 9MB)을 빼 APK를 줄였다
             val mats = listOf("ghost", "flat", "vtx", "add", "flow").associateWith { n ->
                 ctx.assets.open("materials/$n.filamat").use { it.readBytes() }.let { b -> ByteBuffer.allocateDirect(b.size).order(ByteOrder.nativeOrder()).put(b).also { it.flip() } }
             }
-            return Prep(bytes, colors, cube, mats, (System.nanoTime() - t0) / 1_000_000)
+            return Prep(bytes, colors, cube, mats, (System.nanoTime() - t0) / 1_000_000, "읽기 ${(t1 - t0) / 1_000_000}·환경광 ${(t2 - t1) / 1_000_000}")
         }
 
         fun whitenColors(b: ByteArray) {
@@ -693,13 +714,14 @@ class Prep private constructor(
  */
 private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, floor: FloatArray, dark: Boolean): FloatArray {
     var best = Float.MAX_VALUE; var k = -1f
+    // 화소마다 판 열 개를 본다(면 6 × 64² × 테마 2): 배열·쌍을 만들지 않고 같은 식으로 계산한다(결과는 전과 같은 값, 작업 스레드 시간을 줄인다)
     fun panel(axis: Int, at: Float, cu: Float, cv: Float, hu: Float, hv: Float, kk: Float) {
-        val d = floatArrayOf(dx, dy, dz)
-        if (abs(d[axis]) < 1e-4f) return
-        val t = at / d[axis]
+        val da = when (axis) { 0 -> dx; 1 -> dy; else -> dz }
+        if (abs(da) < 1e-4f) return
+        val t = at / da
         if (t <= 0f || t >= best) return
-        val p = floatArrayOf(dx * t, dy * t, dz * t)
-        val (u, v) = when (axis) { 0 -> p[2] to p[1]; 1 -> p[0] to p[2]; else -> p[0] to p[1] }
+        val u = if (axis == 0) dz * t else dx * t   // 판 위 좌표: x축 판 (z, y), y축 판 (x, z), z축 판 (x, y)
+        val v = if (axis == 1) dz * t else dy * t
         if (abs(u - cu) <= hu && abs(v - cv) <= hv) { best = t; k = kk }
     }
     val f = if (dark) 0.55f else 1f

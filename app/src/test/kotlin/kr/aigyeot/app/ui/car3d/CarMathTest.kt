@@ -54,4 +54,36 @@ class CarMathTest {
         fx.onSet(alert, alert.copy(seat = Seat3d.RL), ok = true, arriveIn = 1100 * MS, now = 600 * MS)
         assertEquals(1700 * MS, fx.pulseFrom, "이동 중 목표가 바뀌면 시작 전 맥박은 새 도착 시각에")
     }
+
+    @Test fun liveMotion_onlyInEventViews_parked() {
+        val hvac = setOf(Callout3d.HVAC)
+        assertFalse(Stage3d(View3d.CABIN, callouts = hvac).flowing(1f), "기본 실내 + 공조 칩: 바람 결은 멈춘 그림(계속 그리지 않음)")
+        assertFalse(Stage3d(View3d.CABIN, Light3d.SOOTHE, ripple = true).rippling, "기본 실내 기다림의 소리 결도 멈춘 고리")
+        assertTrue(Stage3d(View3d.REAR, callouts = hvac).flowing(1f), "사건 시점(REAR)에서는 흐른다")
+        assertTrue(Stage3d(View3d.REAR, Light3d.SOOTHE, ripple = true).rippling)
+        assertFalse(Stage3d(View3d.REAR, callouts = hvac, drive = true).flowing(1f), "주행 중은 사건 시점이어도 멈춤")
+        assertFalse(Stage3d(View3d.REAR, callouts = hvac, reducedMotion = true).flowing(1f), "동작 줄이기도 멈춤")
+        assertFalse(Stage3d(View3d.REAR, callouts = hvac).flowing(0.2f), "껍데기가 아직 불투명하면(이동 시작) 흐르지 않는다")
+    }
+
+    // 시작 연출 소진(계약 stage(3D)): 주행 중 무대가 먼저 보였으면 소진하지 않고 처음 정차 홈에서 한다. 정차 홈은 동작 줄이기여도 소진(연출 없이 cabin으로 끝)
+    @Test fun intro_driveFirstView_notConsumed_parkConsumes() {
+        assertFalse(consumeIntro(Stage3d(drive = true)), "주행 중 첫 보기는 소진하지 않는다")
+        assertFalse(consumeIntro(Stage3d(drive = true, reducedMotion = true)), "주행 중이면 동작 줄이기여도 소진하지 않는다")
+        assertTrue(consumeIntro(Stage3d()), "정차 홈 첫 보기는 소진")
+        assertTrue(consumeIntro(Stage3d(reducedMotion = true)), "정차 홈 동작 줄이기도 소진(연출 없이 cabin으로 끝)")
+    }
+
+    // 정지 그림 걷기(onHoldEnd)·옅은 장 판단은 받는 쪽이 본 장의 시각으로 한다. 받는 쪽은 가장 최근 장으로 건너뛰어(updateTexImage) 받은 횟수가 낸 횟수보다 적다
+    @Test fun holdEnd_byShownTimestamp_survivesSkippedFrames() {
+        assertFalse(drawnSince(5_000, -1), "기다리는 것이 없으면 아무 장도 알리지 않는다")
+        assertTrue(drawnSince(5_000, 5_000), "멈춤을 끝낸 doFrame에서 그린 장(같은 시각)부터")
+        assertFalse(drawnSince(4_999, 5_000), "그 전에 그린 장(옅은 장)은 아니다")
+        // 낸 장: 시각 1..10, 멈춤 끝은 시각 8에 그린 장부터. 받는 쪽은 2·5·10만 봤다(중간 건너뜀)
+        val sent = (1L..10L).toList(); val shown = listOf(2L, 5L, 10L); val holdEndFrom = 8L
+        assertTrue(shown.any { drawnSince(it, holdEndFrom) }, "건너뛰어도 그 뒤 장이 들어오면 걷는다")
+        // 고치기 전 식(받은 수 > 멈춤 끝에 낸 수)은 받은 수 3이 낸 수 7을 끝내 넘지 못해 영영 걷지 않았다
+        val sentAtHoldEnd = sent.count { it < holdEndFrom }
+        assertFalse(shown.size > sentAtHoldEnd, "옛 식이 갇히는 경우(이 시험의 전제)")
+    }
 }
