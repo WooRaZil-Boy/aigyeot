@@ -103,6 +103,7 @@ final class CarStageView: UIView {
     private var flightFrom = SIMD2<Float>(0, 0)
     private var arView: ARView?
     private var camera = PerspectiveCamera()
+    private let keyLight = DirectionalLight()
     private var az: Float, el: Float
     /// 아직 돌지 않은 끈 양(점). 프레임마다 9%씩 돌린다.
     private var pending = SIMD2<Float>(0, 0)
@@ -197,40 +198,67 @@ final class CarStageView: UIView {
         }
     }
 
-    /// 재질 이름으로 덮어쓴다(시안 materials(): 도장 펄 화이트 + 클리어코트, 램프는 발광). 이름은 iOS 18+ API라 17은 USDZ 재질 그대로.
+    /// 재질 이름으로 덮어쓴다(시안 v7 car3d.js materials(): 도장 + 클리어코트, 크롬, 유리, 선루프 가림막, 램프는 발광). 이름은 iOS 18+ API라
+    /// 17은 USDZ 재질 그대로(앰비언트만 엔티티 이름으로). 모든 재질은 양면으로 그린다(시안 v7 DoubleSide: 차체가 얇은 판이라 안쪽 면이 비친다).
     private static func restyle(_ root: Entity) {
-        guard #available(iOS 18, *) else { glowAmbientByEntityName(root); return }
         func visit(_ e: Entity) {
             if var m = e.components[ModelComponent.self] {
                 m.materials = m.materials.map { mat in
-                    switch mat.name {
-                    case "Paint"?:
-                        var p = PhysicallyBasedMaterial()
-                        p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.body))
-                        p.roughness = 0.3
-                        p.metallic = 0.06
-                        p.clearcoat = .init(floatLiteral: 1)
-                        p.clearcoatRoughness = .init(floatLiteral: 0.035)
-                        return p
-                    case "Ambient"?:   // 상태 빛 '듣는 중': 실내 앰비언트 선이 곁의 응답 파랑(tokens glow)으로 빛난다(시안 applyState listen 2.2)
-                        var p = PhysicallyBasedMaterial()
-                        p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.ambientBase))
-                        p.emissiveColor = .init(color: UIColor(hex: DS.CarPaint.ambientGlow))
-                        p.emissiveIntensity = 2.2
-                        return p
-                    case "Head_L_All"?: return UnlitMaterial(color: UIColor(hex: DS.CarPaint.headLamp))
-                    case "Rear_L_Pos"?: return UnlitMaterial(color: UIColor(hex: DS.CarPaint.tailLamp))
-                    default: return mat
-                    }
+                    var out = mat
+                    if #available(iOS 18, *) { out = named(mat) }
+                    if var p = out as? PhysicallyBasedMaterial { p.faceCulling = .none; return p }
+                    if #available(iOS 18, *), var u = out as? UnlitMaterial { u.faceCulling = .none; return u }   // Unlit은 18+ API
+                    return out
                 }
                 e.components.set(m)
             }
             e.children.forEach(visit)
         }
         visit(root)
+        if #unavailable(iOS 18) { glowAmbientByEntityName(root) }
     }
 
-    /// ARView는 이 카드에 하나뿐이다: 모델을 기다리는 동안 다시 불려도(크기 바뀜·손가락) 같은 생성 작업을 기다린다.
+    /// 시안 v7 값. 옮기지 못한 것: 크롬 환경광 1.5배·유리 환경광 1.0배(재질마다 환경광 배율이 없다), 유리 투과(USDZ의 짙은 불투명 유리 그대로).
+    @available(iOS 18, *)
+    private static func named(_ mat: any RealityKit.Material) -> any RealityKit.Material {
+        switch mat.name {
+        case "Paint"?:
+            var p = PhysicallyBasedMaterial()
+            p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.body))
+            p.roughness = 0.42
+            p.metallic = 0.26
+            p.clearcoat = .init(floatLiteral: 1)
+            p.clearcoatRoughness = .init(floatLiteral: 0.03)
+            return p
+        case "Chrome"?:
+            var p = PhysicallyBasedMaterial()
+            p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.chrome))
+            p.roughness = 0.08
+            p.metallic = 1.0
+            return p
+        case "Glass_Front"?, "Glass_Rear"?, "Glass_Side"?, "Sunroof_Glass"?:
+            // 굽은 유리 모서리의 직사광 얼룩을 줄인다: 매끈하게(0.03), 정반사 세기 0.25(시안 specularIntensity 0.25, 색은 USDZ 그대로)
+            guard var p = mat as? PhysicallyBasedMaterial else { return mat }
+            p.roughness = 0.03
+            p.specular = PhysicallyBasedMaterial.Specular(floatLiteral: 0.25)
+            return p
+        case "Roofglass_Shade"?:   // 검은 가림막: 지붕 유리가 앞·뒤 유리와 같은 검정으로 보인다
+            var p = PhysicallyBasedMaterial()
+            p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.roofShade))
+            p.roughness = 0.92
+            return p
+        case "Ambient"?:   // 상태 빛 '듣는 중': 실내 앰비언트 선이 곁의 응답 파랑(tokens glow)으로 빛난다(시안 applyState listen 2.2)
+            var p = PhysicallyBasedMaterial()
+            p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.ambientBase))
+            p.emissiveColor = .init(color: UIColor(hex: DS.CarPaint.ambientGlow))
+            p.emissiveIntensity = 2.2
+            return p
+        case "Head_L_All"?: return UnlitMaterial(color: UIColor(hex: DS.CarPaint.headLamp))
+        case "Rear_L_Pos"?: return UnlitMaterial(color: UIColor(hex: DS.CarPaint.tailLamp))
+        default: return mat
+        }
+    }
+
     /// iOS 17: Material.name이 없어 재질 이름으로 덮어쓰지 못한다. 앰비언트 선은 엔티티 이름(Ambient_*)으로 찾아 상태 빛만 켠다.
     /// 도장·램프는 USDZ 재질 그대로(옅은 회색 도장·클리어코트, 미판정: 17 런타임이 맥에 없어 그려 보지 못함).
     private static func glowAmbientByEntityName(_ e: Entity) {
@@ -239,12 +267,14 @@ final class CarStageView: UIView {
             p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.ambientBase))
             p.emissiveColor = .init(color: UIColor(hex: DS.CarPaint.ambientGlow))
             p.emissiveIntensity = 2.2
+            p.faceCulling = .none
             m.materials = m.materials.map { _ in p }
             e.components.set(m)
         }
         e.children.forEach(glowAmbientByEntityName)
     }
 
+    /// ARView는 이 카드에 하나뿐이다: 모델을 기다리는 동안 다시 불려도(크기 바뀜·손가락) 같은 생성 작업을 기다린다.
     private func makeARView() async -> ARView? {
         if let a = arView { return a }
         if let c = creating { return await c.value }
@@ -267,10 +297,8 @@ final class CarStageView: UIView {
         let shadow = ModelEntity(mesh: .generatePlane(width: 5.6, depth: 2.2, cornerRadius: 1.1), materials: [shade])
         shadow.position = [-0.08, 0.003, 0]
         anchor.addChild(shadow)
-        let key = DirectionalLight()
-        key.light.intensity = 2600
-        key.look(at: .zero, from: [3, 6, -2], relativeTo: nil)
-        anchor.addChild(key)
+        keyLight.look(at: .zero, from: [3, 6, -2], relativeTo: nil)
+        anchor.addChild(keyLight)
         camera = PerspectiveCamera()
         anchor.addChild(camera)
         v.scene.addAnchor(anchor)
@@ -280,11 +308,14 @@ final class CarStageView: UIView {
         return v
     }
 
-    /// 시안 car3d.js studio(): 테마마다 방 밝기만 다르다(다크는 어두운 방). RealityKit 기본 환경광의 세기로 맞춘다.
+    /// 시안 v7 car3d.js studio(): 다크는 방·바닥·조명 판(환경)만 0.55배다. RealityKit 기본 환경광 세기(2의 지수)에만 주고,
+    /// 직사광(주광)은 테마와 무관하게 그대로 둔다(시안 DirectionalLight 1.4, 안드로이드와 같다).
+    /// 옮기지 못한 것: 천장·벽 띠 조명의 배치(띠 모양 반사). 시안은 빛나는 판으로 환경을 만들고, 여기는 기본 환경광 + 주광 하나다.
     private func applyTheme() {
         arView?.environment.background = .color(.clear)
         arView?.backgroundColor = .clear
-        arView?.environment.lighting.intensityExponent = dark ? -0.6 : 0
+        arView?.environment.lighting.intensityExponent = dark ? log2(0.55) : 0
+        keyLight.light.intensity = 2600
     }
 
     private func pose() {

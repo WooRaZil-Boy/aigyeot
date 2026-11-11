@@ -286,8 +286,10 @@ enum DesignSystem {
     /// 잠금 화면 진행 중 판(.live-act 바탕 rgba(20,22,26)). 흰 잠금 화면에서도 흰 글자 대비가 나게 92% 불투명.
     static let liveActivityPanel = Color(lightHex: "#14161AEB", darkHex: "#14161AEB")
     /// 3D 차 재질(car3d.js): 차체 도장, 실내 앰비언트 선 바탕, 전조등, 미등. 앰비언트 빛은 tokens `glow`.
+    /// 차 재질 색(시안 js/car3d.js materials(), v7): 도장·크롬·선루프 가림막·앰비언트 바탕·램프.
     enum CarPaint {
-        static let body = "#E9EAEC", ambientBase = "#1D2023", headLamp = "#F2F7FF", tailLamp = "#FF3326"
+        static let body = "#E4E7EA", chrome = "#E2E6EA", roofShade = "#0E1013"
+        static let ambientBase = "#1D2023", headLamp = "#F2F7FF", tailLamp = "#FF3326"
         static var ambientGlow: String { palette["glow"]![0] }
     }
 

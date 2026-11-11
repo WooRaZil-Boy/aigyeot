@@ -94,6 +94,10 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         private val SHELL = Regex("^(Body|Body_Roof|Door_F_|Door_R_|Door_Handle|Mirror_|DLO_|Belt_|Grille|Head_Lamp|Rear_Lamp|Rear_Stop|Panel_Gap|Fuel_Door|Opera_Glass|Glass_|Sunroof_Glass|WheelWell|Parcel_Shelf|Lamp_R_Pod|Door_Trim_|Door_Upper_|Armrest_R_)")
         private val GHOST = Regex("^(Body|Body_Roof|Mirror_Head|Door_F_.*Window|Door_R_.*Window|Opera_Glass|Glass_Front|Glass_Rear|Sunroof_Glass)")
         private val CHILD = Regex("^ChildSeat")
+        /** X-ray에서 가는 빛 선으로 남길 짜임(시안 v7 LINES). */
+        private val LINES = Regex("^(Panel_Gap|DLO_Chrome)")
+        /** 유령 껍데기 바탕 불투명도(시안 v7 uBase). */
+        private const val GHOST_BASE = 0.014f
     }
 
     val scene: Scene = engine.createScene()
@@ -121,6 +125,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
     private val shellFadeByName = HashMap<String, MutableList<MaterialInstance>>()
     private val shellRenderables = ArrayList<Int>()
     private val ghostRenderables = ArrayList<Int>()
+    private val lineRenderables = ArrayList<Int>()   // X-ray 빛 선(Panel_Gap·DLO_Chrome의 둘째 인스턴스)
     private val childGhostRenderables = ArrayList<Int>()
     private val heatPads = HashMap<Int, Seat3d?>()   // 열선 패드 → 뒷자리 쪽(노드 Heat_Pad_RL·RR)
     private val lockRims = HashMap<Int, Seat3d?>()   // 뒷창 잠금 테 → 쪽(노드 Lock_Outline_RL·RR, 재질 Indicator 하나를 같이 쓴다)
@@ -138,6 +143,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
     private lateinit var ghost: MaterialInstance
     private lateinit var childGhost: MaterialInstance
     private lateinit var indicator: MaterialInstance
+    private lateinit var lineMi: MaterialInstance
 
     // 빛
     private val key = em.create()
@@ -181,8 +187,10 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             {
                 ghostMat = material("ghost"); flatMat = material("flat")
                 ghost = ghostMat.createInstance("ghost"); childGhost = ghostMat.createInstance("childGhost")
-                ghost.setParameter("base", 0.03f); childGhost.setParameter("base", 0.03f)
+                // 유령 바탕 0.014(시안 v7: 가운데는 더 비고 테두리는 또렷, 테두리 계수 0.86·지수 2.9는 ghost.mat)
+                ghost.setParameter("base", GHOST_BASE); childGhost.setParameter("base", GHOST_BASE)
                 indicator = flatMat.createInstance("indicator")
+                lineMi = flatMat.createInstance("lines")
             },
             { vtxMat = material("vtx"); addMat = material("add"); flowMat = material("flow") },
             { setupMain() },
@@ -238,7 +246,9 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         // 바깥 껍데기 → 유령(k로 이어진다). 흐리는 동안은 BLEND 짝으로 바꾼다
         setShell(k, dark)
         lin(if (dark) 0xDCE6FF else 0x4A5F8F).let { ghost.setParameter("color", it[0], it[1], it[2]) }
-        ghost.setParameter("k", k * if (dark) 1f else 0.62f)
+        ghost.setParameter("k", k * if (dark) 1f else 0.66f)
+        // 문·창의 짜임(Panel_Gap·DLO_Chrome)을 가는 빛 선으로 남긴다(색은 유령과 같음, 불투명도 라이트 0.55k·다크 0.5k)
+        lin(if (dark) 0xDCE6FF else 0x4A5F8F).let { lineMi.setParameter("color", it[0], it[1], it[2], k * if (dark) 0.5f else 0.55f) }
         // 라이트 X-ray: 흰 바탕에서 검은 대시·화면이 덩어리로 보이지 않게 회색 쪽으로 올린다
         val lift = if (dark) 0f else 0.5f * k
         baseColor("Interior_Dark", mix(lin(0x2A2C30), lin(0x8A8F96), lift), 1f)
@@ -246,7 +256,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         (if (s.light == Light3d.ALERT) apricot else teal).let { childGhost.setParameter("color", it[0], it[1], it[2]) }
         childGhost.setParameter("k", k * 0.9f)
         val ghostOn = k > 0.005f
-        (ghostRenderables + childGhostRenderables).forEach { visible(it, ghostOn) }
+        (ghostRenderables + childGhostRenderables + lineRenderables).forEach { visible(it, ghostOn) }
         lm.setIntensityCandela(lm.getInstance(cabin), 1.5f * k)
         lm.setIntensity(lm.getInstance(key), 1.4f * (1 - 0.35f * k))
         // 제어 표시(실내 보기에서만 또렷하게)
@@ -368,12 +378,13 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             if (ri == 0) continue
             val isChild = named(e, CHILD)
             val isGhost = named(e, GHOST)
-            if (!isChild && !isGhost) continue
-            val mi = if (isChild) childGhost else ghost
+            val isLine = named(e, LINES)
+            if (!isChild && !isGhost && !isLine) continue
+            val mi = if (isChild) childGhost else if (isLine) lineMi else ghost
             for (p in 0 until rm.getPrimitiveCount(ri)) rm.setMaterialInstanceAt(ri, p, mi)
             rm.setPriority(ri, if (isChild) 7 else 6)
             rm.setCastShadows(ri, false); rm.setReceiveShadows(ri, false)
-            if (isChild) childGhostRenderables += e else ghostRenderables += e
+            when { isChild -> childGhostRenderables += e; isLine -> lineRenderables += e; else -> ghostRenderables += e }
             scene.addEntity(e)
             visible(e, false)
         }
@@ -647,13 +658,13 @@ class Prep private constructor(
 
         private fun cubeFaces(dark: Boolean): List<Array<FloatArray>> {
             val size = 64
-            val room = lin(if (dark) 0x1C1F23 else 0x6D737B); val floor = lin(if (dark) 0x111316 else 0x8F959C)
+            val room = lin(if (dark) 0x1C1F23 else 0x646A72); val floor = lin(if (dark) 0x111316 else 0x8A9097)
             var faces = Array(6) { f -> FloatArray(size * size * 3).also { px ->
                 for (y in 0 until size) for (x in 0 until size) {
                     val sc = (x + 0.5f) / size * 2 - 1; val tc = (y + 0.5f) / size * 2 - 1
                     val d = when (f) { 0 -> floatArrayOf(1f, -tc, -sc); 1 -> floatArrayOf(-1f, -tc, sc); 2 -> floatArrayOf(sc, 1f, tc); 3 -> floatArrayOf(sc, -1f, -tc); 4 -> floatArrayOf(sc, -tc, 1f); else -> floatArrayOf(-sc, -tc, -1f) }
                     val l = sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])
-                    val c = studioRadiance(d[0] / l, d[1] / l, d[2] / l, room, floor)
+                    val c = studioRadiance(d[0] / l, d[1] / l, d[2] / l, room, floor, dark)
                     val o = (y * size + x) * 3; px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]
                 }
             } }
@@ -676,8 +687,11 @@ class Prep private constructor(
     }
 }
 
-    /** 원점에서 (dx,dy,dz)로 본 스튜디오 밝기(선형). 판: 위 큰 소프트박스 3.4, 좌우 긴 띠 3.0, 낮은 띠 1.6, 앞뒤 세로 판 1.8. */
-private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, floor: FloatArray): FloatArray {
+/**
+ * 원점에서 (dx,dy,dz)로 본 스튜디오 밝기(선형, 시안 v7 studio). 바닥 밝은 자리(라이트 0.62·다크 0.10), 천장 긴 띠 셋(가운데 4.2, 옆 3.4),
+ * 벽 긴 띠 3.2, 낮은 띠 1.8, 앞뒤 세로 판 2.2. 다크는 바닥 자리 밖 조명을 0.55배. 천장 옆 띠는 시안에서 원점을 향해 약 19° 기울지만 수평 판으로 둔다.
+ */
+private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, floor: FloatArray, dark: Boolean): FloatArray {
     var best = Float.MAX_VALUE; var k = -1f
     fun panel(axis: Int, at: Float, cu: Float, cv: Float, hu: Float, hv: Float, kk: Float) {
         val d = floatArrayOf(dx, dy, dz)
@@ -688,13 +702,17 @@ private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, fl
         val (u, v) = when (axis) { 0 -> p[2] to p[1]; 1 -> p[0] to p[2]; else -> p[0] to p[1] }
         if (abs(u - cu) <= hu && abs(v - cv) <= hv) { best = t; k = kk }
     }
-    panel(1, 13.5f, 0f, 0f, 8f, 3f, 3.4f)              // 위 큰 소프트박스(16×6)
-    panel(2, 15.5f, 0f, 5.5f, 11f, 0.55f, 3.0f)         // 오른쪽 긴 띠
-    panel(2, -15.5f, 0f, 5.5f, 11f, 0.55f, 3.0f)        // 왼쪽 긴 띠
-    panel(2, 15.8f, 0f, 2.4f, 11f, 0.3f, 1.6f)          // 낮은 띠
-    panel(2, -15.8f, 0f, 2.4f, 11f, 0.3f, 1.6f)
-    panel(0, 15.5f, 0f, 4f, 2f, 4.5f, 1.8f)             // 앞·뒤 세로 판
-    panel(0, -15.5f, 0f, 4f, 2f, 4.5f, 1.8f)
+    val f = if (dark) 0.55f else 1f
+    panel(1, -1.88f, 0f, 0f, 5.5f, 3.5f, if (dark) 0.10f else 0.62f)   // 바닥: 차 둘레 밝은 자리(11×7)
+    panel(1, 13.5f, 0f, 0f, 10f, 1.2f, 4.2f * f)        // 천장 가운데 긴 띠(20×2.4)
+    panel(1, 13.2f, 0f, 4.6f, 10f, 0.75f, 3.4f * f)     // 천장 옆 띠(20×1.5)
+    panel(1, 13.2f, 0f, -4.6f, 10f, 0.75f, 3.4f * f)
+    panel(2, 15.5f, 0f, 6.0f, 11f, 0.8f, 3.2f * f)      // 벽 긴 띠(22×1.6, 어깨 위 면에 맺힌다)
+    panel(2, -15.5f, 0f, 6.0f, 11f, 0.8f, 3.2f * f)
+    panel(2, 15.8f, 0f, 2.6f, 11f, 0.35f, 1.8f * f)     // 낮은 띠(22×0.7)
+    panel(2, -15.8f, 0f, 2.6f, 11f, 0.35f, 1.8f * f)
+    panel(0, 15.5f, 0f, 4.5f, 2.5f, 4f, 2.2f * f)       // 앞·뒤 세로 판(5×8)
+    panel(0, -15.5f, 0f, 4.5f, 2.5f, 4f, 2.2f * f)
     if (k >= 0f) return floatArrayOf(k, k, k)
     return if (dy < -0.1f) floor else room
 }
@@ -702,14 +720,16 @@ private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, fl
 
 /** 재질 하나의 덮어쓸 값(시안 materials(): 색은 sRGB → 선형). */
 private class Spec(hex: Int, val roughness: Float, val metallic: Float = 0f, val clearCoat: Float? = null, val ccRough: Float = 0f,
-                   val blend: Boolean = false, val alpha: Float = 1f, clearHex: Int? = null, val emissive: FloatArray? = null, val emissiveStrength: Float = 1f) {
-    val color = lin(hex)
+                   val blend: Boolean = false, val alpha: Float = 1f, clearHex: Int? = null, val emissive: FloatArray? = null, val emissiveStrength: Float = 1f,
+                   colorGain: Float = 1f, val reflectance: Float? = null) {
+    val color = lin(hex).map { it * colorGain }.toFloatArray()
     val clear = clearHex?.let(::lin)
     /** [m]은 [mi]의 재질(복제·제공자가 만든 인스턴스는 Java 쪽 material이 비어 있어 따로 받는다). */
     fun applyTo(mi: MaterialInstance, m: Material) {
         if (m.hasParameter("baseColorFactor")) mi.setParameter("baseColorFactor", color[0], color[1], color[2], alpha)
         if (m.hasParameter("roughnessFactor")) mi.setParameter("roughnessFactor", roughness)
         if (m.hasParameter("metallicFactor")) mi.setParameter("metallicFactor", metallic)
+        if (reflectance != null && m.hasParameter("reflectance")) mi.setParameter("reflectance", reflectance)
         if (clearCoat != null && m.hasParameter("clearCoatFactor")) { mi.setParameter("clearCoatFactor", clearCoat); if (m.hasParameter("clearCoatRoughnessFactor")) mi.setParameter("clearCoatRoughnessFactor", ccRough) }
         // 제공자가 새로 만든 인스턴스는 emissiveStrength가 0이라(발광 = 색 × 세기) 늘 넣는다. 발광이 없는 재질은 1(색만으로)
         val hasStrength = m.hasParameter("emissiveStrength")
@@ -723,17 +743,19 @@ private class Spec(hex: Int, val roughness: Float, val metallic: Float = 0f, val
 
 /** 시안 car3d.js materials()의 값. 유리는 투과 대신 BLEND(GLB 알파)에 틴트 색. 램프 발광은 GLB 값 그대로. */
 private val SPECS: Map<String, Spec> = mapOf(
-    "Paint" to Spec(0xE9EAEC, 0.3f, 0.06f, clearCoat = 1f, ccRough = 0.035f),
+    "Paint" to Spec(0xE4E7EA, 0.42f, 0.26f, clearCoat = 1f, ccRough = 0.03f),
     "Trim_Black" to Spec(0x141618, 0.55f),
     "Black_Gloss" to Spec(0x07080A, 0.12f, clearCoat = 1f, ccRough = 0.03f),
-    "Chrome" to Spec(0xE2E6EA, 0.1f, 1f),
+    // 크롬 환경광 1.5배(시안 envMapIntensity): Filament 표준 재질에는 재질마다 환경광 배율이 없어, 금속 1의 반사색(기본색)을 1.5배로 올린다
+    "Chrome" to Spec(0xE2E6EA, 0.08f, 1f, colorGain = 1.5f),
     "Grille_Chrome" to Spec(0xCFD4DA, 0.16f, 1f),
     "Grille_Base" to Spec(0x08090B, 0.45f),
-    "Glass_Front" to Spec(0x59626A, 0.05f, blend = true, alpha = 0.30f, clearHex = 0x9AA3AB),
-    "Glass_Side" to Spec(0x262C32, 0.05f, blend = true, alpha = 0.55f, clearHex = 0x9EA8B0),
-    "Glass_Rear" to Spec(0x262C32, 0.05f, blend = true, alpha = 0.55f, clearHex = 0x7C868E),
-    "Sunroof_Glass" to Spec(0x15191D, 0.05f, blend = true, alpha = 0.75f, clearHex = 0x6C767E),
-    "Roofglass_Shade" to Spec(0x2B2A28, 0.92f),
+    // 유리: 거칠기 0.03, 정반사 세기 0.25(three specularIntensity가 F0 0.04를 0.01로 → Filament reflectance 0.25: F0 = 0.16·r²)
+    "Glass_Front" to Spec(0x59626A, 0.03f, blend = true, alpha = 0.30f, clearHex = 0x9AA3AB, reflectance = GLASS_REFLECTANCE),
+    "Glass_Side" to Spec(0x262C32, 0.03f, blend = true, alpha = 0.55f, clearHex = 0x9EA8B0, reflectance = GLASS_REFLECTANCE),
+    "Glass_Rear" to Spec(0x262C32, 0.03f, blend = true, alpha = 0.55f, clearHex = 0x7C868E, reflectance = GLASS_REFLECTANCE),
+    "Sunroof_Glass" to Spec(0x15191D, 0.03f, blend = true, alpha = 0.75f, clearHex = 0x6C767E, reflectance = GLASS_REFLECTANCE),
+    "Roofglass_Shade" to Spec(0x0E1013, 0.92f),   // 검은 가림막: 지붕 유리가 앞·뒤 유리와 같은 검정으로
     "Rear_L_Stop" to Spec(0x3A0809, 0.3f),
     // 램프: GLB 값 그대로(발광 색 × 세기 KHR_materials_emissive_strength). 껍데기라 X-ray로 갈 때 함께 흐린다
     "Head_L_All" to Spec(0xFFFFFF, 0.2f, emissive = floatArrayOf(0.888f, 0.930f, 1f), emissiveStrength = 4f),
@@ -742,12 +764,9 @@ private val SPECS: Map<String, Spec> = mapOf(
     "Tire" to Spec(0x18191B, 0.8f),
     "Rim_Silver" to Spec(0xDFE3E7, 0.26f, 0.75f),
     "Rim_Black" to Spec(0x0F1012, 0.38f, 0.3f),
-    "Brake" to Spec(0x2C2E31, 0.5f, 0.6f),
-    "Caliper" to Spec(0x2E3135, 0.4f, 0.5f),
     "Liner" to Spec(0x0A0A0B, 0.95f),
     "Interior_Dark" to Spec(0x2A2C30, 0.62f),
     "Seat" to Spec(0x7C6B5D, 0.78f),
-    "Headliner" to Spec(0xBDB7AD, 0.9f),
     "Carpet" to Spec(0x3B3A38, 0.95f),
     "Display" to Spec(0x050607, 0.3f, clearCoat = 0.3f),
     "Interior_Trim" to Spec(0xA99F92, 0.85f),
@@ -762,6 +781,9 @@ private val SPECS: Map<String, Spec> = mapOf(
     "ChildSeat_Handle" to Spec(0x5E5852, 0.36f),
     "ChildSeat_Base" to Spec(0x3B3D41, 0.45f),
 )
+
+/** 유리 정반사 세기(시안 specularIntensity 0.25 → Filament reflectance). */
+private const val GLASS_REFLECTANCE = 0.25f
 
 /** 발광 세기 보정(Filament 발광 단위를 시안 three.js 세기에 맞추는 값, 에뮬레이터 캡처로 맞춤). */
 private const val EMISSIVE_GAIN = 1f

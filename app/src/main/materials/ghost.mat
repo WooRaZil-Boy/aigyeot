@@ -26,7 +26,7 @@ fragment {
         vec3 n = normalize(variable_wn.xyz);
         vec3 v = normalize(getWorldCameraPosition() - getWorldPosition());
         float f = 1.0 - abs(dot(n, v));
-        float a = clamp((materialParams.base + 0.78 * pow(f, 2.4)) * materialParams.k, 0.0, 1.0);
+        float a = clamp((materialParams.base + 0.86 * pow(f, 2.9)) * materialParams.k, 0.0, 1.0);   // 시안 v7: 테두리 0.86·지수 2.9
         material.baseColor = vec4(materialParams.color * a, a);
     }
 }
