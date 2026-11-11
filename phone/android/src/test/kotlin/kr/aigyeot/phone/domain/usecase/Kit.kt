@@ -189,7 +189,9 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     val push = RegisterPush(state, relay, lose, pushTokens, scope)
     val connection = KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, network, visibility, clock, scope)
     val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
-    val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, Quiet, allowDebugSeed = true, undoMs = undoMs)
+    /** 띠 시간(앱은 화면 읽기·시스템 권장 시간으로 정한다, U87). 시험이 띠를 띄우기 전후에 바꿔 볼 수 있다. */
+    var undoBand = undoMs
+    val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, Quiet, allowDebugSeed = true, undoMs = { undoBand })
     val clearRecords = ClearRecords(care, state, recordCare, notices, songs, connection, outbox, clock, scope)
     val pair = Pair(state, care, credentials, relay, link, disconnect, lose, this.marks, pushTokens, songs, recordCare, notices, clock, scope, Quiet)
     val recordSong = RecordSong(state, songs, clearRecords, outbox, notices, clock, scope)

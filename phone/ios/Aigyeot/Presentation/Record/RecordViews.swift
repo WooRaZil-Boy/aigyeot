@@ -35,7 +35,7 @@ struct RecordsView: View {
                         PatternView(now: now)
                     } else {
                         DayView(sheet: $sheet, report: $report, day: Binding(get: { picked ?? today }, set: { picked = $0 == today ? nil : $0 }), now: now) {
-                            sheet = .quick(.feed, day: picked == nil || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금)
+                            sheet = .past(day: picked == nil || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금), 종류 칸(U86)
                         }
                     }
                 }
@@ -71,32 +71,17 @@ private struct DayView: View {
     let now: Date
     let add: () -> Void
 
-    private enum Item: Identifiable {
-        case care(CareEvent)
-        case car(CarRow)
-        var id: String { switch self { case .care(let e): e.id; case .car(let r): r.id } }
-        var at: Int64 { switch self { case .care(let e): e.startAt; case .car(let r): CareTime.ms(r.at) } }
-        /// 그 기록의 시간대(손 기록은 자기 시간대, 차 기록은 기기 시간대).
-        var zone: TimeZone { switch self { case .care(let e): e.timeZone; case .car: .current } }
-    }
-
     /// 기록이 있는 날(목록과 같게 그 기록의 시간대로). 띠가 이 날들을 모두 담아야 열 수 있다.
     private func recordKeys(_ car: [CarRow]) -> Set<String> {
         Set(vm.ui.care.events.filter { $0.deletedAt == nil }.map { CareRules.dayKey($0.startAt, $0.timeZone) }
             + car.map { CareRules.dayKey(CareTime.ms($0.at), .current) })
     }
 
-    private func items(_ day: String, _ car: [CarRow]) -> [Item] {
-        let hand = CareRules.events(onDay: day, in: vm.ui.care.events).map(Item.care)
-        let carItems = car.filter { CareRules.dayKey(CareTime.ms($0.at), .current) == day }.map(Item.car)
-        return (hand + carItems).sorted { $0.at > $1.at }   // 새 것이 위(시안)
-    }
-
     var body: some View {
         // 차 기록 줄은 그릴 때마다 한 번만 만든다(날짜 띠·목록이 함께 쓴다. 리포트마다 시각을 포맷해 비싸다)
         let car = CareRules.carRows(vm.ui.reports, zone: .current)
         let keys = recordKeys(car)
-        let list = items(day, car)
+        let list = vm.ui.dayItems(day, car: car)
         // 행만 낸다(바깥 RecordsView의 List가 담는다)
         Group {
             DayStrip(selected: $day, span: keys.min().flatMap { a in keys.max().map { (a, $0) } }, records: keys, now: now).enterRise(1)
@@ -105,7 +90,7 @@ private struct DayView: View {
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, 2)
                 .accessibilityAddTraits(.isHeader)
                 .enterRise(2)
-            if list.isEmpty { FootNote(CareText.emptyDay).padding(.horizontal, 16) }
+            if list.isEmpty { EmptyRing(icon: .calendar, text: CareText.emptyDay, action: (CareText.quickPast, add)).padding(.horizontal, 16).enterRise(3) }   // U85 ①
             ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
                 let bucket = hourBucket(item)
                 if i == 0 || hourBucket(list[i - 1]) != bucket { HourHead(hour: bucket).enterRise(3 + min(i, 5)) }
@@ -114,14 +99,16 @@ private struct DayView: View {
                 case .car(let r): carRow(r, order: 3 + min(i, 5))
                 }
             }
-            ListRow(icon: .plus, title: CareText.quickPast, add: true)
-                .padding(.horizontal, 20).padding(.vertical, 8)
-                .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
-                .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 24)
-                .onTapGesture(perform: add)
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { add() }
+            if !list.isEmpty {   // 빈 날에는 가운데 단추 하나만(같은 일 두 번 금지, U85 ①)
+                ListRow(icon: .plus, title: CareText.quickPast, add: true)
+                    .padding(.horizontal, 20).padding(.vertical, 8)
+                    .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
+                    .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 24)
+                    .onTapGesture(perform: add)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { add() }
+            }
         }
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
@@ -129,14 +116,15 @@ private struct DayView: View {
     }
 
     /// 3시간 칸의 시작 시(그 기록의 시간대).
-    private func hourBucket(_ item: Item) -> Int {
+    private func hourBucket(_ item: DayItem) -> Int {
         CareRules.calendar(item.zone).component(.hour, from: CareTime.date(item.at)) / 3 * 3
     }
 
     private func careRow(_ e: CareEvent, order: Int) -> some View {
         let (title, sub) = CareText.splitRow(CareText.row(e))
         return Button { sheet = e.inProgress ? .timer(e.id) : .edit(e.id) } label: {
-            TimelineCard(icon: DS.icon(e.kind), dot: DS.color(e.kind), title: title, sub: sub, memo: e.kind != .note ? e.note : nil)
+            TimelineCard(icon: DS.icon(e.kind), dot: DS.color(e.kind), title: title, sub: sub, memo: e.kind != .note ? e.note : nil,
+                         fresh: vm.fresh == e.id) { vm.clearFresh(e.id) }
         }
         .buttonStyle(.press)
         .enterRise(order)   // 밀어 지우기보다 안쪽(줄의 밀기 동작은 바깥에 남긴다)
@@ -171,6 +159,11 @@ private struct TimelineCard: View {
     let title: String
     let sub: String?
     let memo: String?
+    /// U88 새 줄 강조: 시트로 막 저장한 줄은 옅은 accentSoft 바탕으로 보였다가 1.4초 뒤 `light`(900ms)로 걷힌다(동작 줄이기면 1.6초 뒤 바로).
+    var fresh = false
+    var freshDone: () -> Void = {}
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var glow = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -187,8 +180,16 @@ private struct TimelineCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 16).padding(.vertical, 13)
-            .background(DS.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(glow ? DS.accentSoft : DS.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .padding(.vertical, 4).padding(.trailing, 16)
+        }
+        .task(id: fresh) {
+            // 기다리는 사이 다른 기록을 저장하면 이 줄의 fresh가 거짓이 된다: 강조를 바로 걷고 남기지 않는다(새 줄만 강조)
+            guard fresh else { glow = false; return }
+            glow = true
+            try? await Task.sleep(for: .seconds(reduceMotion ? 1.6 : 1.4))
+            if reduceMotion || Task.isCancelled { glow = false } else { withAnimation(DS.Motion.animation("light", seconds: 0.9)) { glow = false } }
+            if !Task.isCancelled { freshDone() }   // 끝까지 보였을 때만 걷는다(줄이 화면 밖으로 나가 끊겼으면 다시 보일 때 강조)
         }
         .frame(maxWidth: .infinity)
         .modifier(Rail())
@@ -325,11 +326,16 @@ private struct PatternView: View {
                 let sub = [iw.todayMs.map { Text("오늘 ") + Text(CareFormat.length($0)).font(DS.font(.metaStrong)).foregroundColor(DS.textPrimary) },
                            iw.usualMs.map { Text("평소 " + CareFormat.length($0)) }].compactMap { $0 }
                 if !sub.isEmpty { BlockSub(text: sub.dropFirst().reduce(sub[0]) { $0 + Text(" · ") + $1 }) }
-                WeekBarsChart(items: iw.bars.enumerated().map { i, b in
-                    .init(label: b.label, value: b.value.map(Double.init), tip: b.tip, hot: i == iw.bars.count - 1,
-                          valueLabel: i == iw.bars.count - 1 ? b.value.map(CareFormat.length) : nil)
-                }, hot: DS.cFeed, target: iw.usualMs.map { (Double($0), "평소 " + CareFormat.length($0)) },
-                              summary: "지난 7일 수유 간격 중앙값")
+                if ui.numbers.feedIntervalMedianMs == nil {
+                    // U85 ③: 간격 5개 미만이면 가짜 막대 없이 바닥 눈금 + 문구 + 쌓인 수를 점 다섯으로
+                    IntervalStub(labels: iw.bars.map(\.label), count: ui.numbers.feedIntervalCount)
+                } else {
+                    WeekBarsChart(items: iw.bars.enumerated().map { i, b in
+                        .init(label: b.label, value: b.value.map(Double.init), tip: b.tip, hot: i == iw.bars.count - 1,
+                              valueLabel: i == iw.bars.count - 1 ? b.value.map(CareFormat.length) : nil)
+                    }, hot: DS.cFeed, target: iw.usualMs.map { (Double($0), "평소 " + CareFormat.length($0)) },
+                                  summary: "지난 7일 보통 수유 간격")
+                }
             }
             .block()
             .enterRise(2)
@@ -365,7 +371,7 @@ private struct PatternView: View {
         .listRowSeparator(.hidden)
     }
 
-    /// 지난 7일 숫자 칸(결정 2): 하루 수유 "평균 n회"·"{n}일 기준", 수유 간격 "{기간}"·"중앙값", 차에서 울음 "{n}번"·"7일 동안", 켜면 하루 잠·하루 기저귀.
+    /// 지난 7일 숫자 칸(결정 2): 하루 수유 "평균 n번"·"{n}일 기준", 수유 간격 "{기간}"·"보통", 차에서 울음 "{n}번"·"7일 동안", 켜면 하루 잠·하루 기저귀.
     private func kpiItems(_ ui: PatternUi) -> [KpiRow.Item] {
         let p = ui.numbers, trend = ui.feedTrend
         func days(_ n: Int?) -> String? { n.flatMap { $0 > 0 ? CareText.basedOn(days: $0) : nil } }
@@ -381,5 +387,37 @@ private struct PatternView: View {
             items.append(KpiRow.Item(name: CareText.patternDiapers, value: p.diapersPerDay.map(CareText.avgCount) ?? CareText.noRecords, sub: days(p.diaperDays)))
         }
         return items
+    }
+}
+
+/// U85 ③ 수유 간격 빈 상태: 막대 자리는 바닥 눈금(요일)만, 가운데 '기록이 더 쌓이면 보여 드려요' + 쌓인 간격 수를 점 다섯으로.
+private struct IntervalStub: View {
+    let labels: [String]
+    let count: Int
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 10) {
+                Text(CareText.patternFewIntervals).typeStyle(.valueKey).foregroundStyle(DS.textSecondary).multilineTextAlignment(.center)
+                HStack(spacing: 6) {
+                    ForEach(0..<CareRules.minGaps, id: \.self) { i in
+                        Circle().fill(i < count ? DS.textPrimary : .clear)
+                            .overlay(Circle().strokeBorder(DS.textPrimary.opacity(i < count ? 0 : 0.26), lineWidth: 1.5))
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(CareText.intervalProgress(min(count, CareRules.minGaps)))
+            }
+            .frame(maxWidth: .infinity, minHeight: 110)
+            Rectangle().fill(DS.line).frame(height: 1)
+            HStack(spacing: 0) {
+                ForEach(Array(labels.enumerated()), id: \.offset) { _, l in
+                    Text(l).typeStyle(.micro).foregroundStyle(DS.textTertiary).frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.top, 6)
+            .accessibilityHidden(true)
+        }
+        .padding(.top, 8)
     }
 }

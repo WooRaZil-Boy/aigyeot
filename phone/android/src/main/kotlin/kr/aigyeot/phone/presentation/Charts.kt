@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import kr.aigyeot.phone.domain.model.CareStats
+import kotlinx.coroutines.launch
 
 // 차트(시안 js/charts.js·css/charts.css를 Compose Canvas로). 규칙(dataviz): 막대 24 이하·위 4 둥근 끝·바닥 각짐, 격자 1 실선,
 // 글자는 글자 토큰(데이터 색 금지), 하나를 강조하고 나머지는 회색, 툴팁은 보조(값은 라벨에도 있다).
@@ -175,12 +176,29 @@ private class ChartText(fs: Float, p: Palette) {
  * 지금 선은 모든 줄을 가로지르고 지금 뒤 트랙은 흐리다. 아래 눈금 0·6·12·18·24시, '지금 HH:MM'과 겹치는 눈금은 뺀다.
  */
 @Composable
-fun DayStrip(data: DayChartData, modifier: Modifier = Modifier) {
+fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh? = null, freshDone: () -> Unit = {}) {
     val p = Tokens.colors
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
     val n = data.lanes.size
     val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
+    // U88 새 표시(iOS FreshPulse와 같은 값): 시트가 닫힌 뒤(340ms) 표시 점이 톡(1 → 1.5 → 1, spring.bouncy) 하고 같은 색 고리가 1.2초 동안
+    // 3배로 퍼지며 사라진다. 동작 줄이기면 움직이지 않고 바로 걷는다. 띠에 그 줄이 없으면 그리지도 걷지도 않는다(기록 탭이 걷는다).
+    val freshOn = fresh?.takeIf { f -> data.lanes.any { it.kind == f.lane } }
+    val reducedMotion = LocalReducedMotion.current
+    val pop = remember(freshOn?.id) { androidx.compose.animation.core.Animatable(1f) }
+    val ring = remember(freshOn?.id) { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(freshOn?.id) {
+        freshOn ?: return@LaunchedEffect
+        if (reducedMotion) { freshDone(); return@LaunchedEffect }
+        kotlinx.coroutines.delay(340)
+        kotlinx.coroutines.coroutineScope {
+            launch { ring.animateTo(1f, tween(1_200, easing = Motion.enter.easing)) }
+            pop.animateTo(1.5f, tween(140))
+            pop.animateTo(1f, Springs.bouncy.spec())
+        }
+        freshDone()
+    }
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = data.summary }) {
         val w = with(d) { maxWidth.toPx() }
         // 시안 Charts.day는 폭 320 기준 SVG를 칸 폭에 맞춰 늘린다(412 폰의 흰 블록 안 348 → 1.09배). 같은 크기로 보이게 글자·간격에
@@ -243,6 +261,15 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier) {
                                 drawPath(dia, p.surface, style = Stroke(2 * px))
                             } else drawCircle(color, th * 0.3f, c)
                         }
+                    }
+                    // U88 새 표시(점 톡 + 고리 퍼짐). 동작 줄이기면 그리지 않는다.
+                    if (!reducedMotion) freshOn?.let { f ->
+                        val i = data.lanes.indexOfFirst { it.kind == f.lane }
+                        val c = Offset(x(f.at), trackY(i) + th / 2)
+                        val r = th * 0.3f
+                        val col = laneColor(f.lane, p)
+                        drawCircle(col.copy(alpha = 0.6f * (1f - ring.value)), r * (1f + 2f * ring.value), c, style = Stroke(2 * px))
+                        drawCircle(col, r * pop.value, c)
                     }
                     // 고른 표시 강조(살짝 밝게)
                     selected?.let { hits.getOrNull(it) }?.let { h -> drawRoundRect(Color.White.copy(alpha = 0.18f), h.rect.topLeft, h.rect.size, CornerRadius(4 * px)) }
@@ -442,7 +469,7 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------- 에피소드 띠
 
 /**
- * 에피소드 띠(시안 Charts.episode). 소리 줄(먹색 막대 + 안에 방법 이름, 재생 사이 칸은 회색·이름 없이 시간만), 아래 표시(감지·다시 울음·쉼터 제안·그쳤어요).
+ * 에피소드 띠(시안 Charts.episode). 소리 줄(먹색 막대 + 안에 방법 이름, 재생 사이 칸은 회색·이름 없이 시간만), 아래 표시(감지·다시 울음·쉼터 제안·그침).
  * 리포트에 울음 구간이 없어 울음 줄은 그리지 않는다(결정 7).
  */
 @Composable
@@ -464,7 +491,7 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
     val laneW = remember(m, laneStyle) { m.measure("소리", laneStyle).size.width + 12 * px }
     Column(modifier) {
-    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "에피소드: " + (band.sounds.map { it.tip } + band.marks.map { it.label } + band.outcomes).joinToString(", ") }) {
+    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = band.summary }) {
         val w = with(d) { maxWidth.toPx() }
         val left = laneW
         val right = w - 6 * px
@@ -503,10 +530,10 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     }
 }
 
-// ---------------------------------------------------------------- 방법별 성적
+// ---------------------------------------------------------------- 소리별 성적
 
-/** 방법별 성적(시안 Charts.methods): 이름 · 점 행렬(튼 횟수만큼, 그친 만큼 채움, 먹색 한 색) · '6/7번', 3번 미만은 '아직 모름'. */
-/** 방법별 성적 한 줄. 순서는 [CareStats.methodOrder]가 정해 넘긴다. */
+/** 소리별 성적(시안 Charts.methods): 이름 · 점 행렬(튼 횟수만큼, 그친 만큼 채움, 먹색 한 색) · '6/7번', 3번 미만은 '아직 모름'. */
+/** 소리별 성적 한 줄. 순서는 [CareStats.methodOrder]가 정해 넘긴다. */
 data class MethodRow(val name: String, val ok: Int, val n: Int) {
     val known get() = n >= CareStats.methodKnownAttempts
 }
@@ -520,13 +547,13 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
         rows.forEachIndexed { r, row ->
             val before = rows.take(r).sumOf { it.ok } // 찬 점은 모든 줄을 이어 0.02초씩 늦게 튄다(시안 charts.js: spring 강성 600·감쇠 30)
             Row(
-                Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "${row.name}: " + if (row.known) "${row.n}번 중 ${row.ok}번 그침" else "아직 모름" }
+                Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "${row.name}: " + if (row.known) "${row.n}번 틀어서 ${row.ok}번 그침" else "아직 모름, ${row.n}번 틀었어요" }
                     .pointerInput(r) { detectTapGestures { tip = if (tip == r) null else r } },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // 이름 칸은 80 이상(시안 74), 큰 글자에서는 이름 폭만큼 늘어 낱말 가운데서 끊기지 않게(R13).
-                // 144에서 멈춰 긴 부모 노래 이름(30자까지)은 줄을 바꾸고 점·횟수 자리를 남긴다.
+                // 144에서 멈춰 긴 우리 노래 이름(30자까지)은 줄을 바꾸고 점·횟수 자리를 남긴다.
                 Text(row.name, Modifier.widthIn(min = 80.dp, max = 144.dp), style = Type.chip, color = if (row.known) p.textPrimary else p.textTertiary)
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     repeat(row.n) { i ->
@@ -561,13 +588,13 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
 
 // ---------------------------------------------------------------- 조향 비교
 
-/** 평소 대비 조향 보정(시안 Charts.steer): 평소·울음 중·대응 뒤 셋, '울음 중'만 주황. 값 라벨은 막대 위. */
+/** 평소 대비 조향 보정(시안 Charts.steer): 평소·울음 중·달랜 뒤 셋, '울음 중'만 주황. 값 라벨은 막대 위. */
 @Composable
 fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
-    val items = listOf(Triple("평소", baseline, false), Triple("울음 중", during, true), Triple("대응 뒤", after, false))
+    val items = listOf(Triple("평소", baseline, false), Triple("울음 중", during, true), Triple("달랜 뒤", after, false))
     val fs = CHART_FS
     val ct = ChartText(fs, p)
     val tick = ct.tick
@@ -579,7 +606,7 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
     val grow = rememberReveal(Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 2, Curve(0, 0f, 0f, 1f, 1f)) // 막대 셋
     BoxWithConstraints(
         modifier.fillMaxWidth().semantics {
-            contentDescription = "1분당 큰 조향 보정: " + items.joinToString(", ") { (k, v, _) -> "$k ${v?.let(::perMinText) ?: "없음"}번" }
+            contentDescription = "1분당 큰 조향 보정: " + items.mapNotNull { (k, v, _) -> v?.let { "$k ${perMinText(it)}번" } }.joinToString(", ") // 값이 없는 막대는 읽지 않는다(iOS·차와 같음)
         },
     ) {
     val w = with(d) { maxWidth.toPx() }

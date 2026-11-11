@@ -111,8 +111,8 @@ enum DesignSystem {
         case tag
         /// 13·400 흐린 안내 글(.foot-note 긴 글) — caption 계열
         case note
-        /// 13.5·500 첫 안내 목록(.ilist) — caption 계열
-        case introItem
+        /// 13·600 상태 머리·시트 오류 한 줄(시트 '고치는 중' .eb8, .msg) — caption 계열
+        case eyebrow
         /// 14·400 목록 줄 부제·블록 부제(.lrow span) — body 계열
         case rowSub
         /// 14·500 링크·흐린 머리 글(.bh a, .hero-c small) — body 계열
@@ -137,8 +137,6 @@ enum DesignSystem {
         case sheetRow
         /// 15.5·600 시트 값 칩(.sheet .row em) — body 계열
         case sheetValue
-        /// 16·500 첫 안내 첫 줄(.intro p.lead) — body 계열
-        case lead
         /// 16·600 목록 줄 제목·진행 중 판 제목(.lrow b, .run-c b) — body 계열
         case rowTitle
         /// 17·500 날짜 띠 날(.datestrip b) — headline 계열
@@ -147,8 +145,12 @@ enum DesignSystem {
         case strong
         /// 18·700 큰 버튼 글자(.pbtn.big, 434행) — headline 계열
         case strongLarge
+        /// 24·700 기록 시트 질문 제목(.q, v8) — display 계열
+        case sheetQuestion
         /// 28·700 진행 중 판 시계(.run-c .tm) — display 계열
         case runningTimer
+        /// 34·700 시트 젖병 양 숫자(.amt .n, v8) — display 계열
+        case amountNumber
         /// 44·600 녹음 시간(.rec .rt) — timer 계열
         case recordTimer
 
@@ -159,7 +161,6 @@ enum DesignSystem {
             case .footnote: TypeStyle(size: 12.5, line: 17, weight: 500, relativeTo: .body)
             case .tag: TypeStyle(size: 12.5, line: 16, weight: 600, relativeTo: .body)
             case .note: TypeStyle(size: 13, line: 18, weight: 400, relativeTo: .body)
-            case .introItem: TypeStyle(size: 13.5, line: 20, weight: 500, relativeTo: .body)
             case .rowSub: TypeStyle(size: 14, line: 20, weight: 400, relativeTo: .body)
             case .meta: TypeStyle(size: 14, line: 20, weight: 500, relativeTo: .body)
             case .quickLabel: TypeStyle(size: 14, line: 18, weight: 600, relativeTo: .body)
@@ -172,13 +173,15 @@ enum DesignSystem {
             case .action: TypeStyle(size: 15, line: 20, weight: 700, relativeTo: .body)
             case .sheetRow: TypeStyle(size: 15.5, line: 21, weight: 500, relativeTo: .body)
             case .sheetValue: TypeStyle(size: 15.5, line: 21, weight: 600, relativeTo: .body)
-            case .lead: TypeStyle(size: 16, line: 24, weight: 500, relativeTo: .body)
             case .rowTitle: TypeStyle(size: 16, line: 22, weight: 600, relativeTo: .body)
             case .dateNumber: TypeStyle(size: 17, line: 22, weight: 500, relativeTo: .body)
             case .strong: TypeStyle(size: 17, line: 22, weight: 700, relativeTo: .body)
             case .strongLarge: TypeStyle(size: 18, line: 24, weight: 700, relativeTo: .body)
             case .runningTimer: TypeStyle(size: 28, line: 32, weight: 700, relativeTo: .body)
             case .recordTimer: TypeStyle(size: 44, line: 48, weight: 600, relativeTo: .body)
+            case .eyebrow: TypeStyle(size: 13, line: 18, weight: 600, relativeTo: .body)
+            case .sheetQuestion: TypeStyle(size: 24, line: 32, weight: 700, relativeTo: .body)
+            case .amountNumber: TypeStyle(size: 34, line: 40, weight: 700, relativeTo: .body)
             }
         }
     }

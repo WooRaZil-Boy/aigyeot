@@ -52,8 +52,8 @@ class RecordCare(
     private val log: Logger,
     /** debug 빌드만 시연 시드를 받는다(U50). */
     private val allowDebugSeed: Boolean,
-    /** 되돌리기 띠가 떠 있는 시간(7장 '되돌리기' 5초). 시험만 줄인다. */
-    private val undoMs: Long = UNDO_MS,
+    /** 되돌리기 띠가 떠 있는 시간(7장 '되돌리기' 5초, 화면 읽기면 50초: U87 [undoBandMs]). 띠를 띄울 때마다 묻는다. 시험만 줄인다. */
+    private val undoMs: () -> Long = { UNDO_MS },
 ) {
     private val zone get() = APP_ZONE.id
 
@@ -93,7 +93,7 @@ class RecordCare(
     // ---- 되돌리기 띠(7장·U38·U64) 수명 한 곳 ----
 
     /**
-     * 띠를 띄운다. [undoMs] 뒤 저절로 끝난다. 떠 있던 띠는 이때 끝난다(다른 띠로 바뀌어 닫힘): 앞 띠가 가져오기면 그 줄이 이제 차에 보이므로 계기를 낸다.
+     * 띠를 띄운다. [undoMs]가 정한 시간 뒤 저절로 끝난다. 떠 있던 띠는 이때 끝난다(다른 띠로 바뀌어 닫힘): 앞 띠가 가져오기면 그 줄이 이제 차에 보이므로 계기를 낸다.
      * 새 띠를 먼저 세우므로, 새 띠가 가져오기면 새로 가져온 줄만 그 띠가 끝날 때까지 빠진다([forCar]).
      */
     private fun showUndo(u: CareUndo) {
@@ -101,8 +101,9 @@ class RecordCare(
         undoJob?.cancel()
         notices.showUndo(u)
         if (prev is CareUndo.Import) careSaved()
+        val band = undoMs() // 띠를 띄울 때 한 번 정하고 떠 있는 동안 바꾸지 않는다(U87)
         undoJob = scope.launch {
-            delay(undoMs)
+            delay(band)
             endUndo(u)
         }
     }

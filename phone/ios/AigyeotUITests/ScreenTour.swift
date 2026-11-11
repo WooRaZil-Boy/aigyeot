@@ -150,10 +150,14 @@ final class ScreenTour: XCTestCase {
 
     private func tab(_ name: String) {
         // iPhone Duo는 탭 막대가 옆 세로 알약이라 tabBars로 잡히지 않는다. 탭 이름 버튼으로 찾는다.
-        app.buttons[name].firstMatch.tap()
+        // 내리면 iOS 26 탭 막대가 작아져 이름 버튼이 숨는다: 위로 끌어 내리고, 그래도 없으면 작은 막대를 눌러 펼친다(DesignTour와 같다)
+        let b = app.buttons[name].firstMatch
+        for _ in 0..<4 where !(b.exists && b.isHittable) { app.swipeDown() }
+        if !b.exists { app.tabBars.buttons.firstMatch.tap(); sleep(1) }
+        b.tap()
     }
 
-    /// 설정의 '잠·기저귀도 기록하기'를 켠다. 탭을 바꾼 직후에는 첫 탭이 빗나가기도 해(가장 큰 글자) 값을 보고 다시 누른다.
+    /// 설정의 '잠·기저귀도 적기'를 켠다. 탭을 바꾼 직후에는 첫 탭이 빗나가기도 해(가장 큰 글자) 값을 보고 다시 누른다.
     private func turnOnSleepDiaper() {
         let toggle = app.switches.firstMatch
         XCTAssert(toggle.waitForExistence(timeout: 5))
@@ -167,6 +171,9 @@ final class ScreenTour: XCTestCase {
     private func label(beginsWith s: String) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", s)).firstMatch
     }
+
+    /// 기록 시트의 저장 단추(글이 저장될 것을 말한다, U83: '오후 1:58 왼쪽 수유 저장하기').
+    private var saveButton: XCUIElement { app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "저장하기")).firstMatch }
 
     /// 429 잠금이 Retry-After 끝에 풀리는지(대장 'iOS 429 잠금이 17~45초 늦게 풀림', ios_429_1105d).
     /// 중계의 로컬 IP 한도(10분에 10번 틀림)를 먼저 채워 앱의 첫 요청이 429를 받게 한다. 한도가 10분 남으므로 따로 돌린다:
@@ -182,10 +189,12 @@ final class ScreenTour: XCTestCase {
         let field = app.textFields.firstMatch
         XCTAssert(field.waitForExistence(timeout: 5))
         field.tap(); field.typeText("000001")   // 6자리가 차면 바로 보낸다
-        let locked = label(beginsWith: "잠시 뒤에 다시 해 주세요. (")
+        let locked = app.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", "뒤에 다시 해 주세요")).firstMatch
         XCTAssert(locked.waitForExistence(timeout: 10))
         let shownAt = Date()
-        let secs = try XCTUnwrap(Double(locked.label.filter(\.isNumber)))   // "(595초 뒤)"
+        // "10분 뒤에 다시 해 주세요"(60초 넘으면 분 올림, 계약 7.2) 또는 "45초 뒤에 …". 분이면 올림이라 끝 예상이 최대 60초 늦게 잡힌다
+        let n = try XCTUnwrap(Double(locked.label.filter(\.isNumber)))
+        let secs = locked.label.contains("분") ? n * 60 : n
         shot("429-locked")
         field.typeText("000002")   // 잠금 중: 요청 없이 입력칸에 남는다
         let confirm = app.buttons["확인"]
@@ -268,12 +277,23 @@ final class ScreenTour: XCTestCase {
         car.register()
         XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
         shot("01-intro")
+        // U43 안 B: '자세히 보기' 시트에 원문 넷(7.1 intro.* 글자 그대로), '닫기'로 돌아온다
+        let more = app.buttons["오가는 정보 자세히 보기"]
+        XCTAssert(more.waitForExistence(timeout: 5))
+        more.tap()
+        XCTAssert(app.staticTexts["오가는 정보"].waitForExistence(timeout: 5))
+        for (label, text) in [("주고받는 것", "수유 시작 시각"), ("보내지 않는 것", "아기 울음 소리"), ("거치는 서버", "모두 아이곁 중계 서버"), ("AI 서버", "차에서 아기 상황을 물으면")] {
+            XCTAssert(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", label, text)).firstMatch.exists, "\(label) 원문이 시트에 없다")
+        }
+        shot("01b-intro-sheet")
+        app.buttons["닫기"].firstMatch.tap()
+        XCTAssert(app.staticTexts["오가는 정보"].waitForNonExistence(timeout: 5))
         app.buttons["먼저 기록만 쓸게요"].tap()
 
         // 연결 안 됨: 오늘
-        XCTAssert(app.buttons["수유 시작"].waitForExistence(timeout: 5))
+        XCTAssert(app.buttons["수유 시작하기"].waitForExistence(timeout: 5))
         shot("02-unpaired-today-empty")
-        app.buttons["수유 시작"].tap()
+        app.buttons["수유 시작하기"].tap()
         shot("03-unpaired-today-feeding")
         label(beginsWith: "수유 중").tap()
         XCTAssert(app.buttons["끝내기"].waitForExistence(timeout: 5))
@@ -285,26 +305,28 @@ final class ScreenTour: XCTestCase {
         XCTAssert(app.buttons["수유"].waitForExistence(timeout: 5))
         sleep(1)
         app.buttons["수유"].press(forDuration: 1.0)
+        XCTAssert(app.buttons["시작"].waitForExistence(timeout: 5))   // 기록 시트 v8: 줄은 접혀 있다(U82)
+        app.buttons["시작"].tap()
         XCTAssert(app.buttons["1시간 전"].waitForExistence(timeout: 5))
         app.buttons["1시간 전"].tap()
         app.buttons["젖병"].tap()
         shot("05-quick-feed")
-        app.buttons["저장"].tap()
+        saveButton.tap()
         // 겹치면 묻는다
-        if app.buttons["그래도 저장"].waitForExistence(timeout: 2) { shot("05b-overlap"); app.buttons["그래도 저장"].tap() }
+        if app.alerts.buttons["저장"].waitForExistence(timeout: 2) { shot("05b-overlap"); app.alerts.buttons["저장"].tap() }
         app.buttons["메모"].tap()
         let memo = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
         memo.tap(); memo.typeText("트림 잘 함")
         shot("06-quick-note")
-        app.buttons["저장"].tap()
-        XCTAssert(app.staticTexts["메모 적기"].waitForNonExistence(timeout: 5), "메모 시트가 닫히지 않았다")
+        saveButton.tap()
+        XCTAssert(app.staticTexts["무엇을 적을까요?"].waitForNonExistence(timeout: 5), "메모 시트가 닫히지 않았다")
         shot("07-unpaired-today")
 
-        // 설정: 아이 별명, 잠·기저귀 켜기
+        // 설정: 아기 별명, 잠·기저귀 켜기
         tab("설정")
-        let nick = app.textFields.firstMatch   // 설정의 입력칸은 별명 하나다
-        nick.tap()
-        if app.keyboards.firstMatch.waitForExistence(timeout: 2) { app.typeText("콩이\n") }   // 큰 글자에서는 칸이 줄바꿈돼 초점이 안 갈 수 있다
+        label(beginsWith: "아기 별명").tap()   // 별명은 줄을 누르면 뜨는 입력 창에서 고친다
+        let nick = app.alerts.textFields.firstMatch
+        if nick.waitForExistence(timeout: 3) { nick.typeText("콩이"); app.alerts.buttons["저장"].tap() }
         turnOnSleepDiaper()
         shot("08-unpaired-settings")
         app.swipeUp()
@@ -318,20 +340,20 @@ final class ScreenTour: XCTestCase {
         let diaperButton = app.buttons["기저귀"].firstMatch
         for _ in 0..<4 where !(diaperButton.exists && diaperButton.isHittable) { app.swipeUp() }
         diaperButton.tap()
-        XCTAssert(app.buttons["저장"].waitForExistence(timeout: 5), "기저귀 시트가 뜨지 않았다")
-        app.buttons["저장"].firstMatch.tap()
+        XCTAssert(saveButton.waitForExistence(timeout: 5), "기저귀 시트가 뜨지 않았다")
+        saveButton.tap()
 
         // 기록: 하루 → 지우기·되돌리기 → 패턴
         tab("기록")
         shot("10-records-day")
-        let diaperRow = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '기저귀 · ' AND label ENDSWITH '· 소변'")).firstMatch
+        let diaperRow = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '기저귀 · ' AND label CONTAINS '소변'")).firstMatch
         for _ in 0..<4 where !diaperRow.exists { app.swipeUp() }
         XCTAssert(diaperRow.exists, "종류를 고르지 않은 새 기저귀가 소변으로 저장되지 않았다")
         for _ in 0..<4 where !(app.buttons["하루"].exists && app.buttons["하루"].isHittable) { app.swipeDown() }
         // 띠가 없으면 띠 자리는 0이다(제목 바로 아래 하루·패턴 전환). 늘 200pt를 차지하던 회귀를 막는다.
         let gap = app.buttons["하루"].firstMatch.frame.minY - app.navigationBars.firstMatch.frame.maxY   // 가장 큰 글자에서는 나눈 선택 대신 글자 버튼
         XCTAssertLessThan(gap, 40, "띠가 없는데 위쪽 빈칸 \(gap)pt")
-        XCTAssertGreaterThanOrEqual(app.buttons["하루"].firstMatch.frame.height, 44, "하루·패턴 전환의 누르는 높이")   // 나눈 선택도 44pt(8장)
+        XCTAssertGreaterThanOrEqual(app.buttons["하루"].firstMatch.frame.height.rounded(), 44, "하루·패턴 전환의 누르는 높이")   // 43.999… 같은 점 소수 오차는 반올림   // 나눈 선택도 44pt(8장)
         let row = app.cells.containing(NSPredicate(format: "label BEGINSWITH '수유 · '")).firstMatch   // 가장 큰 글자에서는 첫 줄이 전환·날짜 띠다
         row.swipeLeft()
         XCTAssert(app.buttons["지우기"].waitForExistence(timeout: 5), "밀어도 지우기가 없다")
@@ -373,14 +395,14 @@ final class ScreenTour: XCTestCase {
             XCTAssert(secondsWithOffset.evaluate(with: body[k] as? String ?? ""), "\(k) 꼴이 계약과 다르다: \(body[k] ?? "없음")")
         }
 
-        // 연결된 폰에 새 연결 링크: 확인 화면이 끊을지 묻고, '아니에요'면 지금 연결을 그대로 둔다(G16)
+        // 연결된 폰에 새 연결 링크: 확인 화면이 끊을지 묻고, '닫기'면 지금 연결을 그대로 둔다(G16)
         app.open(URL(string: "aigyeot://pair?code=\(car.pairCode())")!)
         XCTAssert(app.buttons["끊고 연결하기"].waitForExistence(timeout: 5))
         XCTAssert(app.staticTexts["지금 연결된 차를 끊고 새 차에 연결할까요?"].exists)
         shot("16b-owner-replace-confirm")
-        app.buttons["아니에요"].tap()
+        app.buttons["닫기"].firstMatch.tap()
         let stillPaired = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS '마지막 연락'")).firstMatch
-        XCTAssert(stillPaired.waitForExistence(timeout: 5), "'아니에요' 뒤 연결이 그대로가 아니다")   // 차 타일은 연결돼 있을 때만 있다. FakeCar는 소켓 없이 HTTP만 써서 차는 '꺼짐 · 마지막 연락'으로 보인다
+        XCTAssert(stillPaired.waitForExistence(timeout: 5), "'닫기' 뒤 연결이 그대로가 아니다")   // 차 타일은 연결돼 있을 때만 있다. FakeCar는 소켓 없이 HTTP만 써서 차는 '꺼짐 · 마지막 연락'으로 보인다
         app.swipeUp(); shot("17-owner-today-2")
         tab("기록")
         shot("18-owner-records")
@@ -399,40 +421,53 @@ final class ScreenTour: XCTestCase {
         sleep(8)
         shot("19b-owner-recording")
         recordButton.tap()
-        XCTAssert(app.buttons["보내기"].waitForExistence(timeout: 5))
+        XCTAssert(app.buttons["차로 보내기"].waitForExistence(timeout: 5))
         shot("19c-owner-recorded")   // 멈춘 뒤: 이름·다시 듣기·보내기(가장 큰 글자에서는 시트 안에서 굴린다)
         // 이름을 넣어 보내고, 차가 받아들이면 목록에 '다시 듣기'·'실험에 쓰기'가 생긴다(둘 다 44pt 이상, 8장)
         let songName = app.textFields["노래 이름(30자까지)"]
         songName.tap(); songName.typeText("song1\n")   // 키보드의 '완료'로 닫는다(키보드 추천 막대가 '보내기'를 덮는다)
-        let send = app.buttons["보내기"]
+        let send = app.buttons["차로 보내기"]
         for _ in 0..<3 where !send.isHittable { app.scrollViews.firstMatch.swipeUp() }   // 큰 글자에서는 시트 안에서 굴린다
         send.tap()
         XCTAssert(app.staticTexts["노래 녹음"].waitForNonExistence(timeout: 5))
         var accepted = false
         for _ in 0..<10 where !accepted { sleep(1); accepted = car.acceptSong() }   // 올리기와 song_added가 끝나기를 기다린다
         XCTAssert(accepted, "차 받은 함에 song_added가 없다")
-        let useIt = app.buttons["실험에 쓰기"], replay = app.buttons["다시 듣기"]
-        XCTAssert(useIt.waitForExistence(timeout: 15), "받아들인 노래의 '실험에 쓰기'가 없다")
-        XCTAssertGreaterThanOrEqual(useIt.frame.height, 44)
-        XCTAssertGreaterThanOrEqual(replay.frame.height, 44)
+        // 받아들인 노래 줄(상태 '다음 주행부터 써요')은 누르면 메뉴(듣기·실험에 쓰기·지우기)이고, 오른쪽 듣기는 바로 누르는 단추다(결정 14)
+        let songRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'song1' AND label CONTAINS '다음 주행부터 써요'")).firstMatch
+        XCTAssert(songRow.waitForExistence(timeout: 15), "받아들인 노래 줄이 없다")
+        let replay = app.buttons["듣기"].firstMatch
+        XCTAssert(replay.exists, "노래 줄 오른쪽 듣기 단추가 없다")
+        XCTAssertGreaterThanOrEqual(replay.frame.height.rounded(), 44)
+        XCTAssertGreaterThanOrEqual(songRow.frame.height.rounded(), 44)
         shot("19d-owner-song-accepted")
+        songRow.tap()
+        let useIt = app.buttons["실험에 쓰기"].firstMatch
+        XCTAssert(useIt.waitForExistence(timeout: 5), "받아들인 노래 메뉴에 '실험에 쓰기'가 없다")   // 메뉴 항목 높이는 시스템이 정한다
+        shot("19e-owner-song-menu")
+        useIt.tap()   // 고른 노래(파랑 체크)는 차가 받아야 보인다(FakeCar는 답하지 않는다). 메뉴가 닫히는지만 본다
+        XCTAssert(useIt.waitForNonExistence(timeout: 5), "실험에 쓰기를 눌러도 메뉴가 닫히지 않았다")
         app.swipeUp(); shot("20-owner-car-2")
         tab("설정")
         shot("21-owner-settings")
-        app.buttons["보호자"].tap()
+        label(beginsWith: "보호자").tap()   // 줄 글은 "보호자, 1명"
         shot("22-owner-guardians")
         // 초대 코드 카드(가장 큰 글자에서 코드 전체가 보이는지는 캡처로 본다)
-        let invite = app.buttons["초대 만들기"].firstMatch
+        let invite = app.buttons["초대 코드 만들기"].firstMatch
         for _ in 0..<6 where !(invite.exists && invite.isHittable) { app.swipeUp() }
         invite.tap()
         XCTAssert(app.staticTexts.matching(NSPredicate(format: "label MATCHES '[0-9A-Z]{5}-[0-9A-Z]{5}'")).firstMatch.waitForExistence(timeout: 10), "초대 코드가 뜨지 않았다")
+        // 코드를 만든 뒤: 주 단추는 '링크로 보내기', 다시 만들기는 글자 단추(v8b-10 ⑨)
+        XCTAssert(app.buttons["새 코드 만들기"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["초대 코드 만들기"].exists)
+        XCTAssert(label(beginsWith: "링크로 보내기").exists)
         shot("22b-owner-invite")
         tab("설정")
         let disconnect = app.buttons["연결 끊기"].firstMatch
         for _ in 0..<6 where !(disconnect.exists && disconnect.isHittable) { app.swipeUp() }   // 큰 글자에서는 화면 밖에 있다
         disconnect.tap()
         shot("23-disconnect-dialog")
-        app.sheets.buttons["연결 끊기"].firstMatch.tap()
+        app.buttons["끊기"].firstMatch.tap()   // 확인 창 주 단추(B10)
         // U25 b: 탭을 누르지 않아도 오늘로 간다.
         expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: app.buttons["오늘"].firstMatch)
         waitForExpectations(timeout: 10)
@@ -462,18 +497,20 @@ final class ScreenTour: XCTestCase {
         origin.withOffset(CGVector(dx: app.frame.width * 0.3, dy: startY))
             .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: app.frame.width * 0.3, dy: startY - h * 0.6)))
         shot("26-guardian-today-2")
-        app.buttons["최근 리포트"].firstMatch.tap()
+        app.buttons["전체"].firstMatch.tap()   // guardian은 '최근 리포트' 머리의 '전체'가 리포트 목록이다
         shot("26b-guardian-reports")
         // 리포트 상세(제목은 주행 날짜)까지 들어가 큰 글자 배치를 찍는다. 먼저 리포트 목록인지 못박는다
         XCTAssert(app.navigationBars["리포트"].waitForExistence(timeout: 5), "리포트 목록이 아니다")
-        app.cells.firstMatch.tap()
-        XCTAssert(app.staticTexts["에피소드"].waitForExistence(timeout: 5), "리포트 상세로 들어가지 못했다")
+        label(beginsWith: "11월").tap()   // 리포트 줄 제목은 주행 날짜(목록은 셀이 아니라 줄 단추다)
+        XCTAssert(app.staticTexts["울음"].firstMatch.waitForExistence(timeout: 5), "리포트 상세로 들어가지 못했다")
         shot("26c-report-detail")
         app.swipeUp(); shot("26d-report-detail-2")
         tab("오늘")   // 같은 탭을 다시 누르면 첫 화면으로 돌아간다
         tab("기록")
         shot("27-guardian-records")
-        app.buttons["지난 기록 적기"].tap()
+        let past = app.buttons.matching(NSPredicate(format: "label == %@", "지난 기록 적기")).firstMatch   // 차 기록 줄이 있으면 목록 끝(굴려야 만들어진다)
+        for _ in 0..<5 where !(past.exists && past.isHittable) { app.swipeUp() }
+        past.tap()
         shot("28-guardian-quick")
         app.swipeDown(velocity: .fast)
 
@@ -575,7 +612,7 @@ final class ScreenTour: XCTestCase {
         tab("설정")
         turnOnSleepDiaper()
         tab("오늘")
-        app.buttons["수유 시작"].tap()
+        app.buttons["수유 시작하기"].tap()
         label(beginsWith: "수유 중").tap()
         XCTAssert(app.buttons["왼쪽"].waitForExistence(timeout: 5))
         app.buttons["왼쪽"].tap()

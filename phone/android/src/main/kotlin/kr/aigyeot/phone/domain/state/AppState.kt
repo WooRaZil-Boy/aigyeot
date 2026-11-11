@@ -101,6 +101,18 @@ class Notices {
         _undo.value = u
     }
 
+    private val _fresh = MutableStateFlow<String?>(null)
+
+    /** 기록 시트가 막 저장한 기록 id(U88). 기록 탭 줄 강조·오늘 하루 띠 새 표시가 한 번 보인 뒤 [clearFresh]로 걷는다(iOS `fresh`). */
+    val fresh: StateFlow<String?> = _fresh.asStateFlow()
+
+    fun markFresh(id: String) {
+        _fresh.value = id
+    }
+
+    /** 그 기록일 때만 걷는다(그사이 다른 기록을 저장했으면 새 것은 남긴다). */
+    fun clearFresh(id: String) = _fresh.update { if (it == id) null else it }
+
     fun clearUndo() {
         _undo.value = null
     }
@@ -258,7 +270,7 @@ class LinkSwitch(private val marks: LinkMarks, private val notices: Notices) {
     /** 설정에서 직접 끊은 뒤(U25 b): 탭(연결 안 됨)의 오늘로 가고 띠를 보인다. */
     fun afterUserDisconnect() {
         chooseRecordsOnly()
-        notices.showCare("연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요")
+        notices.showCare("연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요.")
     }
 
     private companion object {

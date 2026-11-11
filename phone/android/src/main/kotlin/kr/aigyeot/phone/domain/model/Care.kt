@@ -117,11 +117,15 @@ fun CareFile.endUnknown(id: String, now: Long) =
 /** 진행 중인데 이미 최대 길이를 넘었다: 타이머가 R3 안내와 끝 시각 고르기·끝 모름으로 닫기를 준다(U14). */
 fun CareEvent.overMax(now: Long) = isOngoing && now - startAt > (kind.maxMs ?: Long.MAX_VALUE)
 
-enum class CareProblem { FUTURE, END_BEFORE_START, TOO_LONG, AMOUNT, NOTE_TOO_LONG }
+/**
+ * 저장 검사(R3)에 걸린 까닭. 값마다 탓이 된 자리가 하나다(U82 끝, iOS `CareProblem`과 같은 값): 미래 시각은 어느 시각이 미래인지로 나눈다
+ * (둘 다 미래면 시작). 글은 [problemText], 자리는 [field].
+ */
+enum class CareProblem { FUTURE_START, FUTURE_END, END_BEFORE_START, TOO_LONG, AMOUNT, NOTE_TOO_LONG }
 
 /** 저장하지 못한 까닭(7장 + 11-05 결정 문구). 메모는 입력칸이 200자에서 멈춰 보통 보이지 않는다. */
 fun problemText(p: CareProblem, kind: CareKind) = when (p) {
-    CareProblem.FUTURE -> "앞으로의 시각은 적을 수 없어요"
+    CareProblem.FUTURE_START, CareProblem.FUTURE_END -> "앞으로의 시각은 적을 수 없어요"
     CareProblem.END_BEFORE_START -> "끝 시각이 시작보다 빨라요"
     CareProblem.TOO_LONG -> if (kind == CareKind.SLEEP) "잠은 16시간까지 적을 수 있어요" else "수유는 3시간까지 적을 수 있어요"
     CareProblem.AMOUNT -> "0~400ml로 적어 주세요"
@@ -133,7 +137,8 @@ fun overlapText(kind: CareKind) = if (kind == CareKind.SLEEP) "다른 잠과 시
 
 /** R3과 값 범위. 진행 중 기록의 길이는 보지 않는다(타이머가 3시간 경고를 띄운다). */
 fun CareEvent.problem(now: Long): CareProblem? = when {
-    startAt > now + FUTURE_SLACK_MS || (endAt != null && endAt > now + FUTURE_SLACK_MS) -> CareProblem.FUTURE
+    startAt > now + FUTURE_SLACK_MS -> CareProblem.FUTURE_START
+    endAt != null && endAt > now + FUTURE_SLACK_MS -> CareProblem.FUTURE_END
     endAt != null && endAt < startAt -> CareProblem.END_BEFORE_START
     endAt != null && endAt - startAt > (kind.maxMs ?: Long.MAX_VALUE) -> CareProblem.TOO_LONG
     amountMl != null && amountMl !in AMOUNT_ML -> CareProblem.AMOUNT
@@ -259,21 +264,30 @@ fun quickKinds(sleepDiaper: Boolean) =
 data class CarePattern(
     val days: List<LocalDate>,
     val feedsPerDay: List<Int>,
-    /** 5개 미만이면 null(R14). */
-    val feedIntervalMs: Long?,
+    /** R14: 두 수유가 모두 7일 안에 있는 간격(10시간 넘는 것은 뺌). */
+    val feedGapsMs: List<Long>,
     val sleepPerDayMs: List<Long>?,
     val diapersPerDay: List<Int>?,
     val carCryEpisodes: Int,
 ) {
+    /** 보통 간격(중앙값). 간격이 5개 미만이면 null(R14, P4: 간격에서 계산). */
+    val feedIntervalMs: Long? get() = CareStats.usualGap(feedGapsMs)
+
+    /** 쌓인 간격 수(U85 패턴 빈 상태의 점, 5개가 되면 보통 간격이 보인다). */
+    val feedIntervalCount: Int get() = feedGapsMs.size
+
+    /** U85 ③ 점 다섯의 읽기 이름(7.1 `pattern.intervalProgress`). 보통 간격이 보이면 null(점을 그리지 않는다). */
+    val intervalProgress: String? get() = if (feedIntervalMs == null) "수유 간격 5개 중 ${feedIntervalCount}개 쌓임" else null
+
     /** U27·U31: 평균의 분모(P4: 날별 값에서 계산). 수유·기저귀는 그 종류 기록이 그날 시작한 날, 잠은 끝난 잠이 그날에 걸친 시간이 0보다 큰 날. */
     val feedDays: Int get() = feedsPerDay.count { it > 0 }
     val sleepDays: Int get() = sleepPerDayMs?.count { it > 0 } ?: 0
     val diaperDays: Int get() = diapersPerDay?.count { it > 0 } ?: 0
 }
 
-/** 7.1 pattern.value: 횟수 "평균 {n}회"(소수 첫째 자리), 기록한 날이 없으면 "기록 없음"(U27). */
+/** 7.1 pattern.value: 횟수 "평균 {n}번"(소수 첫째 자리), 기록한 날이 없으면 "기록 없음"(U27). */
 fun avgCountText(perDay: List<Int>): String =
-    CareStats.perRecordedDay(perDay)?.let { "평균 ${String.format(java.util.Locale.ROOT, "%.1f", it)}회" } ?: "기록 없음"
+    CareStats.perRecordedDay(perDay)?.let { "평균 ${String.format(java.util.Locale.ROOT, "%.1f", it)}번" } ?: "기록 없음"
 
 /** 잠 "평균 {기간}"(U27 길이 형식). */
 fun avgDurationText(perDayMs: List<Long>): String = CareStats.perRecordedDay(perDayMs)?.let { "평균 ${durationText(it)}" } ?: "기록 없음"
@@ -291,7 +305,7 @@ fun carePattern(care: CareFile, reports: Collection<ReportSummaryBody>, now: Lon
     return CarePattern(
         days = days,
         feedsPerDay = CareStats.countPerDay(care.events, CareKind.FEED, days, zone),
-        feedIntervalMs = CareStats.usualGap(CareStats.feedGaps(CareStats.feedStarts(care.events, from = from, until = now)).map { it.ms }),
+        feedGapsMs = CareStats.feedGaps(CareStats.feedStarts(care.events, from = from, until = now)).map { it.ms },
         sleepPerDayMs = if (care.sleepDiaperEnabled) sleepMs else null,
         diapersPerDay = if (care.sleepDiaperEnabled) CareStats.countPerDay(care.events, CareKind.DIAPER, days, zone) else null,
         // 차 시계가 앞서 내일로 찍힌 것은 뺀다.
@@ -340,27 +354,32 @@ fun reportDate(b: ReportSummaryBody, zone: ZoneId): String? =
 fun reportRowTitle(b: ReportSummaryBody, zone: ZoneId): String =
     listOfNotNull(reportDate(b, zone), reportSpan(b.startedAt, b.endedAt, zone)).joinToString(" ")
 
-/** report.row.sub "울음 {n}번". n은 울음 경보로 시작한 에피소드 수로, 차 기록 줄(R17)의 '차에서 울음' 줄 수와 같다. */
-fun reportRowSub(b: ReportSummaryBody): String {
+/** "울음 {n}번"(0번 "울음 기록 없음"). n은 울음 경보로 시작한 에피소드 수로, 차 기록 줄(R17)의 '차에서 울음' 줄 수와 같다. 리포트 상세의 큰 글도 이것이다. */
+fun reportCries(b: ReportSummaryBody): String {
     val n = b.timeline.count { it.trigger == EpisodeTrigger.CRY_ALARM } // 시각을 읽지 못한 울음도 센다(iOS reportSub와 같다)
-    return (if (n == 0) "울음 기록 없음" else "울음 ${n}번") + if (b.simulated) " · 시뮬레이션" else ""
+    return if (n == 0) "울음 기록 없음" else "울음 ${n}번"
 }
+
+/** report.row.sub: [reportCries], 연습 장면(`simulated`)이면 뒤에 " · 연습 장면"(U47·U72). */
+fun reportRowSub(b: ReportSummaryBody): String = reportCries(b) + if (b.simulated) " · 연습 장면" else ""
 
 fun methodName(m: SoundMethod) = when (m) {
     SoundMethod.WHITE_NOISE -> "백색소음"
     SoundMethod.WOMB -> "뱃속 소리"
     SoundMethod.LULLABY -> "자장가"
-    SoundMethod.PARENT_SONG -> "부모 노래"
+    SoundMethod.PARENT_SONG -> "우리 노래"
     SoundMethod.UNKNOWN -> "기타"
 }
 
 /** 차가 보낸 label을 보이되, 모르는 method(U46)는 label 대신 "기타". */
 fun soundLabel(method: SoundMethod, label: String) = if (method == SoundMethod.UNKNOWN) methodName(method) else label
 
-fun resultText(r: EpisodeResult) = when (r) {
-    EpisodeResult.SUCCESS -> "그쳤어요"
-    EpisodeResult.FAILURE -> "계속 울었어요"
-    EpisodeResult.UNDETERMINED -> "알 수 없음"
+/** 울음 결과(U73·U15): 리포트 상세·차 기록 줄·울음 띠 표시가 같은 낱말을 쓴다. 1차 시도가 없으면 "1차 시도 없음"(차 기록 줄은 칸째 뺀다). */
+fun resultText(r: EpisodeResult?) = when (r) {
+    EpisodeResult.SUCCESS -> "그침"
+    EpisodeResult.FAILURE -> "계속 울음"
+    EpisodeResult.UNDETERMINED -> "판정하지 못함"
+    null -> "1차 시도 없음"
 }
 
 // ---- 문구 형식(7장, 기기 언어와 관계없이 한국어) ----
@@ -388,6 +407,21 @@ fun koSpan(start: Long, end: Long, zone: ZoneId): String =
 
 /** "11월 5일(수)". */
 fun koDate(d: LocalDate) = "${d.monthValue}월 ${d.dayOfMonth}일(${"월화수목금토일"[d.dayOfWeek.value - 1]})"
+
+/** log.date.*: "오늘" / "어제" / "11월 5일(수)"(고른 날 제목, 날짜 칸·시트 줄 값의 날짜). */
+fun dayLabel(d: LocalDate, today: LocalDate) = when (d) {
+    today -> "오늘"
+    today.minusDays(1) -> "어제"
+    else -> koDate(d)
+}
+
+/** 7.1 today.quick.* · timer.title.* 의 종류 이름. */
+fun kindName(k: CareKind) = when (k) {
+    CareKind.FEED -> "수유"
+    CareKind.SLEEP -> "잠"
+    CareKind.DIAPER -> "기저귀"
+    CareKind.NOTE -> "메모"
+}
 
 /** 며칠 전일 수 있는 시각(import.latestFeed, U68 11-09 보충): 오늘이면 "오전 11:00", 어제면 "어제 오전 11:00", 그 전이면 "11월 3일 오전 11:00". */
 fun koDayClock(ms: Long, now: Long, zone: ZoneId): String {

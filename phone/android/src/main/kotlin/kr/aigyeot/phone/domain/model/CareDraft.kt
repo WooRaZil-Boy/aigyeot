@@ -161,6 +161,112 @@ fun CareEvent.normalized(): CareEvent = copy(
     note = note?.trim()?.ifEmpty { null },
 )
 
+// ---- 기록 시트 v8(U80~U84): 질문·줄 값·저장 단추 글. 화면은 이 글을 그리기만 한다(iOS `CareDraft`와 같은 규칙) ----
+
+/** 7.1 sheet.q.*(U81): 새 기록·고치기·지난 기록이 같은 질문이다. 시트의 읽기 이름도 이것이다. */
+fun sheetQuestion(k: CareKind) = when (k) {
+    CareKind.FEED -> "어떻게 먹였어요?"
+    CareKind.SLEEP -> "언제 잤어요?"
+    CareKind.DIAPER -> "어떤 기저귀였어요?"
+    CareKind.NOTE -> "무엇을 적을까요?"
+}
+
+/** 시트에서 값을 고르는 자리(U82). 줄은 [SheetField.START]·[END]·[MEMO], [AMOUNT]는 젖병 양 칸이다. */
+enum class SheetField { START, END, MEMO, AMOUNT }
+
+/** 접힌 줄(U82): 수유 = 시작·끝·메모, 기저귀 = 시각·메모, 잠 = 끝·메모(시작은 주인공 칸), 메모 = 시각(글은 주인공 글칸). */
+val CareDraft.rows: List<SheetField>
+    get() = when (kind) {
+        CareKind.FEED -> listOf(SheetField.START, SheetField.END, SheetField.MEMO)
+        CareKind.SLEEP -> listOf(SheetField.END, SheetField.MEMO)
+        CareKind.DIAPER -> listOf(SheetField.START, SheetField.MEMO)
+        CareKind.NOTE -> listOf(SheetField.START)
+    }
+
+/** 줄 이름(7.1 sheet.row.*). 빈 메모 줄은 누르면 하는 줄 '메모 더하기'(`sheet.memo.add`). */
+fun CareDraft.rowName(f: SheetField) = when (f) {
+    SheetField.START -> if (hasDuration) "시작" else "시각"
+    SheetField.END -> "끝"
+    SheetField.MEMO -> if (note.isBlank()) "메모 더하기" else "메모"
+    SheetField.AMOUNT -> "양"
+}
+
+/**
+ * 시작·시각 줄 값(U82): 몇 분 전을 고른 동안 '{시각} · {칩}', 직접 고른 오늘이면 '{시각}', 다른 날·고치기면 '{날짜} {시각}'(`log.date.*`).
+ */
+fun CareDraft.startValue(now: Long): String {
+    val time = koClock(start, zone)
+    chip?.takeIf { showsAgoChips }?.let { return "$time · ${agoChipText(it)}" }
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val day = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
+    return if (original != null || this.day != null || day != today) "${dayLabel(day, today)} $time" else time
+}
+
+/** 끝 줄 값(U82): 모르면 '모름'(`sheet.end.unknownValue`), 알면 '{시각} · {길이}'(U27). 끝이 시작보다 이르면 '{시각}'만. */
+fun CareDraft.endValue(): String {
+    val e = end ?: return "모름"
+    val time = koClock(e, zone)
+    return if (e < start) time else "$time · ${durationText(e - start)}"
+}
+
+/** 메모 줄 값: 적었으면 글 한 줄(넘치면 화면이 말줄임), 비었으면 없음(줄 이름이 '메모 더하기'). */
+fun CareDraft.memoValue(): String? = note.trim().lineSequence().firstOrNull()?.takeIf { it.isNotEmpty() }
+
+/** 저장 검사(R3)에 걸린 탓이 된 자리(U82 끝): 미래인 시각이 시작이면 시작·시각, 끝이면 끝, 끝·길이 → 끝, 양 → 양 칸, 메모 길이 → 메모. */
+fun CareProblem.field(): SheetField = when (this) {
+    CareProblem.FUTURE_START -> SheetField.START
+    CareProblem.FUTURE_END, CareProblem.END_BEFORE_START, CareProblem.TOO_LONG -> SheetField.END
+    CareProblem.AMOUNT -> SheetField.AMOUNT
+    CareProblem.NOTE_TOO_LONG -> SheetField.MEMO
+}
+
+/** 오류 한 줄이 붙는 자리(U82: 탓이 된 칸 바로 아래, iOS와 같음): 접힌 줄, 젖병 양 칸, 주인공 칸(잠 시작·메모 글칸). */
+enum class ErrorSpot { ROW, AMOUNT, HERO }
+
+/** 탓이 된 자리 [f]가 이 시트의 접힌 줄이면 그 줄 아래, 양이면 양 칸 아래, 그 밖(잠 시작·메모 종류의 글)은 주인공 칸 아래. */
+fun CareDraft.errorSpot(f: SheetField): ErrorSpot = when {
+    f in rows -> ErrorSpot.ROW
+    f == SheetField.AMOUNT -> ErrorSpot.AMOUNT
+    else -> ErrorSpot.HERO
+}
+
+/**
+ * 쪽 칸의 '지난번'(U80, `sheet.last`, iOS `lastSide`와 같은 규칙): 새 기록(빠른 기록·지난 기록 적기)에만 두고 고치기에서는 숨긴다(null).
+ * 새 기록이면 지우지 않은 가장 늦은 수유의 쪽이다. 표시만 하고 미리 고르지 않는다.
+ */
+fun CareFile.sheetLastSide(d: CareDraft): FeedSide? =
+    if (d.original != null) null else events.filter { it.kind == CareKind.FEED && it.deletedAt == null }.maxByOrNull { it.startAt }?.feedSide
+
+/** 첫 기록 도움말 조건(U84): 지우지 않은 손 기록이 0건(차 기록 줄은 `care.json`에 없어 세지 않는다). */
+val CareFile.firstRecord: Boolean get() = events.none { it.deletedAt == null }
+
+/** U83 저장 단추 글을 줄이는 길이(공백 포함 코드 포인트). */
+const val SAVE_LABEL_MAX = 22
+
+/**
+ * 저장 단추 글(U83 `sheet.save.label`): '{시각} {고른 것} {종류} 저장하기'. 시각은 시작(잠이고 끝을 알면 구간), 고른 것은 수유 쪽(젖병이면 양이 있을 때
+ * '젖병 {n}ml'이고 '수유'를 뺀다, 양이 없으면 '젖병 수유')·기저귀 종류. 메모는 '메모 저장하기'. [shorten]이면 22자를 넘을 때 ① 잠 구간 → 시작만
+ * ② 고른 것을 뺀다 ③ 시각을 뺀다 순서로 처음 22자 안에 드는 것을 쓴다(큰 글자는 줄이지 않고 두 줄까지).
+ */
+fun CareDraft.saveLabel(shorten: Boolean = true): String {
+    if (kind == CareKind.NOTE) return "메모 저장하기"
+    val clock = koClock(start, zone)
+    val span = end?.takeIf { kind == CareKind.SLEEP && it > start }?.let { koSpan(start, it, zone) }
+    val bottleMl = amount?.takeIf { kind == CareKind.FEED && side == FeedSide.BOTTLE }
+    val chosen = when (kind) {
+        CareKind.FEED -> side?.let { if (it == FeedSide.BOTTLE) bottleMl?.let { ml -> "젖병 ${ml}ml" } ?: "젖병" else sideName(it) }
+        CareKind.DIAPER -> diaperName(diaper)
+        else -> null
+    }
+    // 젖병 양이 있으면 '수유'를 뺀다(그 글이 무엇인지 말한다).
+    val noun = if (bottleMl != null) null else kindName(kind)
+    fun label(time: String?, pick: String?, name: String?) = listOfNotNull(time, pick, name ?: kindName(kind).takeIf { pick == null }, "저장하기").joinToString(" ")
+    val full = label(span ?: clock, chosen, noun)
+    if (!shorten) return full
+    return sequenceOf(full, label(clock, chosen, noun), label(clock, null, kindName(kind)), label(null, null, kindName(kind)))
+        .first { it.codePointCount(0, it.length) <= SAVE_LABEL_MAX || it == label(null, null, kindName(kind)) }
+}
+
 // ---- 타이머(진행 중 기록)의 고치기 ----
 
 /** 시작 시각 수정: 지금 시작에 가장 가까운 그 시각 중 [limit] 이전(하루 넘게 진행된 기록의 날짜가 바뀌지 않게). */

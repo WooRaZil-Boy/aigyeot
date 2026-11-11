@@ -18,8 +18,11 @@ final class RecordCare {
     /// 앱 시작 계기(`syncToCar(.appStart)`)를 지났는가. 시작 정리 중의 돌봄 저장(옮기기·정리)은 요약을 보낼 함에 넣기만 하고
     /// 보내기는 앞으로 올 때의 갱신이 한다.
     private var started = false
-    /// 되돌리기 띠의 시간(U38·U64, 5초). 시험이 줄인다.
+    /// 되돌리기 띠의 시간(U38·U64, 5초)과 화면 읽기가 켜졌을 때의 시간(U87, 50초). 시험이 줄인다.
     var undoMs = RetryPolicy.undoMs
+    var undoMsScreenReader = RetryPolicy.undoMsScreenReader
+    /// 화면 읽기(VoiceOver·스위치 제어)가 켜져 있는가(U87). 플랫폼 값은 앱 묶음이 넘기고, 시험이 바꾼다.
+    var screenReader: () -> Bool = { false }
     /// 떠 있는 띠의 시간 작업. 시험은 `undoTask?.value`를 기다린다.
     private(set) var undoTask: Task<Void, Never>?
 
@@ -131,6 +134,11 @@ final class RecordCare {
         return .saved
     }
 
+    /// 기록 시트가 저장한 기록을 새 줄로 강조하게 표시한다(U88). 기록 탭 줄이 그린 뒤 `clearFresh`로 걷는다.
+    func markFresh(_ id: String) { notices.markFresh(id) }
+    var fresh: String? { notices.fresh }
+    func clearFresh(_ id: String) { notices.clearFresh(id) }
+
     /// 지우기는 표시만 한다(R8). 차에는 알리지 않는다. 저장했으면 되돌리기를 띄운다(U38, S9).
     func delete(_ id: String) {
         let t = nowMs
@@ -149,7 +157,7 @@ final class RecordCare {
         undoTask?.cancel()
         notices.showUndo(u)
         if case .imported = prev { syncToCar(.importSettled) }
-        let ms = undoMs
+        let ms = RetryPolicy.undoBandMs(screenReader: screenReader(), baseMs: undoMs, screenReaderMs: undoMsScreenReader)   // 띠를 띄울 때 한 번(U87)
         undoTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(max(0, ms)) * 1_000_000)
             guard !Task.isCancelled else { return }
@@ -206,7 +214,7 @@ final class RecordCare {
 
     func setSleepDiaper(_ on: Bool) { save { $0.sleepDiaperEnabled = on } }
 
-    /// 아이 별명은 폰 안에서만 쓴다(U8). 비우면 없앤다.
+    /// 아기 별명은 폰 안에서만 쓴다(U8). 비우면 없앤다.
     func setNickname(_ name: String) {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
         save { $0.childNickname = n.isEmpty ? nil : n }

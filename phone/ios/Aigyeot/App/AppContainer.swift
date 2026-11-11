@@ -1,3 +1,4 @@
+import UIKit
 import Foundation
 
 /// 합성 루트(수동 의존성 컨테이너, 생성자 주입). 원본·유스케이스·화면별 뷰모델을 만들어 넘긴다. 외부 DI 라이브러리를 쓰지 않는다.
@@ -46,9 +47,12 @@ final class AppContainer {
         pushToken: registerPush, sockets: sockets, network: network, lose: lose, now: now)
     private(set) lazy var reconcileCareSummary: ReconcileCareSummary = ReconcileCareSummary(
         state: state, care: care, notices: notices, outbox: sendOutbox, now: now, sendsCareSummary: sendsCareSummary)
-    private(set) lazy var recordCare: RecordCare = RecordCare(
-        care: care, state: state, notices: notices, summary: reconcileCareSummary, outbox: sendOutbox, songFiles: songFiles,
-        ongoing: ongoing, now: now)
+    private(set) lazy var recordCare: RecordCare = {
+        let r = RecordCare(care: care, state: state, notices: notices, summary: reconcileCareSummary, outbox: sendOutbox, songFiles: songFiles,
+                           ongoing: ongoing, now: now)
+        r.screenReader = { UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning }   // U87 화면 읽기 켜짐
+        return r
+    }()
     private(set) lazy var clearRecords: ClearRecords = ClearRecords(
         state: state, care: care, songFiles: songFiles, tasks: tasks, outbox: sendOutbox, recordCare: recordCare,
         connection: keepConnected) { [weak self] in self?.lifecycle.handle(.recordsCleared) }

@@ -116,6 +116,7 @@
 		EF1B0C66212431AD80817000 /* CareViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19C1C140AE102A94D5766138 /* CareViewModels.swift */; };
 		F69E4D0B539AE70C369CB2B1 /* OFL-Pretendard.txt in Resources */ = {isa = PBXBuildFile; fileRef = 49E989A96809FAD2C18F564A /* OFL-Pretendard.txt */; };
 		F713478CDE1226BE6141A577 /* InboundMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31832221BC734EF447261F9B /* InboundMessage.swift */; };
+		FDAEA1EC6AC3695941425D0E /* CareEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3318AA3B64A3D800D825F7 /* CareEditSheet.swift */; };
 		FDBD7389826EA623D3EDB6B3 /* CareActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2680AB71E01206F22D541F66 /* CareActivity.swift */; };
 		FEB83156B3F602513858A9F5 /* SummaryRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2361CE433A75914C51C7B0B7 /* SummaryRules.swift */; };
 /* End PBXBuildFile section */
@@ -200,6 +201,7 @@
 		4C193670A623B14BBB9925B8 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		4E7C9CA6067B6ED93BAB1C0E /* RecordViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordViews.swift; sourceTree = "<group>"; };
 		5508F4B4A8EB086E673E1E1A /* care-sample.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "care-sample.json"; sourceTree = "<group>"; };
+		5A3318AA3B64A3D800D825F7 /* CareEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareEditSheet.swift; sourceTree = "<group>"; };
 		5C5CBCB83F4BF4E8FD69D3D0 /* RetryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetryPolicy.swift; sourceTree = "<group>"; };
 		5E4DD343B055EEE1CCDB115D /* AigyeotWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AigyeotWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F3B26F5446784D30949E1BB /* DesignTokenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokenTests.swift; sourceTree = "<group>"; };
@@ -329,6 +331,7 @@
 		13189C08A04FA1DCF6FC9A47 /* Today */ = {
 			isa = PBXGroup;
 			children = (
+				5A3318AA3B64A3D800D825F7 /* CareEditSheet.swift */,
 				11D992E683ED2E8257D9ECCC /* CareSheets.swift */,
 				19C1C140AE102A94D5766138 /* CareViewModels.swift */,
 				1D43099482E2DA993CEB3D84 /* TodayViews.swift */,
@@ -879,6 +882,7 @@
 				FDBD7389826EA623D3EDB6B3 /* CareActivity.swift in Sources */,
 				68468A83A6A5309C8E9E7675 /* CareCsv.swift in Sources */,
 				5CF194F1A0BCDDC19DB8B2FB /* CareDraft.swift in Sources */,
+				FDAEA1EC6AC3695941425D0E /* CareEditSheet.swift in Sources */,
 				CB83D6CB1908488EE0AFF755 /* CareEdits.swift in Sources */,
 				3116BF2B5949072BE673A2C7 /* CareExport.swift in Sources */,
 				325896170F5AD33BE3CF677E /* CareRepository.swift in Sources */,

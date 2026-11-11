@@ -126,18 +126,11 @@ import kr.aigyeot.phone.domain.model.reportRowTitle
 import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.text
 import kr.aigyeot.phone.domain.model.timerText
+import kr.aigyeot.phone.domain.model.kindName
 import kr.aigyeot.shared.ReportSummaryBody
 
 // 돌봄 기록 화면(phone-care-plan 5·7·7.1장, 디자인 v6 시안 phone.js S.today·S.timer). 화면 글자는 7장·7.1 표 그대로이고,
 // 표에 없는 글자는 시안 IMPLEMENT 6장의 확정 라벨만 쓴다. 주석의 `tab.today` 같은 이름은 7.1 표의 ID다.
-
-/** 7.1 today.quick.* · timer.title.* 의 종류 이름. */
-internal fun kindName(k: CareKind) = when (k) {
-    CareKind.FEED -> "수유"
-    CareKind.SLEEP -> "잠"
-    CareKind.DIAPER -> "기저귀"
-    CareKind.NOTE -> "메모"
-}
 
 /** 종류 아이콘(시안 data.js CARE: 젖병·달·기저귀·수첩, 차는 car-front). */
 @DrawableRes
@@ -305,6 +298,7 @@ private fun rememberStarter(vm: TodayViewModel): (CareKind) -> Unit {
 @Composable
 fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val freshId by vm.fresh.collectAsStateWithLifecycle()
     val s = ui.phone
     val care = ui.care
     val now = rememberNow(15_000)
@@ -324,7 +318,9 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
         }
         Block {
             BlockHeader("오늘 하루", "기록") { openTab("기록") }
-            DayStrip(day)
+            val today = Instant.ofEpochMilli(now).atZone(deviceZone).toLocalDate()
+            val fresh = freshId?.let { id -> care.events.firstOrNull { it.id == id && it.deletedAt == null } }?.let { dayFresh(it, today, deviceZone) }
+            DayStrip(day, fresh = fresh, freshDone = { fresh?.id?.let(vm::clearFresh) })
         }
         when {
             ui.guardian -> Unit // U35: 차 타일 없음(기기 목록을 받지 못한다)
@@ -412,9 +408,16 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
     }
     Block(glow, padding = PaddingValues(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 20.dp)) {
         if (last == null) {
+            // U85 ②: 같은 판 자리에 젖병 고리 + 글 + 빈 간격 트랙 + 주 단추(7장 글 그대로).
             Label("마지막 수유")
-            Text("아직 수유 기록이 없어요", Modifier.padding(top = 6.dp, bottom = 16.dp), style = Type.headline, color = p.textPrimary)
-            Btn("수유 시작", onStart)
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp).clip(CircleShape).background(p.surfaceRaised), contentAlignment = Alignment.Center) {
+                    AIcon(R.drawable.ic_bottle, Modifier.size(22.dp), p.textSecondary)
+                }
+                Text("아직 수유 기록이 없어요", Modifier.padding(start = 12.dp), style = Type.rowTitle, color = p.textPrimary)
+            }
+            Box(Modifier.padding(vertical = 16.dp).fillMaxWidth().height(6.dp).clip(CircleShape).background(p.textPrimary.copy(alpha = 0.06f)))
+            Btn("수유 시작하기", onStart, icon = R.drawable.ic_bottle)
             return@Block
         }
         Label("마지막 수유")
@@ -478,6 +481,7 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
                         null,
                         role = Role.Button,
                         onLongClick = { sheet(k) },
+                        onLongClickLabel = "지난 기록 적기", // 7.1 today.quick.past(iOS accessibilityAction과 같음)
                         onClick = {
                             when {
                                 running != null -> go(Route.Timer(running.id))
@@ -610,7 +614,7 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                 Btn("끝내기", { vm.end() }, icon = R.drawable.ic_square, big = true)
             }
             Column(Modifier.fillMaxWidth()) {
-                Btn("시작 시각 수정", { pick = TimerViewModel.TimeField.START }, kind = BtnKind.TONAL, icon = R.drawable.ic_clock)
+                Btn("시작 시각 고치기", { pick = TimerViewModel.TimeField.START }, kind = BtnKind.TONAL, icon = R.drawable.ic_clock)
                 Spacer(Modifier.height(8.dp))
                 Btn("이 기록 지우기", vm::delete, kind = BtnKind.DANGER_TEXT)
             }
@@ -666,14 +670,15 @@ private fun TimerRing(e: CareEvent, now: Long) {
     }
 }
 
-/** R4 겹침 경고(7장 겹침): "그래도 저장" / "고치기". */
+/** R4 겹침 확인(7장 겹침, U71): 제목 "그래도 저장할까요?" / 본문 겹침 글 / "저장"·"닫기"(닫으면 시트·타이머로 돌아가 고친다). */
 @Composable
 internal fun OverlapDialog(kind: CareKind, onSave: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        title = { Text("그래도 저장할까요?", style = Type.headline) },
         text = { Text(overlapText(kind), style = Type.body) },
-        confirmButton = { TextButton(onClick = onSave) { Text("그래도 저장") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("고치기") } },
+        confirmButton = { TextButton(onClick = onSave) { Text("저장") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
         shape = Radius.dialog,
     )
 }
@@ -696,9 +701,9 @@ internal fun AmountRow(ml: Int?, onChange: (Int?) -> Unit) {
 internal fun AmountStepper(ml: Int?, onChange: (Int?) -> Unit) {
     val p = Tokens.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        StepButton(R.drawable.ic_minus, "빼기", enabled = ml != null) { onChange(ml?.let { (it - 10).coerceAtLeast(AMOUNT_ML.first) }) }
+        StepButton(R.drawable.ic_minus, "줄이기", enabled = ml != null) { onChange(ml?.let { (it - 10).coerceAtLeast(AMOUNT_ML.first) }) }
         Text(ml?.let { "${it}ml" } ?: "", Modifier.widthIn(min = 72.dp), style = Type.sheetValue.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        StepButton(R.drawable.ic_plus, "더하기") { onChange(((ml ?: 0) + 10).coerceAtMost(AMOUNT_ML.last)) }
+        StepButton(R.drawable.ic_plus, "늘리기") { onChange(((ml ?: 0) + 10).coerceAtMost(AMOUNT_ML.last)) }
     }
 }
 
@@ -713,12 +718,18 @@ private fun StepButton(@DrawableRes icon: Int, label: String, enabled: Boolean =
 
 /** 시·분 고르기(플랫폼다움: Material 시각 선택기, 토큰 색). 확인 버튼은 시스템 글자를 쓴다. */
 @Composable
-internal fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onPick: (Int, Int) -> Unit) {
+internal fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onUnknown: (() -> Unit)? = null, onPick: (Int, Int) -> Unit) {
     val state = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = false)
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = { onPick(state.hour, state.minute) }) { Text(stringResource(android.R.string.ok)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        // 끝 시각이면 왼쪽에 '끝 시각 모름'(U82, 시안 시계판 창 '끝 시각 모름'·'취소'·'확인').
+        dismissButton = {
+            androidx.compose.foundation.layout.Row {
+                onUnknown?.let { TextButton(onClick = it) { Text("끝 시각 모름") } }
+                TextButton(onClick = onDismiss) { Text("취소") }
+            }
+        },
         text = { TimePicker(state) },
         shape = Radius.xl,
     )

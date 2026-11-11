@@ -29,6 +29,16 @@ enum ChartData {
         var summary: String { "오늘 하루: " + lanes.map { "\($0.name) \($0.value)" }.joined(separator: ", ") }
     }
 
+    /// U88 오늘 하루 띠의 새 표시: 막 저장한 기록이 그날 띠의 어느 줄·어느 분에 있는지. 띠에 줄이 없는 종류(메모)·다른 날이면 nil.
+    struct Fresh: Hashable { let id: String, lane: LaneKind, at: Int }
+
+    static func fresh(_ e: CareEvent, day: String, zone: TimeZone) -> Fresh? {
+        guard let (from, to) = CareRules.dayRange(day, zone), e.startAt >= from, e.startAt < to else { return nil }
+        let lane: LaneKind
+        switch e.kind { case .feed: lane = .feed; case .sleep: lane = .sleep; case .diaper: lane = .diaper; case .note: return nil }
+        return Fresh(id: e.id, lane: lane, at: minuteIn(e.startAt, from: from))
+    }
+
     private static func minuteIn(_ ms: Int64, from: Int64) -> Int { Int(min(1440, max(0, (ms - from) / minute))) }
 
     /// 오늘 하루 띠. 잠·수유는 그날에 걸친 구간(진행 중은 지금까지, 끝 모름은 시작 점), 기저귀는 시각 점,
@@ -165,7 +175,7 @@ enum ChartData {
                          avgMs: CareStats.perRecordedDay(all), sleepDays: all.filter { $0 > 0 }.count, perDayMs: all)
     }
 
-    /// '지난주보다 {n}회 많아요/적어요'(문구표 design.chart, 시안 S.pattern): 지난 7일 하루 평균 수유 − 그 앞 7일 하루 평균.
+    /// '지난주보다 {n}번 많아요/적어요'(문구표 design.chart, 시안 S.pattern): 지난 7일 하루 평균 수유 − 그 앞 7일 하루 평균.
     /// 평균은 패턴과 같은 규칙(그날 시작한 수유 수를 수유한 날 수로 나눔, 소수 첫째 자리). 앞 7일에 수유한 날이 없거나 차이가 0.0이면 nil.
     static func feedTrend(care: CareFile, now: Int64, zone: TimeZone) -> String? {
         let days = lastWeek(now: now, zone: zone)
@@ -179,7 +189,7 @@ enum ChartData {
         let d = now7 - prev7   // 평균끼리 뺀 뒤 마지막에만 반올림한다
         let n = CareText.oneDecimal(abs(d))   // 안드로이드 %.1f(HALF_UP)와 같게
         if n == "0.0" { return nil }
-        return d > 0 ? "지난주보다 \(n)회 많아요" : "지난주보다 \(n)회 적어요"
+        return d > 0 ? "지난주보다 \(n)번 많아요" : "지난주보다 \(n)번 적어요"
     }
 
     // MARK: 리포트(Charts.episode·methods·steer)
@@ -201,6 +211,11 @@ enum ChartData {
     /// (마지막 재생 끝에 찍으면 거짓 시각이 된다). 안드로이드 episodeBand와 같다.
     struct Episode: Equatable { let totalS: Int, sounds: [Seg], gaps: [Seg], marks: [EpisodeMark], outcomes: [String] }
 
+    /// 에피소드 띠의 읽기 이름: 머리는 에피소드를 연 사건(울음 경보 '울음', 소리 바꾸기 요청 '소리 바꾸기 요청') + 재생마다 길이·표시·결과.
+    static func episodeSummary(_ e: TimelineEpisode, _ band: Episode) -> String {
+        CareText.episodeHead(e.trigger) + ": " + (band.sounds.map(\.tip) + band.marks.map(\.label) + band.outcomes).joined(separator: ", ")
+    }
+
     static func episode(_ e: TimelineEpisode, playName: (PlayEntry) -> String) -> Episode {
         let t0 = Rfc3339.parse(e.startedAt)
         func sec(_ s: String) -> Int? { t0.flatMap { base in Rfc3339.parse(s).map { max(0, Int($0.timeIntervalSince(base))) } } }
@@ -213,13 +228,13 @@ enum ChartData {
         let gaps = zip(plays, plays.dropFirst()).compactMap { x, y in y.from > x.to ? Seg(from: x.to, to: y.from, name: nil) : nil }
         let end = max(plays.map(\.to).max() ?? 0, 1)
         // 시작 표시: 울음 경보면 '감지 {지연}초', 소리 바꾸기 요청이면 그 이름(울음을 감지했다고 보이지 않게).
-        var marks = [EpisodeMark(at: 0, label: e.trigger != .cryAlarm ? "소리 바꾸기 요청" : e.alarmLatencyS.map { "감지 " + seconds($0) } ?? "감지")]
+        var marks = [EpisodeMark(at: 0, label: e.trigger != .cryAlarm ? CareText.episodeStart(e.trigger) : e.alarmLatencyS.map { "감지 " + seconds($0) } ?? "감지")]
         // 다시 울음: 그 때문에 시작한 자동 2차 재생의 시작(운전자 요청 재생은 다시 울음이 아니다). 없으면 표시하지 않는다.
         if e.recried, let second = timed.first(where: { $0.0.purpose == .autoSecond }) { marks.append(EpisodeMark(at: second.1.from, label: "다시 울음")) }
         var outcomes: [String] = []
         // 운전자에게 실제로 묻지 못한 쉼터는 제안했다고 보이지 않는다(U53, stopText와 같은 규칙).
         if let st = e.stop, st.mode == .restOffer, st.toldDriver != false { outcomes.append("쉼터 제안") }
-        if e.result == .success || e.second?.result == .success { outcomes.append("그쳤어요") }
+        if e.result == .success || e.second?.result == .success { outcomes.append(CareText.result(.success)) }
         return Episode(totalS: end, sounds: plays, gaps: gaps, marks: marks, outcomes: outcomes)
     }
 

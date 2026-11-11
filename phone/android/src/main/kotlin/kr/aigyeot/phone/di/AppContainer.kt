@@ -23,6 +23,8 @@ import kr.aigyeot.phone.data.PrefsLinkMarks
 import kr.aigyeot.phone.data.Recorder
 import kr.aigyeot.phone.data.readDocument
 import kr.aigyeot.phone.domain.model.CareCsv
+import kr.aigyeot.phone.domain.model.UNDO_MS
+import kr.aigyeot.phone.domain.model.undoBandMs
 import kr.aigyeot.phone.domain.repository.CareRepository
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.Mark
@@ -117,7 +119,18 @@ class AppContainer(app: Application) {
     val push: RegisterPush = RegisterPush(state, relay, lose, pushTokens, scope)
     val connection: KeepConnected = KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, AndroidNetworkWatcher(app), visibility, clock, scope)
     private val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
-    val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, log, allowDebugSeed = BuildConfig.DEBUG)
+    /** 되돌리기 띠 시간(U87): 띠를 띄울 때 화면 읽기(TalkBack 등)와 시스템 권장 시간('조치를 취할 시간', API 29+)을 읽어 넘긴다. */
+    private val undoBand: () -> Long = {
+        val am = app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+        val recommended = if (am != null && android.os.Build.VERSION.SDK_INT >= 29) {
+            am.getRecommendedTimeoutMillis(
+                UNDO_MS.toInt(),
+                android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT or android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS,
+            ).toLong()
+        } else UNDO_MS
+        undoBandMs(am?.isTouchExplorationEnabled == true, recommended)
+    }
+    val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, log, allowDebugSeed = BuildConfig.DEBUG, undoMs = undoBand)
     val clearRecords = ClearRecords(care, state, recordCare, notices, songs, connection, outbox, clock, scope)
     val pair = Pair(state, care, credentials, relay, link, disconnect, lose, marks, pushTokens, songs, recordCare, notices, clock, scope, log)
     val recordSong = RecordSong(state, songs, clearRecords, outbox, notices, clock, scope)
@@ -139,7 +152,7 @@ class AppContainer(app: Application) {
                 TodayViewModel::class.java -> TodayViewModel(state, care, notices, connection, recordCare, lifecycle)
                 TimerViewModel::class.java -> TimerViewModel(handle().toRoute<Route.Timer>().id, state, care, recordCare, clock)
                 CareSheetViewModel::class.java -> CareSheetViewModel(care, notices, recordCare, clock, handle())
-                RecordsViewModel::class.java -> RecordsViewModel(state, care, recordCare)
+                RecordsViewModel::class.java -> RecordsViewModel(state, care, recordCare, notices)
                 CarViewModel::class.java -> CarViewModel(state, connection)
                 SettingsViewModel::class.java -> SettingsViewModel(state, care, recordCare, clearRecords, disconnect, clock, { readDocument(app.contentResolver, it, CareCsv.MAX_BYTES + 1) })
                 SongsViewModel::class.java -> SongsViewModel(state, connection, recordSong, selectSong, removeSong, songs, Recorder(app), clock, handle())

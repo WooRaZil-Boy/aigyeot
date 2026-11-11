@@ -259,7 +259,7 @@ class UseCaseTest {
         assertEquals(Connection.None, state.connection.value)
         assertEquals(listOf(OWNER.token), relay.deleted)
         assertTrue(link.recordsOnly)
-        assertEquals("연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요", notices.careNotice.value)
+        assertEquals("연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요.", notices.careNotice.value)
         assertEquals(OWNER.deviceId + "|done", marks.get(Mark.LEAVING))
         disconnect.shown()
         assertNull(marks.get(Mark.LEAVING))
@@ -282,10 +282,16 @@ class UseCaseTest {
         pair.start("123456")
         until("연결 끝") { pair.run.value is PairRun.Failed }
         assertEquals("코드가 맞지 않거나 시간이 지났어요. 차 화면의 코드를 다시 확인해 주세요.", (pair.run.value as PairRun.Failed).error)
-        relay.pairResult = RelayResult.Err(429, null, 30)
+        relay.pairResult = RelayResult.Err(429, null, 600)
         pair.start("123456")
-        until("429") { (pair.run.value as? PairRun.Failed)?.error == "잠시 뒤에 다시 해 주세요." }
-        assertEquals(now + 30_000, pair.lockedUntil.value)
+        // 429는 글을 굳히지 않는다: 화면이 잠금 끝 시각에서 그때그때 잰다(7.2, 11-12 사용자 결정). 10분 잠금이 9분 지나면 "600초"가 아니라 "60초".
+        until("429") { pair.run.value == PairRun.Limited("123456") }
+        assertEquals(now + 600_000, pair.lockedUntil.value)
+        val wait = { t: Long -> kr.aigyeot.phone.domain.model.pairWaitText(pair.lockedUntil.value!! - t) }
+        assertEquals("10분 뒤에 다시 해 주세요", kr.aigyeot.phone.domain.model.pairErrorShown(pair.run.value, wait(now)))
+        assertEquals("2분 뒤에 다시 해 주세요", kr.aigyeot.phone.domain.model.pairErrorShown(pair.run.value, wait(now + 8 * MINUTE)))
+        assertEquals("60초 뒤에 다시 해 주세요", kr.aigyeot.phone.domain.model.pairErrorShown(pair.run.value, wait(now + 9 * MINUTE)))
+        assertEquals(null, kr.aigyeot.phone.domain.model.pairErrorShown(pair.run.value, wait(now + 10 * MINUTE)))
         assertTrue(!pair.canTakeLink() || pair.run.value !is PairRun.Running)
     }
 
@@ -457,6 +463,33 @@ class UseCaseTest {
             assertNull(state.state.value.lastSentFeedingAt)
             assertTrue(relay.sent.none { it.type == "feeding_started" })
         }
+    }
+
+    @Test
+    fun `화면 읽기가 켜져 있으면 되돌리기 띠는 50초다`() {
+        assertEquals(50_000L, kr.aigyeot.phone.domain.model.undoBandMs(screenReader = true, systemRecommendedMs = 5_000))
+        assertEquals(5_000L, kr.aigyeot.phone.domain.model.undoBandMs(screenReader = false, systemRecommendedMs = 5_000)) // 꺼져 있으면 지금처럼 5초
+        assertEquals(5_000L, kr.aigyeot.phone.domain.model.undoBandMs(screenReader = false, systemRecommendedMs = 0)) // 권장 시간이 짧아도 5초 아래로 내려가지 않는다
+    }
+
+    @Test
+    fun `시스템 권장 시간이 더 길면 그 값이다`() {
+        assertEquals(12_000L, kr.aigyeot.phone.domain.model.undoBandMs(screenReader = false, systemRecommendedMs = 12_000))
+        assertEquals(120_000L, kr.aigyeot.phone.domain.model.undoBandMs(screenReader = true, systemRecommendedMs = 120_000))
+        assertEquals(50_000L, kr.aigyeot.phone.domain.model.undoBandMs(screenReader = true, systemRecommendedMs = 20_000))
+    }
+
+    @Test
+    fun `띠 시간이 길어져도 가져온 줄은 띠가 끝난 뒤에 차로 간다`() = kitTest(undoMs = 300) {
+        undoBand = 1_500 // 화면 읽기로 늘어난 띠(시험은 줄인 값)
+        assertTrue(recordCare.importRows(imported("FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE")))
+        undoBand = 100 // 띠가 떠 있는 동안 바뀌어도 띄울 때 정한 시간을 따른다
+        kotlinx.coroutines.delay(800) // 옛 띠 시간(300ms)도, 바뀐 값(100ms)도 지났다
+        assertTrue(notices.undo.value is CareUndo.Import)
+        assertTrue(relay.sent.none { it.type == "feeding_started" })
+        until("띠가 끝난 뒤 수유 보냄") { relay.sent.any { it.type == "feeding_started" } }
+        assertNull(notices.undo.value)
+        assertEquals(now - HOUR, state.state.value.lastSentFeedingAt)
     }
 
     @Test

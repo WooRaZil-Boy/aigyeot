@@ -29,11 +29,11 @@ enum CareRules {
         switch kind { case .feed: feedMaxMs; case .sleep: sleepMaxMs; default: nil }
     }
 
-    /// R3 시각 범위와 입력 범위. 문제가 없으면 nil.
+    /// R3 시각 범위와 입력 범위. 문제가 없으면 nil. 처음 걸린 것 하나를 돌려준다(시작 미래 → 끝 미래 → 끝이 이름 → 너무 김 → 양 → 메모).
     static func problem(_ e: CareEvent, now: Int64) -> CareProblem? {
-        if e.startAt > now + futureSlackMs { return .future }
+        if e.startAt > now + futureSlackMs { return .futureStart }
         if let end = e.endAt {
-            if end > now + futureSlackMs { return .future }
+            if end > now + futureSlackMs { return .futureEnd }
             if end < e.startAt { return .endBeforeStart }
             if let max = maxMs(e.kind), end - e.startAt > max { return .tooLong }
         }
@@ -194,7 +194,8 @@ enum CareRules {
                         carEpisodes: episodes.filter { dayKey($0, zone) == day }.count)
         }
         let past = feeds.filter { $0 <= now }   // 간격은 지난 수유만(안드로이드 intervals와 같다)
-        return CarePattern(days: stats, feedIntervalMedianMs: CareStats.usualGap(CareStats.feedGaps(past).map(\.ms)))
+        let gaps = CareStats.feedGaps(past).map(\.ms)
+        return CarePattern(days: stats, feedIntervalMedianMs: CareStats.usualGap(gaps), feedIntervalCount: gaps.count)
     }
 
     // MARK: 차 기록 줄(R17)
@@ -211,7 +212,7 @@ enum CareRules {
             for e in b.timeline where e.trigger == .cryAlarm {   // 소리 요청 에피소드는 줄을 만들지 않는다(U19)
                 guard let at = Rfc3339.parse(e.startedAt) else { continue }
                 // U37: "차에서 울음 · {시각} · {소리} · {결과}", 빈 값은 앞의 " · "와 함께 뺀다(U15).
-                let parts = ["차에서 울음", CareFormat.clock(at, zone), e.sound.map { CareText.method($0.method) }, e.result.map(CareText.carResult)].compactMap { $0 }
+                let parts = ["차에서 울음", CareFormat.clock(at, zone), e.sound.map { CareText.method($0.method) }, e.result.map { CareText.result($0) }].compactMap { $0 }
                 rows.append(CarRow(id: e.episodeId, sessionId: b.sessionId, at: at, text: parts.joined(separator: " · ")))
             }
             return rows

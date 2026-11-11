@@ -177,9 +177,10 @@ final class CareTests: XCTestCase {
         }
         // 미래: 지금 + 1분까지 허용
         XCTAssertNil(CareRules.problem(feed(now + 60_000, nil), now: now))
-        XCTAssertEqual(CareRules.problem(feed(now + 60_001, nil), now: now), .future)
-        XCTAssertEqual(CareRules.problem(feed(now - 60_000, now + 60_001), now: now), .future)
-        XCTAssertEqual(CareProblem.future.message(for: .feed), "앞으로의 시각은 적을 수 없어요")
+        XCTAssertEqual(CareRules.problem(feed(now + 60_001, nil), now: now), .futureStart)
+        XCTAssertEqual(CareRules.problem(feed(now - 60_000, now + 60_001), now: now), .futureEnd)
+        XCTAssertEqual(CareProblem.futureStart.message(for: .feed), "앞으로의 시각은 적을 수 없어요")
+        XCTAssertEqual(CareProblem.futureEnd.message(for: .feed), "앞으로의 시각은 적을 수 없어요")
         XCTAssertEqual(CareProblem.endBeforeStart.message(for: .feed), "끝 시각이 시작보다 빨라요")
         XCTAssertEqual(CareProblem.tooLong.message(for: .feed), "수유는 3시간까지 적을 수 있어요")
         XCTAssertEqual(CareProblem.tooLong.message(for: .sleep), "잠은 16시간까지 적을 수 있어요")
@@ -210,7 +211,7 @@ final class CareTests: XCTestCase {
         XCTAssertEqual(CareRules.problem(note, now: now), .noteTooLong)
         XCTAssertEqual(CareRules.noteLimited(String(repeating: "가", count: 199) + "👨‍👩‍👧").unicodeScalars.count, 200)   // 입력칸은 200에서 더 받지 않는다(U17)
         // 저장하지 않는다
-        XCTAssertEqual(app.recordCare.saveEvent(feed(now + 120_000, nil)), .problem(.future))
+        XCTAssertEqual(app.recordCare.saveEvent(feed(now + 120_000, nil)), .problem(.futureStart))
         XCTAssertTrue(app.care.care.events.isEmpty)
         // 진행 중 수유가 3시간을 넘으면 타이머가 끝 시각을 묻는다(기록은 그대로 있다).
         app.recordCare.start(.feed, side: .left)
@@ -487,7 +488,7 @@ final class CareTests: XCTestCase {
         // 앱에서 끊기
         let message = await app.disconnect.now()
         XCTAssertNil(message)
-        XCTAssertEqual(app.status.ui.notice, "연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요")   // U25 b: 탭(연결 안 됨)으로 간다
+        XCTAssertEqual(app.status.ui.notice, "연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요.")   // U25 b: 탭(연결 안 됨)으로 간다
         XCTAssertFalse((app.appViewModel.ui.route == .gone))
         XCTAssertEqual(careStore.value, before)
         XCTAssertEqual(app.care.care, before)
@@ -527,7 +528,7 @@ final class CareTests: XCTestCase {
         XCTAssertTrue(careStore.value.sleepDiaperEnabled)
         XCTAssertTrue(careStore.value.migratedFeedings)
         XCTAssertTrue(app.state.isPaired)   // 연결은 그대로
-        XCTAssertEqual(CareText.clearConfirm, "이 휴대폰의 리포트·알림·노래·돌봄 기록을 지울까요? 차와 다른 보호자에게 있는 기록은 그대로예요")
+        XCTAssertEqual([CareText.clearConfirm, CareText.clearConfirmNote], ["이 휴대폰의 리포트·알림·노래·돌봄 기록을 지울까요?", "차와 다른 보호자에게 있는 기록은 그대로예요"])   // R10 제목·본문(B18)
     }
 
     func test_지금_수유_기록을_한_번만_옮긴다() {
@@ -637,6 +638,32 @@ final class CareTests: XCTestCase {
         XCTAssertEqual(CareRules.sleepMs(onDay: "2026-11-06", in: all, zone: seoul), 2 * 3_600_000)
     }
 
+    /// U85 ①: 고른 날의 줄(dayItems)이 비면 기록 탭은 가운데 빈 상태 판(달력 고리 + '이 날 기록이 없어요' + '＋ 지난 기록 적기')만 그리고
+    /// 목록 끝 '지난 기록 적기' 줄은 숨긴다(그림은 캡처로 확인). 지운 기록만 있는 날도 빈 날이다. 안드로이드와 같은 이름.
+    func test_빈_날에는_가운데_지난_기록_적기_하나만_보인다() {
+        var care = CareFile()
+        let note = event(.note, "2026-11-05T11:00:00+09:00")
+        care.events = [event(.feed, "2026-11-04T08:00:00+09:00", endUnknown: true, deletedAt: 1), note]
+        let ui = RecordsUiState(care: care, phone: PhoneState())
+        let carAt = Self.t("2026-11-05T09:00:00+09:00")
+        let car = [CarRow(id: "EXAMPLE-car", sessionId: "s", at: carAt, text: "탑승")]
+        XCTAssertTrue(ui.dayItems("2026-11-04", car: car).isEmpty)   // 지운 기록만 있는 날
+        XCTAssertEqual(ui.dayItems("2026-11-05", car: []).map(\.id), [note.id])
+        let carDay = CareRules.dayKey(CareTime.ms(carAt), .current)   // 차 기록 줄은 기기 시간대의 날
+        XCTAssertTrue(ui.dayItems(carDay, car: car).contains { $0.id == "EXAMPLE-car" })
+    }
+
+    /// U85 ③: 간격이 5개 미만이면 가짜 막대 없이 쌓인 수만 점으로(읽기 이름 pattern.intervalProgress).
+    func test_수유_간격이_5개_미만이면_쌓인_수만_점으로_보인다() {
+        clock = Self.t("2026-11-05T12:00:00+09:00")
+        let events = ["2026-11-04T20:00:00+09:00", "2026-11-04T23:00:00+09:00", "2026-11-05T02:00:00+09:00", "2026-11-05T06:00:00+09:00"]
+            .map { event(.feed, $0, endUnknown: true) }   // 간격 3개
+        let p = CareRules.pattern(events, reports: [], now: nowMs, zone: seoul, sleepDiaper: false)
+        XCTAssertNil(p.feedIntervalMedianMs)
+        XCTAssertEqual(p.feedIntervalCount, 3)
+        XCTAssertEqual(CareText.intervalProgress(p.feedIntervalCount), "수유 간격 5개 중 3개 쌓임")
+    }
+
     func test_패턴은_7일_중앙값이고_5개_미만이면_숨긴다() {
         clock = Self.t("2026-11-05T12:00:00+09:00")
         var events = [
@@ -669,7 +696,7 @@ final class CareTests: XCTestCase {
         XCTAssertEqual(onlyOpen.sleepDays, 0)
         XCTAssertNil(onlyOpen.sleepMsPerDay)
         XCTAssertEqual(CareText.patternFewIntervals, "기록이 더 쌓이면 보여 드려요")
-        XCTAssertEqual(CareText.patternFootnote, "직접 기록한 것만 셉니다. 빠진 기록이 있으면 실제와 다를 수 있어요")
+        XCTAssertEqual(CareText.patternFootnote, "직접 적은 기록만 세어요. 빠진 기록이 있으면 실제와 다를 수 있어요.")
     }
 
     func test_진행_중_경과는_시작_시각으로_계산한다() {
@@ -698,8 +725,44 @@ final class CareTests: XCTestCase {
         XCTAssertEqual(CareRules.events(onDay: "2026-11-05", in: app.care.care.events).map(\.id), [sleep.id])
         let p = CareRules.pattern(app.care.care.events, reports: [], now: nowMs, zone: seoul, sleepDiaper: false)
         XCTAssertTrue(p.days.allSatisfy { $0.sleepMs == nil && $0.diapers == nil })
-        XCTAssertEqual(CareText.sleepDiaperToggle, "잠·기저귀도 기록하기")
-        XCTAssertEqual(CareText.sleepDiaperToggleNote, "다른 육아 앱에 이미 적고 있다면 꺼 두셔도 돼요")
+        XCTAssertEqual(CareText.sleepDiaperToggle, "잠·기저귀도 적기")
+        XCTAssertEqual(CareText.sleepDiaperToggleNote, "다른 앱에 적고 있다면 꺼도 돼요")
+    }
+
+    /// U73: 결과·뺀 이유 낱말은 차·두 앱이 같은 글자다(이름: 값 콜론·열거 이름 없음). 안드로이드와 같은 이름의 시험.
+    func test_리포트_결과와_뺀_이유는_정해진_낱말로_보인다() {
+        XCTAssertEqual([.success, .failure, .undetermined, nil].map { CareText.result($0) }, ["그침", "계속 울음", "판정하지 못함", "1차 시도 없음"])
+        let reasons: [ExcludedReason] = [.driverStop, .call, .gearToPark, .startedInPark, .switchSound, .feedingWindow, .sessionCap, .sessionEnd,
+                                         .micError, .detectorTimeout, .inputSilenced, .focusLoss, .suspend]
+        XCTAssertEqual(reasons.map(CareText.excluded), ["운전자가 멈춤", "통화 중", "정차 중", "정차 중", "소리 바꾸기 요청", "수유 시간대", "달래기 20분 끝남",
+                                                        "탑승이 끝남", "마이크 오류", "감지 시간 초과", "마이크 입력이 막힘", "소리를 이어서 틀지 못함", "차가 절전에 들어감"])
+        XCTAssertEqual(CareText.method(.parentSong), "우리 노래")
+    }
+
+    /// copy-audit 14-1(11-12 보충): 리포트 에피소드 블록 머리는 시작 사건으로 정한다(낱말은 episodeHead).
+    func test_리포트_울음_블록_머리는_시작_사건으로_정한다() {
+        XCTAssertEqual(CareText.episodeSectionHead([]), "울음")   // 빈 목록('기록된 울음이 없어요')
+        XCTAssertEqual(CareText.episodeSectionHead([.cryAlarm, .cryAlarm]), "울음")
+        XCTAssertEqual(CareText.episodeSectionHead([.switchSound]), "소리 바꾸기 요청")
+        XCTAssertEqual(CareText.episodeSectionHead([.switchSound, .cryAlarm]), "울음과 소리 바꾸기 요청")
+    }
+
+    /// U73: 소리를 틀지 않은 울음은 '소리 · 재생 없음'만 두고 '재생' 줄을 빼 같은 말을 두 번 하지 않는다(안드로이드 episodeSoundLines와 같다).
+    func test_틀지_않은_울음은_재생_줄_없이_소리_재생_없음만_보인다() throws {
+        let data = try Data(contentsOf: ProtocolFixturesTests.dir.appendingPathComponent("report_summary_handoff.json"))
+        var e = try ProtocolCoding.decoder.decode(Envelope.self, from: data).decodeBody(ReportSummaryBody.self).timeline[0]
+        e.trigger = .cryAlarm
+        e.alarmLatencyS = 2.4
+        e.sound = SoundRef(method: .lullaby, label: "자장가")
+        e.playS = 75
+        XCTAssertEqual(episodeSoundLines(e).map(\.0), ["감지까지", "소리", "재생"])
+        XCTAssertEqual(episodeSoundLines(e).last?.1, "1분 15초")
+        e.sound = nil
+        e.playS = 0
+        XCTAssertEqual(episodeSoundLines(e).map(\.0), ["감지까지", "소리"])
+        XCTAssertEqual(episodeSoundLines(e).last?.1, "재생 없음")
+        e.trigger = .switchSound   // 소리 바꾸기 요청으로 연 울음은 '감지까지'가 없다
+        XCTAssertEqual(episodeSoundLines(e).map(\.0), ["소리"])
     }
 
     func test_리포트에서_차_기록_줄을_만든다() throws {
@@ -708,19 +771,19 @@ final class CareTests: XCTestCase {
         var body = try env.decodeBody(ReportSummaryBody.self)
         let report = StoredReport(messageId: env.id, seq: 1, receivedAt: clock, body: body)
         let rows = CareRules.carRows([report], zone: seoul)
-        XCTAssertEqual(rows.map(\.text), ["탑승 · 오후 3:00–3:49", "차에서 울음 · 오후 3:10 · 자장가 · 계속 울었어요"])
+        XCTAssertEqual(rows.map(\.text), ["탑승 · 오후 3:00–3:49", "차에서 울음 · 오후 3:10 · 자장가 · 계속 울음"])
         XCTAssertEqual(rows.map(\.at), [Self.t("2026-11-05T15:00:00+09:00"), Self.t("2026-11-05T15:10:00+09:00")])
         XCTAssertEqual(rows.map(\.sessionId), [body.sessionId, body.sessionId])   // 누르면 그 리포트 상세로 간다
         // 결과별 문구, 리포트에 없는 값은 비워 둔다.
         body.timeline[0].result = .success
         XCTAssertEqual(CareRules.carRows([StoredReport(messageId: "m", seq: 1, receivedAt: clock, body: body)], zone: seoul)[1].text,
-                       "차에서 울음 · 오후 3:10 · 자장가 · 그쳤어요")
+                       "차에서 울음 · 오후 3:10 · 자장가 · 그침")
         body.timeline[0].result = .undetermined
         XCTAssertEqual(CareRules.carRows([StoredReport(messageId: "m", seq: 1, receivedAt: clock, body: body)], zone: seoul)[1].text,
-                       "차에서 울음 · 오후 3:10 · 자장가 · 알 수 없음")
+                       "차에서 울음 · 오후 3:10 · 자장가 · 판정하지 못함")
         body.timeline[0].sound = SoundRef(method: .parentSong, label: "나비야")   // 소리는 방법 이름만(U15)
         XCTAssertEqual(CareRules.carRows([StoredReport(messageId: "m", seq: 1, receivedAt: clock, body: body)], zone: seoul)[1].text,
-                       "차에서 울음 · 오후 3:10 · 부모 노래 · 알 수 없음")
+                       "차에서 울음 · 오후 3:10 · 우리 노래 · 판정하지 못함")
         body.timeline[0].sound = SoundRef(method: .whiteNoise, label: "x")
         body.timeline[0].result = nil
         XCTAssertEqual(CareRules.carRows([StoredReport(messageId: "m", seq: 1, receivedAt: clock, body: body)], zone: seoul)[1].text,
@@ -865,10 +928,10 @@ final class CareTests: XCTestCase {
     }
 
     func test_평균은_안드로이드처럼_반을_올린다() {
-        XCTAssertEqual(CareText.avgCount(9.0 / 4), "평균 2.3회")   // printf는 2.2(짝수 쪽)였다
-        XCTAssertEqual(CareText.avgCount(7.0 / 4), "평균 1.8회")
-        XCTAssertEqual(CareText.avgCount(44.0 / 7), "평균 6.3회")
-        XCTAssertEqual(CareText.avgCount(7), "평균 7.0회")
+        XCTAssertEqual(CareText.avgCount(9.0 / 4), "평균 2.3번")   // printf는 2.2(짝수 쪽)였다
+        XCTAssertEqual(CareText.avgCount(7.0 / 4), "평균 1.8번")
+        XCTAssertEqual(CareText.avgCount(44.0 / 7), "평균 6.3번")
+        XCTAssertEqual(CareText.avgCount(7), "평균 7.0번")
     }
 
     /// U57: 보내 본 요약은 바꾸지 않고 뒤에 새것을 하나 둔다(중계 도착 순서가 계산 순서와 같게). 계약 시험 이름 그대로.
@@ -1106,7 +1169,7 @@ final class CareTests: XCTestCase {
     }
 
     func test_돌봄_저장_실패도_떠_있는_안내를_덮지_않는다() {
-        app.notices.addLine("노래 삭제를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.")
+        app.notices.addLine("노래 지우기를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.")
         careStore.failing = true
         app.recordCare.setNickname("콩이")
         XCTAssertEqual(app.status.ui.notice?.components(separatedBy: "\n").count, 2)
@@ -1454,15 +1517,26 @@ final class CareTests: XCTestCase {
 
     // MARK: 7.1 전체 문구표
 
-    func test_첫_안내와_연결_확인과_띠_글자는_7_1_표_그대로() {
-        XCTAssertEqual([CareText.introTitle, CareText.introLead, CareText.introSends, CareText.introNotSent, CareText.introRelay, CareText.introAI], [
-            "아이곁",
-            "차의 아이곁과 이 휴대폰을 연결해요.",
+    func test_첫_안내_글은_7_1_표_그대로이고_원문_넷은_시트에_남는다() {
+        // U43 안 B: 머리 이름, 두 줄 제목(마침표 없음, 줄바꿈 하나)
+        XCTAssertEqual(CareText.introTitle, "아이곁")
+        XCTAssertEqual(CareText.introLead, "차의 아이곁과\n이 휴대폰을 연결해요")
+        XCTAssertEqual(CareText.introLead.filter { $0 == "\n" }.count, 1)
+        XCTAssertFalse(CareText.introLead.hasSuffix("."))
+        // intro.short.*: 첫 화면 줄 넷(제목 / 부제, 이 순서)
+        XCTAssertEqual(CareText.introShort.map(\.title), ["차와 주고받아요", "울음소리와 차 위치는 보내지 않아요", "아이곁 중계 서버를 거쳐요", "차에서 물으면 AI 서버를 써요"])
+        XCTAssertEqual(CareText.introShort.map(\.sub), ["수유 시작 시각, 우리 노래, 수유·잠·기저귀 요약, 주행 리포트, 인계 알림이에요", "차 안 마이크 소리도 보내지 않아요",
+                                                       "인계 알림은 Google·Apple 알림 서버도 거쳐요", "답을 만들려고 수유·잠·기저귀 숫자를 보내요"])
+        XCTAssertEqual([CareText.introMore, CareText.introMoreA11y, CareText.introSheetTitle, CareText.introSheetClose], ["자세히 보기", "오가는 정보 자세히 보기", "오가는 정보", "닫기"])
+        // intro.sheet.*: 라벨 넷, 원문은 옛 7.1 intro.* 글자 그대로(U43·U60, 원문 보존)
+        let sheet = CareText.introSheet
+        XCTAssertEqual(sheet.map(\.label), ["주고받는 것", "보내지 않는 것", "거치는 서버", "AI 서버"])
+        XCTAssertEqual([sheet[0].label + ": " + sheet[0].text, sheet[1].label + ": " + sheet[1].text, sheet[2].text, sheet[3].text], [
             "주고받는 것: 수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장",
             "보내지 않는 것: 아기 울음 소리, 차 안 마이크 소리, 차의 위치",
             "모두 아이곁 중계 서버를 거쳐 오가요. 인계 알림은 Google·Apple 알림 서버도 거쳐요.",
             "차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요.",
-        ])   // U43
+        ])
         XCTAssertEqual([CareText.connectCar, CareText.recordOnly], ["차와 연결하기", "먼저 기록만 쓸게요"])
         XCTAssertEqual([CareText.pairConfirm, CareText.pairConfirmSwitch], ["연결하기", "끊고 연결하기"])   // U49
         XCTAssertEqual(CareText.bannerClose, "닫기")   // U48
@@ -1476,8 +1550,8 @@ final class CareTests: XCTestCase {
                        "11월 6일(금) 오후 11:50–오전 12:20")
         XCTAssertEqual(CareText.reportSub(cries: 3, simulated: false), "울음 3번")
         XCTAssertEqual(CareText.reportSub(cries: 0, simulated: false), "울음 기록 없음")
-        XCTAssertEqual(CareText.reportSub(cries: 1, simulated: true), "울음 1번 · 시뮬레이션")
-        XCTAssertEqual(CareText.reportSub(cries: 0, simulated: true), "울음 기록 없음 · 시뮬레이션")
+        XCTAssertEqual(CareText.reportSub(cries: 1, simulated: true), "울음 1번 · 연습 장면")
+        XCTAssertEqual(CareText.reportSub(cries: 0, simulated: true), "울음 기록 없음 · 연습 장면")
     }
 
     func test_기록_줄과_패턴_문구는_7_1_표_그대로() {
@@ -1513,9 +1587,7 @@ final class CareTests: XCTestCase {
         XCTAssertEqual(CareText.dayTitle("2026-11-05", now: clock, zone: seoul), "오늘")
         XCTAssertEqual(CareText.dayTitle("2026-11-04", now: clock, zone: seoul), "어제")
         XCTAssertEqual(CareText.dayTitle("2026-11-03", now: clock, zone: seoul), "11월 3일(화)")
-        // sheet.title.* / sheet.edit.*
-        XCTAssertEqual([CareKind.feed, .sleep, .diaper, .note].map { CareText.sheetTitle($0, editing: false) }, ["수유 적기", "잠 적기", "기저귀 적기", "메모 적기"])
-        XCTAssertEqual(CareText.sheetTitle(.feed, editing: true), "수유 고치기")
+        // sheet.title.*·sheet.edit.*는 11-11부터 쓰지 않는다(U81 질문이 대신, CareDraftTests)
         // pattern.value: 평균은 그 종류 기록이 있는 날만 나눠 센다(U27).
         let days = (0..<7).map { i in
             CareDayStat(day: "d\(i)", feeds: [0, 0, 0, 0, 7, 8, 8][i], sleepMs: i == 6 ? 7 * 3_600_000 : 0, sleepRecorded: i == 6,
@@ -1523,7 +1595,7 @@ final class CareTests: XCTestCase {
         }
         let p = CarePattern(days: days, feedIntervalMedianMs: 170 * 60_000)
         XCTAssertEqual(p.feedDays, 3)
-        XCTAssertEqual(p.feedsPerDay.map(CareText.avgCount), "평균 7.7회")
+        XCTAssertEqual(p.feedsPerDay.map(CareText.avgCount), "평균 7.7번")
         XCTAssertEqual(CareText.basedOn(days: p.feedDays), "3일 기준")
         XCTAssertEqual(p.sleepMsPerDay.map(CareText.avgDuration), "평균 7시간")
         XCTAssertEqual(p.sleepDays, 1)
@@ -1539,7 +1611,7 @@ final class CareTests: XCTestCase {
         XCTAssertEqual(CareText.avgDuration(30_000), "평균 1분 미만")
         XCTAssertEqual(CareText.row(event(.sleep, "2026-11-05T13:10:00+09:00", end: "2026-11-05T13:10:00+09:00")), "잠 · 오후 1:10 · 0분")   // U41
         // about.*(U28)
-        XCTAssertEqual(CareText.version("1.0.0"), "판 1.0.0")
+        XCTAssertEqual(CareText.version("1.0.0"), "버전 1.0.0")
         XCTAssertEqual(CareText.oss, "오픈소스 라이선스")
         // U63: 목록의 라이선스 전문이 앱 묶음에 모두 들어 있다(빠지면 누른 화면이 비어 보인다)
         XCTAssertFalse(OssEntry.all.isEmpty)
@@ -1693,7 +1765,7 @@ final class CareTests: XCTestCase {
         relay.sendError = .http(status: 400, code: "bad_body", retryAfter: nil)
         await app.sendOutbox.run()
         XCTAssertTrue(app.state.state.outbox.isEmpty)
-        XCTAssertEqual(app.status.ui.notice, CareText.careSummaryDropped + "\n수유 기록을 차로 보내지 못했어요.")
+        XCTAssertEqual(app.status.ui.notice, CareText.careSummaryDropped + "\n수유 기록을 차로 보내지 못했어요")
 
         // 같은 글은 한 번만 보인다: 두 곡 삭제가 함께 거절돼도 줄은 하나다.
         var st = PhoneState(introSeen: true, carId: "c_1")
@@ -1706,7 +1778,7 @@ final class CareTests: XCTestCase {
         relay.sendError = .http(status: 400, code: "bad_body", retryAfter: nil)
         await app.sendOutbox.run()
         XCTAssertTrue(app.state.state.outbox.isEmpty)
-        XCTAssertEqual(app.status.ui.notice, "노래 삭제를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.")
+        XCTAssertEqual(app.status.ui.notice, "노래 지우기를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.")
     }
 
     func test_0시가_없는_날의_하루_범위는_다음_날_0시에서_끝나고_패턴_창은_첫날_0시부터다() {
@@ -1832,6 +1904,123 @@ final class CareDraftTests: XCTestCase {
         edit.setStart(at("09:40"))
         XCTAssertEqual(edit.end, at("09:20"))
         XCTAssertEqual(check(edit), .endBeforeStart)
+    }
+
+    // MARK: 기록 시트 v8(U81~U85, 두 앱 같은 이름의 시험)
+
+    private func seoulEvent(_ kind: CareKind, _ start: String, _ end: String? = nil) -> CareEvent {
+        var e = CareEvent(id: "x", kind: kind, startAt: CareTime.ms(Rfc3339.parse("2026-11-10T\(start):00+09:00")!), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0)
+        e.endAt = end.map { CareTime.ms(Rfc3339.parse("2026-11-10T\($0):00+09:00")!) }
+        e.endUnknown = end == nil && (kind == .feed || kind == .sleep)
+        return e
+    }
+
+    func test_시트_질문은_종류마다_정해진_글이다() {
+        XCTAssertEqual([CareKind.feed, .sleep, .diaper, .note].map(CareText.sheetQuestion), ["어떻게 먹였어요?", "언제 잤어요?", "어떤 기저귀였어요?", "무엇을 적을까요?"])
+    }
+
+    func test_시작_줄_값은_칩이면_시각과_칩_직접이면_시각_다른_날은_날짜와_시각이다() {
+        let clock = { (d: Date) in CareFormat.clock(d, .current) }
+        var d = CareDraft.new(kind: .feed, day: nil, now: now)
+        XCTAssertEqual(d.startValue(now: now), clock(now) + " · 지금")
+        d.pick(chip: 15, now: now)
+        XCTAssertEqual(d.startValue(now: now), clock(now.addingTimeInterval(-900)) + " · 15분 전")
+        d.pick(chip: nil, now: now)   // 직접 고른 오늘
+        XCTAssertEqual(d.startValue(now: now), clock(now.addingTimeInterval(-900)))
+        let past = CareDraft.new(kind: .feed, day: "2026-11-08", now: now)   // 다른 날
+        XCTAssertEqual(past.startValue(now: now), "11월 8일(일) " + clock(past.start))
+        let edit = CareDraft.editing(seoulEvent(.diaper, "08:10"))   // 고치기는 날짜와 시각
+        XCTAssertEqual(edit.startValue(now: Rfc3339.parse("2026-11-10T09:00:00+09:00")!), "오늘 오전 8:10")
+        XCTAssertEqual(edit.startValue(now: Rfc3339.parse("2026-11-11T09:00:00+09:00")!), "어제 오전 8:10")
+    }
+
+    func test_끝_줄_값은_모르면_모름_알면_시각과_길이다() {
+        var d = CareDraft.editing(seoulEvent(.sleep, "21:00"))
+        XCTAssertEqual(d.endValue, "모름")
+        d.setEnd(picked: Rfc3339.parse("2026-11-11T06:30:00+09:00")!)
+        XCTAssertEqual(d.endValue, "오전 6:30 · 9시간 30분")
+        var f = CareDraft.editing(seoulEvent(.feed, "12:00", "13:00"))
+        XCTAssertEqual(f.endValue, "오후 1:00 · 1시간")
+        f.setStart(Rfc3339.parse("2026-11-10T13:30:00+09:00")!)   // 끝이 시작보다 이르면 시각만
+        XCTAssertEqual(f.endValue, "오후 1:00")
+    }
+
+    func test_빈_메모_줄은_메모_더하기다() {
+        var d = CareDraft.new(kind: .feed, day: nil, now: now)
+        XCTAssertEqual(d.foldRows, [.start, .end, .memo])
+        XCTAssertEqual(d.rowName(.memo), "메모 더하기")
+        d.note = "트림 잘 함"
+        XCTAssertEqual(d.rowName(.memo), "메모")
+        XCTAssertEqual(CareDraft.new(kind: .diaper, day: nil, now: now).foldRows, [.start, .memo])
+        XCTAssertEqual(CareDraft.new(kind: .sleep, day: nil, now: now).foldRows, [.end, .memo])   // 잠의 시작은 큰 칸
+        XCTAssertEqual(CareDraft.new(kind: .note, day: nil, now: now).foldRows, [.start])
+        XCTAssertEqual([d.rowName(.start), CareDraft.new(kind: .diaper, day: nil, now: now).rowName(.start)], ["시작", "시각"])
+    }
+
+    func test_시트를_열면_모든_줄이_접혀_있고_한_줄만_펼친다() {
+        var f = SheetFolds()
+        XCTAssertNil(f.open)
+        f.toggle(.start)
+        XCTAssertEqual(f.open, .start)
+        f.toggleWheel(.start)
+        f.toggle(.end)                   // 다른 줄을 누르면 앞 줄은 접힌다(바퀴도 닫힌다)
+        XCTAssertEqual(f.open, .end)
+        XCTAssertNil(f.wheel)
+        f.toggle(.end)
+        XCTAssertNil(f.open)
+    }
+
+    func test_몇_분_전을_고른_동안_날짜와_시각_알약은_숨긴다() {
+        var d = CareDraft.new(kind: .feed, day: nil, now: now)
+        XCTAssertFalse(d.showsPills)     // '지금'
+        d.pick(chip: 30, now: now)
+        XCTAssertFalse(d.showsPills)
+        d.pick(chip: nil, now: now)      // '직접'
+        XCTAssertTrue(d.showsPills)
+        XCTAssertTrue(CareDraft.new(kind: .feed, day: "2026-11-08", now: now).showsPills)   // 칩이 없는 시트
+        XCTAssertTrue(CareDraft.editing(seoulEvent(.feed, "08:00")).showsPills)
+    }
+
+    func test_저장_단추_글은_시각과_고른_것과_종류다() {
+        var f = CareDraft.editing(seoulEvent(.feed, "13:58"))
+        XCTAssertEqual(f.saveLabel(), "오후 1:58 수유 저장하기")
+        f.side = .left
+        XCTAssertEqual(f.saveLabel(), "오후 1:58 왼쪽 수유 저장하기")
+        var d = CareDraft.editing(seoulEvent(.diaper, "14:13")); d.diaper = .wet
+        XCTAssertEqual(d.saveLabel(), "오후 2:13 소변 기저귀 저장하기")
+        XCTAssertEqual(CareDraft.editing(seoulEvent(.sleep, "10:20", "11:40")).saveLabel(), "오전 10:20–11:40 잠 저장하기")
+        XCTAssertEqual(CareDraft.editing(seoulEvent(.sleep, "10:20")).saveLabel(), "오전 10:20 잠 저장하기")   // 끝 모름이면 시작만
+        XCTAssertEqual(CareDraft.editing(seoulEvent(.note, "10:20")).saveLabel(), "메모 저장하기")
+    }
+
+    func test_젖병_양이_있으면_수유_대신_양을_쓴다() {
+        var f = CareDraft.editing(seoulEvent(.feed, "13:43")); f.side = .bottle
+        XCTAssertEqual(f.saveLabel(), "오후 1:43 젖병 수유 저장하기")
+        f.amount = 120
+        XCTAssertEqual(f.saveLabel(), "오후 1:43 젖병 120ml 저장하기")
+    }
+
+    func test_22자를_넘으면_잠_구간과_고른_것과_시각_순으로_줄인다() {
+        var s = CareDraft.editing(seoulEvent(.sleep, "12:50"))
+        s.setEnd(picked: Rfc3339.parse("2026-11-11T02:05:00+09:00")!)
+        XCTAssertEqual(s.saveLabel(fit: false), "오후 12:50–오전 2:05 잠 저장하기")   // 23자: 큰 글자에서는 줄이지 않는다
+        XCTAssertEqual(s.saveLabel(), "오후 12:50 잠 저장하기")                     // ① 잠 구간 → 시작 시각
+        // 가장 긴 고른 것도 22자 안에 든다(시안에서 한 줄로 확인한 예)
+        var d = CareDraft.editing(seoulEvent(.diaper, "12:58")); d.diaper = .dry
+        XCTAssertEqual(d.saveLabel(), "오후 12:58 깨끗함 기저귀 저장하기")
+        var b = CareDraft.editing(seoulEvent(.feed, "12:52")); b.side = .bottle; b.amount = 400
+        XCTAssertEqual(b.saveLabel(), "오후 12:52 젖병 400ml 저장하기")
+        for k in [DiaperKind.wet, .dirty, .both, .dry] { d.diaper = k; XCTAssertLessThanOrEqual(d.saveLabel().unicodeScalars.count, 22) }
+    }
+
+    func test_메모가_비면_저장_단추가_꺼진다() {
+        var n = CareDraft.new(kind: .note, day: nil, now: now)
+        XCTAssertFalse(n.savable)
+        n.note = "   "
+        XCTAssertFalse(n.savable)
+        n.note = "트림"
+        XCTAssertTrue(n.savable)
+        XCTAssertTrue(CareDraft.new(kind: .diaper, day: nil, now: now).savable)
     }
 
     func test_저장할_기록은_종류에_맞지_않는_칸을_비우고_메모_공백을_걷는다() {

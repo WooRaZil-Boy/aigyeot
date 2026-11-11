@@ -403,7 +403,10 @@ fun SettingRow(
     title: String,
     @DrawableRes icon: Int,
     sub: String? = null,
+    /** 제목을 빨강으로(이 휴대폰의 기록 지우기). */
     danger: Boolean = false,
+    /** 되돌릴 수 없는 동작 줄(지우기·연결 끊기): 아이콘을 빨강으로(11-11 사용자, 세 앱 같음). 글자 색은 [danger]가 따로 정한다. */
+    destructive: Boolean = danger,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     /** 있으면 행 전체가 스위치 하나다(화면 읽기가 제목과 상태를 함께 읽는다). */
@@ -423,17 +426,59 @@ fun SettingRow(
         onClick != null -> base.pressable(enabled = enabled, scale = 0.98f, onClick = onClick)
         else -> base
     }
+    // 아이콘은 제목 줄에 위 맞춤(v8b-10 ②: 부제가 두 줄이어도 아이콘이 제목 옆), 꼬리(스위치·›)는 행 가운데.
+    val line = with(LocalDensity.current) { Type.rowTitle.lineHeight.toDp() }
     Row(
         act.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(19.dp), p.textTertiary) } // 시안 .grp .li: 아이콘은 늘 흐린 색, 위험 행은 글자만 빨강
-        Column(Modifier.weight(1f)) {
-            Text(title, style = Type.rowTitle, color = if (danger) p.danger else p.textPrimary)
-            sub?.let { Text(it, style = Type.rowSub, color = p.textTertiary) }
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.width(32.dp).height(line), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(19.dp), if (destructive) p.danger else p.textTertiary) } // 시안 .grp .li: 아이콘은 흐린 색, 되돌릴 수 없는 줄만 빨강(surface 위 5.04·6.13:1)
+            Column(Modifier.weight(1f)) {
+                Text(title, style = Type.rowTitle, color = if (danger) p.danger else p.textPrimary)
+                sub?.let { Text(it, Modifier.padding(top = 2.dp), style = Type.rowSub, color = p.textTertiary) }
+            }
         }
         trailing?.invoke()
+    }
+}
+
+/**
+ * 정보 줄(v8b-10 ②, 첫 안내·보호자 초대): 선 아이콘 22(칸 폭 24 × 제목 줄 높이, 위 맞춤, 바탕 없음) · 16 · 제목 `rowTitle` / 부제 `rowSub`.
+ * 줄 하나가 읽기 요소 하나이고 아이콘은 읽지 않는다. [plain]이면 제목 굵기 500(블록 안 줄, 시안 .ob-block .ob-t).
+ */
+@Composable
+fun InfoLine(@DrawableRes icon: Int, title: String, sub: String? = null, child: Boolean = false, plain: Boolean = false, modifier: Modifier = Modifier) {
+    val p = Tokens.colors
+    val line = with(LocalDensity.current) { Type.rowTitle.lineHeight.toDp() }
+    Row(modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+        Box(Modifier.width(24.dp).height(line), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(22.dp), if (child) p.child else p.textSecondary) }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = if (plain) Type.rowTitle.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium) else Type.rowTitle, color = p.textPrimary)
+            sub?.let { Text(it, Modifier.padding(top = 2.dp), style = Type.rowSub, color = p.textTertiary) }
+        }
+    }
+}
+
+/** 결과 화면(v8b-10 ⑧ 연결됐어요·연결이 끊겼어요): 위 막대 없이 가운데 원 64 + 큰 제목(display) + 한 줄, 단추는 아래 고정. */
+@Composable
+fun ResultPage(@DrawableRes icon: Int, title: String, body: String, child: Boolean = false, buttons: @Composable ColumnScope.() -> Unit) {
+    val p = Tokens.colors
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        ) {
+            Box(Modifier.padding(bottom = 8.dp).size(64.dp).clip(CircleShape).background(if (child) p.childSoft else p.accentSoft), contentAlignment = Alignment.Center) {
+                AIcon(icon, Modifier.size(32.dp), if (child) p.child else p.onAccentSoft)
+            }
+            Text(title, Modifier.semantics { heading() }, style = Type.display, color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(body, style = Type.lead.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = p.textSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = buttons)
     }
 }
 
@@ -514,7 +559,7 @@ fun Btn(
         BtnKind.PRIMARY -> p.accent to p.onAccent
         BtnKind.TONAL -> p.tonal to p.textPrimary
         BtnKind.DANGER_TEXT -> Color.Transparent to p.danger
-        BtnKind.TEXT -> Color.Transparent to p.accentInk
+        BtnKind.TEXT -> Color.Transparent to p.textSecondary // 글자 단추(v8b-10: 600/16 흐림, 높이 48)
     }
     val h = when {
         kind == BtnKind.DANGER_TEXT || kind == BtnKind.TEXT -> 48.dp
@@ -529,7 +574,7 @@ fun Btn(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let { AIcon(it, Modifier.size(20.dp), fg); Spacer(Modifier.width(8.dp)) }
-        Text(text, style = if (big) Type.strongLarge else Type.strong, color = fg)
+        Text(text, style = when { kind == BtnKind.TEXT -> Type.rowTitle; big -> Type.strongLarge; else -> Type.strong }, color = fg)
     }
 }
 
@@ -656,6 +701,25 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
             layout(plain.width, plain.height) { plain.place(0, 0) }
         }
     }
+}
+
+/**
+ * 글 통째 바뀜(U88 값 글 바뀜: 단추·줄 값). 새 글이 6 아래에서 올라오며 나타난다(roll 0.85·632). 동작 줄이기면 바로 바뀐다.
+ * ponytail: 블러 4 → 0은 뺐다(Modifier.blur는 API 31+), 필요하면 API 31 이상에서만 graphicsLayer renderEffect로 더한다.
+ */
+@Composable
+fun SwapText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, textAlign: androidx.compose.ui.text.style.TextAlign? = null, overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip) {
+    if (LocalReducedMotion.current) {
+        Text(text, modifier, style = style, color = color, maxLines = maxLines, textAlign = textAlign, overflow = overflow)
+        return
+    }
+    val shift = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
+    AnimatedContent(
+        targetState = text,
+        modifier = modifier,
+        transitionSpec = { (slideInVertically(Springs.roll.spec()) { shift } + fadeIn(Motion.rollIn.spec())) togetherWith fadeOut(Motion.rollOut.spec()) },
+        label = "swap",
+    ) { t -> Text(t, style = style, color = color, maxLines = maxLines, textAlign = textAlign, overflow = overflow) }
 }
 
 /** 둘레 테가 있는 앱 아이콘 칸(흰 바탕 아이콘이라 흰 면 위에서 경계가 보이게 검정 10% 테, 시안 v6-6). */

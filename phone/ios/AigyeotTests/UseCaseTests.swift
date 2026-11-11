@@ -94,12 +94,12 @@ final class UseCaseTests: XCTestCase {
         kit.relay.pairResult = .failure(.http(status: 429, code: "rate_limited", retryAfter: 30))
         connect.start(.pair("123456"))
         await kit.app.pair.job?.value
-        XCTAssertEqual(connect.ui.run, .failed(code: .pair("123456"), .rateLimited(30)))
+        XCTAssertEqual(connect.ui.run, .failed(code: .pair("123456"), .rateLimited))
         XCTAssertTrue(connect.ui.isLocked)
         let calls = kit.relay.pairCalls
         connect.start(.pair("654321"))   // 잠금 중: 중계에 묻지 않는다
         XCTAssertEqual(kit.relay.pairCalls, calls)
-        XCTAssertEqual(connect.ui.run, .failed(code: .pair("654321"), .rateLimited(30)))
+        XCTAssertEqual(connect.ui.run, .failed(code: .pair("654321"), .rateLimited))
     }
 
     /// D3: iOS는 완료 화면 대신 '연결됐어요' 띠와 탭(오늘)으로 간다. 오늘 탭으로 바꾸는 일은 MainView가 연결 여부를 보고 한다.

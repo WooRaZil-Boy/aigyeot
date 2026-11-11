@@ -5,10 +5,15 @@ private typealias DS = DesignSystem
 /// 무엇을 시트로 띄울지. 새 기록은 종류, 고치기·타이머는 기록 id.
 enum CareSheet: Identifiable {
     case quick(CareKind, day: String? = nil)   // day: 기록 탭에서 고른 오늘 아닌 날
+    /// 기록 탭 '지난 기록 적기'(목록 끝 줄·빈 날 단추): 종류를 고를 수 있는 시트(U86). day: 고른 날(오늘이면 nil)
+    case past(day: String?)
     case edit(String)
     case timer(String)
     var id: String {
-        switch self { case .quick(let k, let d): "q-\(k.rawValue)-\(d ?? "")"; case .edit(let i): "e-\(i)"; case .timer(let i): "t-\(i)" }
+        switch self {
+        case .quick(let k, let d): "q-\(k.rawValue)-\(d ?? "")"; case .past(let d): "p-\(d ?? "")"
+        case .edit(let i): "e-\(i)"; case .timer(let i): "t-\(i)"
+        }
     }
 }
 
@@ -46,7 +51,9 @@ struct TodayView: View {
                                 VStack(alignment: .leading, spacing: 0) {
                                     BlockHeader(title: CareText.todayDay, link: CareText.tabLog) { goTab(CareText.tabLog) }
                                     let today = CareRules.dayKey(now, .current)
-                                    DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now, zone: .current, showCar: vm.ui.isPaired))
+                                    let fresh = vm.fresh.flatMap { ChartData.fresh($0, day: today, zone: .current) }
+                                    DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now, zone: .current, showCar: vm.ui.isPaired),
+                                                 fresh: fresh) { if let id = fresh?.id { vm.clearFresh(id) } }
                                 }
                                 .block()
                                 .enterRise(3)
@@ -100,7 +107,7 @@ private struct ZoomDestination: ViewModifier {
 }
 
 /// 마지막 수유(시안 .hero-c): 이름 → 큰 경과 → 시각 · 쪽 → 간격 막대 → (owner) 다음 수유 시간대.
-/// 없으면 "아직 수유 기록이 없어요" + '수유 시작'.
+/// 없으면 "아직 수유 기록이 없어요" + '수유 시작하기'(U85 ②).
 private struct LastFeedCard: View {
     @Environment(TodayViewModel.self) private var vm
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -135,9 +142,17 @@ private struct LastFeedCard: View {
                     .padding(.top, 14)
                 }
             } else {
-                Text(CareText.noFeedYet).typeStyle(.body).foregroundStyle(DS.textSecondary).padding(.top, 8)
-                Button { vm.start(.feed) } label: { Text(CareText.startFeed) }
-                    .buttonStyle(.pill).padding(.top, 14)
+                // U85 ②: 같은 판 자리에 젖병 고리 + 문구 + 빈 간격 트랙 + 주 단추
+                HStack(spacing: 14) {
+                    IconImage(.bottle, size: 22).foregroundStyle(DS.textSecondary)
+                        .frame(width: 52, height: 52).background(DS.surfaceRaised, in: Circle())
+                        .accessibilityHidden(true)
+                    Text(CareText.noFeedYet).typeStyle(.headline).foregroundStyle(DS.textPrimary)
+                }
+                .padding(.top, 12)
+                FeedMeter(value: 0, tick: nil).padding(.top, 18).padding(.bottom, 16).accessibilityHidden(true)
+                Button { vm.start(.feed) } label: { Label { Text(CareText.startFeed) } icon: { IconImage(.bottle, size: 20) } }
+                    .buttonStyle(.pill)
             }
         }
         .block(padding: EdgeInsets(top: 22, leading: 22, bottom: 20, trailing: 22))
@@ -341,7 +356,7 @@ struct CarTile: View {
     /// 차 카드 글(7.2). 마지막 연락은 U20 경과(1분 미만 '방금', 그 밖 '5분 전'·'1시간 전'·'1시간 15분 전', 연결 계약 5.6·L100).
     func text(now: Date) -> String {
         if offline { return "알 수 없음" }
-        guard let car else { return "차를 기다리고 있어요" }
+        guard let car else { return "차를 기다리는 중" }
         if car.online { return "연결됨" }
         guard let last = car.lastSeenAt.flatMap(Rfc3339.parse) else { return "차 꺼짐" }
         return "차 꺼짐 · 마지막 연락 " + CareText.ago(CareTime.ms(now) - CareTime.ms(last))
@@ -375,7 +390,7 @@ struct CarTile: View {
         .frame(minHeight: 44)
         if let open {
             Button(action: open) { content.contentShape(Rectangle()) }.buttonStyle(.plain)
-                .accessibilityHint(CareText.tabCar)
+                .accessibilityHint("차 탭을 열어요")
         } else { content }
     }
 }

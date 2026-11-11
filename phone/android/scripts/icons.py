@@ -17,8 +17,8 @@ from pathlib import Path
 
 # 화면에서 쓰는 아이콘만 넣는다. 더 필요하면 이름을 더하고 다시 돌린다.
 NAMES = [
-    "arrow-left", "baby", "bell", "car-front", "check", "chevron-right", "circle-check", "clock",
-    "download", "file-up", "house", "info", "link", "list", "locate-fixed", "minus",
+    "arrow-left", "baby", "bell", "calendar", "car-front", "check", "chevron-down", "chevron-right", "circle-alert", "circle-check", "clock",
+    "download", "droplet", "file-up", "house", "info", "link", "list", "locate-fixed", "lock", "minus",
     "moon", "notebook-pen", "play", "plus", "qr-code", "rotate-3d", "route", "settings",
     "share", "shield-check", "smartphone", "sparkles", "square", "trash-2", "unlink", "users", "x",
 ]
@@ -27,7 +27,20 @@ NAMES = [
 CUSTOM = {
     "bottle": '<path d="M9 2h6"/><path d="M10 2v3.2L8.4 7.4A3 3 0 0 0 8 9v10a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3V9a3 3 0 0 0-.4-1.6L14 5.2V2"/><path d="M8 12h3"/><path d="M8 16h3"/>',
     "diaper": '<path d="M3 6h18v3a9 9 0 0 1-6.2 8.6L14 18h-4l-.8-.4A9 9 0 0 1 3 9z"/><path d="M3 9c2.5 0 4 1.5 5 4"/><path d="M21 9c-2.5 0-4 1.5-5 4"/>',
+    # 기록 시트 v8(시안 js/sheet.js ICONS): 쪽 셋(채운 원 = 그 쪽), 대변·깨끗함. 둘 다는 아래 GROUPS.
+    "side-left": '<circle cx="7" cy="12" r="4.5" fill="currentColor"/><circle cx="17" cy="12" r="4.5"/>',
+    "side-right": '<circle cx="7" cy="12" r="4.5"/><circle cx="17" cy="12" r="4.5" fill="currentColor"/>',
+    "side-both": '<circle cx="7" cy="12" r="4.5" fill="currentColor"/><circle cx="17" cy="12" r="4.5" fill="currentColor"/>',
+    "poo": '<path d="M6.3 20.5h11.4a2.75 2.75 0 0 0 0-5.5H6.3a2.75 2.75 0 0 0 0 5.5z"/><path d="M6.6 15a2.3 2.3 0 0 1 1.9-4.5h7a2.3 2.3 0 0 1 1.9 4.5"/><path d="M9.2 10.5c0-2.6 1.6-4.2 4.6-5 -.4 1.3.1 2.3 1 2.9.7.5.8 1.3.5 2.1"/>',
+    "clean": '<path d="M11 4c.7 4 2.3 5.6 6.2 6.3-3.9.7-5.5 2.3-6.2 6.2-.7-3.9-2.3-5.5-6.2-6.2C8.7 9.6 10.3 8 11 4z"/><path d="M19 15v5"/><path d="M16.5 17.5h5"/>',
     "song": '<path d="M9 2a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M15 10a6 6 0 0 1-12 0"/><path d="M9 16v4"/><path d="M19.6 13.8c-.9.9-2.6 2.3-2.6 2.3s-1.7-1.4-2.6-2.3a1.5 1.5 0 0 1 2.1-2.1l.5.5.5-.5a1.5 1.5 0 0 1 2.1 2.1z"/>',
+}
+
+
+# 줄인 그림을 겹친 아이콘: (옮김 x, y, 배율, 본문). 시안의 non-scaling-stroke처럼 선 굵기는 배율로 나눠 2를 지킨다.
+_DROP = '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>'
+GROUPS = {
+    "pee-poo": [(0.5, 1.5, 0.6, _DROP), (7.6, 7.4, 0.68, CUSTOM["poo"])],
 }
 
 
@@ -72,13 +85,24 @@ def to_path(tag):
     raise SystemExit(f"모르는 도형: {name}")
 
 
-def vector(body):
+def paths_of(body, stroke=2.0, indent="    "):
     tags = re.findall(r"<(?:path|circle|ellipse|rect|line|polyline|polygon)\b[^>]*>", body)
-    paths = "\n".join(
-        f'    <path android:pathData="{to_path(t)}" android:fillColor="#00000000" android:strokeColor="#FF000000" '
-        f'android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />'
+    return "\n".join(
+        f'{indent}<path android:pathData="{to_path(t)}" android:fillColor="{"#FF000000" if attrs(t).get("fill") == "currentColor" else "#00000000"}" '
+        f'android:strokeColor="#FF000000" android:strokeWidth="{n(stroke)}" android:strokeLineCap="round" android:strokeLineJoin="round" />'
         for t in tags
     )
+
+
+def vector(body, groups=None):
+    if groups:
+        paths = "\n".join(
+            f'    <group android:translateX="{n(x)}" android:translateY="{n(y)}" android:scaleX="{n(k)}" android:scaleY="{n(k)}">\n'
+            + paths_of(b, round(2 / k, 3), "        ") + "\n    </group>"
+            for x, y, k, b in groups
+        )
+    else:
+        paths = paths_of(body)
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         "<!-- 생성 파일(scripts/icons.py). Lucide(ISC, assets/licenses/ISC-lucide.txt) 또는 아이곁 직접 그림. 색은 쓰는 곳에서 입힌다. -->\n"
@@ -165,7 +189,9 @@ def main(lucide, fg, res):
         body = (Path(lucide) / f"{name}.svg").read_text()
         (d / f"ic_{name.replace('-', '_')}.xml").write_text(vector(body))
     for name, body in CUSTOM.items():
-        (d / f"ic_{name}.xml").write_text(vector(body))
+        (d / f"ic_{name.replace('-', '_')}.xml").write_text(vector(body))
+    for name, groups in GROUPS.items():
+        (d / f"ic_{name.replace('-', '_')}.xml").write_text(vector("", groups))
     app_icon(fg, res)
 
 

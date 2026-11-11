@@ -40,7 +40,7 @@ final class PresentationTests: XCTestCase {
         let connect = app.connect()
         connect.start(.pair("123456"))
         await app.pair.job?.value
-        XCTAssertEqual(connect.ui.run, .failed(code: .pair("123456"), .rateLimited(30)))
+        XCTAssertEqual(connect.ui.run, .failed(code: .pair("123456"), .rateLimited))
         XCTAssertTrue(connect.ui.isLocked)
         XCTAssertTrue(app.appViewModel.ui.isPairLocked)
     }
@@ -275,7 +275,7 @@ final class ViewModelTests: XCTestCase {
         let sheet = kit.app.careSheet(.new(.note, day: nil))
         sheet.edit { $0.note = "  메모  " }
         sheet.save()
-        XCTAssertEqual(sheet.phase, .closed)
+        XCTAssertEqual(sheet.phase, .closed(saved: true))   // 보통 저장
         let saved = try! XCTUnwrap(kit.app.care.care.events.first { $0.kind == .note })
         XCTAssertEqual(saved.note, "메모")   // 앞뒤 공백을 걷는다(CareRules.normalized)
 
@@ -284,7 +284,7 @@ final class ViewModelTests: XCTestCase {
         kit.app.recordCare.delete(saved.id)
         editing.edit { $0.note = "고침" }
         editing.save()
-        XCTAssertEqual(editing.phase, .closed)   // 그사이 지워졌으면 되살리지 않고 닫는다(R10)
+        XCTAssertEqual(editing.phase, .closed(saved: false))   // 그사이 지워졌으면 되살리지 않고 닫는다(R10). 저장하지 않았으니 확인 표시 없음(U88)
         XCTAssertNotNil(kit.app.care.care.events.first { $0.id == saved.id }?.deletedAt)
         XCTAssertNil(kit.app.careSheet(.edit(saved.id)).draft)   // 지운 기록은 시트를 그리지 않는다
 
@@ -292,7 +292,78 @@ final class ViewModelTests: XCTestCase {
         let other = kit.app.careSheet(.new(.note, day: nil))
         other.edit { $0.note = "다른" }
         other.save()
-        XCTAssertEqual(other.phase, .failed(NoticeRules.saveFailed))
+        XCTAssertEqual(other.phase, .failed(NoticeRules.saveFailed, attempt: 1))
+    }
+
+    /// U82(11-12 보충): 같은 오류가 다시 나도 실패마다 새 값을 낸다(시도 번호). 화면은 그 값이 바뀔 때 펼침·흔들림·오류 햅틱을 낸다.
+    func test_같은_저장_오류가_다시_나면_시도_번호가_다른_실패를_낸다() {
+        let kit = Kit()
+        let now = kit.clock
+        let sheet = kit.app.careSheet(.new(.feed, day: nil))
+        sheet.edit { $0.setStart(now.addingTimeInterval(-3600)); $0.setEnd(picked: now.addingTimeInterval(3600)) }   // 같은 미래 끝 시각
+        sheet.save()
+        let first = sheet.phase
+        sheet.save()
+        let second = sheet.phase
+        XCTAssertEqual(first, .failed("앞으로의 시각은 적을 수 없어요", problem: .futureEnd, attempt: 1))
+        XCTAssertEqual(second, .failed("앞으로의 시각은 적을 수 없어요", problem: .futureEnd, attempt: 2))
+        XCTAssertNotEqual(first, second)
+        kit.careStore.failing = true   // 저장 실패(저장 공간)도 같은 규칙
+        sheet.edit { $0.setEnd(picked: now.addingTimeInterval(-1800)) }
+        sheet.save()
+        XCTAssertEqual(sheet.phase, .failed(NoticeRules.saveFailed, attempt: 3))
+        sheet.save()
+        XCTAssertEqual(sheet.phase, .failed(NoticeRules.saveFailed, attempt: 4))
+    }
+
+    /// U82: 값을 고치면 앞 검사 오류를 걷는다(끝 시각 오류 뒤 '끝 시각 모름'을 골라도 빨간 테·글이 남지 않게, 안드로이드 edit과 같음).
+    func test_검사_오류_뒤_값을_고치면_오류를_걷는다() {
+        let kit = Kit()
+        let now = kit.clock
+        let sheet = kit.app.careSheet(.new(.feed, day: nil))
+        sheet.edit { $0.setStart(now.addingTimeInterval(-3600)); $0.setEnd(picked: now.addingTimeInterval(3600)) }
+        sheet.save()
+        XCTAssertEqual(sheet.phase, .failed("앞으로의 시각은 적을 수 없어요", problem: .futureEnd, attempt: 1))
+        sheet.edit { $0.endUnknown = true }   // 시트의 '끝 시각 모름' 알약과 같은 입력
+        XCTAssertEqual(sheet.phase, .editing)
+    }
+
+    /// U88 끝: 지우기로 닫히는 시트는 저장한 닫힘이 아니다(확인 표시·성공 햅틱 없음).
+    func test_시트를_지우면_저장하지_않은_닫힘이다() throws {
+        let kit = Kit()
+        let sheet = kit.app.careSheet(.new(.diaper, day: nil))
+        sheet.save()
+        let id = try XCTUnwrap(kit.app.care.care.events.first?.id)
+        let editing = kit.app.careSheet(.edit(id))
+        editing.delete()
+        XCTAssertEqual(editing.phase, .closed(saved: false))
+        XCTAssertNotNil(kit.app.care.care.events.first { $0.id == id }?.deletedAt)
+    }
+
+    /// U88(11-12 보충): 저장 확인 표시가 머무는 동안(closed(saved: true)) 지우기는 받지 않는다.
+    func test_저장_확인_표시_중에는_지우기를_받지_않는다() throws {
+        let kit = Kit()
+        kit.app.careSheet(.new(.diaper, day: nil)).save()
+        let id = try XCTUnwrap(kit.app.care.care.events.first?.id)
+        let editing = kit.app.careSheet(.edit(id))
+        XCTAssertTrue(editing.canEdit)
+        editing.save()
+        XCTAssertEqual(editing.phase, .closed(saved: true))
+        XCTAssertFalse(editing.canEdit)
+        editing.delete()
+        XCTAssertEqual(editing.phase, .closed(saved: true))
+        XCTAssertNil(kit.app.care.care.events.first { $0.id == id }?.deletedAt)
+    }
+
+    /// U88 끝: 닫힐 때 보일 것은 저장 여부와 종류로만 정한다. 메모 저장은 햅틱만, 수유 저장은 확인 표시, 저장 안 됨은 바로 닫힘, 동작 줄이기는 햅틱만.
+    func test_시트가_닫힐_때_확인_표시는_실제로_저장했을_때만이다() {
+        XCTAssertEqual(SheetCloseFeedback.on(saved: true, kind: .note, reduceMotion: false), .hapticOnly)
+        XCTAssertEqual(SheetCloseFeedback.on(saved: true, kind: .feed, reduceMotion: false), .confirm)
+        XCTAssertEqual(SheetCloseFeedback.on(saved: true, kind: .diaper, reduceMotion: false), .confirm)
+        XCTAssertEqual(SheetCloseFeedback.on(saved: false, kind: .feed, reduceMotion: false), .none)
+        XCTAssertEqual(SheetCloseFeedback.on(saved: false, kind: .note, reduceMotion: false), .none)
+        XCTAssertEqual(SheetCloseFeedback.on(saved: true, kind: .feed, reduceMotion: true), .hapticOnly)
+        XCTAssertEqual(SheetCloseFeedback.on(saved: false, kind: .feed, reduceMotion: true), .none)
     }
 
     /// 겹침은 묻고(R4) '고치기'면 고치는 중으로 돌아가며, '그래도 저장'이면 저장한다.
@@ -301,7 +372,7 @@ final class ViewModelTests: XCTestCase {
         // 끝 모름 잠 둘이 같은 시각에 시작하면 겹친다(R4 두 점)
         let first = kit.app.careSheet(.new(.sleep, day: nil))
         first.save()
-        XCTAssertEqual(first.phase, .closed)
+        XCTAssertEqual(first.phase, .closed(saved: true))
         let second = kit.app.careSheet(.new(.sleep, day: nil))
         second.save()
         XCTAssertEqual(second.phase, .confirmOverlap)
@@ -315,7 +386,7 @@ final class ViewModelTests: XCTestCase {
         XCTAssertEqual(second.phase, .confirmOverlap)
         second.save(allowOverlap: true)
         second.save(allowOverlap: true)   // 닫히는 사이 또 눌렀다
-        XCTAssertEqual(second.phase, .closed)
+        XCTAssertEqual(second.phase, .closed(saved: true))   // 겹침 확인 뒤 저장도 저장한 닫힘이다(확인 표시·햅틱, U88)
         XCTAssertEqual(kit.app.care.care.events.filter { $0.kind == .sleep && $0.deletedAt == nil }.count, 2)
     }
 
@@ -332,8 +403,95 @@ final class ViewModelTests: XCTestCase {
         sheet.pick(chip: 0)                                          // 몇 분 전 칩 '지금'도 끝을 당기지 않는다
         XCTAssertEqual(sheet.draft?.end, end)
         sheet.save()
-        XCTAssertEqual(sheet.phase, .failed("끝 시각이 시작보다 빨라요"))
+        XCTAssertEqual(sheet.phase, .failed("끝 시각이 시작보다 빨라요", problem: .endBeforeStart, attempt: 1))
         XCTAssertTrue(kit.app.care.care.events.filter { $0.kind == .feed }.isEmpty)
+    }
+
+    /// U82 끝: 저장 검사(R3)에 걸리면 그 검사가 단계에 남고, 탓이 된 줄을 펼친다(시각 → 시작, 끝 → 끝, 양 → 양 칸).
+    func test_저장_검사에_걸리면_탓이_된_줄을_펼친다() throws {
+        let kit = Kit()
+        let now = kit.clock
+        let feed = kit.app.careSheet(.new(.feed, day: nil))
+        feed.edit { $0.setStart(now.addingTimeInterval(3600)) }   // 앞으로의 시각
+        feed.save()
+        guard case .failed(let m, let p?, _) = feed.phase else { return XCTFail("검사에 걸리지 않았다") }
+        XCTAssertEqual(m, CareProblem.futureStart.message(for: .feed))
+        XCTAssertEqual(CareDraft.field(for: p), .start)
+        var folds = SheetFolds()
+        folds.toggle(.end)
+        folds.reveal(try XCTUnwrap(CareDraft.field(for: p)))
+        XCTAssertEqual(folds.open, .start)
+        let end = kit.app.careSheet(.new(.feed, day: nil))
+        end.edit { $0.setStart(now.addingTimeInterval(-3600)); $0.setEnd(picked: now.addingTimeInterval(-1800)); $0.setStart(now.addingTimeInterval(-900)) }
+        end.save()
+        guard case .failed(_, let ep?, _) = end.phase else { return XCTFail() }
+        XCTAssertEqual(CareDraft.field(for: ep), .end)
+        let bottle = kit.app.careSheet(.new(.feed, day: nil))
+        bottle.edit { $0.side = .bottle; $0.amount = 500 }
+        bottle.save()
+        guard case .failed(_, let bp?, _) = bottle.phase else { return XCTFail() }
+        XCTAssertEqual(CareDraft.field(for: bp), .amount)
+        // 저장 실패(저장 공간)는 줄이 아니라 단추 위
+        kit.careStore.failing = true
+        let diaper = kit.app.careSheet(.new(.diaper, day: nil))
+        diaper.save()
+        XCTAssertEqual(diaper.phase, .failed(NoticeRules.saveFailed, problem: nil, attempt: 1))
+    }
+
+    /// U82·검토 C: 앞으로의 시각은 미래인 쪽 줄을 탓한다(시작을 고쳐도 풀리지 않는 끝 미래를 시작 줄에 붙이지 않는다).
+    private func futureField(start: TimeInterval, end: TimeInterval?) -> SheetField? {
+        let kit = Kit()
+        let now = kit.clock
+        let sheet = kit.app.careSheet(.new(.feed, day: nil))
+        sheet.edit { d in d.setStart(now.addingTimeInterval(start)); if let end { d.setEnd(picked: now.addingTimeInterval(end)) } }
+        sheet.save()
+        guard case .failed(let m, let p?, _) = sheet.phase else { XCTFail("검사에 걸리지 않았다"); return nil }
+        XCTAssertEqual(m, "앞으로의 시각은 적을 수 없어요")
+        return CareDraft.field(for: p)
+    }
+
+    func test_끝만_미래면_끝_줄을_탓한다() {
+        XCTAssertEqual(futureField(start: -3600, end: 3600), .end)   // 지금 오후 2시에 시작 1시·끝 3시
+    }
+
+    func test_시작만_미래면_시작_줄을_탓한다() {
+        XCTAssertEqual(futureField(start: 1800, end: nil), .start)
+    }
+
+    func test_시작과_끝이_둘_다_미래면_시작_줄을_탓한다() {
+        XCTAssertEqual(futureField(start: 1800, end: 3600), .start)
+    }
+
+    /// U84: 지우지 않은 손 기록이 없을 때만 첫 기록 도움말(지운 기록은 세지 않는다).
+    func test_손_기록이_없을_때만_첫_기록_도움말을_보인다() throws {
+        let kit = Kit()
+        let first = kit.app.careSheet(.new(.diaper, day: nil))
+        XCTAssertTrue(first.firstRecord)
+        first.save()
+        XCTAssertFalse(kit.app.careSheet(.new(.diaper, day: nil)).firstRecord)
+        let id = try XCTUnwrap(kit.app.care.care.events.first?.id)
+        kit.app.recordCare.delete(id)
+        XCTAssertTrue(kit.app.careSheet(.new(.feed, day: nil)).firstRecord)
+    }
+
+    /// U86: '지난 기록 적기'는 종류 칸(빠른 기록 순서)이 있고 처음은 수유다. 종류를 바꿔도 시각은 그대로.
+    func test_지난_기록_적기는_종류를_고를_수_있고_처음은_수유다() throws {
+        let kit = Kit()
+        let past = kit.app.careSheet(.new(.feed, day: "2026-11-08", chooseKind: true))
+        XCTAssertEqual(past.kinds, [.feed, .note])   // 잠·기저귀를 켜지 않았다
+        XCTAssertEqual(past.draft?.kind, .feed)
+        let start = past.draft?.start
+        past.setKind(.note)
+        XCTAssertEqual(past.draft?.kind, .note)
+        XCTAssertEqual(past.draft?.start, start)
+        past.setKind(.sleep)                         // 칸에 없는 종류는 받지 않는다
+        XCTAssertEqual(past.draft?.kind, .note)
+        kit.app.recordCare.setSleepDiaper(true)
+        XCTAssertEqual(kit.app.careSheet(.new(.feed, day: nil, chooseKind: true)).kinds, [.feed, .note, .sleep, .diaper])
+        XCTAssertEqual(kit.app.careSheet(.new(.feed, day: nil)).kinds, [])   // 오늘 빠른 기록은 종류 칸이 없다
+        let diaper = kit.app.careSheet(.new(.feed, day: nil, chooseKind: true))
+        diaper.setKind(.diaper)
+        XCTAssertEqual(diaper.draft?.diaper, .wet)   // 새 기저귀는 소변으로 시작
     }
 
     /// 새 기록 id는 시트를 열 때 정한다(안드로이드 sheetId). 저장해 닫히는 사이 또 누른 저장은 아무것도 하지 않고, 실패 뒤 다시 저장해도 같은 기록이다.
@@ -343,18 +501,18 @@ final class ViewModelTests: XCTestCase {
         let id = try XCTUnwrap(sheet.draft?.sheetId)
         sheet.save()
         sheet.save()
-        XCTAssertEqual(sheet.phase, .closed)
+        XCTAssertEqual(sheet.phase, .closed(saved: true))
         XCTAssertEqual(kit.app.care.care.events.filter { $0.kind == .diaper }.map(\.id), [id])
 
         kit.careStore.failing = true
         let note = kit.app.careSheet(.new(.note, day: nil))
         note.edit { $0.note = "메모" }
         note.save()
-        XCTAssertEqual(note.phase, .failed(NoticeRules.saveFailed))
+        XCTAssertEqual(note.phase, .failed(NoticeRules.saveFailed, attempt: 1))
         kit.careStore.failing = false
         note.save()   // 실패 뒤 다시 저장
         note.save()
-        XCTAssertEqual(note.phase, .closed)
+        XCTAssertEqual(note.phase, .closed(saved: true))   // 실패 뒤 다시 저장
         XCTAssertEqual(kit.app.care.care.events.filter { $0.kind == .note }.map(\.id), [note.draft?.sheetId])
     }
 
@@ -374,7 +532,7 @@ final class ViewModelTests: XCTestCase {
         XCTAssertNil(timer.error)
         // 시작을 앞으로 옮기면 R3 글이 시트 안에 보인다
         XCTAssertFalse(timer.setTime(.start, to: kit.clock.addingTimeInterval(3600)))
-        XCTAssertEqual(timer.error, CareProblem.future.message(for: .feed))
+        XCTAssertEqual(timer.error, CareProblem.futureStart.message(for: .feed))
     }
 
     /// 시트를 닫거나 다시 녹음하면 녹음 장치가 그 파일을 지운다(파일 지우기는 SongRecorder 한 곳).

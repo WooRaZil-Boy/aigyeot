@@ -150,15 +150,17 @@ enum CareCoding {
 
 // MARK: 규칙 결과
 
+/// 저장 검사(R3)에 걸린 까닭. 값마다 탓하는 자리가 하나다(U82: 시트는 그 줄을 펼친다, `CareDraft.field(for:)`).
+/// 앞으로의 시각은 시작과 끝을 나눈다: 끝만 미래인데 시작 줄을 탓하면 시작을 고쳐도 풀리지 않았다. 둘 다 미래면 시작이 먼저 걸린다.
 enum CareProblem: Equatable {
-    case future, endBeforeStart, tooLong, amount, noteTooLong
+    case futureStart, futureEnd, endBeforeStart, tooLong, amount, noteTooLong
     /// 같은 종류의 진행 중 기록이 이미 있다(R1). 화면은 이 경우를 만들지 않는다.
     case inProgressExists
 
     /// 7장 문구(U17). 메모는 입력칸이 200자에서 더 받지 않아 문구가 없다.
     func message(for kind: CareKind) -> String? {
         switch self {
-        case .future: return "앞으로의 시각은 적을 수 없어요"
+        case .futureStart, .futureEnd: return "앞으로의 시각은 적을 수 없어요"
         case .endBeforeStart: return "끝 시각이 시작보다 빨라요"
         case .tooLong: return kind == .sleep ? "잠은 16시간까지 적을 수 있어요" : "수유는 3시간까지 적을 수 있어요"
         case .amount: return "0~400ml로 적어 주세요"
@@ -197,6 +199,8 @@ struct CareDayStat: Equatable {
 struct CarePattern: Equatable {
     var days: [CareDayStat]          // 오래된 날 → 오늘, 7개
     var feedIntervalMedianMs: Int64? // 간격이 5개 미만이면 nil(R14)
+    /// 7일 동안 쌓인 수유 간격 수(U85 ③: 5개 미만이면 점 다섯 중 이만큼 채운다).
+    var feedIntervalCount: Int = 0
 
     // U27: 평균은 그 종류 기록이 있는 날만 나눠 센다. 그런 날이 없으면 nil("기록 없음").
     var feedDays: Int { days.filter { $0.feeds > 0 }.count }

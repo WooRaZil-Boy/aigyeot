@@ -11,9 +11,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -44,6 +47,7 @@ import kr.aigyeot.phone.R
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.agoText
 import kr.aigyeot.phone.domain.model.instantOf
+import kr.aigyeot.phone.domain.model.phoneSub
 import kr.aigyeot.shared.Role
 
 /** 위쪽 띠(오프라인·안내·시계 차이, 7.2). 연결 안 됨이면 차와 관계된 띠는 뜻이 없고, 저장 실패 같은 안내만 보인다(U7). */
@@ -103,8 +107,8 @@ fun AlertScreen(onBack: () -> Unit, vm: AlertViewModel = appViewModel()) {
             Block {
                 Badge("차에서 · ${agoText(instantOf(alert.body.occurredAt) ?: alert.receivedAt, System.currentTimeMillis())}", R.drawable.ic_car_front, child = true)
                 Text(alert.body.text, Modifier.padding(top = 10.dp, bottom = 6.dp), style = Type.headline, color = p.textPrimary)
-                alert.body.restName?.let { Text("쉼터: $it", style = Type.body, color = p.textSecondary) }
-                alert.body.minutesToArrival?.let { Text("도착까지 ${it}분", style = Type.body, color = p.textSecondary) }
+                // 이름·값 두 칸(iOS detailRow와 같음, '이름: 값' 콜론 없음)
+                KeyValues(listOfNotNull(alert.body.restName?.let { "쉼터" to it }, alert.body.minutesToArrival?.let { "도착까지" to "${it}분" }))
                 Text(dateTime(alert.body.occurredAt), Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
             }
         }
@@ -130,7 +134,7 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
         if (ui.role == Role.GUARDIAN) {
             Group {
                 SettingRow(
-                    "인계 알림 받기", R.drawable.ic_bell, sub = "아기가 계속 울어 운전자에게 쉬어 가기를 안내할 때 알림을 받아요.",
+                    "인계 알림 받기", R.drawable.ic_bell, sub = "아기가 계속 울면 알려요", // guardian.handoff.sub
                     enabled = !ui.busy,
                     checked = ui.handoffAlerts,
                     onCheckedChange = { on ->
@@ -139,35 +143,44 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
                     },
                 )
             }
+            FootNote("리포트는 알림을 꺼도 받아요") // guardian.handoff.note
         } else {
+            // 보호자 초대(v8b-10 ⑧, contracts-link 7.2): 블록 머리 + 정보 줄 셋. 코드를 만든 뒤에는 코드·기한·QR + 주 단추 '링크로 보내기' + 글자 단추 '새 코드 만들기'.
             Block {
-                Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요.", style = Type.headline, color = p.textPrimary)
-                Text("초대 코드는 24시간 동안 한 번만 쓸 수 있어요. 받는 사람은 수유·노래를 보내지 못해요.", Modifier.padding(top = 6.dp, bottom = 16.dp), style = Type.meta, color = p.textTertiary)
-                if (ui.busy) Text("초대 코드를 만들고 있어요", Modifier.padding(bottom = 8.dp), style = Type.caption, color = p.textTertiary)
-                Btn("초대 코드 만들기", vm::makeInvite, enabled = !ui.busy && ui.online, icon = R.drawable.ic_users)
-                if (!ui.online) Text("인터넷이 필요해요", Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
-            }
-            ui.invite?.let { inv ->
-                Block {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                BlockHeader("다른 보호자 초대")
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    InfoLine(R.drawable.ic_bell, "리포트와 인계 알림을 같이 받아요", plain = true)
+                    InfoLine(R.drawable.ic_clock, "코드는 24시간 동안 한 번만 쓸 수 있어요", plain = true) // '써요'는 시키는 말로 읽혀 '쓸 수 있어요'
+                    InfoLine(R.drawable.ic_lock, "수유 시작과 우리 노래는 보낼 수 없어요", plain = true)
+                }
+                val inv = ui.invite
+                if (inv != null) {
+                    Column(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(inv.display, style = Type.inviteCode, color = p.textPrimary)
-                        Text("${dateTime(inv.expiresAt)}까지", Modifier.padding(bottom = 14.dp), style = Type.caption, color = p.textTertiary)
-                        Box(Modifier.size(220.dp).clip(Radius.control).background(androidx.compose.ui.graphics.Color.White).padding(10.dp).semantics { contentDescription = "초대 QR" }, contentAlignment = Alignment.Center) {
-                            Image(qr(inv.link).asImageBitmap(), null, Modifier.size(200.dp))
-                            AppMark(44.dp, 12.dp)
+                        Text("${dateTime(inv.expiresAt)}까지", Modifier.padding(top = 4.dp, bottom = 16.dp), style = Type.caption, color = p.textTertiary)
+                        Box(Modifier.size(196.dp).clip(Radius.control).background(androidx.compose.ui.graphics.Color.White).padding(10.dp).semantics { contentDescription = "초대 QR" }, contentAlignment = Alignment.Center) {
+                            Image(qr(inv.link).asImageBitmap(), null, Modifier.size(176.dp))
+                            AppMark(40.dp, 11.dp)
                         }
                     }
+                }
+                if (ui.busy) Text("초대 코드를 만들고 있어요", Modifier.padding(top = 16.dp), style = Type.caption, color = p.textTertiary)
+                if (inv != null) {
                     Btn("링크로 보내기", {
                         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
                             .putExtra(Intent.EXTRA_TEXT, "아이곁 초대 코드 ${inv.display}\n${inv.link}")
                         context.startActivity(Intent.createChooser(send, "링크로 보내기"))
-                    }, Modifier.padding(top = 16.dp), kind = BtnKind.TONAL, icon = R.drawable.ic_share)
+                    }, Modifier.padding(top = 20.dp), icon = R.drawable.ic_share)
+                    Btn("새 코드 만들기", vm::makeInvite, Modifier.padding(top = 4.dp), kind = BtnKind.TEXT, enabled = !ui.busy && ui.online)
+                } else {
+                    Btn("초대 코드 만들기", vm::makeInvite, Modifier.padding(top = 20.dp), enabled = !ui.busy && ui.online, icon = R.drawable.ic_users)
                 }
+                if (!ui.online) Text("인터넷이 필요해요", Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
             }
-            if (ui.phones.isNotEmpty()) ListBlock {
+            if (ui.phones.isNotEmpty()) ListBlock("연결된 휴대폰") {
                 for (d in ui.phones) ListRow(
                     if (d.role == Role.OWNER) "함께 타는 보호자" else "다른 보호자",
-                    if (d.deviceId == ui.myDeviceId) "이 휴대폰" else d.platform.name.lowercase(),
+                    phoneSub(d, ui.myDeviceId),
                     icon = if (d.role == Role.OWNER) R.drawable.ic_car_front else R.drawable.ic_smartphone,
                 )
             }

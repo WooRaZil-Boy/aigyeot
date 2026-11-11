@@ -7,6 +7,8 @@ import java.util.Locale
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.resultText
+import kr.aigyeot.phone.domain.model.episodeHead
 import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.FeedGap
 import kr.aigyeot.phone.domain.model.MINUTE
@@ -111,6 +113,22 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
     return DayChartData(lanes, nowMin)
 }
 
+/** U88 오늘 하루 띠 새 표시: 막 저장한 기록이 그날 띠의 어느 줄·어느 분에 있는지(iOS `ChartData.Fresh`). */
+data class DayFresh(val id: String, val lane: LaneKind, val at: Int)
+
+/** 그날 시작한 수유·잠·기저귀면 그 줄·분. 메모(띠에 줄이 없음)·다른 날이면 null(iOS `ChartData.fresh`와 같은 규칙). */
+fun dayFresh(e: CareEvent, day: LocalDate, zone: ZoneId): DayFresh? {
+    val (from, to) = dayBounds(day, zone)
+    if (e.startAt !in from until to) return null
+    val lane = when (e.kind) {
+        CareKind.FEED -> LaneKind.FEED
+        CareKind.SLEEP -> LaneKind.SLEEP
+        CareKind.DIAPER -> LaneKind.DIAPER
+        CareKind.NOTE -> return null
+    }
+    return DayFresh(e.id, lane, minuteIn(e.startAt, from))
+}
+
 /** 7일 막대 하나. 값이 없으면 null(막대 없음). */
 data class WeekBar(val day: LocalDate, val label: String, val value: Long?, val tip: String?)
 
@@ -183,9 +201,12 @@ fun sleepGrid(care: CareFile, now: Long, zone: ZoneId): SleepGrid {
 
 /**
  * 에피소드 띠(시안 Charts.episode). 초는 감지(에피소드 시작)부터. 시간축 표시([marks])는 시각을 아는 것만(시작, 자동 2차 시작),
- * 결과(쉼터 제안·그쳤어요)는 리포트에 그 시각이 없어 축 밖 [outcomes]로 둔다(마지막 재생 끝에 찍으면 거짓 시각이 된다).
+ * 결과(쉼터 제안·그침)는 리포트에 그 시각이 없어 축 밖 [outcomes]로 둔다(마지막 재생 끝에 찍으면 거짓 시각이 된다).
  */
-data class EpisodeBand(val sounds: List<EpisodeSeg>, val marks: List<EpisodeMarkAt>, val startAt: Long?, val outcomes: List<String> = emptyList()) {
+data class EpisodeBand(val sounds: List<EpisodeSeg>, val marks: List<EpisodeMarkAt>, val startAt: Long?, val outcomes: List<String> = emptyList(), val head: String = "울음") {
+    /** 화면 읽기 한 줄: 머리([episodeHead], trigger로 정함) + 재생·표시·결과. 소리 바꾸기 요청 에피소드를 '울음'으로 읽지 않는다. */
+    val summary: String get() = "$head: " + (sounds.map { it.tip } + marks.map { it.label } + outcomes).joinToString(", ")
+
     /**
      * 재생 사이 칸(P4: 소리 구간에서 계산, 이름 없음). [sounds]는 시작 순서다. 그 사이 통화 등으로 판정을 멈췄을 수도 있고 리포트에는 그 사실을 알 칸이 없어
      * '듣기 틈'이라 단정하지 않는다(차 리포트 soundTip과 같은 규칙, 시안 charts.js의 '듣기 틈' 라벨과 다르게 한 곳).
@@ -233,9 +254,9 @@ fun episodeBand(e: TimelineEpisode, songs: List<SongEntry>): EpisodeBand {
     val outcomes = buildList {
         // 운전자에게 실제로 묻지 못한 쉼터는 제안했다고 보이지 않는다(U53, stopText·stopNoticeCount와 같은 규칙).
         if (e.stop?.let { it.mode == HandoffKind.REST_OFFER && it.toldDriver != false } == true) add("쉼터 제안")
-        if (e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS) add("그쳤어요")
+        if (e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS) add(resultText(EpisodeResult.SUCCESS))
     }
-    return EpisodeBand(plays, marks, t0, outcomes)
+    return EpisodeBand(plays, marks, t0, outcomes, head = episodeHead(e.trigger))
 }
 
 /** 리포트 숫자 줄(결정 6). [cryS]는 울음 시간 합(그친 시각은 리포트에 없어 '그칠 때까지'로 쓰지 않는다). */
@@ -276,7 +297,7 @@ fun feedMeter(last: Long, now: Long, carLast: Long?, windowStart: Long?, usualMs
 }
 
 /**
- * '지난주보다 {n}회 많아요/적어요'(문구표 design.chart, 시안 S.pattern): 지난 7일 하루 평균 수유 − 그 앞 7일 하루 평균.
+ * '지난주보다 {n}번 많아요/적어요'(문구표 design.chart, 시안 S.pattern): 지난 7일 하루 평균 수유 − 그 앞 7일 하루 평균.
  * 평균은 패턴과 같은 규칙(그날 시작한 수유 수를 수유한 날 수로 나눔, 소수 첫째 자리). 앞 7일에 수유한 날이 없거나 차이가 0.0이면 null.
  */
 fun feedTrend(care: CareFile, now: Long, zone: ZoneId): String? {
@@ -287,7 +308,7 @@ fun feedTrend(care: CareFile, now: Long, zone: ZoneId): String? {
     val n = String.format(Locale.ROOT, "%.1f", kotlin.math.abs(d))
     return when {
         n == "0.0" -> null
-        d > 0 -> "지난주보다 ${n}회 많아요"
-        else -> "지난주보다 ${n}회 적어요"
+        d > 0 -> "지난주보다 ${n}번 많아요"
+        else -> "지난주보다 ${n}번 적어요"
     }
 }

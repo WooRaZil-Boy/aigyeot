@@ -144,6 +144,8 @@ private extension GraphicsContext {
 /// 줄마다 위에 '이름 · 합계', 그 아래 0~24시 회색 트랙에 표시. 지금 뒤는 흐리게, 지금 선은 모든 줄을 가로지른다.
 private struct DayBandChartBody: View {
     let data: ChartData.Day
+    var fresh: ChartData.Fresh? = nil
+    var freshDone: () -> Void = {}
     @ScaledMetric(relativeTo: .footnote) private var fs: CGFloat = 13
     @State private var t: Double = 0
 
@@ -167,6 +169,16 @@ private struct DayBandChartBody: View {
         .frame(height: height)
         .mask(alignment: .leading) { GeometryReader { g in Rectangle().frame(width: g.size.width * t) } }
         .modifier(Appear(animation: revealCurve, t: $t))
+        .overlay {
+            // U88: 시트로 막 저장한 기록의 표시가 '톡' 하고 고리가 1.2초 퍼진다(띠 줄이 없으면 그리지 않고 걷지도 않는다)
+            if let f = fresh, let i = data.lanes.firstIndex(where: { $0.kind == f.lane }) {
+                GeometryReader { g in
+                    FreshPulse(color: color(f.lane), dot: th * 0.6, done: freshDone)
+                        .position(x: x(f.at, g.size.width), y: trY(i) + th / 2)
+                }
+                .id(f)
+            }
+        }
         .accessibilityElement()
         .accessibilityLabel(data.summary)
     }
@@ -455,7 +467,7 @@ struct MethodDots: View {
                     if typeSize.isAccessibilitySize { stacked(m, known: known, base: base) } else {
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 12) {
-                                WidthIn(lo: 80, hi: 144) { name(m, known: known) }   // 긴 부모 노래 이름은 줄을 바꾸고 점·횟수 자리를 남긴다(안드로이드 widthIn 80~144)
+                                WidthIn(lo: 80, hi: 144) { name(m, known: known) }   // 긴 우리 노래 이름은 줄을 바꾸고 점·횟수 자리를 남긴다(안드로이드 widthIn 80~144)
                                 dots(m, known: known, base: base)
                                 Spacer(minLength: 4)
                                 value(m, known: known)
@@ -529,7 +541,44 @@ struct MethodDots: View {
 
 struct DayBandChart: View {
     let data: ChartData.Day
-    var body: some View { DayBandChartBody(data: data).dynamicTypeSize(...DynamicTypeSize.xxLarge) }
+    /// 시트로 막 저장한 기록의 자리(U88 새 표시)와 표시를 마친 뒤 걷기.
+    var fresh: ChartData.Fresh? = nil
+    var freshDone: () -> Void = {}
+    var body: some View { DayBandChartBody(data: data, fresh: fresh, freshDone: freshDone).dynamicTypeSize(...DynamicTypeSize.xxLarge) }
+}
+
+/// U88 새 표시: 시트가 닫힌 뒤(320ms) 표시 점이 톡(1 → 1.5 → 1, spring.bouncy) 하고 같은 색 고리가 1.2초 동안 퍼지며 사라진다.
+/// 동작 줄이기면 움직이지 않고 바로 걷는다(고리 퍼짐 없음).
+private struct FreshPulse: View {
+    let color: Color
+    let dot: CGFloat
+    let done: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var on = false
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(color, lineWidth: 2).frame(width: dot, height: dot)
+                .scaleEffect(on ? 3 : 1).opacity(on ? 0 : 0.6)
+                .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 1.2), value: on)
+            Circle().fill(color).frame(width: dot, height: dot)
+                .keyframeAnimator(initialValue: CGFloat(1), trigger: on) { v, s in v.scaleEffect(s) } keyframes: { _ in
+                    SpringKeyframe(1.5, duration: 0.14)
+                    SpringKeyframe(1, duration: 0.4, spring: .bouncy)
+                }
+        }
+        .opacity(on || !reduceMotion ? 1 : 0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .task {
+            guard !reduceMotion else { done(); return }
+            try? await Task.sleep(for: .milliseconds(340))   // 시트가 닫힌 뒤에 보이게
+            guard !Task.isCancelled else { return }
+            on = true
+            try? await Task.sleep(for: .seconds(1.2))
+            if !Task.isCancelled { done() }
+        }
+    }
 }
 
 struct WeekBarsChart: View {

@@ -85,9 +85,9 @@ final class ChartDataTests: XCTestCase {
     }
 
     func test_방법별_성적은_판정할_수_있는_것_먼저_그친_비율_높은_순이다() {
-        let stats = [MethodStat(method: .whiteNoise, label: "백색소음", successes: 2, attempts: 6), MethodStat(method: .parentSong, label: "부모 노래", successes: 0, attempts: 2),
+        let stats = [MethodStat(method: .whiteNoise, label: "백색소음", successes: 2, attempts: 6), MethodStat(method: .parentSong, label: "우리 노래", successes: 0, attempts: 2),
                      MethodStat(method: .lullaby, label: "자장가", successes: 6, attempts: 7), MethodStat(method: .womb, label: "뱃속 소리", successes: 3, attempts: 4)]
-        XCTAssertEqual(methodDotRows(stats).map(\.name), ["자장가", "뱃속 소리", "백색소음", "부모 노래"])
+        XCTAssertEqual(methodDotRows(stats).map(\.name), ["자장가", "뱃속 소리", "백색소음", "우리 노래"])
         // 차가 보낸 값이 음수·뒤집혀도 점 범위가 깨지지 않는다
         let odd = MethodDots.Row(id: 0, name: "x", ok: 5, n: -1)
         XCTAssertEqual([odd.n, odd.ok], [0, 0])
@@ -192,6 +192,21 @@ final class ChartDataTests: XCTestCase {
         XCTAssertFalse((b.gaps + b.sounds).contains { $0.tip.contains("듣기") })
     }
 
+    /// 3회차 검토: 띠 읽기 이름 머리는 에피소드를 연 사건이다. 소리 바꾸기 요청 에피소드를 '울음'이라 읽지 않는다(차 앱 episodeHead와 같은 낱말).
+    func test_소리_바꾸기_요청_에피소드의_띠_읽기_이름은_울음이_아니다() throws {
+        var e = try report().timeline[0]
+        let t0 = at(13, 24)
+        e.startedAt = iso(t0)
+        e.plays = [PlayEntry(purpose: .request, method: .whiteNoise, songId: nil, startedAt: iso(t0 + 1000), endedAt: iso(t0 + 11_000), playS: 10)]
+        e.trigger = .switchSound
+        let b = ChartData.episode(e, playName: { _ in "백색소음" })
+        XCTAssertTrue(ChartData.episodeSummary(e, b).hasPrefix("소리 바꾸기 요청: "))
+        XCTAssertFalse(ChartData.episodeSummary(e, b).hasPrefix("울음"))
+        e.trigger = .cryAlarm
+        XCTAssertTrue(ChartData.episodeSummary(e, ChartData.episode(e, playName: { _ in "백색소음" })).hasPrefix("울음: "))
+        XCTAssertEqual([CareText.episodeStart(.cryAlarm), CareText.episodeStart(.switchSound)], ["울음 감지", "소리 바꾸기 요청"])   // 부제 '{시각} … 부터'
+    }
+
     func test_에피소드_띠는_재생_구간과_재생_사이와_표시를_리포트에서_만든다() throws {
         var e = try report().timeline[0]
         let t0 = at(13, 24)
@@ -213,7 +228,7 @@ final class ChartDataTests: XCTestCase {
         XCTAssertEqual(b.totalS, 122)
         // 시간축에는 시각을 아는 것만(시작·자동 2차 시작), 결과는 축 밖.
         XCTAssertEqual(b.marks, [.init(at: 0, label: "감지 2.4초"), .init(at: 66, label: "다시 울음")])
-        XCTAssertEqual(b.outcomes, ["그쳤어요"])
+        XCTAssertEqual(b.outcomes, ["그침"])
         // 다시 울음은 자동 2차 재생의 시작이다(운전자 요청 재생이면 표시하지 않는다).
         var req = e
         req.plays[1].purpose = .request
@@ -266,15 +281,28 @@ final class ChartDataTests: XCTestCase {
         care.events = feeds(0, 8) + feeds(1, 7)   // 평균 7.5
         XCTAssertNil(ChartData.feedTrend(care: care, now: now, zone: zone))   // 앞 주 기록 없음
         care.events += feeds(7, 7) + feeds(8, 7)   // 앞 주 평균 7.0
-        XCTAssertEqual(ChartData.feedTrend(care: care, now: now, zone: zone), "지난주보다 0.5회 많아요")
+        XCTAssertEqual(ChartData.feedTrend(care: care, now: now, zone: zone), "지난주보다 0.5번 많아요")
         care.events += feeds(9, 9)   // 앞 주 평균 (7+7+9)/3 = 7.67
-        XCTAssertEqual(ChartData.feedTrend(care: care, now: now, zone: zone), "지난주보다 0.2회 적어요")
+        XCTAssertEqual(ChartData.feedTrend(care: care, now: now, zone: zone), "지난주보다 0.2번 적어요")
         // 정확히 반인 차이(7.25 − 7)는 안드로이드 %.1f(HALF_UP)처럼 올린다
         var quarter = CareFile()
         quarter.events = feeds(0, 8) + feeds(1, 7) + feeds(2, 7) + feeds(3, 7) + feeds(7, 7)   // 평균 29/4 = 7.25, 앞 주 7
-        XCTAssertEqual(ChartData.feedTrend(care: quarter, now: now, zone: zone), "지난주보다 0.3회 많아요")
+        XCTAssertEqual(ChartData.feedTrend(care: quarter, now: now, zone: zone), "지난주보다 0.3번 많아요")
         XCTAssertEqual(ChartData.seconds(2.25), "2.3초")
         XCTAssertEqual(ChartData.seconds(2.05), "2.1초")   // 자바는 가장 짧은 십진 표기 2.05를 올린다(printf는 2.0)
         XCTAssertEqual(CareText.oneDecimal(7.0), "7.0")
+    }
+
+    /// U88: 오늘 하루 띠의 새 표시는 그 기록 종류의 줄과 그날 시작 분이다. 메모(띠 줄 없음)·다른 날은 없다.
+    func test_오늘_하루_띠_새_표시는_그날_줄과_분이다() {
+        let z = TimeZone(identifier: "Asia/Seoul")!
+        func ev(_ k: CareKind, _ s: String) -> CareEvent {
+            CareEvent(id: "EXAMPLE-\(k.rawValue)", kind: k, startAt: CareTime.ms(Rfc3339.parse(s)!), zone: "Asia/Seoul", createdAt: 0, updatedAt: 0)
+        }
+        XCTAssertEqual(ChartData.fresh(ev(.feed, "2026-11-11T14:13:00+09:00"), day: "2026-11-11", zone: z), .init(id: "EXAMPLE-FEED", lane: .feed, at: 14 * 60 + 13))
+        XCTAssertEqual(ChartData.fresh(ev(.diaper, "2026-11-11T00:05:00+09:00"), day: "2026-11-11", zone: z)?.lane, .diaper)
+        XCTAssertEqual(ChartData.fresh(ev(.sleep, "2026-11-11T09:00:00+09:00"), day: "2026-11-11", zone: z)?.at, 540)
+        XCTAssertNil(ChartData.fresh(ev(.note, "2026-11-11T14:13:00+09:00"), day: "2026-11-11", zone: z))
+        XCTAssertNil(ChartData.fresh(ev(.feed, "2026-11-10T23:50:00+09:00"), day: "2026-11-11", zone: z))
     }
 }

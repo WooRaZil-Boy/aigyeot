@@ -51,6 +51,41 @@ class ChartDataTest {
     private fun iso(ms: Long) = Instant.ofEpochMilli(ms).atZone(zone).toOffsetDateTime().toString()
 
     @Test
+    fun `오늘 하루 띠 새 표시는 막 저장한 기록의 줄과 분이다`() {
+        // U88(iOS ChartData.fresh와 같은 규칙): 그날 시작한 수유·잠·기저귀만, 메모와 다른 날은 없다.
+        assertEquals(DayFresh("f", LaneKind.FEED, 9 * 60), dayFresh(ev(CareKind.FEED, at(9)).copy(id = "f"), today, zone))
+        assertEquals(LaneKind.DIAPER, dayFresh(ev(CareKind.DIAPER, at(11)), today, zone)?.lane)
+        assertNull(dayFresh(ev(CareKind.NOTE, at(9)), today, zone))
+        assertNull(dayFresh(ev(CareKind.FEED, at(9, day = today.minusDays(1))), today, zone))
+    }
+
+    @Test
+    fun `빈 날에는 가운데 지난 기록 적기 하나만 보인다`() {
+        // 고른 날의 줄이 비면 DayView는 빈 상태 판(달력 고리 + '이 날 기록이 없어요' + '＋ 지난 기록 적기')만 그리고 목록 끝 줄은 숨긴다(U85 ①, 그림은 캡처로 확인).
+        val yesterday = today.minusDays(1)
+        val car = kr.aigyeot.phone.domain.model.CarLine("EXAMPLE-S", null, at(9), at(10), null, null)
+        val care = CareFile(events = listOf(ev(CareKind.FEED, at(8, day = yesterday), deleted = true), ev(CareKind.NOTE, at(11))))
+        assertTrue(dayRows(care, listOf(car), yesterday, zone).isEmpty()) // 지운 기록만 있는 날은 빈 날
+        val rows = dayRows(care, listOf(car), today, zone)
+        assertEquals(listOf(at(11), at(9)), rows.map { it.first }) // 손 기록·차 기록이 있으면 새 것이 위인 목록(끝에 '지난 기록 적기' 줄)
+    }
+
+    @Test
+    fun `수유 간격이 5개 미만이면 쌓인 수만 점으로 보인다`() {
+        // 간격 3개(1h씩): 보통 간격은 없고 점 다섯 중 셋을 채운다(U85 ③, 7.1 pattern.intervalProgress).
+        val few = CareFile(events = (0..3).map { ev(CareKind.FEED, at(8 + it)) })
+        val p3 = carePattern(few, emptyList(), now, zone)
+        assertNull(p3.feedIntervalMs)
+        assertEquals(3, p3.feedIntervalCount)
+        assertEquals("수유 간격 5개 중 3개 쌓임", p3.intervalProgress)
+        assertEquals("수유 간격 5개 중 0개 쌓임", carePattern(CareFile(), emptyList(), now, zone).intervalProgress)
+        // 5개가 되면 보통 간격이 보이고 점은 그리지 않는다.
+        val five = CareFile(events = (0..5).map { ev(CareKind.FEED, at(8 + it)) })
+        assertEquals(HOUR, carePattern(five, emptyList(), now, zone).feedIntervalMs)
+        assertNull(carePattern(five, emptyList(), now, zone).intervalProgress)
+    }
+
+    @Test
     fun `차트 안 시각은 24시간제 HH MM이다`() {
         assertEquals("00:00", hhmm(0))
         assertEquals("14:13", hhmm(14 * 60 + 13))
@@ -175,6 +210,36 @@ class ChartDataTest {
     }
 
     @Test
+    fun `소리 바꾸기 요청 에피소드의 띠 읽기 이름은 울음이 아니다`() {
+        // 읽기 이름 머리는 trigger로 정한다(episodeHead, 차 앱과 같은 이름·낱말): 울음 경보는 '울음', 소리 바꾸기 요청은 그 이름.
+        val e = report().timeline.first()
+        assertTrue(episodeBand(e, emptyList()).summary.startsWith("울음: "))
+        val switched = episodeBand(e.copy(trigger = EpisodeTrigger.SWITCH_SOUND), emptyList()).summary
+        assertTrue(switched, switched.startsWith("소리 바꾸기 요청: "))
+        assertTrue(switched, !switched.startsWith("울음"))
+    }
+
+    @Test
+    fun `리포트 결과와 뺀 이유는 정해진 낱말로 보인다`() {
+        // U73(차·두 앱 같은 글자): 결과는 명사형, 뺀 이유는 열거 이름을 보이지 않는다. 줄은 '이름 · 값' 두 칸(콜론 없음).
+        assertEquals(listOf("그침", "계속 울음", "판정하지 못함", "1차 시도 없음"), listOf(EpisodeResult.SUCCESS, EpisodeResult.FAILURE, EpisodeResult.UNDETERMINED, null).map { kr.aigyeot.phone.domain.model.resultText(it) })
+        val reasons = kr.aigyeot.shared.ExcludedReason.entries.associateWith { kr.aigyeot.phone.domain.model.excludedText(it) }
+        assertEquals("마이크 오류", reasons[kr.aigyeot.shared.ExcludedReason.MIC_ERROR])
+        assertEquals("달래기 20분 끝남", reasons[kr.aigyeot.shared.ExcludedReason.SESSION_CAP])
+        assertEquals("탑승이 끝남", reasons[kr.aigyeot.shared.ExcludedReason.SESSION_END])
+        assertEquals("차가 절전에 들어감", reasons[kr.aigyeot.shared.ExcludedReason.SUSPEND])
+        assertTrue(reasons.values.none { it.any { c -> c in 'a'..'z' || c == '_' } }) // 'mic_error' 같은 열거 이름이 화면에 나오지 않는다
+        val e = report().timeline.first().copy(result = EpisodeResult.FAILURE, excludedReason = kr.aigyeot.shared.ExcludedReason.INPUT_SILENCED, recried = true, second = null, stop = null, totalCryS = 75)
+        val names = (episodeSoundLines(emptyList(), e) + episodeResultLines(emptyList(), e)).map { it.first }
+        assertEquals(listOf("감지까지", "소리", "재생", "결과", "성적에서 뺌", "다시 울음", "울음 시간"), names)
+        assertEquals(listOf("결과" to "계속 울음", "성적에서 뺌" to "마이크 입력이 막힘", "다시 울음" to "있음", "울음 시간" to "1분 15초"), episodeResultLines(emptyList(), e))
+        assertTrue((episodeSoundLines(emptyList(), e) + episodeResultLines(emptyList(), e)).none { ":" in it.first || ":" in it.second })
+        // 소리 바꾸기 요청으로 연 울음은 '감지까지'가 없고, 틀지 않았으면 소리 '재생 없음'이고 '재생' 줄은 없다(같은 말 두 번 금지).
+        assertTrue(episodeSoundLines(emptyList(), e.copy(sound = null, playS = 0)).none { it.first == "재생" })
+        assertEquals("재생 없음", episodeSoundLines(emptyList(), e.copy(trigger = EpisodeTrigger.SWITCH_SOUND, sound = null)).let { l -> assertTrue(l.none { it.first == "감지까지" }); l.first { it.first == "소리" }.second })
+    }
+
+    @Test
     fun `하루 띠는 같은 분 안에 끝난 기록에도 길이를 붙인다`() {
         // 12:00:10~12:00:50 잠: 분 칸은 12:00–12:00이어도 기록 시각 차이(40초)가 있으니 기록 목록과 같은 "1분 미만"을 붙인다.
         val e = CareEvent("s", CareKind.SLEEP, at(12, 0) + 10_000, endAt = at(12, 0) + 50_000, zone = zone.id, createdAt = now, updatedAt = now)
@@ -224,7 +289,7 @@ class ChartDataTest {
         assertEquals(122, b.totalS)
         // 시간축에는 시각을 아는 것만(시작·자동 2차 시작), 결과는 축 밖.
         assertEquals(listOf(EpisodeMarkAt(0, "감지 2.4초"), EpisodeMarkAt(66, "다시 울음")), b.marks)
-        assertEquals(listOf("그쳤어요"), b.outcomes)
+        assertEquals(listOf("그침"), b.outcomes)
         // 다시 울음은 자동 2차 재생의 시작이다(운전자 요청 재생이면 표시하지 않는다).
         val req = e.copy(plays = e.plays.mapIndexed { i, p -> if (i == 1) p.copy(purpose = PlayPurpose.REQUEST) else p })
         assertTrue(episodeBand(req, emptyList()).marks.none { it.label == "다시 울음" })
@@ -272,11 +337,11 @@ class ChartDataTest {
         val thisWeek = feeds(0, 8) + feeds(1, 7) // 평균 7.5
         assertNull(feedTrend(CareFile(events = thisWeek), now, zone))
         val prev = feeds(7, 7) + feeds(8, 7) // 평균 7.0
-        assertEquals("지난주보다 0.5회 많아요", feedTrend(CareFile(events = thisWeek + prev), now, zone))
-        assertEquals("지난주보다 0.5회 적어요", feedTrend(CareFile(events = feeds(0, 7) + feeds(1, 7) + feeds(7, 8) + feeds(8, 7)), now, zone))
+        assertEquals("지난주보다 0.5번 많아요", feedTrend(CareFile(events = thisWeek + prev), now, zone))
+        assertEquals("지난주보다 0.5번 적어요", feedTrend(CareFile(events = feeds(0, 7) + feeds(1, 7) + feeds(7, 8) + feeds(8, 7)), now, zone))
         assertNull(feedTrend(CareFile(events = feeds(0, 7) + feeds(7, 7)), now, zone))
         // 평균끼리 뺀 뒤 반올림: 이번 주 7일 8번(8/7 ≈ 1.14) vs 앞 주 6일 7번(7/6 ≈ 1.17) → −0.02 → 0.0이라 없다.
-        // (반올림한 뒤 빼면 1.1 − 1.2로 '0.1회 적어요'가 잘못 나온다.)
+        // (반올림한 뒤 빼면 1.1 − 1.2로 '0.1번 적어요'가 잘못 나온다.)
         val a = (1..6).flatMap { feeds(it, 1) } + feeds(0, 2)
         val b = feeds(7, 2) + (8..12).flatMap { feeds(it, 1) }
         assertNull(feedTrend(CareFile(events = a + b), now, zone))

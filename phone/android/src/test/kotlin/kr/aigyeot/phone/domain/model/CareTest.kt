@@ -124,8 +124,8 @@ class CareTest {
         val f = CareFile()
         fun p(e: CareEvent) = e.problem(now)
         assertNull(p(feed("a", now + MINUTE)))
-        assertEquals(CareProblem.FUTURE, p(feed("a", now + MINUTE + 1)))
-        assertEquals(CareProblem.FUTURE, p(feed("a", now - HOUR, now + MINUTE + 1)))
+        assertEquals(CareProblem.FUTURE_START, p(feed("a", now + MINUTE + 1)))
+        assertEquals(CareProblem.FUTURE_END, p(feed("a", now - HOUR, now + MINUTE + 1)))
         assertNull(p(feed("a", now - HOUR, now - HOUR))) // 끝 = 시작은 된다
         assertEquals(CareProblem.END_BEFORE_START, p(feed("a", now - HOUR, now - HOUR - 1)))
         assertNull(p(feed("a", now - 3 * HOUR, now)))
@@ -141,7 +141,7 @@ class CareTest {
         assertEquals(CareProblem.NOTE_TOO_LONG, p(ev("n", CareKind.NOTE, now, note = "👶".repeat(201))))
         assertEquals(CareProblem.NOTE_TOO_LONG, p(ev("n", CareKind.NOTE, now, note = "가".repeat(201))))
         // 저장 거부: 파일은 그대로.
-        assertEquals("앞으로의 시각은 적을 수 없어요", problemText(CareProblem.FUTURE, CareKind.FEED))
+        assertEquals("앞으로의 시각은 적을 수 없어요", problemText(CareProblem.FUTURE_END, CareKind.FEED))
         assertEquals("잠은 16시간까지 적을 수 있어요", problemText(CareProblem.TOO_LONG, CareKind.SLEEP))
         assertNull(f.upsert(feed("a", now + 2 * MINUTE), now))
         assertNull(f.upsert(feed("a", now - 4 * HOUR, now), now))
@@ -440,9 +440,9 @@ class CareTest {
         assertEquals(listOf(0, 0, 0, 0, 0, 2, 3), p4.feedsPerDay)
         // U27: 평균은 그 종류 기록이 있는 날만 나눠 센다(5개 ÷ 2일). 기록한 날이 없으면 "기록 없음"이고 "n일 기준"은 보이지 않는다.
         assertEquals(2, p4.feedDays)
-        assertEquals("평균 2.5회", avgCountText(p4.feedsPerDay))
+        assertEquals("평균 2.5번", avgCountText(p4.feedsPerDay))
         assertEquals("2일 기준", daysText(p4.feedDays))
-        assertEquals("평균 3.0회", avgCountText(listOf(0, 3, 3)))
+        assertEquals("평균 3.0번", avgCountText(listOf(0, 3, 3)))
         assertEquals("기록 없음", avgCountText(List(7) { 0 }))
         assertNull(daysText(0))
         assertNull(p4.feedIntervalMs) // 쓸 간격 3개(3h, 2h, 2h30m): 5개 미만
@@ -506,7 +506,7 @@ class CareTest {
         assertEquals(2, cross.sleepDays)
         assertEquals("평균 1시간 30분", avgDurationText(cross.sleepPerDayMs!!))
         assertEquals("평균 1시간", avgDurationText(on.sleepPerDayMs))
-        assertEquals("평균 1.0회", avgCountText(on.diapersPerDay!!))
+        assertEquals("평균 1.0번", avgCountText(on.diapersPerDay!!))
         assertEquals(0, off.sleepDays + carePattern(CareFile(sleepDiaperEnabled = true), emptyList(), now, seoul).sleepDays)
         assertEquals("기록 없음", avgDurationText(List(7) { 0L }))
         assertEquals(1, on.diapersPerDay!!.last())
@@ -525,16 +525,16 @@ class CareTest {
         assertTrue(drive.isDrive)
         assertEquals(report.sessionId, drive.sessionId)
         assertEquals("탑승 · 오전 8:00–8:42", drive.text(seoul))
-        assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 그쳤어요", lines[1].text(seoul)) // U37: 한 줄에 시각
+        assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 그침", lines[1].text(seoul)) // U37: 한 줄에 시각
         assertEquals(instantOf("2026-11-05T08:05:12+09:00"), lines[1].startAt)
         // 리포트에 없는 값은 칸째 뺀다. 결과 글자는 리포트 값만 옮긴다.
         val ep = report.timeline.single()
         val none = carLines(listOf(report.copy(timeline = listOf(ep.copy(sound = null, result = null)))))[1]
         assertEquals("차에서 울음 · 오전 8:05", none.text(seoul))
         val failed = carLines(listOf(report.copy(timeline = listOf(ep.copy(result = kr.aigyeot.shared.EpisodeResult.FAILURE)))))[1]
-        assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 계속 울었어요", failed.text(seoul))
+        assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 계속 울음", failed.text(seoul))
         val unknown = carLines(listOf(report.copy(timeline = listOf(ep.copy(sound = kr.aigyeot.shared.SoundRef(kr.aigyeot.shared.SoundMethod.WHITE_NOISE, "x"), result = kr.aigyeot.shared.EpisodeResult.UNDETERMINED)))))[1]
-        assertEquals("차에서 울음 · 오전 8:05 · 백색소음 · 알 수 없음", unknown.text(seoul))
+        assertEquals("차에서 울음 · 오전 8:05 · 백색소음 · 판정하지 못함", unknown.text(seoul))
         // 소리 바꾸기 요청으로 시작한 에피소드는 '울음' 줄로 만들지 않는다(11-05 결정).
         val switched = report.copy(timeline = listOf(ep, ep.copy(episodeId = "e2", trigger = kr.aigyeot.shared.EpisodeTrigger.SWITCH_SOUND)))
         assertEquals(listOf(null, ep.episodeId), carLines(listOf(switched)).map { it.episodeId })
@@ -547,7 +547,7 @@ class CareTest {
         assertEquals("11월 5일(목) 오전 8:00–8:42", reportRowTitle(report, seoul))
         assertEquals("11월 5일(목)", reportDate(report, seoul))
         assertEquals("울음 1번", reportRowSub(switched))
-        assertEquals("울음 기록 없음 · 시뮬레이션", reportRowSub(report.copy(timeline = emptyList(), simulated = true)))
+        assertEquals("울음 기록 없음 · 연습 장면", reportRowSub(report.copy(timeline = emptyList(), simulated = true)))
         assertEquals("11월 5일(목) 오후 11:50–오전 12:20", reportRowTitle(report.copy(startedAt = "2026-11-05T23:50:00+09:00", endedAt = "2026-11-06T00:20:00+09:00"), seoul))
         assertEquals("오전 3:04–3:05", reportSpan("2026-11-06T03:04:10+09:00", "2026-11-06T03:05:00+09:00", seoul)) // 재생 줄
         assertEquals("오전 3:04", reportSpan("2026-11-06T03:04:10+09:00", "bad", seoul))

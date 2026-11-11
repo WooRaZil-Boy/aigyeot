@@ -17,6 +17,8 @@ final class Notices {
     private(set) var banner: String?
     /// 되돌리기 띠('지웠어요'·'기록 n건을 가져왔어요' + '되돌리기', U38·U64). 띄우고 걷는 것은 RecordCare가 한다(5초 한 곳).
     private(set) var undo: CareUndo?
+    /// 기록 시트로 막 저장한 기록 id(U88 새 줄 강조). 기록 탭 줄이 한 번 강조하고 걷는다.
+    private(set) var fresh: String?
 
     func addLine(_ line: String) { notice = NoticeRules.adding(line, to: notice) }
     func saveFailed() { addLine(NoticeRules.saveFailed) }
@@ -33,6 +35,8 @@ final class Notices {
     /// `alertId`를 주면 그 배너가 아직 떠 있을 때만 걷는다(그사이 새 배너가 떴으면 둔다, 8초 닫힘).
     func clearBanner(_ alertId: String? = nil) { if alertId == nil || banner == alertId { banner = nil } }
     func showUndo(_ u: CareUndo) { undo = u }
+    func markFresh(_ id: String) { fresh = id }
+    func clearFresh(_ id: String) { if fresh == id { fresh = nil } }
     func clearUndo() { undo = nil }
 }
 

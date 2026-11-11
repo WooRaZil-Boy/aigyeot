@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareCsv
 import kr.aigyeot.phone.domain.model.CareDraft
+import kr.aigyeot.phone.domain.model.CareProblem
 import kr.aigyeot.phone.domain.model.latestPick
 import kr.aigyeot.phone.domain.model.toggleSide
 import kr.aigyeot.phone.domain.model.setStart
@@ -119,6 +120,10 @@ class TodayViewModel(
     fun start(kind: CareKind) = recordCare.start(kind)
     fun clearCareNotice() = notices.clearCare()
 
+    /** 막 저장한 기록 id(U88 하루 띠 새 표시). 띠가 보인 뒤 걷는다. */
+    val fresh: StateFlow<String?> = notices.fresh
+    fun clearFresh(id: String) = notices.clearFresh(id)
+
     /** 알림 권한은 처음 타이머를 시작할 때 한 번만 묻는다(9장). */
     fun takeNotificationAsk() = lifecycle.takeNotificationAsk()
     fun refreshOngoingNotice() = lifecycle.refreshOngoingNotice()
@@ -147,6 +152,9 @@ class TimerViewModel(
     private val _phase = MutableStateFlow<CareSheetViewModel.Phase>(CareSheetViewModel.Phase.Editing)
     val phase: StateFlow<CareSheetViewModel.Phase> = _phase.asStateFlow()
 
+    /** 실패 번호(시트와 같은 규칙): 같은 오류가 다시 나도 새 값을 낸다. */
+    private var failures = 0
+
     fun setSide(side: FeedSide) { viewModelScope.launch { recordCare.editOngoing(id) { it.withSide(side) } } }
     fun setAmount(ml: Int?) { viewModelScope.launch { recordCare.editOngoing(id) { it.copy(amountMl = ml) } } }
 
@@ -162,7 +170,7 @@ class TimerViewModel(
             TimeField.END -> e.withEndPicked(hour, minute)
         }
         when (val c = care.care.value.check(next, clock.now())) {
-            is EditCheck.Problem -> _phase.value = CareSheetViewModel.Phase.Failed(problemText(c.problem, e.kind))
+            is EditCheck.Problem -> _phase.value = CareSheetViewModel.Phase.Failed(problemText(c.problem, e.kind), c.problem, attempt = ++failures)
             EditCheck.Overlap -> _phase.value = CareSheetViewModel.Phase.ConfirmOverlap(next)
             EditCheck.Ok -> save(next)
         }
@@ -180,7 +188,8 @@ class TimerViewModel(
         _phase.value = CareSheetViewModel.Phase.Saving
         viewModelScope.launch {
             val ok = recordCare.editOngoing(id) { it.copy(startAt = next.startAt, endAt = next.endAt) }
-            _phase.value = if (ok || before == null) CareSheetViewModel.Phase.Editing else before
+            // 저장하지 못하면 앞 실패 글을 두되 새 시도 번호로(같은 글이어도 이번 실패를 알린다).
+            _phase.value = if (ok || before == null) CareSheetViewModel.Phase.Editing else before.copy(attempt = ++failures)
         }
     }
 
@@ -219,19 +228,35 @@ class CareSheetViewModel(
      * [ConfirmOverlap]은 R4 겹침 경고를 띄운 채 '그래도 저장'을 기다린다. [Failed]는 저장하지 않았다는 시트 안 글(규칙 위반·저장 실패, 없을 수도 있다).
      */
     sealed interface Phase {
+        /**
+         * 입력·저장·지우기를 받는 단계(편집 중·실패). 저장 중·겹침 확인 중·닫힘(확인 표시가 머무는 동안)에는 받지 않는다
+         * (U88 11-12 보충). 시트의 휴지통·저장 단추 켜짐도 이 값 하나를 쓴다.
+         */
+        val editable: Boolean get() = this is Editing || this is Failed
+
         data object Editing : Phase
 
         data class ConfirmOverlap(val event: CareEvent) : Phase
 
-        data class Failed(val message: String?) : Phase
+        /**
+         * [problem]이 있으면 저장 검사(R3)에 걸린 것이라 시트가 탓이 된 줄을 펼친다(U82). 없으면 저장 실패 글(단추 위).
+         * [attempt]는 실패마다 하나씩 는다: 같은 오류가 다시 나도 새 값이라 펼침·흔들림·오류 햅틱이 매번 돈다(U82 오류, 11-12 보충).
+         */
+        data class Failed(val message: String?, val problem: CareProblem? = null, val attempt: Int = 0) : Phase
 
         data object Saving : Phase
 
-        /** 저장했거나 지웠거나, 고치던 기록이 그사이 지워졌다(되살리지 않는다, R10): 시트를 닫는다. */
-        data object Closed : Phase
+        /**
+         * 시트를 닫는다. [saved]는 이번 닫힘이 실제로 저장한 것인지다(U88 끝: 확인 표시·성공 햅틱은 저장되어 닫힐 때만, 화면은 짐작하지 않는다).
+         * 저장 성공만 참이고, 지우기·고치던 기록이 그사이 지워져 저장하지 않은 닫힘(R10)은 거짓이다.
+         */
+        data class Closed(val saved: Boolean) : Phase
     }
 
     val careFile: StateFlow<CareFile> = care.care
+
+    /** 실패 번호(Failed.attempt): 실패를 낼 때마다 늘린다. */
+    private var failures = 0
 
     private val _sheet = MutableStateFlow(
         saved.get<String>(K_DRAFT)?.let { runCatching { ProtocolJson.decodeFromString(CareDraft.serializer(), it) }.getOrNull() }?.let { SheetState(it) },
@@ -268,7 +293,7 @@ class CareSheetViewModel(
     /** 입력 칸을 고친다. 고치면 앞 실패 글은 걷는다. 저장 중·겹침 확인 중에는 바꾸지 않는다. */
     fun edit(change: (CareDraft) -> CareDraft) {
         val cur = _sheet.value ?: return
-        if (cur.phase !is Phase.Editing && cur.phase !is Phase.Failed) return
+        if (!cur.phase.editable) return
         set(SheetState(change(cur.draft)))
     }
 
@@ -296,13 +321,13 @@ class CareSheetViewModel(
             val o = cur.phase as? Phase.ConfirmOverlap ?: return
             return commit(cur.sheetId, o.event, editing = d.original != null)
         }
-        if ((cur.phase !is Phase.Editing && cur.phase !is Phase.Failed) || !d.savable) return
+        if (!cur.phase.editable || !d.savable) return
         val now = clock.now()
         val base = d.original?.let { o -> care.care.value.events.firstOrNull { it.id == o.id && it.deletedAt == null } }
-        if (d.original != null && base == null) return phase(d.sheetId, Phase.Closed)
+        if (d.original != null && base == null) return phase(d.sheetId, Phase.Closed(saved = false))
         val e = d.event(now, base)
         when (val c = care.care.value.check(e, now)) {
-            is EditCheck.Problem -> phase(d.sheetId, Phase.Failed(problemText(c.problem, e.kind)))
+            is EditCheck.Problem -> phase(d.sheetId, Phase.Failed(problemText(c.problem, e.kind), c.problem, attempt = ++failures))
             EditCheck.Overlap -> phase(d.sheetId, Phase.ConfirmOverlap(e))
             EditCheck.Ok -> commit(d.sheetId, e, editing = d.original != null)
         }
@@ -321,26 +346,49 @@ class CareSheetViewModel(
             phase(
                 sheetId,
                 when {
-                    recordCare.saveEvent(e, editing) -> Phase.Closed
-                    editing && care.care.value.events.none { it.id == e.id && it.deletedAt == null } -> Phase.Closed
+                    recordCare.saveEvent(e, editing) -> Phase.Closed(saved = true).also { notices.markFresh(e.id) } // U88 새 줄 강조·하루 띠 새 표시
+                    editing && care.care.value.events.none { it.id == e.id && it.deletedAt == null } -> Phase.Closed(saved = false) // 저장 중 지워짐
                     // 저장 실패는 시트 안에서도 보인다. 띠의 다른 줄(버림 안내)은 시트에 옮기지 않는다.
-                    else -> Phase.Failed(SAVE_FAILED.takeIf { notices.notice.value?.lines()?.contains(it) == true })
+                    else -> Phase.Failed(SAVE_FAILED.takeIf { notices.notice.value?.lines()?.contains(it) == true }, attempt = ++failures)
                 },
             )
         }
     }
 
-    /** 고치던 기록을 지운다(5초 되돌리기 띠는 RecordCare가 띄운다). */
+    /** 고치던 기록을 지운다(5초 되돌리기 띠는 RecordCare가 띄운다). 저장 중·확인 표시가 머무는 동안에는 받지 않는다(U88 11-12 보충). */
     fun delete() {
         val cur = _sheet.value ?: return
+        if (!cur.phase.editable) return
         val id = cur.draft.original?.id ?: return
         recordCare.delete(id)
-        phase(cur.sheetId, Phase.Closed)
+        phase(cur.sheetId, Phase.Closed(saved = false))
     }
 
     private companion object {
         const val K_DRAFT = "careSheet.draft"
     }
+}
+
+/** 시트가 닫힐 때의 연출(U88 끝). */
+enum class SheetExit {
+    /** 확인 표시 + 성공 햅틱 + 잠깐(320ms) 머문 뒤 닫힘. */
+    CHECK,
+
+    /** 성공 햅틱만 내고 바로 닫힘(메모 저장, 동작 줄이기). */
+    HAPTIC,
+
+    /** 바로 닫힘(저장하지 않은 닫힘: 지우기·지워진 기록). */
+    NONE,
+}
+
+/**
+ * 닫힘 연출은 VM이 정한 저장 결과와 종류로만 정한다: 저장 안 됨 → 바로, 메모 저장·동작 줄이기 → 햅틱만 내고 바로(U88, iOS와 같음),
+ * 그 밖 저장 → 확인 표시.
+ */
+fun sheetExit(closed: CareSheetViewModel.Phase.Closed, kind: CareKind, reduced: Boolean = false): SheetExit = when {
+    !closed.saved -> SheetExit.NONE
+    kind == CareKind.NOTE || reduced -> SheetExit.HAPTIC
+    else -> SheetExit.CHECK
 }
 
 /** 기록 탭(C4·C5·C14): 하루 타임라인과 패턴. */
@@ -352,6 +400,7 @@ class RecordsViewModel(
     state: PhoneStateRepository,
     care: CareRepository,
     private val recordCare: RecordCare,
+    private val notices: Notices,
     scope: CoroutineScope = vmScope(),
 ) : ViewModel(scope) {
     val ui: StateFlow<RecordsUiState> = derive(care.care, state.state, state.connection) {
@@ -360,6 +409,10 @@ class RecordsViewModel(
 
     /** 밀어서 지우기. 저장하지 못하면 `onFail`(밀린 줄을 되돌린다). */
     fun delete(id: String, onFail: () -> Unit) = recordCare.delete(id, onFail)
+
+    /** 막 저장한 기록 id(U88 새 줄 강조). 줄이 강조를 마치면 걷는다. */
+    val fresh: StateFlow<String?> = notices.fresh
+    fun clearFresh(id: String) = notices.clearFresh(id)
 }
 
 /** 차 탭: 연결 상태 → 우리 노래 → 리포트(5장). */

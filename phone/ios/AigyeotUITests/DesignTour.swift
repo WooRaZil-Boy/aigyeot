@@ -16,7 +16,8 @@ final class DesignTour: XCTestCase {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         continueAfterFailure = true
         app = XCUIApplication()
-        app.launchArguments = ["-demoSeed"]   // U50 시연 시드(지난 6일 + 오늘 장면)
+        // U50 시연 시드(지난 6일 + 오늘 장면). 기록 시트 v8 캡처는 빈 상태부터 찍으려고 시드 없이 연다
+        app.launchArguments = name.contains("v8") ? [] : ["-demoSeed"]
         app.launch()
     }
 
@@ -36,6 +37,135 @@ final class DesignTour: XCTestCase {
     private func label(beginsWith s: String) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", s)).firstMatch
     }
+
+    /// 기록 시트 v8(2판 안 1, U80~U88)과 빈 상태 셋(U85). 시드 없이: 오늘 빈 판 → 기록 빈 날 → 지난 기록 적기(첫 기록 도움말·종류 칸)
+    /// → 수유(왼쪽·젖병 양)·시작 줄 펼침 → 저장(새 줄 강조) → 잠·기저귀·메모 → 고치기(끝 줄 펼침) → 패턴 빈 상태.
+    func test_v8_시트() {
+        XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
+        shot("v8-00-intro", settle: 3)   // 첫 안내 안 B(U43)와 '자세히 보기' 시트
+        app.buttons["오가는 정보 자세히 보기"].tap()
+        XCTAssert(app.staticTexts["오가는 정보"].waitForExistence(timeout: 5))
+        shot("v8-00b-intro-sheet")
+        app.buttons["닫기"].firstMatch.tap()
+        sleep(1)
+        app.buttons["먼저 기록만 쓸게요"].tap()
+        XCTAssert(app.buttons["수유 시작하기"].waitForExistence(timeout: 5))
+        shot("v8-01-today-empty")
+        tab("기록")
+        let past = app.buttons.matching(NSPredicate(format: "label == %@", "지난 기록 적기"))
+        XCTAssert(past.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(past.count, 1, "빈 날에는 가운데 지난 기록 적기 하나만 보인다(U85)")
+        shot("v8-02-day-empty")
+        past.firstMatch.tap()
+        XCTAssert(app.staticTexts["어떻게 먹였어요?"].waitForExistence(timeout: 5))
+        shot("v8-03-sheet-past-first")
+        app.buttons["왼쪽"].firstMatch.tap()
+        shot("v8-04-sheet-feed-left", settle: 1)
+        app.buttons["젖병"].firstMatch.tap()
+        let amount = app.descendants(matching: .any)["양"].firstMatch
+        // 양 칸은 한 요소(위아래 쓸기)라 오른쪽 ＋ 자리를 눌러 120ml로
+        if amount.waitForExistence(timeout: 3) { for _ in 0..<12 { amount.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() } }
+        shot("v8-05-sheet-bottle", settle: 1)
+        app.buttons["시작"].firstMatch.tap()
+        shot("v8-06-sheet-start-open", settle: 1)
+        save.tap()
+        XCTAssert(app.staticTexts["어떻게 먹였어요?"].waitForNonExistence(timeout: 5))
+        shot("v8-07-day-fresh", settle: 1)
+
+        tab("설정")
+        let toggle = app.switches.firstMatch
+        if toggle.waitForExistence(timeout: 5), toggle.value as? String != "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
+        tab("기록")
+        let pastRow = app.buttons["지난 기록 적기"].firstMatch
+        for _ in 0..<4 where !(pastRow.exists && pastRow.isHittable) { app.swipeUp() }
+        pastRow.tap()
+        XCTAssert(app.buttons["잠"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["잠"].firstMatch.tap()
+        shot("v8-08-sheet-sleep", settle: 1)
+        app.buttons["기저귀"].firstMatch.tap()
+        shot("v8-09-sheet-diaper", settle: 1)
+        app.buttons["메모"].firstMatch.tap()
+        shot("v8-10-sheet-note", settle: 1)
+        app.buttons["취소"].firstMatch.tap()
+        sleep(1)
+
+        let row = label(beginsWith: "수유 · ")
+        for _ in 0..<4 where !(row.exists && row.isHittable) { app.swipeDown() }
+        if row.waitForExistence(timeout: 3) {
+            row.tap()
+            XCTAssert(app.staticTexts["고치는 중"].waitForExistence(timeout: 5))
+            shot("v8-11-sheet-edit")
+            app.buttons["끝"].firstMatch.tap()
+            shot("v8-12-sheet-edit-end", settle: 1)
+            app.buttons["취소"].firstMatch.tap()
+            sleep(1)
+        }
+        app.buttons["패턴"].firstMatch.tap()
+        shot("v8-13-pattern-empty")
+    }
+
+    /// U90 3D 준비 표시: 오늘 탭 아래 '차와 연결하기' 카드 자리까지 내려 둔 채 차와 연결하면, 그 자리에 차 카드가 들어와
+    /// 이 프로세스에서 처음 3D 모델을 읽는다(시뮬레이터 약 3초). 고리('3D 차 준비 중')는 붙이고 0.8초 뒤에 나타나 첫 그림까지만 있다.
+    /// XCUITest는 누를 때마다 앱이 쉴 때까지 기다리는데 RealityKit 준비가 그동안 주 스레드를 잡아 고리가 있는 동안 확인하기 어렵다.
+    /// 나타남은 스크립트의 화면 녹화(rec-v8c-3d.mov)로 보고, 여기서는 첫 그림 뒤 준비 표시가 남지 않고 3D 무대가 있는지를 못박는다.
+    func test_v8c_3d_준비() {
+        let car = FakeCar()
+        car.register()
+        XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
+        app.buttons["먼저 기록만 쓸게요"].tap()
+        app.open(URL(string: "aigyeot://pair?code=\(car.pairCode())")!)
+        XCTAssert(app.buttons["연결하기"].waitForExistence(timeout: 5))
+        app.buttons["연결하기"].tap()
+        // 연결되면 오늘 탭 아래 차 카드가 처음 3D를 읽기 시작한다. 바로 내려 그 카드를 화면에 둔다(링크를 열면 앱이 다시 앞으로 와 미리 내려 둘 수 없다)
+        let tile = label(beginsWith: "우리 차 3D 그림")
+        for _ in 0..<4 where !(tile.exists && tile.isHittable) { app.swipeUp() }
+        shot("v8c-01-ring", settle: 0)
+        let loading = app.descendants(matching: .any)["3D 차 준비 중"]
+        XCTAssert(loading.waitForNonExistence(timeout: 20), "첫 그림 뒤에도 준비 표시가 남았다")
+        shot("v8c-02-car", settle: 1)
+        XCTAssert(app.descendants(matching: .any)["우리 차 3D 그림"].firstMatch.exists, "차 카드 3D 무대가 없다")
+    }
+
+    /// U82(11-12 보충): 큰 글자에서 끝 줄을 바꿔(시작이 지금이라 끝이 미래·다음 날) 접고 본문 맨 위로 굴려 끝 줄이 화면 밖일 때 저장하면,
+    /// 끝 줄이 다시 펼쳐지고 그 자리로 굴러 오류 글이 보인다. 스크립트가 글자 크기를 접근성 크기로 바꾼 뒤 돌린다.
+    func test_v8_시트_오류_굴림() {
+        XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
+        app.buttons["먼저 기록만 쓸게요"].tap()
+        let feed = app.buttons["수유"].firstMatch
+        XCTAssert(feed.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !feed.isHittable { app.swipeUp() }
+        sleep(1)
+        feed.press(forDuration: 1.0)   // 길게 누르면 빠른 기록 시트
+        let body = app.scrollViews.firstMatch
+        func reach(_ e: XCUIElement) { for _ in 0..<6 where !(e.exists && e.isHittable) { body.swipeUp() } }
+        let endRow = app.buttons["끝"].firstMatch
+        XCTAssert(endRow.waitForExistence(timeout: 5), "기록 시트가 뜨지 않았다")
+        reach(endRow)
+        endRow.tap()
+        let pill = app.buttons["끝 시각 고르기"].firstMatch
+        reach(pill)
+        pill.tap()
+        let wheels = app.pickerWheels
+        XCTAssert(wheels.firstMatch.waitForExistence(timeout: 3))
+        let hour = wheels.element(boundBy: wheels.count >= 3 ? 1 : 0)
+        reach(hour)
+        hour.swipeUp()   // 시를 돌려 끝을 바꾼다(시작이 지금이라 끝은 미래·다음 날 → 끝 줄 탓)
+        sleep(1)
+        endRow.tap()   // 접는다
+        for _ in 0..<6 { body.swipeDown() }   // 본문 맨 위로
+        sleep(1)
+        XCTAssertFalse(endRow.isHittable, "재현 조건이 안 됐다: 저장 전에 끝 줄이 이미 보인다")
+        shot("v8-14-ax-before-save")
+        save.tap()
+        let err = app.staticTexts.matching(NSPredicate(format: "label IN %@", ["앞으로의 시각은 적을 수 없어요", "수유는 3시간까지 적을 수 있어요"])).firstMatch
+        XCTAssert(err.waitForExistence(timeout: 3), "오류 글이 없다")
+        sleep(1)
+        shot("v8-15-ax-error-scrolled")
+        XCTAssert(err.isHittable, "오류 줄이 본문 밖에 남았다")
+    }
+
+    /// 기록 시트의 저장 단추(글이 저장될 것을 말한다, U83).
+    private var save: XCUIElement { app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "저장하기")).firstMatch }
 
     /// 연결 안 됨(기록만): 첫 안내 → 오늘 → 수유 중 → 타이머 → 기록 하루·고치기 시트 → 패턴 → 설정.
     func test_v6_기록만() {
@@ -63,12 +193,12 @@ final class DesignTour: XCTestCase {
         if feedRow.waitForExistence(timeout: 3) {
             feedRow.tap()
             shot("06-sheet-edit")
-            let time = app.buttons["시작 시각"].firstMatch   // 시각 칩 → 작은 창의 시각 바퀴
-            if time.exists {
-                time.tap()
+            let start = app.buttons["시작"].firstMatch   // 기록 시트 v8: 줄을 펼치고 시각 알약 → 그 자리 바퀴(U82)
+            if start.exists {
+                start.tap()
+                let time = label(beginsWith: "시각 고르기")
+                if time.waitForExistence(timeout: 3) { time.tap() }
                 shot("06b-sheet-time", settle: 1)
-                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()   // 작은 창 밖을 눌러 닫는다
-                sleep(1)
             }
             app.buttons["취소"].firstMatch.tap()
         }
@@ -104,8 +234,8 @@ final class DesignTour: XCTestCase {
             .press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)))
     }
 
-    /// 시안 예시와 같은 리포트: 13:10–13:52(42분), 울음 1번(감지 2.4초), 자장가 → 듣기 틈 → 백색소음(자동 2차, 다시 울음), 쉼터 제안, 그쳤어요,
-    /// 조향 0.8 → 2.1 → 0.9, 차가 한 일 4가지, 방법별 성적 넷. `minAgo`는 주행 시작이 몇 분 전인지.
+    /// 시안 예시와 같은 리포트: 13:10–13:52(42분), 울음 1번(감지 2.4초), 자장가 → 재생 사이 → 백색소음(자동 2차, 다시 울음), 쉼터 제안, 그쳤어요,
+    /// 조향 0.8 → 2.1 → 0.9, 차가 한 일 4가지, 소리별 성적 넷. `minAgo`는 주행 시작이 몇 분 전인지.
     private func sendRichReport(_ car: FakeCar, minAgo: Int) {
         let s = Date().addingTimeInterval(TimeInterval(-minAgo * 60)), cry = s.addingTimeInterval(14 * 60), ep = FakeCar.ulid()
         func r(_ d: Date) -> String { FakeCar.rfc(d) }
@@ -126,7 +256,7 @@ final class DesignTour: XCTestCase {
                             ["action": "rear_window_lock", "count": 1, "total_s": NSNull()], ["action": "ambient_dim", "count": 1, "total_s": NSNull()]],
             "controls": [["api": "Seat.setHvacSeatTemperature", "target": "ROW_2_LEFT", "attempts": 1, "succeeded": 1, "failed": 0, "retries": 0]],
             "method_stats": [["method": "lullaby", "label": "자장가", "successes": 6, "attempts": 7], ["method": "womb", "label": "뱃속 소리", "successes": 3, "attempts": 4],
-                             ["method": "white_noise", "label": "백색소음", "successes": 2, "attempts": 6], ["method": "parent_song", "label": "부모 노래", "successes": 0, "attempts": 2]],
+                             ["method": "white_noise", "label": "백색소음", "successes": 2, "attempts": 6], ["method": "parent_song", "label": "우리 노래", "successes": 0, "attempts": 2]],
         ])
     }
 
@@ -188,7 +318,7 @@ final class DesignTour: XCTestCase {
         tab("설정")
         shot("31-owner-settings")
         label(beginsWith: "보호자").tap()   // 줄 글은 "보호자, 1명"
-        let invite = app.buttons["초대 만들기"].firstMatch
+        let invite = app.buttons["초대 코드 만들기"].firstMatch
         if invite.waitForExistence(timeout: 5) { invite.tap(); sleep(2) }
         shot("31b-owner-guardians")
         app.navigationBars.buttons.firstMatch.tap()
@@ -197,8 +327,8 @@ final class DesignTour: XCTestCase {
         let disconnect = app.buttons["연결 끊기"].firstMatch
         for _ in 0..<3 where !(disconnect.exists && disconnect.isHittable) { app.swipeUp() }
         disconnect.tap()
-        let confirm = app.buttons.matching(identifier: "연결 끊기").element(boundBy: 1)
-        if confirm.waitForExistence(timeout: 3) { confirm.tap() } else { app.sheets.buttons["연결 끊기"].firstMatch.tap() }
+        let confirm = app.buttons["끊기"].firstMatch   // 확인 창 주 단추(B10)
+        XCTAssert(confirm.waitForExistence(timeout: 3)); confirm.tap()
         XCTAssert(app.buttons["오늘"].firstMatch.waitForExistence(timeout: 10))
         sleep(2)
         let connect = label(beginsWith: "차와 연결하기")

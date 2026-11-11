@@ -15,6 +15,7 @@ import kr.aigyeot.phone.domain.model.HOUR
 import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.onDate
+import kr.aigyeot.phone.domain.model.field
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.DisconnectRun
@@ -152,7 +153,7 @@ class ViewModelTest {
         assertEquals(CareSheetViewModel.Phase.Editing, vm.sheet.value?.phase)
         vm.setNote("트림")
         vm.save()
-        until("저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed }
+        until("저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
         assertEquals("01JXSHEET0000000000000000A", care.care.value.events.single().id)
         // 화면을 다시 만들면(같은 시트 id) 적던 것을 이어 쓰고, 프로세스가 죽은 뒤에도 화면 저장 상태에서 되살린다.
         vm.close("01JXSHEET0000000000000000A")
@@ -178,8 +179,188 @@ class ViewModelTest {
         until("지움") { care.care.value.events.first { it.id == e.id }.deletedAt != null }
         vm.setNote("고침")
         vm.save()
-        assertEquals(CareSheetViewModel.Phase.Closed, vm.sheet.value?.phase)
+        assertEquals(CareSheetViewModel.Phase.Closed(saved = false), vm.sheet.value?.phase) // 고치기 시작 전에 기록이 지워짐: 저장 안 함
         assertTrue(care.care.value.events.first { it.id == e.id }.deletedAt != null)
+    }
+
+    @Test
+    fun `실패 뒤 다시 저장하면 저장한 닫힘이다`() = kitTest {
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        vm.open("f", CareSheetTarget.New(CareKind.FEED, day = null))
+        vm.pick(30)
+        val early = java.time.Instant.ofEpochMilli(NOW - 40 * MINUTE).atZone(APP_ZONE)
+        vm.setEnd(early.hour, early.minute) // 끝이 시작보다 이르다
+        vm.save()
+        assertTrue(vm.sheet.value?.phase is CareSheetViewModel.Phase.Failed)
+        vm.setEndUnknown()
+        vm.save()
+        until("다시 저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
+    }
+
+    @Test
+    fun `저장 중에 고치던 기록이 지워지면 저장하지 않은 닫힘이다`() = kitTest {
+        // U88 끝: 저장 단계를 거쳤어도 실제로 저장하지 않았으면 확인 표시를 내지 않는다(화면이 단계 순서로 짐작하지 않게).
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        vm.open("m", CareSheetTarget.New(CareKind.NOTE, day = null))
+        vm.setNote("처음")
+        vm.save()
+        until("저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
+        vm.close("m")
+        val e = care.care.value.events.single()
+        vm.open("e", CareSheetTarget.Edit(e.id))
+        vm.setNote("고침")
+        vm.save() // 저장 단계로 들어간 뒤(검사는 지나감)
+        assertEquals(CareSheetViewModel.Phase.Saving, vm.sheet.value?.phase)
+        recordCare.delete(e.id) // 그 저장이 기록에 닿기 전에 지운다
+        until("닫힘") { vm.sheet.value?.phase is CareSheetViewModel.Phase.Closed }
+        assertEquals(CareSheetViewModel.Phase.Closed(saved = false), vm.sheet.value?.phase)
+        assertTrue(care.care.value.events.first { it.id == e.id }.deletedAt != null) // 되살리지 않았다(R10)
+    }
+
+    @Test
+    fun `지우기는 저장하지 않은 닫힘이다`() = kitTest {
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        vm.open("m", CareSheetTarget.New(CareKind.NOTE, day = null))
+        vm.setNote("지울 것")
+        vm.save()
+        until("저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
+        vm.close("m")
+        val e = care.care.value.events.single()
+        vm.open("d", CareSheetTarget.Edit(e.id))
+        vm.delete()
+        assertEquals(CareSheetViewModel.Phase.Closed(saved = false), vm.sheet.value?.phase)
+        until("지움") { care.care.value.events.single().deletedAt != null }
+    }
+
+    @Test
+    fun `저장 중이나 저장 확인 표시 중에는 지우기를 받지 않는다`() = kitTest {
+        // U88(11-12 보충): 저장 중·확인 표시가 머무는 동안 VM도 지우기를 받지 않는다(화면 단추 잠금과 같은 판단 Phase.editable).
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        vm.open("m", CareSheetTarget.New(CareKind.NOTE, day = null))
+        vm.setNote("처음")
+        vm.save()
+        until("저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
+        vm.close("m")
+        val e = care.care.value.events.single()
+        vm.open("e", CareSheetTarget.Edit(e.id))
+        vm.setNote("고침")
+        vm.save()
+        assertEquals(CareSheetViewModel.Phase.Saving, vm.sheet.value?.phase)
+        vm.delete() // 저장 중: 무시
+        assertEquals(CareSheetViewModel.Phase.Saving, vm.sheet.value?.phase)
+        until("고친 저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
+        vm.delete() // 확인 표시 중: 무시
+        settle()
+        assertEquals(CareSheetViewModel.Phase.Closed(saved = true), vm.sheet.value?.phase)
+        val after = care.care.value.events.single()
+        assertNull(after.deletedAt) // 기록 그대로
+        assertEquals("고침", after.note)
+        assertNull(notices.undo.value) // 되돌리기 띠도 뜨지 않았다
+    }
+
+    @Test
+    fun `같은 저장 오류를 다시 내도 새 실패 값이다`() = kitTest {
+        // U82 오류(11-12 보충): 같은 미래 끝 시각으로 두 번 저장하면 시도 번호가 다른 실패 둘(펼침·흔들림·햅틱이 매번 돈다).
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        vm.open("f", CareSheetTarget.New(CareKind.FEED, day = null))
+        vm.pick(30)
+        val future = java.time.Instant.ofEpochMilli(NOW + HOUR).atZone(APP_ZONE)
+        vm.setEnd(future.hour, future.minute)
+        vm.save()
+        val first = vm.sheet.value?.phase as CareSheetViewModel.Phase.Failed
+        vm.save()
+        val second = vm.sheet.value?.phase as CareSheetViewModel.Phase.Failed
+        assertEquals(first.problem, second.problem)
+        assertEquals(first.message, second.message)
+        assertTrue(first != second && second.attempt > first.attempt)
+    }
+
+    @Test
+    fun `진행 중 시각 고르기도 같은 오류를 다시 내면 새 실패 값이다`() = kitTest {
+        recordCare.start(CareKind.SLEEP)
+        until("잠 시작") { care.care.value.events.any { it.kind == CareKind.SLEEP } }
+        val sleep = care.care.value.events.first { it.kind == CareKind.SLEEP }
+        val timer = TimerViewModel(sleep.id, state, care, recordCare, clock, vmScope())
+        until("타이머") { timer.ui.value.event != null }
+        val later = java.time.Instant.ofEpochMilli(NOW + 2 * HOUR).atZone(APP_ZONE)
+        timer.setTime(TimerViewModel.TimeField.END, later.hour, later.minute)
+        val first = timer.phase.value as CareSheetViewModel.Phase.Failed
+        timer.setTime(TimerViewModel.TimeField.END, later.hour, later.minute)
+        val second = timer.phase.value as CareSheetViewModel.Phase.Failed
+        assertEquals(first.message, second.message)
+        assertTrue(first != second && second.attempt > first.attempt)
+    }
+
+    @Test
+    fun `닫힘 연출은 저장 결과와 종류로만 정한다`() {
+        // U88 끝: 메모 저장은 햅틱만, 그 밖 저장은 확인 표시, 저장하지 않은 닫힘은 바로 닫힘.
+        assertEquals(SheetExit.HAPTIC, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.NOTE))
+        assertEquals(SheetExit.CHECK, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.FEED))
+        assertEquals(SheetExit.CHECK, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.DIAPER))
+        assertEquals(SheetExit.NONE, sheetExit(CareSheetViewModel.Phase.Closed(saved = false), CareKind.FEED))
+        assertEquals(SheetExit.NONE, sheetExit(CareSheetViewModel.Phase.Closed(saved = false), CareKind.NOTE))
+        // 동작 줄이기면 확인 표시 없이 햅틱만 내고 바로 닫는다(U88, iOS SheetCloseFeedback과 같음)
+        assertEquals(SheetExit.HAPTIC, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.FEED, reduced = true))
+        assertEquals(SheetExit.NONE, sheetExit(CareSheetViewModel.Phase.Closed(saved = false), CareKind.FEED, reduced = true))
+    }
+
+    @Test
+    fun `시트로 저장한 기록은 새 표시가 되고 보인 뒤 걷힌다`() = kitTest {
+        // U88: 기록 탭 줄 강조·오늘 하루 띠 새 표시가 같은 '막 저장한 기록 id' 하나를 본다(iOS markFresh·clearFresh와 같음).
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        vm.open("n", CareSheetTarget.New(CareKind.FEED, day = null))
+        vm.save()
+        until("저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
+        val id = care.care.value.events.single().id
+        assertEquals(id, notices.fresh.value)
+        notices.clearFresh("다른 기록")
+        assertEquals(id, notices.fresh.value) // 다른 기록의 걷기는 새 것을 지우지 않는다
+        notices.clearFresh(id)
+        assertNull(notices.fresh.value)
+    }
+
+    @Test
+    fun `시트를 열면 모든 줄이 접혀 있고 한 줄만 펼친다`() {
+        var open: kr.aigyeot.phone.domain.model.SheetField? = null // 연 때: 모두 접힘
+        open = toggleRow(open, kr.aigyeot.phone.domain.model.SheetField.START)
+        assertEquals(kr.aigyeot.phone.domain.model.SheetField.START, open)
+        open = toggleRow(open, kr.aigyeot.phone.domain.model.SheetField.END) // 다른 줄을 누르면 앞 줄은 접힌다
+        assertEquals(kr.aigyeot.phone.domain.model.SheetField.END, open)
+        assertNull(toggleRow(open, kr.aigyeot.phone.domain.model.SheetField.END)) // 다시 누르면 접힌다
+    }
+
+    @Test
+    fun `저장 검사에 걸리면 탓이 된 줄을 펼친다`() = kitTest {
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        vm.open("n", CareSheetTarget.New(CareKind.FEED, day = null))
+        fun hm(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(APP_ZONE)
+        vm.pick(60)
+        val end = hm(NOW - 30 * MINUTE)
+        vm.setEnd(end.hour, end.minute)
+        val later = hm(NOW - 15 * MINUTE)
+        vm.setStart(later.hour, later.minute) // 시작을 끝 뒤로 옮겼다
+        vm.save()
+        val failed = vm.sheet.value?.phase as CareSheetViewModel.Phase.Failed
+        assertEquals(kr.aigyeot.phone.domain.model.CareProblem.END_BEFORE_START, failed.problem)
+        assertEquals(kr.aigyeot.phone.domain.model.SheetField.END, failed.problem!!.field()) // 시트는 이 줄을 펼치고 빨간 테
+        assertEquals("끝 시각이 시작보다 빨라요", failed.message)
+        // 젖병 양은 양 칸(미래 시각은 아래 시험)
+        assertEquals(kr.aigyeot.phone.domain.model.SheetField.AMOUNT, kr.aigyeot.phone.domain.model.CareProblem.AMOUNT.field())
+    }
+
+    @Test
+    fun `지난 기록 적기는 종류를 고를 수 있고 처음은 수유다`() = kitTest {
+        // 기록 탭 '지난 기록 적기'는 종류 칸이 있는 시트를 수유로 연다(U86). 종류 칸 차례는 quickKinds(수유·메모, 켜면 잠·기저귀).
+        assertEquals(listOf(CareKind.FEED, CareKind.NOTE, CareKind.SLEEP, CareKind.DIAPER), kr.aigyeot.phone.domain.model.quickKinds(true))
+        val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
+        val yesterday = java.time.Instant.ofEpochMilli(NOW).atZone(APP_ZONE).toLocalDate().minusDays(1)
+        vm.open("p", CareSheetTarget.New(CareKind.FEED, day = yesterday))
+        assertEquals(CareKind.FEED, vm.sheet.value!!.draft.kind)
+        val start = vm.sheet.value!!.draft.start
+        vm.setKind(CareKind.DIAPER) // 종류를 바꿔도 시각은 그대로
+        assertEquals(CareKind.DIAPER, vm.sheet.value!!.draft.kind)
+        assertEquals(start, vm.sheet.value!!.draft.start)
+        assertEquals(onDate(yesterday, 12, 0, APP_ZONE), start) // 다른 날은 그날 낮 12시
     }
 
     @Test
@@ -198,7 +379,10 @@ class ViewModelTest {
         vm.pick(0)
         assertEquals(picked, vm.sheet.value?.draft?.end)
         vm.save()
-        assertEquals(CareSheetViewModel.Phase.Failed("끝 시각이 시작보다 빨라요"), vm.sheet.value?.phase)
+        (vm.sheet.value?.phase as CareSheetViewModel.Phase.Failed).let {
+            assertEquals("끝 시각이 시작보다 빨라요", it.message)
+            assertEquals(kr.aigyeot.phone.domain.model.CareProblem.END_BEFORE_START, it.problem)
+        }
         assertTrue(care.care.value.events.none { it.kind == CareKind.FEED })
     }
 
@@ -210,7 +394,7 @@ class ViewModelTest {
         vm.pick(30)
         vm.setEnd(java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).hour, java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).minute)
         vm.save()
-        until("첫 수유") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed }
+        until("첫 수유") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
         vm.close("a")
         // 겹치는 새 수유(15분 전 시작, 끝 모름)는 확인을 기다리고, '그래도 저장'이면 저장한다.
         vm.open("b", CareSheetTarget.New(CareKind.FEED, day = null))
@@ -221,7 +405,7 @@ class ViewModelTest {
         assertEquals(CareSheetViewModel.Phase.Editing, vm.sheet.value?.phase)
         vm.save()
         vm.save(allowOverlap = true)
-        until("겹쳐도 저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed }
+        until("겹쳐도 저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) } // 겹침 확인 뒤 저장
         assertEquals(2, care.care.value.events.size)
         // 타이머: 시작 시각을 앞으로 옮기면 R3 글이고 저장하지 않는다.
         recordCare.start(CareKind.SLEEP)
@@ -292,7 +476,7 @@ class ViewModelTest {
         )
         suspend fun ended(message: String) = until(message) { vm.import.value == ImportUi.Ended(message) }
         // 끝내는 안내 셋(7.1 import.unreadable·tooLarge·failed): 글과 '닫기'만.
-        val unreadable = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요"
+        val unreadable = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요."
         vm.pick("content://unknown")
         ended(unreadable)
         vm.closeImport()
@@ -301,7 +485,7 @@ class ViewModelTest {
         vm.pick("content://big")
         ended("파일이 너무 커요")
         vm.pick("content://gone") // 파일을 열지 못했다
-        ended("가져오지 못했어요. 다시 해 주세요")
+        ended("가져오지 못했어요. 다시 해 주세요.")
         vm.closeImport()
         assertEquals(ImportUi.Closed, vm.import.value)
         // Nara 아이 둘: 고르기 → 미리 보기 → 가져오기.

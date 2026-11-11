@@ -90,6 +90,9 @@ final class TodayViewModel {
 
     /// 빠른 버튼·카드의 수유·잠 시작.
     func start(_ kind: CareKind) { recordCare.start(kind) }
+    /// 시트로 막 저장한 기록(U88 오늘 하루 띠 새 표시). 띠가 한 번 보이고 걷는다. 지운 기록이면 없다.
+    var fresh: CareEvent? { recordCare.fresh.flatMap { id in careRepo.care.events.first { $0.id == id && $0.deletedAt == nil } } }
+    func clearFresh(_ id: String) { recordCare.clearFresh(id) }
     /// 당겨서 새로고침(7.2).
     func retryNow() async { await connection.retryNow() }
 }
@@ -177,7 +180,8 @@ final class TimerViewModel {
 
 /// 기록 시트가 고치는 것: 새 기록(종류, 기록 탭에서 고른 날) 또는 고칠 기록 id.
 enum CareSheetTarget: Equatable {
-    case new(CareKind, day: String?)
+    /// `chooseKind`: 기록 탭 '지난 기록 적기'로 연 시트(종류 칸, U86).
+    case new(CareKind, day: String?, chooseKind: Bool = false)
     case edit(String)
 }
 
@@ -191,9 +195,12 @@ final class CareSheetViewModel {
         /// 같은 종류와 시간이 겹친다(R4). '그래도 저장'이면 `save(allowOverlap: true)`.
         case confirmOverlap
         /// 저장하지 않았다. 시트 안에 보일 문구(규칙 위반, 또는 저장 실패 — 띠의 다른 안내까지 옮기지 않는다). 문구가 없는 규칙도 있다.
-        case failed(String?)
-        /// 저장했거나, 고치던 기록이 그사이 지워졌다(되살리지 않는다, R10). 시트를 닫는다.
-        case closed
+        /// `problem`은 저장 검사(R3)에 걸린 것이면 그 검사(탓이 된 줄을 펼치고 그 아래에 글, U82). 저장 실패면 nil(단추 위).
+        /// `attempt`는 이 시트에서 몇 번째 실패인지다: 같은 오류가 다시 나도 새 값이라 화면이 펼침·흔들림·오류 햅틱을 매번 낸다(U82 11-12 보충).
+        case failed(String?, problem: CareProblem? = nil, attempt: Int)
+        /// 시트를 닫는다. `saved`는 실제로 저장했는가: 저장이면 참, 고치던 기록이 그사이 지워짐(되살리지 않는다, R10)·지우기면 거짓.
+        /// 확인 표시·성공 햅틱은 이 값으로만 정한다(U88 끝, 화면이 단계 순서로 짐작하지 않는다).
+        case closed(saved: Bool)
     }
 
     @ObservationIgnored private let stateRepo: PhoneStateRepository
@@ -203,25 +210,45 @@ final class CareSheetViewModel {
     /// 시트 입력. 고칠 기록을 찾지 못했으면 없다(시트를 그리지 않는다).
     private(set) var draft: CareDraft?
     private(set) var phase: Phase = .editing
+    /// 이 시트에서 낸 실패 수(`Phase.failed`의 `attempt`).
+    @ObservationIgnored private var failures = 0
+    /// U86: 종류 칸(기록 탭 '지난 기록 적기'만). 순서는 빠른 기록 순서(`quickKinds`), 처음은 수유.
+    let kinds: [CareKind]
 
     init(target: CareSheetTarget, state: PhoneStateRepository, care: CareRepository, recordCare: RecordCare, now: @escaping () -> Date) {
         stateRepo = state
         careRepo = care
         self.recordCare = recordCare
         self.now = now
+        var choose = false
         switch target {
-        case .new(let kind, let day): draft = .new(kind: kind, day: day, now: now())
+        case .new(let kind, let day, let chooseKind): draft = .new(kind: kind, day: day, now: now()); choose = chooseKind
         case .edit(let id): draft = care.care.events.first { $0.id == id && $0.deletedAt == nil }.map(CareDraft.editing)
         }
+        kinds = choose ? CareRules.quickKinds(sleepDiaper: care.care.sleepDiaperEnabled) : []
     }
 
     var guardian: Bool { stateRepo.role == .guardian }
 
-    /// 입력 칸을 고친다(시트가 바꾸는 것은 이 값뿐). 실패 글은 다음 저장까지 그대로 둔다.
+    /// U84: 지우지 않은 손 기록이 하나도 없을 때만 첫 기록 도움말(차 기록 줄은 `events`에 없다). 첫 기록을 저장하면 저절로 사라진다.
+    var firstRecord: Bool { careRepo.care.events.allSatisfy { $0.deletedAt != nil } }
+
+    /// U80: 새 수유의 쪽 칸에서 지난 수유의 쪽 아래 '지난번'(표시만, 미리 고르지 않는다). 고치기에는 보이지 않는다.
+    var lastSide: FeedSide? { draft?.original == nil ? CareRules.latestFeed(careRepo.care.events)?.feedSide : nil }
+
+    /// U86: 종류를 바꾼다(시각 입력은 그대로).
+    func setKind(_ k: CareKind) {
+        guard kinds.contains(k) else { return }
+        edit { $0.setKind(k) }
+    }
+
+    /// 입력 칸을 고친다(시트가 바꾸는 것은 이 값뿐). 고치면 앞 실패 글은 걷는다(고친 값에 앞 오류가 붙지 않게, 안드로이드와 같음).
+    /// 입력을 받는 단계(`canEdit`)에서만 바꾼다.
     func edit(_ change: (inout CareDraft) -> Void) {
-        guard var d = draft else { return }
+        guard canEdit, var d = draft else { return }
         change(&d)
         draft = d
+        if case .failed = phase { phase = .editing }
     }
 
     /// 몇 분 전 칩. 누른 때 기준이다.
@@ -230,29 +257,56 @@ final class CareSheetViewModel {
     /// 저장(안드로이드와 같은 단계 규칙). 고치는 중·실패 뒤에만 저장하고, `allowOverlap`('그래도 저장')은 겹침을 묻는 중에만 받는다.
     /// 저장해 닫히는 사이 또 누른 저장은 아무것도 하지 않는다. 새 기록 id는 시트를 열 때 정한 `draft.sheetId`라 다시 저장해도 같은 기록이다.
     func save(allowOverlap: Bool = false) {
-        guard let d = draft else { return }
+        guard let d = draft, d.savable else { return }   // 메모가 비면 단추가 꺼진다(U83)
         switch (phase, allowOverlap) {
         case (.editing, false), (.failed, false), (.confirmOverlap, true): break
         default: return
         }
         let e = d.event(now: now())
-        if d.original != nil, !careRepo.care.events.contains(where: { $0.id == e.id && $0.deletedAt == nil }) { phase = .closed; return }
+        if d.original != nil, !careRepo.care.events.contains(where: { $0.id == e.id && $0.deletedAt == nil }) { phase = .closed(saved: false); return }
         let r = recordCare.saveEvent(e, allowOverlap: allowOverlap)
         switch r {
-        case .saved: phase = .closed
+        case .saved: recordCare.markFresh(e.id); phase = .closed(saved: true)
         case .overlap: phase = .confirmOverlap
-        case .notSaved: phase = .failed(NoticeRules.saveFailed)
-        case .problem: phase = .failed(r.message(for: e.kind))
+        case .notSaved: fail(NoticeRules.saveFailed, nil)
+        case .problem(let p): fail(r.message(for: e.kind), p)
         }
+    }
+
+    /// 실패마다 새 값(시도 번호)을 낸다: 저장을 누를 때마다 화면이 반응한다(U82).
+    private func fail(_ message: String?, _ problem: CareProblem?) {
+        failures += 1
+        phase = .failed(message, problem: problem, attempt: failures)
     }
 
     /// 겹침을 묻는 창에서 '고치기'.
     func keepEditing() { if phase == .confirmOverlap { phase = .editing } }
 
-    /// 고치던 기록을 지운다(되돌리기 띠는 RecordCare가 띄운다).
+    /// 입력·지우기를 받는 단계(U88): 저장 확인 표시가 머무는 동안(`closed`)과 겹침을 묻는 중에는 받지 않는다. 휴지통도 이것으로 켠다.
+    var canEdit: Bool {
+        switch phase { case .editing, .failed: true; default: false }
+    }
+
+    /// 고치던 기록을 지운다(되돌리기 띠는 RecordCare가 띄운다). `canEdit`일 때만.
     func delete() {
-        guard let id = draft?.original?.id else { return }
+        guard canEdit, let id = draft?.original?.id else { return }
         recordCare.delete(id)
-        phase = .closed
+        phase = .closed(saved: false)
+    }
+}
+
+/// 기록 시트가 닫힐 때 보일 것(U88 끝): 확인 표시·성공 햅틱은 실제로 저장되어 닫힐 때만. 메모 저장은 햅틱만(11-11 사용자 결정),
+/// 동작 줄이기면 햅틱만 내고 바로 닫는다. 저장하지 않고 닫히면(지우기·그사이 지워짐) 아무것도 없이 바로 닫는다.
+enum SheetCloseFeedback: Equatable {
+    /// 단추에 확인 표시(spring.bouncy) + 성공 햅틱, 320ms 뒤 닫힘
+    case confirm
+    /// 성공 햅틱만, 바로 닫힘
+    case hapticOnly
+    /// 바로 닫힘
+    case none
+
+    static func on(saved: Bool, kind: CareKind, reduceMotion: Bool) -> SheetCloseFeedback {
+        guard saved else { return .none }
+        return kind == .note || reduceMotion ? .hapticOnly : .confirm
     }
 }
