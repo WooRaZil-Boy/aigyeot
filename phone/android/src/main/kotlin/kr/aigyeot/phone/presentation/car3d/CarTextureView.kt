@@ -97,7 +97,22 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
         }
     }
 
-    init { ui.attachTo(this); isOpaque = false }
+    /** 첫 그림(U90): 그린 장이 처음 TextureView에 들어왔을 때 한 번 부른다(메인 스레드). */
+    var onFirstFrame: (() -> Unit)? = null
+    private var shown = false
+
+    init {
+        ui.attachTo(this)
+        isOpaque = false
+        // UiHelper가 단 수신기를 감싸 첫 onSurfaceTextureUpdated를 안다(차 앱 CarView와 같은 방법). SwapChain 다 그림 알림은 에뮬레이터 OpenGL에서 오지 않는다.
+        val inner = surfaceTextureListener
+        if (inner != null) surfaceTextureListener = object : SurfaceTextureListener by inner {
+            override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) {
+                inner.onSurfaceTextureUpdated(st)
+                if (!shown) { shown = true; onFirstFrame?.invoke() }
+            }
+        }
+    }
 
     /** TextureView는 표면 크기를 바꾸기 전에 그리던 프레임을 끝내야 한다(FilamentHelper 안내: onResized에서는 늦다). */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
