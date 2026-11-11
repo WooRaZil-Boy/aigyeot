@@ -85,26 +85,61 @@ for m in re.finditer(r"text=\"([^\"]*)\"[^>]*?bounds=\"\[(\d+),(\d+)\]\[(\d+),(\
 ' "$@"
 }
 
+# 덤프에서 글자 $1(있으면 $2 다음의 $1)을 찾을 때까지 최대 UI_WAIT_S초(기본 10), 1.5초마다 다시 찾는다(에뮬레이터를 켠 직후·맥 부하가 높을 때는 화면이 늦게 뜬다).
+# 그 사이의 덤프 실패도 다시 한다. 마지막 한 번은 덤프 실패 메시지를 그대로 보인다. 찾으면 "x y", 못 찾으면 빈 출력
+ui_wait() {
+  local xy end=$((SECONDS + ${UI_WAIT_S:-10}))
+  while [ $SECONDS -lt $end ]; do
+    xy=$(ui_dump 2>/dev/null | ui_pos "$@")
+    [ -n "$xy" ] && { echo "$xy"; return 0; }
+    sleep 1.5
+  done
+  ui_dump | ui_pos "$@"
+}
+
 # 실내 조명 '무드 조명' 스위치를 차량 설정 화면에서 누른다(VC ambient_mode로는 앱이 읽는 스위치가 안 켜진다, featD_1110).
 # $1 = 켜기 | 끄기. 차량 설정 → '라이트' → 아래로 스크롤 → '무드 조명' 다음의 [끄기|켜기|자동] 중 $1을 덤프에서 찾아 누른다.
+# 에뮬레이터를 켠 직후에는 운전자 쪽 Pleos UI 서비스가 뒤늦게 뜨며 시스템 창 닫기(closeSystemDialog)를 보내, 열어 둔 차량 설정이 아무 단계에서나
+# 사라지고 내비가 드러나는 일이 있다(demo_1111.txt). 그래서 한 번 시도가 어디서 막히든 차량 설정 열기부터 다시 한다(최대 세 번). 이미 $1이 골라져 있어도 다시 눌러 괜찮다
 ambient_switch() {
-  local want="$1" out xy i
+  local i
+  for i in 1 2 3; do
+    ambient_try "$1" && return 0
+    [ $i -lt 3 ] && echo "다시: 차량 설정을 처음부터 다시 연다($((i + 1))/3)" >&2
+  done
+  die "무드 조명 '$1'을 누르지 못했다(차량 설정을 세 번 열어 봄, 위 메시지 확인)"
+}
+
+# 화면 덤프($1)에 차량 설정 왼쪽 메뉴 '라이트'가 없으면 참(차량 설정이 사라짐). 덤프가 비면(덤프 실패) 거짓으로 보고 계속한다.
+# 스크롤 고리에서만 쓴다: 덤프가 계속 비어도 그 고리는 결국 '찾지 못했다'로 다시 시도하므로 거짓 성공이 되지 않는다
+vc_gone() { [ -n "$1" ] && [ -z "$(printf '%s' "$1" | ui_pos "라이트")" ]; }
+
+# ambient_switch 한 번 시도. 막히면 이유를 찍고 1(다시 시도할 일), 차량 설정 실행 자체가 오류면 멈춘다
+ambient_try() {
+  local want="$1" out xy x i
   out=$(a shell am start -n ai.umos.vehiclecontrol/.VehicleControlActivity 2>&1) || die "차량 설정을 열지 못했다: ${out:0:160}"
   case "$out" in *Error*|*Exception*) die "차량 설정을 열지 못했다: ${out:0:160}";; esac
-  sleep 2
-  xy=$(ui_dump | ui_pos "라이트"); [ -n "$xy" ] || die "차량 설정 화면에서 '라이트' 항목을 찾지 못했다(화면 덤프에 없음)"
-  a shell input tap $xy || { echo "실패: '라이트' 탭 실패(adb input tap $xy)" >&2; return 1; }
+  sleep 1   # 화면이 들어오는 움직임이 끝날 틈
+  xy=$(UI_WAIT_S=5 ui_wait "라이트")
+  [ -n "$xy" ] || { echo "차량 설정 화면에서 '라이트' 항목을 찾지 못했다(약 5초)" >&2; return 1; }
+  a shell input tap $xy || return 1
   sleep 1
-  xy=""
+  # '라이트'를 누르면 맨 위(실외 조명)부터 보여 '무드 조명'은 스크롤해야 나온다. 스크롤마다 차량 설정이 아직 있는지 본다
   for i in 1 2 3 4 5 6; do
-    xy=$(ui_dump | ui_pos "$want" "무드 조명")
+    x=$(ui_dump 2>/dev/null)   # 덤프가 한 번 실패해도 멈추지 않고 스크롤하며 다시 찾는다
+    xy=$(printf '%s' "$x" | ui_pos "$want" "무드 조명")
     [ -n "$xy" ] && break
-    a shell input swipe 1900 1150 1900 250 500 || { echo "실패: 스크롤 실패(adb input swipe)" >&2; return 1; }
+    vc_gone "$x" && { echo "차량 설정이 사라졌다('무드 조명'을 찾는 중)" >&2; return 1; }
+    a shell input swipe 1900 1150 1900 250 500 || return 1
     sleep 1
   done
-  [ -n "$xy" ] || die "'무드 조명' 다음의 '$want'를 찾지 못했다(스크롤 6번까지 시도)"
-  a shell input tap $xy || { echo "실패: '$want' 탭 실패(adb input tap $xy)" >&2; return 1; }
-  sleep 1   # 마지막 명령이 탭이 아니게 되므로 위 || 가 실패 코드를 지킨다
+  [ -n "$xy" ] || { echo "'무드 조명' 다음의 '$want'를 찾지 못했다(스크롤 6번)" >&2; return 1; }
+  a shell input tap $xy || return 1
+  sleep 1
+  # 누른 뒤에도 '라이트'가 보여야 성공으로 친다(덤프 실패는 ui_wait이 다시 찍는다). 누르기 직전 덤프에서 차량 설정이 열려 있었고 그 사이 다시 여는 일은 없으니,
+  # 누른 뒤에도 보이면 탭이 차량 설정에 들어간 것이다. 안 보이면 누르는 순간 닫혀 다른 화면을 눌렀을 수 있어 다시 한다
+  [ -n "$(UI_WAIT_S=3 ui_wait "라이트" 2>/dev/null)" ] || { echo "차량 설정이 사라졌다('$want'를 누른 직후)" >&2; return 1; }
+  return 0
 }
 ambient_on() { ambient_switch 켜기; }
 ambient_off() { ambient_switch 끄기; }
