@@ -66,7 +66,7 @@ struct ReportDetailView: View {
 /// 명세서 11장의 다섯 항목을 모두 그린다. 숫자 줄 규칙은 안드로이드와 같다(진행 기록 '결정' 6).
 private struct ReportDetailContent: View {
     let report: StoredReport
-    /// `song_id`로 내 곡 목록에서 이름을 찾는다. 없으면 "부모 노래".
+    /// `song_id`로 내 곡 목록에서 이름을 찾는다. 없으면 "우리 노래".
     let songName: (String?) -> String?
 
     var body: some View {
@@ -80,7 +80,7 @@ private struct ReportDetailContent: View {
                     Text(head).typeStyle(.meta).foregroundStyle(DS.textTertiary)
                     Text(CareText.reportSub(cries: b.timeline.filter { $0.trigger == .cryAlarm }.count, simulated: false))
                         .typeStyle(.hero).foregroundStyle(DS.textPrimary).padding(.top, 6)
-                    if b.simulated { Badge(text: "시뮬레이션").padding(.top, 6) }
+                    if b.simulated { Badge(text: "연습 장면").padding(.top, 6) }
                     // 시안 '그칠 때까지'는 그친 시각이 리포트에 없어 쓰지 않고 '울음 시간'(totalCryS 합)을 쓴다(거짓 시간 방지, 안드로이드와 같다).
                     VStack(alignment: .leading, spacing: 16) {
                         KpiRow(items: [
@@ -94,13 +94,13 @@ private struct ReportDetailContent: View {
                     // 재생이 한 번도 없으면 출력 경로 표시를 넣지 않는다.
                     if b.outputRoute == .rearZone { note("소리 나간 곳 · 뒷좌석") }
                     if b.outputRoute == .defaultZoneFallback { note("소리 나간 곳 · 앞에서도 들림") }
-                    if b.truncated == true { note("오래된 에피소드는 줄였어요") }
+                    if b.truncated == true { note("기록이 많아 일부를 줄였어요") }
                 }
                 .block(padding: EdgeInsets(top: 22, leading: 22, bottom: 20, trailing: 22))
 
                 VStack(alignment: .leading, spacing: 0) {
-                    BlockHeader(title: "에피소드")
-                    if b.timeline.isEmpty { Text("기록된 에피소드가 없어요").typeStyle(.body).foregroundStyle(DS.textTertiary) }   // 울음이 없었다고 단정하지 않는다
+                    BlockHeader(title: CareText.episodeSectionHead(b.timeline.map(\.trigger)))
+                    if b.timeline.isEmpty { Text("기록된 울음이 없어요").typeStyle(.body).foregroundStyle(DS.textTertiary) }   // 울음이 없었다고 단정하지 않는다
                     ForEach(Array(b.timeline.enumerated()), id: \.element.episodeId) { i, e in
                         if i > 0 { Rectangle().fill(DS.line).frame(height: 1).padding(.vertical, 16) }
                         EpisodeView(episode: e, songName: songName)
@@ -110,7 +110,7 @@ private struct ReportDetailContent: View {
 
                 if let stats = b.methodStats, !stats.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
-                        BlockHeader(title: "방법별 성적")
+                        BlockHeader(title: "소리별 성적")
                         MethodDots(rows: methodDotRows(stats))
                         BlockNote(text: "그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.")
                     }
@@ -128,11 +128,11 @@ private struct ReportDetailContent: View {
                         BlockHeader(title: "울음 직전 주행")
                         ForEach(Array(b.preCryContext.enumerated()), id: \.element.episodeId) { i, c in
                             if i > 0 { Rectangle().fill(DS.line).frame(height: 1).padding(.vertical, 12) }
-                            Text("울기 전 \(c.windowS)초").typeStyle(.caption).foregroundStyle(DS.textTertiary).padding(.bottom, 6)
+                            Text("울음 감지 전 \(c.windowS)초").typeStyle(.caption).foregroundStyle(DS.textTertiary).padding(.bottom, 6)
                             KeyValues(rows: [
-                                ("속도", "평균 \(Int(c.speedKmhAvg.rounded())) · 최고 \(Int(c.speedKmhMax.rounded())) km/h"),
+                                ("속도", "평균 \(Int(c.speedKmhAvg.rounded())) · 최고 \(Int(c.speedKmhMax.rounded()))km/h"),
                                 ("브레이크", "\(c.brakePresses)번"),
-                                ("큰 조향 반전", "\(c.steeringReversals)번"),
+                                ("큰 조향", "\(c.steeringReversals)번"),
                             ] + (c.cabinTempC.map { [("실내", String(format: "%.1f℃", $0))] } ?? []))
                             Text("기어 \(c.gear.rawValue)" + (c.turnSignalUsed ? ", 방향지시등 씀" : "") + (c.playing ? ", 소리 재생 중" : "")
                                  + (c.windowOpen == true ? ", 창 열림" : ""))
@@ -197,29 +197,28 @@ private struct EpisodeView: View {
     var body: some View {
         let e = episode
         VStack(alignment: .leading, spacing: 0) {
-            BlockSub(text: Text("\(clock(e.startedAt)) \(e.trigger == .cryAlarm ? "울음 감지" : "소리 바꾸기 요청")부터" + (e.result == .success ? " 그칠 때까지" : "")))
+            BlockSub(text: Text("\(clock(e.startedAt)) \(CareText.episodeStart(e.trigger))부터" + (e.result == .success ? " 그칠 때까지" : "")))
             if !e.plays.isEmpty {
                 let band = ChartData.episode(e) { methodName($0.method, songName($0.songId)) }
                 // 화면 읽기: 재생마다 실제 길이(에피소드 끝 시각은 리포트에 없어 전체 길이는 말하지 않는다, 안드로이드와 같다)
-                EpisodeBandChart(band: band, summary: "에피소드: " + (band.sounds.map(\.tip) + band.marks.map(\.label) + band.outcomes).joined(separator: ", "))
+                EpisodeBandChart(band: band, summary: ChartData.episodeSummary(e, band))
                 if !band.outcomes.isEmpty {
                     HStack(spacing: 6) { ForEach(band.outcomes, id: \.self) { Badge(text: $0) } }.padding(.top, 8).accessibilityHidden(true)
                 }
                 Spacer().frame(height: 12)
             }
             VStack(alignment: .leading, spacing: 4) {
-                if e.trigger == .cryAlarm, let l = e.alarmLatencyS { line("감지까지", ChartData.seconds(l)) }
-                line("소리", e.sound.map { soundLabel($0.method, $0.label) } ?? "틀지 않았어요")
-                line("재생", minSec(e.playS))
+                ForEach(Array(episodeSoundLines(e).enumerated()), id: \.offset) { _, l in line(l.0, l.1) }
                 ForEach(Array(e.plays.enumerated()), id: \.offset) { _, p in
                     Text("· \(purposeText(p.purpose)) \(methodName(p.method, songName(p.songId))) \(span(p.startedAt, p.endedAt)) \(minSec(p.playS))")
                         .typeStyle(.footnote).foregroundStyle(DS.textTertiary)
                 }
-                line("판정", resultText(e.result, excluded: e.excludedReason))
-                if e.recried { line("다시 울었는지", "다시 울었어요") }
+                line("결과", CareText.result(e.result))
+                if let x = e.excludedReason { line("성적에서 뺌", CareText.excluded(x)) }
+                if e.recried { line("다시 울음", "있음") }
                 if let s = e.second { line("2차", secondText(s)) }
                 if let st = e.stop { line("정차", stopText(st)) }
-                line("총 울음", minSec(e.totalCryS))
+                line("울음 시간", minSec(e.totalCryS))
             }
         }
     }
@@ -240,7 +239,7 @@ private struct SteeringView: View {
         if !s.available {
             Text(s.unavailableReason == .noCry ? "울음이 없어 비교하지 않았어요" : "비교할 구간이 없어요").typeStyle(.body).foregroundStyle(DS.textTertiary)
         } else {
-            let items: [(String, Double?, Bool)] = [("평소", s.baselinePerMin, false), ("울음 중", s.duringCryPerMin, true), ("대응 뒤", s.afterResponsePerMin, false)]
+            let items: [(String, Double?, Bool)] = [("평소", s.baselinePerMin, false), ("울음 중", s.duringCryPerMin, true), ("달랜 뒤", s.afterResponsePerMin, false)]
             BlockSub(text: Text("1분당 큰 조향 보정"))
             WeekBarsChart(items: items.map { k, v, hot in
                 .init(label: k, value: v, tip: v.map { "\(k) · 1분당 \(ChartData.perMin($0))번" }, hot: hot, valueLabel: v.map(ChartData.perMin), dim: !hot)
@@ -252,13 +251,13 @@ private struct SteeringView: View {
 
 // MARK: 문구
 
-/// 음원 표시 이름(CareText.method 한 곳). 부모 노래는 곡 이름을 덧붙인다.
+/// 소리 표시 이름(CareText.method 한 곳). 우리 노래는 곡 이름을 덧붙인다(D6 값 보충 괄호).
 private func methodName(_ m: SoundMethod, _ song: String?) -> String {
     let base = CareText.method(m)
     return m == .parentSong ? song.map { "\(base)(\($0))" } ?? base : base
 }
 
-/// 방법별 성적 점 행렬 줄(순서 규칙은 `CareStats.methodOrder` 한 곳, 안드로이드와 같다).
+/// 소리별 성적 점 행렬 줄(순서 규칙은 `CareStats.methodOrder` 한 곳, 안드로이드와 같다).
 func methodDotRows(_ stats: [MethodStat]) -> [MethodDots.Row] {
     CareStats.methodOrder(stats).map { MethodDots.Row(id: $0.index, name: soundLabel($0.stat.method, $0.stat.label), ok: $0.stat.successes, n: $0.stat.attempts) }
 }
@@ -272,32 +271,14 @@ private func purposeText(_ p: PlayPurpose) -> String {
     switch p { case .autoFirst: return "자동 1차"; case .autoSecond: return "자동 2차"; case .request: return "운전자 요청" }
 }
 
-private func resultText(_ r: EpisodeResult?, excluded: ExcludedReason?) -> String {
-    if let x = excluded { return "성적에서 뺐어요(\(excludedText(x)))" }
-    switch r {
-    case .success?: return "그쳤어요"
-    case .failure?: return "이어졌어요"
-    case .undetermined?: return "판정하지 못했어요"
-    case nil: return "1차 시도가 없었어요"
-    }
-}
-
-private func excludedText(_ x: ExcludedReason) -> String {
-    switch x {
-    case .driverStop: return "운전자가 멈춤"
-    case .call: return "통화 중"
-    case .gearToPark: return "기어를 P로 바꿈"
-    case .startedInPark: return "정차 중에 시작"
-    case .switchSound: return "소리를 바꿈"
-    case .sessionCap: return "세션 시간 상한"
-    case .feedingWindow: return "수유 시간대"
-    case .micError: return "마이크 오류"
-    case .focusLoss: return "다른 소리가 이어받음"
-    case .detectorTimeout: return "판별 시간 초과"
-    case .inputSilenced: return "입력이 무음 처리됨"
-    case .suspend: return "차가 절전에 들어감"
-    case .sessionEnd: return "세션이 끝나 판정하지 못했어요"
-    }
+/// 울음 한 건의 앞 줄(U73, 안드로이드 `episodeSoundLines`와 같은 규칙): '감지까지'(울음 경보만) · '소리'(틀지 않았으면 '재생 없음') ·
+/// '재생'(틀었을 때만: 틀지 않았으면 '소리 · 재생 없음'이 이미 말한다). 재생마다의 줄은 그 뒤에 화면이 그린다.
+func episodeSoundLines(_ e: TimelineEpisode) -> [(String, String)] {
+    var out: [(String, String)] = []
+    if e.trigger == .cryAlarm, let l = e.alarmLatencyS { out.append(("감지까지", ChartData.seconds(l))) }
+    out.append(("소리", e.sound.map { soundLabel($0.method, $0.label) } ?? "재생 없음"))
+    if e.sound != nil { out.append(("재생", minSec(e.playS))) }
+    return out
 }
 
 private func secondText(_ s: SecondAttempt) -> String {
@@ -305,10 +286,10 @@ private func secondText(_ s: SecondAttempt) -> String {
     switch s.action {
     case .comfortCool: what = "더운 실내로 판단했어요"
     case .feedingWindow: what = "수유 시간대로 판단했어요"
-    case .otherSound: what = "다른 소리로 바꿨어요" + (s.sound.map { "(\(soundLabel($0.method, $0.label)))" } ?? "")
+    case .otherSound: what = "다른 소리로 바꿨어요" + (s.sound.map { " · " + soundLabel($0.method, $0.label) } ?? "")
     case .focusDenied: what = "소리를 이어서 틀지 못했어요"
     }
-    return what + (s.result.map { " · " + resultText($0, excluded: nil) } ?? "")
+    return what + (s.result.map { " · " + CareText.result($0) } ?? "")
 }
 
 /// U53: 차가 운전자에게 말하지 못한 인계(toldDriver == false)는 제안했다고 보이지 않는다.
@@ -334,7 +315,7 @@ func stopText(_ s: StopInfo) -> String {
     let why: String
     switch s.reason {
     case .attemptLimit: why = "두 번 시도 뒤"
-    case .sessionCap: why = "세션 20분 상한"
+    case .sessionCap: why = "달래기 20분 끝남"
     case .feedingWindow: why = "수유 시간대"
     case .noSound: why = "뒷좌석 출력 없음"
     }

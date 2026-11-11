@@ -123,7 +123,7 @@ class LinkSendTest : LinkKit() {
         assertNull(dao.credential())
         assertTrue(dao.phoneLinks().isEmpty())
         assertEquals(2, outbox().size)   // 보낼 함은 남긴다
-        assertEquals("휴대폰을 다시 연결해 주세요.", link.status.value.error)
+        assertEquals("휴대폰을 다시 연결해 주세요", link.status.value.error)
     }
 
     @Test fun pump_401_frontWaits60s_noReRegisterChain() {

@@ -12,7 +12,7 @@ import { BASE, addGuardian, call, carWithOwner, newCar, send } from "./helpers";
 const fixtures = import.meta.glob("./fixtures/llm_*", { query: "?raw", import: "default", eager: true });
 const fixture = (name: string) => fixtures[`./fixtures/${name}`] as string;
 const contractTools = JSON.parse(fixture("llm_tools.json"));
-const contractPrompt = fixture("llm_p6.txt");
+const contractPrompt = fixture("llm_p7.txt");
 
 type Seen = { url: string; headers: Headers; body: any };
 
@@ -66,7 +66,7 @@ describe("POST /v1/llm", () => {
     const seen = fakeFetch(() => claude([{ type: "thinking", thinking: "" }, { type: "text", text: "자장가가 " }, { type: "text", text: "잘 통했어요." }]));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody() });
     expect(r.status).toBe(200);
-    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-sonnet-5-5", prompt_version: "p6" });
+    expect(r.json).toMatchObject({ text: "자장가가 잘 통했어요.", tool_calls: [], stop_reason: "end_turn", model: "claude-sonnet-5-5", prompt_version: "p7" });
     expect(typeof r.json.latency_ms).toBe("number");
     const [s] = seen;
     expect(s.url).toBe("https://api.anthropic.com/v1/messages");
@@ -83,15 +83,16 @@ describe("POST /v1/llm", () => {
     expect(s.body.messages[0].content).toMatch(/\n\n운전자 질문: 뭐가 제일 잘 통해\?$/);
   });
 
-  it("c194 p6 지시: 버전 p6, 사실 주제는 글 없이 도구로, 글에는 숫자를 쓰지 않는다(계약 글자 그대로)", () => {
-    expect(PROMPT_VERSION).toBe("p6");
+  it("c194·c385 p7 지시: 버전 p7, 사실 주제는 글 없이 도구로, 글에는 숫자를 쓰지 않는다(계약 글자 그대로)", () => {
+    expect(PROMPT_VERSION).toBe("p7");
     expect(SYSTEM_PROMPT).toBe(contractPrompt);
     expect(SYSTEM_PROMPT).toContain("이때 글은 쓰지 않는다");
     expect(SYSTEM_PROMPT).toContain("글에는 숫자를 쓰지 않는다");
+    expect(SYSTEM_PROMPT.split("\n").pop()).toBe('- 해요체로 말한다. 합니다체·반말과 "-시-"·"~시겠어요?"를 쓰지 않는다.');
     expect(SYSTEM_PROMPT).not.toContain("숫자는 상태값에 있는 숫자만");
   });
 
-  it("p6 answer tool_use는 tool_calls로 그대로 넘긴다", async () => {
+  it("p7 answer tool_use는 tool_calls로 그대로 넘긴다", async () => {
     const car = await newCar();
     fakeFetch(() => claude([{ type: "tool_use", id: "t1", name: "answer", input: { topics: ["feeding", "sleep"] } }], "tool_use"));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody("마지막 수유 언제야") });
@@ -179,7 +180,7 @@ describe("FCM 푸시", () => {
     const m = push.body.message;
     expect(m).toMatchObject({
       token: "fcm-token-1",
-      notification: { title: "아이곁", body: a.text },
+      notification: { title: "인계 알림", body: a.text },
       data: { msg_id: sent.json.id, type: "handoff_alert" },
       android: { priority: "high", notification: { channel_id: "handoff_alert", tag: sent.json.id } },
     });

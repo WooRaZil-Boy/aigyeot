@@ -31,7 +31,7 @@ fun sampleBeta(a: Int, b: Int, rng: Long): Pair<Long, Double> {
     return r to if (ga + gb == 0.0) 0.5 else ga / (ga + gb)
 }
 
-/** 처음 순서(백색소음 → 뱃속 소리 → 자장가 → 부모 노래, enum 선언 순서). 같은 종류는 받은 순서 그대로. */
+/** 처음 순서(백색소음 → 뱃속 소리 → 자장가 → 우리 노래, enum 선언 순서). 같은 종류는 받은 순서 그대로. */
 private fun ordered(methods: List<Method>) = methods.sortedBy { it.kind.ordinal }
 
 data class Pick(val method: Method, val rng: Long)
@@ -222,15 +222,13 @@ fun spokenMin(min: Long): String {
 }
 fun spokenMin(min: Int): String = spokenMin(min.toLong())
 internal fun hm(ms: Long): String = spokenMin(ms / 60_000)
-internal fun methodName(m: Method) = when (m.kind) {
+/** 소리 이름 하나(말·화면·④·리포트 `sound.label`·`method_stats.label` 모두, C385가 C303 A19 '말과 부모 노래만 다르다'를 고침). */
+fun methodLabel(k: MethodKind) = when (k) {
     MethodKind.WHITE_NOISE -> "백색소음"
     MethodKind.WOMB -> "뱃속 소리"
     MethodKind.LULLABY -> "자장가"
     MethodKind.SONG -> "우리 노래"
 }
-
-/** C303 A19: 화면·④·리포트에 쓰는 음원 이름. 말(methodName)과 부모 노래만 다르다("우리 노래" ↔ "부모 노래"). */
-fun methodLabel(k: MethodKind) = if (k == MethodKind.SONG) "부모 노래" else methodName(Method(k))
 
 private const val B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 

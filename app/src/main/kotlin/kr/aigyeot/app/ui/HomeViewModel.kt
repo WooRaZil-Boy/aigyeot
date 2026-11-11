@@ -72,7 +72,8 @@ sealed interface HomeCard {
     /** 쉼터: 이름·부가('수유실 · 7km')·경유지로 넣었는가. */
     data class Rest(val name: String, val sub: String?, val added: Boolean) : HomeCard
     /** 정차 중 마지막 에피소드 흐름(시작 시각 + 차례). */
-    data class Episode(val at: Long, val flow: List<FlowItem>) : HomeCard
+    /** [head]: 제목 머리(episodeHead: 울음 경보 '울음', 운전자 요청 '소리 바꾸기 요청'). */
+    data class Episode(val at: Long, val head: String, val flow: List<FlowItem>) : HomeCard
     /** 물어보기: 듣는 중이면 마이크, 들은 질문, 답. */
     data class Ask(val listening: Boolean, val question: String?, val answer: String?) : HomeCard
 }
@@ -279,7 +280,7 @@ internal fun sub(s: EngineState?, now: Long): String? {
     val x = s?.session ?: return null
     if (x.phase != Phase.LISTENING || s.car.gear == Gear.P) return null
     val drive = x.leftParkAt?.let { ((now - it) / 60_000).takeIf { m -> m >= 0 } }
-    val parts = listOfNotNull(drive?.let { "주행 ${it}분째" }, s.car.cabinC?.let { "실내 ${it.roundToInt()}°" })
+    val parts = listOfNotNull(drive?.let { "주행 ${it}분째" }, s.car.cabinC?.let { "실내 ${it.roundToInt()}℃" })
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
@@ -362,9 +363,9 @@ internal fun episodeCard(e: TimelineEpisode): HomeCard.Episode? {
             add(FlowItem(methodKindOf(pl.method)?.let(::methodLabel) ?: "기타", Tone.MUTED))
         }
         e.stop?.let { st -> if (st.mode == HandoffKind.REST_OFFER && toldShown(st.toldDriver, settled = true)) add(FlowItem("쉼터 제안", Tone.CHILD)) }
-        if (e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS) add(FlowItem("그쳤어요", Tone.ACCENT))   // 1차든 2차든 그쳤으면
+        if (e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS) add(FlowItem(resultText(EpisodeResult.SUCCESS), Tone.ACCENT))   // 1차든 2차든 그쳤으면
     }
-    return if (flow.isEmpty()) null else HomeCard.Episode(at, flow)
+    return if (flow.isEmpty()) null else HomeCard.Episode(at, episodeHead(e.trigger), flow)
 }
 
 /** 3D 무대 상태(시안 STEPS의 view·light·ripple·callouts·listen). 주행·동작 줄이기 깃발은 화면이 붙인다. */
@@ -382,7 +383,7 @@ internal fun stage(s: EngineState?, done: Set<OkControl> = emptySet()): Stage3d 
         if (x != null && done.any { it.act == ControlAct.CABIN_COOL }) add(Callout3d.HVAC)
         if (x != null && heat.isNotEmpty()) add(Callout3d.HEAT)
     }
-    if (x == null) return Stage3d(View3d.HERO, if (s?.car?.micRunning == true) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)
+    if (x == null) return Stage3d(View3d.CABIN, if (s?.car?.micRunning == true) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)
     return sessionStage(x, s.hears(), callouts, seat).copy(sides = mapOf(Callout3d.LOCK to lock, Callout3d.HEAT to heat).filterValues { it.isNotEmpty() })
 }
 
@@ -395,8 +396,8 @@ private fun sessionStage(x: kr.aigyeot.engine.SessionState, mic: Boolean, callou
         // 듣는 빛·듣기 표시는 판단 코어가 소리를 볼 때만(마이크 꺼짐·입력 끊김에 듣는다는 거짓 표시 방지, S17·5.3)
         is Stage.Gap, is Stage.Confirm -> Stage3d(View3d.REAR, Light3d.BASE, listen = mic, callouts = callouts, seat = seat)
         is Stage.Handoff -> Stage3d(View3d.REAR, Light3d.BASE, callouts = callouts, seat = seat)
-        is Stage.Wait -> Stage3d(View3d.HERO, if (st.play != null) Light3d.SOOTHE else if (mic) Light3d.LISTEN else Light3d.BASE, ripple = ripple, callouts = callouts, seat = seat)
-        Stage.Listening -> Stage3d(View3d.HERO, if (mic) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)
+        is Stage.Wait -> Stage3d(View3d.CABIN, if (st.play != null) Light3d.SOOTHE else if (mic) Light3d.LISTEN else Light3d.BASE, ripple = ripple, callouts = callouts, seat = seat)
+        Stage.Listening -> Stage3d(View3d.CABIN, if (mic) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)
     }
 }
 
@@ -457,7 +458,7 @@ internal fun dayChart(s: EngineState?, car: List<CarSpan>, now: Long, zone: java
             val driveMs = drives.sumOf { it.ms }   // 합계와 툴팁이 같은 값
             val cries = spans.flatMap { it.alarms }.filter(::today)   // 울음 경보 에피소드마다 한 번(리포트 목록 '울음 n번'과 같은 수, C381)
             // 세션 구간(출발 D부터 도착 뒤 뒷문 열 때까지)이라 중간 정차도 들어 있다: '주행'이 아니라 아기가 타 있던 '탑승' 시간
-            add(DayLane("차에서", DataColor.CAR, "탑승 " + TimeText.duration(driveMs), if (cries.isEmpty()) "울음 없음" else "울음 ${cries.size}번",
+            add(DayLane("차에서", DataColor.CAR, "탑승 " + TimeText.duration(driveMs), "울음 ${cries.size}번",
                 blocks = drives, diamonds = cries.map(::min)))
         }
     }
@@ -477,8 +478,8 @@ internal fun sleepValue(todayMin: Int, hasBlock: Boolean) = when {
 /** C303 ⑤(B7): 물어보기 버튼은 판단 코어가 AskButton을 받을 때만 켠다(말하는 중·통화·질문 창 등에서 눌러도 버려지지 않게). */
 internal fun askEnabled(s: EngineState?): Boolean = s?.canAsk() == true
 
-/** 수유 간격 글 '평소 3시간'(시안 v4-8 intervalText). */
-internal fun intervalText(min: Int) = "평소 " + if (min % 60 == 0) "${min / 60}시간" else if (min < 60) "${min}분" else "${min / 60}시간 ${min % 60}분"
+/** 수유 간격 글 '평소 3시간'(시안 v4-8 intervalText). 간격 글 꼴(U20)은 아기 설정과 같은 [intervalText] 하나다. */
+internal fun usualIntervalText(min: Int) = "평소 " + intervalText(min)
 
 /** 지난 시간 큰 숫자 'h:mm'(시안 feedCard). 1분 미만은 '방금'. */
 internal fun agoText(ms: Long): String = (ms / 60_000).coerceAtLeast(0).let { m -> if (m < 1) "방금" else "${m / 60}:%02d".format(m % 60) }

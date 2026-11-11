@@ -76,7 +76,7 @@ final class RecorderViewModel {
                 Task { @MainActor in self?.tick() }
             }
         } catch {
-            self.error = "녹음을 시작하지 못했어요."
+            self.error = "녹음을 시작하지 못했어요. 다른 앱이 마이크를 쓰고 있으면 닫고 다시 눌러 주세요."
         }
     }
 

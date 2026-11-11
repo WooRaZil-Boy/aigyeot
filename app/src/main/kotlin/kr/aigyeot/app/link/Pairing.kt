@@ -16,7 +16,7 @@ import kr.aigyeot.app.store.bestEffortSuspend
 import kr.aigyeot.engine.Params
 
 private const val TAG = "Link"
-private const val DISCONNECT_FAILED = "연결을 끊지 못했어요. 잠시 뒤 다시 해 주세요."
+private const val DISCONNECT_FAILED = "연결을 끊지 못했어요. 잠시 뒤에 다시 해 주세요."
 
 /**
  * 연결 화면(8.7): 연결 코드 받기·갱신·지우기, 폰 연결 끊기, 폰 목록 새로고침. 범주 R·U.

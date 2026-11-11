@@ -119,7 +119,7 @@ class LinkQaTest : LinkKit() {
         assertEquals(7.2, st.nextRest!!.distanceKm); assertEquals("r1", st.nextRest!!.id)
         val lullaby = st.methodStats.single { it.label == "자장가" }
         assertEquals(6, lullaby.successes); assertEquals(7, lullaby.attempts)
-        assertEquals("부모 노래", st.methodStats.last().label)   // 곡 이름은 보내지 않는다
+        assertEquals("우리 노래", st.methodStats.last().label)   // 곡 이름은 보내지 않는다
         assertNull(st.lastNightWakeups)
     }
 
@@ -148,7 +148,7 @@ class LinkQaTest : LinkKit() {
         val st = stateWith(careNow())
         fun out(r: LlmResponse, q: String = "q") = qaEventsCare(r, "L1", T0, st, q, emptyList())
         out(reply("불편할 수 있어요.", answer("why"))).let { assertTrue(it.llm); assertEquals("", it.fallback); assertEquals(listOf("why"), it.fallbackTopics); assertTrue(it.fallbackCare) }   // C227: 글 대신 주제
-        out(reply("불편할 수 있어요.", answer("unknown"))).let { assertTrue(it.llm); assertEquals("그건 제가 알 수 없어요.", it.fallback) }
+        out(reply("불편할 수 있어요.", answer("unknown"))).let { assertTrue(it.llm); assertEquals("그건 알 수 없어요.", it.fallback) }
         out(reply("아기가 불편할 수 있어요."), "q").let { assertTrue(it.llm); assertEquals(offlineReply("q", st), it.fallback); assertEquals(emptyList(), it.fallbackTopics); assertEquals(offlineCareUsed("q"), it.fallbackCare) }
         out(reply("아기가 불편할 수 있어요."), "왜 울어?").let { assertEquals("", it.fallback); assertEquals(listOf("why"), it.fallbackTopics) }
         out(reply("x", answer("feeding"))).let { assertEquals(false, it.llm, "주제 문장은 LLM 글이 아니다"); assertEquals("", it.fallback) }
@@ -208,8 +208,8 @@ class LinkQaTest : LinkKit() {
         for (q in listOf("아기 자?", "애기 자니", "자나?")) assertEquals("sleep", offlineTopic(q), q)
         assertEquals("sleep", questionTopic("자나?"))
         val st = sleepAll()
-        assertEquals("그건 제가 알 수 없어요.", say(reply("지금 자요.", answer("unknown")), "q", st))
-        assertEquals("그건 제가 알 수 없어요.", say(reply("잘 자네요.", answer("unknown")), "q", st))
+        assertEquals("그건 알 수 없어요.", say(reply("지금 자요.", answer("unknown")), "q", st))
+        assertEquals("그건 알 수 없어요.", say(reply("잘 자네요.", answer("unknown")), "q", st))
     }
 
     // C311: 조각 나누기가 '?'를 떼면 표의 '자?'에 닿지 못해 시연 질문이 "알 수 없어요"가 됐다
@@ -260,7 +260,7 @@ class LinkQaTest : LinkKit() {
         val st = sleepAll()
         val ok = "죄송하지만 주변 소리까지는 알 수 없어요."
         assertEquals(ok, say(reply(ok), "그냥 얘기해 줘", st))
-        for (leak in listOf("answer 도구를 호출해 수유 주제를 고릅니다.", "Rendering the answer for the question.", "stop_soothing을 호출합니다.", "Sleep 주제로 알려 드릴게요."))
+        for (leak in listOf("answer 도구를 호출해 수유 주제를 고릅니다.", "Rendering the answer for the question.", "stop_soothing을 호출합니다.", "Sleep 주제로 알려 드릴게요.", "먼저 why 쪽으로 답을 고르겠습니다."))
             assertNotEquals(leak, say(reply(leak), "그냥 얘기해 줘", st), leak)
         assertNotEquals("세 번이에요.", say(reply("세 번이에요."), "그냥 얘기해 줘", st))   // 진짜 숫자 말은 여전히 버린다
     }
@@ -455,7 +455,7 @@ class LinkQaTest : LinkKit() {
         assertEquals(whySentence, say(reply("두 시간 동안 불편할 수 있어요.", answer("why")), "q", st))
         assertEquals(whySentence, say(reply("아기가 배고파서 울어요.", answer("why")), "q", st))   // 상태 단정
         assertEquals(whySentence, say(reply("낯선 소리에 십여 분 동안 불편할 수 있어요.", answer("why")), "q", st))   // C249: 한자어 수 + 여 + 단위
-        assertEquals("그건 제가 알 수 없어요.", say(reply("세 번 울었어요.", answer("unknown")), "q", st))
+        assertEquals("그건 알 수 없어요.", say(reply("세 번 울었어요.", answer("unknown")), "q", st))
     }
 
     @Test fun c194_mixedFactAndWhy_factSentencesOnly() {
@@ -483,7 +483,7 @@ class LinkQaTest : LinkKit() {
         assertEquals("카시트에 52분째예요.", say("carseat", "unknown"))   // 사실 주제가 있으면 unknown은 말하지 않는다(C194)
         assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", say("carseat", "carseat", "엉뚱", "cabin_temp"))   // 겹침·모르는 값은 버린다
         assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", say("carseat", "cabin_temp", "unknown", "cry"))   // 앞 두 주제까지, 주제마다 한 문장(C172)
-        assertEquals("그건 제가 알 수 없어요.", say("unknown"))
+        assertEquals("그건 알 수 없어요.", say("unknown"))
         assertEquals("카시트에 52분째예요.", qaEventsCare(reply("x 40분", answer("엉뚱")), "L1", T0, st, "카시트", emptyList()).said(st))   // 알려진 주제가 하나도 없으면 오프라인 문장
     }
 

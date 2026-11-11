@@ -86,10 +86,10 @@ private struct CarContent: View {
                     .swipeActions { Button("지우기", role: .destructive) { songsVM.remove(row.id) } }
             }
             if songsVM.ui.slotsUsed >= SongRules.maxSongs {
-                Text("노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요.").typeStyle(.note).foregroundStyle(DS.textTertiary).padding(.bottom, 8)
+                Text(SongError.limitReached.message).typeStyle(.note).foregroundStyle(DS.textTertiary).padding(.bottom, 8)
             }
         } footer: {
-            Text("차에서는 다음 주행부터 써요.").typeStyle(.footnote).foregroundStyle(DS.textTertiary)
+            Text(CareText.songsNote).typeStyle(.footnote).foregroundStyle(DS.textTertiary)
         }
         .listRowSeparator(.hidden)
         .listRowBackground(DS.surface)
@@ -99,7 +99,7 @@ private struct CarContent: View {
     }
 }
 
-/// 노래 한 줄(시안 songs()): 회색 원 + 이름 + "0:48 · 상태", 오른쪽 다시 듣기(실험에 쓰는 곡은 파랑 체크). 거절·실패면 '다시 녹음', 받은 곡은 '실험에 쓰기'.
+/// 노래 한 줄(시안 songs()): 회색 원 + 이름 + "0:48 · 상태", 오른쪽 다시 듣기(실험에 쓰는 곡은 파랑 체크). 거절·실패면 '다시 녹음하기', 받은 곡은 '실험에 쓰기'.
 struct SongRowView: View {
     @Environment(SongsViewModel.self) private var vm
     let row: SongRow
@@ -113,7 +113,7 @@ struct SongRowView: View {
 
     private var statusText: String {
         switch row.state {
-        case .uploading: return vm.ui.offline ? "연결되면 보내요" : "올리는 중"
+        case .uploading: return vm.ui.offline ? "연결되면 보내요" : "올리고 있어요"
         case .waiting: return "차가 받기를 기다려요"
         case .accepted: return "다음 주행부터 써요"
         case .rejected(let r): return rejectText(r)
@@ -128,10 +128,10 @@ struct SongRowView: View {
         HStack(spacing: 4) {
             Menu {
                 if row.hasFile {
-                    Button { if !playing { beforePlay?() }; player.toggle(row.id) } label: { Text(playing ? "멈추기" : "다시 듣기") }
+                    Button { if !playing { beforePlay?() }; player.toggle(row.id) } label: { Text(playing ? "멈추기" : "듣기") }
                 }
                 if row.state == .accepted, !row.candidate { Button("실험에 쓰기") { vm.select(row.id) } }
-                if isProblem, let rerecord { Button("다시 녹음") { rerecord() } }   // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다(9장 '노래 거절')
+                if isProblem, let rerecord { Button("다시 녹음하기") { rerecord() } }   // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다(9장 '노래 거절')
                 if let remove { Button("지우기", role: .destructive) { remove() } }
             } label: {
                 HStack(spacing: 12) {
@@ -158,7 +158,7 @@ struct SongRowView: View {
                     IconImage(playing ? .square : .play, size: 20).foregroundStyle(DS.textTertiary).frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel(playing ? "멈추기" : "다시 듣기")
+                .accessibilityLabel(playing ? "멈추기" : "듣기")
             }
         }
     }
@@ -173,12 +173,12 @@ struct SongRowView: View {
 /// 거절 이유 문구(3.3 표).
 func rejectText(_ r: SongRejectReason) -> String {
     switch r {
-    case .peakLimit: return "조금 더 크게 다시 녹음해 주세요."
+    case .peakLimit: return "조금 더 크게 다시 녹음해 주세요"
     case .silent: return "소리가 거의 들리지 않아요. 다시 녹음해 주세요."
     case .badFormat: return "파일을 읽지 못했어요. 다시 녹음해 주세요."
-    case .tooLong: return "3분이 넘어요. 3분 안으로 다시 녹음해 주세요."
-    case .tooLarge: return "파일이 너무 커요. 다시 녹음해 주세요."
-    case .limitReached: return "노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요."
+    case .tooLong: return SongError.tooLong.message   // 같은 사실은 같은 글 한 곳(폰이 먼저 막는 글)
+    case .tooLarge: return SongError.tooLarge.message
+    case .limitReached: return SongError.limitReached.message
     case .downloadFailed: return "차가 파일을 받지 못했어요. 다시 보내 주세요."
     }
 }
@@ -241,7 +241,7 @@ struct RecordSheet: View {
             } else {
                 switch rec.phase {
                 case .idle:
-                    recordButton(recording: false) { player.stop(); Task { await rec.start() } }.accessibilityLabel("녹음 시작")   // 목록 듣기가 녹음에 섞이지 않게
+                    recordButton(recording: false) { player.stop(); Task { await rec.start() } }.accessibilityLabel("녹음하기")   // 목록 듣기가 녹음에 섞이지 않게
                     Text("평소 불러 주던 노래를 녹음해 보세요").typeStyle(.footnote).foregroundStyle(DS.textTertiary).multilineTextAlignment(.center)
                 case .recording:
                     recordButton(recording: true) { rec.stop() }.accessibilityLabel("녹음 멈추기")
@@ -257,9 +257,9 @@ struct RecordSheet: View {
                             Label { Text(rec.isPlaying ? "멈추기" : "다시 듣기") } icon: { IconImage(rec.isPlaying ? .square : .play, size: 18) }
                         }
                         .buttonStyle(.pillTonal)
-                        Button { sendError = nil; rec.discard() } label: { Text("다시 녹음") }.buttonStyle(.pillTonal)
+                        Button { sendError = nil; rec.discard() } label: { Text("다시 녹음하기") }.buttonStyle(.pillTonal)
                     }
-                    Button { send() } label: { Text("보내기") }.buttonStyle(.pill)
+                    Button { send() } label: { Text("차로 보내기") }.buttonStyle(.pill)
                     if vm.ui.offline { Text("연결되면 보내요").typeStyle(.caption).foregroundStyle(DS.textTertiary) }
                 }
             }
@@ -273,7 +273,7 @@ struct RecordSheet: View {
                 .disabled(rec.phase == .recording)
                 .padding(.top, 8)
             }
-            Text("차에서는 다음 주행부터 써요.").typeStyle(.footnote).foregroundStyle(DS.textTertiary)
+            Text(CareText.songsNote).typeStyle(.footnote).foregroundStyle(DS.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
@@ -299,7 +299,7 @@ struct RecordSheet: View {
             rec.sent()   // 닫히는 사이 또 눌러도 같은 녹음을 다시 보내지 않는다
             dismiss()
         } catch let e as SongError { sendError = e.message }
-        catch { sendError = "노래를 저장하지 못했어요." }
+        catch { sendError = "녹음을 저장하지 못했어요. 다시 보내 주세요." }
     }
 }
 

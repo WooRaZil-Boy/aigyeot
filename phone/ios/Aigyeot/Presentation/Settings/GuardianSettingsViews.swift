@@ -62,13 +62,23 @@ private struct OwnerGuardians: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("다른 보호자를 초대하면 리포트와 인계 알림을 함께 받아요").typeStyle(.body).foregroundStyle(DesignSystem.textPrimary)
-                Text("초대 코드는 24시간 동안, 한 번만 쓸 수 있어요.").typeStyle(.caption).foregroundStyle(DesignSystem.textTertiary)
+                BlockHeader(title: "다른 보호자 초대")   // B4: 머리는 명사, 설명은 줄마다 한 문장(v8b-6 ③, v8b-10 ⑧ 정보 줄)
+                VStack(alignment: .leading, spacing: 14) {
+                    InfoRow(icon: .bell, title: "리포트와 인계 알림을 같이 받아요")
+                    InfoRow(icon: .clock, title: "코드는 24시간 동안 한 번만 쓸 수 있어요")
+                    InfoRow(icon: .lock, title: "수유 시작과 우리 노래는 보낼 수 없어요")
+                }
                 if let invite = vm.ui.invite { InviteCard(invite: invite) }
                 if vm.ui.busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요").typeStyle(.body) } }
                 if let error = vm.ui.error { Text(error).typeStyle(.caption).foregroundStyle(DesignSystem.danger) }
-                Button { Task { await vm.makeInvite() } } label: { Label { Text("초대 만들기") } icon: { IconImage(.userPlus, size: 20) } }
-                    .buttonStyle(.pill).disabled(vm.ui.busy || vm.ui.offline)
+                // 코드를 만든 뒤에는 주 단추가 '링크로 보내기'(카드 안)이고 다시 만들기는 글자 단추(v8b-7: 파랑 '만들기'가 남아 위계가 뒤집혔다)
+                if vm.ui.invite == nil {
+                    Button { Task { await vm.makeInvite() } } label: { Label { Text("초대 코드 만들기") } icon: { IconImage(.userPlus, size: 20) } }
+                        .buttonStyle(.pill).disabled(vm.ui.busy || vm.ui.offline)
+                } else {
+                    Button { Task { await vm.makeInvite() } } label: { Text("새 코드 만들기") }
+                        .buttonStyle(.pillText).disabled(vm.ui.busy || vm.ui.offline)
+                }
                 if vm.ui.offline { Text("인터넷이 필요해요").typeStyle(.caption).foregroundStyle(DesignSystem.textTertiary) }
             }
             .block()
@@ -95,6 +105,9 @@ private struct InviteCard: View {
         VStack(spacing: 12) {
             Text(invite.display).font(.system(size: codeSize, weight: .bold, design: .monospaced)).foregroundStyle(DesignSystem.textPrimary)
                 .minimumScaleFactor(0.5).lineLimit(1)
+            if let exp = Rfc3339.parse(invite.expiresAt) {   // 코드 만료(안드로이드와 같은 글)
+                Text(CareFormat.dateTime(exp) + "까지").typeStyle(.caption).foregroundStyle(DesignSystem.textTertiary)
+            }
             if let img = qr(invite.link) {
                 Image(uiImage: img).interpolation(.none).resizable().frame(width: 168, height: 168)
                     .overlay { AppMark(size: 34).padding(3).background(.white, in: RoundedRectangle(cornerRadius: 11, style: .continuous)) }
@@ -102,8 +115,8 @@ private struct InviteCard: View {
                     .accessibilityElement().accessibilityLabel("초대 QR")
             }
             if let url = URL(string: invite.link) {
-                ShareLink(item: url, message: Text("아이곁 초대 코드: \(invite.display)")) { Label { Text("링크로 보내기") } icon: { IconImage(.share, size: 20) } }
-                    .buttonStyle(.pillTonal)
+                ShareLink(item: url, message: Text("아이곁 초대 코드 \(invite.display)")) { Label { Text("링크로 보내기") } icon: { IconImage(.share, size: 20) } }
+                    .buttonStyle(.pill)
             }
         }
         .frame(maxWidth: .infinity)
@@ -129,8 +142,8 @@ private struct GuardianToggle: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Group26 {
-                SettingRow(icon: .bell, title: "인계 알림 받기") {
-                    Toggle("인계 알림 받기", isOn: Binding(
+                SettingRow(icon: .bell, title: CareText.handoffReceive, sub: CareText.handoffSub) {
+                    Toggle(CareText.handoffReceive, isOn: Binding(
                         get: { vm.ui.handoffAlerts },
                         set: { on in
                             Task {
@@ -143,12 +156,12 @@ private struct GuardianToggle: View {
                 .accessibilityElement(children: .combine)
             }
             if let error = vm.ui.error { FootNote(error).foregroundStyle(DesignSystem.danger) }
-            FootNote("아기가 계속 울어 차가 운전자에게 쉼터를 제안하거나 세우도록 안내하면 알려 드려요. 리포트는 알림 설정과 상관없이 받아요.")
+            FootNote(CareText.handoffNote)
         }
     }
 }
 
-/// 설정(5장 순서, 시안 S.settings 묶음): [보호자 · 아이 별명] [잠·기저귀도 기록하기] [내 기록 내보내기 · 다른 앱 기록 가져오기(U64)]
+/// 설정(5장 순서, 시안 S.settings 묶음): [보호자 · 아기 별명] [잠·기저귀도 적기] [내 기록 내보내기 · 다른 앱 기록 가져오기(U64)]
 /// [연결 끊기 · 이 휴대폰의 기록 지우기] [정보·라이선스].
 struct SettingsView: View {
     @Environment(SettingsViewModel.self) private var vm
@@ -203,17 +216,18 @@ struct SettingsView: View {
                                 // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서 인터넷이 필요하다). 초대 만들기와 같다
                                 Button { confirmDisconnect = true } label: {
                                     SettingRow(icon: .unlink, title: CareText.disconnect,
-                                               sub: busy ? "끊고 있어요" : vm.ui.offline ? "인터넷이 필요해요" : nil, tone: DesignSystem.textPrimary)
+                                               sub: busy ? "끊고 있어요" : vm.ui.offline ? "인터넷이 필요해요" : nil, irreversible: true)   // 끊으면 차 화면의 새 코드 없이는 되돌릴 수 없다
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(busy || vm.ui.offline)
                             }
                             Button { confirmClear = true } label: {
-                                SettingRow(icon: .trash, title: CareText.clear, tone: DesignSystem.danger) { EmptyView() }
+                                SettingRow(icon: .trash, title: CareText.clear, irreversible: true, tone: DesignSystem.danger) { EmptyView() }
                             }
                             .buttonStyle(.plain)
                         }
                         .enterRise(3)
+                        if vm.ui.connected { FootNote(CareText.clearNote) }   // settings.clear.note(지우기 전에 알아야 할 사실, 두 앱)
                         if let error { FootNote(error).foregroundStyle(DesignSystem.danger) }
                         Group26 {
                             NavigationLink { AboutView(version: vm.ui.version) } label: { SettingRow(icon: .info, title: CareText.about) }
@@ -233,13 +247,18 @@ struct SettingsView: View {
                 Button(CareText.save) { vm.setNickname(nickname) }
                 Button(CareText.cancel, role: .cancel) {}
             }
-            .confirmationDialog("차와의 연결을 끊을까요?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
-                Button("연결 끊기", role: .destructive) { vm.startDisconnect() }
+            // 확인 창(B18·U71): 제목 질문 / 본문 누르면 생기는 일 / 주 동작 + '닫기'
+            .confirmationDialog(CareText.disconnectConfirm, isPresented: $confirmDisconnect, titleVisibility: .visible) {
+                Button(CareText.disconnectAction, role: .destructive) { vm.startDisconnect() }
+                Button(CareText.closeDialog, role: .cancel) {}
             } message: {
-                Text(CareText.disconnectKeepsCare)   // R9
+                Text(CareText.disconnectConfirmNote)   // R9
             }
             .confirmationDialog(CareText.clearConfirm, isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("기록 지우기", role: .destructive) { vm.clearRecords() }
+                Button(CareText.delete, role: .destructive) { vm.clearRecords() }
+                Button(CareText.closeDialog, role: .cancel) {}
+            } message: {
+                Text(CareText.clearConfirmNote)   // R10
             }
         }
     }

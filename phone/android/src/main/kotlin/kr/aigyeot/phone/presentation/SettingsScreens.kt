@@ -40,7 +40,7 @@ import kr.aigyeot.phone.domain.model.importPreview
 // 설정 탭(디자인 v6 시안 phone.js S.settings: 흰 묶음 다섯, 행 56 + 흐린 아이콘). 항목 글자는 7.1 settings.*.
 
 /**
- * 설정: [보호자 · 아이 별명] [잠·기저귀도 기록하기] [내 기록 내보내기 · 다른 앱 기록 가져오기] [연결 끊기 · 이 휴대폰의 기록 지우기] [정보·라이선스].
+ * 설정: [보호자 · 아기 별명] [잠·기저귀도 적기] [내 기록 내보내기 · 다른 앱 기록 가져오기] [연결 끊기 · 이 휴대폰의 기록 지우기] [정보·라이선스].
  * 보호자·연결 끊기는 연결됐을 때만. 별명은 누르면 입력 창.
  */
 @Composable
@@ -63,10 +63,10 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
         StatusBands(connected = ui.connected)
         Group {
             if (ui.connected) SettingRow("보호자", R.drawable.ic_users, sub = ui.phones.takeIf { it > 0 }?.let { "${it}명" }, onClick = { go(Route.Guardians) })
-            SettingRow("아이 별명", R.drawable.ic_baby, sub = care.childNickname ?: "예: 콩이", onClick = { nicknameOpen = true })
+            SettingRow("아기 별명", R.drawable.ic_baby, sub = care.childNickname ?: "예: 콩이", onClick = { nicknameOpen = true })
         }
         Group {
-            SettingRow("잠·기저귀도 기록하기", R.drawable.ic_moon, sub = "다른 육아 앱에 이미 적고 있다면 꺼 두셔도 돼요", checked = care.sleepDiaperEnabled, onCheckedChange = vm::setSleepDiaper)
+            SettingRow("잠·기저귀도 적기", R.drawable.ic_moon, sub = "다른 앱에 적고 있다면 꺼도 돼요", checked = care.sleepDiaperEnabled, onCheckedChange = vm::setSleepDiaper)
         }
         Group {
             SettingRow("내 기록 내보내기", R.drawable.ic_download, onClick = {
@@ -79,10 +79,10 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
                 }
             })
             // settings.import(U64) / settings.import.sub
-            SettingRow("다른 앱 기록 가져오기", R.drawable.ic_file_up, sub = "아이곁·Huckleberry·Nara에서 내보낸 CSV", onClick = { pickCsv.launch(CSV_TYPES) })
+            SettingRow("다른 앱 기록 가져오기", R.drawable.ic_file_up, sub = "아이곁·Huckleberry·Nara에서 내보낸 CSV를 읽어요", onClick = { pickCsv.launch(CSV_TYPES) })
         }
         Group {
-            if (ui.connected) SettingRow("연결 끊기", R.drawable.ic_unlink, sub = if (busy) "끊고 있어요" else null, enabled = !busy, onClick = { confirm = "disconnect" })
+            if (ui.connected) SettingRow("연결 끊기", R.drawable.ic_unlink, sub = if (busy) "끊고 있어요" else null, destructive = true, enabled = !busy, onClick = { confirm = "disconnect" })
             SettingRow("이 휴대폰의 기록 지우기", R.drawable.ic_trash_2, danger = true, onClick = { confirm = "clear" }, trailing = null)
         }
         if (ui.connected) FootNote("기록을 지워도 연결은 그대로예요. 차에 남은 기록은 차 화면에서 지워요.")
@@ -93,14 +93,14 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
         AlertDialog(
             onDismissRequest = { confirm = null },
             title = { Text(if (what == "clear") "이 휴대폰의 리포트·알림·노래·돌봄 기록을 지울까요?" else "연결을 끊을까요?", style = Type.headline) },
-            text = { Text(if (what == "clear") "차와 다른 보호자에게 있는 기록은 그대로예요" else "다시 연결하려면 차 화면의 새 코드가 필요해요. 돌봄 기록은 이 휴대폰에 남아요", style = Type.body) },
+            text = { Text(if (what == "clear") "차와 다른 보호자에게 있는 기록은 그대로예요" else "다시 연결하려면 차 화면의 새 코드가 필요해요. 돌봄 기록은 이 휴대폰에 남아요.", style = Type.body) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = null
                     if (what == "clear") vm.clearRecords() else vm.startDisconnect()
                 }) { Text(if (what == "clear") "지우기" else "끊기", color = Tokens.colors.danger) }
             },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("닫기") } },
             shape = Radius.dialog,
         )
     }
@@ -108,14 +108,14 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
     ImportDialog(importUi, vm)
 }
 
-/** 아이 별명(settings.nickname): 입력 칸 하나(예: 콩이). 바뀐 때만 저장한다. */
+/** 아기 별명(settings.nickname): 입력 칸 하나(예: 콩이). 바뀐 때만 저장한다. */
 @Composable
 private fun NicknameDialog(current: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by rememberSaveable { mutableStateOf(current) }
     fun save() = if (text.trim() != current) onSave(text) else onDismiss()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("아이 별명", style = Type.headline) },
+        title = { Text("아기 별명", style = Type.headline) },
         text = {
             OutlinedTextField(
                 value = text,
@@ -153,7 +153,7 @@ private fun ImportDialog(ui: ImportUi, vm: SettingsViewModel) {
         )
         is ImportUi.PickChild -> AlertDialog(
             onDismissRequest = vm::closeImport,
-            title = { Text("어느 아이의 기록인가요?", style = Type.headline) }, // import.pickChild
+            title = { Text("어느 아기의 기록인가요?", style = Type.headline) }, // import.pickChild
             text = {
                 // 큰 글자·낮은 창에서도 아래 아이까지 고를 수 있게 넘긴다(대화창 본문 높이는 제한된다).
                 Column(Modifier.verticalScroll(rememberScrollState())) {

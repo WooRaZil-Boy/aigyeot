@@ -35,8 +35,8 @@ class MonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(NotificationChannel(CHANNEL, "아이곁 감시", NotificationManager.IMPORTANCE_LOW))
-        val n = Notification.Builder(this, CHANNEL).setContentTitle("아이곁이 함께해요")
+            .createNotificationChannel(NotificationChannel(CHANNEL, "탑승·주행", NotificationManager.IMPORTANCE_LOW))
+        val n = Notification.Builder(this, CHANNEL).setContentTitle("탑승과 주행을 살피고 있어요")   // 탑승 전·주행 중 모두 맞는 글(11-12 사용자 결정)
             .setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setOngoing(true).build()
         try { startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) }
         catch (e: Exception) { Log.e(TAG, "startForeground 실패", e); stopSelf(); return }

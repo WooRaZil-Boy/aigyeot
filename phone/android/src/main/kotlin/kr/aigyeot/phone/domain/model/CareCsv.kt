@@ -388,6 +388,6 @@ fun importPreview(d: ImportDraft, now: Long, zone: ZoneId): ImportPreview {
 }
 
 /** 끝내는 안내(7.1 import.unreadable·tooLarge·failed). 화면은 글과 '닫기'만 보인다. */
-const val IMPORT_UNREADABLE = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요"
+const val IMPORT_UNREADABLE = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요."
 const val IMPORT_TOO_LARGE = "파일이 너무 커요"
-const val IMPORT_FAILED = "가져오지 못했어요. 다시 해 주세요"
+const val IMPORT_FAILED = "가져오지 못했어요. 다시 해 주세요."

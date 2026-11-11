@@ -319,18 +319,18 @@ class PhoneStateTest {
         val lines = withDropNotices(null, listOf("feeding_started", "song_removed", "feeding_started", "song_added", "song_selected", "care_summary"))!!.lines()
         assertEquals(
             listOf(
-                "수유 기록을 차로 보내지 못했어요.",
-                "노래 삭제를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.",
-                "실험에 쓸 노래 선택을 차로 보내지 못했어요.",
-                "돌봄 기록 요약을 차로 보내지 못했어요.",
+                "수유 기록을 차로 보내지 못했어요",
+                "노래 지우기를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.",
+                "실험에 쓸 노래 선택을 차로 보내지 못했어요",
+                "돌봄 기록 요약을 차로 보내지 못했어요",
             ),
             lines,
         )
         // 띠에 떠 있는 안내(다른 버림·저장 실패)는 덮지 않고 줄을 바꿔 더한다.
         val one = withDropNotices(SAVE_FAILED, listOf("feeding_started"))
-        assertEquals("$SAVE_FAILED\n수유 기록을 차로 보내지 못했어요.", one)
+        assertEquals("$SAVE_FAILED\n수유 기록을 차로 보내지 못했어요", one)
         val two = withDropNotices(one, listOf("song_removed", "feeding_started"))
-        assertEquals("$one\n노래 삭제를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.", two)
+        assertEquals("$one\n노래 지우기를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.", two)
         assertEquals(two, withDropNotices(two, listOf("song_added")))
         assertNull(withDropNotices(null, emptyList()))
         // 버린 안내가 떠 있는 동안 저장이 실패해도 앞 줄을 덮지 않는다(같은 글은 한 번).
@@ -349,7 +349,7 @@ class PhoneStateTest {
         assertTrue(pruned.outbox.isEmpty())
         // 버린 것과 같은 저장에 안내가 남는다
         assertEquals(listOf("feeding_started", "song_selected"), pruned.unseenDrops.values.toList())
-        assertEquals("수유 기록을 차로 보내지 못했어요.\n실험에 쓸 노래 선택을 차로 보내지 못했어요.", withDropNotices(null, pruned.unseenDrops.values.toList()))
+        assertEquals("수유 기록을 차로 보내지 못했어요\n실험에 쓸 노래 선택을 차로 보내지 못했어요", withDropNotices(null, pruned.unseenDrops.values.toList()))
     }
 
     @Test
@@ -741,7 +741,7 @@ class PhoneStateTest {
         assertTrue(dropped.outbox.isEmpty())
         assertEquals(mapOf(item.envelope.id to "feeding_started"), dropped.unseenDrops)
         val reread = ProtocolJson.decodeFromString(PhoneState.serializer(), ProtocolJson.encodeToString(PhoneState.serializer(), dropped))
-        assertEquals("수유 기록을 차로 보내지 못했어요.", withDropNotices(null, reread.unseenDrops.values.toList()))
+        assertEquals("수유 기록을 차로 보내지 못했어요", withDropNotices(null, reread.unseenDrops.values.toList()))
         // 다시 보낼 실패(5xx)·띠 글이 없는 노래 추가는 적지 않는다. 같은 type은 한 번.
         assertTrue(s.afterSend(item, SendResult.Failed(503, "unavailable"), now).unseenDrops.isEmpty())
         val song = owner.addSong("01JC90A0Q4M8T1V6B5R3H2CD7F", "나비야", 94.5, "x.m4a", now)
@@ -749,7 +749,7 @@ class PhoneStateTest {
         // 같은 종류를 또 버리면 띠 글은 한 줄이지만 메시지마다 적는다: 띠를 닫을 때 본 것만 지워, 그사이 새로 버린 것은 남는다.
         val twice = dropped.startFeeding(now).let { it.afterSend(it.outbox.single(), SendResult.Failed(400, "bad_request"), now) }
         assertEquals(2, twice.unseenDrops.size)
-        assertEquals("수유 기록을 차로 보내지 못했어요.", withDropNotices(null, twice.unseenDrops.values.toList()))
+        assertEquals("수유 기록을 차로 보내지 못했어요", withDropNotices(null, twice.unseenDrops.values.toList()))
         assertEquals(listOf("feeding_started"), (twice.unseenDrops - dropped.unseenDrops.keys).values.toList())
         // 보내는 사이 새 요약이 바꾼 옛것(보낼 함에 없음)의 실패는 알리지 않는다(R19).
         assertTrue(s.copy(outbox = emptyList()).afterSend(item, SendResult.Failed(400, "bad_request"), now).unseenDrops.isEmpty())

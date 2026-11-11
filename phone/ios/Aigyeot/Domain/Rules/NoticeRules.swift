@@ -10,9 +10,9 @@ enum NoticeRules {
     /// 7.1 outbox.dropped(U54): 버린 메시지의 띠 글. 노래 추가는 노래 줄에만 보인다.
     static func dropNotice(_ type: String) -> String? {
         switch type {
-        case MessageType.feedingStarted: "수유 기록을 차로 보내지 못했어요."
-        case MessageType.songRemoved: "노래 삭제를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요."
-        case MessageType.songSelected: "실험에 쓸 노래 선택을 차로 보내지 못했어요."
+        case MessageType.feedingStarted: "수유 기록을 차로 보내지 못했어요"
+        case MessageType.songRemoved: "노래 지우기를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요."
+        case MessageType.songSelected: "실험에 쓸 노래 선택을 차로 보내지 못했어요"
         case MessageType.careSummary: CareText.careSummaryDropped
         default: nil
         }

@@ -47,7 +47,7 @@ class SetHandoffAlerts(
         val c = state.creds ?: return null
         return when (val r = relay.patchMe(c.token, PatchDeviceRequest(handoffAlerts = on))) {
             is RelayResult.Ok -> null.also { state.commit(c) { it.copy(handoffAlerts = r.value.handoffAlerts) } }
-            is RelayResult.Err -> if (r.status == 401) null.also { lose.lost(c) } else "바꾸지 못했어요. 잠시 뒤에 다시 해 주세요."
+            is RelayResult.Err -> if (r.status == 401) null.also { lose.lost(c) } else "알림 설정을 바꾸지 못했어요. 잠시 뒤에 다시 해 주세요."
             RelayResult.Offline, RelayResult.Unreached -> "인터넷이 필요해요"
         }
     }

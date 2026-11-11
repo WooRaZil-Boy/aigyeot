@@ -105,7 +105,7 @@ data class DayChartData(val lanes: List<DayLane>, val nowMin: Int?)
  * 에피소드 띠(시안 Charts.episode). 초는 에피소드 시작부터. [marks]는 시각을 아는 표시만 축 위에,
  * [outcomes]는 시각이 기록에 없는 결과('울음 n초'·'쉼터 제안'·'그쳤어요')라 띠 아래 축 밖 글자로 둔다.
  */
-data class EpisodeChartData(val totalS: Int, val sounds: List<SoundSeg>, val marks: List<ChartMark>, val outcomes: List<String> = emptyList())
+data class EpisodeChartData(val totalS: Int, val sounds: List<SoundSeg>, val marks: List<ChartMark>, val outcomes: List<String> = emptyList(), val head: String)
 
 /** 소리 줄 한 칸. [name]이 null이면 재생 사이 칸(그 사이 판정을 멈췄을 수도 있어 '듣기 틈'이라 단정하지 않는다, [soundTip]). [secs]는 툴팁 초(재생은 기록된 play_s, 재생 사이는 앞 재생 끝~다음 재생 시작). */
 data class SoundSeg(val from: Int, val to: Int, val name: String?, val secs: Int = to - from)
@@ -351,7 +351,7 @@ private const val EPI_LH = 64f
 @Composable
 internal fun EpisodeChart(data: EpisodeChartData, modifier: Modifier = Modifier) = Column(modifier.fillMaxWidth()) {
     ChartCanvas(
-        "에피소드: " + (data.sounds.mapNotNull { it.name } + data.marks.map { it.label } + data.outcomes).joinToString(", "), data, 900, sweep = true, Modifier,
+        "${data.head}: " + (data.sounds.mapNotNull { it.name } + data.marks.map { it.label } + data.outcomes).joinToString(", "), data, 900, sweep = true, Modifier,   // 머리는 trigger로(episodeHead)
     ) { w, u, tm, p -> episodeGeo(data, w, u, tm, p) }
     if (data.outcomes.isNotEmpty()) FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         data.outcomes.forEach { Pill(it) }
@@ -480,7 +480,7 @@ internal fun MethodDotsChart(rows: List<MethodDots>, modifier: Modifier = Modifi
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Text(m.name, Modifier.width(170.dp), style = CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(600)), color = if (m.known) p.textPrimary else p.textTertiary, maxLines = 2)
             FlowRow(
-                Modifier.weight(1f).semantics { contentDescription = "${m.n}번 중 ${m.ok}번" },
+                Modifier.weight(1f).semantics { contentDescription = if (m.known) "${m.name}: ${m.n}번 틀어서 ${m.ok}번 그침" else "${m.name}: 아직 모름, ${m.n}번 틀었어요" },   // 두 폰과 같은 말(copy-audit 11-2)
                 horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 repeat(m.n) { i ->

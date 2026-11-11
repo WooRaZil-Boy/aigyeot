@@ -21,7 +21,7 @@ import kr.aigyeot.engine.MethodKind
 /** 노래 한 줄. [selected]면 "이 곡 쓰기"를 끈다. */
 data class SongRow(val id: String, val label: String, val selected: Boolean)
 
-/** 노래 고르기(G20, 명세서 5장): 받은 부모 노래 중 실험에 쓸 곡을 고른다. 후보 ③ 다시 계산은 store가 한다. */
+/** 노래 고르기(G20, 명세서 5장): 받은 우리 노래 중 실험에 쓸 곡을 고른다. 후보 ③ 다시 계산은 store가 한다. */
 class SongsViewModel(store: Store, host: Host, private val link: Link) : ViewModel() {
     val rows: StateFlow<List<SongRow>> = combine(store.activeSongsFlow(), store.selectionFlow(), host.steps) { songs, sel, steps ->
         songRows(songs, sel, steps?.state?.methodsNext.orEmpty())
@@ -33,7 +33,7 @@ class SongsViewModel(store: Store, host: Host, private val link: Link) : ViewMod
 internal fun songRows(songs: List<SongEntity>, selection: SongSelectionEntity?, methods: List<Method>): List<SongRow> {
     val third = methods.firstOrNull { it.kind == MethodKind.SONG }?.songId
     return songs.map { s ->
-        SongRow(s.id, (s.name ?: "이름 없는 노래") + (s.durationS?.let { " · ${it.toInt()}초" } ?: "") + if (s.id == third) " · 실험에 쓰는 곡" else "", s.id == selection?.songId)
+        SongRow(s.id, (s.name ?: "이름 없는 노래") + (s.durationS?.let { " · ${it.toInt()}초" } ?: "") + if (s.id == third) " · 실험에 쓰는 노래" else "", s.id == selection?.songId)
     }
 }
 

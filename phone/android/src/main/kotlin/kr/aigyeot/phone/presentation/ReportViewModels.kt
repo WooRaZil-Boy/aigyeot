@@ -29,7 +29,7 @@ class ReportsViewModel(state: PhoneStateRepository, scope: CoroutineScope = vmSc
     val reports: StateFlow<List<ReportSummaryBody>> = derive(state.state) { reportsNewestFirst(state.state.value.reports.values.map { it.body }) }
 }
 
-/** 리포트 상세. 부모 노래 이름은 이 폰이 아는 곡에서 붙인다. */
+/** 리포트 상세. 우리 노래 이름은 이 폰이 아는 곡에서 붙인다. */
 data class ReportDetailUiState(val report: ReportSummaryBody?, val songs: List<SongEntry>)
 
 class ReportDetailViewModel(sessionId: String, state: PhoneStateRepository, scope: CoroutineScope = vmScope()) : ViewModel(scope) {

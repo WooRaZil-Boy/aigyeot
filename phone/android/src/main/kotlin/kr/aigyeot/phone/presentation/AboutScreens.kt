@@ -34,7 +34,7 @@ private fun rememberOss(): List<OssEntry> {
     }
 }
 
-/** about.version · about.oss: "판 {버전}"과 "오픈소스 라이선스" 목록. 누르면 그 라이브러리의 라이선스. */
+/** about.version · about.oss: "버전 {버전}"과 "오픈소스 라이선스" 목록. 누르면 그 라이브러리의 라이선스. */
 @Composable
 fun AboutScreen(onBack: () -> Unit, open: (Int) -> Unit) {
     val list = rememberOss()
@@ -44,7 +44,7 @@ fun AboutScreen(onBack: () -> Unit, open: (Int) -> Unit) {
                 AppMark(48.dp, 14.dp)
                 Column(Modifier.padding(start = 14.dp)) {
                     Text("아이곁", style = Type.title, color = Tokens.colors.textPrimary)
-                    Text("판 ${BuildConfig.VERSION_NAME}", style = Type.caption, color = Tokens.colors.textTertiary)
+                    Text("버전 ${BuildConfig.VERSION_NAME}", style = Type.caption, color = Tokens.colors.textTertiary)
                 }
             }
         }

@@ -11,7 +11,7 @@ import kr.aigyeot.app.link.db.RelayCredentialEntity
 import kr.aigyeot.app.store.retryingSuspend
 
 private const val TAG = "Link"
-private const val RELINK = "휴대폰을 다시 연결해 주세요."            // 9장 차 토큰 무효
+private const val RELINK = "휴대폰을 다시 연결해 주세요"            // 9장 차 토큰 무효
 
 internal class Cred(val carId: String, val deviceId: String, val token: String)
 

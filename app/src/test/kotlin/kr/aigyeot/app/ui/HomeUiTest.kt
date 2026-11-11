@@ -74,7 +74,7 @@ class HomeUiTest {
     @Test fun beforeDrive_offAndOn() {
         val off = ui(fresh())
         assertEquals("출발 전이에요", off.status); assertEquals(Eyebrow("듣기 꺼짐", Tone.MUTED), off.eyebrow)
-        assertTrue(off.cta.board); assertEquals(View3d.HERO, off.stage.view); assertEquals(Light3d.BASE, off.stage.light)
+        assertTrue(off.cta.board); assertEquals(View3d.CABIN, off.stage.view); assertEquals(Light3d.BASE, off.stage.light)
         val on = ui(fresh().let { it.copy(car = it.car.copy(micRunning = true)) })
         assertEquals(Eyebrow("듣기 켜짐", Tone.ACCENT, live = true), on.eyebrow); assertEquals(Light3d.LISTEN, on.stage.light)
         val reserved = ui(fresh().let { it.copy(ign = it.ign.copy(reserved = true), car = it.car.copy(micRunning = true)) })
@@ -155,7 +155,7 @@ class HomeUiTest {
     @Test fun listening_drivingSub_parkedEyebrow() {
         val s = driving(ses(Stage.Listening, offers = OfferState(leftParkAt = T0 - 32 * 60_000))).let { it.copy(car = it.car.copy(cabinC = 23.6)) }
         val u = ui(s)
-        assertEquals(Eyebrow("듣는 중", Tone.ACCENT, live = true), u.eyebrow); assertEquals("주행 32분째 · 실내 24°", u.sub)
+        assertEquals(Eyebrow("듣는 중", Tone.ACCENT, live = true), u.eyebrow); assertEquals("주행 32분째 · 실내 24℃", u.sub)
         val parked = ui(s.copy(car = s.car.copy(gear = Gear.P)))
         assertEquals(Eyebrow("정차 중", Tone.MUTED), parked.eyebrow); assertNull(parked.sub); assertTrue(parked.cta.askHero)
     }
@@ -179,7 +179,7 @@ class HomeUiTest {
         val still = kr.aigyeot.app.ui.car3d.Stage3d(callouts = setOf(Callout3d.HEAT))
         assertTrue(Callout3d.HEAT.shownAt(still, Seat3d.RR) && Callout3d.HEAT.shownAt(still, Seat3d.RL), "쪽을 모르는 그림(리포트)은 둘 다")
         assertEquals(emptySet(), ui(fresh(), done = setOf(hvac, heatL)).stage.callouts, "세션이 없으면 칩이 없다")
-        assertEquals("공조 낮춤", calloutText(Callout3d.HVAC))
+        assertEquals("실내 온도 낮춤", calloutText(Callout3d.HVAC))
     }
 
     @Test fun micOff_session_neverSaysListening() {
@@ -244,7 +244,7 @@ class HomeUiTest {
     @Test fun pills_phoneCountOrConnText() {
         val two = LinkStatus(conn = LinkConn.CONNECTED, phones = listOf(LinkedPhone("a", "owner", null), LinkedPhone("b", "guardian", null)))
         assertEquals(Pills("휴대폰 2대", true, null), homeUi(fresh(), T0, two, null, null, 0, null).pills)
-        assertEquals("휴대폰 연결: 붙는 중", homeUi(fresh(), T0, LinkStatus(conn = LinkConn.CONNECTING), null, null, 0, null).pills.phone)
+        assertEquals("휴대폰과 연결하는 중", homeUi(fresh(), T0, LinkStatus(conn = LinkConn.CONNECTING), null, null, 0, null).pills.phone)
         assertNull(homeUi(fresh(), T0, LinkStatus(), null, null, 0, null).pills.phone)
     }
 
@@ -325,14 +325,27 @@ class HomeUiTest {
             kr.aigyeot.shared.TimelineEpisode("E", kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM, "2027-01-15T17:00:00+09:00", 2.4, null, 112, plays, result, null, recried, second, null, 30)
         val auto = ep(listOf(play(kr.aigyeot.shared.PlayPurpose.AUTO_FIRST, kr.aigyeot.shared.SoundMethod.LULLABY), play(kr.aigyeot.shared.PlayPurpose.AUTO_SECOND, kr.aigyeot.shared.SoundMethod.WHITE_NOISE)),
             kr.aigyeot.shared.EpisodeResult.FAILURE, true, kr.aigyeot.shared.SecondAttempt(kr.aigyeot.shared.SecondAction.OTHER_SOUND, null, kr.aigyeot.shared.EpisodeResult.SUCCESS))
-        assertEquals(listOf("자장가", "다시 울음", "백색소음", "그쳤어요"), episodeCard(auto)!!.flow.map { it.text }, "2차에 그쳐도 '그쳤어요'")
+        assertEquals(listOf("자장가", "다시 울음", "백색소음", "그침"), episodeCard(auto)!!.flow.map { it.text }, "2차에 그쳐도 '그침'")
         val request = ep(listOf(play(kr.aigyeot.shared.PlayPurpose.REQUEST, kr.aigyeot.shared.SoundMethod.WHITE_NOISE), play(kr.aigyeot.shared.PlayPurpose.REQUEST, kr.aigyeot.shared.SoundMethod.WOMB)), null, false, null)
         assertEquals(listOf("백색소음", "뱃속 소리"), episodeCard(request)!!.flow.map { it.text }, "운전자가 소리만 바꾼 것은 울음이 아니다")
     }
 
+    // 정차 홈 에피소드 카드 제목 머리: 울음 없이 운전자가 소리를 바꾼 에피소드(SWITCH_SOUND)는 '울음'이 아니다(리포트 카드·두 폰 triggerText와 같은 낱말)
+    @Test fun episodeCard_headByTrigger_switchSoundIsNotCry() {
+        fun ep(trigger: kr.aigyeot.shared.EpisodeTrigger, purpose: kr.aigyeot.shared.PlayPurpose) = kr.aigyeot.shared.TimelineEpisode(
+            "E", trigger, "2027-01-15T17:00:00+09:00", null, null, 56,
+            listOf(kr.aigyeot.shared.PlayEntry(purpose, kr.aigyeot.shared.SoundMethod.WHITE_NOISE, null, "2027-01-15T17:00:00+09:00", "2027-01-15T17:00:56+09:00", 56)),
+            null, null, false, null, null, 0)
+        val request = episodeCard(ep(kr.aigyeot.shared.EpisodeTrigger.SWITCH_SOUND, kr.aigyeot.shared.PlayPurpose.REQUEST))!!
+        val cry = episodeCard(ep(kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM, kr.aigyeot.shared.PlayPurpose.AUTO_FIRST))!!
+        assertEquals("소리 바꾸기 요청", request.head)
+        assertEquals("울음", cry.head)
+        assertEquals("소리 바꾸기 요청", triggerText(kr.aigyeot.shared.EpisodeTrigger.SWITCH_SOUND), "리포트 자세히·띠 시작 표시와 같은 낱말")
+    }
+
     @Test fun textHelpers() {
         assertEquals("방금", agoText(30_000)); assertEquals("1:21", agoText(81 * 60_000L))
-        assertEquals("평소 3시간", intervalText(180)); assertEquals("평소 2시간 30분", intervalText(150)); assertEquals("평소 45분", intervalText(45))
+        assertEquals("평소 3시간", usualIntervalText(180)); assertEquals("평소 2시간 30분", usualIntervalText(150)); assertEquals("평소 45분", usualIntervalText(45))
         assertEquals("7", formatKm(7.0)); assertEquals("2.5", formatKm(2.5)); assertEquals("12", formatKm(12.4))
         assertEquals(listOf(150f, 430f, 710f), chipXs(listOf(100f, 150f, null), 1000f))
         val four = chipXs(listOf(100f, 400f, 600f, 900f), 1022f)

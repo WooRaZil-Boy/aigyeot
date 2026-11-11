@@ -22,12 +22,12 @@ final class ReportsViewModel {
     func retryNow() async { await connection.retryNow() }
 }
 
-/// 리포트 상세. 부모 노래 이름은 이 폰이 아는 곡에서 붙인다.
+/// 리포트 상세. 우리 노래 이름은 이 폰이 아는 곡에서 붙인다.
 struct ReportDetailUiState {
     var report: StoredReport?
     var songs: [SongRow]
 
-    /// `song_id`로 내 곡 목록에서 이름을 찾는다. 없으면 nil("부모 노래").
+    /// `song_id`로 내 곡 목록에서 이름을 찾는다. 없으면 nil("우리 노래").
     func songName(_ id: String?) -> String? { id.flatMap { id in songs.first { $0.id == id }?.name } }
 }
 

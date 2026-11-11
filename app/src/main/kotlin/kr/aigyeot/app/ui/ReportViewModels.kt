@@ -38,19 +38,31 @@ import kotlin.math.roundToInt
 
 // 리포트 목록·상세의 화면 상태와 그 계산(순수 함수). 화면(ReportScreen)은 여기서 만든 값을 그리기만 한다.
 
-/** 리포트 목록 한 줄(U47): [title] "{날짜} {구간}", [sub] "울음 {n}번"·"울음 기록 없음"·"주행 중"(+ " · 시뮬레이션"). 열린 세션은 열 수 없다. */
+/** 리포트 목록 한 줄(U47): [title] "{날짜} {구간}", [sub] "울음 {n}번"·"울음 기록 없음"·"주행 중"(+ " · 연습 장면", C385). 열린 세션은 열 수 없다. */
 data class ReportRow(val id: String, val title: String, val sub: String, val enabled: Boolean)
 
 /** [cries]: 닫힌 세션의 울음 경보 에피소드 수(모르면 null, 부가 글자에서 뺀다). */
 internal fun reportRows(sessions: List<SessionEntity>, cries: (String) -> Int? = { null }) = sessions.map { s ->
     val end = s.endedAt
     val title = TimeText.date(s.startedAt) + " " + (end?.let { TimeText.range(s.startedAt, it) } ?: TimeText.clock(s.startedAt))
-    val sub = listOfNotNull(if (end == null) "주행 중" else cries(s.id)?.let(::cryText), if (s.scenarioId != null) "시뮬레이션" else null)
+    val sub = listOfNotNull(if (end == null) "주행 중" else cries(s.id)?.let(::cryText), if (s.scenarioId != null) "연습 장면" else null)
     ReportRow(s.id, title, sub.joinToString(" · "), end != null)
 }
 
 /** U47: 0번이면 "울음 기록 없음". */
 internal fun cryText(n: Int) = if (n == 0) "울음 기록 없음" else "울음 ${n}번"
+
+/** 운전자가 소리 바꾸기를 청해 열린 에피소드의 이름(두 폰 triggerText와 같은 낱말). */
+private const val SWITCH_SOUND_NAME = "소리 바꾸기 요청"
+
+/** 에피소드 시작 이름(두 폰 triggerText와 같음): 울음 경보 '울음 감지', 운전자 요청 '소리 바꾸기 요청'. 리포트 '자세히' 머리 줄·띠 시작 표시가 쓴다. */
+internal fun triggerText(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM) "울음 감지" else SWITCH_SOUND_NAME
+
+/**
+ * 에피소드 카드 제목 머리(리포트 카드 '{머리} · {시각}부터'·정차 홈 카드 '{머리} · {시각}'·띠 읽기 이름): 울음 경보 '울음', 운전자 요청 '소리 바꾸기 요청'.
+ * 울음 없이 소리만 바꾼 에피소드가 '울음'으로 보이지 않게 trigger로 정한다(울음 수 '울음 n번'은 울음 경보만 센다).
+ */
+internal fun episodeHead(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM) "울음" else SWITCH_SOUND_NAME
 
 /**
  * 목록 '울음 n번'(U47·C381): 홈 '오늘 하루'와 같은 [Store.cryAlarms](규칙 isCryAlarm 하나). 리포트 본문으로 세지 않는다(64KB를 넘으면 앞 에피소드를 버린다).
@@ -90,7 +102,7 @@ data class DetailLine(val text: String, val head: Boolean = false)
 /** 차가 대신 한 일 한 줄: 이름(아이콘은 화면이 [kind]로 고른다)과 횟수·재생 초. */
 data class ActionItem(val kind: CarActionKind, val name: String, val extra: String)
 
-/** 에피소드 카드: 제목 '에피소드 · {시각}부터'와 띠. */
+/** 울음 카드: 제목 '울음 · {시각}부터'(C385)와 띠. */
 data class EpisodeCard(val title: String, val chart: EpisodeChartData)
 
 data class ReportView(
@@ -120,7 +132,7 @@ internal fun reportView(b: ReportSummaryBody, settling: Boolean): ReportView {
         stats = reportStats(b),
         episodes = b.timeline.mapNotNull { e ->
             val chart = episodeChart(e, settling) ?: return@mapNotNull null
-            EpisodeCard("에피소드 · ${epochMs(e.startedAt)?.let { TimeText.clock(it) } ?: ""}부터", chart)
+            EpisodeCard("${episodeHead(e.trigger)} · ${epochMs(e.startedAt)?.let { TimeText.clock(it) } ?: ""}부터", chart)
         },
         details = detailLines(b, settling),
         actions = b.carActions.filter { it.count > 0 }.map { ActionItem(it.action, actionName(it.action), "${it.count}번" + (it.totalS?.let { s -> " · ${s}초" } ?: "")) },   // 0번은 한 일이 아니다(숫자 줄·3D 칩과 같은 기준)
@@ -182,22 +194,22 @@ internal fun episodeChart(e: TimelineEpisode, settling: Boolean = false): Episod
         }
     }
     val marks = buildList {
-        add(ChartMark(0, if (e.trigger != EpisodeTrigger.CRY_ALARM) "소리 바꾸기" else e.alarmLatencyS?.let { "감지 %.1f초".format(it) } ?: "울음 감지"))
+        add(ChartMark(0, if (e.trigger != EpisodeTrigger.CRY_ALARM) triggerText(e.trigger) else e.alarmLatencyS?.let { "감지 %.1f초".format(it) } ?: "감지"))
         if (e.recried) plays.firstOrNull { it.first.purpose == PlayPurpose.AUTO_SECOND }?.let { add(ChartMark(sec(it.second), "다시 울음")) }
     }
     val outcomes = listOfNotNull(
         e.totalCryS.takeIf { it > 0 }?.let { "울음 ${it}초" },
         "쉼터 제안".takeIf { e.stop?.let { it.mode == HandoffKind.REST_OFFER && toldShown(it.toldDriver, settled = !settling) } == true },   // 묻지 못했거나 확정 전이면 제안했다고 보이지 않는다(C130·C185)
-        "그쳤어요".takeIf { e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS },
+        resultText(EpisodeResult.SUCCESS).takeIf { e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS },
     )
-    return EpisodeChartData(maxOf(sounds.maxOf { it.to }, 1), sounds, marks, outcomes)
+    return EpisodeChartData(maxOf(sounds.maxOf { it.to }, 1), sounds, marks, outcomes, episodeHead(e.trigger))
 }
 
-/** 조향 막대 셋(평소·울음 중·대응 뒤). 값이 없는 막대는 뺀다. 비교할 수 없으면 null. */
+/** 조향 막대 셋(평소·울음 중·달랜 뒤). 값이 없는 막대는 뺀다. 비교할 수 없으면 null. */
 internal fun steerBars(s: Steering): List<SteerBar>? = if (!s.available) null else listOfNotNull(
     s.baselinePerMin?.let { SteerBar("평소", it, false) },
     s.duringCryPerMin?.let { SteerBar("울음 중", it, true) },
-    s.afterResponsePerMin?.let { SteerBar("대응 뒤", it, false) },
+    s.afterResponsePerMin?.let { SteerBar("달랜 뒤", it, false) },
 ).ifEmpty { null }
 
 private fun steeringUnavailable(s: Steering) =
@@ -208,38 +220,43 @@ internal fun methodDots(stats: List<MethodStat>?, p: Params = Params()) = stats.
     .map { MethodDots(it.label, it.successes, it.attempts, it.attempts >= p.statMinShown) }
     .sortedWith(compareByDescending<MethodDots> { it.known }.thenByDescending { if (it.n == 0) 0.0 else it.ok.toDouble() / it.n })
 
-/** '자세히': 시안에 자리가 없는 사실을 지금 문장 그대로(출력 경로·줄임·시뮬레이션·에피소드별 재생·결과·정차·울음 직전 주행·제어 기록). */
+/**
+ * '자세히': 시안에 자리가 없는 사실(출력 경로·줄임·연습 장면·울음별 재생·결과·정차·울음 직전 주행·제어 기록). 줄은 '이름 · 값'(콜론 없음),
+ * 결과·뺀 이유·소리 나간 곳은 두 폰과 같은 낱말(C385, phone-care-plan U73·7.1 `report.route`).
+ */
 internal fun detailLines(b: ReportSummaryBody, settling: Boolean) = buildList {
-    if (b.simulated) add(DetailLine("시뮬레이션 입력으로 만든 기록이에요"))
+    if (b.simulated) add(DetailLine("연습 장면으로 만든 기록이에요"))
     when (b.outputRoute) {
-        OutputRoute.REAR_ZONE -> add(DetailLine("소리는 뒷좌석으로 나갔어요"))
-        OutputRoute.DEFAULT_ZONE_FALLBACK -> add(DetailLine("뒷좌석 출력이 없어 앞에서도 들렸어요"))
+        // 폴백이 한 번이라도 있었다는 값이라 원인·전부를 말하지 않는다(폰 report.route와 같은 글)
+        OutputRoute.REAR_ZONE -> add(DetailLine("소리 나간 곳 · 뒷좌석"))
+        OutputRoute.DEFAULT_ZONE_FALLBACK -> add(DetailLine("소리 나간 곳 · 앞에서도 들림"))
         OutputRoute.NO_PLAYBACK -> Unit   // 재생이 없었으면 출력 경로를 보이지 않는다
     }
-    if (b.truncated == true) add(DetailLine("오래된 에피소드는 줄였어요"))
-    if (b.timeline.isEmpty()) add(DetailLine("기록된 에피소드가 없어요"))   // 통화 중 경보처럼 에피소드 없이 기록만 한 경보도 있다
+    if (b.truncated == true) add(DetailLine("기록이 많아 일부를 줄였어요"))
+    if (b.timeline.isEmpty()) add(DetailLine("기록된 울음이 없어요"))   // 통화 중 경보처럼 에피소드 없이 기록만 한 경보도 있다(울음이 없었다고 단정하지 않는다)
     b.timeline.forEach { e ->
         val at = epochMs(e.startedAt)?.let { TimeText.clock(it) } ?: ""
-        add(DetailLine("$at " + if (e.trigger == EpisodeTrigger.CRY_ALARM) "울음 감지${e.alarmLatencyS?.let { " (지연 ${"%.1f".format(it)}초)" } ?: ""}" else "소리 바꾸기", head = true))
+        add(DetailLine("$at " + triggerText(e.trigger) + (if (e.trigger == EpisodeTrigger.CRY_ALARM) e.alarmLatencyS?.let { " · 감지까지 ${"%.1f".format(it)}초" } else null).orEmpty(), head = true))
         add(DetailLine("${e.sound?.label ?: "재생 없음"} · ${e.playS}초" + (e.plays.size.takeIf { it > 1 }?.let { " · 재생 ${it}번" } ?: "")))
         e.plays.forEach { pl ->
             val span = epochMs(pl.startedAt)?.let { a -> epochMs(pl.endedAt)?.let { z -> TimeText.range(a, z) } } ?: ""
             add(DetailLine("· ${purpose(pl.purpose)} ${method(pl.method)} $span ${pl.playS}초"))
         }
-        add(DetailLine("결과: " + result(e.result) + (e.excludedReason?.let { " · 성적에서 뺌(${excluded(it)})" } ?: "")))
-        if (e.recried) add(DetailLine("다시 울었어요"))
-        e.second?.let { add(DetailLine("2차: " + secondText(it))) }
-        e.stop?.let { add(DetailLine("정차: " + stopText(it, settling))) }
-        add(DetailLine("울음 ${e.totalCryS}초"))
+        add(DetailLine("결과 · " + resultText(e.result)))
+        e.excludedReason?.let { add(DetailLine("성적에서 뺌 · " + excludedText(it))) }
+        if (e.recried) add(DetailLine("다시 울음"))
+        e.second?.let { add(DetailLine("2차 · " + secondText(it))) }
+        e.stop?.let { add(DetailLine("정차 · " + stopText(it, settling))) }
+        add(DetailLine("울음 시간 ${e.totalCryS}초"))
     }
     if (b.preCryContext.isNotEmpty()) add(DetailLine("울음 직전 주행", head = true))
     b.preCryContext.forEach { c ->
         add(DetailLine("평균 ${c.speedKmhAvg}km/h · 최고 ${c.speedKmhMax}km/h · 브레이크 ${c.brakePresses}번"))
-        add(DetailLine("큰 조향 ${c.steeringReversals}번 · 방향지시등 ${if (c.turnSignalUsed) "켬" else "안 켬"} · 기어 ${c.gear.name}" + (c.cabinTempC?.let { " · 실내 ${"%.1f".format(it)}℃" } ?: "") + if (c.playing) " · 재생 중" else ""))
+        add(DetailLine("큰 조향 ${c.steeringReversals}번" + (if (c.turnSignalUsed) " · 방향지시등 씀" else "") + " · 기어 ${c.gear.name}" + (c.cabinTempC?.let { " · 실내 ${"%.1f".format(it)}℃" } ?: "") + if (c.playing) " · 재생 중" else ""))
     }
     add(DetailLine("제어 기록", head = true))
     if (b.controls.isEmpty()) add(DetailLine("없어요"))
-    b.controls.forEach { add(DetailLine("${it.api} ${it.target}: 성공 ${it.succeeded} · 실패 ${it.failed} · 재시도 ${it.retries}")) }
+    b.controls.forEach { add(DetailLine("${it.api} ${it.target} · 성공 ${it.succeeded} · 실패 ${it.failed} · 다시 ${it.retries}")) }
 }
 
 /** C303 A19: 이름은 판단 코어 methodLabel 하나. 받은 모르는 방식(UNKNOWN)만 "기타". */
@@ -247,42 +264,46 @@ private fun method(m: SoundMethod) = methodKindOf(m)?.let(::methodLabel) ?: "기
 
 private fun purpose(p: PlayPurpose) = when (p) { PlayPurpose.AUTO_FIRST -> "자동 1차"; PlayPurpose.AUTO_SECOND -> "자동 2차"; PlayPurpose.REQUEST -> "운전자 요청" }
 
-private fun result(r: EpisodeResult?) = when (r) {
-    EpisodeResult.SUCCESS -> "그쳤어요"; EpisodeResult.FAILURE -> "계속 울었어요"; EpisodeResult.UNDETERMINED -> "판정하지 못했어요"; null -> "시도 없음"
+/** 울음 결과 낱말(U73, 차·두 폰 같은 글자): 리포트 '자세히'·울음 띠·정차 홈 흐름이 이 하나를 쓴다. 1차 시도가 없으면 null. */
+internal fun resultText(r: EpisodeResult?) = when (r) {
+    EpisodeResult.SUCCESS -> "그침"; EpisodeResult.FAILURE -> "계속 울음"; EpisodeResult.UNDETERMINED -> "판정하지 못함"; null -> "1차 시도 없음"
 }
 
-/** 폰 리포트의 excluded()와 같은 뜻(열거 이름을 그대로 쓰지 않는다). */
-private fun excluded(e: ExcludedReason) = when (e) {
-    ExcludedReason.SESSION_END -> "세션이 끝나 판정하지 못했어요"
+/** 성적에서 뺀 이유(U73, 차·두 폰 같은 글자. 열거 이름을 그대로 쓰지 않는다). */
+internal fun excludedText(e: ExcludedReason) = when (e) {
+    ExcludedReason.SESSION_END -> "탑승이 끝남"
     ExcludedReason.DRIVER_STOP -> "운전자가 멈춤"
-    ExcludedReason.CALL -> "통화"
+    ExcludedReason.CALL -> "통화 중"
     ExcludedReason.GEAR_TO_PARK, ExcludedReason.STARTED_IN_PARK -> "정차 중"
     ExcludedReason.SWITCH_SOUND -> "소리 바꾸기 요청"
     ExcludedReason.FEEDING_WINDOW -> "수유 시간대"
-    ExcludedReason.SESSION_CAP -> "세션 상한"
+    ExcludedReason.SESSION_CAP -> SESSION_CAP_TEXT
     ExcludedReason.MIC_ERROR -> "마이크 오류"
     ExcludedReason.DETECTOR_TIMEOUT -> "감지 시간 초과"
-    ExcludedReason.INPUT_SILENCED -> "입력이 무음 처리됨"
+    ExcludedReason.INPUT_SILENCED -> "마이크 입력이 막힘"
     ExcludedReason.FOCUS_LOSS -> "소리를 이어서 틀지 못함"
-    ExcludedReason.SUSPEND -> "일시 중단"
+    ExcludedReason.SUSPEND -> "차가 절전에 들어감"
 }
+
+/** 달래기 상한(뺀 이유·정차 이유가 같은 낱말, U73. 인계 알림 '달래기 시간이 끝났어요'와 같은 말). */
+private const val SESSION_CAP_TEXT = "달래기 20분 끝남"
 
 private fun secondText(sec: SecondAttempt): String {
     val what = when (sec.action) {
         // C355: 분기는 고른 사실이다. 실제로 낮췄는지는 car_actions cabin_cool이 보인다
         SecondAction.COMFORT_COOL -> "더운 실내로 판단했어요"
         SecondAction.FEEDING_WINDOW -> "수유 시간대로 판단했어요"
-        SecondAction.OTHER_SOUND -> "다른 소리로 바꿨어요" + (sec.sound?.let { "(${it.label})" } ?: "")
+        SecondAction.OTHER_SOUND -> "다른 소리로 바꿨어요" + (sec.sound?.let { " · ${it.label}" } ?: "")
         SecondAction.FOCUS_DENIED -> "소리를 이어서 틀지 못했어요"
     }
-    return what + (sec.result?.let { " · ${result(it)}" } ?: "")
+    return what + (sec.result?.let { " · ${resultText(it)}" } ?: "")
 }
 
 /** [settling]: 인계 행에 아직 확정 안 된(말하는 종류인데 told_driver null) 것이 있으면(`handoffSettled` 거짓, C305) 한 줄로만 보인다(C185). */
 internal fun stopText(st: StopInfo, settling: Boolean = false) = buildString {
     append(when (st.reason) {
         StopReason.ATTEMPT_LIMIT -> "두 번 시도 뒤"
-        StopReason.SESSION_CAP -> "세션 20분 상한"
+        StopReason.SESSION_CAP -> SESSION_CAP_TEXT
         StopReason.FEEDING_WINDOW -> "수유 시간대"
         StopReason.NO_SOUND -> "뒷좌석 출력 없음"
     })
@@ -290,8 +311,8 @@ internal fun stopText(st: StopInfo, settling: Boolean = false) = buildString {
     if (settling) { append("정리하는 중이에요"); return@buildString }
     val told = toldShown(st.toldDriver, settled = true)   // C130 ⑦·C303 A10: 인계 문장을 못 말했으면 "했다"고 쓰지 않는다(폰 U53과 같은 글). 확정 전은 위에서 끝났다
     append(when (st.mode) {
-        HandoffKind.REST_OFFER -> if (told) "${st.restName ?: "쉼터"} 들르기 제안" else "쉼터는 묻지 못했어요"
-        HandoffKind.ARRIVAL_NOTICE -> if (told) "도착 안내" else "도착 안내는 하지 못했어요"
+        HandoffKind.REST_OFFER -> if (told) "${st.restName ?: "쉼터"}에 들르자고 제안했어요" else "쉼터는 묻지 못했어요"
+        HandoffKind.ARRIVAL_NOTICE -> if (told) "도착 안내를 했어요" else "도착 안내는 하지 못했어요"
         HandoffKind.NO_REST -> if (told) "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요" else "안전한 곳에 세우도록 안내하지 못했어요"
         HandoffKind.PARKED -> if (st.reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"   // U59
     })

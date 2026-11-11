@@ -179,7 +179,7 @@ internal fun cpuPercent(a: ProcSample, b: ProcSample, hz: Long): Double? {
 internal fun metrics(results: SceneResults?, cpuPct: Double?, pssKb: Long?): List<Metric> {
     val lat = results?.rows?.mapNotNull { it.alarmLatencyMs }.orEmpty()
     return listOf(
-        Metric("감지 지연 중앙값", median(lat)?.let { "%.1f초".format(Locale.ROOT, it / 1000) } ?: "—", results?.let { "${it.id} ${lat.size}/${it.rows.size}회" } ?: ""),
+        Metric("보통 감지 지연", median(lat)?.let { "%.1f초".format(Locale.ROOT, it / 1000) } ?: "—", results?.let { "${it.id} ${lat.size}/${it.rows.size}번" } ?: ""),
         Metric("경보 지연 목표", "3초 이하", "명세 15장"),
         Metric("CPU", cpuPct?.let { "%.1f%%".format(Locale.ROOT, it) } ?: "—", "예산 5% 미만"),
         Metric("메모리", pssKb?.let { "${(it + 512) / 1024}MB" } ?: "—", "예산 400MB 이하"),
@@ -195,8 +195,8 @@ private fun readProcSample() = ProcSample(
 
 private fun clockTicks(): Long = runCatching { Os.sysconf(OsConstants._SC_CLK_TCK) }.getOrDefault(100L)
 
-/** 진행 한 줄(지금 앱 문구 그대로): "A 2/5회 · 37초 · 어긋남 t=12.0". */
-internal fun progressText(p: ScenarioProgress) = "${p.id} ${p.run}/${p.of}회 · ${p.t.toInt()}초" + (p.failedStep?.let { " · 어긋남 t=$it" } ?: "")
+/** 진행 한 줄: "A 2/5번 · 37초 · 어긋남 t=12.0"(횟수는 '번', C385). */
+internal fun progressText(p: ScenarioProgress) = "${p.id} ${p.run}/${p.of}번 · ${p.t.toInt()}초" + (p.failedStep?.let { " · 어긋남 t=$it" } ?: "")
 
 /** 반복 단추 글(null = 장면 파일의 repeat). */
 internal fun repeatText(repeat: Int?) = "반복 ${repeat?.toString() ?: "장면 기본"}"
@@ -228,8 +228,8 @@ fun DemoScreen(
         Stepper(repeatText(repeat), Modifier.padding(top = 24.dp), minusEnabled = !running, plusEnabled = !running,
             onMinus = { repeat = repeatDown(repeat, base) }, onPlus = { repeat = repeatUp(repeat, base) })
         Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            CarButton("실행", Modifier.weight(1f), BtnKind.BRAND, icon = R.drawable.ic_play, enabled = sel != null && !running) { sel?.let { onRun(it, repeat) } }
-            CarButton("멈춤", Modifier.weight(1f), icon = R.drawable.ic_square, enabled = running, onClick = onStop)
+            CarButton("실행하기", Modifier.weight(1f), BtnKind.BRAND, icon = R.drawable.ic_play, enabled = sel != null && !running) { sel?.let { onRun(it, repeat) } }
+            CarButton("멈추기", Modifier.weight(1f), icon = R.drawable.ic_square, enabled = running, onClick = onStop)
         }
     }
     val right: @Composable ColumnScope.() -> Unit = {
@@ -243,8 +243,8 @@ fun DemoScreen(
             }
         }
         CarButton("Virtual Console 확인", Modifier.padding(top = 16.dp), size = BtnSize.M, enabled = !running, onClick = onCheckVc)
-        ui.vcText?.let { Body("Virtual Console: $it") }
-        Body("프로필·연결·노래는 남기고 주행 기록과 성적을 모두 지워요. 휴대폰 중계에 남은 기록도 지워요")
+        ui.vcText?.let { Body("Virtual Console · $it") }
+        Body("프로필·연결·노래는 남기고 주행 기록과 성적을 모두 지워요. 중계 서버에 남은 기록도 지워요.")
         CarButton("모든 기록 지우기", Modifier.padding(top = 24.dp), BtnKind.DANGER, icon = R.drawable.ic_trash_2, enabled = !running) { ask = true }
     }
 
@@ -261,7 +261,7 @@ fun DemoScreen(
             }
         }
     }
-    if (ask) Popup("모든 기록을 지울까요?", "지운 기록은 되돌릴 수 없어요", "지우기", "그만두기", onConfirm = { ask = false; onClear() }, onDismiss = { ask = false })
+    if (ask) Popup("모든 기록을 지울까요?", "지운 기록은 되돌릴 수 없어요", "지우기", "닫기", onConfirm = { ask = false; onClear() }, onDismiss = { ask = false })
 }
 
 /** 울음 확률 선(시안 .prob: 높이 200, 기준선 아이 주황 점선, 선 브랜드 파랑 4). 정차 화면이라 새 구간마다 다시 그린다. */
@@ -297,7 +297,7 @@ private fun MetricGrid(ms: List<Metric>) {
     }
 }
 
-/** 장면 행(시안 .lrow + .badge): 표 · 제목 · 녹음 파일, 고르면 옅은 면 + 확인 표시. */
+/** 장면 행(시안 .lrow + .badge): 표 · 제목 · 녹음 파일, 고르면 옅은 면 + 확인 표시(공용 [CheckBox]). */
 @Composable
 private fun SceneRow(s: SceneInfo, on: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val p = LocalPalette.current
@@ -313,7 +313,7 @@ private fun SceneRow(s: SceneInfo, on: Boolean, enabled: Boolean, onClick: () ->
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (s.audio.isNotEmpty()) Text(s.audio.joinToString(" · "), style = CarType.label, color = p.textTertiary, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
         }
-        if (on) LineIcon(R.drawable.ic_check, 40.dp, p.textPrimary)
+        if (on) CheckBox(true)   // 선택 표시는 공용 체크 칸 하나(브랜드 파랑 바탕 + 흰 체크, 11-11 사용자 결정). 한 개만 고르는 목록이라 꺼진 칸은 그리지 않는다
     }
 }
 

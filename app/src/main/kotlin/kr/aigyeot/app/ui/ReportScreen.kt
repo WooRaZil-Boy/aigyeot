@@ -107,7 +107,7 @@ private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier,
                 SteerCard(v, Modifier.weight(1f).fillMaxHeight())
             }
         }
-        if (v.methods.isNotEmpty()) Panel(label = "방법별 성적") {
+        if (v.methods.isNotEmpty()) Panel(label = "소리별 성적") {
             MethodDotsChart(v.methods)
             Note("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.", Modifier.padding(top = 6.dp))
         }
@@ -145,16 +145,10 @@ private fun DidCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifi
     }
 }
 
-/** 3D 'did' 자리(정차 화면에서만 보이고 조작 없음, 상태가 바뀔 때 한 장만 그린다). 화면을 떠나면 놓는다. */
+/** 3D 'did' 자리(정차 화면에서만 보이고 조작 없음, 지난 주행의 정지 그림: 상태가 바뀔 때 한 장만, 바람 결·효과 움직임 없음). 화면을 떠나면 놓는다. */
 @Composable
-private fun CarStill(v: ReportView, modifier: Modifier) {
-    val dark = LocalPalette.current.isDark
-    AndroidView(
-        factory = { CarView(it, interactive = false) }, modifier = modifier, onRelease = { it.destroy() },
-        // 지난 주행의 정지 그림: 움직임 없음(reducedMotion으로 바람 결·효과도 끈다)
-        update = { it.dark = dark; Stage3d(view = View3d.DID, light = Light3d.BASE, callouts = v.callouts, reducedMotion = true).let { s -> if (it.state != s) it.set(s, animate = false) } },
-    )
-}
+private fun CarStill(v: ReportView, modifier: Modifier) =
+    Car3dStill(Stage3d(view = View3d.DID, light = Light3d.BASE, callouts = v.callouts), modifier)
 
 /** 평소 대비 조향 보정(시안 Charts.steer + note). 비교할 수 없으면 그 이유 한 줄. */
 @Composable
@@ -162,7 +156,7 @@ private fun SteerCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modi
     if (v.steer == null) Body(v.steerText ?: "")
     else {
         SteerChart(v.steer)
-        Note("1분당 큰 조향 보정 횟수예요.", Modifier.padding(top = 6.dp))
+        Note("1분당 큰 조향 보정 횟수예요", Modifier.padding(top = 6.dp))
     }
 }
 

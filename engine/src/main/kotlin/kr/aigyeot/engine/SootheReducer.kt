@@ -122,7 +122,7 @@ internal fun Tx.started(e: PlaybackStarted) {
     enter(st.withPlay(pl.copy(startedAt = now)))
     ses { copy(output = if (e.fallback || output == OutputRoute.DEFAULT_FALLBACK) OutputRoute.DEFAULT_FALLBACK else OutputRoute.REAR_ZONE) }   // C85
     if (pl.method.isSong()) songStarted()                                                       // Q5d: 듣는 도중 시작(Qa)
-    val method = mapOf("method" to methodName(pl.method))
+    val method = mapOf("method" to methodLabel(pl.method.kind))
     when (pl.purpose) {
         PlayPurpose.AUTO_FIRST -> {                                                             // 4b·4e·5b
             val fw = feeding()

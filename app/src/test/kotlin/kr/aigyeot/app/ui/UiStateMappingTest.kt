@@ -45,7 +45,7 @@ class UiStateMappingTest {
     @Test fun songRows_markThirdAndSelected() {
         fun song(id: String, name: String?, dur: Double?) = SongEntity(id, name, null, "m4a", dur, null, null, "ACTIVE", null, 1, 1)
         val rows = songRows(listOf(song("a", "자장", 61.7), song("b", null, null)), SongSelectionEntity("b", 1), listOf(Method(MethodKind.SONG, "a")))
-        assertEquals(listOf("자장 · 61초 · 실험에 쓰는 곡", "이름 없는 노래"), rows.map { it.label })
+        assertEquals(listOf("자장 · 61초 · 실험에 쓰는 노래", "이름 없는 노래"), rows.map { it.label })
         assertEquals(listOf(false, true), rows.map { it.selected })
         assertEquals(listOf(false, false), songRows(listOf(song("a", "x", null), song("b", "y", null)), null, emptyList()).map { it.selected })
     }
@@ -55,7 +55,7 @@ class UiStateMappingTest {
         val rows = reportRows(listOf(s("a", null, null), s("b", T0 + 60_000, "sc")))
         assertEquals(listOf(false, true), rows.map { it.enabled })
         assertEquals("주행 중", rows[0].sub)
-        assertTrue(rows[1].title.contains("–") && rows[1].sub.endsWith("시뮬레이션"))
+        assertTrue(rows[1].title.contains("–") && rows[1].sub.endsWith("연습 장면"))
         assertEquals(listOf("a", "b"), rows.map { it.id })
     }
 

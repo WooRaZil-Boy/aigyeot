@@ -44,7 +44,7 @@ import kotlin.math.roundToLong
  * - `cry`(C288 순서): 판단 코어 `cryView`(C303 ②)를 그대로 옮긴다. 확인할 수 없으면 `unavailable`(C245, 판단 코어가 구간을 보지 않음), 아니고 그침 확인(GAP·CONFIRM) 중이면 `confirming`(C231),
  *   아니고 이어진 경보가 끊기지 않았으면 `current_min` = 그 경보의 처음부터 n분째(첫 1분 = 1, C286). 앞 칸이 서면 뒤 칸은 비운다.
  * - 소수(거리·온도)는 소수 첫째 자리로 줄인다. 숫자 검사가 이 값으로 견주므로 모델이 그대로 읽을 수 있게 한다.
- * - 부모 노래 이름은 보내지 않는다(별명이 들어 있을 수 있다, 기준 문서 6.5). `label`은 "부모 노래"다.
+ * - 우리 노래의 곡 이름은 보내지 않는다(별명이 들어 있을 수 있다, 기준 문서 6.5). `label`은 "우리 노래"다(C385).
  */
 internal fun llmState(s: EngineState?, now: Long, cryRuns: Int = s?.session?.cryRuns ?: 0, zone: ZoneId = ZoneId.systemDefault()): LlmState {
     if (s == null) return LlmState(LlmCry(null, 0, unavailable = true), null, null, null, null, emptyList(), null)
@@ -81,6 +81,9 @@ internal fun llmState(s: EngineState?, now: Long, cryRuns: Int = s?.session?.cry
         careAsOfMinAgo = c?.let { ago(it.asOf) },
     )
 }
+
+/** ④ 모르는 질문 답(연결 계약 8.8 `unknown`, C385: 차 문장에 1인칭을 쓰지 않는다). 답·대체 답·오프라인 답이 이 하나를 쓴다. */
+private const val UNKNOWN_REPLY = "그건 알 수 없어요."
 
 private fun tenth(x: Double) = (x * 10).roundToLong() / 10.0
 
@@ -150,7 +153,7 @@ internal fun qaEventsCare(
         facts.isNotEmpty() -> ""   // 사실 주제는 차가 정한 문장만 말한다(C194). 글은 호스트가 큐에서 처리할 때 짠다(C221)
         llmText != null -> llmText
         "why" in topics -> ""   // C227: 호스트가 짠다(composeTopics)
-        "unknown" in topics -> "그건 제가 알 수 없어요."
+        "unknown" in topics -> UNKNOWN_REPLY
         else -> when (tools.firstOrNull()) {
             is SwitchSound -> "소리를 바꿀게요."
             is DriverStop -> "소리를 멈출게요."
@@ -170,7 +173,7 @@ internal fun qaEventsCare(
     var fbTopics = emptyList<String>()
     val (fb, fbCare) = when {
         "why" in topics -> { fbTopics = listOf("why"); "" to true }   // C227: 대체 답도 호스트가 짠다
-        "unknown" in topics -> "그건 제가 알 수 없어요." to false
+        "unknown" in topics -> UNKNOWN_REPLY to false
         else -> when (tools.firstOrNull()) {
             is SwitchSound -> "소리를 바꿀게요." to false
             is DriverStop -> "소리를 멈출게요." to false
@@ -278,7 +281,7 @@ private fun plainTopic(topic: String, s: LlmState, p: Params): Pair<String, Bool
         (s.feeding?.let { "마지막 수유 시작부터 ${spokenMin(it.elapsedMin)}${if (seat != null) ", $seat" else "이에요."} 배고프거나 불편할 수 있어요." }
             ?: "${seat?.plus(" ") ?: ""}불편할 수 있어요.") to (woke != null)
     }
-    "unknown" -> "그건 제가 알 수 없어요." to false
+    "unknown" -> UNKNOWN_REPLY to false
     else -> "지금은 답을 가져오지 못했어요." to false
 }
 

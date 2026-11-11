@@ -77,12 +77,21 @@ fun noStateClaim(text: String): Boolean {
 }
 
 /**
- * 군말 검사(C375, contracts-link 8.8). 정규화한 글에 영문 낱말(영문자 4자 이상 연속)이나 '도구'·'호출'이 있으면 거짓이다.
- * 모델이 도구 이름·주제 이름·영어 추론을 글 칸에 흘리는 것을 막는다. 걸러도 정해 둔 문장이 나갈 뿐이라 안전 쪽이다.
+ * 군말 검사(C375·C386, contracts-link 8.8). 모델이 도구 이름·주제 값·영어 추론·"…를 고르겠습니다" 같은 추론 글을 글 칸에 흘리는 것을 막는다.
+ * 정규화한 글에 ① 영문 낱말(영문자 2자 이상 연속. 식별자 목록 없이 길이로 거른다) ② 한글·영문 밖 글자(힌디·키릴·한자 등, 1자도) ③ 괄호류
+ * ④ [LEAK_WORDS](공백 지운 글)가 있으면 거짓이다. 걸러도 정해 둔 문장이 나갈 뿐이라 안전 쪽이다. 낱말은 실측 자료에서 뽑았고 말투 변형을 하나씩 더하지 않는다.
  */
-fun noLeak(text: String): Boolean = !LEAK.containsMatchIn(readable(text))
+fun noLeak(text: String): Boolean {
+    val t = readable(text)
+    return !LEAK_CHARS.containsMatchIn(t) && t.filterNot { it.isWhitespace() }.let { s -> LEAK_WORDS.none { it in s } }
+}
 
-private val LEAK = Regex("[A-Za-z]{4,}|도구|호출")
+// 한글은 \p{IsHangul} 대신 코드 범위로 쓴다: 그 표기는 Android 10부터라 minSdk 28(Android 9)에서 정규식 만들기가 실패한다.
+// 범위 = 한글 음절·자모·호환 자모·확장 A·B·반각 자모(유니코드 Hangul 문자 집합)
+private val LEAK_CHARS = Regex("[A-Za-z]{2,}|[\\p{L}&&[^A-Za-z\\uAC00-\\uD7A3\\u1100-\\u11FF\\u3130-\\u318F\\uA960-\\uA97F\\uD7B0-\\uD7FF\\uFFA0-\\uFFDC]]|[\\[\\](){}<>]")
+
+/** 설계값(공백 없는 꼴). 프롬프트의 내부 낱말(주제·도구·상태값·정해진 문장)과 추론 투 낱말. 바꾸면 contracts-link 8.8과 NumberCheckTest를 함께 고친다. */
+internal val LEAK_WORDS = listOf("주제", "도구", "호출", "상태값", "문장", "고르겠", "고를게", "고릅니", "답하겠", "답할게", "답합니", "질문으로보", "말로보여")
 
 /** 설계값(공백 없는 꼴). 바꾸면 contracts-link 8.8과 NumberCheckTest를 함께 고친다. */
 internal val STATE_CLAIMS = listOf(

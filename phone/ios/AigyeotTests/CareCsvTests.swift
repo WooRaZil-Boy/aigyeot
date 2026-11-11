@@ -78,7 +78,7 @@ final class CareCsvTests: XCTestCase {
         let k = try kit()
         let vm = k.app.settings()
         let unknown = await vm.loaded(.text(try text("unknown")))
-        XCTAssertEqual(unknown, .failed("이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요"))
+        XCTAssertEqual(unknown, .failed("이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요."))
         let notUtf8 = await vm.loaded(.unreadable)
         XCTAssertEqual(notUtf8, .failed(CareText.importUnreadable))
     }
@@ -270,7 +270,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(vm.importStep, .picking)
         let step = await vm.loaded(.text(t))
         XCTAssertEqual(step, .pickChild(text: t, profiles: ["EXAMPLE-B", "EXAMPLE-A"]))
-        XCTAssertEqual(CareText.importPickChild, "어느 아이의 기록인가요?")
+        XCTAssertEqual(CareText.importPickChild, "어느 아기의 기록인가요?")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("EXAMPLE-nara.csv")
         try Data(t.utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
@@ -383,7 +383,7 @@ final class CareCsvTests: XCTestCase {
         await vm2.importJob?.value
         XCTAssertEqual(vm2.importStep, .preview(d))
         vm2.confirmImport()
-        XCTAssertEqual(vm2.importStep, .failed("가져오지 못했어요. 다시 해 주세요"))
+        XCTAssertEqual(vm2.importStep, .failed("가져오지 못했어요. 다시 해 주세요."))
         XCTAssertEqual(k.app.care.care, before)
         XCTAssertEqual(k.careStore.value, before)
         XCTAssertTrue(queued(k).isEmpty)
@@ -556,6 +556,22 @@ final class CareCsvTests: XCTestCase {
         }
     }
 
+    /// U87·U67: 화면 읽기가 켜져 띠가 길어져도 가져온 줄은 그 띠가 끝난 뒤에 차로 간다(띠 수명은 RecordCare 한 곳).
+    func test_띠_시간이_길어져도_가져온_줄은_띠가_끝난_뒤에_차로_간다() async throws {
+        let k = try kit()
+        k.app.recordCare.screenReader = { true }
+        k.app.recordCare.undoMs = 0                    // 꺼져 있을 때의 시간이면 바로 끝났을 것
+        k.app.recordCare.undoMsScreenReader = 300      // 50초 대신 짧게(같은 길)
+        let ids = try await importedWithBand(k.app)
+        XCTAssertEqual(ids.count, 20)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertNotNil(k.app.notices.undo)            // 화면 읽기 시간으로 아직 떠 있다
+        XCTAssertTrue(queued(k).isEmpty)
+        await k.app.recordCare.undoTask?.value
+        XCTAssertNil(k.app.notices.undo)
+        XCTAssertEqual(queuedAt(k), [CareTime.date(1_793_934_000_000)])
+    }
+
     /// 요약(R19)까지 보는 앱. 이 연결에서 요약을 넣은 적이 있다(U61, 값 없는 요약도 간다).
     func summaryKit() throws -> Kit {
         let k = try kit()
@@ -679,7 +695,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(p.buttons, ["가져오기", "취소"])
         XCTAssertEqual(CareText.importSkipTitle, "가져오지 않는 것")
         XCTAssertEqual(CareText.importZoneNote, "시각은 한국 시간으로 읽어요")
-        XCTAssertEqual([CareText.importEntry, CareText.importEntrySub], ["다른 앱 기록 가져오기", "아이곁·Huckleberry·Nara에서 내보낸 CSV"])
+        XCTAssertEqual([CareText.importEntry, CareText.importEntrySub], ["다른 앱 기록 가져오기", "아이곁·Huckleberry·Nara에서 내보낸 CSV를 읽어요"])
         XCTAssertNotNil(k.app.recordCare.importRows(first.rows))
         // 같은 파일을 다시: 가져올 것이 0이면 import.nothing과 '닫기'만.
         let before = k.app.care.care

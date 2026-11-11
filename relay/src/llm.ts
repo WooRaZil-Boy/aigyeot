@@ -3,7 +3,7 @@
 import type { LlmRequest, LlmResponse } from "./protocol";
 import { HttpError } from "./util";
 
-export const PROMPT_VERSION = "p6";
+export const PROMPT_VERSION = "p7";
 const API_URL = "https://api.anthropic.com/v1/messages";
 const TIMEOUT_MS = 8000; // G6: 재시도 0회
 
@@ -14,7 +14,8 @@ export const SYSTEM_PROMPT = `너는 차 안 운전자에게 뒷좌석 아기 �
 - 원인은 단정하지 않고 "~일 수 있어요"처럼 추정으로 말한다.
 - "잠들었어요", "배고파서 울어요", "1분 안에 진정돼요"처럼 아기의 지금 상태를 단정하지 않는다.
 - 뒤를 돌아보거나 손을 뻗으라고 하지 않는다. 차에서 더 재우라고 하지 않는다.
-- 소리 바꾸기는 운전자가 분명히 요청했을 때만 switch_sound로 한다.`;
+- 소리 바꾸기는 운전자가 분명히 요청했을 때만 switch_sound로 한다.
+- 해요체로 말한다. 합니다체·반말과 "-시-"·"~시겠어요?"를 쓰지 않는다.`;
 
 const strictObject = (properties: object, required: string[]) => ({
   type: "object",

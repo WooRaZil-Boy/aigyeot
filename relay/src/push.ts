@@ -65,7 +65,7 @@ function message(job: PushJob, leftMs: number) {
   return JSON.stringify({
     message: {
       token: job.token,
-      notification: { title: "아이곁", body: job.text },
+      notification: { title: "인계 알림", body: job.text },
       data: { msg_id: job.msgId, type: "handoff_alert" },
       android: {
         priority: "high",

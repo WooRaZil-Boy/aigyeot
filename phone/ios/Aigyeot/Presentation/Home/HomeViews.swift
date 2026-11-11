@@ -87,7 +87,8 @@ struct AlertBanner: View {
                         HStack(alignment: .top, spacing: 12) {
                             AppMark(size: 38)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(CareText.introTitle).typeStyle(.bannerTitle)
+                                Text(CareText.introTitle + " · 지금").typeStyle(.footnote).foregroundStyle(DS.textTertiary)   // 푸시와 같은 짜임(12-2): 머리 · 제목 · 본문
+                                Text(CareText.handoffTitle).typeStyle(.bannerTitle)
                                 Text(vm.ui.bannerText ?? "").typeStyle(.eventTitle).multilineTextAlignment(.leading).lineLimit(3)   // 큰 글자에서 화면을 덮지 않게. 전체는 눌러서 본다
                             }
                             Spacer(minLength: 0)
@@ -191,8 +192,8 @@ func feedStatusText(_ r: FeedingRecord) -> String {
     case .sending: return "보내는 중"
     case .sent: return "보냄 \(r.sentAt.map { CareFormat.clock($0) } ?? "")"
     case .reflected: return "차에 반영됨"
-    case .expired: return "7일이 지나 보내지 못했어요"
-    case .failed: return "차로 보내지 못했어요"
+    case .expired: return "보내지 못함 · 7일 지남"
+    case .failed: return "보내지 못함"
     }
 }
 
@@ -233,10 +234,10 @@ private struct AlertDetailContent: View {
                 .screenPadding()
             }
             .screenBackground()
-            .navigationTitle("인계 알림")
+            .navigationTitle(CareText.handoffTitle)
             .navigationBarTitleDisplayMode(.inline)
         } else {
-            ContentUnavailableView("알림을 불러오고 있어요", image: Ico.bell.assetName)
+            ContentUnavailableView("알림 내용을 받고 있어요", image: Ico.bell.assetName)
         }
     }
 

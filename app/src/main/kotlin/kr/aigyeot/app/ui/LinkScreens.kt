@@ -203,7 +203,7 @@ private fun LinkArt() {
         Modifier.padding(top = 20.dp).fillMaxWidth().height(300.dp).clip(RoundedCornerShape(CarRadius.l))
             .drawBehind { drawRect(Brush.radialGradient(listOf(glow, p.stage), Offset(size.width / 2, size.height * 0.7f), size.width * 0.6f)) },
     ) {
-        Car3dStill(Stage3d(view = View3d.TILE, light = Light3d.LISTEN), Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.94f).align(Alignment.TopCenter))
+        Car3dStill(Stage3d(view = View3d.CABIN, light = Light3d.LISTEN), Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.94f).align(Alignment.TopCenter))
         Canvas(Modifier.fillMaxSize().padding(start = 70.dp, end = 70.dp, top = 40.dp, bottom = 70.dp)) {
             val sx = size.width / 100f; val sy = size.height / 60f
             fun curve(x0: Float, c1: Float, c2: Float) = Path().apply { moveTo(x0 * sx, 48 * sy); cubicTo(c1 * sx, 10 * sy, c2 * sx, 10 * sy, 50 * sx, 30 * sy) }
@@ -225,12 +225,12 @@ private fun PhoneChip(modifier: Modifier) {
     Box(modifier.size(72.dp).shadow(12.dp, shape).clip(shape).background(p.surface), Alignment.Center) { LineIcon(R.drawable.ic_smartphone, 38.dp, p.accentInk) }
 }
 
-/** 정차 화면의 연결 상태 한 줄(contracts-link 8.6). NONE은 표시하지 않는다. CONNECTED는 연결된 폰이 있을 때만 "연결됨"(C106). */
+/** 정차 화면의 연결 상태 한 줄(contracts-link 8.6, 한 칸의 상태라 모두 명사형, C385). NONE은 표시하지 않는다. CONNECTED는 연결된 폰이 있을 때만 "연결됨"(C106). */
 internal fun connText(c: LinkConn, hasPhone: Boolean): String? = when (c) {
     LinkConn.NONE -> null
-    LinkConn.CONNECTING -> "휴대폰 연결: 붙는 중"
-    LinkConn.CONNECTED -> if (hasPhone) "휴대폰 연결됨" else "아직 연결된 휴대폰이 없어요"
-    LinkConn.BACKOFF -> "휴대폰 연결: 다시 붙는 중"
+    LinkConn.CONNECTING -> "휴대폰과 연결하는 중"
+    LinkConn.CONNECTED -> if (hasPhone) "휴대폰 연결됨" else "연결된 휴대폰 없음"
+    LinkConn.BACKOFF -> "휴대폰과 다시 연결하는 중"
 }
 
 /**
@@ -262,15 +262,15 @@ internal fun LinkLines(st: LinkStatus) {
     linkLines(st, paired).forEach { Body(it.text, if (it.error) LocalPalette.current.danger else Color.Unspecified) }
 }
 
-/** 노래 고르기 화면(G20, 시안 목록 행 결). 고른 곡은 다음 주행부터 쓴다. */
+/** 노래 고르기 화면(G20, 시안 목록 행 결). 고른 노래는 다음 주행부터 쓴다. */
 @Composable
 fun SongsScreen(rows: List<SongRow>, onSelect: (String) -> Unit, onBack: () -> Unit) =
-    Page("부모 노래", onBack) {
+    Page("우리 노래", onBack) {
         if (rows.isEmpty()) Body("휴대폰에서 노래를 보내면 여기 보여요")
         rows.forEach { s ->
             ListRow(s.label, icon = R.drawable.ic_song, selected = s.selected) {
-                CarButton("이 곡 쓰기", size = BtnSize.M, enabled = !s.selected) { onSelect(s.id) }
+                CarButton("실험에 쓰기", size = BtnSize.M, enabled = !s.selected) { onSelect(s.id) }
             }
         }
-        Note("고른 곡은 다음 주행부터 써요")
+        Note("고른 노래는 다음 주행부터 써요")
     }

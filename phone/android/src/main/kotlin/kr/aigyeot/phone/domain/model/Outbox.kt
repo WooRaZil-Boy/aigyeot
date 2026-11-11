@@ -128,10 +128,10 @@ fun Map<String, String>.withDrop(id: String, type: String): Map<String, String> 
 
 /** 7.1 outbox.dropped(U54): 버린(영구 실패) 메시지의 띠 안내. 수유는 기록 줄의 실패 표시와 함께 띄운다. 노래 추가는 항목에만 표시된다. */
 fun dropNotice(type: String): String? = when (type) {
-    "feeding_started" -> "수유 기록을 차로 보내지 못했어요."
-    "song_removed" -> "노래 삭제를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요."
-    "song_selected" -> "실험에 쓸 노래 선택을 차로 보내지 못했어요."
-    "care_summary" -> "돌봄 기록 요약을 차로 보내지 못했어요."
+    "feeding_started" -> "수유 기록을 차로 보내지 못했어요"
+    "song_removed" -> "노래 지우기를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요."
+    "song_selected" -> "실험에 쓸 노래 선택을 차로 보내지 못했어요"
+    "care_summary" -> "돌봄 기록 요약을 차로 보내지 못했어요"
     else -> null
 }
 
@@ -154,7 +154,7 @@ private fun PhoneState.markFailed(item: OutboxItem, r: SendResult.Failed): Phone
         else -> "노래를 보내지 못했어요. 다시 녹음해 주세요."
     }
     return when {
-        item.isFeeding -> copy(feedings = feedings.map { if (it.msgId == item.id) it.copy(failed = "차로 보내지 못했어요") else it })
+        item.isFeeding -> copy(feedings = feedings.map { if (it.msgId == item.id) it.copy(failed = "보내지 못함") else it })
         item.payload is OutboxPayload.Song -> copy(songs = songs.map { if (it.songId == item.songId) it.copy(error = why) else it })
         else -> this
     }

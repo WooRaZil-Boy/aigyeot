@@ -11,6 +11,24 @@ import org.junit.Test
 
 class StopTextTest {
     @Test
+    fun `리포트 에피소드 블록 머리는 시작 사건으로 정한다`() {
+        // copy-audit 14-1(11-12 보충): 없음·울음만 → 울음, 요청만 → 소리 바꾸기 요청, 섞임 → 울음과 소리 바꾸기 요청(낱말은 episodeHead).
+        val cry = kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM
+        val switch = kr.aigyeot.shared.EpisodeTrigger.SWITCH_SOUND
+        assertEquals("울음", episodeSectionHead(emptyList()))
+        assertEquals("울음", episodeSectionHead(listOf(cry, cry)))
+        assertEquals("소리 바꾸기 요청", episodeSectionHead(listOf(switch)))
+        assertEquals("울음과 소리 바꾸기 요청", episodeSectionHead(listOf(switch, cry)))
+    }
+
+    @Test
+    fun `연결된 휴대폰 부제는 Android와 iPhone이고 열거 이름을 보이지 않는다`() {
+        fun d(id: String, pl: kr.aigyeot.shared.Platform) = kr.aigyeot.shared.DeviceInfo(id, kr.aigyeot.shared.Role.GUARDIAN, pl, "2026-11-11T00:00:00Z", null, true)
+        assertEquals("Android", phoneSub(d("a", kr.aigyeot.shared.Platform.ANDROID), myDeviceId = "me"))
+        assertEquals("iPhone · 이 휴대폰", phoneSub(d("me", kr.aigyeot.shared.Platform.IOS), myDeviceId = "me"))
+    }
+
+    @Test
     fun `제어 기록 두 줄은 iOS와 같은 글이다`() {
         val c = kr.aigyeot.shared.ControlRecord("requestAudioFocus", "01M73SSW3K-2", attempts = 2, succeeded = 1, failed = 1, retries = 1)
         assertEquals("requestAudioFocus · 01M73SSW3K-2", controlTitle(c))
@@ -44,7 +62,7 @@ class StopTextTest {
 
     @Test fun `뒤붙임까지 전체 줄이 iOS와 같다`() {
         assertEquals(
-            "세션 20분 상한 · 휴게소에 들르자고 제안했어요 · 경유지 추가 · 다른 보호자에게 알림",
+            "달래기 20분 끝남 · 휴게소에 들르자고 제안했어요 · 경유지 추가 · 다른 보호자에게 알림",
             stopText(StopReason.SESSION_CAP, HandoffKind.REST_OFFER, "휴게소", true, true, true),
         )
     }

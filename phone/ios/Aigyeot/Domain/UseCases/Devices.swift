@@ -21,15 +21,15 @@ final class Invite {
     }
 
     func callAsFunction() async -> Result<InviteResponse, InviteFailure> {
-        guard let c = state.creds else { return .failure(InviteFailure(message: "초대를 만들지 못했어요. 잠시 뒤에 다시 해 주세요.")) }
+        guard let c = state.creds else { return .failure(InviteFailure(message: CareText.inviteFailed)) }
         do { return .success(try await gate.observed { try await relay.createInvite(token: c.token) }) }
         catch let e as RelayError {
             gate.unauthorized(e, c: c)
             if e.isOffline { return .failure(InviteFailure(message: "인터넷이 필요해요")) }
             if e.status == 409 { return .failure(InviteFailure(message: "쓰지 않은 초대가 3개 있어요")) }
-            if e.status == 429 { return .failure(InviteFailure(message: "잠시 뒤에 다시 해 주세요.")) }
-            return .failure(InviteFailure(message: "초대를 만들지 못했어요. 잠시 뒤에 다시 해 주세요."))
-        } catch { return .failure(InviteFailure(message: "초대를 만들지 못했어요.")) }
+            if e.status == 429 { return .failure(InviteFailure(message: CareText.inviteFailed)) }
+            return .failure(InviteFailure(message: CareText.inviteFailed))
+        } catch { return .failure(InviteFailure(message: CareText.inviteFailed)) }
     }
 }
 
@@ -93,11 +93,11 @@ final class SetHandoffAlerts {
     }
 
     func callAsFunction(_ on: Bool) async -> String? {
-        guard let c = state.creds else { return "바꾸지 못했어요. 잠시 뒤에 다시 해 주세요." }
+        guard let c = state.creds else { return CareText.handoffSettingFailed }
         switch await patches.send(c, PatchDeviceRequest(handoffAlerts: on)) {
         case .done, .stale: return nil
-        case .failed(let e?): return e.isOffline ? "인터넷이 필요해요" : "바꾸지 못했어요. 잠시 뒤에 다시 해 주세요."
-        case .failed(nil): return "바꾸지 못했어요."
+        case .failed(let e?): return e.isOffline ? "인터넷이 필요해요" : CareText.handoffSettingFailed
+        case .failed(nil): return CareText.handoffSettingFailed
         }
     }
 }

@@ -125,7 +125,7 @@ class Scenario(
             }
         } finally {
             withContext(NonCancellable) {
-                var note = "결과: ${out.path}"
+                var note = "결과 파일 · ${out.path}"
                 if (micBefore && !startMicIfForeground()) note += " · 앱 화면이 없어 마이크를 다시 켜지 못함"
                 save()
                 _progress.value = _progress.value?.copy(note = note)
@@ -222,7 +222,7 @@ class Scenario(
                 if (run.done(now)) break
                 if (now > run.endAt + OVERTIME_MS) { run.finish("시간 초과"); break }
                 run.advance(now)
-                _progress.value = ScenarioProgress(scene.id, k + 1, n, ((now - t0) / 1000).toDouble(), run.firstFail(), note ?: "시뮬레이션 입력 실행 중")   // 정수 초: 같은 값이면 StateFlow가 거른다
+                _progress.value = ScenarioProgress(scene.id, k + 1, n, ((now - t0) / 1000).toDouble(), run.firstFail(), note ?: "연습 장면 실행 중")   // 정수 초: 같은 값이면 StateFlow가 거른다
                 delay(TICK_MS)
             }
         } catch (e: CancellationException) {

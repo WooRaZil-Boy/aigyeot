@@ -81,7 +81,7 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
         if (!vm.play(e)) android.widget.Toast.makeText(context, "녹음 파일을 읽지 못했어요.", android.widget.Toast.LENGTH_SHORT).show()
     }
     // 녹음 화면(시안 S.song)은 머리 없이 목록만 둔다(위 막대 제목이 '우리 노래'). 아직 곡이 없으면 위 안내가 대신한다.
-    if (!header && songs.isEmpty()) { FootNote("차에서는 다음 주행부터 써요."); return }
+    if (!header && songs.isEmpty()) { FootNote("차에서는 다음 주행부터 써요"); return }
     ListBlock(if (header) "우리 노래" else null, if (header && onRecord != null && !ui.full) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
         if (songs.isEmpty()) Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Modifier.padding(bottom = 14.dp), style = Type.body, color = p.textTertiary)
         // 행 상태(메뉴 열림)는 곡 id에 묶는다: 곡 상태가 바뀌거나 다른 폰이 곡을 지워 자리가 달라져도 열린 메뉴가 다른 곡으로 옮겨 가지 않는다.
@@ -107,14 +107,14 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
                     if (e.file != null) DropdownMenuItem({ Text("듣기") }, { menu = false; play(e) })
                     if (e.phase == SongPhase.ACCEPTED && !e.candidate) DropdownMenuItem({ Text("실험에 쓰기") }, { menu = false; vm.select(e.songId) })
                     // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다(9장 '노래 거절', iOS와 같음).
-                    if (e.replaceable && onRecord != null) DropdownMenuItem({ Text("다시 녹음") }, { menu = false; vm.stopPlaying(); onRecord(e.songId) })
+                    if (e.replaceable && onRecord != null) DropdownMenuItem({ Text("다시 녹음하기") }, { menu = false; vm.stopPlaying(); onRecord(e.songId) })
                     DropdownMenuItem({ Text("지우기", color = p.danger) }, { menu = false; vm.remove(e.songId) })
                 }
             }
         }
         if (ui.full) Text(SONGS_FULL, Modifier.padding(bottom = 12.dp), style = Type.caption, color = p.textTertiary) // car.songs.full(7.1)
     }
-    FootNote("차에서는 다음 주행부터 써요.") // car.songs.note(문구표, 확정 시안 그대로. 3분 한도는 녹음 화면 "0:00 / 3:00"이 보인다)
+    FootNote("차에서는 다음 주행부터 써요") // car.songs.note(문구표, 확정 시안 그대로. 3분 한도는 녹음 화면 "0:00 / 3:00"이 보인다)
 }
 
 /**
@@ -201,7 +201,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
             Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Btn("다시 듣기", vm::playTake, Modifier.weight(1f), kind = BtnKind.TONAL, icon = R.drawable.ic_play)
-                    Btn("다시 녹음", vm::discardTake, Modifier.weight(1f), kind = BtnKind.TONAL, enabled = !s.sending)
+                    Btn("다시 녹음하기", vm::discardTake, Modifier.weight(1f), kind = BtnKind.TONAL, enabled = !s.sending)
                 }
                 OutlinedTextField(
                     value = name,
@@ -252,7 +252,7 @@ private fun RecButton(recording: Boolean, enabled: Boolean, onClick: () -> Unit)
     val corner by animateDpAsState(if (recording) 8.dp else 30.dp, spec, label = "recR")
     Box(
         Modifier.size(84.dp).clip(CircleShape).background(lerpColor(p.surface, p.danger, 0.14f))
-            .pressable(enabled = enabled, onClick = onClick).semantics { contentDescription = if (recording) "멈춤" else "녹음" },
+            .pressable(enabled = enabled, onClick = onClick).semantics { contentDescription = if (recording) "녹음 멈추기" else "녹음하기" },
         contentAlignment = Alignment.Center,
     ) { Box(Modifier.size(side).clip(RoundedCornerShape(corner)).background(p.danger)) }
 }

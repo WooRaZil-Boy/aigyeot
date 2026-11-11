@@ -6,6 +6,7 @@ import kr.aigyeot.shared.CarAction
 import kr.aigyeot.shared.CarActionKind
 import kr.aigyeot.shared.ControlRecord
 import kr.aigyeot.shared.EpisodeResult
+import kr.aigyeot.shared.ExcludedReason
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.Gear
 import kr.aigyeot.shared.HandoffKind
@@ -54,7 +55,7 @@ class ReportViewTest {
         fun s(id: String, end: Long?, scene: String?) = SessionEntity(id, ms("13:10:00"), end, "T", null, null, 0, 0, false, "[]", null, null, false, scene, 10)
         val rows = reportRows(listOf(s("a", null, null), s("b", ms("13:52:00"), null), s("c", ms("13:52:00"), "sc"))) { if (it == "b") 0 else 2 }
         assertEquals(listOf("11월 9일(월) 오후 1:10", "11월 9일(월) 오후 1:10–1:52", "11월 9일(월) 오후 1:10–1:52"), rows.map { it.title })
-        assertEquals(listOf("주행 중", "울음 기록 없음", "울음 2번 · 시뮬레이션"), rows.map { it.sub })
+        assertEquals(listOf("주행 중", "울음 기록 없음", "울음 2번 · 연습 장면"), rows.map { it.sub })
         assertEquals(listOf(false, true, true), rows.map { it.enabled })
         assertEquals("", reportRows(listOf(s("b", ms("13:52:00"), null))).single().sub, "울음 수를 모르면 만들지 않는다")
     }
@@ -83,7 +84,7 @@ class ReportViewTest {
         val c = episodeChart(ep(listOf(first, second), result = EpisodeResult.FAILURE, recried = true, second = SecondAttempt(SecondAction.OTHER_SOUND, null, EpisodeResult.SUCCESS)))!!
         assertEquals(listOf(SoundSeg(2, 58, "자장가", 56), SoundSeg(58, 66, null, 8), SoundSeg(66, 122, "백색소음", 56)), c.sounds)   // 0초 = 경보 시각
         assertEquals(listOf(ChartMark(0, "감지 2.4초"), ChartMark(66, "다시 울음")), c.marks, "축 위에는 시각을 아는 표시만(감지, 자동 2차 시작)")
-        assertEquals(listOf("울음 30초", "그쳤어요"), c.outcomes, "그친 시각은 기록에 없어 축 밖에")
+        assertEquals(listOf("울음 30초", "그침"), c.outcomes, "그친 시각은 기록에 없어 축 밖에")
         assertEquals(122, c.totalS)
         assertEquals("자장가 56초", soundTip(c.sounds[0])); assertEquals("8초", soundTip(c.sounds[1]), "듣기 틈은 띠의 이름 칸이 이미 말한다")
     }
@@ -95,7 +96,7 @@ class ReportViewTest {
         assertEquals(emptyList(), episodeChart(ep(listOf(first), cry = 0))!!.outcomes, "들은 울음이 0이면 글자도 없다")
         assertNull(episodeChart(ep(lat = 2.4)), "재생이 없으면 띠가 없다(경보 지연을 울음 구간으로 그리지 않는다)")
         val sw = episodeChart(ep(listOf(first), lat = null, trigger = EpisodeTrigger.SWITCH_SOUND))!!
-        assertEquals(listOf(ChartMark(0, "소리 바꾸기")), sw.marks, "소리 바꾸기는 울음 감지로 보이지 않는다")
+        assertEquals(listOf(ChartMark(0, "소리 바꾸기 요청")), sw.marks, "소리 바꾸기는 울음 감지로 보이지 않는다")
     }
 
     @Test fun episodeChart_restOfferOnlyWhenTold() {
@@ -137,14 +138,31 @@ class ReportViewTest {
         assertEquals(setOf(Callout3d.LOCK, Callout3d.DIM), v.callouts, "3D 칩은 실제로 한 것만")
         assertEquals(listOf("뒷창 잠금", "조명 낮춤", "뒷좌석 재생"), v.actions.map { it.name }, "0번은 한 일이 아니다")
         assertEquals("1번 · 56초", v.actions.last().extra)
-        assertEquals("에피소드 · 오후 1:24부터", v.episodes.single().title)
+        assertEquals("울음 · 오후 1:24부터", v.episodes.single().title)
         val lines = v.details.map { it.text }
         for (want in listOf(
-            "시뮬레이션 입력으로 만든 기록이에요", "뒷좌석 출력이 없어 앞에서도 들렸어요", "오래된 에피소드는 줄였어요", "오후 1:24 울음 감지 (지연 2.4초)",
-            "· 자동 1차 자장가 오후 1:24–1:24 56초", "결과: 계속 울었어요", "다시 울었어요",
-            "정차: 두 번 시도 뒤 · 안전한 곳에 세우도록 안내하지 못했어요 · 다른 보호자에게 알림", "울음 30초",
-            "평균 62.0km/h · 최고 70.5km/h · 브레이크 1번", "Seat.setHvacSeatTemperature ROW_2_LEFT: 성공 1 · 실패 0 · 재시도 0",
+            "연습 장면으로 만든 기록이에요", "소리 나간 곳 · 앞에서도 들림", "기록이 많아 일부를 줄였어요", "오후 1:24 울음 감지 · 감지까지 2.4초",
+            "· 자동 1차 자장가 오후 1:24–1:24 56초", "결과 · 계속 울음", "다시 울음",
+            "정차 · 두 번 시도 뒤 · 안전한 곳에 세우도록 안내하지 못했어요 · 다른 보호자에게 알림", "울음 시간 30초",
+            "평균 62.0km/h · 최고 70.5km/h · 브레이크 1번", "Seat.setHvacSeatTemperature ROW_2_LEFT · 성공 1 · 실패 0 · 다시 0",
         )) assertTrue(want in lines, "자세히에 '$want'가 있어야 한다: $lines")
+        assertTrue(lines.none { ": " in it }, "자세히 줄은 '이름 · 값'(콜론 없음, C385. 시각 '1:24'는 그대로): $lines")
+        assertTrue(lines.none { "방향지시등" in it }, "방향지시등은 썼을 때만 적는다(폰과 같게): $lines")
+    }
+
+    /** U73·C385: 결과·뺀 이유·정차 이유는 차·두 폰 같은 낱말이다(열거 이름이 보이지 않는다). */
+    @Test fun `리포트 결과와 뺀 이유는 정해진 낱말로 보인다`() {
+        assertEquals(listOf("그침", "계속 울음", "판정하지 못함", "1차 시도 없음"), listOf(EpisodeResult.SUCCESS, EpisodeResult.FAILURE, EpisodeResult.UNDETERMINED, null).map(::resultText))
+        assertEquals(mapOf(
+            ExcludedReason.DRIVER_STOP to "운전자가 멈춤", ExcludedReason.CALL to "통화 중", ExcludedReason.GEAR_TO_PARK to "정차 중", ExcludedReason.STARTED_IN_PARK to "정차 중",
+            ExcludedReason.SWITCH_SOUND to "소리 바꾸기 요청", ExcludedReason.FEEDING_WINDOW to "수유 시간대", ExcludedReason.SESSION_CAP to "달래기 20분 끝남",
+            ExcludedReason.SESSION_END to "탑승이 끝남", ExcludedReason.MIC_ERROR to "마이크 오류", ExcludedReason.DETECTOR_TIMEOUT to "감지 시간 초과",
+            ExcludedReason.INPUT_SILENCED to "마이크 입력이 막힘", ExcludedReason.FOCUS_LOSS to "소리를 이어서 틀지 못함", ExcludedReason.SUSPEND to "차가 절전에 들어감",
+        ), ExcludedReason.entries.associateWith(::excludedText))
+        val capped = StopInfo(true, StopReason.SESSION_CAP, HandoffKind.PARKED, null, false, false, false)
+        assertTrue(stopText(capped).startsWith("달래기 20분 끝남 · "), "정차 이유도 뺀 이유와 같은 낱말")
+        val lines = reportView(body(listOf(ep(listOf(first), result = EpisodeResult.SUCCESS).copy(excludedReason = ExcludedReason.CALL)), emptyList()), settling = false).details.map { it.text }
+        assertTrue("결과 · 그침" in lines && "성적에서 뺌 · 통화 중" in lines, "뺐으면 결과 줄 아래 한 줄 더: $lines")
     }
 
     @Test fun dayTips_chartClockOnly() {
@@ -169,5 +187,23 @@ class ReportViewTest {
     @Test fun actionNames_matchPhoneTable() {
         assertEquals(listOf("뒷좌석 재생", "앞에서도 들리게 재생", "뒷좌석 열선 끔", "뒷창 잠금", "실내 온도 낮춤", "독서등 끔", "조명 낮춤", "경유지 추가", "도착 안내", "다른 보호자 알림"),
             kr.aigyeot.shared.CarActionKind.entries.map(::actionName))
+    }
+
+    // 소리 바꾸기 요청 에피소드(울음 없이 운전자가 소리를 바꿈)는 '울음'으로 보이지 않는다: 카드 제목·차트 읽기·자세히 줄 모두 trigger로(두 폰 triggerText와 같은 낱말)
+    @Test fun episodeTitles_switchSoundOnlySession_notCry() {
+        val req = play(PlayPurpose.REQUEST, SoundMethod.WHITE_NOISE, "13:30:00", "13:30:56", 56)
+        val v = reportView(body(listOf(ep(listOf(req), lat = null, trigger = EpisodeTrigger.SWITCH_SOUND, at = "13:30:00", cry = 0))), settling = false)
+        assertEquals(listOf("소리 바꾸기 요청 · 오후 1:30부터"), v.episodes.map { it.title })
+        assertEquals("0번", v.stats.first { it.label == "울음" }.value, "울음 0번인 리포트")
+        assertTrue(v.details.any { it.head && it.text == "오후 1:30 소리 바꾸기 요청" })
+        assertTrue(v.episodes.none { it.title.startsWith("울음") } && v.details.none { it.head && "울음 감지" in it.text })
+    }
+
+    @Test fun episodeTitles_mixedTriggers_eachByItsOwn() {
+        val req = play(PlayPurpose.REQUEST, SoundMethod.WOMB, "13:40:00", "13:40:56", 56)
+        val v = reportView(body(listOf(ep(listOf(first)), ep(listOf(req), lat = null, trigger = EpisodeTrigger.SWITCH_SOUND, at = "13:40:00", cry = 0))), settling = false)
+        assertEquals(listOf("울음 · 오후 1:24부터", "소리 바꾸기 요청 · 오후 1:40부터"), v.episodes.map { it.title })
+        assertEquals(listOf("오후 1:24 울음 감지 · 감지까지 2.4초", "오후 1:40 소리 바꾸기 요청"), v.details.filter { it.head && it.text.startsWith("오후") }.map { it.text })
+        assertEquals("1번", v.stats.first { it.label == "울음" }.value)
     }
 }

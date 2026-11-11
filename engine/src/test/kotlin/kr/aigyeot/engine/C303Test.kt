@@ -195,7 +195,7 @@ class C303Test {
     @Test fun c303_a18_a19_a20_scoreLabelsDefaults() {
         assertEquals(2.0 / 5.0, methodScore(1, 3))
         assertEquals(T0 - 28 * DAY_MS, P.statSince(T0))
-        assertEquals("부모 노래", methodLabel(MethodKind.SONG)); assertEquals("우리 노래", methodName(SONG))
+        assertEquals("우리 노래", methodLabel(MethodKind.SONG))   // C385: 말과 화면 이름이 같다
         assertEquals("뱃속 소리", methodLabel(MethodKind.WOMB))
         assertEquals(listOf(MethodKind.WHITE_NOISE, MethodKind.WOMB, MethodKind.LULLABY), DEFAULT_METHODS.map { it.kind })
         assertEquals(setOf(Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11), OFFER_SIDS)

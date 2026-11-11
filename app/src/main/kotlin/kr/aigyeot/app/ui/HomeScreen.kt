@@ -368,7 +368,7 @@ private fun RestCard(c: HomeCard.Rest) {
 @Composable
 private fun EpisodeFlow(c: HomeCard.Episode) {
     val p = LocalPalette.current
-    Panel(label = "에피소드 · ${TimeText.clock(c.at)}") {
+    Panel(label = "${c.head} · ${TimeText.clock(c.at)}") {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             c.flow.forEachIndexed { i, f ->
                 if (i > 0) Text("→", style = CarType.label, color = p.textTertiary)
@@ -473,7 +473,7 @@ private fun FeedPanel(f: FeedCard) {
         }
         Row(Modifier.fillMaxWidth()) {
             Text(TimeText.clock(start), style = CarType.label.copy(fontFeatureSettings = "tnum"), color = p.textSecondary, modifier = Modifier.weight(1f))
-            f.intervalMin?.takeIf { it > 0 }?.let { Text(intervalText(it), style = CarType.label, color = p.textTertiary) }
+            f.intervalMin?.takeIf { it > 0 }?.let { Text(usualIntervalText(it), style = CarType.label, color = p.textTertiary) }
         }
     }
 }

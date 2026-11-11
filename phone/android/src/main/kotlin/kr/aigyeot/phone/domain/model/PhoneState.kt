@@ -468,7 +468,7 @@ fun PhoneState.pruned(now: Long, sending: String? = null): PhoneState {
     var songs = songs
     for (item in old) when {
         item.isFeeding -> feedings = feedings.map {
-            if (it.msgId == item.id && !it.reflected && it.failed == null && it.sentAt == null) it.copy(failed = "7일이 지나 보내지 못했어요") else it
+            if (it.msgId == item.id && !it.reflected && it.failed == null && it.sentAt == null) it.copy(failed = "보내지 못함 · 7일 지남") else it
         }
         item.payload is OutboxPayload.Song -> songs = songs.map {
             if (it.songId == item.songId && (it.phase == SongPhase.UPLOADING || it.phase == SongPhase.WAITING) && it.error == null)
