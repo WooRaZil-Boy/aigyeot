@@ -3,10 +3,6 @@ package kr.aigyeot.app.ui
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -229,6 +225,9 @@ private val ENTER_EASE = Tokens.motion.getValue("enter").easing
 private val EXIT_EASE = Tokens.motion.getValue("exit").easing
 private const val COL_EXIT_MS = 150
 
+/** 듣는 중 점 숨쉬기를 다시 그리는 횟수(초당). 60이면 정차 홈 대기에서 창 전체를 초당 60장 그려 앱 CPU가 16~18%였다(car3d_v7_1111.txt 9절). */
+private const val LIVE_FPS = 15
+
 @Composable
 private fun EyebrowRow(e: Eyebrow) {
     val p = LocalPalette.current
@@ -238,8 +237,17 @@ private fun EyebrowRow(e: Eyebrow) {
         Box(Modifier.size(14.dp), Alignment.Center) {
             if (e.live && !reducedMotion()) {
                 // 듣는 중 점 숨쉬기(시안 @keyframes live 1.8초, 구간마다 cb(.4,0,.2,1)): 0% 테 0·40% → 60% 테 12·투명 → 100% 처음으로. 실제로 듣는 신호일 때만
-                val t = rememberInfiniteTransition(label = "live")
-                val r by t.animateFloat(0f, 1f, infiniteRepeatable(tween(Tokens.loopMs.getValue("live"), easing = LinearEasing), RepeatMode.Restart), label = "r")
+                // 주기 안 위치(0~1, 선형)는 초당 LIVE_FPS번만 바꾼다. 겉모양(주기·곡선·폭)은 그대로, 다시 그리는 횟수만 준다. 화면을 떠나면 고리도 멈춘다.
+                // 한 바퀴마다 다음 프레임을 기다려 그 시각으로 계산한다: 앱이 가려지면(다른 앱이 덮어 STOPPED) 프레임 시계와 함께 멈추고, 다시 보이면 이어서 돈다
+                val r by produceState(0f) {
+                    val per = Tokens.loopMs.getValue("live")
+                    val t0 = androidx.compose.runtime.withFrameMillis { it }
+                    while (true) {
+                        val now = androidx.compose.runtime.withFrameMillis { it }
+                        value = ((now - t0) % per) / per.toFloat()
+                        delay(1000L / LIVE_FPS)
+                    }
+                }
                 Canvas(Modifier.size(14.dp)) {
                     val base = Tokens.motion.getValue("base").easing   // 시안 animation: live 1.8s var(--e-base)
                     val ring = if (r < 0.6f) base.transform(r / 0.6f) else 1f - base.transform((r - 0.6f) / 0.4f)
