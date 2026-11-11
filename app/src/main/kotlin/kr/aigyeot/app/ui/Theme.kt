@@ -67,6 +67,22 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kr.aigyeot.app.R
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import kotlinx.coroutines.launch
 
 // 디자인 v6(시안 docs/design/1109-unified-v3, 11-09 확정): 회색 바탕 + 흰 판, 브랜드 파랑은 행동(버튼·선택·스위치)에만, 숫자·진행은 먹색.
 // 값은 Tokens(tokens.json 한 출처). 모양은 시안 css/car.css를 옮겼다(1px = 1dp, Connect-S).
@@ -298,12 +314,16 @@ fun ListRow(
     }
 }
 
-/** 스위치(시안 .sw: 80×48, 켜짐 active 초록, 손잡이 40). 터치 영역은 행 전체가 맡는다. */
+/**
+ * 스위치(시안 .sw: 80×48, 손잡이 40, 꺼짐 먹색 22%). 켜짐은 브랜드 파랑 accent(11-11 사용자 결정, '브랜드 색은 행동: 버튼·선택·스위치에만', 두 폰 앱 .psw와 같음).
+ * 시안 car.css의 active(Pleos informative_active 초록)를 바꿨다. 대비: 흰 손잡이 / accent 5.03(라이트·다크 같음, 전 초록은 다크 2.19),
+ * accent / surface 라이트 5.03·다크 3.38(그래픽 3:1). 다크도 accent(accentInk #7AA5FF는 흰 손잡이와 대비가 낮다). 터치 영역은 행 전체가 맡는다.
+ */
 @Composable
 fun CarSwitch(on: Boolean) {
     val p = LocalPalette.current
     val x by animateFloatAsState(if (on) 32f else 0f, tween(Tokens.motion.getValue("fast").ms, easing = Tokens.motion.getValue("fast").easing), label = "sw")
-    Box(Modifier.size(80.dp, 48.dp).clip(RoundedCornerShape(percent = 50)).background(if (on) p.active else p.ink(22))) {
+    Box(Modifier.size(80.dp, 48.dp).clip(RoundedCornerShape(percent = 50)).background(if (on) p.accent else p.ink(22))) {
         Box(Modifier.padding(start = (4 + x).dp, top = 4.dp).size(40.dp).clip(RoundedCornerShape(20.dp)).background(Color.White))
     }
 }
@@ -313,13 +333,13 @@ fun CarSwitch(on: Boolean) {
 fun SwitchRow(title: String, sub: String?, on: Boolean, icon: Int? = null, set: (Boolean) -> Unit) =
     ListRow(title, sub, icon, onClick = { set(!on) }, toggled = on) { CarSwitch(on) }
 
-/** 확인 칸(시안 .chk: 48, 모서리 12, 켜짐 active). */
+/** 확인 칸(시안 .chk: 48, 모서리 12, 꺼짐 textTertiary 테). 켜짐은 스위치와 같은 브랜드 파랑 accent + 흰 체크(onAccent, 대비 5.03). */
 @Composable
 fun CheckBox(on: Boolean) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(12.dp)
-    Box(Modifier.size(48.dp).clip(shape).background(if (on) p.active else Color.Transparent).border(3.dp, if (on) p.active else p.textTertiary, shape), Alignment.Center) {
-        if (on) LineIcon(R.drawable.ic_check, 32.dp, Color.White)
+    Box(Modifier.size(48.dp).clip(shape).background(if (on) p.accent else Color.Transparent).border(3.dp, if (on) p.accent else p.textTertiary, shape), Alignment.Center) {
+        if (on) LineIcon(R.drawable.ic_check, 32.dp, p.onAccent)
     }
 }
 
@@ -348,20 +368,14 @@ fun <T> Segmented(items: List<Pair<T, String>>, selected: T, modifier: Modifier 
     }
 }
 
-/**
- * 수 고르기(시안 .stepper: 높이 100, 양끝 100 단추, 가운데 titleM). [fit]이면 가운데 글자를 칸에 맞춰 줄인다(36→24, 두 줄까지:
- * 반 폭 두 칸·분할 840에서 '비움(수유 시계 꺼짐)'이 넘치지 않게). 모양·양끝 단추는 하나다.
- */
+/** 수 고르기(시안 .stepper: 높이 100, 양끝 100 단추, 가운데 titleM 한 줄). 시연 화면 '반복 장면'이 쓴다. */
 @Composable
-fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, fit: Boolean = false, onMinus: () -> Unit, onPlus: () -> Unit) {
+fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, onMinus: () -> Unit, onPlus: () -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(CarRadius.l)
     Row(modifier.fillMaxWidth().heightIn(min = 100.dp).clip(shape).background(p.surface).border(2.dp, p.line, shape), verticalAlignment = Alignment.CenterVertically) {
         StepKey(R.drawable.ic_minus, "줄이기", minusEnabled, onMinus)
-        if (fit) androidx.compose.foundation.text.BasicText(
-            text, Modifier.weight(1f), style = CarType.titleM.copy(color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 1.25.em),
-            maxLines = 2, autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = CarType.label.fontSize, maxFontSize = CarType.titleM.fontSize),
-        ) else Text(text, style = CarType.titleM, color = p.textPrimary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
+        Text(text, style = CarType.titleM, color = p.textPrimary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
         StepKey(R.drawable.ic_plus, "늘리기", plusEnabled, onPlus)
     }
 }
@@ -397,9 +411,17 @@ fun Pill(text: String, icon: Int? = null, live: Boolean = false) {
     }
 }
 
-/** 확인 창(시안 .popup: 폭 808, 반경 48, 여백 48, 제목 40/52·700, 본문 bodyL, 단추 둘). 바깥을 누르면 [onDismiss]. */
+/**
+ * 창(시안 .popup = Pleos System Popup Medium 결: 폭 808, 반경 48, 여백 48, 제목 40/52·700 왼쪽, 설명 bodyL 흐림). 바깥을 누르거나 뒤로면 [onDismiss].
+ * [content]는 Pleos Body(서비스 맥락의 콘텐츠, 예: 바퀴 판) 자리로 설명 아래 36(설명이 없으면 제목 아래 32)에 둔다.
+ * 단추는 주 동작 [confirm](짙은 칠, 왼쪽) + [dismiss](기본) 가로 둘, [dismiss]가 없으면 [confirm] 하나를 폭 가득(Pleos Single).
+ * 창 이름(읽기)은 제목이다. 들어오기는 0.96배·투명에서 enter 360ms, 동작 줄이기면 바로.
+ */
 @Composable
-fun Popup(title: String, body: String, confirm: String, dismiss: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun Popup(
+    title: String, body: String?, confirm: String, dismiss: String?, onConfirm: () -> Unit, onDismiss: () -> Unit,
+    content: (@Composable ColumnScope.() -> Unit)? = null,
+) {
     val p = LocalPalette.current
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         // 바탕 가림(시안 .popup-scrim rgba(19,20,23,.4))은 창 흐림 0.4로, 창은 0.96배·투명에서 enter(360ms cb(.2,.8,.2,1))로 들어온다(시안 popIn)
@@ -409,12 +431,95 @@ fun Popup(title: String, body: String, confirm: String, dismiss: String, onConfi
         val k = remember { Animatable(if (still) 1f else 0f) }
         LaunchedEffect(Unit) { k.animateTo(1f, tween(e.ms, easing = e.easing)) }
         Column(Modifier.graphicsLayer { alpha = k.value; val s = 0.96f + 0.04f * k.value; scaleX = s; scaleY = s }
-            .widthIn(max = 808.dp).fillMaxWidth().clip(RoundedCornerShape(48.dp)).background(p.surface).padding(48.dp)) {
+            .widthIn(max = 808.dp).fillMaxWidth().clip(RoundedCornerShape(48.dp)).background(p.surface).padding(48.dp)
+            .semantics { paneTitle = title }) {
             Text(title, style = CarType.titleL.copy(fontWeight = FontWeight(700)), color = p.textPrimary)   // 시안 .popup h3 700 40/52
-            Text(body, style = CarType.bodyL, color = p.textSecondary, modifier = Modifier.padding(top = 16.dp, bottom = 36.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (body != null) Text(body, style = CarType.bodyL, color = p.textSecondary, modifier = Modifier.padding(top = 16.dp))
+            if (content != null) { Spacer(Modifier.height(if (body != null) 36.dp else 32.dp)); content() }
+            Row(Modifier.padding(top = 36.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 CarButton(confirm, Modifier.weight(1f), BtnKind.FILL, onClick = onConfirm)
-                CarButton(dismiss, Modifier.weight(1f), onClick = onDismiss)
+                if (dismiss != null) CarButton(dismiss, Modifier.weight(1f), onClick = onDismiss)
+            }
+        }
+    }
+}
+
+/** 바퀴 줄 높이(dp, Pleos Spinner 그림 Picker4·Picker7: 줄 간격 88). */
+private const val WHEEL_ROW = 88
+
+/**
+ * 바퀴 판(Pleos Spinner 결, 시안 su-spin, 그림에서 잰 값): 높이 384, 모서리 32, 바탕 bg, 좌우 안쪽 40, 열 사이 24(열 폭은 같게).
+ * 선택 띠는 판 위에서 148, 높이 88, 좌우 16 안쪽, 모서리 24, textPrimary 5%(서 있고 글이 굴러간다). 위아래 60은 판 바탕색으로 흐린다.
+ */
+@Composable
+fun WheelPanel(content: @Composable RowScope.() -> Unit) {
+    val p = LocalPalette.current
+    val fade = 60.dp
+    Box(
+        Modifier.fillMaxWidth().height((WHEEL_ROW * 4 + 32).dp).clip(RoundedCornerShape(32.dp)).background(p.bg)
+            .drawWithContent {
+                drawContent()
+                val f = fade.toPx()
+                drawRect(Brush.verticalGradient(listOf(p.bg, p.bg.copy(alpha = 0f)), 0f, f), size = androidx.compose.ui.geometry.Size(size.width, f))
+                drawRect(Brush.verticalGradient(listOf(p.bg.copy(alpha = 0f), p.bg), size.height - f, size.height), topLeft = Offset(0f, size.height - f), size = androidx.compose.ui.geometry.Size(size.width, f))
+            },
+    ) {
+        Box(Modifier.padding(start = 16.dp, end = 16.dp, top = WHEEL_BAND_TOP.dp).fillMaxWidth().height(WHEEL_ROW.dp).clip(RoundedCornerShape(24.dp)).background(p.ink(5)))
+        Row(Modifier.fillMaxSize().padding(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(24.dp), content = content)
+    }
+}
+
+/** 판 위에서 선택 띠까지(dp): (384 − 88) / 2. */
+private const val WHEEL_BAND_TOP = (WHEEL_ROW * 4 + 32 - WHEEL_ROW) / 2
+
+/**
+ * 바퀴 한 열(Pleos Spinner Contents, 시안 su-col): 열 높이 전체가 누름·끌기 영역(Pleos 'Touch / Drag controls'). 끌면 손가락을 따르고, 놓으면 플랫폼 감속으로
+ * 미끄러지다 띠 가운데에 가장 가까운 줄에 멈춘다(돌지 않음, 처음·끝은 빈칸). 띠 밖 줄을 누르면 그 줄로 굴러간다(base 220ms, 동작 줄이기면 바로).
+ * 띠 안 줄은 700 48 textPrimary, 밖은 400 48 textPrimary 32%(굵기·색은 띠 가운데를 지나는 순간 바뀜).
+ * [selected]가 밖에서 바뀌면(예: 해를 올해로 바꿔 달이 줄어듦) 그 줄로 굴러간다. 띠 가운데 줄이 바뀔 때마다 [onSelect](미끄러지는 중에도, 그래서 '고르기'는 가장 가까운 줄).
+ * 읽기(TalkBack): 열 하나가 노드 하나, 이름 [label], 값은 띠 줄 글, Slider와 같은 조절(한 칸씩).
+ */
+@Composable
+fun <T> RowScope.Wheel(values: List<T>, selected: Int, label: String, text: (T) -> String, onSelect: (Int) -> Unit) {
+    val p = LocalPalette.current
+    val rowPx = with(androidx.compose.ui.platform.LocalDensity.current) { WHEEL_ROW.dp.toPx() }
+    val reduced = reducedMotion()
+    val state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = selected.coerceIn(0, (values.size - 1).coerceAtLeast(0)))
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // 띠 가운데(줄 앞 = 띠 위)에 가장 가까운 줄. 항목 offset은 내용 시작(위 여백 148 뒤)부터라 띠에 선 줄은 offset 0이다
+    val centered by remember(state) {
+        androidx.compose.runtime.derivedStateOf { state.layoutInfo.visibleItemsInfo.minByOrNull { kotlin.math.abs(it.offset.toFloat()) }?.index ?: state.firstVisibleItemIndex }
+    }
+    val pick by androidx.compose.runtime.rememberUpdatedState(onSelect)
+    LaunchedEffect(state) { androidx.compose.runtime.snapshotFlow { centered }.collect { pick(it) } }
+    val base = Tokens.motion.getValue("base")
+    suspend fun go(i: Int) {
+        val target = i.coerceIn(0, values.size - 1)
+        if (reduced) { state.scrollToItem(target); return }
+        val d = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.offset?.toFloat() ?: ((target - centered) * rowPx)
+        state.animateScrollBy(d, tween(base.ms, easing = base.easing))
+    }
+    // 굴러가기는 이 열의 범위에서 돌린다: 굴러가는 동안 띠 줄이 바뀌어 [selected]가 따라 바뀌어도 효과가 다시 시작되며 굴러가기를 끊지 않게
+    LaunchedEffect(selected, values.size) { if (selected in values.indices && selected != centered && !state.isScrollInProgress) scope.launch { go(selected) } }
+    androidx.compose.foundation.lazy.LazyColumn(
+        Modifier.weight(1f).fillMaxHeight().clearAndSetSemantics {
+            contentDescription = label
+            if (centered in values.indices) stateDescription = text(values[centered])
+            progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(centered.toFloat(), 0f..(values.size - 1).coerceAtLeast(1).toFloat(), (values.size - 2).coerceAtLeast(0))
+            setProgress { v -> scope.launch { go(kotlin.math.round(v).toInt()) }; true }
+        },
+        state = state,
+        contentPadding = PaddingValues(vertical = WHEEL_BAND_TOP.dp),
+        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(state, androidx.compose.foundation.gestures.snapping.SnapPosition.Start),
+    ) {
+        items(values.size) { i ->
+            val on = i == centered
+            Box(
+                Modifier.fillMaxWidth().height(WHEEL_ROW.dp).clickable(remember { MutableInteractionSource() }, null) { scope.launch { go(i) } },
+                Alignment.Center,
+            ) {
+                Text(text(values[i]), style = CarType.headlineS.copy(fontWeight = FontWeight(if (on) 700 else 400), lineHeight = 52.sp),
+                    color = if (on) p.textPrimary else p.textPrimary.copy(alpha = 0.32f), maxLines = 1)
             }
         }
     }

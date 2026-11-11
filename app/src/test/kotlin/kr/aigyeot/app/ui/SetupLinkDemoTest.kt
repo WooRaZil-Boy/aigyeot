@@ -25,7 +25,7 @@ import java.time.ZoneId
 // 디자인 v6 설정·연결·시연 화면이 계산하는 값(시안 setup()·connect()·demo())
 class SetupLinkDemoTest {
     @Test fun seats_orderLabelsAnd3dAnchors() {
-        assertEquals(listOf("뒷좌석 왼쪽", "가운데", "뒷좌석 오른쪽"), SEATS.map { it.second })   // 명세서 11장·시안 순서
+        assertEquals(listOf("뒷좌석 왼쪽", "뒷좌석 가운데", "뒷좌석 오른쪽"), SEATS.map { it.second })   // 명세서 11장·시안 순서
         assertEquals(listOf(Seat3d.RL, Seat3d.RC, Seat3d.RR), SEATS.map { seat3d(it.first) })    // 자리 단추가 붙는 3D 좌석
         assertEquals(CarSeat.CENTER, carSeatOf("CENTER"))
         assertEquals(CarSeat.RIGHT, carSeatOf(null))   // 첫 설정 기본값
@@ -75,8 +75,8 @@ class SetupLinkDemoTest {
     }
 
     @Test fun demoTexts_keepCurrentWording() {
-        assertEquals("A 2/5회 · 37초", progressText(ScenarioProgress("A", 2, 5, 37.9, null, null)))
-        assertEquals("C 1/1회 · 3초 · 어긋남 t=12.0", progressText(ScenarioProgress("C", 1, 1, 3.0, 12.0, "x")))
+        assertEquals("A 2/5번 · 37초", progressText(ScenarioProgress("A", 2, 5, 37.9, null, null)))
+        assertEquals("C 1/1번 · 3초 · 어긋남 t=12.0", progressText(ScenarioProgress("C", 1, 1, 3.0, 12.0, "x")))
         assertEquals("반복 장면 기본", repeatText(null))
         assertEquals("반복 3", repeatText(3))
     }
@@ -108,12 +108,12 @@ class SetupLinkDemoTest {
 
     @Test fun metrics_realValuesOrDash() {
         val none = metrics(null, null, null)
-        assertEquals(listOf("감지 지연 중앙값", "경보 지연 목표", "CPU", "메모리"), none.map { it.name })
+        assertEquals(listOf("보통 감지 지연", "경보 지연 목표", "CPU", "메모리"), none.map { it.name })
         assertEquals(listOf("—", "3초 이하", "—", "—"), none.map { it.value })
         assertEquals(listOf("", "명세 15장", "예산 5% 미만", "예산 400MB 이하"), none.map { it.sub })
         val m = metrics(SceneResults("A", listOf(row(2_400), row(null), row(1_800))), 3.14, 217_600)
         assertEquals("2.1초", m[0].value)   // 경보가 난 회차 둘의 중앙값
-        assertEquals("A 2/3회", m[0].sub)
+        assertEquals("A 2/3번", m[0].sub)
         assertEquals("3.1%", m[2].value)
         assertEquals("213MB", m[3].value)   // 217600KB / 1024 반올림
         assertEquals("—", metrics(SceneResults("E", listOf(row(null))), null, null)[0].value)   // 울음 없는 장면
@@ -129,18 +129,76 @@ class SetupLinkDemoTest {
         assertEquals(emptyList<ProbPoint>(), probPoints(emptyList()))
     }
 
-    // 설정 양식 규칙(SetupForm.kt): 오늘은 주입받은 시계로, 생년월은 이번 달을 넘지 않고, 수유 간격은 30분 칸·10시간 끝·한 칸 아래면 비움
+    // 설정 양식 규칙(SetupForm.kt): 오늘은 주입받은 시계로. 바퀴 값·글은 디자인 v8d-10 ⑩·명세 C387
+    private val nov10 = java.time.ZonedDateTime.of(2026, 11, 10, 9, 0, 0, 0, ZoneId.of("Asia/Seoul")).toInstant().toEpochMilli()
+    private fun ym(y: Int, m: Int) = java.time.YearMonth.of(y, m)
+
     @Test fun setupForm_rulesUseInjectedClock() {
-        val now = java.time.ZonedDateTime.of(2026, 11, 10, 9, 0, 0, 0, java.time.ZoneId.of("Asia/Seoul")).toInstant().toEpochMilli()
-        assertEquals(java.time.YearMonth.of(2026, 11), thisMonth(now))
-        assertNull(nextBirthMonth(java.time.YearMonth.of(2026, 11), now))
-        assertEquals(java.time.YearMonth.of(2026, 11), nextBirthMonth(java.time.YearMonth.of(2026, 10), now))
-        assertEquals(java.time.YearMonth.of(2026, 11), birthMonthOf(null, now)); assertEquals(java.time.YearMonth.of(2026, 2), birthMonthOf("2026-02", now))
-        assertNull(intervalDown(30)); assertEquals(150, intervalDown(180)); assertNull(intervalDown(null))
-        assertEquals(30, intervalUp(null)); assertEquals(600, intervalUp(590)); assertEquals("비움(수유 시계 꺼짐)", intervalStepText(null)); assertEquals("3시간 0분", intervalStepText(180))
-        assertTrue(ageNote(java.time.YearMonth.of(2026, 10), now)!!.startsWith("참고")); assertNull(ageNote(java.time.YearMonth.of(2026, 7), now)); assertEquals("비워 두면 수유 시계가 꺼져요", ageNote(java.time.YearMonth.of(2026, 5), now))
-        val e = profileEntity(null, " 하늘 ", java.time.YearMonth.of(2026, 8), CarSeat.CENTER, 180, sibling = false, song = false, front = true, noRearOutput = false, now = now)
-        assertEquals("하늘", e.nickname); assertEquals("2026-08", e.birthYm); assertEquals("뒷좌석 출력이 있으면 앞 재생 허용은 저장하지 않는다", false, e.frontFallbackAllowed)
+        val now = nov10
+        assertEquals(ym(2026, 11), thisMonth(now))
+        assertEquals(ym(2026, 11), birthMonthOf(null, now)); assertEquals(ym(2026, 2), birthMonthOf("2026-02", now))
+        assertEquals("2026년 10월", birthMonthText(ym(2026, 10)))
+        val e = profileEntity(null, " 하늘 ", ym(2026, 8), CarSeat.CENTER, 180, sibling = false, song = false, front = true, noRearOutput = false, now = now)
+        assertEquals("하늘", e.nickname); assertEquals("2026-08", e.birthYm); assertEquals(180, e.feedingIntervalMin)
+        assertEquals("뒷좌석 출력이 있으면 앞 재생 허용은 저장하지 않는다", false, e.frontFallbackAllowed)
         assertEquals(listOf(kr.aigyeot.engine.MethodKind.WHITE_NOISE, kr.aigyeot.engine.MethodKind.WOMB, kr.aigyeot.engine.MethodKind.LULLABY), e.methods.map { it.kind }); assertEquals(now, e.consentAt)
+        assertNull("'안 씀'은 저장 null(수유 시계 꺼짐, 저장 형식 그대로)", profileEntity(null, "하늘", ym(2026, 8), CarSeat.RIGHT, null, false, true, false, false, now).feedingIntervalMin)
+    }
+
+    @Test fun birthYears_thisYearBackThree_keepsOlderSaved() {
+        assertEquals(listOf(2023, 2024, 2025, 2026), birthYears(nov10))
+        assertEquals(listOf(2023, 2024, 2025, 2026), birthYears(nov10, saved = 2024))
+        assertEquals(listOf(2021, 2023, 2024, 2025, 2026), birthYears(nov10, saved = 2021))   // 저장 2021-05: 목록에 더해 지킨다
+    }
+
+    @Test fun birthMonths_thisYearStopsAtThisMonth() {
+        assertEquals((1..11).toList(), birthMonths(2026, nov10))
+        assertEquals((1..12).toList(), birthMonths(2025, nov10))
+    }
+
+    @Test fun clampBirth_futureMonthMovesToThisMonth() {
+        assertEquals(ym(2026, 11), clampBirth(2026, 12, nov10))   // 2025-12에서 해만 2026으로
+        assertEquals(ym(2026, 3), clampBirth(2026, 3, nov10))
+        assertEquals(ym(2025, 12), clampBirth(2025, 12, nov10))
+    }
+
+    @Test fun intervals_offThen30To600_keepsOddSaved() {
+        val l = intervals(null)
+        assertEquals(21, l.size); assertNull(l.first()); assertEquals(30, l[1]); assertEquals(600, l.last())
+        assertTrue(l.drop(1).zipWithNext { a, b -> b!! - a!! }.all { it == 30 })
+        assertEquals(l, intervals(180))   // 목록 안 저장값은 그대로
+        val odd = intervals(200)
+        assertEquals(22, odd.size); assertEquals(listOf(180, 200, 210), odd.subList(odd.indexOf(180), odd.indexOf(180) + 3))
+    }
+
+    @Test fun intervalText_offMinutesHours() {
+        assertEquals("안 씀", intervalText(null)); assertEquals("30분", intervalText(30)); assertEquals("2시간 30분", intervalText(150))
+        assertEquals("3시간", intervalText(180)); assertEquals("10시간", intervalText(600)); assertEquals("3시간 20분", intervalText(200))
+    }
+
+    @Test fun ageText_monthsFromBirth() {
+        assertEquals("생후 1개월", ageText(ym(2026, 10), nov10)); assertEquals("생후 0개월", ageText(ym(2026, 11), nov10))
+        assertEquals("생후 14개월", ageText(ym(2025, 9), nov10))
+    }
+
+    @Test fun setupHelp_newbornFirst_thenOff_elseNone() {
+        for (iv in listOf(null, 180)) {   // 0·1개월은 간격과 관계없이 참고 범위(먼저)
+            assertEquals(NEWBORN_HELP, setupHelp(ym(2026, 11), iv, nov10)); assertEquals(NEWBORN_HELP, setupHelp(ym(2026, 10), iv, nov10))
+        }
+        assertNull(setupHelp(ym(2026, 8), 180, nov10))                          // 3개월 + 3시간
+        assertEquals(INTERVAL_OFF_HELP, setupHelp(ym(2026, 8), null, nov10))     // 3개월 + '안 씀'
+        assertEquals(INTERVAL_OFF_HELP, setupHelp(ym(2026, 3), 180, nov10))      // 8개월
+        assertEquals("'안 씀'이면 수유 시계가 꺼져요", INTERVAL_OFF_HELP)
+    }
+
+    @Test fun consentTexts_summaryAndOriginal() {
+        assertEquals("아기의 보호자(법정대리인)로서 아이곁 사용에 동의해요", CONSENT_TITLE)
+        assertEquals("질문하면 질문 글과 상태 숫자가 AI 서버로 가요. 울음소리와 차 위치 좌표는 보내지 않아요.", CONSENT_SUMMARY)
+        assertEquals("AI 서버로 가는 정보", CONSENT_DETAIL_TITLE)
+        // 창 본문 = 명세 C120 ③ 원문 글자 그대로(로컬에 명세가 있으면 거기서도 찾는다)
+        val original = "질문하면 질문 글과 지금 상태 숫자(울음·수유·잠·기저귀 기록 요약, 카시트 시간, 실내 온도, 소리별 성적, 다음 쉼터 이름·거리)가 아이곁 중계 서버를 거쳐 AI 서버로 가요. 울음 소리와 차 위치 좌표는 보내지 않아요."
+        assertEquals(original, CONSENT_DETAIL)
+        val spec = listOf(File("../docs/eyes-forward-spec.md"), File("docs/eyes-forward-spec.md")).firstOrNull { it.exists() }
+        if (spec != null) assertTrue("명세 C120 ③에 같은 글이 있다", spec.readText().contains("\"$CONSENT_DETAIL\""))
     }
 }
