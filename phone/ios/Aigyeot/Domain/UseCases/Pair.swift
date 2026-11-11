@@ -59,7 +59,7 @@ final class Pair {
     /// 결과를 `run`에 두고 `then`을 부른다(연결 흐름 화면을 닫는 쪽).
     func start(_ code: PairCode, then: @escaping @MainActor (PairRun) -> Void = { _ in }) {
         guard canTakeLink() else { return }
-        if isLocked, let until = lockedUntil { finish(.failed(code: code, .rateLimited(until.timeIntervalSince(now()))), then); return }
+        if isLocked, let until = lockedUntil { finish(.failed(code: code, .rateLimited), then); return }
         run = .running(code: code)   // 작업이 돌기 전 틈에 온 링크도 막는다(U52)
         job = tasks.spawn { [self] in
             // 확인하기 전에는 지금 연결을 지우지 않는다. 그사이 끊겼으면(401) 끊기를 거치지 않는다(U13 ②)
@@ -117,7 +117,7 @@ final class Pair {
             case (404, _): return .codeInvalid
             case (429, _):
                 lock(e.retryAfter)
-                return .rateLimited(e.retryAfter)
+                return .rateLimited
             case (400, "bad_code_format"): return .badCode
             default: return e.isOffline ? .offline : .other
             }

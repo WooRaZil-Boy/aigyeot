@@ -182,7 +182,15 @@ struct ConnectUiState: Equatable {
     var run: PairRun?
     /// 연결 429 잠금 중(직접 입력·확인 화면이 같이 본다, 계약 9장).
     var isLocked: Bool
+    /// 잠금 끝 시각(글의 남은 시간 계산용).
+    var lockedUntil: Date? = nil
     var connected: Bool
+
+    /// 보일 연결 실패(`code`를 주면 그 코드의 실패만, 확인 화면). 429 글은 잠금 동안만(`ConnectFailure.visible`).
+    func failure(for code: PairCode? = nil) -> ConnectFailure? {
+        guard case .failed(let c, let f) = run, code == nil || c == code else { return nil }
+        return f.visible(locked: isLocked)
+    }
 }
 
 /// 연결 화면(QR·코드 넣기)과 확인 시트. 작업은 Pair가 앱 범위에서 끝까지 하고, 화면은 `run`만 그린다(M2).
@@ -200,7 +208,7 @@ final class ConnectViewModel {
         self.finished = finished
     }
 
-    var ui: ConnectUiState { ConnectUiState(run: pair.run, isLocked: pair.isLocked, connected: stateRepo.isPaired) }
+    var ui: ConnectUiState { ConnectUiState(run: pair.run, isLocked: pair.isLocked, lockedUntil: pair.lockedUntil, connected: stateRepo.isPaired) }
 
     /// 직접 친 코드(G17, 확인 없음)와 확인 화면의 연결 버튼(이미 연결돼 있으면 끊고 연결, G16).
     func start(_ code: PairCode) { pair.start(code, then: finished) }

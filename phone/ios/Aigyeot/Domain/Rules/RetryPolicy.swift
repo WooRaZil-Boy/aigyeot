@@ -19,6 +19,13 @@ enum RetryPolicy {
     static let songQuota: TimeInterval = 60
     /// 연결 429 잠금(초). Retry-After가 없거나 1초 미만이면 10초·1초(안드로이드 pairLockUntil과 같다).
     static func pairLock(retryAfter: TimeInterval?) -> TimeInterval { max(retryAfter ?? 10, 1) }
+    /// 연결 잠금 안내 글(계약 7.2): 남은 시간은 잠금 끝 시각에서 그때그때 계산해 넘긴다. 60초 넘으면 분 올림, 이하면 초 올림.
+    /// nil이면 시각을 모르는 '잠시 뒤', 0 이하(잠금 끝)면 nil.
+    static func pairWaitText(remaining: TimeInterval?) -> String? {
+        guard let r = remaining else { return "잠시 뒤에 다시 해 주세요" }
+        guard r > 0 else { return nil }
+        return r > 60 ? "\(Int((r / 60).rounded(.up)))분 뒤에 다시 해 주세요" : "\(Int(r.rounded(.up)))초 뒤에 다시 해 주세요"
+    }
     /// 앞에 있고 소켓이 붙어 있는 동안 기기 목록을 다시 받는 주기(7.2 설계값).
     static let devicePollNanos: UInt64 = 60_000_000_000
     /// 소켓 다시 붙기 1·2·4…60초, 4008은 60초(계약 2장).
@@ -29,6 +36,14 @@ enum RetryPolicy {
     static let pairBusyNotice: TimeInterval = 3
     static let bannerNanos: UInt64 = 8_000_000_000
     static let undoMs: Int64 = 5000
+    /// U87: 화면 읽기가 켜져 있으면 되돌리기 띠 50초(WCAG 2.2.1 '기본값의 10배 이상').
+    static let undoMsScreenReader: Int64 = 50_000
+
+    /// U87 띠 시간 한 곳(안드로이드 `undoBandMs`와 같은 이름): max(화면 읽기면 `screenReaderMs` 아니면 `baseMs`, 시스템 권장 시간).
+    /// iOS는 시스템 권장 시간이 없어 0을 넘긴다. 띠를 띄울 때 한 번 정하고 떠 있는 동안 바꾸지 않는다.
+    static func undoBandMs(screenReader: Bool, systemRecommendedMs: Int64 = 0, baseMs: Int64 = undoMs, screenReaderMs: Int64 = undoMsScreenReader) -> Int64 {
+        max(screenReader ? screenReaderMs : baseMs, systemRecommendedMs)
+    }
 }
 
 /// 보관 기간과 판단 창(계약 7.4·5.6·G28·G34·G39). 기간 숫자도 여기 한 곳이다.

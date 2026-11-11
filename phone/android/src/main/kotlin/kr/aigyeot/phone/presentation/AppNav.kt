@@ -143,7 +143,7 @@ fun AppRoot(app: AppViewModel) {
         val r = ui.pairRun?.takeIf { it !is PairRun.Running } ?: return@LaunchedEffect
         // 그 결과를 실제로 받는 화면이면 맡긴다: 같은 코드의 확인 화면, 또는 연결 화면의 실패(직접 친 코드의 오류는 입력칸 아래에 보인다).
         val receiver = when {
-            entry.destination.hasRoute<Route.Connect>() -> r is PairRun.Failed
+            entry.destination.hasRoute<Route.Connect>() -> r is PairRun.Failed || r is PairRun.Limited
             entry.destination.hasRoute<Route.Confirm>() -> entry.toRoute<Route.Confirm>().code == r.code
             else -> false
         }
@@ -155,10 +155,10 @@ fun AppRoot(app: AppViewModel) {
     (ui.pairRun as? PairRun.Failed)?.takeIf { it.resetOffer }?.let { r ->
         AlertDialog(
             onDismissRequest = app::clearPairRun,
-            title = { Text("연결 정보를 읽지 못했어요", style = Type.headline) },
-            text = { Text("이 휴대폰의 연결 정보를 지우고 새로 연결할까요? 돌봄 기록은 그대로 남아요. 전에 연결했던 이 휴대폰은 차 화면에서 지워 주세요.") },
+            title = { Text("연결 정보를 지우고 새로 연결할까요?", style = Type.headline) },
+            text = { Text("이 휴대폰의 연결 정보를 읽지 못했어요. 돌봄 기록은 그대로 남아요. 전에 연결했던 이 휴대폰은 차 화면에서 지워 주세요.") },
             confirmButton = { TextButton(onClick = { app.resetAndPair(r.code) }) { Text("지우고 연결하기") } },
-            dismissButton = { TextButton(onClick = app::clearPairRun) { Text("취소") } },
+            dismissButton = { TextButton(onClick = app::clearPairRun) { Text("닫기") } },
             shape = Radius.dialog,
         )
     }
@@ -302,7 +302,7 @@ private fun HandoffBanner(text: String, onOpen: () -> Unit, onClose: () -> Unit)
             Box(Modifier.size(22.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
                 AIcon(R.drawable.ic_stat_aigyeot, Modifier.size(16.dp), Color.White)
             }
-            Text("  아이곁 · 지금", style = Type.footnote, color = p.textSecondary)
+            Text("아이곁 · 지금", Modifier.padding(start = 8.dp), style = Type.footnote, color = p.textSecondary)
         }
         Text("인계 알림", Modifier.padding(top = 8.dp), style = Type.action, color = p.textPrimary)
         Text(text, style = Type.meta, color = p.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)

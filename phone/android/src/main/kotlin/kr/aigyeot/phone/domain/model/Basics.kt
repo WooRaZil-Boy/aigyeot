@@ -137,3 +137,52 @@ class LeaveWatch<C : Any> {
         lost = false
     }
 }
+
+// ---- 첫 안내(U43 안 B, 7.1 intro.*·intro.short.*·intro.more·intro.sheet.*, iOS `CareText.intro*`와 같은 글자) ----
+
+object IntroText {
+    /** intro.title: 머리 이름(작은 글자). */
+    const val TITLE = "아이곁"
+
+    /** intro.lead: 큰 제목, 두 줄 고정·마침표 없음. */
+    const val LEAD = "차의 아이곁과\n이 휴대폰을 연결해요"
+
+    /** intro.short.sends·notSent·relay·ai: 정보 줄 넷(제목, 부제). */
+    val SHORT = listOf(
+        "차와 주고받아요" to "수유 시작 시각, 우리 노래, 수유·잠·기저귀 요약, 주행 리포트, 인계 알림이에요",
+        "울음소리와 차 위치는 보내지 않아요" to "차 안 마이크 소리도 보내지 않아요",
+        "아이곁 중계 서버를 거쳐요" to "인계 알림은 Google·Apple 알림 서버도 거쳐요",
+        "차에서 물으면 AI 서버를 써요" to "답을 만들려고 수유·잠·기저귀 숫자를 보내요",
+    )
+
+    /** intro.more: 글자 단추와 읽기 이름. */
+    const val MORE = "자세히 보기"
+    const val MORE_A11Y = "오가는 정보 자세히 보기"
+
+    /** intro.sheet.title·close. */
+    const val SHEET_TITLE = "오가는 정보"
+    const val SHEET_CLOSE = "닫기"
+
+    /** 시트 라벨(intro.sheet.*)과 원문 intro.* 넷. 원문의 '주고받는 것: '·'보내지 않는 것: ' 머리는 라벨로 뗐다(글자는 그대로, U43·E5). */
+    val SHEET = listOf(
+        "주고받는 것" to "수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장",
+        "보내지 않는 것" to "아기 울음 소리, 차 안 마이크 소리, 차의 위치",
+        "거치는 서버" to "모두 아이곁 중계 서버를 거쳐 오가요. 인계 알림은 Google·Apple 알림 서버도 거쳐요.",
+        "AI 서버" to "차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요.",
+    )
+
+    /** intro.connect·intro.recordOnly. */
+    const val CONNECT = "차와 연결하기"
+    const val RECORDS_ONLY = "먼저 기록만 쓸게요"
+}
+
+/** 첫 안내 무대 최대 높이(v8b-10 ⑦, 안드로이드 222·iOS 232)와 그리지 않는 아래 한계. */
+const val INTRO_STAGE_MAX = 222
+const val INTRO_STAGE_MIN = 120
+
+/**
+ * 첫 안내 무대 높이(dp, v8b-10 ⑦): 창 높이 − 글 칸(머리 이름 위 ~ '자세히 보기' 아래) − 아래 단추 띠 − 32(흐림 24 + 여유 8), [max]를 넘지 않는다.
+ * [INTRO_STAGE_MIN]보다 작으면 null(무대를 그리지 않는다): 무엇이 오가는지가 결정 단추보다 먼저 보여야 한다(U62).
+ */
+fun introStageHeight(window: Int, text: Int, bar: Int, max: Int = INTRO_STAGE_MAX): Int? =
+    minOf(window - text - bar - 32, max).takeIf { it >= INTRO_STAGE_MIN }

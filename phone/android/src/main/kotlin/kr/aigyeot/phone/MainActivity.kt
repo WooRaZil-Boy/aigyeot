@@ -17,6 +17,7 @@ import androidx.lifecycle.LifecycleOwner
 import kr.aigyeot.phone.presentation.AigyeotTheme
 import kr.aigyeot.phone.presentation.AppRoot
 import kr.aigyeot.phone.presentation.AppViewModel
+import kr.aigyeot.phone.presentation.IntroMotion
 import kr.aigyeot.phone.presentation.LocalViewModelFactory
 import kr.aigyeot.phone.presentation.ProvideMotion
 
@@ -47,6 +48,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * 창이 초점을 받았다: 시작 화면이 걷히고 앱 창이 보인다(에뮬레이터 녹화에서 시작 화면이 걷힌 뒤 약 0.1초. onEnterAnimationComplete는 이 기기에서 오지 않았다).
+     * 첫 안내 등장 안무는 이때부터 보인다(v8b-10 ⑤).
+     */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) IntroMotion.windowShown = true
     }
 
     override fun onNewIntent(intent: Intent) {

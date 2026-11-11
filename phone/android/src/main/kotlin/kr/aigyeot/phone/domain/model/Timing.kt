@@ -11,6 +11,20 @@ fun backoffMs(attempts: Int): Long = minOf(60_000L, 1000L shl minOf(attempts, 6)
  */
 fun pairLockUntil(now: Long, retryAfterS: Long?): Long = now + (retryAfterS?.takeIf { it > 0 } ?: 10L) * 1000
 
+/**
+ * 연결 429 글(contracts-link 7.2·9장, 11-12 사용자 결정, iOS와 같은 규칙). `remainingMs`는 처음 받은 값이 아니라 잠금 끝 시각에서
+ * 그때그때 잰 남은 시간이다: 60초 넘으면 "{n}분 뒤에"(올림), 60초 이하면 "{n}초 뒤에"(올림), 0 이하면 잠금이 풀려 null, 모르면 "잠시 뒤에".
+ */
+fun pairWaitText(remainingMs: Long?): String? = when {
+    remainingMs == null -> "잠시 뒤에 다시 해 주세요"
+    remainingMs <= 0 -> null
+    remainingMs > MINUTE -> "${(remainingMs + MINUTE - 1) / MINUTE}분 뒤에 다시 해 주세요"
+    else -> "${(remainingMs + 999) / 1000}초 뒤에 다시 해 주세요"
+}
+
+/** [pairWaitText]가 다음에 바뀌기까지(분·초 경계, 1 이상). 잠금 글은 이때만 다시 그린다(1초 고정 폴링 대신). */
+fun pairWaitNextMs(remainingMs: Long): Long = (remainingMs - 1).mod(if (remainingMs > MINUTE) MINUTE else 1000L) + 1
+
 /** 상태 요청 사이 최소 간격(7.4, G6). */
 const val STATE_REQUEST_GAP_MS = 10 * MINUTE
 
@@ -45,3 +59,12 @@ const val BANNER_MS = 8_000L
 
 /** 되돌리기 띠('지웠어요'·'기록 n건을 가져왔어요' + '되돌리기')가 떠 있는 시간(7장·U38·U64). 가져오기는 이 띠가 끝난 뒤 차로 보낸다(U67 11-09 보충). */
 const val UNDO_MS = 5_000L
+
+/** 화면 읽기가 켜져 있을 때의 띠 시간(U87): 기본값의 10배(WCAG 2.2 2.2.1 '시간 조절'). */
+const val UNDO_MS_A11Y = 50_000L
+
+/**
+ * 되돌리기 띠 시간(U87, iOS `RetryPolicy.undoBandMs`와 같은 규칙): 화면 읽기면 50초, 아니면 5초. 시스템 권장 시간(안드로이드 '조치를 취할 시간')이 더 길면 그 값.
+ * 띠를 띄울 때 한 번 정한다. 플랫폼 쪽은 두 값을 읽어 넘기기만 한다.
+ */
+fun undoBandMs(screenReader: Boolean, systemRecommendedMs: Long): Long = maxOf(if (screenReader) UNDO_MS_A11Y else UNDO_MS, systemRecommendedMs)

@@ -61,18 +61,29 @@ enum FeedTrigger: Equatable {
 }
 
 enum ConnectFailure: Equatable {
-    case codeInvalid, rateLimited(TimeInterval?), offline, badCode, other, busy
+    case codeInvalid, rateLimited, offline, badCode, other, busy
     /// 새 차로 바꾸려고 지금 연결을 끊다가 실패했다. 끊기의 이유 문구 그대로다.
     case disconnectFailed(String)
     /// 중계는 연결했는데 이 폰에 저장하지 못했다. `removed`: 받은 토큰으로 중계의 그 연결을 지웠다(안드로이드 discardPaired와 같은 글).
     case notSaved(removed: Bool)
 
+    /// 화면에 보일 실패인가(계약 7.2·9장 '코드 시도 초과': 이 글은 잠금 동안만 보이고 Retry-After가 지나 단추가 다시 켜지면 걷는다).
+    /// 429는 잠금 동안만, 다른 실패는 그대로다. 직접 입력·확인 화면·잠금 중 누름이 모두 이것만 쓴다.
+    func visible(locked: Bool) -> ConnectFailure? {
+        if case .rateLimited = self { return locked ? self : nil }
+        return self
+    }
+
+    /// 화면에 보일 글. 429는 잠금 끝 시각에서 지금 남은 시간을 계산한다(처음 받은 값을 굳히지 않는다).
+    func text(lockedUntil: Date?, now: Date) -> String {
+        guard case .rateLimited = self, let until = lockedUntil else { return message }
+        return RetryPolicy.pairWaitText(remaining: until.timeIntervalSince(now)) ?? message
+    }
+
     var message: String {
         switch self {
         case .codeInvalid: return "코드가 맞지 않거나 시간이 지났어요. 차 화면의 코드를 다시 확인해 주세요."
-        case .rateLimited(let wait):
-            if let w = wait, w >= 1 { return "잠시 뒤에 다시 해 주세요. (\(Int(w.rounded(.up)))초 뒤)" }
-            return "잠시 뒤에 다시 해 주세요."
+        case .rateLimited: return RetryPolicy.pairWaitText(remaining: nil)!   // 남은 시간이 든 글은 `text(lockedUntil:now:)`
         case .offline: return "인터넷에 연결한 뒤 다시 해 주세요"   // 계약 7.2 글자(D9 a)
         case .badCode: return "6자리 숫자 또는 초대 코드를 넣어 주세요"
         case .other: return "연결하지 못했어요. 잠시 뒤에 다시 해 주세요."

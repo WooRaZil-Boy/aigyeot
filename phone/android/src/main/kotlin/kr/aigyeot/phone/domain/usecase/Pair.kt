@@ -115,8 +115,13 @@ class Pair(
                 return@launch
             }
             if (err == null) err = pair(code)
-            retryAfterS.getAndSet(-1L).takeIf { it >= 0 }?.let { _lockedUntil.value = pairLockUntil(clock.now(), it) }
-            _run.value = if (err != null) PairRun.Failed(code, err) else PairRun.Done(code, state.creds?.role)
+            val wait = retryAfterS.getAndSet(-1L).takeIf { it >= 0 } // 429면 잠금 길이(그 글은 화면이 잠금 끝 시각에서 만든다)
+            wait?.let { _lockedUntil.value = pairLockUntil(clock.now(), it) }
+            _run.value = when {
+                wait != null -> PairRun.Limited(code)
+                err != null -> PairRun.Failed(code, err)
+                else -> PairRun.Done(code, state.creds?.role)
+            }
         }
     }
 
@@ -244,7 +249,7 @@ class Pair(
                 r.code == "bad_code_format" -> "6자리 숫자 또는 초대 코드를 넣어 주세요"
                 r.status == 429 -> {
                     retryAfterS.set(r.retryAfterS ?: 0L)
-                    "잠시 뒤에 다시 해 주세요."
+                    "rate_limited" // 화면 글이 아니다: 결과는 PairRun.Limited가 되고 글은 화면이 잠금 끝 시각에서 만든다
                 }
                 // 화면 문구는 앱이 정한다(1.1): 중계의 코드는 로그에만 남긴다(iOS와 같은 글).
                 else -> "연결하지 못했어요. 잠시 뒤에 다시 해 주세요.".also { log.w("연결 실패 ${r.status} ${r.code}") }

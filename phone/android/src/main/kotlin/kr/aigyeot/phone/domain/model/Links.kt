@@ -29,9 +29,31 @@ sealed interface PairRun {
     /** `resetOffer`: 연결 정보 읽기가 거듭 실패해 지우고 새로 연결할지 묻는다(11-07 사용자 결정). */
     data class Failed(override val code: String, val error: String, val resetOffer: Boolean = false) : PairRun
 
+    /**
+     * 중계 429(코드 시도 초과). 글은 저장하지 않는다: 화면이 잠금 끝 시각에서 그때그때 만들고 잠금 동안만 보인다
+     * ([pairErrorShown], contracts-link 7.2·9장).
+     */
+    data class Limited(override val code: String) : PairRun
+
     /** 연결됐다. `role`이 null이면 끝난 사이 끊겨(GONE) 완료 화면으로 가지 않는다. */
     data class Done(override val code: String, val role: Role?) : PairRun
 }
+
+/**
+ * 연결 화면(직접 입력 칸 아래·확인 화면)에 보일 실패 글. 429는 `wait`(잠금 끝 시각에서 지금 잰 [pairWaitText], 잠금이 없거나 풀렸으면 null)를
+ * 보여 잠금 동안만 보이고 버튼이 다시 켜지면 걷힌다(contracts-link 7.2 '코드 시도 초과'). 그 밖의 실패는 그대로 보인다. 두 화면이 이 함수만 쓴다.
+ */
+fun pairErrorShown(run: PairRun?, wait: String?): String? = when (run) {
+    is PairRun.Failed -> run.error
+    is PairRun.Limited -> wait
+    else -> null
+}
+
+/**
+ * 실패 글을 라이브 영역으로 알릴지. 429 남은 시간 글은 잠금의 첫 글(`waitAtStart`)일 때만 알리고 줄어드는 동안은 다시 읽지 않는다
+ * (Compose 접근성 안내: 카운트다운처럼 자주 바뀌는 글에는 라이브 영역을 쓰지 않는다). 초점을 옮기면 지금 글을 읽는다. 그 밖의 실패 글은 늘 알린다.
+ */
+fun pairErrorLive(run: PairRun?, wait: String?, waitAtStart: String?): Boolean = run !is PairRun.Limited || wait == waitAtStart
 
 /** 설정의 '연결 끊기'. */
 sealed interface DisconnectRun {
