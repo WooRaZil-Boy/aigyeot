@@ -147,7 +147,7 @@ internal fun qaEventsCare(
     val topics = if (kw != null && answered.none { it in FACT_TOPICS }) listOf(kw) + answered.filter { it != "why" && it != "unknown" }.take(2)
         else answered.ifEmpty { if (tools.isEmpty()) listOfNotNull(questionTopic(question)) else emptyList() }
     val facts = topics.filter { it in FACT_TOPICS }
-    val llmText = r.text.trim().takeIf { !(answered.isEmpty() && tools.isNotEmpty()) && it.isNotEmpty() && noDigits(it) && noStateClaim(it) && noLeak(it) }   // answer 없이 도구만 오면 LLM 글을 쓰지 않는다(C206)
+    val llmText = r.text.trim().takeIf { !(answered.isEmpty() && tools.isNotEmpty()) && it.isNotEmpty() && noDigits(it) && noStateClaim(it) && noLeak(it) }?.let { kr.aigyeot.engine.firstSentences(it, 2) }   // C392: 검사는 전체 글에, 말은 앞 두 문장만. answer 없이 도구만 오면 LLM 글을 쓰지 않는다(C206)
     val text = when {
         noSong -> "지금은 소리를 틀 수 없어요."   // 명세서 8장 S20. 틀 곡이 없으니 답 주제와 상관없이
         facts.isNotEmpty() -> ""   // 사실 주제는 차가 정한 문장만 말한다(C194). 글은 호스트가 큐에서 처리할 때 짠다(C221)

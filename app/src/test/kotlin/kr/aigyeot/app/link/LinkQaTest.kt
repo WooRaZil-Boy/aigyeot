@@ -265,6 +265,16 @@ class LinkQaTest : LinkKit() {
         assertNotEquals("세 번이에요.", say(reply("세 번이에요."), "그냥 얘기해 줘", st))   // 진짜 숫자 말은 여전히 버린다
     }
 
+    // C392: LLM 글은 앞 두 문장만 말한다. 검사는 전체 글에 한다
+    @Test fun c392_llmText_firstTwoSentences() {
+        val st = sleepAll()
+        assertEquals("주변 소리는 알 수 없어요. 그래도 곁에 있어요.", say(reply("주변 소리는 알 수 없어요. 그래도 곁에 있어요. 천천히 하세요."), "그냥 얘기해 줘", st))
+        assertEquals("알 수 없어요.", say(reply("알 수 없어요."), "그냥 얘기해 줘", st))
+        val bad = "주변 소리는 알 수 없어요. 그래도 곁에 있어요. 아기가 잤어요."
+        assertNotEquals(bad, say(reply(bad), "그냥 얘기해 줘", st))   // 셋째 문장의 상태 단정도 걸러 LLM 글을 쓰지 않는다
+        assertTrue(!say(reply(bad), "그냥 얘기해 줘", st).contains("곁에 있어요"))
+    }
+
     // C377: 말하는 분 값은 60분 이상이면 시간·분으로
     @Test fun c377_spokenDuration() {
         assertEquals("0분", spokenMin(0)); assertEquals("59분", spokenMin(59)); assertEquals("1시간", spokenMin(60)); assertEquals("1시간 1분", spokenMin(61))
