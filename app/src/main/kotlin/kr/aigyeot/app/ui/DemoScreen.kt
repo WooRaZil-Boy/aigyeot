@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -175,12 +176,13 @@ internal fun cpuPercent(a: ProcSample, b: ProcSample, hz: Long): Double? {
     return (tb - ta) * 1000.0 / hz / dt * 100
 }
 
-/** 측정표 네 칸(시안 demo()). 감지 지연은 마지막으로 실행한 장면의 경보 지연(alarm_latency_ms) 중앙값, 목표·예산은 명세서 15장 고정값. 없는 값은 '—'. */
+/** 측정표 네 칸(시안 demo()). 감지 지연은 마지막으로 실행한 장면의 경보 지연(alarm_latency_ms) 중앙값과 가장 늦은 회차(회차 기준과 비교하는 값이라 0.1초 올림, C394), 회차 기준은 명세서 15장·C100 회차마다 값(합친 기준은 작은 글, 명세 17장 C388), 예산은 명세서 15장 고정값. 없는 값은 '—'. */
 internal fun metrics(results: SceneResults?, cpuPct: Double?, pssKb: Long?): List<Metric> {
     val lat = results?.rows?.mapNotNull { it.alarmLatencyMs }.orEmpty()
     return listOf(
-        Metric("보통 감지 지연", median(lat)?.let { "%.1f초".format(Locale.ROOT, it / 1000) } ?: "—", results?.let { "${it.id} ${lat.size}/${it.rows.size}번" } ?: ""),
-        Metric("경보 지연 목표", "3초 이하", "명세 15장"),
+        Metric("보통 감지 지연", median(lat)?.let { "%.1f초".format(Locale.ROOT, it / 1000) } ?: "—",
+            results?.let { r -> "${r.id} ${lat.size}/${r.rows.size}번" + (lat.maxOrNull()?.let { " · 최대 %.1f초".format(Locale.ROOT, Math.ceil(it / 100.0) / 10) } ?: "") } ?: ""),
+        Metric("회차 기준", "3.6초 이하", "모든 장면 합쳐 보통 3초 이하"),
         Metric("CPU", cpuPct?.let { "%.1f%%".format(Locale.ROOT, it) } ?: "—", "예산 5% 미만"),
         Metric("메모리", pssKb?.let { "${(it + 512) / 1024}MB" } ?: "—", "예산 400MB 이하"),
     )
@@ -284,12 +286,12 @@ private fun MetricGrid(ms: List<Metric>) {
     val p = LocalPalette.current
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         ms.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 row.forEach { m ->
-                    Column(Modifier.weight(1f).clip(RoundedCornerShape(28.dp)).background(p.surface).padding(horizontal = 24.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(28.dp)).background(p.surface).padding(horizontal = 24.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(m.name, style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.textTertiary, maxLines = 1)
                         Text(m.value, style = TextStyle(fontFamily = AppFont, fontSize = 44.sp, lineHeight = 52.sp, fontWeight = FontWeight(300), fontFeatureSettings = "tnum"), color = p.textPrimary, maxLines = 1)
-                        if (m.sub.isNotEmpty()) Text(m.sub, style = CarType.label.copy(fontWeight = FontWeight(500)), color = p.textTertiary, maxLines = 1)
+                        if (m.sub.isNotEmpty()) Text(m.sub, style = CarType.label.copy(fontWeight = FontWeight(500)), color = p.textTertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

@@ -108,12 +108,14 @@ class SetupLinkDemoTest {
 
     @Test fun metrics_realValuesOrDash() {
         val none = metrics(null, null, null)
-        assertEquals(listOf("보통 감지 지연", "경보 지연 목표", "CPU", "메모리"), none.map { it.name })
-        assertEquals(listOf("—", "3초 이하", "—", "—"), none.map { it.value })
-        assertEquals(listOf("", "명세 15장", "예산 5% 미만", "예산 400MB 이하"), none.map { it.sub })
+        assertEquals(listOf("보통 감지 지연", "회차 기준", "CPU", "메모리"), none.map { it.name })
+        assertEquals(listOf("—", "3.6초 이하", "—", "—"), none.map { it.value })
+        assertEquals(listOf("", "모든 장면 합쳐 보통 3초 이하", "예산 5% 미만", "예산 400MB 이하"), none.map { it.sub })
         val m = metrics(SceneResults("A", listOf(row(2_400), row(null), row(1_800))), 3.14, 217_600)
         assertEquals("2.1초", m[0].value)   // 경보가 난 회차 둘의 중앙값
-        assertEquals("A 2/3번", m[0].sub)
+        assertEquals("A 2/3번 · 최대 2.4초", m[0].sub)   // C394: 회차 기준과 비교할 가장 늦은 회차
+        assertEquals("A 1/1번 · 최대 3.7초", metrics(SceneResults("A", listOf(row(3_601))), null, null)[0].sub)   // 상한과 비교하는 값이라 올림(3.6초로 보이지 않게)
+        assertEquals("E 0/1번", metrics(SceneResults("E", listOf(row(null))), null, null)[0].sub)
         assertEquals("3.1%", m[2].value)
         assertEquals("213MB", m[3].value)   // 217600KB / 1024 반올림
         assertEquals("—", metrics(SceneResults("E", listOf(row(null))), null, null)[0].value)   // 울음 없는 장면
