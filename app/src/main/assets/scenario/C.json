@@ -68,7 +68,7 @@
      },
      {
       "id": "r2",
-      "name": "△△졸음쉼터",
+      "name": "남사졸음쉼터(부산방향)",
       "kind": "DROWSY_SHELTER",
       "distanceKm": 3,
       "hasNursingRoom": false

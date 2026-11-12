@@ -33,6 +33,20 @@ class SceneFileTest {
         files.forEach { f -> assertEquals(f.nameWithoutExtension, parseScene(f.readText()).id) }
     }
 
+    @Test fun `장면 파일의 쉼터 이름은 모두 휴게소 자료의 한 줄로 찾아진다(자리표시 이름 금지)`() {
+        val files = File("src/main/assets/scenario").listFiles { f -> f.extension == "json" }!!
+        var n = 0
+        files.forEach { f ->
+            parseScene(f.readText()).steps.mapNotNull { (it.action as? Inject)?.takeIf { a -> a.event == "RouteState" } }.forEach { a ->
+                (injectEvent("RouteState", a.fields, 0) as RouteState).rests.forEach { r ->
+                    n++
+                    assertTrue("${f.name} 쉼터 '${r.name}'은 휴게소 자료에서 한 점으로 찾아져야 한다", kr.aigyeot.app.exec.RestAreas.let { it.placeable(r.name, it.rowsOf(r.kind)) })
+                }
+            }
+        }
+        assertTrue("쉼터가 하나도 검사되지 않았다", n > 0)
+    }
+
     @Test fun `모든 동작과 setup을 읽는다`() {
         val s = parseScene(scene("""
             {"t":0,"vc":"PUT /vehicle/gear?gear=Drive"},

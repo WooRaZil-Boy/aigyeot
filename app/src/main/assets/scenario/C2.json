@@ -65,14 +65,14 @@
      },
      {
       "id": "r2",
-      "name": "△△졸음쉼터",
-      "kind": "REST_AREA",
+      "name": "남사졸음쉼터(부산방향)",
+      "kind": "DROWSY_SHELTER",
       "distanceKm": 3,
       "hasNursingRoom": false
      },
      {
-      "id": "tbt:rest:천안휴게소(부산방향)",
-      "name": "천안휴게소(부산방향)",
+      "id": "tbt:rest:천안호두휴게소(부산방향)",
+      "name": "천안호두휴게소(부산방향)",
       "kind": "REST_AREA",
       "distanceKm": 80,
       "hasNursingRoom": true
