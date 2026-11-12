@@ -28,12 +28,12 @@ object Notices {
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "확인 요청", NotificationManager.IMPORTANCE_DEFAULT))
         val b = Notification.Builder(ctx, CHANNEL).setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setAutoCancel(true)
         when (kind) {
-            Notice.BABY_ABOARD -> b.setContentTitle("아기가 탔나요?").setContentText("누르면 듣기를 켜요").setContentIntent(open(ctx, BABY_ABOARD))
-            Notice.MIC_STOPPED -> b.setContentTitle("듣기가 멈췄어요").setContentText("누르면 다시 들어요").setContentIntent(open(ctx, MIC_RESTART))
+            Notice.BABY_ABOARD -> b.setContentTitle("아기가 탔나요?").setContentText("누르면 듣기를 켜요").setContentIntent(open(ctx, BABY_ABOARD)).setOnlyAlertOnce(true)   // C396: 상태대로 다시 띄워도(1k·1l·첫 P) 떠 있으면 소리는 한 번
+            Notice.MIC_STOPPED -> b.setContentTitle("듣기가 멈췄어요").setContentText("누르면 다시 들어요").setContentIntent(open(ctx, MIC_RESTART)).setOnlyAlertOnce(true)
             Notice.FEEDING_CONFIRM -> b.setContentTitle("수유하셨어요?").setContentIntent(open(ctx, null)).setOnlyAlertOnce(true)   // C349: Boot가 다시 띄워도 소리는 한 번
                 .addAction(Notification.Action.Builder(null, "네", open(ctx, FEEDING_YES)).build())
                 .addAction(Notification.Action.Builder(null, "아니요", open(ctx, FEEDING_NO)).build())
-            Notice.SAFETY_CONTROL_FAILED -> b.setContentTitle("열선을 끄지 못했어요").setContentText("뒷좌석 열선을 직접 확인해 주세요")
+            Notice.SAFETY_CONTROL_FAILED -> b.setContentTitle("열선을 끄지 못했어요").setContentText("세운 뒤 뒷좌석 열선을 확인해 주세요")
         }
         nm.notify(kind.ordinal + 10, b.build())
     }

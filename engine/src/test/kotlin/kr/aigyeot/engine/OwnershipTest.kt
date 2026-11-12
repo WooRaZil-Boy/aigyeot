@@ -35,7 +35,7 @@ class OwnershipTest {
         own("Facts", "profile", "methodsNext", "otherGuardians", "care", "careSeq", "careRoom", "history"),
         own("Feeding", "feedingStart", "nursingStop", "departChecked"),
         own("Life", "car", "gear", "gearSince", "rearDoorOpen", "inCall", "micRunning", "micPath", "cabinC", "route", "seatHeat", "pauses",
-            "s16Said", "doorOpenedSinceP", "reserved", "suspendedAt", "driverUserId", "session", "micNoticeArmed", "s17Said", "bootAt"),
+            "s16Said", "doorOpenedSinceP", "reserved", "suspendedAt", "driverUserId", "boardNotice", "session", "micNoticeArmed", "s17Said", "bootAt"),
         own("Soothe", "stage", "episode", "playedMs", "alarmRun", "cryRuns", "output", "mixedUntil"),
         own("Offer", "offers", "spokenAt", "pendingAsk", "waypointPending", "addedRestIds", "driveFrom", "longDriveOffered", "leftParkAt", "handoffs"),
         own("Qa", "qa"),

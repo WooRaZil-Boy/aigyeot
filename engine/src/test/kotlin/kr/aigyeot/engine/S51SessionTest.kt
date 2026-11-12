@@ -38,7 +38,7 @@ class S51SessionTest {
     @Test fun r01d_noProfile_staysIdle() {
         val sim = idle(prof = null).doorCycle().gear(Gear.D)
         assertNull(sim.s.session)
-        assertTrue(sim.cmds.isEmpty())
+        assertEquals(listOf<Command>(HideNotice(Notice.BABY_ABOARD), HideNotice(Notice.MIC_STOPPED)), sim.cmds)   // 1g: 출발 알림 내림만
     }
 
     @Test fun r01e_micOffAtOpen_saysS17Once() {
@@ -53,6 +53,70 @@ class S51SessionTest {
         val sim = session(mic = false).gear(Gear.P, MIN)
         assertEquals(listOf(Notice.BABY_ABOARD), sim.step<ShowNotice>().map { it.kind })
         assertTrue(sim.step<Speak>().none { it.sid == Sid.S16 })
+    }
+
+    @Test fun r01g_leaveAndReturnPark_reshowsBabyAboard() {
+        val sim = session(mic = false).gear(Gear.P, MIN)
+        assertEquals(1, sim.step<ShowNotice>().size)
+        sim.gear(Gear.D, MIN)
+        assertEquals(1, sim.step<HideNotice>().count { it.kind == Notice.BABY_ABOARD })
+        assertEquals(listOf(Notice.BABY_ABOARD), sim.gear(Gear.P, MIN).step<ShowNotice>().map { it.kind })   // 두 번째 P에도 다시 뜬다
+    }
+
+    @Test fun r01g_micOn_parkShowsNoNotice() {
+        val sim = session(mic = false).ev(MicService(T0 + MIN, true, MicPath.HOME_BUTTON))
+        assertTrue(sim.gear(Gear.P, MIN).step<ShowNotice>().isEmpty())
+    }
+
+    // 1h·C391: 세션 밖 알림(2a)도 P마다 다시 뜬다
+    @Test fun r01h_noSessionReturnPark_reshowsBabyAboard() {
+        val sim = idle(mic = false).doorCycle()
+        assertEquals(1, sim.step<ShowNotice>().size)
+        assertEquals(1, sim.gear(Gear.R, MIN).step<HideNotice>().count { it.kind == Notice.BABY_ABOARD })
+        assertEquals(listOf(Notice.BABY_ABOARD), sim.gear(Gear.P, MIN).step<ShowNotice>().map { it.kind })
+    }
+
+    @Test fun r01h_micOnBeforeReturn_noReshow() {
+        val sim = idle(mic = false).doorCycle().gear(Gear.R, MIN).ev(MicService(T0 + 2 * MIN, true, MicPath.HOME_BUTTON))
+        assertTrue(sim.gear(Gear.P, MIN).step<ShowNotice>().isEmpty())
+    }
+
+    @Test fun r01h_sessionOpenedOrClosed_noOutOfSessionReshow() {
+        val sim = idle(mic = false).doorCycle().gear(Gear.D, MIN)   // 프로필 있음: 세션 열림 → boardNotice 꺼짐
+        assertFalse(sim.s.ign.boardNotice)
+        sim.gear(Gear.P, MIN).ev(RearDoor(sim.t + 1, Side.LEFT, true))   // 13a 닫힘
+        assertNull(sim.s.session)
+        sim.ev(RearDoor(sim.t + 1, Side.LEFT, false)).clear()
+        assertTrue(sim.gear(Gear.R, MIN).gear(Gear.P, MIN).all<ShowNotice>().isEmpty())
+    }
+
+    @Test fun r01h_noDoorEvent_driveThenPark_noNotice() {
+        assertTrue(idle(mic = false).gear(Gear.D, MIN).gear(Gear.P, MIN).all<ShowNotice>().isEmpty())
+    }
+
+    // 2a·C393: 프로필이 없으면 세션이 열리지 않아 표시가 남으므로 서지 않는다(알림·S16은 그대로)
+    @Test fun r02a_noProfile_boardNoticeStaysFalse() {
+        val sim = idle(prof = null, mic = false).doorCycle()
+        assertEquals(1, sim.step<ShowNotice>().size)
+        assertFalse(sim.s.ign.boardNotice)
+    }
+
+    @Test fun r01h_newIgnition_clearsBoardNotice() {
+        val sim = idle(mic = false).doorCycle()
+        assertTrue(sim.s.ign.boardNotice)
+        assertFalse(sim.ev(Boot(sim.t + MIN, Gear.P, 10)).s.ign.boardNotice)
+        assertTrue(sim.ev(Suspend(sim.t + 1)).ev(Resume(sim.t + 2)).clear().gear(Gear.R, MIN).gear(Gear.P, MIN).all<ShowNotice>().isEmpty())
+    }
+
+    // 1g·C391: 출발하면 '아기가 탔나요?' 알림을 내린다
+    @Test fun r01g_leavePark_hidesBabyAboardNotice() {
+        val hide = listOf(HideNotice(Notice.BABY_ABOARD), HideNotice(Notice.MIC_STOPPED))   // 1g: 둘 다(C393)
+        assertEquals(hide, idle(mic = false).ev(GearChanged(T0 + MIN, Gear.D)).step<HideNotice>())            // P → D
+        assertEquals(hide, Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(GearChanged(T0, Gear.D)).step<HideNotice>())   // 앞 기어 모름 → D
+        assertEquals(hide, Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(Boot(T0, Gear.D, 10)).step<HideNotice>())   // Boot(D)
+        assertTrue(Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(Boot(T0, Gear.P, 10)).step<HideNotice>().isEmpty())
+        assertTrue(Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(Boot(T0, null, 10)).step<HideNotice>().isEmpty())
+        assertTrue(idle(gear = Gear.D).ev(GearChanged(T0 + MIN, Gear.N)).step<HideNotice>().isEmpty())                  // D → N은 앞 기어가 P 아님
     }
 
     @Test fun r02a_doorClosedParkMicOff_saysS16() {

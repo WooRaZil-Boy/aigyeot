@@ -539,7 +539,7 @@ class S58DriveTest {
         assertTrue(sim.s.ign.nursingStop!!.confirmShown)
         sim.gear(Gear.D)
         assertNull(sim.s.ign.nursingStop)
-        assertEquals(listOf(HideNotice(Notice.FEEDING_CONFIRM)), sim.step<HideNotice>())
+        assertEquals(listOf(HideNotice(Notice.BABY_ABOARD), HideNotice(Notice.MIC_STOPPED), HideNotice(Notice.FEEDING_CONFIRM)), sim.step<HideNotice>())   // 1g 알림 내림 + C347
     }
 
     // C347: 옛 알림의 '아니요'(확인 전 도착)는 새 정차를 지우지 않는다

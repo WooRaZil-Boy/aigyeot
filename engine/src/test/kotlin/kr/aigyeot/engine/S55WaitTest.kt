@@ -109,7 +109,7 @@ class S55WaitTest {
         val ended = session()
         ended.s = ended.s.copy(session = null)                                                          // ②(a) Room에서 끝난 세션
         ended.ev(Boot(ended.t + MIN, Gear.D, 10))
-        assertTrue(ended.cmds.all { it is RestoreAmbientLedger })   // 장부 되돌림(C364)만
+        assertTrue(ended.cmds.all { it is RestoreAmbientLedger || it == HideNotice(Notice.BABY_ABOARD) || it == HideNotice(Notice.MIC_STOPPED) })   // 장부 되돌림(C364)과 1g 알림 내림만
     }
 
     @Test fun r14r_restoreWhilePlaying_treatedAsPlaybackError() {

@@ -70,6 +70,7 @@ data class Ignition(
     val windowLockPending: List<WindowLockPending>,
     val suspendedAt: Long?,
     val driverUserId: Int,
+    val boardNotice: Boolean = false,       // 1h·C391: 세션 밖 '아기가 탔나요?' 알림(2a)이 서 있음. 마이크가 켜지거나 세션이 열리거나 새 시동이면 꺼진다. 주인 Life
     val nursingStop: NursingStop? = null,   // 결정 ①(V1): 수유실 들름은 시동 단위. 세션이 13a로 닫혀도 F8 수유 확인이 뜬다
     val ambient: Ambient? = null,           // 앰비언트 조명(기능 D, 5.10, C358). 시동 단위 한 칸. null = 손대지 않음. 주인 Control, 쓰기는 ControlReducer.kt의 private ambient(next) 하나
 )

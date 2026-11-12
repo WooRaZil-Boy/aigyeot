@@ -17,14 +17,16 @@ internal fun Tx.boot(e: Boot) {
     // C345: 실행기 기어가 P가 아니면 stopEnded(GearChanged 처리 전에 장면이 끝난 경우)와 상관없이 정차는 끝난 것. 프로세스 시작은 gear null이라 그대로
     val ended = e.stopEnded || (e.gear != null && e.gear != Gear.P)
     if (ended) nursingLeftPark()
+    if (e.gear != null && e.gear != Gear.P) { out += HideNotice(Notice.BABY_ABOARD); out += HideNotice(Notice.MIC_STOPPED) }  // 1g·C391: 프로세스가 다시 떠도(장면 끝 복원 포함) 지난 '아기가 탔나요?' 알림이 주행 중 남지 않게
     if (s.ign.nursingStop?.confirmShown == true) out += ShowNotice(Notice.FEEDING_CONFIRM)   // C349: 알림 = 상태. 장면 끝 복원·프로세스 시작에 다시 띄운다(ended면 위가 이미 지웠다)
     ign { copy(driverUserId = e.userId, doorOpenedSinceP = if (ended && e.gear == Gear.P) false else doorOpenedSinceP) }
     newIgnition()
+    if (e.gear == Gear.P) parkNotices(baby = false)   // 1k·C394: 장면 끝 Boot는 지금 기어 P를 읽어 뒤이은 reemit의 P가 무시되므로 여기서 상태대로 다시 띄운다. C395: '아기가 탔나요?'는 뺀다(위 newIgnition이 장면 실행기가 끈 마이크로 건 칸이라 다음 P(14p)에 맡긴다)
     lifecycle(Life.BOOT)   // 14g: 새 프로세스라 옛 콜백이 오지 않는다. 경유지(C84)·쾌적(C102) 버림, 잠금 결과 대기 버림·열린 세션 영역 다시 잠금(C86). Resume은 살아 있을 수 있어 그대로
 }
 
 internal fun Tx.newIgnition() {                                                                            // G11·14g
-    ign { copy(s16Said = false, suspendedAt = null) }
+    ign { copy(s16Said = false, suspendedAt = null, boardNotice = false) }
     if (!s.car.micRunning) ses { copy(micNoticeArmed = true) }
 }
 
@@ -47,8 +49,10 @@ internal fun Tx.dropReserved() = ign { copy(reserved = false) }
 // ---- 차 사실(3.3) ----
 
 internal fun Tx.micService(e: MicService) {
+    val was = s.car.micRunning
     car { copy(micRunning = e.running, micPath = if (e.running) e.path else null) }
-    if (e.running) ses { copy(micNoticeArmed = false) }
+    if (!e.running && was && gearP) parkNotices(baby = false)   // 1l·C396: 다시 켜기가 같은 오류로 실패하면 감지기가 InputLost를 다시 내지 않으므로 여기서 되살린다(21g·21h로 이미 꺼졌으면 was가 거짓)
+    if (e.running) { ses { copy(micNoticeArmed = false) }; ign { copy(boardNotice = false) }; out += HideNotice(Notice.BABY_ABOARD); out += HideNotice(Notice.MIC_STOPPED) }   // 1j·C393·C394: 알림 = 상태. 다른 길(앱 화면·단추·장면 뒤 다시 켬)로 켜져도 둘 다 내린다
 }
 
 /** 열선 값(차 사실). 아기 자리 열선을 켜면 끄는 일(3c)은 Control.heatGuard. */
@@ -83,18 +87,23 @@ internal fun Tx.gear(g: Gear) {
     if (g == Gear.P) {
         ign { copy(doorOpenedSinceP = false) }
         nursingParked()                                                                        // F7: 세션 없이도(결정 ①)
-        if (x == null) return
+        if (x == null) { parkNotices(); return }
         if (x.phase in AUTO_PHASES) toWait(Unjudged.GEAR_P) else stopPlay(PlayEndReason.GEAR_P)   // 14b·18e
         if (now - (x.leftParkAt ?: x.openedAt) >= p.arrivalMinDriveMs) say(Sid.S12)               // A1
-        if (!s.car.micRunning && x.micNoticeArmed) {                                              // 1f·14p
-            out += ShowNotice(Notice.BABY_ABOARD)
-            ses { copy(micNoticeArmed = false) }
-        }
+        parkNotices()
         return
     }
+    if (prev == null || prev == Gear.P) { out += HideNotice(Notice.BABY_ABOARD); out += HideNotice(Notice.MIC_STOPPED) }                 // 1g·C391: 출발하면 주행 중 눌러 마이크를 켜지 않게 내린다. 다음 P에서 1f·14p가 다시 띄운다
     nursingLeftPark()                                                                          // F9: 첫 P 뒤 P가 아니면 수유 확인을 버린다(세션 없이도). 앞 기어가 모름(Boot 뒤)이어도 돈다. firstPAt은 P에서만 찍힌다
     if (x == null) { if (g == Gear.D) maybeOpen(); return }
     if (prev == Gear.P) leftPark()                                                             // 이번 주행의 시작(Offer)
+}
+
+/** 1f·1h·1i·1k·1l·14p: 알림 = 상태. P에서 마이크가 꺼져 있으면 띄운다(내림은 1g·1j). 띄웠다고 칸을 끄지 않는다(C391). [baby]가 거짓이면 '듣기가 멈췄어요'만(1k·C395). */
+private fun Tx.parkNotices(baby: Boolean = true) {
+    if (s.car.micRunning) return
+    if (PauseReason.MIC_ERROR in s.car.pauses) out += ShowNotice(Notice.MIC_STOPPED)   // 1i·C393: 세션 유무와 상관없이
+    if (baby && (ses?.micNoticeArmed ?: s.ign.boardNotice)) out += ShowNotice(Notice.BABY_ABOARD) // 1f·14p(세션), 1h(세션 밖)
 }
 
 internal fun Tx.door(e: RearDoor) {
@@ -106,6 +115,7 @@ internal fun Tx.door(e: RearDoor) {
     } else if (ses == null && gearP && !s.car.micRunning && !s.ign.s16Said) {                  // 2a·2b
         if (say(Sid.S16)) ign { copy(s16Said = true) }
         out += ShowNotice(Notice.BABY_ABOARD)
+        if (s.profile != null) ign { copy(boardNotice = true) }                                                     // 1h: 알림 = 상태
     }
 }
 
@@ -115,6 +125,7 @@ internal fun Tx.maybeOpen() {                                                   
     if (!doorCycle && !s.ign.reserved) return
     val id = newUlid()
     trimHistory(p.statSince(now))
+    ign { copy(boardNotice = false) }                                                          // 1h: 세션 안 알림은 micNoticeArmed가 이어받는다
     lifecycle(Life.SESSION_OPEN)                                                               // 예약을 썼다(1a). 나머지 대기는 그대로
     s = s.copy(session = SessionState(
         id = id, openedAt = now, trigger = if (doorCycle) OpenTrigger.DOOR_THEN_D else OpenTrigger.BUTTON_THEN_D,
@@ -163,7 +174,7 @@ internal fun Tx.closeFromRoom() {
 internal fun Tx.inputLost(r: PauseReason) {
     if (r == PauseReason.MIC_ERROR) {                                                          // 21g·21h
         car { copy(micRunning = false, micPath = null) }
-        out += ShowNotice(Notice.MIC_STOPPED)
+        if (s.car.gear == Gear.P) out += ShowNotice(Notice.MIC_STOPPED)                       // C393: 정차 중에만. 주행 중이면 다음 P에서 1i가 띄운다
     }
     car { copy(pauses = pauses + r) }                                                          // 21a·21h·C79
     val x = ses ?: return

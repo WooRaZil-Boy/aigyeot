@@ -201,7 +201,7 @@ class SceneCloseTest {
         k.ev(Tick(0), k.now + 16 * 60_000L)
         assertTrue(Notice.FEEDING_CONFIRM in k.notices, "준비: 확인이 떴다")
         k.ev(GearChanged(0, Gear.D))
-        assertEquals(listOf(Notice.FEEDING_CONFIRM), k.hiddenNotices)
+        assertEquals(listOf(Notice.BABY_ABOARD, Notice.MIC_STOPPED, Notice.BABY_ABOARD, Notice.MIC_STOPPED, Notice.BABY_ABOARD, Notice.MIC_STOPPED, Notice.FEEDING_CONFIRM), k.hiddenNotices, "마이크 켜짐 1j·세션 열 때 D·출발 D의 1g 내림(둘씩, C394) + 수유 확인 내림")
     }
 
     // C349: 실제 수유 확인은 장면 중 내려 두고(상태 유지) 장면 끝에 다시 띄우며, 그때 '네'가 실제 수유 시작으로 저장된다
@@ -212,7 +212,7 @@ class SceneCloseTest {
         assertEquals(1, k.notices.count { it == Notice.FEEDING_CONFIRM })
         val before = k.state().feedingStart
         k.host.startScenario(setup()); k.host.awaitIdle()
-        assertEquals(listOf(Notice.FEEDING_CONFIRM), k.hiddenNotices, "장면 시작이 실제 확인 알림을 내린다")
+        assertEquals(listOf(Notice.BABY_ABOARD, Notice.MIC_STOPPED, Notice.BABY_ABOARD, Notice.MIC_STOPPED, Notice.FEEDING_CONFIRM), k.hiddenNotices, "(앞의 넷은 준비 때 마이크 켜짐 1j와 세션 열기 D의 1g 내림) 장면 시작이 실제 확인 알림을 내린다")
         k.host.endScenario(); k.host.awaitIdle()
         assertEquals(2, k.notices.count { it == Notice.FEEDING_CONFIRM }, "장면 끝에 다시 띄운다")
         assertTrue(k.state().ign.nursingStop!!.confirmShown)

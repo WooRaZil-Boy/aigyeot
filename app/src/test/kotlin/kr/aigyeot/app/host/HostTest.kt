@@ -731,7 +731,9 @@ class HostTest {
         k.boot()
         assertEquals(false, k.state().car.micRunning)
         assertTrue(PauseReason.MIC_ERROR in k.state().car.pauses)
-        assertTrue(Notice.MIC_STOPPED in k.notices)
+        assertTrue(Notice.MIC_STOPPED !in k.notices, "C393: 복원 기어가 D(주행 중)면 띄우지 않는다")
+        k.ev(GearChanged(0, Gear.P))
+        assertTrue(Notice.MIC_STOPPED in k.notices, "다음 P에서 1i가 띄운다")
     }
 
     @Test fun restoreMicAlreadyRunning_c82_reconcilesBothWays() {
