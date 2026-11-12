@@ -81,6 +81,29 @@ class HomeUiTest {
         assertEquals("출발하면 듣기 시작해요", reserved.status); assertFalse(reserved.cta.board, "예약되면 물어보기·먹이기")
     }
 
+    private fun noSession(gear: Gear?, mic: Boolean = true, reserved: Boolean = false) =
+        fresh().let { it.copy(ign = it.ign.copy(reserved = reserved), car = it.car.copy(gear = gear, micRunning = mic)) }
+
+    @Test fun noSession_drivingD_saysMicOff() {
+        val u = ui(noSession(Gear.D))
+        assertEquals(MIC_OFF, u.status)
+        assertEquals(Eyebrow("듣기 꺼짐", Tone.MUTED), u.eyebrow); assertFalse(u.eyebrow.live)
+        assertEquals(Symbol.EAR, u.drive.symbol)
+        assertEquals(Light3d.BASE, u.stage.light)
+    }
+
+    @Test fun noSession_drivingR_saysMicOff() = assertEquals(MIC_OFF, ui(noSession(Gear.R)).status)
+
+    @Test fun noSession_unknownGear_staysBeforeDrive() = assertEquals("출발 전이에요", ui(noSession(null)).status)
+
+    @Test fun noSession_parkedMicOn_staysBeforeDrive() {
+        val u = ui(noSession(Gear.P))
+        assertEquals("출발 전이에요", u.status); assertEquals(Eyebrow("듣기 켜짐", Tone.ACCENT, live = true), u.eyebrow)
+        assertEquals(Light3d.LISTEN, u.stage.light)
+    }
+
+    @Test fun noSession_reservedDriving_saysStartListening() = assertEquals("출발하면 듣기 시작해요", ui(noSession(Gear.D, reserved = true)).status)
+
     @Test fun detected_beforePlaybackStarts_isAlertAndChild() {
         val u = ui(driving(ses(Stage.Attempt(1, play(1, null)), ep())))
         assertEquals(Eyebrow("울음 감지 · 2.4초", Tone.CHILD), u.eyebrow)

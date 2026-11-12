@@ -233,8 +233,15 @@ internal fun soundNow(x: kr.aigyeot.engine.SessionState): Sound {
  */
 internal fun rearSure(x: kr.aigyeot.engine.SessionState) = x.output != kr.aigyeot.engine.OutputRoute.DEFAULT_FALLBACK
 
+/** 세션이 없는데 이미 주행 중(예약 아님, 기어를 알고 P 아님): 판단 코어는 판정하지 않는다(hears() 거짓). 상태 문장·눈썹이 같은 조건을 본다. */
+internal fun drivingWithoutSession(s: EngineState?): Boolean =
+    s != null && s.session == null && !s.ign.reserved && s.car.gear.let { it != null && it != Gear.P }
+
+/** 세션 밖에서 듣는 중: 마이크가 돌고 주행 중 세션 없음이 아니다. 눈썹·3D 조명이 같은 조건을 본다. */
+internal fun idleListening(s: EngineState?): Boolean = s?.car?.micRunning == true && !drivingWithoutSession(s)
+
 internal fun statusText(s: EngineState?): String {
-    val x = s?.session ?: return if (s?.ign?.reserved == true) "출발하면 듣기 시작해요" else "출발 전이에요"
+    val x = s?.session ?: return if (s?.ign?.reserved == true) "출발하면 듣기 시작해요" else if (drivingWithoutSession(s)) MIC_OFF else "출발 전이에요"
     return when (x.phase) {
         // 판단 코어가 소리를 보지 않는 동안(마이크 꺼짐·입력 끊김 판정 멈춤)은 듣는다고 쓰지 않는다(S17 문장, 계약 차 5장 1e·5.3). hears()는 판단 코어와 같은 조건
         Phase.LISTENING -> if (s.hears()) "아기 소리를 듣고 있어요" else MIC_OFF
@@ -253,7 +260,7 @@ internal fun statusText(s: EngineState?): String {
 
 /** 눈썹 이름(시안 화면 라벨, IMPLEMENT 6장): 듣기 꺼짐·듣기 켜짐·듣는 중·정차 중·울음 감지 · n초·n차 · 방법·듣기 틈 · n초·사람에게 넘김·경유지 추가. */
 internal fun eyebrow(s: EngineState?, p: Params = Params()): Eyebrow {
-    val x = s?.session ?: return if (s?.car?.micRunning == true) Eyebrow("듣기 켜짐", Tone.ACCENT, live = true) else Eyebrow("듣기 꺼짐", Tone.MUTED)
+    val x = s?.session ?: return if (idleListening(s)) Eyebrow("듣기 켜짐", Tone.ACCENT, live = true) else Eyebrow("듣기 꺼짐", Tone.MUTED)
     val parked = s.car.gear == Gear.P
     return when (val st = x.stage) {
         is Stage.Attempt -> {
@@ -383,7 +390,7 @@ internal fun stage(s: EngineState?, done: Set<OkControl> = emptySet()): Stage3d 
         if (x != null && done.any { it.act == ControlAct.CABIN_COOL }) add(Callout3d.HVAC)
         if (x != null && heat.isNotEmpty()) add(Callout3d.HEAT)
     }
-    if (x == null) return Stage3d(View3d.CABIN, if (s?.car?.micRunning == true) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)
+    if (x == null) return Stage3d(View3d.CABIN, if (idleListening(s)) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)
     return sessionStage(x, s.hears(), callouts, seat).copy(sides = mapOf(Callout3d.LOCK to lock, Callout3d.HEAT to heat).filterValues { it.isNotEmpty() })
 }
 
