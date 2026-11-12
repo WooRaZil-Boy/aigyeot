@@ -23,3 +23,8 @@
 ## 4. 미판정
 - (해결) 울음이 있는 실제 주행의 차·폰 리포트 일치는 같은 날 e2e_cry_drive_1111.txt에서 쟀다(가상 오디오 장치로 에뮬레이터 마이크에 울음 입력, 차 3곳·폰 2곳 값 일치)
 - Sonnet은 직접 호출 3.08초로 3초 대기와 가깝다. 질문이 대기 시간을 넘겨 오프라인 답으로 넘어가는지·그 비율은 재지 않았다(미판정)
+
+## 5. 말투 통일 뒤 다시 배포(11-12 20:25)
+- 바뀐 것: 시스템 지시 해요체 한 줄(PROMPT_VERSION p6 → p7), 인계 푸시 제목 '인계 알림'. 배포 전 중계 vitest 121·tsc 통과
+- `npx wrangler deploy` → 버전 6af1d4a6, LLM_MODEL claude-sonnet-5-5, `/v1/health` llm true · push false
+- `AIGYEOT_RELAY=https://aigyeot-relay.byuncorry.workers.dev ./gradlew :app:testDebugUnitTest --tests '*LinkRelayLiveTest'` 통과 1/1(14.3초). 답 글 예: "아직 정확한 이유를 알 수는 없어요. 배고픔, 졸림, 기저귀 불편, 카시트에 오래 앉아 있는 답답함 때문일 수 있어요."(해요체, 두 문장)
