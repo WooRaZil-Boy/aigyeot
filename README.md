@@ -2,327 +2,183 @@
 
 > 아기가 울면 차가 대신 달래 줍니다. 부모는 앞만 보고 운전합니다.
 
-뒷좌석 카시트에 0~2세 아기를 태우고 혼자 운전하는 부모를 위한 Pleos Connect(Android Automotive) 앱입니다. 현대자동차그룹 차량용 앱 개발 공모전 출품작이며, 차 앱과 휴대폰 앱 두 개(안드로이드·iOS), 그 사이 중계로 이루어져 있습니다.
+뒷좌석 카시트에 0~2세 아기를 태우고 혼자 운전하는 부모를 위한 Pleos Connect(Android Automotive) 앱입니다. 아기가 울면 차가 울음을 듣고 뒷좌석 스피커로 달랩니다. 현대자동차그룹 차량용 앱 개발 공모전 출품작이며, 차 앱과 보호자 휴대폰 앱(안드로이드·iOS), 그 사이 중계 서버로 이루어져 있습니다.
 
-## 3분 안에 보기
+| 항목 | 내용 |
+| --- | --- |
+| APK | 차 앱 [`apk/곁빛_아이곁_release.apk`](apk/곁빛_아이곁_release.apk), 안드로이드 휴대폰 앱 [`apk/곁빛_아이곁_휴대폰_release.apk`](apk/곁빛_아이곁_휴대폰_release.apk). 둘 다 release 키로 서명 |
+| 개발·시험 에뮬레이터 | Pleos Connect Emulator v2.1.0(Android 14, API 34), 기기 프로필 `Pleos Connect v2.1.0`, 화면 2560×1440. 11-08까지의 측정 일부는 같은 시스템 이미지의 1920×1080 AVD에서 했습니다([tools/measure/README.md](tools/measure/README.md)) |
+| 실행 방법 | 에뮬레이터를 띄우고 `tools/demo/prepare.sh`로 APK 설치·권한·차량 상태를 맞춥니다([실행 방법](#실행-방법)) |
+| 테스트 환경과 설정 | macOS(Apple Silicon)에서 확인. Pleos SDK 4종과 MediaPipe 사용([테스트 환경과 필요한 설정](#테스트-환경과-필요한-설정)) |
 
-아기가 울면 차가 차 안에서 울음을 감지합니다(에뮬레이터 장면 6회 중앙값 2.46초). 그러면 **뒷좌석 스피커에서만** 달래는 소리를 틀고(뒷좌석 출력이 없는 차에서는 '아기 설정'에서 허용했을 때만 앞에서 작게 틉니다), 운전자에게는 "뒤에서 울어요. 뒷자리에 자장가 틀었어요." 한 문장만 말합니다. 56초 뒤에는 소리를 멈추고 8초 들어 봅니다. 조용하면 소리를 끈 채 30초 더 확인한 뒤 '그쳤다'고 기록합니다. 자동 시도는 두 번까지입니다. 두 번 해도 울면 소리를 멈추고 연결된 다른 보호자 휴대폰에 알려 사람에게 넘깁니다. 주행 중에는 경로 위 수유실 휴게소 같은 세울 곳을 내비 경유지로 넣을지 묻는 식으로 차가 말로 안내합니다(언제 무엇을 말하는지는 아래 표의 '두 번 실패'). 주행 중에 운전자가 화면을 만질 일은 없습니다. 차의 질문에는 말로 답하고, 궁금한 것은 마이크가 켜져 있을 때 차가 안내를 마친 직후 5초 동안 말로 물을 수 있습니다(정차 중에는 홈의 '물어보기'). 듣지 않는 때는 아래 '말로 묻기'에 적었습니다.
+## 무엇을 하나
 
-| 핵심 장면 | 무엇을 보면 되나 | 장면 파일 |
+1. **차 안에서 듣기:** 차 마이크 소리를 차 안에서 판정합니다(MediaPipe YAMNet 점수 위에 직접 학습한 로지스틱 회귀 울음 판별층). 운전자의 말은 Pleos SpeechToText의 기기 안 인식(ON_DEVICE)으로 알아듣습니다. 마이크 소리는 저장하거나 차 밖으로 보내지 않습니다.
+2. **뒷좌석에서 달래기:** 달래는 소리는 뒷좌석 오디오 존으로 틉니다(뒷좌석 출력이 없는 차에서는 '아기 설정'에서 허용했을 때만 앞에서 작게). 운전자에게 처음 알리는 말은 "뒤에서 울어요. 뒷자리에 자장가 틀었어요." 같은 짧은 문장입니다. 56초 틀고 멈춰 8초 듣고, 조용하면 소리를 끈 채 30초 더 확인해 그쳤는지 판정합니다. 재생을 켠 채 판정하지 않는 까닭은 노래를 울음으로 잘못 듣는 경우가 있어서입니다(아래 [검증 결과](#검증-결과)).
+3. **두 번까지만:** 자동 시도는 두 번까지입니다. 1차 뒤에도 울고 실내가 더우면 앞 공조 설정을 2℃ 낮출 수 있습니다. 두 번 해도 울면 소리를 멈추고 인계(돌봄 넘김)로 넘어갑니다. 다른 보호자의 휴대폰이 연결돼 있으면 알림을 보내고, 달리는 중이면 경로 앞 휴게소·졸음쉼터를 내비 경유지로 넣을지 묻거나 도착해서·세워서 돌보라고 안내할 수 있습니다. 언제 무엇을 하는지는 `engine/`의 규칙(`SootheReducer.kt`·`OfferReducer.kt`·`Calc.kt`)이 정합니다.
+4. **차량 제어:** 상황에 따라 아기 자리 시트 열선 끄기, 형제가 있으면 뒷창 잠금, 실내가 더우면 앞 공조 낮추기, 정차 중 뒷좌석 독서등 끄기, 무드 조명이 켜져 있으면 달래는 동안 조명 낮추기를 합니다(명령 목록은 `engine/`의 `Command.kt`). 브레이크·방향지시등·큰 조향으로 운전이 바쁜 동안에는 급하지 않은 안내를 바로 말하지 않습니다.
+5. **기록으로 소리 고르기:** 어떤 소리(백색소음, 자장가, 뱃속 소리, 부모가 녹음한 노래)를 틀었을 때 그쳤는지 판정이 난 1차 시도의 결과를 쌓아(아기 프로필 하나 기준), 다음에 틀 소리를 고릅니다(톰슨 샘플링을 쓰며, 규칙은 `engine/`의 `Calc.kt`·`SootheReducer.kt`). 리포트에는 "소리 덕분인지는 알 수 없어요"라고 함께 적습니다.
+6. **말로 묻기:** "뭐가 제일 잘 통해?", "언제 먹였지?"처럼 운전자가 먼저 물으면 답합니다. 아기를 태우고 가는 동안에는 차가 안내를 마친 직후 5초 동안, 정차(기어 P) 중에는 홈의 '물어보기'를 누르면 5초 듣습니다. 듣는 조건은 `engine/`의 `Rules.kt`(`listenOk`·`canAsk`)와 `SpeechReducer.kt`에 있습니다. 자장가나 부모 노래를 트는 동안에는 가사를 질문으로 잘못 듣지 않도록 질문으로 받지 않습니다. 질문은 중계 서버를 거쳐 외부 언어 모델(LLM)이 주제를 고르고(질문 낱말로도 고름), 기록이나 차 상태(수유·잠·기저귀·울음·카시트 시간·실내 온도·다음 쉼터·소리 성적)를 묻는 질문에는 차가 값을 읽어 정해 둔 문장으로 답합니다. 그 밖의 질문은 LLM이 쓴 글이 검사(숫자·상태 단정·군말)를 통과할 때만 앞 두 문장을 말하고, LLM에 닿지 못하면 정해 둔 문장으로 답합니다(규칙은 `app/`의 `link/Qa.kt`). LLM에는 상태값과 질문 글자만 보냅니다(아이 별명은 '아기'로 바꿈).
+7. **주행 중 화면 조작 없음:** 주행 제한(`CarUxRestrictions`)이 걸리면 아이곁 화면은 단추 없는 주행 전용 화면으로 바뀝니다. 차의 질문에는 말로 답합니다.
+8. **휴대폰 앱:** 수유·잠·기저귀 기록, 다른 육아 앱 기록 가져오기(CSV), 부모 노래 녹음, 주행 리포트 보기, 인계 알림 받기.
+
+울음의 원인을 맞히지 않고, 잠·호흡을 감지하지 않습니다.
+
+## 실행 방법
+
+1·2·4단계는 제출 APK(release)로 보는 순서이고(iOS 휴대폰 앱만 소스로 빌드), 3단계 시연 장면은 debug 빌드에만 들어 있습니다. 5단계는 소스 빌드와 시험입니다. 명령은 저장소 루트에서 실행하고, 확인한 환경은 macOS(Apple Silicon)입니다. `adb`·`emulator`가 PATH에 있어야 하고, 시연 스크립트는 bash·curl·python3를 씁니다(macOS의 python3는 Xcode Command Line Tools에 들어 있고, 없으면 `xcode-select --install`). 스크립트와 장면의 자세한 절차, 제출 APK로 울음 감지를 보는 마이크 순서, debug 순서는 [tools/demo/README.md](tools/demo/README.md)에 있습니다.
+
+### 1. 에뮬레이터 준비
+
+[공식 설치 문서](https://document.pleos.ai/en/docs/connect/guide/getting-started/application-development/setup-connect-sdk-emulator#setting-up-the-emulator)대로 AVD를 만듭니다. 개발·시험 환경은 시스템 이미지 API 34의 `Pleos Connect v2.1.0 APIs`(arm64-v8a), 기기 프로필 `Pleos Connect v2.1.0`(2560×1440), RAM 4GB, Cold boot입니다.
+
+```bash
+emulator -avd <AVD 이름> -timezone Asia/Seoul   # 기록을 한국 시간으로 남깁니다
+adb devices                                       # 차 에뮬레이터 시리얼 확인(예: emulator-5554)
+```
+
+### 2. 설치와 첫 실행
+
+```bash
+SERIAL=emulator-5554 tools/demo/prepare.sh apk/곁빛_아이곁_release.apk
+```
+
+`prepare.sh`는 APK를 설치하고 운전자 사용자(user 10) 권한과 시연에 필요한 차량·앱 상태를 맞춥니다. 하는 일 전체는 [tools/demo/README.md](tools/demo/README.md#스크립트)에 있습니다.
+
+1. 처음 실행하면 '아기 설정'(동의, 별명, 태어난 달, 카시트 자리, 수유 간격 등)을 마쳐야 홈이 나옵니다.
+2. 정차 화면에서 '아기 탔어요'를 누릅니다. 시동 뒤 앱 화면이 없으면 Android가 마이크 서비스를 시작하게 두지 않아 출발 전에 누르게 했습니다([mictest_1102.txt](tools/pleos-probe/mictest_1102.txt)).
+3. 짧게 달려 봅니다. 기어 D·30km/h로 25초 달린 뒤 정차하고 뒷문을 열었다 닫아 이 주행을 끝냅니다.
+
+   ```bash
+   SERIAL=emulator-5554 tools/demo/drive.sh
+   ```
+
+   달리는 동안 앱은 단추 없는 주행 화면으로 바뀝니다.
+4. 울음 감지와 달래기는 따로 새로 달리면서 에뮬레이터 마이크에 울음 소리를 넣어 봅니다. 위 3번의 25초 주행은 판정(약 56초 재생 → 8초 듣기 → 30초 확인)까지 가지 못하므로, '아기 탔어요'를 다시 누르고 `drive.sh 180`으로 3분을 달립니다. 에뮬레이터가 맥의 오디오 입력을 받게 띄우고, 맥 입력을 가상 오디오 장치로 바꿔 그동안 울음 녹음을 틀면 경보 → 뒷좌석 재생 → 그쳤는지 판정까지 이어집니다. 순서는 [제출 APK로 울음 감지 보기](tools/demo/README.md#제출-apk로-울음-감지-보기)에 있습니다.
+
+### 3. 시연 장면(debug 빌드)
+
+장면은 개발·측정용 재연 기능이라 debug 빌드에만 들어 있습니다. Virtual Console로 기어·속도를 바꾸고, 마이크 자리에 울음 녹음을 넣어 같은 상황을 매번 똑같이 재현합니다. debug 빌드를 설치하는 순서는 [tools/demo/README.md](tools/demo/README.md#debug로-돌리기녹음-장면인계-알림로컬-중계-서버)에 있습니다. 차 앱 홈 → 오른쪽 위 '아기 설정' → 맨 아래 '시연·측정'에서 장면을 고르고, 반복 횟수를 '−'로 1에 맞춥니다. 그다음 아래 명령을 먼저 실행하고, '기다린다'가 찍히면 '실행하기'를 누릅니다. 장면이 끝나면 결과(회차마다 기대 조건을 채웠는지, 차량 제어 반영률)를 찍고 정차 상태로 되돌립니다.
+
+```bash
+SERIAL=emulator-5554 tools/demo/scene-result.sh
+```
+
+| 장면 | 보는 것 | 대략 길이 | 울음 녹음 |
+| --- | --- | --- | --- |
+| A | 출발 5분 뒤 울음 → 뒷좌석 재생 → 1차에 그침 | 약 20분 30초 | `stop_40s.pcm` |
+| B | 실내 27℃. 1차 뒤에도 울어 공조를 2℃ 낮춘 뒤 그침 | 약 8분 | `cont_75s.pcm` |
+| C | 수유 시간대 울음 → 수유실 휴게소를 내비 경유지로 | 약 3분 | `stop_50s.pcm` |
+| C2 | 출발할 때 수유 시간 전에 수유실 휴게소 제안 | 약 50초 | 필요 없음 |
+| D | 두 번 시도에도 울어 보호자에게 넘김 | 약 10분 30초 | `cont_long.pcm` |
+| D2 | 넘길 때 목적지까지 6분 → 도착해서 돌보라고 안내 | 약 10분 30초 | `cont_long.pcm` |
+| E | 도착: 꺼내 눕히기 안내, 뒷문을 열면 리포트 | 약 6분 30초 | 필요 없음 |
+| F14-01~20 | 아기 탑승 세션을 열고 닫는 규칙 20가지(장면 20개를 하나씩 실행) | 장면마다 약 30초~1분 40초 | 필요 없음 |
+
+길이는 장면 파일에서 계산한 대략의 시간이고, 실제로는 이보다 짧거나 길 수 있습니다.
+
+- **울음 녹음:** 녹음 장면(A·B·C·D·D2)은 표의 이름으로 준비한 울음 녹음을 `cry.sh`로 넣어야 돌아갑니다. 쓴 녹음은 배포 허락을 확인하지 못해 저장소에 넣지 않았습니다.
+- **장면 C·C2:** 시작 전에 내비 길안내를 켜 두어야 합니다([장면 C·C2의 내비](tools/demo/README.md#장면-cc2의-내비)).
+
+### 4. 휴대폰 앱과 중계 서버
+
+제출 APK(release)는 배포한 중계 서버 `https://aigyeot-relay.byuncorry.workers.dev`에 붙으므로 로컬 중계 서버가 필요 없습니다. 휴대폰 앱도 release로 맞춥니다.
+
+- **안드로이드:** 일반 안드로이드 에뮬레이터(API 26 이상, arm64-v8a 또는 x86_64)에 제출 APK를 설치합니다.
+
+  ```bash
+  adb -s <폰 에뮬레이터 시리얼> install -r apk/곁빛_아이곁_휴대폰_release.apk
+  ```
+
+- **iOS:** `phone/ios/Aigyeot.xcodeproj`를 Xcode로 열고, `Aigyeot` 스킴의 실행 구성(Edit Scheme → Run → Build Configuration)을 `Release`로 바꿔 iPhone 시뮬레이터에서 실행합니다.
+
+1. **연결:** 차 앱 홈 오른쪽 위의 휴대폰 모양 단추('휴대폰 연결')를 누르면 QR과 짧은 코드가 나옵니다. 카메라가 없는 에뮬레이터·시뮬레이터에서는 휴대폰 앱에 코드를 넣습니다.
+2. **리포트:** 연결한 뒤 '아기 탔어요'를 누르고 `drive.sh`로 짧게 달리면, 주행이 끝날 때 그 주행의 리포트가 휴대폰 앱에 옵니다(울음이 없었으면 '울음 기록 없음'). 장면이 만든 리포트는 차 앱에만 남고 휴대폰으로 보내지 않습니다.
+
+인계 알림(장면 D·D2, 두 번째 휴대폰)과 로컬 중계 서버로 모두 debug로 돌리는 순서는 [tools/demo/README.md](tools/demo/README.md#debug로-돌리기녹음-장면인계-알림로컬-중계-서버)에 있습니다.
+
+### 5. 소스 빌드와 시험
+
+빌드 전에 [필요한 설정](#테스트-환경과-필요한-설정)의 `local.properties`와 `JAVA_HOME`을 맞춥니다.
+
+```bash
+./gradlew :app:assembleDebug     # 차 앱 debug → app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleRelease   # 차 앱 release(서명 키 설정이 없으면 서명 없이 만듦)
+tools/check.sh                   # 시험 전부: engine·shared·app·phone(JVM), relay(typecheck·vitest), iOS(xcodebuild test)
+```
+
+`tools/check.sh`가 무엇을 건너뛰고 언제 실패로 멈추는지, iOS 시뮬레이터를 어떻게 고르는지(`IOS_SIM`)는 스크립트 머리 주석에 있습니다.
+
+## 테스트 환경과 필요한 설정
+
+| 구분 | 값 |
+| --- | --- |
+| 개발 맥 | macOS 27.0.1, Apple Silicon(arm64) |
+| 차 앱 | compileSdk 37 / targetSdk 34 / minSdk 28, ABI arm64-v8a·x86_64 |
+| Pleos SDK | Vehicle 2.3.2, NaviHelper 3.0.5, SpeechToText 3.3.1, TextToSpeech 3.3.1 |
+| 울음 감지 | MediaPipe tasks-audio 0.10.32(YAMNet) |
+| 안드로이드 빌드 | Gradle 9.6.0, AGP 9.4.1, Kotlin 2.4.21. Gradle은 Android Studio 내장 JDK(OpenJDK 25.0.3)로 돌리고, 컴파일 대상은 Java 17 |
+| 안드로이드 휴대폰 앱 | compileSdk 37 / targetSdk 36 / minSdk 26 |
+| iOS 휴대폰 앱 | Xcode 27.2, 최소 iOS 17.0, XcodeGen 2.45.3 |
+| 중계 서버 | Node.js v25.4.0에서 확인(wrangler 4.156.0은 22 이상, vitest 5.0.5는 22.12·24·26 이상을 적어 둠), Cloudflare Workers + Durable Objects |
+
+나머지 라이브러리 버전은 `gradle/libs.versions.toml`, `phone/ios/project.yml`, `relay/package.json`에 있습니다.
+
+**필요한 설정**
+- **필수:** 루트 `local.properties`에 `sdk.dir=<Android SDK 경로>`(또는 환경 변수 `ANDROID_HOME`). `JAVA_HOME`이 없으면 Android Studio 내장 JDK를 지정합니다(macOS: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`). `tools/check.sh`는 `JAVA_HOME`이 없으면 이 JDK를 씁니다.
+- **선택(로컬 중계 서버의 LLM 답·원격 푸시):** 실제 키가 있을 때만 `cp -n relay/dev.vars.example relay/.dev.vars` 뒤 `ANTHROPIC_API_KEY`와 `FCM_PROJECT_ID`·`FCM_CLIENT_EMAIL`·`FCM_PRIVATE_KEY`를 진짜 값으로 바꿉니다. 예시 값을 그대로 두면 가짜 키로 요청해 실제 호출이 실패합니다. 키가 없거나 중계 서버에 닿지 못하면 말로 묻기는 정해 둔 문장으로 답합니다.
+- **선택(원격 푸시):** 안드로이드는 `phone/android/google-services.json`을 넣습니다. iOS는 `phone/ios/Aigyeot/GoogleService-Info.plist`에 넣은 뒤 앱 타깃에 들어가게 해야 합니다. `phone/ios`에서 `xcodegen generate`로 프로젝트를 다시 만들면(프로젝트는 `phone/ios/project.yml`에서 만듭니다) 이 파일이 `Aigyeot` 타깃 리소스에 들어갑니다. XcodeGen이 없으면 Xcode에서 이 파일을 `Aigyeot` 타깃에 추가합니다(File → Add Files, Targets에서 `Aigyeot` 선택). 파일이 없거나 iOS 앱 타깃에 들어가지 않으면 원격 푸시만 꺼집니다.
+- **선택(release 서명):** `local.properties`에 `aigyeot.release.storeFile`·`storePassword`·`keyAlias`·`keyPassword` 넷이 모두 있으면 서명합니다. 키는 저장소에 두지 않습니다.
+
+## Pleos SDK와 차량 신호를 쓰는 곳
+
+| SDK·API | 아이곁에서 쓰는 곳 |
+| --- | --- |
+| Vehicle(읽기) | 뒷문 열림·닫힘으로 아기 탑승 세션 시작·끝, 시트 열선·공조 온도·창 잠금·조명 상태, 조향각·브레이크·방향지시등(리포트의 큰 조향 횟수, 운전이 바쁠 때 안내 미루기) |
+| Vehicle(제어) | 아기 자리 시트 열선 끄기, 형제가 있으면 뒷창 잠금·풀기, 실내가 더우면 앞 공조 2℃ 낮춤, 정차 중 뒷좌석 독서등 끄기, 무드 조명 낮추기·되돌리기 |
+| NaviHelper | 안내 중 여부, 남은 시간·거리, 경로 위 휴게소·졸음쉼터, 경유지 넣기 |
+| TextToSpeech / SpeechToText | 운전자에게 하는 안내 / '응·아니', 운전자 질문, 멈춤 말('그만' 등). 둘 다 기기 안(ON_DEVICE) 모드 |
+| AAOS `CarPropertyManager`·`CarPowerManager`·`CarUxRestrictions` | 기어·속도, 전원 정책·화면 꺼짐으로 시동 꺼짐·켜짐 짐작, 주행 제한 때 주행 화면으로 전환 |
+| Android `AudioTrack`·`MediaPlayer` | 출력 장치를 뒷좌석 오디오 존으로 지정해 재생(백색소음은 `AudioTrack`, 그 밖의 소리는 `MediaPlayer`) |
+
+권한 전체는 [AndroidManifest.xml](app/src/main/AndroidManifest.xml)에 있습니다. Pleos Playground의 SDK 사용 신청에서 Vehicle Control·TextToSpeech·SpeechToText는 아직 '준비 중'입니다. 아이곁은 공식 에뮬레이터에서 매니페스트 권한 선언으로 동작을 확인했고, 실차 동작과 Pleos App Market 심사 통과는 확인하지 않았습니다.
+
+## 검증 결과
+
+에뮬레이터 실측 중 경보 지연·내비 경유지·자원은 debug 빌드 차 앱으로, 뒷좌석 재생·주행 중 차량 제어는 별도 실측 앱([tools/pleos-probe](tools/pleos-probe/))으로 쟀습니다. 울음 감지와 그침 판정은 휴대폰·가정 녹음에 차 소음을 섞어 맥에서 평가했습니다. 조건과 전체 표는 [tools/measure/README.md](tools/measure/README.md)에 있습니다.
+
+| 항목 | 결과 | 기록 |
 | --- | --- | --- |
-| 울음 → 뒷좌석 존으로 재생 | 출발 5분 뒤 울음. 소리는 뒷좌석 오디오 존(`bus100_audio_zone_1`)으로 나가고, 운전자에게는 한 문장만 말합니다(에뮬레이터 소리는 맥 스피커로 나와 앞·뒤로 나뉘어 들리는지는 확인할 수 없습니다, [mic_loopback_gleo_1103.txt](tools/measure/mic_loopback_gleo_1103.txt) 한계 1). 56초 재생 뒤 8초 듣고, 조용하면 30초 더 확인한 뒤 '그침'이 기록됩니다 | A |
-| 더운 실내 → 2차 대응 | 1차 뒤에도 울고 실내가 27℃이면 공조를 2℃ 낮추고 "실내가 27도예요. 2도 낮췄어요."라고 말합니다 | B |
-| 수유 시간대 → 수유실 휴게소 경유 | 수유 시각이 가까우면 "○킬로미터 앞 ○○휴게소에 수유실이 있어요. 들를까요?"라고 묻고, '응'이면 Pleos 내비 경로에 경유지를 넣습니다 | C, C2(출발할 때 미리 제안) |
-| 두 번 실패 → 사람에게 넘김 | 자동 시도 두 번 뒤 재생을 멈추고 다른 보호자 휴대폰에 알림을 보냅니다. 주행 중에는 남은 시간과 앞쪽 경로의 쉼터에 따라 쉼터를 경유지로 넣을지 묻거나, "○분 뒤 도착해요. 도착해서 돌봐 주세요." 또는 안전한 곳에 세워서 돌보라고 말합니다. 정차(기어 P) 중에는 말하지 않습니다. 쉼터를 고르는 거리, 같은 안내를 되풀이하지 않는 규칙 같은 세부 조건은 `engine`의 `OfferReducer.kt`(`handoffGuidance`)와 그 시험이 기준입니다 | D, D2 |
+| 경보 지연(울음 입력 → 첫 달래기 재생 명령) | 에뮬레이터 장면 6회 중앙값 2,464ms, 최대 3,515ms | [perf_1108.txt](tools/measure/perf_1108.txt) |
+| 뒷좌석 재생 | 출력 장치를 지정하면 뒷좌석 존 `bus100_audio_zone_1`으로 나감 | [rear_audio_1102.txt](tools/pleos-probe/rear_audio_1102.txt) |
+| 주행 중 차량 제어 | 기어 D·60km/h에서 시트 열선·창 잠금·공조 온도·무드 조명 색 24/24 반영. 무드 조명 밝기는 따로 주행 6/6 | [babycare_Drive.txt](tools/sim/babycare_Drive.txt), [official_audit_1108.txt](tools/measure/official_audit_1108.txt) |
+| 내비 경유지 | 앱이 넣은 휴게소가 실제 내비 경로에 '경유'로 들어옴 | [emulator_1110.txt](tools/measure/emulator_1110.txt) 4절 |
+| 자원(3D 화면 포함) | CPU 한 코어 100% 기준 구간 평균 1.63~4.03%, 메모리(PSS) 최대 252MB | [demo_check_1112.txt](tools/measure/demo_check_1112.txt) 7절 |
+| 울음 감지(교차검증, 울음 대 차 소음 비 10 dB) | 재현율 378/457(0.83). 오경보 수치와 조건은 [tools/measure/README.md](tools/measure/README.md#맥-오프라인-평가) | [tools/cry-retrain](tools/cry-retrain/) |
+| 그침·계속 판정(학습에 쓰지 않은 울음 18개로 만든 맥 합성 장면 360개) | 소리를 멈추고 들을 때 359/360. 재생을 켠 채 판정하면 노래 장면에서 실제로 그친 72번 중 18번을 '아직 운다'로 잘못 봄 | [tools/cry-retrain](tools/cry-retrain/) |
 
-그 밖에 하는 일입니다.
-- **아이별 기록:** 어떤 소리를 틀었을 때 그쳤는지를 아이별로 쌓아 다음 소리를 고릅니다(백색소음, 자장가, 뱃속 소리, 부모가 녹음한 노래). 리포트에는 "그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요"라고 함께 적습니다.
-- **말로 묻기(④ 상황판):** "뭐가 제일 잘 통해?", "언제 먹였지?"처럼 운전자가 먼저 물을 때만 기록으로 답합니다. 아기를 태우고 가는 동안('아기 탔어요'를 누르거나 뒷문을 여닫고 출발한 뒤)에는 차가 한 문장을 마친 직후 5초 동안 듣고('응/아니'를 묻는 질문 뒤와, 운전자가 물은 질문에 차가 답한 뒤에는 이 5초 듣기를 열지 않습니다), 정차(기어 P) 중에는 홈의 '물어보기'를 누르면 5초 듣습니다(출발 전에는 이 자리에 '아기 탔어요'가 있고, 누르면 '물어보기'로 바뀝니다). 둘 다 마이크가 켜져 있어야 하고, 통화 중이거나 차가 말하는 중이거나 앞 질문에 답하는 중에는 열리지 않습니다. 자장가·부모 노래를 트는 동안에는 '그만' 같은 멈춤 말만 받습니다.
-- **휴대폰 앱:** 수유·잠·기저귀 돌봄 기록, 다른 육아 앱 기록 가져오기(CSV), 부모 노래 녹음, 주행 리포트 보기, 인계 알림 받기.
-- **조명 낮춤:** 차량 설정의 무드 조명이 켜져 있으면 달래는 소리가 나오는 동안과 소리를 멈추고 그쳤는지 듣는 동안 실내 조명을 낮추고, 그 밖에는 원래대로 돌립니다. 그 사이 운전자가 바꾼 밝기나 색은 되돌리지 않습니다.
+## 알려진 한계
 
-하지 않는 일도 있습니다. 울음의 원인을 맞히지 않고, 잠·호흡을 감지하지 않습니다. 소리 크기를 울음에 맞춰 키우지 않습니다. 울음 원음은 저장하거나 밖으로 보내지 않습니다.
+- **실제 효과:** 아기가 실제로 덜 우는지, 운전자가 덜 돌아보는지는 재지 않았습니다. 앱의 성적은 '그 소리를 틀었을 때 그친 횟수'이고, 소리 덕분인지는 알 수 없습니다.
+- **감지 수치의 조건:** 차 안에서 녹음한 울음과 긴 녹음에서의 시간당 오경보는 재지 않았습니다.
+- **에뮬레이터 소리:** 에뮬레이터 소리는 맥 스피커로 나와 앞·뒤로 나뉘어 들리는지는 확인할 수 없습니다. 실차의 오디오 존 구성은 확인하지 않았습니다.
+- **원격 푸시:** 키를 넣지 않아 백그라운드에서 인계 알림이 실제로 도착하는지는 확인하지 않았습니다.
+- **학습 데이터:** 비상업 조건 데이터가 들어 있어 울음 판별층은 공모전 시연용입니다. 상용 배포 전에는 상용 가능한 데이터로 다시 학습합니다.
 
-**어디부터 보면 되나**
-1. 시연 영상([시연 영상](#시연-영상), 준비 중)
-2. 에뮬레이터에서 직접 보기: [실행 방법](#실행-방법). 장면 C2·E는 울음 녹음 없이 돌릴 수 있습니다(C2는 경유지를 넣으므로 먼저 Pleos 내비에서 길안내를 켭니다).
-3. 숫자: [실측·평가·시뮬레이션](#실측평가시뮬레이션). 에뮬레이터 실측, 맥 오프라인 평가, 시뮬레이션을 나눠 적었습니다.
-4. 코드: 판단 규칙은 `engine/`(플랫폼 코드 없는 순수 Kotlin 상태 기계)에, Pleos SDK 연결은 `app/src/main/kotlin/kr/aigyeot/app/exec/android/`에, 울음 감지는 `app/src/main/kotlin/kr/aigyeot/app/detect/`에 있습니다.
+전체 목록은 [tools/measure/README.md](tools/measure/README.md#알려진-한계와-확인하지-못한-것)에 있습니다.
 
 ## 저장소 구성
 
 | 위치 | 내용 |
 | --- | --- |
-| `app/` | 차 앱(Pleos Connect). 울음 감지(`detect`), SDK 실행(`exec`), 감시 서비스(`host`), 휴대폰 연결(`link`), 장면 재생(`scenario`), 기록(`store`), 정차 화면(`ui`) |
+| `app/` | 차 앱. 울음 감지(`detect`), SDK 실행(`exec`), 부팅 때 뜨는 상주 서비스(`host`), 휴대폰 연결(`link`), 장면 재생(`scenario`, debug 빌드의 `app/src/debug/`에만), 기록(`store`), 화면(`ui`), 파일 위치(`common`) |
 | `engine/` | 판단 코어. 세션·달래기·판정·인계 규칙을 담은 순수 Kotlin 상태 기계이고, JVM 시험으로 검증합니다 |
-| `shared/` | 차·휴대폰·중계가 함께 쓰는 메시지 형식과 JSON 예제(`shared/src/test/resources/protocol/`) |
-| `phone/android/` | 안드로이드 휴대폰 앱(Kotlin, Jetpack Compose) |
-| `phone/ios/` | iOS 휴대폰 앱(SwiftUI). 프로젝트 파일은 `project.yml`(XcodeGen)에서 만듭니다 |
-| `relay/` | 차·휴대폰 중계(Cloudflare Workers + Durable Objects). 로컬은 `wrangler dev` |
-| [tools/demo](tools/demo/) | 에뮬레이터 시연 준비 스크립트(설치·권한·Virtual Console·기준값) |
-| [tools/measure](tools/measure/) | 에뮬레이터 실측 기록(글). 측정 중 찍은 화면 캡처는 저장소에 넣지 않습니다 |
-| [tools/cry-retrain](tools/cry-retrain/) | 울음 판별층 재학습·평가 스크립트와 기기용 판별층 `cry_head24_rt.json`. YAMNet 점수 위에 얹는 로지스틱 판별층입니다 |
-| [tools/pleos-probe](tools/pleos-probe/) | Pleos 공식 에뮬레이터에서 소리·차량 제어·내비·부팅·마이크 동작을 잰 실측 앱 |
-| [tools/sim](tools/sim/) | 아이별 소리 고르기(톰슨 샘플링) 시뮬레이션과 차량 제어 실측 로그 |
-| [tools/sound](tools/sound/) | 뱃속 소리 합성 스크립트 |
-| `tools/check.sh` | 모든 시험을 한 번에 돌립니다 |
-| `apk/` | 제출용 release APK(제출 전에 넣습니다) |
-
-## 실행 방법
-
-명령은 저장소 루트에서 실행합니다. 확인한 환경은 macOS(Apple Silicon)입니다. 시연 스크립트는 bash·curl·python3를 씁니다.
-
-### 1. Pleos Connect 에뮬레이터 준비
-
-[공식 설치 문서](https://document.pleos.ai/en/docs/connect/guide/getting-started/application-development/setup-connect-sdk-emulator#setting-up-the-emulator)대로 AVD를 만듭니다.
-- 기기 프로필 `Pleos Connect v2.1.0`(2560×1440), 시스템 이미지 API 34 `Pleos Connect v2.1.0 APIs`
-- RAM 4GB, 부팅 방식 Cold boot
-
-시연 기록은 한국 시간으로 남기므로 시간대를 지정해 띄웁니다.
-
-```bash
-emulator -avd <AVD 이름> -timezone Asia/Seoul
-```
-
-차량 상태(기어·속도·문·공조)는 [Virtual Console](https://document.pleos.ai/en/docs/connect/guide/getting-started/application-development/use-vehicle-emulator#how-to-run-pleos-connect-virtual-console)로 바꿉니다. `adb forward tcp:8088 tcp:8088` 뒤 브라우저에서 `http://127.0.0.1:8088/`을 엽니다. 세션 신호(`POST /browser/session`)가 3초 안에 계속 들어와야 차량 입력이 반영됩니다. 아래 `prepare.sh`가 이 신호를 1초마다 보냅니다.
-
-### 2. 차 앱 설치(운전자 사용자 user 10)
-
-Pleos 에뮬레이터의 운전자는 user 10입니다. 앱은 user 10에서 실행합니다.
-
-```bash
-adb install -r <APK>          # apk/ 안의 release APK, 또는 소스 빌드 산출물
-adb shell pm grant --user 10 kr.aigyeot.app android.permission.RECORD_AUDIO
-adb shell pm grant --user 10 kr.aigyeot.app android.permission.POST_NOTIFICATIONS
-adb shell pm grant --user 10 kr.aigyeot.app android.car.permission.CAR_SPEED
-adb shell am start --user 10 -n kr.aigyeot.app/.MainActivity
-```
-
-권한은 앱이 띄우는 권한 창에서 허용해도 됩니다. 처음 실행하면 '아기 설정'(동의, 별명, 태어난 달, 카시트 자리, 수유 간격 등)을 마쳐야 홈 화면이 나옵니다.
-
-마이크는 시동 뒤 앱 화면이 없으면 Android가 열어 주지 않습니다. 그래서 출발 전에 정차 화면에서 '아기 탔어요'를 한 번 누릅니다. 기어를 D로 바꿔 주행 제한이 걸리면(Pleos가 속도·기어·브레이크 신호로 판단합니다) 앱은 정차 화면 대신 주행 중 화면(큰 기호·짧은 상태 문구와 상황에 따른 안내('응 / 아니' 등)·움직이지 않는 실내 그림, 단추 없음)을 보입니다. 앱이 주행 중 화면을 선언(`distractionOptimized`)하고, `CarUxRestrictions`가 주행 제한을 알리는 동안에는 이 화면만 그립니다.
-
-### 3. 시연 스크립트와 장면
-
-[tools/demo](tools/demo/)의 스크립트는 기본 기기를 `emulator-5560`으로 잡습니다. 다른 기기면 `SERIAL=emulator-5554`처럼 지정합니다.
-
-```bash
-SERIAL=emulator-5554 tools/demo/prepare.sh [APK]   # 시연 전 한 번. APK를 생략하면 debug 빌드 산출물
-SERIAL=emulator-5554 tools/demo/cry.sh <녹음>...    # debug 빌드만. 장면용 울음 녹음 넣기
-SERIAL=emulator-5554 tools/demo/reset.sh            # 같은 장면을 다시 하기 전
-SERIAL=emulator-5554 tools/demo/stop.sh             # 끝나면
-```
-
-- `prepare.sh`가 하는 일: Pleos 에뮬레이터 확인, 실측 프로브 삭제, APK 설치, user 10 설치 확인, 권한 부여(`RECORD_AUDIO`, `POST_NOTIFICATIONS`, `CAR_SPEED`), Virtual Console forward와 세션 신호, 기준값(기어 P, 정지, 뒷문 닫힘, 공조 켬, 22℃), 차량 설정 '무드 조명' 켜기(밝기 70·흰색), 앱 실행.
-- 에뮬레이터를 켠 직후에는 차량 설정 화면이 늦게 떠서 `prepare.sh`가 차량 설정을 다시 열며 조금 더 걸릴 수 있습니다(약 26초). 그래도 '무드 조명' 단계에서 멈추면 30초쯤 기다렸다 다시 실행합니다.
-- `reset.sh`는 기준값과 조명을 되돌리고 앱을 앞으로 가져옵니다. 앞 회차의 경유지 요청이 내비를 앞으로 띄우면 다음 회차의 '아기 탔어요'에서 마이크를 켤 수 없기 때문입니다.
-- `stop.sh`는 세션 신호와 forward를 멈추고 무드 조명을 끕니다.
-
-장면은 차 앱 홈 → '시연·측정' → '장면 고르기·실행'에서 고릅니다. 장면은 Virtual Console로 기어·속도를 바꾸고, 마이크 자리에 울음 녹음을 섞어 넣습니다. 그 녹음은 실제 감지 경로(YAMNet + 판별층)를 그대로 거칩니다. 장면은 실제 시간으로 흐르고(A는 약 20분), 반복 횟수는 장면 파일 값(A~E·D2는 5회, C2·F14는 1회)이 기본입니다. 한 번만 보려면 '−'로 1에 맞춥니다.
-
-| 장면 | 내용 | 울음 녹음 |
-| --- | --- | --- |
-| A | 등원 20분: 출발 5분 뒤 울음, 1차에 그침 | `stop_40s.pcm` |
-| B | 장보기 40분: 실내 27℃, 쾌적 조정 뒤 그침 | `cont_75s.pcm` |
-| C | 명절: 수유 시간대 울음, 수유실 휴게소 경유 | `stop_50s.pcm` |
-| C2 | 출발: 수유 시간 전에 수유실 휴게소 제안, '응' 뒤 경유지 | 필요 없음 |
-| D | 계속 울음: 두 번 시도 뒤 인계 | `cont_long.pcm` |
-| D2 | 도심: 인계인데 목적지까지 6분 | `cont_long.pcm` |
-| E | 도착: 꺼내 눕히기 안내, 뒷문 열면 리포트 | 필요 없음 |
-| F14-01~20 | 뒷문·기어로 세션을 열고 닫는 규칙 20가지 | 필요 없음 |
-
-장면 C·C2는 '응' 뒤 Pleos 내비 경로에 경유지를 넣습니다. 내비에 길안내가 없으면 경유지가 반영되지 않으므로, 장면을 시작하기 전에 내비에서 먼 목적지(예: 부산역 KTX)로 길안내를 켜 둡니다([feature_ab_1106a.txt](tools/measure/feature_ab_1106a.txt) 1절). 경유지 요청은 내비를 앞으로 띄워 다음 회차에서 마이크를 켤 수 없으므로, 장면 C는 반복을 1로 맞춰 돌리고(C2는 장면 기본이 1) 다시 하기 전에 `reset.sh`로 앱을 앞으로 가져옵니다. 앞 회차의 경유지가 경로에 남아 있으면 내비가 같은 요청에 아무것도 바꾸지 않으므로, 다시 할 때는 내비에서 그 경유지를 지운 뒤 합니다([scenario_C_1105b.txt](tools/measure/scenario_C_1105b.txt) 3절).
-
-울음 녹음(16kHz 모노 16비트 PCM)은 배포 허락을 확인하지 못해 저장소와 APK에 넣지 않았습니다. 그래서 녹음 장면(A·B·C·D·D2)은 지금 debug 빌드에서 `cry.sh`로 녹음을 넣어야 돌아갑니다. 장면 B·C·D·D2는 기어 D로 끝나 정차 화면이 가려지므로, `reset.sh` 뒤에 결과를 봅니다.
-
-### 4. 소스 빌드와 시험
-
-루트 `local.properties`에 `sdk.dir=<Android SDK 경로>`가 있어야 합니다. `./gradlew`는 `JAVA_HOME`(없으면 PATH의 `java`)으로 돕니다. JDK를 따로 깔지 않았으면 Android Studio 내장 JDK를 먼저 지정합니다(macOS: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`).
-
-```bash
-./gradlew :app:assembleDebug        # 차 앱 debug → app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:assembleRelease      # 차 앱 release
-./gradlew :phone:assembleDebug      # 안드로이드 폰 앱 → phone/android/build/outputs/apk/debug/phone-debug.apk
-tools/check.sh                      # 시험 전부: engine·shared·app·phone(JVM), relay(typecheck·vitest), iOS(xcodebuild test)
-IOS_SIM=<시뮬레이터 id> tools/check.sh   # iOS 시험을 돌릴 시뮬레이터 지정
-```
-
-- `tools/check.sh`는 `JAVA_HOME`이 없으면 Android Studio 내장 JDK를 씁니다. iOS 시험은 `xcodebuild`가 있을 때만 돌리고, 시뮬레이터를 지정하지 않으면 켜진 iPhone, 그다음 가장 새 런타임의 iPhone을 고릅니다.
-- release 서명: `local.properties`에 `aigyeot.release.storeFile`·`storePassword`·`keyAlias`·`keyPassword` 넷이 모두 있으면 서명하고, 없으면 서명 없는 release를 만듭니다. 키는 저장소에 두지 않습니다. 비밀번호가 공백으로 시작하면 `Properties` 형식이 `=` 뒤 공백을 지우므로 첫 공백을 `\ `로 적습니다.
-
-### 5. 휴대폰 앱과 중계
-
-차·휴대폰을 한 맥에서 함께 돌릴 때는 로컬 중계를 씁니다. 에뮬레이터는 맥을 `10.0.2.2`로 봅니다.
-
-| 실행하는 것 | 중계 주소(debug) |
-| --- | --- |
-| 차 앱(Pleos 에뮬레이터) | `http://10.0.2.2:8787` |
-| 안드로이드 폰 앱(일반 안드로이드 에뮬레이터) | `http://10.0.2.2:8787` |
-| iOS 폰 앱(iPhone 시뮬레이터) | `http://localhost:8787` |
-
-**중계**
-
-```bash
-cd relay
-npm ci
-cp -n dev.vars.example .dev.vars  # 키가 있을 때만(-n: 이미 있으면 덮지 않음). 복사한 뒤 EXAMPLE 값을 진짜 값으로 바꿉니다. 건너뛰면 ④ LLM 답과 원격 푸시만 꺼집니다
-npm run dev                       # wrangler dev --port 8787
-curl http://127.0.0.1:8787/v1/health   # {"ok":true,…,"llm":…,"push":…}
-```
-
-`.dev.vars`에는 `ANTHROPIC_API_KEY`(④ 상황판 LLM)와 `FCM_PROJECT_ID`·`FCM_CLIENT_EMAIL`·`FCM_PRIVATE_KEY`(원격 푸시)를 넣습니다. 예시 값을 그대로 두면 가짜 키로 요청해, `/v1/health`는 `true`를 보이지만 실제 호출은 실패합니다. 이 파일은 저장소에 넣지 않습니다. 키가 없거나 중계에 닿지 못하면 ④는 정해 둔 문장으로 답합니다.
-
-**안드로이드 폰 앱:** `./gradlew :phone:assembleDebug` 뒤 일반 안드로이드 에뮬레이터에 `adb -s <폰 에뮬레이터> install -r phone/android/build/outputs/apk/debug/phone-debug.apk`로 설치합니다. 원격 푸시를 쓰려면 Firebase 설정 파일 `phone/android/google-services.json`을 직접 만들어 둡니다. 없으면 Firebase 플러그인을 걸지 않고 빌드합니다.
-
-**iOS 폰 앱:** `phone/ios/Aigyeot.xcodeproj`를 Xcode로 열어 `Aigyeot` 스킴을 iPhone 시뮬레이터에서 실행합니다. Firebase는 Swift Package Manager가 받습니다. `project.yml`을 바꿨다면 `cd phone/ios && xcodegen generate`로 프로젝트 파일을 다시 만듭니다. `GoogleService-Info.plist`가 앱에 없으면 원격 푸시만 켜지지 않습니다.
-
-**연결:** 차 앱 홈 → '휴대폰 연결'에 QR과 짧은 코드가 나옵니다. 카메라가 없는 에뮬레이터·시뮬레이터에서는 휴대폰 앱에 코드를 넣습니다.
-
-release 빌드(차 앱, 안드로이드·iOS 휴대폰 앱)는 배포한 중계 `https://aigyeot-relay.byuncorry.workers.dev`에 붙습니다. 그래서 로컬 중계를 띄우지 않아도 release끼리 휴대폰 연결과 ④ LLM 답이 동작합니다. 배포한 중계에는 원격 푸시 키를 넣지 않았습니다(`/v1/health`의 `push`가 `false`).
-
-실기기 휴대폰을 배포한 중계에 붙이려면 안드로이드는 `./gradlew :phone:assembleDebug -Paigyeot.relayUrl.debug=https://aigyeot-relay.byuncorry.workers.dev`로 debug를 만들고, iOS는 `Release` 구성으로 빌드합니다(기기 설치에는 Xcode에서 자기 개발 팀을 골라 서명합니다).
-
-## 테스트 환경
-
-빌드 파일과 개발 맥에서 읽은 값입니다.
-
-| 구분 | 항목 | 값 | 확인한 곳 |
-| --- | --- | --- | --- |
-| 에뮬레이터 | Pleos Connect Emulator | v2.1.0, Android 14(API 34) arm64 이미지 `Pleos/crp_avd_arm64:14/RELEASE.release_connect_v2.1.0`, 기기 프로필 `Pleos Connect v2.1.0`(2560×1440), RAM 4GB, Cold boot | [emulator_1110.txt](tools/measure/emulator_1110.txt), 공식 설치 문서 |
-| 차 앱 | Pleos SDK(`ai.pleos.playground`) | Vehicle 2.3.2, NaviHelper 3.0.5, SpeechToText 3.3.1, TextToSpeech 3.3.1 | `gradle/libs.versions.toml` |
-| 차 앱 | MediaPipe tasks-audio(YAMNet) | 0.10.32 | `gradle/libs.versions.toml` |
-| 차 앱·안드로이드 폰 앱 | Filament(3D) | 1.77.3 | `gradle/libs.versions.toml` |
-| 차 앱 | compileSdk / targetSdk / minSdk | 37 / 34 / 28 | `app/build.gradle.kts` |
-| 차 앱 | 넣는 ABI | arm64-v8a, x86_64 | `app/build.gradle.kts` |
-| 안드로이드 폰 앱 | compileSdk / targetSdk / minSdk | 37 / 36 / 26 | `phone/android/build.gradle.kts` |
-| 안드로이드 폰 앱 | Firebase BoM | 35.1.0 | `gradle/libs.versions.toml` |
-| 안드로이드 공통 | Gradle / AGP | 9.6.0 / 9.4.1 | `gradle/wrapper/gradle-wrapper.properties`, `gradle/libs.versions.toml` |
-| 안드로이드 공통 | Kotlin / KSP | 2.4.21 / 2.3.12 | `gradle/libs.versions.toml` |
-| 안드로이드 공통 | Compose BOM / Room / OkHttp | 2026.09.00 / 2.8.5 / 5.5.1 | `gradle/libs.versions.toml` |
-| 안드로이드 공통 | JDK | Gradle 실행은 Android Studio 내장 JDK(OpenJDK 25.0.3), 컴파일 대상은 Java 17 | `tools/check.sh`, 각 `build.gradle.kts` |
-| iOS 폰 앱 | Xcode | 27.2(설치된 시뮬레이터 런타임 iOS 27.0·27.1) | 개발 맥 |
-| iOS 폰 앱 | 최소 iOS / Swift 언어 모드 | 17.0 / 5.0 | `phone/ios/project.yml` |
-| iOS 폰 앱 | XcodeGen / Firebase iOS SDK | 2.45.3 / 12.19.2 | 개발 맥, `phone/ios/project.yml` |
-| 중계 | wrangler / TypeScript / Vitest | 4.156.0 / 7.0.2 / 5.0.5 | `relay/package.json` |
-| 중계 | Node.js | v25.4.0(wrangler 4.156.0은 22 이상 요구) | 개발 맥 |
-| 중계 | Workers compatibility_date | 2026-10-20 | `relay/wrangler.jsonc` |
-| 개발 맥 | macOS | 27.0.1, Apple Silicon(arm64) | 개발 맥 |
-
-## 쓰는 Pleos SDK와 권한
-
-Pleos Playground의 [SDK 사용 신청](https://document.pleos.ai/docs/pleos-only/create-my-project#sdk-%EC%82%AC%EC%9A%A9-%EC%8B%A0%EC%B2%AD) 화면에서 Vehicle Control, TextToSpeech, SpeechToText는 아직 '준비 중'(신청 버튼 없음)입니다. 신청 없이 쓸 수 있는 것은 Vehicle State와 NaviHelper뿐입니다. 공모전 심사는 공식 에뮬레이터에서 매니페스트 권한 선언만으로 동작합니다. 실차 배포는 신청이 열린 뒤에 할 수 있습니다.
-
-| SDK | 아이곁에서 쓰는 곳 | 매니페스트 권한 | Playground 사용 신청 상태 |
-| --- | --- | --- | --- |
-| Vehicle 2.3.2(읽기) | 뒷문 열림·닫힘(세션 시작·끝), 시트 열선·공조 온도·창 잠금·조명 상태 읽기, 조향각·브레이크·방향지시등(리포트의 조향 보정, 울음 직전 주행 맥락, 차선 변경 중 말 미루기) | `pleos.car.permission.CAR_DOORS`, `CAR_SEATS`, `CAR_CLIMATE`, `CAR_WINDOWS`, `CAR_LIGHTS`, `CAR_DRIVE` | Vehicle State: 사용 가능 |
-| Vehicle 2.3.2(제어) | 아기 자리 시트 열선 끄기, 형제가 있으면 뒷창 잠금·풀기, 실내가 더우면 앞 공조 2℃ 낮춤, 정차 중 뒷좌석 독서등 끄기, 무드 조명 낮추기·되돌리기 | `CONTROL_CAR_SEATS`, `CONTROL_CAR_WINDOWS`, `CONTROL_CAR_CLIMATE`, `CONTROL_CAR_LIGHTS`(독서등). 무드 조명 밝기·색 쓰기는 읽기와 같은 `CAR_LIGHTS` | Vehicle Control: 준비 중 |
-| NaviHelper 3.0.5 | 안내 중 여부, 남은 시간·거리, 경로 위 휴게소·졸음쉼터(TBT), 경유지 넣기 | `NAVI_ROUTE`, `NAVI_ROUTE_SEARCH` | 사용 가능 |
-| TextToSpeech 3.3.1 | 운전자에게 하는 한 문장 안내 | `TTS_SERVICE` | 준비 중 |
-| SpeechToText 3.3.1 | 쉼터 질문의 '응/아니', ④ 상황판 질문, 멈춤 말('그만' 등) | `STT_SERVICE` | 준비 중 |
-| AAOS 표준 `CarPropertyManager`(Pleos SDK 아님) | 기어(`GEAR_SELECTION`), 속도(`PERF_VEHICLE_SPEED`), 시동·전원 정책 | `android.car.permission.CAR_POWERTRAIN`, `CAR_SPEED`(런타임 권한), `READ_CAR_POWER_POLICY` | 해당 없음 |
-
-그 밖의 Android 권한: `RECORD_AUDIO`·`FOREGROUND_SERVICE_MICROPHONE`(울음 감지 마이크 서비스), `FOREGROUND_SERVICE`(포그라운드 서비스 공통), `FOREGROUND_SERVICE_SPECIAL_USE`·`RECEIVE_BOOT_COMPLETED`(부팅 때 뜨는 감시 서비스), `POST_NOTIFICATIONS`, `INTERNET`, `ACCESS_NETWORK_STATE`. 뒷좌석 전용 재생은 SDK가 아니라 Android `AudioTrack`의 출력 장치 지정으로 합니다.
-
-## 실측·평가·시뮬레이션
-
-세 종류를 섞지 않고 따로 적었습니다. 숫자는 표의 기록 파일에서 그대로 옮겼습니다.
-
-### 에뮬레이터 실측
-
-Pleos 공식 에뮬레이터에서 잰 값입니다. 장면은 마이크 자리에 울음 녹음을 섞은 것이라 실제 마이크로 들은 값이 아닙니다. 성능은 debug 빌드로 쟀습니다. 11-10에 3D 화면이 들어갔으므로 성능은 3D가 들어간 최신 측정(11-12)을 먼저 적고 그 전 측정(11-08)을 함께 둡니다. 두 측정은 AVD(11-08 `PleosProbe`, 11-12 `PleosConnect`)·장면 구성·표본 간격이 달라, 둘의 차이를 3D 화면 영향으로 따로 판정하지 않습니다.
-
-| 항목 | 결과 | 조건·기록 |
-| --- | --- | --- |
-| 경보 지연(울음 입력 → 첫 달래기 재생 명령) | 유효 6회 중앙값 2,464ms, 최대 3,515ms. 11-12 재측정은 유효 4회 중앙값 약 2,488ms, 최대 3,166ms([demo_check_1112.txt](tools/measure/demo_check_1112.txt) 5절). 앱이 재생 시작을 기록하기까지는 아래 '경보 → 재생 시작'만큼 더 걸립니다(스피커에서 소리가 나는 시점은 재지 않았습니다) | 11-08은 장면 A·B·C(기록의 B1~B3·C2는 회차 이름입니다. C2는 장면 C의 두 번째 측정이고 장면 C2가 아닙니다), 11-12는 장면 C·B·D·A 각 1회. [perf_1108.txt](tools/measure/perf_1108.txt) |
-| 경보 → 재생 시작(재생 명령 → 앱의 재생 시작 기록 `PlaybackStarted`. 실제 소리가 나는 시점은 미판정) | 31~169ms(11-08), 81~332ms(11-12) | 같은 회차. [perf_1108.txt](tools/measure/perf_1108.txt), [demo_check_1112.txt](tools/measure/demo_check_1112.txt) 5절 |
-| CPU(3D 포함, 11-12) | 한 코어 100% 기준 구간 평균 1.63~4.03%(정차 홈 대기 1.63%, 장면 B·D·A 전체 2.53~3.13%, 가장 높은 구간은 장면 B 울음 뒤 4.03%). 95% 값은 장면 구간 8.0%, 정차 홈 대기 4.0% | 2초마다 `top`. [demo_check_1112.txt](tools/measure/demo_check_1112.txt) 7절 |
-| 메모리(PSS, 3D 포함, 11-12) | 최대 252MB(정차 홈 대기 219~227MB) | 20초마다 `dumpsys meminfo`. [demo_check_1112.txt](tools/measure/demo_check_1112.txt) 7절 |
-| CPU(3D 전, 11-08) | 한 코어 100% 기준 평균 2.56%(전체 4코어 대비 약 0.64%). 한 코어 기준 순간 최대 7.9%는 장면 시작 직후 한 번 | 장면 B 76표본. [perf_1108.txt](tools/measure/perf_1108.txt). 조명 낮춤 회차는 평균 2.79%·최대 4.7%([featD_1110.txt](tools/measure/featD_1110.txt)) |
-| 메모리(PSS, 3D 전, 11-08) | 최대 144,225KB(약 141MB) | 장면 B·C. [perf_1108.txt](tools/measure/perf_1108.txt) |
-| 스레드 | 45~56개, 장면을 거듭해도 늘지 않음 | [perf_1108.txt](tools/measure/perf_1108.txt) |
-| 뒷좌석 전용 재생 | 지정하면 `bus100_audio_zone_1`(뒷좌석 존), 지정하지 않으면 `bus0_media_out` | `AudioTrack` 출력 장치 지정. [rear_audio_1102.txt](tools/pleos-probe/rear_audio_1102.txt) |
-| 주행 중 차량 제어 반영 | 24/24 | 기어 D·60km/h. 뒷좌석 열선(`ROW_2_LEFT`, 레벨 2↔0), 뒷창 잠금(`ROW_2_LEFT`, 잠금↔해제), 앞 공조 온도(`ROW_1_LEFT`), 앰비언트(전체 영역) 각 6/6. [babycare_Drive.txt](tools/sim/babycare_Drive.txt) |
-| 뒷좌석 독서등 | 주행 중 0/6, 정차(P) 6/6 | 주행 중에는 시스템이 명령을 거절합니다(오류 50001). [babycare_Drive.txt](tools/sim/babycare_Drive.txt), [babycare_Park.txt](tools/sim/babycare_Park.txt) |
-| 시동 뒤 화면 없이 마이크 열기 | 다섯 경로 모두 막힘 | 그래서 출발 전 정차 중에 한 번 눌러 켭니다. [mictest_1102.txt](tools/pleos-probe/mictest_1102.txt) |
-| 기기 계산 = 맥 계산 | 6개 PCM, 구간 54개, 울음 확률 최대 절대차 0.00(소수 둘째 자리), 경보 6/6 일치 | [device_match_1102.txt](tools/pleos-probe/device_match_1102.txt) |
-| MediaPipe 0.10.14 → 0.10.32 | PCM 3개, 구간 113개, 최대 차 0.00, 경보 일치. x86_64 라이브러리가 APK에 처음 들어감 | [mediapipe_1108.txt](tools/measure/mediapipe_1108.txt) |
-| 앱이 넣은 경유지 | 실제 내비 안내 중 장면 C가 안성휴게소를 넣자, 내비 TBT에 '경유'(`TURN_WAY`) 항목으로 들어옴 | [emulator_1110.txt](tools/measure/emulator_1110.txt) 4절 |
-| 조명 낮춤 | 무드 조명이 켜져 있으면 첫 재생 뒤 한 번 낮춤(밝기 70→20, 색 흰색→`#3050A0`)하고 그침 확인 뒤 되돌림. 꺼져 있으면 건드리지 않음. 운전자가 그 사이 밝기를 바꾸면 밝기는 되돌리지 않음 | [featD_1110.txt](tools/measure/featD_1110.txt) 1~3절 |
-| 기어 읽기(AAOS 표준) | P→D→R→N→D→P 바꿀 때마다 `GEAR_SELECTION` 변경 수신 | [official_audit_1108.txt](tools/measure/official_audit_1108.txt) 1절 |
-
-### 맥 오프라인 평가
-
-맥에서 파이썬으로 돌린 평가입니다(Python 3.11, `mediapipe` 0.10.14). 재현율·오경보 숫자는 **교차검증(학습에 안 쓴 접기로 잼)** 값입니다. 같은 구조의 판별층을 접기마다 새로 학습해, 그 판별층이 학습에 쓰지 않은 접기에서 점수를 냈습니다(`rt_train.py`). 앱에 들어가는 `cry_head24_rt.json`은 같은 데이터 전체로 학습한 것입니다. 그래서 이 판별층에 진짜 학습 밖 시험은 AxonData(독립 울음 18개)와 아래 장면 시험(첫 경보·R1·R3)입니다. 장면 시험은 내보낸 판별층을 그대로 씁니다. 스크립트와 결과 파일은 [tools/cry-retrain](tools/cry-retrain/)에 있습니다.
-
-| 항목 | 결과 | 조건 |
-| --- | --- | --- |
-| 울음 경보 재현율(교차검증) | 378/457(0.83) | 휴대폰으로 녹음한 아기 울음(Donate-a-Cry) 457개, 차 소음 10 dB, 기준 0.7. 이전 판별층은 0.64(같은 기준 0.7) / 0.70(이전 판별층 자신의 기준 0.5) |
-| 오경보(교차검증) | 말소리 0/497, 음악 0/144, 노래(CSD) 7/107, ESC 다른 소리 15/1960 | 같은 조건. 말소리 497개 중 36개는 약 2.9초보다 짧아 판정 구간이 하나뿐이라, '연속 2번' 규칙상 경보를 낼 수 없습니다. 경보가 가능한 말소리는 461개입니다 |
-| (참고, 시험 결과 아님) 학습 데이터 안 값 | 울음 379/457, 말소리 0/497, 음악 0/144, 노래 6/107, ESC 13/1960 | 내보낸 판별층을 같은 데이터에 다시 적용한 값 |
-| 첫 경보 지연(장면 시험) | 중앙값 2.4초, 360장면 중 357장면에서 경보 | `rt_stop.py`. 재생은 울음 시작 6초 뒤에 켜지므로 첫 경보 357개 중 353개가 울음 시작 6초 안, 곧 재생이 켜지기 전에 났습니다. 재생 중 소음에 대한 강건성을 잰 값이 아닙니다 |
-| 달래기 성공·실패 판정(R3) | 359/360 | 56초에 재생을 멈추고 8초 듣고, 재생을 끈 채 30초 더 확인 |
-| 재생을 끄지 않고 t0+30~60초로 판정할 때(R1, 비교용), 노래 장면 | 실제로 그친 72번 중 54번 맞힘, 계속 운 72번은 72번 모두 맞힘 | 18번은 노래를 울음으로 착각해 '아직 운다'로 잘못 봤습니다 |
-
-조건과 한계는 다음과 같습니다.
-- R1·R3의 360번 = 학습에 쓰지 않은 가정 울음 녹음 18개(AxonData) × 울음 대 차 소음 비 2가지(10, 0 dB) × 정답 2가지(그침·계속) × 재생 조건 5가지(없음, 백색소음, 브라운 잡음, 노래 두 크기)입니다. 조건마다 소음을 새로 뽑았습니다.
-- 첫 경보 지연(`rt_stop`)의 360장면은 구성이 다릅니다. 같은 울음 18개 × 소음 비 2가지 × 재생 조건 10가지(없음, 백색소음·브라운 잡음·노래 각 두 크기, 20초 틀고 4초 멈추는 듣기 틈 세 가지)이고, 그침·계속으로 나누지 않고 울음 파일 전체를 씁니다.
-- 장면의 경계가 분명합니다. '그침' 장면은 첫 재생 5~25초 뒤에 울음이 끝나고, '계속' 장면은 첫 재생(t0) 76초 뒤까지 이어집니다. 확인 중에 다시 우는 경우와 판정 시점 근처에서 그치는 경우는 시험하지 않았습니다.
-- 장면 시험(R1·R3·`rt_stop`)의 차 소음은 학습에 쓴 것과 같은 DEMAND TCAR 300초 녹음에서 뽑았습니다. 같은 60초 구간 다섯 개 중 하나를 고르므로 소음은 학습 밖이 아닙니다.
-- R1 시험에 쓴 노래는 판별층이 '울음 아님'으로 배운 노래와 같은 곡입니다.
-- 평가는 `mediapipe` 0.10.14로 돌렸고 앱은 tasks-audio 0.10.32를 씁니다. 두 버전의 기기 확률은 위 에뮬레이터 표대로 같았습니다.
-
-### 시뮬레이션
-
-[tools/sim/bandit_sim.py](tools/sim/bandit_sim.py)의 결과입니다. 아이마다 방법별 '1분 안에 그칠 확률'이 다르다고 **가정**하고, 톰슨 샘플링을 늘 같은 방법·무작위·돌아가며 쓰기와 비교했습니다. 판정 오류는 위 R3 값(1/180, 0/180)을 넣었습니다. **가정한 확률에서 나온 값이고, 실제 아기에서의 효과가 아닙니다.**
-
-| 가정(방법 3개, 아이 20,000명 × 울음 20번) | 마지막 5번에서 그 아이에게 가장 맞는 방법을 고른 비율 |
-| --- | --- |
-| 아이마다 차이 큼(방법별 확률 0.1~0.9 균등) | 톰슨 61.1%, 늘 같은 방법 33.8%, 돌아가며 33.5% |
-| 차이 중간(0.3~0.7) | 톰슨 47.6%, 늘 같은 방법 34.4% |
-| 차이 없음(모두 0.5) | 모두 100%(고를 차이가 없음) |
-
-출처: [bandit_1106_K3.txt](tools/sim/bandit_1106_K3.txt). 방법 4개(부모 노래 포함)와 울음 40번 결과는 같은 폴더의 `_K4`·`_T40` 파일에 있습니다.
-
-## APK
-
-- **위치:** `apk/` 안의 release APK. 제출 전에 넣습니다.
-- **ABI:** arm64-v8a·x86_64만 넣었습니다. Pleos 에뮬레이터(맥 arm64 이미지, Windows·Linux x86_64 이미지)와 실차(arm64)에 맞춘 것이고, 32비트(armeabi-v7a·x86)는 뺐습니다.
-- **크기:** 서명 전 release 빌드 기준 70,815,340바이트(약 67.5MB, 11-09). 서명한 APK를 넣을 때 다시 적습니다.
-- **release에서 다른 점:** 배포한 중계에 붙어 휴대폰 연결과 ④ LLM 답이 동작합니다(원격 푸시는 꺼져 있음). 녹음 장면(A·B·C·D·D2)은 녹음을 넣을 방법이 debug에만 있습니다.
-
-## 시연 영상
-
-준비 중입니다. 영상 링크: (준비 중)
-
-녹화 조건은 다음과 같습니다.
-- 공식 기기 프로필 AVD를 `-timezone Asia/Seoul`로 띄웁니다.
-- `tools/demo/prepare.sh`로 설치·권한·Virtual Console 세션·기준값·무드 조명 켜기를 맞추고, 회차 사이에는 `reset.sh`를 돌립니다.
-- Virtual Console 웹 화면(`http://127.0.0.1:8088/`)을 함께 띄웁니다. 기어·문 상태가 보이고, 조명 낮춤은 에뮬레이터 화면에 그려지지 않아 이 화면에서만 보입니다.
-- 에뮬레이터 마이크에 소리를 넣으려면 맥 기본 입력을 가상 오디오 장치로 바꿔야 합니다(아래 '에뮬레이터 마이크'). 녹화의 울음은 장면 녹음으로 넣습니다.
-
-## 알려진 한계와 확인하지 못한 것
-
-- **실제 효과:** 아기가 실제로 덜 우는지, 운전자가 덜 돌아보는지는 재지 않았습니다. 아기와 사람이 있어야 잴 수 있습니다. 앱의 성적은 '그 소리를 틀었을 때 그친 횟수'이고, 소리 덕분인지는 알 수 없습니다.
-- **듣지 못한 시간의 리포트 표시:** 마이크 입력이 끊긴 동안(다른 앱이 마이크를 무음 처리하거나, 에뮬레이터 마이크에 소리가 들어오지 않을 때)은 판정을 멈추고 울음을 기록하지 않습니다. 주행 중 화면은 이때 '아직 듣지 못하고 있어요'를 보이지만, 주행 리포트는 듣지 못한 시간을 따로 표시하지 않아 주행 내내 듣지 못했어도 '울음 기록 없음'으로 보입니다.
-- **설계값:** 56초·8초·30초·자동 시도 2회는 제품 설계값입니다. 임상 기준이 아닙니다.
-- **감지 수치의 조건:** 휴대폰·가정 녹음에 차 소음을 섞어 맥에서 잰 값입니다. 차 안에서 녹음한 울음, 긴 녹음에서의 시간당 오경보, 형제 소리(웃음은 ESC 40개 중 4개가 경보)는 재지 않았습니다.
-- **에뮬레이터 마이크:** 맥 마이크를 기본 입력으로 둔 채 띄운 에뮬레이터에는 소리가 들어오지 않았습니다(`-allow-host-audio`로 띄워도 입력 rms 0.0, 맥의 마이크 권한은 따로 주지 않음). 맥 기본 입력을 가상 오디오 장치(BlackHole 2ch)로 바꾸고 울음 녹음을 그 장치로 내보내면 에뮬레이터 마이크가 받습니다. 이렇게 장면이 아닌 실제 세션에서 경보·달래기·그침을 거쳐 차·휴대폰 리포트 값이 서로 맞는 것을 확인했습니다([e2e_cry_drive_1111.txt](tools/measure/e2e_cry_drive_1111.txt)). 뒷좌석 재생 소리가 마이크로 되돌아오는지, 쉼터 질문에 목소리로 '응' 하는 경로는 여전히 미판정입니다. 장면은 '응'을 직접 넣습니다.
-- **순정 음성 비서·통화와 함께 쓸 때:** 마이크 무음 처리와 오디오 포커스 겹침은 에뮬레이터에서 만들지 못해 미판정입니다.
-- **실차 오디오 존:** 에뮬레이터의 뒷좌석 존(`bus100_audio_zone_1`) 기준입니다. 존 구성은 차마다 다를 수 있고 실차는 확인하지 않았습니다.
-- **실내 온도:** 에뮬레이터 실내 온도는 19.1℃로 고정입니다. 공조를 낮추는 장면 B는 실내 27℃를 장면이 넣습니다.
-- **x86_64(Windows·Linux) 에뮬레이터:** APK에 x86_64 라이브러리가 들어 있는 것까지만 확인했습니다. 실행은 미판정입니다(맥 Apple Silicon에서 x86_64 이미지를 띄우지 못함).
-- **④ LLM:** 지금 코드의 시스템 지시(p7)로 맥에서 같은 질문 73개를 동시 3번·순차 2번 부른 지연은 중앙값 1,864ms, p90 2,456ms이고, 차가 기다리는 3초를 넘긴 것은 9/363건(2.5%, 그중 7건은 동시 묶음, 원인 미판정)입니다([llm_p7_1111.txt](tools/measure/llm_p7_1111.txt) 1절). 같은 조건에서 앞 지시(p6)는 중앙값 1,999ms, 3초 초과 2/363건(0.6%)이었습니다. 3초를 넘기면 차는 정해 둔 문장으로 답합니다. 배포한 중계로 차 경로를 시험한 세 질문은 2.2~3.0초였습니다([relay_deploy_sonnet_1111.txt](tools/measure/relay_deploy_sonnet_1111.txt)). 배포한 중계에서 3초를 넘기는 비율은 재지 않았습니다(미판정). 목소리로 물은 실제 사례의 단계별 지연은 한 번만 쟀습니다(llm_1110.txt 8절).
-- **원격 푸시:** FCM·APNs 키를 넣지 않아 실제 도착은 미판정입니다.
-- **에뮬레이터 안정성:** 맥 부하가 높을 때 에뮬레이터 CarService가 다시 뜨는 일이 있었습니다. 그때 앱 응답 없음(ANR)이 두 번 기록됐고(차 연결 콜백이 차량 서비스 호출에 막힘), 원인을 고쳤습니다. 고친 뒤 맥 부하가 1분 평균 136~157까지 오른 때 CarService가 7번 다시 뜬 동안 앱은 그대로 살아 있었고 ANR은 0이었습니다(한 번 관찰). 이때 무드 조명 스위치가 꺼짐으로 돌아갑니다. 장면 도중이면 차량 설정 → 라이트 → '무드 조명'에서 '켜기'를 누르고 앱으로 돌아옵니다. `tools/demo/prepare.sh`는 APK를 다시 설치해(`adb install -r`) 앱을 끝내므로 장면 사이에만 씁니다. 기록: [emulator_1110.txt](tools/measure/emulator_1110.txt), [featD_1110.txt](tools/measure/featD_1110.txt).
-- **SDK 신청:** Vehicle Control·TTS·STT 사용 신청이 아직 '준비 중'이라 실차 배포는 신청이 열린 뒤에 할 수 있습니다. 에뮬레이터에서 동작한다고 앱 마켓 심사(상시 청취, 뒷좌석 자동 재생)를 통과한다는 뜻은 아닙니다.
-- **학습 데이터:** 비상업 조건 데이터가 들어 있어 판별층은 공모전 시연용입니다. 상용 배포 전에 상용 가능한 데이터로 다시 학습합니다.
-
-## 출처 고지
-
-- **자장가:** 브람스 「자장가」 Op.49 No.4(퍼블릭 도메인). MIDI: Rabanus Flavus(Peter Gerloff), CC0, Wikimedia Commons. 음색: FluidR3_GM(Frank Wen, MIT). −30 LUFS로 맞춰 렌더링함.
-- **뱃속 소리:** 직접 합성한 소리(`tools/sound/womb.py`). 외부 음원을 쓰지 않았습니다. −30 LUFS로 맞춰 렌더링함.
-- **휴게소·졸음쉼터 정보:** 공공데이터포털 전국휴게소정보표준데이터(한국도로공사, 2026-09-21)·전국졸음쉼터표준데이터(한국도로공사, 2026-03-05). 졸음쉼터 데이터 번호는 15028203입니다.
-- **울음 판별 바탕 모델:** YAMNet(TensorFlow Model Garden, Apache 2.0)과 MediaPipe tasks-audio(Apache 2.0). Apache 2.0 전문은 [app/src/main/assets/licenses/Apache-2.0.txt](app/src/main/assets/licenses/Apache-2.0.txt)에 있습니다.
-- **AudioSet 온톨로지:** YAMNet 모델 파일에 들어 있는 클래스 이름은 AudioSet 온톨로지(CC BY-SA 4.0)에서 왔습니다.
-- **판별층:** YAMNet 점수 위에 얹은 판별층의 학습 데이터와 라이선스는 아래 표에 있습니다.
-- **④ 상황판 LLM:** 중계가 외부 LLM API를 부릅니다(모델은 `relay/wrangler.jsonc`의 `LLM_MODEL`). 상태값과 운전자 질문 글자(아이 별명은 '아기'로 바꿈)만 보내고, 키는 중계에만 둡니다.
-- **서체:** Pretendard Variable 1.3.9(SIL OFL 1.1)를 세 앱에 넣었습니다. 전문은 [app/src/main/assets/licenses/Pretendard-OFL.txt](app/src/main/assets/licenses/Pretendard-OFL.txt)에 있습니다.
-- **아이콘:** Lucide(ISC). 전문은 [app/src/main/assets/licenses/Lucide-ISC.txt](app/src/main/assets/licenses/Lucide-ISC.txt)에 있습니다.
-- **3D 차:** 차 앱과 안드로이드 휴대폰 앱은 Filament 1.77.3(Apache 2.0)으로, iOS 휴대폰 앱은 RealityKit으로 그립니다. 차 모델은 직접 만들었습니다(엠블럼 없음, 외부 모델·텍스처 파일을 쓰지 않음).
-- **오픈소스 고지 화면:** 안드로이드·iOS 휴대폰 앱에는 앱 안에 오픈소스 라이선스 화면이 있습니다. 차 앱에는 고지 화면이 없고, 라이선스 전문(Apache 2.0, Lucide ISC, Pretendard OFL)만 앱 assets에 있습니다.
-
-## 학습 데이터와 라이선스
-
-판별층 학습에 쓴 데이터입니다. 비상업 조건 데이터가 들어 있어 이 판별층은 공모전 시연용입니다. 상용 배포 전에는 상용 가능한 데이터로 다시 학습합니다. 라이선스는 2026-11-02에 각 배포처의 표기를 확인했습니다.
-
-| 데이터 | 쓰임 | 라이선스 |
-| --- | --- | --- |
-| [ESC-50](https://github.com/karolpiczak/ESC-50) | 울음·다른 소리 | CC BY-NC |
-| [Donate-a-Cry corpus](https://github.com/gveres/donateacry-corpus) | 울음 | GitHub 라이선스 항목 없음. 저장소 README에 ODbL 1.0(데이터베이스)·DbCL 1.0(내용)이라고 적혀 있음 |
-| [AxonData Infant Cry Detection Dataset](https://huggingface.co/datasets/AxonData/infant-cry-detection-dataset)(공개 표본) | 처음 듣는 울음 시험 | 메타데이터 표기는 CC BY 4.0. 설명 본문의 이용 조건과 맞는지는 확인하지 못함(그래서 녹음을 배포하지 않음) |
-| [DEMAND](https://zenodo.org/records/1227121)(TCAR) | 차 실내 소음 | Zenodo 메타데이터는 CC BY 4.0, 설명 본문은 CC BY-SA 3.0(표기가 서로 다름) |
-| [CSD: Children's Song Dataset](https://zenodo.org/records/4785016) | 노래(오경보 시험) | CC BY-NC-SA |
-| [MUSDB18 7초 발췌](https://zenodo.org/records/3270814) | 음악(오경보 시험) | Zenodo 기록 표기는 CC BY 4.0(원곡별 권리는 확인하지 못함) |
-| [Zeroth-Korean](https://huggingface.co/datasets/Bingsu/zeroth-korean)(test) | 한국어 말소리 | CC BY 4.0 |
-| [Mini LibriSpeech](https://www.openslr.org/31/)(dev-clean-2) | 영어 말소리 | CC BY 4.0 |
-| macOS `say` 합성 | 한국어 말소리 8개 | 직접 합성(공개 배포 안 함) |
+| `shared/` | 차·휴대폰·중계 서버가 함께 쓰는 메시지 형식과 JSON 예제 |
+| `phone/android/`, `phone/ios/` | 안드로이드(Kotlin, Jetpack Compose)·iOS(SwiftUI) 휴대폰 앱 |
+| `relay/` | 차·휴대폰 중계 서버(Cloudflare Workers + Durable Objects) |
+| `tools/` | 시연 스크립트(`demo`), 실측 기록(`measure`), 울음 판별층 학습·평가(`cry-retrain`), 에뮬레이터 실측 앱(`pleos-probe`), 시뮬레이션(`sim`), 뱃속 소리 합성(`sound`), 전체 시험(`check.sh`) |
+| `apk/` | 제출용 release APK |
+
+## 출처와 라이선스
+
+울음 판별 바탕 모델(YAMNet, MediaPipe — Apache 2.0), 서체(Pretendard — SIL OFL 1.1), 아이콘(Lucide — ISC, 일부 MIT), 주요 오픈소스 라이브러리, 자장가·뱃속 소리, 휴게소·졸음쉼터 공공데이터, 판별층 학습·평가 데이터의 출처와 라이선스는 [NOTICE.md](NOTICE.md)에 있습니다.
