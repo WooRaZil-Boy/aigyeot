@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 17장 C170·C171·U56(11-07 26회차 검토). C166~C168은 호스트 시험(HostTest).
+// 명세서 17장 C170·C171·U56. C166~C168은 호스트 시험(HostTest).
 class C166ToC171Test {
     private fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }
     private fun text(c: SendToPhone) = c.body["text"]!!.jsonPrimitive.content

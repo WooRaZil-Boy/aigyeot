@@ -40,7 +40,7 @@ history 최대 282, restLog 최대 5, lastOffer 최대 2, 말 큐 최대 3
 - 가장 큰 비용은 스냅숏이다. 상태 하나가 약 24KB(대부분 history 285줄)이고 직렬화는 약 36 µs다. 한 번은 싸지만 저장 횟수 해석이 (가)이면 시간당 36,534번(약 875MB 쓰기)이다. VehicleSample 10Hz마다 조향 필터값(steer.filtered·lastSampleAt)이 바뀌기 때문이다. (나)(조향 필터 값만 바뀐 Step 제외)면 시간당 약 540번, (다)(Save* 명령이 나온 Step만)면 시간당 14번이다. 호스트 구현은 (가)를 피해야 한다(계약 2.4 문구를 '조향 필터 값 제외'로 못 박거나 디바운스).
 - 목록 증가: history는 maybeOpen에서만 28일 밖을 자른다(Engine.kt 233). 세션 안에서는 한 에피소드당 한 줄씩 느는 것이 전부다. restLog는 상한이 없다(아래 코드 읽기).
 
-== 자원 해제·무한 증가 점검(코드 읽기, 감지 갈래) ==
+== 자원 해제·무한 증가 점검(코드 읽기, 감지 부분) ==
 - 스레드: DetectorRunner.stop()이 stopped 표시, detector.shutdown(), source.cancel(), 읽기 스레드 interrupt를 한다. 읽기 스레드는 finally에서 source.close와 onClose(MediaPipe classifier.close)를 부른다(DetectorRunner.kt run). 감시 스레드는 daemon이고 stopped 또는 읽기 스레드 종료를 보면 최대 0.5초 안에 끝난다. 서비스 종료(MicService.onDestroy)는 이 stop()을 부른다. 문제 없음.
 - AudioRecord: MicPcmSource.close가 unregisterAudioRecordingCallback, stop, release를 한다. 다만 start()에서 AudioRecord 생성 뒤 STATE_INITIALIZED 검사가 실패하면 rec에 넣기 전에 던져(PcmSource.kt:93-95) release되지 않는다. close()는 rec만 놓기 때문이다. 드물고(마이크 초기화 실패, 서비스는 MIC_ERROR로 끝난다) 한 번만 새지만, 최소 수정은 check 실패 전에 r.release()를 부르는 것이다.
 - MediaPipe AudioClassifier: 읽기 스레드 종료 때 onClose로 닫힌다. MicService.onStartCommand가 source 또는 scorer 생성에 실패하면 둘 다 닫는다. 문제 없음.

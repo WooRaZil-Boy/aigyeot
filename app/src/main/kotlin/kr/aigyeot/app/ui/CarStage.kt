@@ -84,7 +84,7 @@ internal fun chipXs(anchorXs: List<Float?>, w: Float, sp0: Float = 280f, margin0
 }
 
 /**
- * 첫 3D 장 전에 홈 무대에 둘 정지 그림(11-11 사용자 결정): 시작 연출 첫 장인 바깥 모습(HERO)을 홈 무대 크기(998×1097px, CarView '첫 화면' 로그)에서 찍은
+ * 첫 3D 장 전에 홈 무대에 둘 정지 그림(11-11 결정): 시작 연출 첫 장인 바깥 모습(HERO)을 홈 무대 크기(998×1097px, CarView '첫 화면' 로그)에서 찍은
  * 투명 PNG(debug Car3dSpikeActivity `--es capture --ez noseat true`, 기본 빛, 칩 없음). 지금 상태를 담지 않게 카시트를 빼고 듣는 빛 없이 찍었다:
  * 바깥 모습에서도 옆 유리로 카시트가, 앞 유리로 듣는 빛이 보여 그대로면 다른 자리·빛을 안내하게 된다(car3d_cabin_1111.txt 13절 화소 대조).
  * 3D로 바뀌면 지금 자리의 카시트와 빛이 나타난다.

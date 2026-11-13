@@ -97,7 +97,7 @@ class Pair(
                 }
                 Reread.FAILED -> {
                     // 옛 연결을 끊지 못한 채 덮어쓰지 않는다(중계에 옛 기기가 남는다). 거듭 실패하면(보안 저장소 고장) 그 정보를 지우고
-                    // 새로 연결할지 묻는다: 앱 데이터를 지우지 않고도(돌봄 기록을 잃지 않고) 다시 연결할 길(11-07 사용자 결정).
+                    // 새로 연결할지 묻는다: 앱 데이터를 지우지 않고도(돌봄 기록을 잃지 않고) 다시 연결할 길(11-07 결정).
                     rereadFailures++
                     _run.value = PairRun.Failed(code, "지금 연결 정보를 읽지 못했어요. 앱을 다시 켠 뒤 해 주세요.", resetOffer = rereadFailures >= REREAD_LIMIT)
                     return@launch

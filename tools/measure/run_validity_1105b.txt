@@ -1,7 +1,7 @@
 # 회차 유효성과 맥 부하 — 2026-11-05(1105b) 재측정 묶음
 규칙(이번 묶음): 맥 부하가 높아도 잰다. 값 옆에 '부하 중(최대 n)'을 붙인다. 회차를 무효로 치는 것은 그 회차 중 CarService·system_server·앱이 다시 시작됐거나
       에뮬레이터가 꺼졌을 때뿐이고, 무효면 한 번 다시 돈다.
-맥 부하: 30초마다 1분 평균(sysctl vm.loadavg). 10:01~12:5x 표본 330여 개, 최소 4.41, 최대 190.94(12:02:42). 맥에서 다른 작업(파이썬 여러 개, 다른 세션의 Xcode·Gradle 빌드, iOS 시뮬레이터)이 함께 돌았다.
+맥 부하: 30초마다 1분 평균(sysctl vm.loadavg). 10:01~12:5x 표본 330여 개, 최소 4.41, 최대 190.94(12:02:42). 맥에서 다른 작업(파이썬 여러 개, 다른 작업의 Xcode·Gradle 빌드, iOS 시뮬레이터)이 함께 돌았다.
 확인 방법: 회차 시작에 `ps -A -o PID,STIME,NAME`(system_server·com.android.car·kr.aigyeot.app), 끝에 다시. logcat ActivityManager 'has died'·'Start proc', carwatchdogd 줄.
 adb 대상: 10:53부터 사용자 실기기(USB)가 함께 붙어 있었다. 그때부터 모든 adb에 차 `emulator-5554`(PleosProbe), 폰 `emulator-5556`(AigyeotPhone)을 지정했다.
       10:53에 지정 없이 보낸 읽기 명령 몇 개가 'more than one device'로 실패했고 실기기에는 아무 명령도 가지 않았다. 다시 돌 회차는 없다.

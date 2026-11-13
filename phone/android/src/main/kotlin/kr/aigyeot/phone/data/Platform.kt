@@ -73,7 +73,7 @@ class PrefsLinkMarks(context: Context) : LinkMarks {
 }
 
 class FcmPushTokens(private val context: Context, private val log: Logger) : PushTokens {
-    /** Firebase 설정 파일이 없으면(공개 저장소 빌드) null. */
+    /** Firebase 설정 파일이 없으면 null. */
     @Suppress("DEPRECATION") // Firebase Messaging 26의 register() 대신 계약 5.4의 token을 쓴다
     override suspend fun token(): String? {
         if (FirebaseApp.getApps(context).isEmpty()) return null

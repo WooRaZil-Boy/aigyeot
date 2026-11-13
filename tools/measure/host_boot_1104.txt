@@ -1,4 +1,4 @@
-# 재부팅 뒤 감시 서비스·복원 실측(11-04, ui-store-host). AVD PleosProbe(adb reboot), user 10, 디버그 APK
+# 재부팅 뒤 감시 서비스·복원 실측(11-04, 호스트). AVD PleosProbe(adb reboot), user 10, 디버그 APK
 # 재부팅 전: 프로필 저장, '아기 탔어요'로 마이크 서비스 켜짐(예약), 정차
 
 ## 부팅 수신기 → 감시 서비스

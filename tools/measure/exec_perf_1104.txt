@@ -1,4 +1,4 @@
-아이곁 exec 갈래 성능 (2026-11-04) — 정적 자원 점검 + JVM 처리 시간(참고값)
+아이곁 exec 성능 (2026-11-04) — 정적 자원 점검 + JVM 처리 시간(참고값)
 
 목적: exec(app/src/main/kotlin/kr/aigyeot/app/exec/*.kt)가 만드는 스레드·리스너·오디오 자원·반복 작업을 코드로 하나씩 짝지어(만드는 곳 ↔ 놓는 곳) 새는 것과 평소에 도는 것이 없는지 본다. 무거운 순수 계산 부분의 처리 시간을 이 맥 JVM에서 재어 실시간 비율로 적는다.
 기준: Pleos 성능 예산(주행 중 CPU 5% 미만·RAM 400MB 이하)과 경보 지연 3초 이하(명세서 15장), 스레드·리스너·서비스·AudioRecord·파일 핸들 해제, 불필요한 반복·폴링·백그라운드 작업이 없는지, 오디오 스레드·리스너·AudioTrack 해제와 폴링 대신 콜백.
@@ -16,7 +16,7 @@
   - 2장의 realtime_ratio = 처리 시간 ÷ 그 오디오의 길이. 한 코어 대비 % = ratio × 100. 계속 도는 일(백색소음 생성)은 이 %가 곧 CPU 점유 추정이고, 한 번만 하는 일(3분 노래 측정)은 '3분 노래 한 곡을 처리하는 데 걸린 시간'이 의미 있는 값이고 %는 참고만 한다.
 
 한계:
-  - 에뮬레이터를 재지 않았다(사용자 결정: 호스트 연결이 합쳐진 뒤 잰다. 에뮬레이터는 다른 세션이 쓰는 중). 그래서 앱 CPU 5% 미만·RAM 400MB 이하(명세서 15장)와 경보 지연 3초 이하는 모두 미판정이다. 이유: 실제 AudioTrack·MediaPlayer·Pleos SDK 호출 비용, 스레드 수, 메모리 사용은 에뮬레이터에서만 볼 수 있다.
+  - 에뮬레이터를 재지 않았다(결정: 호스트 연결이 합쳐진 뒤 잰다. 에뮬레이터는 다른 작업이 쓰는 중). 그래서 앱 CPU 5% 미만·RAM 400MB 이하(명세서 15장)와 경보 지연 3초 이하는 모두 미판정이다. 이유: 실제 AudioTrack·MediaPlayer·Pleos SDK 호출 비용, 스레드 수, 메모리 사용은 에뮬레이터에서만 볼 수 있다.
   - 2장 숫자는 맥(M4 Pro)의 JVM(HotSpot JIT)이다. 차 SoC·ART와 다르므로 차에서의 값이 아니고 참고값이다. 차에서는 더 느리다고만 알 뿐 몇 배인지 모른다(환산하지 않았다).
   - Sampler·RouteFeed·keepTail은 호출당 몇 ns로, JIT이 시험의 가짜 시계·가짜 post와 함께 인라인해 줄인 값일 수 있다. '순수 로직 비용이 무시할 만하다'는 뜻 이상으로 읽지 않는다. 실제 비용은 SDK 콜백·잠금·Handler 전달이 지배하며 이는 재지 못했다.
   - 정적 점검은 SDK 내부 동작(예: AudioTrack·MediaPlayer·TextToSpeech·NaviHelper의 release가 라우팅·이벤트 리스너를 스스로 정리하는지)을 이 환경에서 확인하지 못했다. 그 칸은 '명시 제거 없음(SDK 의존, 미확인)'으로 적었다.
@@ -46,10 +46,10 @@ MediaCodec 인코더             S:153                S:216 stop→release (fina
 MediaMuxer                    S:156                S:209 release (finally)                  -           ○        mux.stop(S:207)이 던져도 release
 .tmp 파일                     S:150                성공은 renameTo(S:212), 실패는 S:217 delete  -   ○        makeCopy의 catch(S:44)도 output.delete
 MicService.pcmTap (감지 PCM)  A:337 설정           A:338 close. V:52(cancel)·V:71(새 듣기)·V:77(finish)·V:90(예외)·V:96(창 끝)  ○ (Exec.stop→voice.cancel)  ○  tap은 듣기 창이 끝나면(V:96) STT 최종 결과를 기다리는 동안에도 이미 닫는다. close는 자기 것일 때만 null(A:338)
-AudioRecord                   -                    -                                        -           -        exec는 직접 열지 않는다(마이크는 MicService, 이 갈래 밖). 해당 없음
+AudioRecord                   -                    -                                        -           -        exec는 직접 열지 않는다(마이크는 MicService, 이 모듈 밖). 해당 없음
 
 1-3. SDK 리스너
-Pleos Vehicle: 리스너 종류 7(Gear, Door ×2 쪽, SeatTemperature ×2 구역, Cabin(HvacTemperature), SteeringWheelAngle, BrakePedalStatus, TurnSignalState)이고 등록은 모두 9번이다(A:422~430). 8종이라는 말은 이 갈래 지시문의 숫자이고 코드로는 7종 9등록이다.
+Pleos Vehicle: 리스너 종류 7(Gear, Door ×2 쪽, SeatTemperature ×2 구역, Cabin(HvacTemperature), SteeringWheelAngle, BrakePedalStatus, TurnSignalState)이고 등록은 모두 9번이다(A:422~430). 8종이라는 말은 처음 적어 둔 숫자이고 코드로는 7종 9등록이다.
 자원                       만드는 곳                          놓는 곳                                  정상(stop)  재구독·끊김   비고
 Vehicle (SDK 객체)         A:406 Vehicle(ctx).initialize      A:457 vehicle.release (runCatching)      ○           -            initialize 실패는 로그만 남기고 계속(A:406) — 실패한 객체로 구독 시도(A:419 vehicle non-null)해도 subscribe가 runCatching(A:420)이라 안 새나 구독은 안 된다
 GearSelectionListener      A:422 register                     A:441 unregister                         ○           ○ unsubscribe가 subscribe 맨 앞(A:418)

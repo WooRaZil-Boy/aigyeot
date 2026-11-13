@@ -42,7 +42,7 @@ import java.io.File
  * 차 쪽 중계 연결(contracts-link 8장)의 겉면. 감시 서비스가 start·stop하고, 호스트가 할 일(SendToPhone·Qa)을 handle로 넘긴다.
  * 일은 책임별 클래스가 한다: [Creds]·[Connection]·[Inbox]·[Outbox]·[SongWorker]·[Pairing]·[QaService].
  * 공유 상태는 [Creds]의 자격과 [LinkStatus] 흐름 둘뿐이고(받기 잠금 [rx]·코루틴 범위는 함께 쓰는 하나), 서로 부르는 것은 생성자 람다로 넘긴다.
- * 공개 모양(생성자·메서드 이름과 인자)은 0단계 그대로다(handoff README 4장). 더한 메서드: [wake], [restoreEvents].
+ * 공개 모양(생성자·메서드 이름과 인자)은 처음 정한 그대로다. 더한 메서드: [wake], [restoreEvents].
  */
 class Link internal constructor(
     private val context: Context,

@@ -5,7 +5,7 @@ import kr.aigyeot.shared.Role
 // 작업 상태(sealed). 화면이 회전·재구성돼도 작업은 앱 수명에서 끝나고, 화면은 이 값만 본다. 불가능한 조합(도는 중인데 오류 등)은 타입으로 막는다.
 
 /**
- * 지금 연결(11-08 조율 결정, 두 앱 같음). 원본은 [kr.aigyeot.phone.domain.repository.PhoneStateRepository]이고 상태 파일과 한 잠금에서 바뀐다.
+ * 지금 연결(11-08 결정, 두 앱 같음). 원본은 [kr.aigyeot.phone.domain.repository.PhoneStateRepository]이고 상태 파일과 한 잠금에서 바뀐다.
  * 자격이 있으면서 GONE인 조합은 없다(강제 끊김은 지운 뒤에 GONE이 된다).
  */
 sealed interface Connection {
@@ -26,7 +26,7 @@ sealed interface PairRun {
 
     data class Running(override val code: String) : PairRun
 
-    /** `resetOffer`: 연결 정보 읽기가 거듭 실패해 지우고 새로 연결할지 묻는다(11-07 사용자 결정). */
+    /** `resetOffer`: 연결 정보 읽기가 거듭 실패해 지우고 새로 연결할지 묻는다(11-07 결정). */
     data class Failed(override val code: String, val error: String, val resetOffer: Boolean = false) : PairRun
 
     /**

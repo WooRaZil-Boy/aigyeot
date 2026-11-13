@@ -47,7 +47,7 @@ struct CareLiveActivity: Widget {
             } compactLeading: {
                 icon(context.attributes).resizable().scaledToFit().frame(width: 18, height: 18).foregroundStyle(tint(context.attributes))
             } compactTrailing: {
-                // 사용자 결정(11-07): 압축 섬은 아이콘만. 좁은 섬(iPhone Care 약 30pt)에서 1시간 넘는 경과가 '1:00…'으로 잘렸다. 경과는 펼친 섬·잠금 화면에 시:분:초로 보인다
+                // 결정(11-07): 압축 섬은 아이콘만. 좁은 섬(iPhone Care 약 30pt)에서 1시간 넘는 경과가 '1:00…'으로 잘렸다. 경과는 펼친 섬·잠금 화면에 시:분:초로 보인다
                 EmptyView()
             } minimal: {
                 icon(context.attributes).resizable().scaledToFit().frame(width: 18, height: 18).foregroundStyle(tint(context.attributes))

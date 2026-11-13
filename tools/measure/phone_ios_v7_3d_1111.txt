@@ -4,7 +4,7 @@ iOS 폰 3D 새 그랜저 모델(v7) 반영 — 옛 모델(v6)과 준비 시간·
 환경
 - Xcode 27.2, iPhoneSimulator 27.2 SDK, 시뮬레이터 iPhone 17 Pro(iOS 27.0, 1206x2622). 단위 시험은 Aigyeot Test 시뮬레이터.
 - 옛 모델: phone/ios/Aigyeot/Resources/aigyeot_car.usdz 8,456,563바이트(시안 v6).
-- 새 모델: 시안 docs/design/1109-unified-v3/assets/car/aigyeot_car.usdz 3,358,265바이트(v7, 11-11). usdchecker --arkit 통과.
+- 새 모델: 시안 v3 assets/car/aigyeot_car.usdz 3,358,265바이트(v7, 11-11). usdchecker --arkit 통과.
 - 렌더러: 옛 = v6 값(도장 #E9EAEC·거칠기 0.3·금속 0.06, 다크 환경광 2^-0.6), 새 = 아래 '옮긴 값'(v7).
 
 방법(phone_ios_v6_3d.txt 6절과 같은 시나리오)
@@ -14,7 +14,7 @@ iOS 폰 3D 새 그랜저 모델(v7) 반영 — 옛 모델(v6)과 준비 시간·
   - 프레임: ARView scene.subscribe(SceneEvents.Update) 초당 횟수.
   - 메모리: task_info(TASK_VM_INFO).phys_footprint, 1초마다(MB).
 - CPU: 맥 호스트 ps %cpu, 0.5초 간격(시뮬레이터 앱은 맥 프로세스라 실기기 값이 아니다. 비교용).
-- 맥 부하를 기다리지 않고 쟀다. 부하(1분 평균)를 같이 적는다. 옛 1·2회차(부하 126·120)는 다른 세션 빌드와 겹쳐 아래 표에서 뺐다.
+- 맥 부하를 기다리지 않고 쟀다. 부하(1분 평균)를 같이 적는다. 옛 1·2회차(부하 126·120)는 다른 작업 빌드와 겹쳐 아래 표에서 뺐다.
 
 결과(공식 예산이 없어 비교만 한다)
 
@@ -50,7 +50,7 @@ iOS 폰 3D 새 그랜저 모델(v7) 반영 — 옛 모델(v6)과 준비 시간·
 - 선루프 가림막 Roofglass_Shade: #0E1013, 거칠기 0.92.
 - 양면: 모든 PhysicallyBasedMaterial faceCulling = .none(iOS 15+), UnlitMaterial은 18+ API라 18 이상에서만.
 - 다크 조명 0.55배: 시안처럼 환경(방·바닥·조명 판)에만 준다 → 기본 환경광 intensityExponent = log2(0.55)(옛 -0.6). 주광은 테마와 무관하게 2600 그대로
-  (시안 DirectionalLight 1.4·안드로이드와 같다. 처음에는 주광까지 0.55배로 낮췄다가 검토 지적으로 고침, 캡처 24-owner-car-dark-keylight.png).
+  (시안 DirectionalLight 1.4·안드로이드와 같다. 처음에는 주광까지 0.55배로 낮췄다가 고침, 캡처 24-owner-car-dark-keylight.png).
 - 근거: Apple PhysicallyBasedMaterial(https://developer.apple.com/documentation/realitykit/physicallybasedmaterial), Specular(…/physicallybasedmaterial/specular-swift.struct), faceCulling(…/physicallybasedmaterial/faceculling-swift.property, "끄면 덜 효율적" — 위 측정에서 프레임 저하 없음).
 
 옮기지 못한 값과 가장 가까운 방법

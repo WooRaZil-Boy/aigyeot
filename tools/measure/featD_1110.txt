@@ -1,6 +1,6 @@
-# 기능 D(달래는 동안 앰비언트 낮추기)·ANR 고침 에뮬레이터 확인 — 2026-11-09 08:10~08:44(파일 이름은 조율 담당이 정한 1110)
+# 기능 D(달래는 동안 앰비언트 낮추기)·ANR 고침 에뮬레이터 확인 — 2026-11-09 08:10~08:44
 환경: AVD PleosConnect(2560×1440 mdpi, Pleos/crp_avd_arm64:14/RELEASE.release_connect_v2.1.0), emulator-5560, 운전자 user 10, 기기 date KST(Asia/Seoul).
-      APK: main 작업 트리 app/build/outputs/apk/debug/app-debug.apk(08:05 빌드, 기능 D 구현 에이전트). 같은 파일을 작업용 폴더에 복사해(SHA-1 앞 16자 73663f0284fc2a62) 그 사본만 설치했다.
+      APK: main 작업 트리 app/build/outputs/apk/debug/app-debug.apk(08:05 빌드). 같은 파일을 작업용 폴더에 복사해(SHA-1 앞 16자 73663f0284fc2a62) 그 사본만 설치했다.
       스크립트: prepare.sh <사본>(08:13), stop.sh(08:43). 녹음 4개 크기 확인(2384640·2384640·1280000·1600000, 다시 넣지 않음). 잠금 파일·다른 기기·프로브는 건드리지 않음.
       앰비언트 값 읽기(프로브 없이): ① 앱의 Pleos SDK 로그 `getProperty_onResult eventPropKey INTERIOR_LIGHTS_AMBIENT_*`(앱이 읽은 값),
         ② GAA 관찰 줄 `[GAA-Vehicle]: [Car-Context-Observe] (INTERIOR_LIGHTS_AMBIENT_BRIGHTNESS) >> [...] | N`(밝기 바뀔 때마다),
@@ -16,7 +16,7 @@
 - 08:11:10 `adb install -r` Success → am start → 앱 pid 23627 살아 있음, 앱 FATAL·ANR 없음.
   DB `pragma user_version` = 3(MIGRATION_2_3), session 7행 그대로, child_profile.last_feeding_start 1794177019664(07:30, 앞 측정 값) 그대로, control_log에 `cmd_id` 칸 있음. 통과.
 - 설치 전후 환경 이상: 07:59:09·08:02:37·08:05:57·08:09:17에 carwatchdog가 com.android.car를 죽임('CarWatchdogService is about to be killed by car watchdog daemon'),
-  08:11에는 ai.umos.vehiclecontrol이 'createCar(context) must not be null'로 계속 죽음 → 08:12:15 `adb reboot`(조율 담당에게 알림).
+  08:11에는 ai.umos.vehiclecontrol이 'createCar(context) must not be null'로 계속 죽음 → 08:12:15 `adb reboot`.
   재부팅 뒤 08:14:30 system_server 와치독('Blocked in handler on foreground thread (android.fg) for 66s')으로 시스템 전체가 한 번 다시 떴다. 그 뒤 08:43까지 CarService 재시작 0번.
   이 두 구간(07:59~08:12:15, 08:14:17~08:14:45)은 측정에 쓰지 않았다.
 
@@ -70,7 +70,7 @@ MP(08:28:23~08:30:04): 08:28:47 낮춤(100 → 20, #FFFFFF → #3050A0). 낮춘 
   → 08:35:38.852 am_proc_died → 08:35:39.881 MonitorService로 새 프로세스 14215 → 08:35:40.594 `stepLog 세션 IDLE`(실제 상태 복원, 장면 세션은 그 시각으로 닫힘).
   RestoreAmbient 없음. 08:36:15에도 밝기 20·#3050a0(screens_featD_1110/home_after_kill_still_dim.png, 배지는 없음). 손으로 VC 70·#ffffff로 되돌림.
   control_log: 그 세션(01M6YR8JV7…)에 dim:20·dim:#3050A0만.
-  계약상 장면 상태는 스냅숏을 남기지 않으므로(2.4 장면 줄) 예상된 동작이지만, 시연(장면) 중 앱이 죽으면 실내 조명이 낮은 채 남는다. 고칠지·기각할지는 조율 담당 판단.
+  계약상 장면 상태는 스냅숏을 남기지 않으므로(2.4 장면 줄) 예상된 동작이지만, 시연(장면) 중 앱이 죽으면 실내 조명이 낮은 채 남는다. 고칠지·기각할지는 미정.
 
 ## 5. ANR — 미판정
 이번 부팅(08:12) 뒤 측정 동안 CarService만 다시 뜨는 일이 저절로 나지 않았다(com.android.car am_proc_died 0). 일부러 만들 방법이 없다(user 빌드).
@@ -107,7 +107,7 @@ MP(08:28:23~08:30:04): 08:28:47 낮춤(100 → 20, #FFFFFF → #3050A0). 낮춘 
 
 ## 장부·시연 스크립트(11-09 2차)
 환경: 같은 AVD(emulator-5560, 08:12 부팅 그대로), user 10. APK: main 트리 app/build/outputs/apk/debug/app-debug.apk 빌드 시각 09:20:11, 작업용 폴더에 복사한 사본(SHA-1 앞 16자 392610887b230b6e)을
-      prepare.sh에 넘겨 설치. 측정 09:26~10:25(사용 한도로 09:42~09:58 사이 멈춤. 그동안 조율 담당이 09:55 prepare.sh·reset.sh·stop.sh를 돌려 앱이 다시 설치됨).
+      prepare.sh에 넘겨 설치. 측정 09:26~10:25(09:42~09:58 사이 측정을 멈춤. 그동안 09:55에 prepare.sh·reset.sh·stop.sh가 돌아 앱이 다시 설치됨).
       값 읽기는 1절과 같다(앱 SDK 로그·GAA 관찰 줄·VC GET·control_log). 스위치는 VC 값으로 판정하지 않고 앱이 읽은 값(`INTERIOR_LIGHTS_AMBIENT_SWITCH`)과 차량 설정 화면으로 판정했다.
       측정용 장면 MP(1절과 같은 파일)를 다시 넣어 쓰고 끝에 지움.
 맥 부하(1분 평균, 구간 최대): prepare·reset 시험 12.9 · kill 1회차 8.7 · kill 2회차 165.2(무효) · kill 3회차 92.8 · 장면 A 1회차 157.3(무효) · 장면 A 2회차 61.4 · stop 뒤 MP 29.6.
@@ -115,12 +115,12 @@ MP(08:28:23~08:30:04): 08:28:47 낮춤(100 → 20, #FFFFFF → #3050A0). 낮춘 
   - 09:31:58~09:32:05: 부하 65→165로 VC 세션 신호가 3초 넘게 끊겨 VC가 'web-deactivated'·'emulation-source-inactive'가 됐고, VC로 넣은 밝기 50이 앱이 쓴 값 20으로 돌아갔다(09:32:05.922 GAA | 20).
     그래서 kill 2회차(낮춘 동안 50으로 바꾸고 kill)는 무효로 하고 3회차로 다시 했다. 참고로 2회차에서도 장부 되돌림 자체는 돌았다(09:32:20 읽기 20 = set → 70·흰색, cmd_id idle-6).
   - 09:37:44 VHAL heartbeat 시간 초과(부하 136~157) → 09:37:54 carwatchdog가 VHAL 종료 → com.android.car가 09:37:54~09:39:39에 7번 죽고 다시 뜸. VHAL이 다시 뜨면서
-    무드 조명 스위치가 꺼짐으로 돌아가(09:40:22.723 앱 읽기 'skip: off') 장면 A 1회차(09:35:07~)는 낮춤 회귀 근거로 쓰지 않는다. 그 회차는 09:55:17 조율 담당의 prepare.sh 재설치로 끊김.
+    무드 조명 스위치가 꺼짐으로 돌아가(09:40:22.723 앱 읽기 'skip: off') 장면 A 1회차(09:35:07~)는 낮춤 회귀 근거로 쓰지 않는다. 그 회차는 09:55:17 prepare.sh 재설치로 끊김.
 
 ### 1. 시연 스크립트 — 통과(실패 경로는 함수 단위로만 확인)
 - prepare.sh 1회차 09:26:53~09:27:13, 종료 코드 0. 출력 끝 '[6/6] 기준값…', '앰비언트: 무드 조명 켜기, 밝기 70·흰색', '완료. 앱을 띄웠다.' 뒤 앞 앱 kr.aigyeot.app/.MainActivity.
   차량 설정 '무드 조명' = 켜기(screens_featD_1110/prepare_after_mood_on.png), VC GET 70·#ffffff.
-- prepare.sh 2회차 09:59:32~09:59:48, 종료 코드 0. 조율 담당의 stop.sh 뒤라 시작 전 '끄기'(before_prepare_2.png) → 끝난 뒤 '켜기'(after_prepare_2.png).
+- prepare.sh 2회차 09:59:32~09:59:48, 종료 코드 0. stop.sh 뒤라 시작 전 '끄기'(before_prepare_2.png) → 끝난 뒤 '켜기'(after_prepare_2.png).
   앱이 읽은 스위치: 10:05:42.438 `getProperty_onResult eventPropKey INTERIOR_LIGHTS_AMBIENT_SWITCH eventAreaId 117 eventValue 1`(켜짐) → 낮춤(3절).
 - reset.sh 09:29:31, 종료 코드 0: VC로 40·#123456을 넣어 둔 뒤 → VC GET 70·#ffffff(GAA 09:29:30.407 | 40 → 09:29:34.445 | 70). 스위치는 켜기 그대로(reset_after_switch_kept.png).
 - stop.sh 10:21:43~10:21:57, 종료 코드 0, '세션 신호 유지와 forward(8088)를 지웠다.' → 차량 설정 '끄기'(after_stop.png).

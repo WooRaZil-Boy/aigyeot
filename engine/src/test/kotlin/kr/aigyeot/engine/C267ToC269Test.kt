@@ -9,7 +9,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 17장 C267~C269(11-07 46회차 검토, 종류째).
+// 명세서 17장 C267~C269.
 class C267ToC269Test {
     private fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }.map { it.body }
     private fun JsonObject.str(k: String) = this[k]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content

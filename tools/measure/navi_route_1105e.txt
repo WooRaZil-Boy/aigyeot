@@ -117,7 +117,7 @@
 | 3·4-3 경유지 추가·끝·재시작 | 18:11:30~18:14:23 | 9.82 | 예 |
 
 ## 7. 준비·정리
-- 잠금 파일을 17:50:17에 잡고 18:15에 지웠다. emulator-5554(다른 세션의 CarePhone)와 사용자 실기기는 건드리지 않았다. PleosProbe를 `-port 5560 -no-snapshot-load -no-boot-anim`으로 콜드 부팅,
+- 잠금 파일을 17:50:17에 잡고 18:15에 지웠다. emulator-5554(다른 작업의 CarePhone)와 실기기는 건드리지 않았다. PleosProbe를 `-port 5560 -no-snapshot-load -no-boot-anim`으로 콜드 부팅,
   모든 adb 명령에 `-s emulator-5560`.
 - VC: `adb -s emulator-5560 forward tcp:8088 tcp:8088`, 1초 세션 신호, 정지·P. 정리 때 세션 신호 끔, `forward --remove tcp:8088`(forward 목록 비어 있음).
 - GPS는 바꾸지 않았다. 마지막 상태는 안내 없음(3회차 끝). `emu kill`로 emulator-5560 끔(18:14:55). 맥 부하 기록·logcat 수집 끔.

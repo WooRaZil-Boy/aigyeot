@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 명세서 17장 C213·C214(11-07 34회차 검토).
+// 명세서 17장 C213·C214.
 class C213ToC214Test {
     private val alerts: Sim.() -> List<SendToPhone> = { all<SendToPhone>().filter { it.type == "handoff_alert" } }
     private fun text(c: SendToPhone) = c.body["text"]!!.jsonPrimitive.content

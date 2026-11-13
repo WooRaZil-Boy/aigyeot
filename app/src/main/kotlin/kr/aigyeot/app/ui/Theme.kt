@@ -84,7 +84,7 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import kotlinx.coroutines.launch
 
-// 디자인 v6(시안 docs/design/1109-unified-v3, 11-09 확정): 회색 바탕 + 흰 판, 브랜드 파랑은 행동(버튼·선택·스위치)에만, 숫자·진행은 먹색.
+// 디자인 v6(시안 v3, 11-09 확정): 회색 바탕 + 흰 판, 브랜드 파랑은 행동(버튼·선택·스위치)에만, 숫자·진행은 먹색.
 // 값은 Tokens(tokens.json 한 출처). 모양은 시안 css/car.css를 옮겼다(1px = 1dp, Connect-S).
 
 /** 색 한 벌(라이트·다크). 이름은 tokens.json 그대로. */
@@ -315,7 +315,7 @@ fun ListRow(
 }
 
 /**
- * 스위치(시안 .sw: 80×48, 손잡이 40, 꺼짐 먹색 22%). 켜짐은 브랜드 파랑 accent(11-11 사용자 결정, '브랜드 색은 행동: 버튼·선택·스위치에만', 두 폰 앱 .psw와 같음).
+ * 스위치(시안 .sw: 80×48, 손잡이 40, 꺼짐 먹색 22%). 켜짐은 브랜드 파랑 accent(11-11 결정, '브랜드 색은 행동: 버튼·선택·스위치에만', 두 폰 앱 .psw와 같음).
  * 시안 car.css의 active(Pleos informative_active 초록)를 바꿨다. 대비: 흰 손잡이 / accent 5.03(라이트·다크 같음, 전 초록은 다크 2.19),
  * accent / surface 라이트 5.03·다크 3.38(그래픽 3:1). 다크도 accent(accentInk #7AA5FF는 흰 손잡이와 대비가 낮다). 터치 영역은 행 전체가 맡는다.
  */

@@ -1,7 +1,7 @@
 # 울음이 있는 실제 주행 — 차 리포트와 폰 리포트 대조(11-10 e2e_v6_1110.txt 4장에서 미판정으로 남긴 것) — 07:34~07:45(파일 이름은 같은 날 기록들과 맞춘 1111)
 환경: 차 = AVD PleosConnect(emulator-5560, -timezone Asia/Seoul, -allow-host-audio), user 10, kr.aigyeot.app debug(main 4763d26에서 :app:assembleDebug).
       폰 = AVD AigyeotPhone(emulator-5558), kr.aigyeot.phone debug(같은 커밋에서 :phone:assembleDebug, 중계 10.0.2.2:8787). 중계 = 맥의 wrangler dev 127.0.0.1:8787(LLM 키 있음, 이번 측정은 ④를 쓰지 않음).
-      소리: 맥 기본 입력을 가상 장치(BlackHole 2ch)로 바꾸고, 울음 녹음(로컬 전용 파일)을 ffmpeg로 그 장치에만 내보냈다. 에뮬레이터 마이크가 그 입력을 받는다. 앱 소리 출력은 바꾸지 않았다(스피커로 울음이 나가지 않음).
+      소리: 맥 기본 입력을 가상 장치(BlackHole 2ch)로 바꾸고, 울음 녹음 파일을 ffmpeg로 그 장치에만 내보냈다. 에뮬레이터 마이크가 그 입력을 받는다. 앱 소리 출력은 바꾸지 않았다(스피커로 울음이 나가지 않음).
       차는 앱 데이터를 지운 뒤 tools/demo/prepare.sh, 아기 설정(동의·별명)만 했다. 폰은 지운 뒤 설치. 연결 코드·초대 코드·토큰은 기록에 남기지 않는다(contracts-link 6.6). 시작 때 맥 부하(1분) 4.9.
 규칙: 확인하지 못한 것은 미판정. 코드는 고치지 않았고 커밋하지 않았다. 캡처는 e2e_cry_drive_1111/ 아래.
 

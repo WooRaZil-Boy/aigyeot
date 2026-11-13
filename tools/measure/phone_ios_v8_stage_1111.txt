@@ -3,7 +3,7 @@ iOS 폰 3D 준비 표시(U90)·첫 안내 등장 안무(v8b-10 ⑤) 확인 — 1
 
 환경
 - Xcode 27.2, iPhoneSimulator 27.2 SDK, 시험 전용 시뮬레이터 'Aigyeot Test'(iOS 27.0). 맥 부하를 기다리지 않고 쟀다.
-- 녹화: xcrun simctl io recordVideo(h264), 장은 ffmpeg로 뽑았다. 녹화·캡처 파일은 tools/measure/screens_v8_ios/(로컬 전용, 커밋하지 않음).
+- 녹화: xcrun simctl io recordVideo(h264), 장은 ffmpeg로 뽑았다. 녹화·캡처 파일은 tools/measure/screens_v8_ios/.
 
 1. 3D 준비 중 주 스레드(임시 로그로 잼, 재고 나서 지움)
 - 방법: CarStage에 os.Logger 줄과 주 스레드 100ms 틱을 잠깐 넣고 UI 시험 DesignTour/test_v8c_3d_준비를 한 번 돌렸다(오늘 탭 차 카드가 처음 3D를 읽음).

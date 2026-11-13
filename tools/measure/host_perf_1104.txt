@@ -1,5 +1,5 @@
-# ui-store-host 성능 실측(11-04). AVD PleosProbe, user 10, 디버그 APK
-# 상태: 정차(P, 0km/h), 감시 서비스 + 마이크 서비스(감지 실행) 켜짐, 앱 화면 앞. exec·link·scenario는 0단계 빈 몸통이라 주행 장면은 미측정
+# 호스트 성능 실측(11-04). AVD PleosProbe, user 10, 디버그 APK
+# 상태: 정차(P, 0km/h), 감시 서비스 + 마이크 서비스(감지 실행) 켜짐, 앱 화면 앞. exec·link·scenario는 아직 빈 몸통이라 주행 장면은 미측정
 # 측정 시각: 2026-11-04 05:38
 
 ## dumpsys cpuinfo(앱 줄)

@@ -4,7 +4,7 @@
 
 ## 1. 뒷좌석 존 재생(계약 4.1, C74)
 - 16:02(수정본 설치) 뒤 재생 59회(백색소음·자장가): getRoutedDevice 59/59 = bus100_audio_zone_1, 포커스 요청 → 경로 확정 18~719ms(1초 넘음 0), routing unknown 0.
-  수정 전(15:39) 1회: 설치 직후 부하에서 MediaPlayer 경로가 1초 안에 안 정해져 ERROR(scenario_C_1104.txt, 보고서 '고친 버그').
+  수정 전(15:39) 1회: 설치 직후 부하에서 MediaPlayer 경로가 1초 안에 안 정해져 ERROR(scenario_C_1104.txt).
 - 경보 → PlaybackStarted: 대부분 21~151ms. 설치 직후 첫 자장가 1,531ms(MediaPlayer prepare 동기 1초 + 생성 0.5초, 수정 전)·394ms(D 1회).
 - 이득: gain_violations 모든 장면 0. 마지막 2초 페이드는 50ms마다 setVolume 줄(선형).
 - 앞 폴백 이득 0.3(D12): **미판정** — 이 에뮬레이터는 bus100_audio_zone_1이 늘 있어 '뒷좌석 출력 없음'·'다른 곳으로 나감'을 만들 수 없었다(JVM 시험만).

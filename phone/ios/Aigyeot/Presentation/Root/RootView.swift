@@ -99,7 +99,7 @@ struct IntroView: View {
         IntroRise(hidden: hidden, dy: 16, blur: 6, go: go, delayMs: plan.map { $0.textDelayMs + 50 * order } ?? 0)
     }
 
-    /// 무대: 차 정지 그림(11-11 사용자 결정, 시안 assets/intro, 테마마다 한 장) + 바닥 전에 사라지는 타원 빛. 꾸밈이라 읽지 않는다.
+    /// 무대: 차 정지 그림(11-11 결정, 시안 assets/intro, 테마마다 한 장) + 바닥 전에 사라지는 타원 빛. 꾸밈이라 읽지 않는다.
     private func stage(height: CGFloat, top: CGFloat) -> some View {
         GeometryReader { g in
             ZStack {
@@ -236,7 +236,7 @@ enum IntroMotion {
 enum IntroLayout {
     static let heroMax: CGFloat = 232, heroMin: CGFloat = 120
     /// 무대와 머리 이름 사이(v8b-10 ②). 무대가 보일 때만 붙지만 계산에는 늘 넣는다: 잰 글 높이에 이 여백이 들어 있으면
-    /// 무대를 보일 때 글이 6 늘어 숨김 조건이 되고, 숨기면 다시 보임 조건이 되어 남는 높이 120~125pt 창에서 배치가 오갔다(검토 2회차).
+    /// 무대를 보일 때 글이 6 늘어 숨김 조건이 되고, 숨기면 다시 보임 조건이 되어 남는 높이 120~125pt 창에서 배치가 오갔다.
     static let stageGap: CGFloat = 6
 
     /// `text`는 무대 여부와 무관한 글 높이(머리 이름 위 ~ '자세히 보기' 아래, 무대 여백 없이). 같은 입력이면 결과가 한 번에 정해진다.

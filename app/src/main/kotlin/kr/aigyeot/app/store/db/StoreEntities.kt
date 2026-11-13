@@ -11,7 +11,7 @@ import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.Unjudged
 
 // 계약 contracts-car.md 6.1의 store 몫 표. 칼럼 이름·타입·PK·인덱스는 표 그대로다(시각 epoch ms Long, 열거 String, 목록 JSON String).
-// 이 파일은 ui-store-host(store)가 고친다. 엔티티 목록·버전은 AppDatabase(조율 담당)에 있다.
+// 엔티티 목록·버전은 AppDatabase에 있다.
 // 주의: 부모 행(session·episode)을 @Insert(REPLACE)로 쓰면 지웠다 넣어 CASCADE로 자식 행이 지워진다. @Upsert나 @Update를 쓴다.
 
 /** 13장 ChildProfile(한 행). */

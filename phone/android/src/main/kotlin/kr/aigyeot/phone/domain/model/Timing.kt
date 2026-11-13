@@ -12,7 +12,7 @@ fun backoffMs(attempts: Int): Long = minOf(60_000L, 1000L shl minOf(attempts, 6)
 fun pairLockUntil(now: Long, retryAfterS: Long?): Long = now + (retryAfterS?.takeIf { it > 0 } ?: 10L) * 1000
 
 /**
- * 연결 429 글(contracts-link 7.2·9장, 11-12 사용자 결정, iOS와 같은 규칙). `remainingMs`는 처음 받은 값이 아니라 잠금 끝 시각에서
+ * 연결 429 글(contracts-link 7.2·9장, 11-12 결정, iOS와 같은 규칙). `remainingMs`는 처음 받은 값이 아니라 잠금 끝 시각에서
  * 그때그때 잰 남은 시간이다: 60초 넘으면 "{n}분 뒤에"(올림), 60초 이하면 "{n}초 뒤에"(올림), 0 이하면 잠금이 풀려 null, 모르면 "잠시 뒤에".
  */
 fun pairWaitText(remainingMs: Long?): String? = when {

@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-// 계약 타입이 JSON으로 썼다 다시 읽어도 같은지만 본다(전이 시험은 갈래 ②).
+// 계약 타입이 JSON으로 썼다 다시 읽어도 같은지만 본다(전이 시험은 따로 있다).
 class ContractTypesTest {
     private val json = Json
 

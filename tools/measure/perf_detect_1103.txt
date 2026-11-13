@@ -1,6 +1,6 @@
 아이곁 감지 성능 (2026-11-03)
 
-목적: 감지 갈래(app/.../detect: AudioRecord 대신 녹음 파일 입력 + 실제 MediaPipe YAMNet + 판별층)가 공식 Pleos 에뮬레이터에서 쓰는 CPU·메모리와 창당 처리 시간을 재서 공식 예산(주행 중 CPU 5% 미만, RAM 400MB 이하, 앱 전체)에 대한 뜻을 본다.
+목적: 감지 부분(app/.../detect: AudioRecord 대신 녹음 파일 입력 + 실제 MediaPipe YAMNet + 판별층)가 공식 Pleos 에뮬레이터에서 쓰는 CPU·메모리와 창당 처리 시간을 재서 공식 예산(주행 중 CPU 5% 미만, RAM 400MB 이하, 앱 전체)에 대한 뜻을 본다.
 방법(저장소 루트, AVD PleosProbe를 -no-snapshot -no-boot-anim -gpu host -no-audio로 띄운 뒤. 프로브 dev.probe.pleos는 깔려 있지 않았다):
   ./gradlew :app:assembleDebug
   adb install --user 10 -r app/build/outputs/apk/debug/app-debug.apk

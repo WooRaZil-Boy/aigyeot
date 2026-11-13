@@ -50,7 +50,7 @@ internal class ExecIo(
  * 차·음성 실행기. 판단 코어의 재생·음성·차 제어·내비 할 일을 실행하고 결과와 차량 신호를 사건으로 돌려준다. 판단은 하지 않는다.
  * [handle]·SDK 콜백·예약이 한 잠금 안에서 차례로 돈다. [handle]은 빨리 돌아온다: StartPlayback의 결과(Started·Rejected)는
  * 돌아오기 전에 post한다(계약 2.4 '재생 시작 결과 먼저'). [stop] 뒤에 [start]하면 다시 구독한다(서비스가 다시 뜨는 경우). [start]·[stop]은 여러 번 불려도 안전하다.
- * 공개 모양은 고치지 않는다(handoff README 4장).
+ * 공개 모양은 고치지 않는다.
  */
 class Exec internal constructor(
     private val clock: () -> Long,
@@ -86,7 +86,7 @@ class Exec internal constructor(
 
     /**
      * 차량 신호 구독·통화 모드·내비·TTS 예열·STT 준비(감시 서비스 시작 때). 여러 번 불려도 처음 한 번만 하고,
-     * [stop] 뒤에 다시 부르면 다시 구독한다(서비스가 다시 뜨는 경우, ui-store-host 보고). 지금 기어·통화 상태를 바로 낸다.
+     * [stop] 뒤에 다시 부르면 다시 구독한다(서비스가 다시 뜨는 경우). 지금 기어·통화 상태를 바로 낸다.
      */
     fun start() = synchronized(io.lock) {
         if (started) return@synchronized

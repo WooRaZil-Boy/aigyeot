@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 17장 C150~C153(11-07 영역별 검토 24회차).
+// 명세서 17장 C150~C153.
 class C150ToC153Test {
     private val nurse = rest("n", 9.0, nursing = true)
     private fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }

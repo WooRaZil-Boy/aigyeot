@@ -1,7 +1,7 @@
 # 시연 흐름 확인 — 2026-11-12 05:10~06:30, HEAD 738f555(작업 트리 깨끗), debug 빌드
 환경: 차 AVD PleosConnect(emulator-5560, 2560x1440, -timezone Asia/Seoul, 운전자 user 10, 아기 설정 'Mimi' 있던 데이터 그대로),
       폰 AVD CarePhone(emulator-5580, 1080x2400, Android 16, 앱 데이터를 지우고 시작), 로컬 중계 `npm run dev`(wrangler dev 8787, /v1/health llm true · push false).
-규칙: 확인만 했다(앱 코드·문서·시험 고치지 않음). 캡처는 tools/measure/screens_1112_demo/(로컬 전용). 맥 1분 부하 4~32(다른 작업), 기다리지 않고 쟀다.
+규칙: 확인만 했다(앱 코드·문서·시험 고치지 않음). 캡처는 tools/measure/screens_1112_demo/. 맥 1분 부하 4~32(다른 작업), 기다리지 않고 쟀다.
 값 읽기: 장면 결과 줄(SCENARIO 로그), 앱 CPU = `top -b -n 1 -p <pid> -o %CPU`(2초마다, 한 코어 기준), PSS = `dumpsys meminfo <pid>` TOTAL PSS(20초마다), `dumpsys cpuinfo`.
 
 ## 0. 시작 전 차 에뮬레이터 상태

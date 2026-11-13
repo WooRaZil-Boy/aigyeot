@@ -67,7 +67,7 @@ final class LinkSwitch {
     }
 
     // ---- goneCleanupPending(표시 `gone_device`, D1 a) ----
-    // 강제 끊김(401·4001) 정리·확인이 남은 기기 id. 재시작 복구 기록이며 화면 상태가 아니다(화면 GONE은 `Connection.gone`, 11-08 조율 결정).
+    // 강제 끊김(401·4001) 정리·확인이 남은 기기 id. 재시작 복구 기록이며 화면 상태가 아니다(화면 GONE은 `Connection.gone`, 11-08 결정).
     // 수명(P6) — 쓰는 곳은 아래 두 함수뿐이다:
     // | 사건                                    | 표시                              |
     // | 401·4001 정리 시작(지우기 전)            | 세움 — goneCleanupStarted         |

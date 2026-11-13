@@ -9,7 +9,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 17장 C276·C277·C279(11-07 48회차 검토, 종류째).
+// 명세서 17장 C276·C277·C279.
 class C276ToC279Test {
     private fun Sim.asked() = all<Ask>().map { it.sid }
     private fun Sim.spoke() = all<Speak>().map { it.sid }

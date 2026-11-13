@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 명세서 17장 C250(11-07 43회차 검토): 경로 때문에 무효가 된 인계 줄(S15·S10)은 버리지 않고 지금 경로로 다시 고른다.
+// 명세서 17장 C250: 경로 때문에 무효가 된 인계 줄(S15·S10)은 버리지 않고 지금 경로로 다시 고른다.
 class C250Test {
     private fun waiting(sim: Sim): Sim = sim.handoff()
     private fun Sim.release() = done(2_000).tick(P.speechGapMs)

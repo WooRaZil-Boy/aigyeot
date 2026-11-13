@@ -1,14 +1,14 @@
-# next-car 2.1 마지막 고침(C349~C357) 에뮬레이터 재확인 — 2026-11-09 06:22~07:57(파일 이름은 조율 담당이 정한 1110)
+# 마지막 고침(C349~C357) 에뮬레이터 재확인 — 2026-11-09 06:22~07:57
 환경: AVD PleosConnect(공식 프로필 2560×1440 mdpi, Pleos/crp_avd_arm64:14/RELEASE.release_connect_v2.1.0), emulator-5560, 운전자 user 10, 시간대 Asia/Seoul.
-      kr.aigyeot.app debug: 조율 담당이 main 작업 트리에서 빌드한 app/build/outputs/apk/debug/app-debug.apk. 다시 빌드하지 않았다(prepare.sh의 install -r로 같은 파일만 다시 깔림).
+      kr.aigyeot.app debug: main 작업 트리에서 빌드한 app/build/outputs/apk/debug/app-debug.apk. 다시 빌드하지 않았다(prepare.sh의 install -r로 같은 파일만 다시 깔림).
       새 AVD라 첫 화면 '아기 설정'부터 했다: 동의, 별명 EXAMPLE, 2026년 8월, 뒷좌석 오른쪽, 수유 간격 3시간 0분, 형제 없음, 부모 노래 켬(기본). 06:28 홈 '지금 먹이기 시작했어요'로 실제 마지막 수유 06:28.
-스크립트: tools/demo/prepare.sh(06:27, 재부팅 뒤 06:52), reset.sh(회차 앞마다), cry.sh, stop.sh(07:56). 잠금 파일은 조율 담당 것이라 건드리지 않음. 프로브 없음.
+스크립트: tools/demo/prepare.sh(06:27, 재부팅 뒤 06:52), reset.sh(회차 앞마다), cry.sh, stop.sh(07:56). 잠금 파일은 건드리지 않음. 프로브 없음.
       cry.sh: 시작 때 기기의 files/scenario/cry/ 녹음 4개가 모두 0바이트였다(run-as wc -c). research/scenario-cry/의 원본으로 cry.sh를 다시 돌려 4개 모두 크기 일치 확인(2384640·2384640·1280000·1600000).
-맥 부하(1분 평균): 다른 세션의 Gradle(java 130%)·Spotlight로 크게 출렁였다. 06:27 27.6, 06:44 78.9, 06:53~07:01 최대 19.6, 07:02~07:08 최대 14.2, 07:08~07:10 127~226, 07:45~07:47 35~104, 07:50~07:54 최대 25.6.
+맥 부하(1분 평균): 다른 작업의 Gradle(java 130%)·Spotlight로 크게 출렁였다. 06:27 27.6, 06:44 78.9, 06:53~07:01 최대 19.6, 07:02~07:08 최대 14.2, 07:08~07:10 127~226, 07:45~07:47 35~104, 07:50~07:54 최대 25.6.
 에뮬레이터 이상(환경, 이번 기록의 큰 제약):
   - VHAL heartbeat 시간 초과 → carwatchdog가 VHAL 종료 → CarService(com.android.car) 재시작이 세 번 났다: 06:43:24, 07:08:20, 07:45:56. 두 번째·세 번째 뒤에는 CarService가
     'FATAL EXCEPTION: UserService … IllegalStateException: CarServiceHelper did not connect'로 약 20초마다 다시 죽는 고리에 빠져(07:09~07:24에 44번) 홈·systemui가 검게 멈췄다.
-    그래서 `adb -s emulator-5560 reboot`로 같은 AVD를 세 번 다시 부팅했다(06:51:00, 07:24:40, 07:47:13. 조율 담당에게 메시지로 알림). 부팅 뒤 약 17~23분마다 다시 났다.
+    그래서 `adb -s emulator-5560 reboot`로 같은 AVD를 세 번 다시 부팅했다(06:51:00, 07:24:40, 07:47:13). 부팅 뒤 약 17~23분마다 다시 났다.
   - audioserver(AudioFlinger) 재시작: 07:03:29 처음, 그 뒤 CarService 고리 동안 여러 번.
   - 앱 FATAL 0줄. 앱 ANR 2번(아래 '결함 후보').
 무효 구간(판정 근거로 쓰지 않음):
@@ -124,9 +124,9 @@ D를 거친 장면(참고, 의도된 C342 동작): 07:27:27 장면 C2 실행 →
   "binder:32000_1" Blocked: ExecThread.guard ← PleosNavi$newListener$1.on(Navi.kt:51) ← onDrivingInfo(Navi.kt:54) ← INaviServiceCallbackV2 `waiting to lock <0x09adebfe> held by thread 1`
   (pid 32000의 대기 스레드. pid 7531은 main이 MonitorService.onCreate → Graph.get 안에서 exec 잠금 <0x0a236e36>·Graph·Graph$Companion 잠금을 쥔 채 같은 getIntProperty에 막혔고, 그 순간 잠금을 기다린 다른 스레드는 없었다)
 읽은 것: createCar에 exec handler를 줬지만 수명 콜백이 main 스레드에서 불렸고, 그 안에서 exec 잠금을 쥔 채 동기 바인더 getProperty를 불러 VHAL이 응답하지 않는 동안
-  main·host·binder가 모두 멈췄다. 차가 정상이면 나지 않는 조건(CarService·VHAL 재시작)이다. 조율 담당이 결함으로 고치기로 함(측정 중 메시지).
+  main·host·binder가 모두 멈췄다. 차가 정상이면 나지 않는 조건(CarService·VHAL 재시작)이다. 결함으로 고치기로 함.
 참고: 07:08·07:45의 CarService 재시작 때는 앱이 죽지 않았다(07:09:26 'getCarManager not working while car service not ready' → subscribe NPE 경고 뒤 다시 구독).
-참고: 줄 번호는 설치한 APK 기준이고, 측정 중 읽은 작업 트리 Car.kt와 맞았다. 07:58 git status에는 다른 세션이 Car.kt·ExecThread.kt 등을 고치는 중(M, CarGate.kt·ReadyProbe.kt 새 파일)이라
+참고: 줄 번호는 설치한 APK 기준이고, 측정 중 읽은 작업 트리 Car.kt와 맞았다. 07:58 git status에는 다른 작업이 Car.kt·ExecThread.kt 등을 고치는 중(M, CarGate.kt·ReadyProbe.kt 새 파일)이라
   이 결함 후보가 그 변경에서 이미 다뤄졌는지는 보지 않았다.
 
 ## 그 밖에 본 것(판정 대상 아님)

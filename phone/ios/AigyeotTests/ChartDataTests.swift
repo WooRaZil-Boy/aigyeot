@@ -192,7 +192,7 @@ final class ChartDataTests: XCTestCase {
         XCTAssertFalse((b.gaps + b.sounds).contains { $0.tip.contains("듣기") })
     }
 
-    /// 3회차 검토: 띠 읽기 이름 머리는 에피소드를 연 사건이다. 소리 바꾸기 요청 에피소드를 '울음'이라 읽지 않는다(차 앱 episodeHead와 같은 낱말).
+    /// 띠 읽기 이름 머리는 에피소드를 연 사건이다. 소리 바꾸기 요청 에피소드를 '울음'이라 읽지 않는다(차 앱 episodeHead와 같은 낱말).
     func test_소리_바꾸기_요청_에피소드의_띠_읽기_이름은_울음이_아니다() throws {
         var e = try report().timeline[0]
         let t0 = at(13, 24)

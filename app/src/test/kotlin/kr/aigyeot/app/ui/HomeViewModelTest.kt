@@ -21,7 +21,7 @@ import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-// 홈 ViewModel의 시간 출처는 주입 시계 하나다(코드 리뷰 9). 화면 흐름을 실제로 모아 본다
+// 홈 ViewModel의 시간 출처는 주입 시계 하나다. 화면 흐름을 실제로 모아 본다
 @RunWith(RobolectricTestRunner::class)
 class HomeViewModelTest {
     private val k = Kit()

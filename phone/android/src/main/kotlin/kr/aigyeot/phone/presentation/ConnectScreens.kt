@@ -201,7 +201,7 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
                         AppMark(24.dp, 7.dp)
                         Text(IntroText.TITLE, Modifier.padding(start = 8.dp), style = Type.action, color = p.textSecondary) // intro.title
                     }
-                    // 제목은 50ms 뒤 500ms·12 → 0, 한 덩어리로 올라온다. 낱말별 간격·블러는 두 앱 모두 뺐다(11-11 조율).
+                    // 제목은 50ms 뒤 500ms·12 → 0, 한 덩어리로 올라온다. 낱말별 간격·블러는 두 앱 모두 뺐다(11-11).
                     Text(
                         IntroText.LEAD,
                         Modifier.padding(top = 10.dp).introRise(run, text + Motion.RISE_STAGGER_MS, 12.dp, ms = 500, blur = 0.dp).semantics { heading() },

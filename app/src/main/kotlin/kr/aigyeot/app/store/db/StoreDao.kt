@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kr.aigyeot.app.link.db.OutboxEntity
 import kr.aigyeot.app.link.db.SongSelectionEntity
 
-/** store의 쿼리. 다른 갈래의 표(outbox·song_selection)도 여기서 쿼리한다(handoff README 4장). 부모 행은 @Upsert로 쓴다(REPLACE는 CASCADE로 자식을 지운다). */
+/** store의 쿼리. 다른 모듈의 표(outbox·song_selection)도 여기서 쿼리한다. 부모 행은 @Upsert로 쓴다(REPLACE는 CASCADE로 자식을 지운다). */
 @Dao
 interface StoreDao {
     // ---- child_profile(한 행) ----
@@ -79,7 +79,7 @@ interface StoreDao {
     @Query("SELECT * FROM engine_snapshot WHERE id = 1") fun snapshot(): EngineSnapshotEntity?
     @Upsert fun saveSnapshot(s: EngineSnapshotEntity)
 
-    // ---- 다른 갈래 표(link 몫): 읽기와 store가 넣는 outbox 항목 ----
+    // ---- 다른 모듈 표: 읽기와 store가 넣는 outbox 항목 ----
     @Insert(onConflict = OnConflictStrategy.IGNORE) fun insertOutbox(o: OutboxEntity)
     // C303 A12·A13: phone_link 수(보낼 폰·알림 받을 보호자)는 LinkDao.phoneCount·otherGuardians 한 곳이다
     @Query("SELECT * FROM song WHERE status = 'ACTIVE' ORDER BY added_seq DESC") fun activeSongs(): List<SongEntity>

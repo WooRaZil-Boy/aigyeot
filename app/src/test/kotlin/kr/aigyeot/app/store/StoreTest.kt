@@ -794,7 +794,7 @@ class StoreTest {
         assertEquals(false, steering(emptyList(), base, null).available)
     }
 
-    // ---- 검토 수정 C6~C8 ----
+    // ---- 회귀 시험 C6~C8 ----
 
     @Test fun report_hugeControls_stillUnderLimit() {
         session()
@@ -965,7 +965,7 @@ class StoreTest {
         assertEquals(store.cryAlarms("S1").size, buildReport(dao, "S1", now)!!.timeline.count { it.trigger == kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM })
     }
 
-    // 코드 리뷰 6(C381): 리포트 목록 '울음 n번'은 홈과 같은 Store.cryAlarms로 센다. 본문이 64KB를 넘어 앞 에피소드를 버려도 줄지 않고, 기록만 한 경보는 세지 않는다
+    // C381: 리포트 목록 '울음 n번'은 홈과 같은 Store.cryAlarms로 센다. 본문이 64KB를 넘어 앞 에피소드를 버려도 줄지 않고, 기록만 한 경보는 세지 않는다
     @Test fun reportList_cryCount_sameAsHomeCryAlarms_evenWhenReportTruncated() {
         session()
         val n = 3_000

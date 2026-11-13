@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 명세서 17장 C191·C193(11-07 30회차 검토).
+// 명세서 17장 C191·C193.
 class C191ToC193Test {
     private val h = S57HandoffTest()
     private fun Sim.alertsOf() = all<SendToPhone>().filter { it.type == "handoff_alert" }

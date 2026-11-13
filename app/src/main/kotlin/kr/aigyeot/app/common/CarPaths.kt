@@ -3,7 +3,7 @@ package kr.aigyeot.app.common
 import android.content.Context
 import java.io.File
 
-/** 파일 위치 약속(아무 갈래도 고치지 않는다). */
+/** 파일 위치 약속(고정 경로). */
 object CarPaths {
     fun songDownload(ctx: Context, songId: String) = File(ctx.filesDir, "songs/$songId.download")  // link가 받은 원본(검사 전)
     fun songFile(ctx: Context, songId: String) = File(ctx.filesDir, "songs/$songId.m4a")   // −30 LUFS 사본. exec가 튼다

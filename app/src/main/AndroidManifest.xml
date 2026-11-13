@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 공용 파일이라 조율 담당만 고친다. 갈래가 서비스·화면을 더하면 조율 담당에게 알린다. -->
+<!-- 앱 서비스·화면 선언. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="pleos.car.permission.CAR_CLIMATE" />
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
@@ -37,7 +37,7 @@
         android:networkSecurityConfig="@xml/network_security_config">
         <!-- CCP(로터리 컨트롤러)를 지원하지 않는다고 선언한다(Pleos CCP 개발 가이드) -->
         <meta-data android:name="com.hmg.rotary.ROTARY_SUPPORTED" android:value="false" />
-        <!-- 아래 셋은 0단계에서 이름만 정했다. 클래스는 ui-store-host가 만든다(handoff 0-scaffold 3절) -->
+        <!-- 아래 셋의 클래스는 호스트·화면 모듈이 만든다 -->
         <!-- DO(distractionOptimized)를 선언한다(C365·C378): 주행 중에는 CarUxRestrictions 값에 따라 주행 중 화면 하나만 그린다(조작·움직임 없음) -->
         <activity
             android:name=".MainActivity"
@@ -73,7 +73,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- 갈래 ① 감지: 마이크 Foreground Service. 앱 화면이 있을 때만 시작한다(명세서 6장) -->
+        <!-- 감지: 마이크 Foreground Service. 앱 화면이 있을 때만 시작한다(명세서 6장) -->
         <service
             android:name=".detect.MicService"
             android:exported="false"

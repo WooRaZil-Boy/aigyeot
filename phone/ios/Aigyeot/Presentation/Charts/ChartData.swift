@@ -6,7 +6,7 @@ import Foundation
 enum ChartData {
     static let minute: Int64 = 60_000
 
-    /// 차트 안 시각만 24시간제 'HH:MM'(사용자 결정 11-09, 시안 v6-9). 나머지 화면은 7.1 '오전/오후 h:mm'.
+    /// 차트 안 시각만 24시간제 'HH:MM'(결정 11-09, 시안 v6-9). 나머지 화면은 7.1 '오전/오후 h:mm'.
     static func hhmm(_ minuteOfDay: Int) -> String { String(format: "%02d:%02d", (minuteOfDay / 60) % 24, minuteOfDay % 60) }
 
     // MARK: 오늘 하루 띠(Charts.day)

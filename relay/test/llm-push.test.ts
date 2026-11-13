@@ -8,7 +8,7 @@ import { forgetAccessToken, retryAfterS } from "../src/push";
 import { ulid } from "../src/util";
 import { BASE, addGuardian, call, carWithOwner, newCar, send } from "./helpers";
 
-// 계약 1.4의 도구 JSON·시스템 지시 코드 블록을 그대로 옮긴 예제 파일과 견준다(docs/는 공개되지 않는다).
+// 계약 1.4의 도구 JSON·시스템 지시 코드 블록을 그대로 옮긴 예제 파일과 견준다.
 const fixtures = import.meta.glob("./fixtures/llm_*", { query: "?raw", import: "default", eager: true });
 const fixture = (name: string) => fixtures[`./fixtures/${name}`] as string;
 const contractTools = JSON.parse(fixture("llm_tools.json"));

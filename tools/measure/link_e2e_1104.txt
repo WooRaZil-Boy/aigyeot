@@ -1,4 +1,4 @@
-# link 갈래 종단 실측(2026-11-04 05:25~05:32 KST)
+# link 종단 실측(2026-11-04 05:25~05:32 KST)
 # 구성: 맥 relay/ wrangler dev(--port 8787, 비밀값 없음: llm=false, push=false)
 #       차 = 에뮬레이터 PleosProbe(emulator-5554, user 10)의 kr.aigyeot.app debug + 임시 실측 화면(LinkProbeActivity, 커밋하지 않음)
 #       폰 = 맥의 HTTP 흉내(파이썬, POST /v1/pair·/v1/messages, GET /v1/inbox 5ms 간격). 폰 앱 화면은 지나지 않았다(미판정)
@@ -50,9 +50,9 @@ state_request status=201 answer_ms=17
 [차 토큰 무효(8.6)] 중계를 빈 저장소로 다시 띄워 차 방을 없앰:
   05:55:18 소켓 끊김 → BACKOFF / 05:55:25 GET /v1/ws 401 → 자격·PhoneLink 지움, LinkChanged, "다시 연결" 표시
   → 기다림(약 8초) → 05:55:33 POST /v1/cars 201(한 번) → GET /v1/ws 101 → 받은 함. 재등록 연쇄 없음
-  발견: 연결 화면이 열린 채 소켓 쪽에서 무효가 나면 옛 방의 연결 코드가 만료까지 화면에 남는다 → 고침 대상(보고서)
+  발견: 연결 화면이 열린 채 소켓 쪽에서 무효가 나면 옛 방의 연결 코드가 만료까지 화면에 남는다 → 고침 대상
 # 참고: 실측 시험을 시간당 5번 넘게 돌리면 중계 차 등록 제한(IP당 시간당 5회, G6)에 걸린다. 그때는 wrangler를 새 --persist-to로 띄운다
 
-# 최종 코드(검토 3회차 수정 뒤) JVM 종단(LinkRelayLiveTest, 실제 wrangler dev):
+# 최종 코드(수정 뒤) JVM 종단(LinkRelayLiveTest, 실제 wrangler dev):
 #   pair_ms=44 tap_to_car_ms=22 tap_to_phone_feeding_state_ms=39 state_request_ms=21 qa_offline_ms=18 conn=CONNECTED
 #   (에뮬레이터 2차 실측 뒤 바뀐 것: 차 등록 간격, kick 비우기 위치, 무효 뒤 옛 소켓 닫기·연결 코드 새로, ULID 아닌 id ack만 — 에뮬레이터 재실측은 하지 않음)

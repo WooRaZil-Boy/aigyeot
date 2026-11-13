@@ -34,7 +34,7 @@ import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.AfterTest
 
-// link 시험 도구: Robolectric + Room in-memory(0단계 AppDatabase), 가짜 중계, 가짜 토큰 감싸기, 가짜 시계.
+// link 시험 도구: Robolectric + Room in-memory(AppDatabase), 가짜 중계, 가짜 토큰 감싸기, 가짜 시계.
 
 const val T0 = 1_762_300_000_000L   // 2025-11-05 08:26:40Z 근처
 const val PHONE = "d_5KQ2M8T1V6B5R3H2CD7F3AK2N9"

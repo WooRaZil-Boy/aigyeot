@@ -160,7 +160,7 @@ class BasicsTest {
     }
 
     @Test fun `연결 429 남은 시간은 60초 넘으면 분 올림 이하면 초 올림`() {
-        // contracts-link 7.2(11-12 사용자 결정): 처음 받은 값이 아니라 잠금 끝 시각에서 그때그때 잰 남은 시간.
+        // contracts-link 7.2(11-12 결정): 처음 받은 값이 아니라 잠금 끝 시각에서 그때그때 잰 남은 시간.
         assertEquals("10분 뒤에 다시 해 주세요", pairWaitText(600_000))
         assertEquals("10분 뒤에 다시 해 주세요", pairWaitText(540_001))
         assertEquals("9분 뒤에 다시 해 주세요", pairWaitText(540_000))

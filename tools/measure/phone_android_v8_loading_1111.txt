@@ -2,7 +2,7 @@
 구성
   - 폰: AVD CarePhone(1080×2400, android-36 arm64, GPU SwiftShader), kr.aigyeot.phone debug. 로컬 중계 wrangler dev 127.0.0.1:8787, 차는 curl 흉내(owner 연결).
   - 녹화: adb shell screenrecord(바뀐 장만 담겨 장 간격이 고르지 않다), ffmpeg로 실제 장 시각 그대로 풀어 영역별 화소를 셌다. 시각은 logcat(앱 로그 IntroScreen·CarScene·CarStage, ActivityTaskManager Displayed).
-  - 맥 부하: 1분 평균 17:05~17:08 25~287(다른 담당 빌드), 17:10 이후 7~16. 부하 높은 회차는 아래에 따로 적었다.
+  - 맥 부하: 1분 평균 17:05~17:08 25~287(다른 작업 빌드), 17:10 이후 7~16. 부하 높은 회차는 아래에 따로 적었다.
 
 ## 1. 3D 준비 고리(차 탭·오늘 차 타일)
 - 첫 그림 = CarTextureView 첫 onSurfaceTextureUpdated. 로그 'CarStage 첫 그림 Nms'(무대를 붙인 때부터).
@@ -30,7 +30,7 @@
   마지막 수유 판 둘레 빛(.flash)도 같이 났다. 캡처: tools/measure/screens_v8_android/today_fresh_frames.png(로컬).
 - 새 표시·기록 탭 줄 강조는 iOS와 같이 '막 저장한 기록 id'(Notices.fresh) 하나를 본다. 보인 곳이 걷는다.
 
-## 4. 검토 수정 확인(22:40, 에뮬레이터 시계)
+## 4. 수정 뒤 확인(22:40, 에뮬레이터 시계)
 - C 저장 검사 자리: 시작 오후 9:40(1시간 전)·끝 오후 11:40(미래)로 저장 → '끝' 줄이 펼쳐지고 빨간 테, 아래 '앞으로의 시각은 적을 수 없어요'.
   캡처: screens_v8_android/c_end_future_{light,dark}.png(로컬).
 - D-1 메모 글자 수: 일곱 줄 메모(197자)에서 글자 수 '197/200'이 본문 아래 제 줄에 있고 마지막 줄과 겹치지 않음. 캡처: d1_memo_{light,dark}.png.

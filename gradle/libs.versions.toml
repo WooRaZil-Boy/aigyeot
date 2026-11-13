@@ -1,4 +1,4 @@
-# 버전 출처: 구현 계획 1장(11-02 확인). 공용 파일이라 조율 담당만 고친다.
+# 버전 출처: 구현 계획 1장(11-02 확인).
 [versions]
 agp = "9.4.1"
 kotlin = "2.4.21"
@@ -21,7 +21,7 @@ pleosNavi = "3.0.5"
 pleosSpeech = "3.3.1"
 filament = "1.77.3"          # 11-10 Maven Central 확인(디자인 v6 3D: Pleos 3D Assets 가이드의 공식 엔진 Filament)
 junit4 = "4.13.2"
-robolectric = "4.17"            # 11-04 Maven Central 확인(0단계 Room 시험)
+robolectric = "4.17"            # 11-04 Maven Central 확인(Room 시험)
 androidxTestCore = "1.7.0"      # 11-04 Google Maven 확인
 
 [libraries]

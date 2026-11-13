@@ -2,7 +2,7 @@
 규칙: 맥 부하를 기다리지 않고 잰다. CarService·system_server·앱이 다시 뜬 회차만 무효로 친다.
 
 ## 환경
-- AVD PleosProbe, emulator-5560(`-port 5560 -no-snapshot-load -no-boot-anim -no-audio -gpu host`, 22:08경 콜드 부팅). 5554의 다른 세션 기기·실기기는 건드리지 않았다.
+- AVD PleosProbe, emulator-5560(`-port 5560 -no-snapshot-load -no-boot-anim -no-audio -gpu host`, 22:08경 콜드 부팅). 5554의 다른 작업 기기·실기기는 건드리지 않았다.
 - 빌드: main 작업 트리 `./gradlew :app:assembleDebug`(debug, 21:27 산출물). 설치 시 `pm clear --user 10`으로 앱 데이터를 비운 뒤 `prepare.sh`부터 시작(첫 설정 화면 캡처 때문).
 - 화면: `wm size` Physical 1920x1080, `wm density` Physical 160. 차 화면은 밝은 바탕(다크 아님)이다.
 - 잠금 /tmp/aigyeot-emulator.lock(who: demo)을 잡았고 끝에 지웠다.
@@ -73,7 +73,7 @@
 ## 정리
 세션 신호 루프·부하 기록기 종료, forward 8088 제거, emulator-5560 `emu kill`(qemu 0개), 잠금 삭제, 8787·8788 대기 없음.
 
-## 검토 1회차 수정 확인(emulator-5560 다시 부팅, 저장소 루트에서 상대 경로, 장면은 돌리지 않음)
+## 수정 뒤 확인 1(emulator-5560 다시 부팅, 저장소 루트에서 상대 경로, 장면은 돌리지 않음)
 고친 곳: vc.sh(forward 에뮬레이터 쪽 8088 고정, 세션 루프 `curl -m1`, `vc()`의 `curl -f`, `app_front`의 Error·monkey 확인, `abspath` 추가, `vc_start` 실패 때 `vc_stop`), prepare.sh(인자 경로를 cd 전에 절대화, 프로브를 `pm list packages -u`로 모든 사용자에서 찾아 지우고 확인, 권한마다 종료 코드와 user 10 `granted=true` 확인), cry.sh(인자 절대화, 파일 이름 `^[A-Za-z0-9._-]+$` 검사), reset.sh(늘 `vc_start`). `bash -n` 5개 통과.
 | 확인 | 명령 | 결과 |
 | --- | --- | --- |
@@ -87,7 +87,7 @@
 - 확인하지 못함: 프로브가 user 0에만 깔린 경우(프로브가 없어 못 만듦), `app_front`의 Error·monkey 분기(앱 삭제 상태를 만들지 않음), `vc()`의 HTTP 4xx 분기, `vc_start` 실패 때 정리, prepare가 권한 실패에서 멈추는 분기, 세션 루프 2초 이내(코드만 확인, 시간 미측정).
 - 정리: emulator-5560 `emu kill`(qemu 0), 잠금 삭제, forward·세션 루프 0개, 8787·8788 사용 안 함.
 
-## 검토 2회차 수정 확인(에뮬레이터 없이, 가짜 `a()`로 확인)
+## 수정 뒤 확인 2(에뮬레이터 없이, 가짜 `a()`로 확인)
 - vc.sh `app_front`(62~67줄): monkey 대체를 지웠다(Android 14 Monkey가 `--user`를 거절). `am start`의 종료 코드가 0이 아니거나 출력에 `Error`·`Exception`이 있으면 출력 앞부분과 함께 멈춘다. 성공이면 아무것도 찍지 않는다. `bash -n vc.sh` 통과.
 - 확인: vc.sh를 source한 뒤 `a()`를 가짜 함수로 바꿔 세 경우를 돌렸다. 실제 adb·에뮬레이터는 쓰지 않았다.
   - (가) "Starting: Intent { cmp=kr.aigyeot.app/.MainActivity }", rc 0 → 통과(출력 없음, rc 0)

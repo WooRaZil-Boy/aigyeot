@@ -36,7 +36,7 @@ private val ULID_RE = Regex("[0-9A-HJKMNP-TV-Z]{26}")
 /** 메시지 id 형식 검사(계약 0장). 밖에서 온 값(인텐트·푸시)은 이것을 통과해야 쓴다. */
 fun isUlid(s: String) = ULID_RE.matches(s)
 
-/** 앱의 시간대. 한국 전용이라 기기 설정과 상관없이 고정한다(사용자 결정 11-07: 서머타임·날짜변경선·다른 시간대는 다루지 않는다). */
+/** 앱의 시간대. 한국 전용이라 기기 설정과 상관없이 고정한다(결정 11-07: 서머타임·날짜변경선·다른 시간대는 다루지 않는다). */
 val APP_ZONE: ZoneId = ZoneId.of("Asia/Seoul")
 
 /** RFC 3339(시차 포함, 초 단위). `OffsetDateTime.toString()`은 0초를 빼므로 쓰지 않는다. */

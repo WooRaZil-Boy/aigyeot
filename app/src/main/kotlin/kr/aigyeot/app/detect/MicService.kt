@@ -105,7 +105,7 @@ class MicService : Service() {
         @Volatile var pendingPauses: Set<PauseReason> = emptySet()
         /** 읽은 PCM(16kHz mono s16)을 그대로 넘긴다. exec STT가 쓴다. 감지 스레드에서 부르므로 빨리 돌아와야 하고, 배열은 다시 쓰이니 필요하면 복사한다. */
         @Volatile var pcmTap: ((ShortArray, Int) -> Unit)? = null
-        /** 판단 코어로 보낸 울음 구간을 그대로 넘긴다(읽기 전용, 시연·측정 화면의 울음 확률 선). 감지 스레드에서 부르므로 빨리 돌아와야 한다. */
+        /** 판단 코어로 보낸 울음 구간을 그대로 넘긴다(읽기 전용, debug 빌드의 시연·측정 화면이 읽는 울음 확률 선). 감지 스레드에서 부르므로 빨리 돌아와야 한다. */
         val segmentTaps = java.util.concurrent.CopyOnWriteArraySet<(CrySegment) -> Unit>()   // 구독자마다 하나(지울 때 남의 것을 지우지 않게). 비어 있으면 아무 일도 하지 않는다
         /** 지금 도는 서비스의 감지기. 서비스가 시작·끝날 때만 바꾼다. */
         @Volatile internal var running: CryDetector? = null

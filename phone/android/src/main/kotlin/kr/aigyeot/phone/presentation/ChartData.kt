@@ -31,7 +31,7 @@ import kr.aigyeot.shared.TimelineEpisode
 // 차트에 넣는 값(디자인 v6 시안 js/charts.js의 DATA 자리). 저장하지 않고 그릴 때 기록·리포트에서 계산한다(P4).
 // 순수 함수라 JUnit으로 본다(ChartDataTest). 실제 데이터에 붙이는 규칙은 진행 기록 '결정' 1~8.
 
-/** 차트 안 시각만 24시간제 'HH:MM'(사용자 결정 11-09, 시안 v6-9). 나머지 화면은 7.1 '오전/오후 h:mm'. */
+/** 차트 안 시각만 24시간제 'HH:MM'(결정 11-09, 시안 v6-9). 나머지 화면은 7.1 '오전/오후 h:mm'. */
 fun hhmm(minuteOfDay: Int): String = String.format(Locale.ROOT, "%02d:%02d", (minuteOfDay / 60) % 24, minuteOfDay % 60)
 
 fun hhmm(ms: Long, zone: ZoneId): String = Instant.ofEpochMilli(ms).atZone(zone).let { hhmm(it.hour * 60 + it.minute) }

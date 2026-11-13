@@ -1,6 +1,6 @@
 import java.util.Properties
 
-// 차 앱. 여러 갈래가 함께 쓰는 공용 파일이라 조율 담당만 고친다.
+// 차 앱 모듈.
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -71,7 +71,7 @@ dependencies {
     implementation(libs.filament.utils)     // 환경광(IBL) 미리 거르기·KTX
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit4)
-    testImplementation(kotlin("test-junit")) // 갈래 ① 감지 시험(assertNotNull 등). JUnit4 위에서 돈다
+    testImplementation(kotlin("test-junit")) // 감지 시험(assertNotNull 등). JUnit4 위에서 돈다
     testImplementation(libs.robolectric) // store·link Room 시험을 JVM에서
     testImplementation(libs.androidx.test.core)
 }

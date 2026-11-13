@@ -284,7 +284,7 @@ class UseCaseTest {
         assertEquals("코드가 맞지 않거나 시간이 지났어요. 차 화면의 코드를 다시 확인해 주세요.", (pair.run.value as PairRun.Failed).error)
         relay.pairResult = RelayResult.Err(429, null, 600)
         pair.start("123456")
-        // 429는 글을 굳히지 않는다: 화면이 잠금 끝 시각에서 그때그때 잰다(7.2, 11-12 사용자 결정). 10분 잠금이 9분 지나면 "600초"가 아니라 "60초".
+        // 429는 글을 굳히지 않는다: 화면이 잠금 끝 시각에서 그때그때 잰다(7.2, 11-12 결정). 10분 잠금이 9분 지나면 "600초"가 아니라 "60초".
         until("429") { pair.run.value == PairRun.Limited("123456") }
         assertEquals(now + 600_000, pair.lockedUntil.value)
         val wait = { t: Long -> kr.aigyeot.phone.domain.model.pairWaitText(pair.lockedUntil.value!! - t) }
@@ -444,7 +444,7 @@ class UseCaseTest {
             "FEED,${rfc3339(now - 30 * HOUR)},,true,LEFT,,,EXAMPLE 24시간 밖",
             "FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE",
         )
-        // U67 11-09 보충(사용자 결정): 저장 직후가 아니라 되돌리기 띠가 끝난 뒤 한 번 보낸다.
+        // U67 11-09 보충(결정): 저장 직후가 아니라 되돌리기 띠가 끝난 뒤 한 번 보낸다.
         kitTest(undoMs = 1_000) {
             assertTrue(recordCare.importRows(rows()))
             settle()

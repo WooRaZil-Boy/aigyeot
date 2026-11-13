@@ -529,7 +529,7 @@ final class CareCsvTests: XCTestCase {
         queued(k).compactMap { e -> Date? in if case .string(let s)? = e.body.objectValue?["at"] { Rfc3339.parse(s) } else { nil } }
     }
 
-    /// U67 11-09 보충(사용자 결정): 가져오기의 차 보내기 계기(R5·R19)는 되돌리기 띠가 끝난 뒤 한 번 낸다. 띠 수명은 RecordCare 한 곳이다.
+    /// U67 11-09 보충(결정): 가져오기의 차 보내기 계기(R5·R19)는 되돌리기 띠가 끝난 뒤 한 번 낸다. 띠 수명은 RecordCare 한 곳이다.
     func test_가져온_더_늦은_수유는_owner일_때_차로_보낸다() async throws {
         // owner·연결됨: 가져온 가장 늦은 수유(2026-11-06 12:00)가 24시간 안이고 더 늦다. 저장 직후에는 보내지 않는다.
         let k = try kit()

@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 17장 C246(11-07 42회차 검토): 기다리는 S15·S10은 꺼낼 때 지금 경로로 다시 본다.
+// 명세서 17장 C246: 기다리는 S15·S10은 꺼낼 때 지금 경로로 다시 본다.
 class C246Test {
     /** 8초 간격(S1)에 막혀 인계 줄이 큐에서 기다리는 상태. */
     private fun waiting(sim: Sim): Sim = sim.handoff()   // 앞 발화(S03)가 말하는 중이라 인계 줄은 그 뒤에서 기다린다

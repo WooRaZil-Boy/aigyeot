@@ -7,7 +7,7 @@ import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-// 0단계: store·link가 함께 쓰는 AppDatabase가 Robolectric + Room in-memory로 열리고, 계약 표가 모두 있는지
+// store·link가 함께 쓰는 AppDatabase가 Robolectric + Room in-memory로 열리고, 계약 표가 모두 있는지
 @RunWith(RobolectricTestRunner::class)
 class AppDatabaseTest {
     @Test fun `in-memory로 열면 계약 6장과 link 8장 표가 모두 있다`() {

@@ -10,7 +10,7 @@ import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.Profile
 import kr.aigyeot.engine.Step
 
-/** 호스트. ui-store-host가 구현하고 화면·scenario가 쓴다. 공개 모양은 고치지 않는다(handoff README 4장). */
+/** 호스트. 호스트 모듈이 구현하고 화면·장면 모듈이 쓴다. 공개 모양은 고치지 않는다. */
 interface HostApi {
     val steps: StateFlow<Step?>                    // 판단 코어 Step 흐름(읽기 전용, 계약 2.4). 마지막 값만: 느린 수집자는 중간 Step을 건너뛴다
     val stepLog: SharedFlow<Step>                  // 모든 Step을 순서대로(replay 0). 할 일을 하나도 놓치면 안 되는 수집자(장면 측정)용

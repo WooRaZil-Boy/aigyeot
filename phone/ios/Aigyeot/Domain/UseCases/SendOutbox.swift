@@ -168,7 +168,7 @@ final class SendOutbox {
                 let untry = error?.status == 429 && item.type == MessageType.careSummary
                 guard state.commit(c, { OutboxRules.scheduleRetry(id, delay: delay, network: error == .network, untry: untry, now: t, in: &$0) }) else {
                     // 저장은 못 해도 메시지 Retry-After는 지킨다. 노래 PUT 한도는 메시지와 따로라(1.4) 기기 전체 기다림은 걸지 않는다(잠시 뒤 다시 올려 다시 받는다).
-                    // 다만 맨 앞 항목의 기다림은 넣은 순서대로 줄을 막는다(7.5, 보고서 계약 결정 항목)
+                    // 다만 맨 앞 항목의 기다림은 넣은 순서대로 줄을 막는다(7.5)
                     if posting { holdMessages(c, for: delay) }
                     retrySaveLater(); return
                 }

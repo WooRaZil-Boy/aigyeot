@@ -151,7 +151,7 @@ fun AppRoot(app: AppViewModel) {
         // 다른 화면에 있는 사이 지금 연결이 성공했다: 완료 화면으로 간다(guardian 알림 권한 단계를 빠뜨리지 않게, 7.1). 실패·지난 결과는 비운다.
         if (app.takePairDone(r)) nav.reset(Route.Done((r as PairRun.Done).role!!.name)) else app.clearPairRun()
     }
-    // 연결 정보를 거듭 읽지 못하면 지우고 새로 연결할지 묻는다(11-07 사용자 결정). 돌봄 기록은 남는다.
+    // 연결 정보를 거듭 읽지 못하면 지우고 새로 연결할지 묻는다(11-07 결정). 돌봄 기록은 남는다.
     (ui.pairRun as? PairRun.Failed)?.takeIf { it.resetOffer }?.let { r ->
         AlertDialog(
             onDismissRequest = app::clearPairRun,

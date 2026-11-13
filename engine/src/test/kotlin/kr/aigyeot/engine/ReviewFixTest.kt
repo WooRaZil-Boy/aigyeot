@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-// 11-03 검토 수정(명세서 17장 C79~C81).
+// 명세서 17장 C79~C81.
 class ReviewFixTest {
     @Test fun r21a_lostBeforePlaybackStarted_firstUnjudged() {
         val sim = session().alarm()

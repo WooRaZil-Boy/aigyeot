@@ -62,7 +62,7 @@ class StageMarkTest {
 
     @Test
     fun `고리는 초당 15장, 한 장 24도로 끊어 돈다`() {
-        assertEquals(15, RING_FPS)   // 11-11 사용자 결정, 세 앱 같음
+        assertEquals(15, RING_FPS)   // 11-11 결정, 세 앱 같음
         assertEquals(24f, 360f / RING_FPS, 0f)
     }
 

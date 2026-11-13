@@ -180,7 +180,7 @@ struct SettingRow<Tail: View>: View {
     let icon: Ico
     let title: String
     var sub: String? = nil
-    /// 되돌릴 수 없는 줄('이 휴대폰의 기록 지우기'·'연결 끊기'): 아이콘을 danger로(11-11 사용자 지시, 세 앱 같은 규칙). 그 밖의 줄 아이콘은 흐린 색.
+    /// 되돌릴 수 없는 줄('이 휴대폰의 기록 지우기'·'연결 끊기'): 아이콘을 danger로(11-11 지시, 세 앱 같은 규칙). 그 밖의 줄 아이콘은 흐린 색.
     /// 글자 색은 줄마다 그대로다(`tone`: 기록 지우기만 원래 빨강).
     var irreversible = false
     var tone: Color = DS.textPrimary

@@ -1715,7 +1715,7 @@ final class CareTests: XCTestCase {
         let g = DemoSeed.make(nowMs: Self.ms("2026-11-03T15:00:00-05:00"), zone: ny)
         XCTAssertEqual(CareRules.sleepMs(onDay: "2026-11-01", in: g.events, zone: ny), 840 * 60_000)
         // 두 시간이 되풀이되는 날(남극 Troll 10/25)도 밤잠을 끝에서 7시간 전에 시작해 840분이다.
-        // 두 시간이 빠지는 날(3/29)은 수유와 겹치지 않고는 13시간을 맞출 수 없어 보정 범위 밖이다(보고서 3h).
+        // 두 시간이 빠지는 날(3/29)은 수유와 겹치지 않고는 13시간을 맞출 수 없어 보정 범위 밖이다.
         let troll = TimeZone(identifier: "Antarctica/Troll")!
         let h = DemoSeed.make(nowMs: Self.ms("2026-10-27T15:00:00+00:00"), zone: troll)
         XCTAssertEqual(CareRules.sleepMs(onDay: "2026-10-25", in: h.events, zone: troll), 840 * 60_000)

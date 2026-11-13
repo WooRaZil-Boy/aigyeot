@@ -1,4 +1,4 @@
-# C67·C68 실측(11-04, ui-store-host). AVD PleosProbe, user 10, 디버그 APK
+# C67·C68 실측(11-04, 호스트). AVD PleosProbe, user 10, 디버그 APK
 # 명령: adb shell cmd car_service suspend --simulate → 8초 → adb shell cmd car_service resume (이 이미지에서는 둘 다 동작함)
 # 상태: 정차, 감시 서비스 + 마이크 서비스 켜짐
 

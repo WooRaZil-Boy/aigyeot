@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 명세서 17장 C251·C257(11-07 44회차 검토): 인계에 묶인 줄은 꺼낼 때 지금 경로로 고른 종류와 맞는지 보고 다르면 다시 고른다. 알림 분은 발화와 같다.
+// 명세서 17장 C251·C257: 인계에 묶인 줄은 꺼낼 때 지금 경로로 고른 종류와 맞는지 보고 다르면 다시 고른다. 알림 분은 발화와 같다.
 class C251Test {
     private fun Sim.reroute(sec: Int?, dest: Boolean = true, vararg rests: RestCandidate) = ev(RouteState(t + 1_000, dest, sec, rests.toList(), null))
     private fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }

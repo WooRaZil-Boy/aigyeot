@@ -72,10 +72,10 @@ class OwnershipTest {
         assertEquals(declared, owners.keys, "상태 칸과 소유 표가 다르다")
     }
 
-    /** 칸 → 주인 표가 설계 3.3과 같다. 설계 문서는 로컬 전용이라 없으면 건너뛴다. */
+    /** 칸 → 주인 표가 설계 3.3과 같다. 설계 문서가 없으면 건너뛴다. */
     @Test fun ownership_tableMatchesDesign() {
         val doc = File("../docs/architecture-car.md")
-        assumeTrue(doc.exists(), "설계 문서 없음(공개 저장소)")
+        assumeTrue(doc.exists(), "설계 문서 없음")
         val lines = doc.readLines()
         val start = lines.indexOfFirst { it.startsWith("### 3.3") }
         val rows = lines.drop(start + 1).dropWhile { !it.startsWith("|") }.takeWhile { it.startsWith("|") }.drop(2)

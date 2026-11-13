@@ -141,7 +141,7 @@ class HomeUiTest {
         assertEquals(Symbol.PIN, hand.drive.symbol)
     }
 
-    // 코드 리뷰 3: 1차·듣기 틈 두 칸은 1차 결과 하나로 정한다. 1차가 미판정이면 2차 시도에서도 실패로 그리지 않고, 2차 시도 → 틈 → 확인 → 인계 내내 같은 값
+    // 1차·듣기 틈 두 칸은 1차 결과 하나로 정한다. 1차가 미판정이면 2차 시도에서도 실패로 그리지 않고, 2차 시도 → 틈 → 확인 → 인계 내내 같은 값
     @Test fun track_firstTwoSlots_followFirstResult_fromSecondAttemptToHandoff() {
         val noise = Method(MethodKind.WHITE_NOISE)
         fun marks(st: Stage, e: EpisodeState) = (ui(driving(ses(st, e))).card as HomeCard.Track).marks.take(2)
@@ -294,7 +294,7 @@ class HomeUiTest {
         assertTrue(ui(fresh().copy(care = late)).day!!.lanes[0].blocks.all { it.range.first <= it.range.last && it.ms >= 0 })
     }
 
-    // 코드 리뷰 B: 툴팁·합계의 길이는 그날 안으로 자른 기록 시각의 차이(두 폰과 같은 규칙). 분으로 내린 칸 차이(42분)가 아니다
+    // 툴팁·합계의 길이는 그날 안으로 자른 기록 시각의 차이(두 폰과 같은 규칙). 분으로 내린 칸 차이(42분)가 아니다
     @Test fun dayChart_blockTipAndTotal_useRecordedTimes_notMinuteCells() {
         val day0 = java.time.Instant.ofEpochMilli(T0).atZone(seoul).toLocalDate().atStartOfDay(seoul).toInstant().toEpochMilli()
         fun at(h: Int, m: Int, sec: Int) = day0 + ((h * 60 + m) * 60 + sec) * 1_000L
@@ -306,7 +306,7 @@ class HomeUiTest {
         assertEquals("잠 01:00–03:10 · 2시간 9분", dayBlockTip(sleep, sleep.blocks.single()))
     }
 
-    // 리뷰 K·Q: 잠 줄 값은 합계가 먼저(길이), 합계가 0분이면 칸이 있을 때 '1분 미만'·없을 때 '0번'("0초"가 아니다)
+    // 잠 줄 값은 합계가 먼저(길이), 합계가 0분이면 칸이 있을 때 '1분 미만'·없을 때 '0번'("0초"가 아니다)
     @Test fun dayChart_sleepValue_matchesPhones() {
         val day0 = java.time.Instant.ofEpochMilli(T0).atZone(seoul).toLocalDate().atStartOfDay(seoul).toInstant().toEpochMilli()
         fun sleep(c: CareView) = ui(fresh().copy(care = c)).day!!.lanes.single { it.name == "잠" }
@@ -317,12 +317,12 @@ class HomeUiTest {
         val dozing = none.copy(sleepingSince = T0 - 60_000 + 0)   // 막 잠듦(요약 시각에 잠든 중)
         assertEquals("1분 미만", sleep(dozing).value)
         assertEquals("1시간 30분", sleep(none.copy(lastSleepStartAt = day0 + 60 * 60_000, lastSleepEndAt = day0 + 150 * 60_000, todaySleepMin = 90)).value)
-        // 리뷰 Q: 차는 오늘 잠 칸을 다 모른다. 요약 시각 뒤에 끝난 잠(12:00–13:11을 13:10:20에 저장)은 마지막 잠에 없어도 합계 70분이 사실
+        // 차는 오늘 잠 칸을 다 모른다. 요약 시각 뒤에 끝난 잠(12:00–13:11을 13:10:20에 저장)은 마지막 잠에 없어도 합계 70분이 사실
         val unseen = none.copy(todaySleepMin = 70)
         assertTrue(sleep(unseen).blocks.isEmpty()); assertEquals("1시간 10분", sleep(unseen).value)
     }
 
-    // 리뷰 P: 칸은 그날과 실제로 겹치는 구간만(두 폰 inDay). 자정에 딱 끝난 전날 잠·세션은 오늘 칸(길이 0)이 아니다
+    // 칸은 그날과 실제로 겹치는 구간만(두 폰 inDay). 자정에 딱 끝난 전날 잠·세션은 오늘 칸(길이 0)이 아니다
     @Test fun dayChart_midnightEnd_isNotTodayBlock() {
         val day0 = java.time.Instant.ofEpochMilli(T0).atZone(seoul).toLocalDate().atStartOfDay(seoul).toInstant().toEpochMilli()
         fun sleep(c: CareView) = ui(fresh().copy(care = c)).day!!.lanes.single { it.name == "잠" }
@@ -334,7 +334,7 @@ class HomeUiTest {
         assertTrue(car?.lanes?.none { it.name == "차에서" } ?: true, "자정에 딱 끝난 세션은 '차에서' 칸이 없다")
     }
 
-    // 리뷰 L: 칩 자리는 값으로 비교한다(같은 값의 새 배열이면 상태를 바꾸지 않는다)
+    // 칩 자리는 값으로 비교한다(같은 값의 새 배열이면 상태를 바꾸지 않는다)
     @Test fun sameAnchors_comparesByContent() {
         assertTrue(sameAnchors(listOf(floatArrayOf(1f, 2f, 3f), null), listOf(floatArrayOf(1f, 2f, 3f), null)))
         assertFalse(sameAnchors(listOf(floatArrayOf(1f, 2f, 3f)), listOf(floatArrayOf(1f, 2.5f, 3f))))

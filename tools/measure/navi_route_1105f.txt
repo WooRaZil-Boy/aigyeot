@@ -107,7 +107,7 @@ logcat 'has died'는 부팅 직후(18:22:23~18:22:26, 다른 시스템 앱)뿐�
 | 3-4 | 18:44:45~18:48:10 | 8.00 | 예 |
 
 ## 7. 준비·정리
-- 잠금 파일을 18:22:05에 잡고 18:48 이후 지웠다. emulator-5554(다른 세션)와 사용자 실기기는 건드리지 않았다. PleosProbe를 `-port 5560 -no-snapshot-load -no-boot-anim`으로 콜드 부팅(18:22:39 부팅 끝),
+- 잠금 파일을 18:22:05에 잡고 18:48 이후 지웠다. emulator-5554(다른 작업)와 실기기는 건드리지 않았다. PleosProbe를 `-port 5560 -no-snapshot-load -no-boot-anim`으로 콜드 부팅(18:22:39 부팅 끝),
   모든 adb 명령에 `-s emulator-5560`.
 - VC: `adb -s emulator-5560 forward tcp:8088 tcp:8088`, 1초 세션 신호, 기어 P·속도 0. 정리 때 세션 신호 끔, `forward --remove tcp:8088`(forward 목록 비어 있음).
 - GPS는 바꾸지 않았다. 마지막 상태는 안내 없음(3-4 끝). `emu kill`로 emulator-5560 끔(18:48:38, adb 목록에서 빠짐 확인). 맥 부하 기록·logcat 수집 끔.

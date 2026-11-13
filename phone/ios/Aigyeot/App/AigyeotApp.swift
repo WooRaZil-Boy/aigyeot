@@ -3,7 +3,7 @@ import UserNotifications
 import FirebaseCore
 import FirebaseMessaging
 
-/// FCM 등록 토큰(5.4). Firebase 설정 파일이 없으면(공개 저장소·시험) 늘 nil이다.
+/// FCM 등록 토큰(5.4). Firebase 설정 파일이 없으면(시험) 늘 nil이다.
 final class PushToken: PushTokens {
     static let shared = PushToken()
     var token: String?

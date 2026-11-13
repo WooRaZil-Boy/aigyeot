@@ -38,7 +38,7 @@ session 01M6Y1DRYK0000000000000001(run-as로 aigyeot.db 꺼내 sqlite3):
   그래서 report_summary JSON의 steering 블록은 DB에서 꺼낼 수 없었다. 리포트 화면(주행 리포트, 장면 A 항목)이 같은 계산(Report.kt `steering()`)을 보여주므로 그 화면과 코드로 대신 확인했다.
 - steering 값(화면 '3. 평소 대비 조향' = '비교할 구간이 없어요'): available=false, baseline_per_min·during_cry_per_min·after_response_per_min·during_cry_z = null, unavailable_reason = no_comparable_window.
   (JSON 직접 확인은 못 함. 화면 문구와 `steering()` 코드 분기로 추정 — 미판정에 가까운 대리 확인.)
-- 이유와 계약 대조(docs/contracts-link.md 3.3 `steering`): 이 세션에 울음 창이 1개 있고(cry 비어 있지 않음) 평소 창 기준선은 `baselineWindows()`가 `scenario_id IS NULL`인 실제 세션만 쓰는데, 실제 세션(01M6WGJDP3…, 11-08)의 steer_window는 0행이라
+- 이유와 계약 대조(contracts-link 3.3 `steering`): 이 세션에 울음 창이 1개 있고(cry 비어 있지 않음) 평소 창 기준선은 `baselineWindows()`가 `scenario_id IS NULL`인 실제 세션만 쓰는데, 실제 세션(01M6WGJDP3…, 11-08)의 steer_window는 0행이라
   기준선 속도대가 비어 있다 → 'comparable' 비어 → `no_comparable_window`. 계약의 '같은 속도대 평소 창이 없으면 no_comparable_window(C112)'·'기준선은 실제 세션의 창만 쓴다(C97)'와 일치. `no_cry`가 아닌 이유도 맞다(울음 창이 있고 미관측 창도 있음).
 - 리포트 화면 나머지: '시뮬레이션 입력으로 만든 기록이에요', 02:01:22 울음 감지(지연 3.1초)·자장가 56초·결과 그쳤어요, 평균 50.0km/h·브레이크 0번·큰 조향 0번, 뒷자리 재생 1번 56초, 제어 기록 requestAudioFocus 성공 1.
 - 리포트 생성 예외: logcat에 앱 E 줄·예외 없음(W는 WindowOnBackDispatcher·Codec2Client·MediaCodec 일반 경고뿐).

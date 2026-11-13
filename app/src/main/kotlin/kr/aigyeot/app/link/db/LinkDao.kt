@@ -10,7 +10,7 @@ import kr.aigyeot.app.store.db.PhoneLinkEntity
 import kr.aigyeot.app.store.db.SongEntity
 
 /**
- * link의 쿼리. 다른 갈래의 표(phone_link·song·child_profile·episode)도 여기서 쿼리한다(handoff README 4장).
+ * link의 쿼리. 다른 모듈의 표(phone_link·song·child_profile·episode)도 여기서 쿼리한다.
  * 모두 막는 호출이다. link는 IO 스레드의 `runInTransaction` 안에서 부른다(contracts-link 8.3 '한 Room 트랜잭션').
  */
 @Dao

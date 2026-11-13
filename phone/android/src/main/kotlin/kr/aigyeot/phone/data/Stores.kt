@@ -56,7 +56,7 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
     /**
      * 저장된 자격. 없거나 키를 지웠으면([revokeKey], 끊기 확정. 백업은 꺼 두어 다른 기기로 암호문만 옮겨지지 않는다) null.
      * 읽지 못하면(Keystore 오류, 암호문이 키와 맞지 않거나 형식이 깨짐) 예외: 끊었다고 확정된 것이 아니므로 부르는 쪽은 '연결 없음'과 달리
-     * 녹음 파일·보낼 함·옮길 수유를 지우지 않고, 거듭 실패하면 지우고 새로 연결할지 묻는다(11-07 사용자 결정).
+     * 녹음 파일·보낼 함·옮길 수유를 지우지 않고, 거듭 실패하면 지우고 새로 연결할지 묻는다(11-07 결정).
      */
     private fun read(): Credentials? {
         val stored = prefs.getString(VALUE, null) ?: return null
@@ -75,7 +75,7 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
     }.getOrDefault(false)
 
     /**
-     * 읽지 못하는 연결 정보를 버린다('지우고 연결하기', 11-07 사용자 결정): 암호문과 키를 둘 다 지운다.
+     * 읽지 못하는 연결 정보를 버린다('지우고 연결하기', 11-07 결정): 암호문과 키를 둘 다 지운다.
      * 읽기 실패의 원인이 키 고장이면 키를 남겨서는 새 자격도 저장하지 못한다. 다음 [save]가 새 키를 만든다. IO 스레드에서 부른다.
      */
     private fun wipe(): Boolean {

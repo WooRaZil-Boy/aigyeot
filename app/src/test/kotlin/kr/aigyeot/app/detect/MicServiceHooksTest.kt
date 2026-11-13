@@ -11,7 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-// 0단계 감지 연결점: 호스트의 C82 대조(runningPauses·assumePausedNow)와 exec STT의 pcmTap
+// 감지 연결점: 호스트의 C82 대조(runningPauses·assumePausedNow)와 exec STT의 pcmTap
 class MicServiceHooksTest {
     private val head = CryHead(intArrayOf(0), doubleArrayOf(30.0, 0.0), -10.0)
     private val events = CopyOnWriteArrayList<Event>()

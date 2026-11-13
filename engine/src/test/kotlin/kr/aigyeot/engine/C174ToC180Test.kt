@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 17장 C174·C178·C180(11-07 27회차 검토).
+// 명세서 17장 C174·C178·C180.
 class C174ToC180Test {
     private fun care(asOf: Long, feeds: Int = 1) = CareView(asOf, true, null, null, null, null, null, null, null, feeds)
     private val nurse = rest("n", 9.0, nursing = true)

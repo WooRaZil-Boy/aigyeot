@@ -52,7 +52,7 @@ protocol SongFileStore {
 struct StoreError: Error {}
 
 /// FCM 등록 토큰(5.4). 앱의 `PushToken`이 `messaging(_:didReceiveRegistrationToken:)`에서 채우고, 연결 요청·앱 열기·토큰 바뀜 때 `PATCH /v1/devices/me`로 올린다.
-/// `GoogleService-Info.plist`가 없으면(공개 저장소·시험) 늘 nil이다.
+/// `GoogleService-Info.plist`가 없으면(시험) 늘 nil이다.
 protocol PushTokens {
     var token: String? { get set }
 }

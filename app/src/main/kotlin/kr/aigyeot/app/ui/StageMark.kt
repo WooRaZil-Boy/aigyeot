@@ -47,7 +47,7 @@ enum class StageMark { HIDDEN, RING, STILL, FAILED }
 const val STAGE_MARK_DELAY_MS = 800L
 const val STAGE_MARK_MIN_MS = 400L
 
-/** 고리를 다시 그리는 횟수(초당, 11-11 사용자 결정, 세 앱 같음). 한 바퀴 1초를 이만큼 끊어 한 장에 360/15 = 24°. */
+/** 고리를 다시 그리는 횟수(초당, 11-11 결정, 세 앱 같음). 한 바퀴 1초를 이만큼 끊어 한 장에 360/15 = 24°. */
 const val RING_FPS = 15
 
 /**

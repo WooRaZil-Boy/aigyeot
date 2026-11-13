@@ -297,7 +297,7 @@ final class KeepConnected {
 
     // MARK: 갱신
 
-    /// 사용자가 다시 해 달라고 했다(띠의 '다시 시도', 당겨서 새로고침): 망 실패의 기다림을 당기고 갱신한다(7.5, 사용자 결정 11-07).
+    /// 사용자가 다시 해 달라고 했다(띠의 '다시 시도', 당겨서 새로고침): 망 실패의 기다림을 당기고 갱신한다(7.5, 결정 11-07).
     func retryNow() async {
         outbox.hurryNetworkWaits()
         wakeSocket()

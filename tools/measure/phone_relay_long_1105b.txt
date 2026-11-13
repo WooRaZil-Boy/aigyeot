@@ -4,7 +4,7 @@
       안드로이드 AVD AigyeotPhone 아이곁 폰 debug(12:45~13:17, 30분).
 방법: 15분마다 `ps` RSS(KB)·`lsof -iTCP:8787 -sTCP:ESTABLISHED`(프로세스별 연결 수)·그 구간 중계 로그의 GET /v1/ws 수. 13:18부터 macOS `footprint`의 phys_footprint(MB)를 더했다
       (ps RSS는 메모리 압축 때문에 4~51MB로 크게 흔들려 추세 판단에 쓰기 어렵다). 안드로이드는 `dumpsys meminfo kr.aigyeot.phone` TOTAL PSS·스레드 수.
-주의: 같은 맥에서 다른 세션의 아이곁 iOS 앱(다른 시뮬레이터, pid 2971·28327)이 돌았다. ps 기록 13:32:47 줄의 pid 2971·411MB는 그 앱이라 버린다.
+주의: 같은 맥에서 다른 작업의 아이곁 iOS 앱(다른 시뮬레이터, pid 2971·28327)이 돌았다. ps 기록 13:32:47 줄의 pid 2971·411MB는 그 앱이라 버린다.
       13:17·13:32 표본에 'Aigyeot' 연결이 2개였는데 둘 다 우리 pid인지 확인하지 못했다(그 시간대 중계에 낯선 등록·연결 요청은 없었다).
 
 ## iOS 앱·중계(ps RSS, KB)
