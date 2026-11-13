@@ -53,9 +53,18 @@ final class FileStateStore: StateStore {
     }
 }
 
-/// SongFileStore 구현: 앱 전용 폴더의 녹음 파일과 임시 폴더의 녹음 원본.
+/// SongFileStore 구현: `root/songs`의 녹음 파일과 임시 폴더의 녹음 원본. 루트를 받아 시험이 실제 폴더를 건드리지 않는다(안드로이드 `AppSongFileStore(dir)`와 같다).
 struct FileSongStore: SongFileStore {
-    func url(for songId: String) -> URL { SongFiles.url(for: songId) }
+    private let root: URL
+    init(root: URL = FileStateStore.supportDirectory) { self.root = root }
+
+    /// 녹음 파일 폴더(`root/songs`). 접근할 때 만든다. 곡을 지울 때 함께 지운다(7.4).
+    private var directory: URL {
+        let d = root.appendingPathComponent("songs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }
+    func url(for songId: String) -> URL { directory.appendingPathComponent("\(songId).m4a") }
     func exists(_ songId: String) -> Bool { FileManager.default.fileExists(atPath: url(for: songId).path) }
     func copyIn(_ recording: URL, as songId: String) throws {
         let dest = url(for: songId)
@@ -63,34 +72,20 @@ struct FileSongStore: SongFileStore {
         try FileManager.default.copyItem(at: recording, to: dest)
     }
     func size(of url: URL) -> Int { (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0 }
-    func delete(_ songId: String) { SongFiles.remove(songId) }
-    func purge() { SongFiles.removeAll(); SongFiles.removeBrokenCopies() }
-    func removeBrokenCopies() { SongFiles.removeBrokenCopies() }
+    func delete(_ songId: String) { try? FileManager.default.removeItem(at: url(for: songId)) }
+    func purge() { try? FileManager.default.removeItem(at: directory); removeBrokenCopies() }
+    /// 복원 실패 때 남긴 사본(`state.json.broken-*`, `songs.broken-*`)을 지운다. 사용자가 기록 지우기·연결 끊기를 한 때만 부른다.
+    func removeBrokenCopies() {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        for n in names where n.hasPrefix("state.json.broken-") || n.hasPrefix("songs.broken-") {
+            try? FileManager.default.removeItem(at: root.appendingPathComponent(n))
+        }
+    }
     func clean(keep: Set<String>) {
-        let files = (try? FileManager.default.contentsOfDirectory(at: SongFiles.directory, includingPropertiesForKeys: nil)) ?? []
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         for f in files where f.pathExtension == "m4a" && !keep.contains(f.deletingPathExtension().lastPathComponent) {
             try? FileManager.default.removeItem(at: f)
         }
     }
     func deleteLeftovers() { AudioRecorder.removeTempRecordings() }
-}
-
-/// 녹음 파일 폴더(Application Support/songs). 곡을 지울 때 함께 지운다(7.4).
-enum SongFiles {
-    static var directory: URL {
-        let d = FileStateStore.supportDirectory.appendingPathComponent("songs", isDirectory: true)
-        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
-        return d
-    }
-    static func url(for songId: String) -> URL { directory.appendingPathComponent("\(songId).m4a") }
-    static func remove(_ songId: String) { try? FileManager.default.removeItem(at: url(for: songId)) }
-    static func removeAll() { try? FileManager.default.removeItem(at: directory) }
-
-    /// 복원 실패 때 남긴 사본(`state.json.broken-*`, `songs.broken-*`)을 지운다. 사용자가 기록 지우기·연결 끊기를 한 때만 부른다.
-    static func removeBrokenCopies(in dir: URL = FileStateStore.supportDirectory) {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
-        for n in names where n.hasPrefix("state.json.broken-") || n.hasPrefix("songs.broken-") {
-            try? FileManager.default.removeItem(at: dir.appendingPathComponent(n))
-        }
-    }
 }

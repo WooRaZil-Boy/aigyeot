@@ -366,7 +366,7 @@ final class AppModelTests: XCTestCase {
         await app.keepConnected.networkPathChanged(satisfied: true)
         await app.sendOutbox.run()
         XCTAssertTrue(relay.uploaded.isEmpty)   // Retry-After를 지킨다
-        for r in app.state.state.songs { SongFiles.remove(r.id) }
+        for r in app.state.state.songs { app.songFiles.delete(r.id) }
     }
 
     func test_받은_함_429_기다림_중에도_다시_시도는_보낼_함을_보낸다() async {
@@ -682,12 +682,12 @@ final class AppModelTests: XCTestCase {
     }
 
     func test_저장이_거부된_실행의_401_초기화는_실패하고_녹음_파일을_지우지_않는다() async throws {
-        let file = SongFiles.url(for: "refused-test")
+        let songs = FileSongStore(root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true))
+        let file = songs.url(for: "refused-test")
         try Data("m4a".utf8).write(to: file)
-        defer { SongFiles.remove("refused-test") }
         store.restoreFailed = true   // 복원에 실패해 원본을 보존하지 못한 실행
         store.writesRefused = true
-        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
+        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false, songFiles: songs)
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "init 직후")
         relay.inboxError = .http(status: 401, code: "unauthorized", retryAfter: nil)
         await app.keepConnected.refresh()
@@ -799,29 +799,37 @@ final class AppModelTests: XCTestCase {
     }
 
     func test_기록_지우기는_복구_사본도_지우고_저장이_거부되면_남긴다() throws {
-        let dir = FileStateStore.supportDirectory
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let songs = FileSongStore(root: dir)
         let fm = FileManager.default
         let stateCopy = dir.appendingPathComponent("state.json.broken-1")
         let songsCopy = dir.appendingPathComponent("songs.broken-1", isDirectory: true)
         func plant() throws {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             try fm.createDirectory(at: songsCopy, withIntermediateDirectories: true)
             try Data("x".utf8).write(to: songsCopy.appendingPathComponent("x.m4a"))
             try Data("{}".utf8).write(to: stateCopy)
         }
-        defer { try? fm.removeItem(at: stateCopy); try? fm.removeItem(at: songsCopy) }
+        defer { try? fm.removeItem(at: dir) }
         // 저장이 거부된 실행: 아무것도 지우지 않는다.
         try plant()
         store.writesRefused = true
-        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
+        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false, songFiles: songs)
         app.clearRecords()
         XCTAssertTrue(fm.fileExists(atPath: stateCopy.path))
         XCTAssertTrue(fm.fileExists(atPath: songsCopy.path))
         // 정상 실행: 둘 다 지운다.
         store.writesRefused = false
-        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
+        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false, songFiles: songs)
         app.clearRecords()
         XCTAssertFalse(fm.fileExists(atPath: stateCopy.path))
         XCTAssertFalse(fm.fileExists(atPath: songsCopy.path))
+    }
+
+    func test_컨테이너_기본_녹음_폴더는_실제_앱_폴더_밖의_임시_폴더다() {
+        let real = FileStateStore.supportDirectory.standardizedFileURL.path
+        XCTAssertFalse(app.songFiles.url(for: "x").standardizedFileURL.path.hasPrefix(real))   // 시험 컨테이너의 시작 정리가 앱의 녹음을 지우지 않는다
+        XCTAssertTrue(FileSongStore().url(for: "x").standardizedFileURL.path.hasPrefix(real))  // 앱이 넘기는 실제 저장소
     }
 
     // MARK: 노래
@@ -1106,7 +1114,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(relay.sent.isEmpty)
     }
 
-    // MARK: 검토 반영
+    // MARK: 회귀 시험
 
     func test_저장에_실패하면_ack하지_않고_상태도_바꾸지_않는다() async {
         store.failing = true
@@ -1140,11 +1148,11 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(store.value.outbox.count, 1)   // 곡과 song_added가 같이 저장됐다
         store.failing = true
         app.removeSong(id)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: SongFiles.url(for: id).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: app.songFiles.url(for: id).path))
         XCTAssertEqual(app.state.state.songs.first?.state, .uploading)
         store.failing = false
         app.removeSong(id)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: SongFiles.url(for: id).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: app.songFiles.url(for: id).path))
         XCTAssertEqual(store.value.outbox.map(\.type), ["song_removed"])   // 아직 못 올린 올리기는 빼고 지움은 늘 보낸다(안드로이드 removeSong과 같다)
         XCTAssertNotNil(store.value.songs.first?.removedAt)
     }
@@ -1294,7 +1302,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(app.state.isPaired)
     }
 
-    // MARK: 2회차 검토 반영
+    // MARK: 회귀 시험 2
 
     func test_초기화_저장이_실패하면_새_자격_증명을_켜지_않는다() async {
         make(paired: false)
@@ -1353,17 +1361,17 @@ final class AppModelTests: XCTestCase {
 
     func test_시작할_때_지움_상태이거나_목록에_없는_곡_파일을_정리한다() throws {
         let keep = ULID.generate(), gone = ULID.generate(), orphan = ULID.generate()
-        for id in [keep, gone, orphan] { try Data(repeating: 1, count: 10).write(to: SongFiles.url(for: id)) }
+        let songs = FileSongStore(root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true))
+        for id in [keep, gone, orphan] { try Data(repeating: 1, count: 10).write(to: songs.url(for: id)) }
         store.value.songs = [SongRow(id: keep, name: "k", durationS: 1, state: .accepted, addedAt: clock),
                              SongRow(id: gone, name: "g", durationS: 1, state: .removed, addedAt: clock, removedAt: clock)]
-        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: SongFiles.url(for: keep).path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: SongFiles.url(for: gone).path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: SongFiles.url(for: orphan).path))
-        SongFiles.remove(keep)
+        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false, songFiles: songs)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: songs.url(for: keep).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: songs.url(for: gone).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: songs.url(for: orphan).path))
     }
 
-    // MARK: 3회차 검토 반영
+    // MARK: 회귀 시험 3
 
     func test_결과_저장에_실패하면_표시도_보낼_함도_그대로_두었다가_함께_바꾼다() async {
         app.recordCare.start(.feed)
@@ -1462,7 +1470,7 @@ final class AppModelTests: XCTestCase {
         try Data(repeating: 1, count: 100).write(to: file)
         try app.recordSong(name: "나비야", recording: file, durationS: 12)
         let id = try XCTUnwrap(app.state.state.songs.first?.id)
-        SongFiles.remove(id)              // 올릴 파일이 사라졌다
+        app.songFiles.delete(id)              // 올릴 파일이 사라졌다
         app.keepConnected.socketEvent(.unreachable)   // 띠가 켜져 있다
         await app.sendOutbox.run()
         XCTAssertTrue(app.status.ui.offline)      // HTTP가 없었으니 '닿음'으로 치지 않는다
@@ -1542,7 +1550,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(g?.message.contains("차 화면에서 이 휴대폰 연결을 끊어 주세요") == true)
     }
 
-    // MARK: 4회차 검토 반영
+    // MARK: 회귀 시험 4
 
     func test_7일_만료된_전송은_진행_중_표시를_만료로_바꾼다() throws {
         let old = clock.addingTimeInterval(-8 * 86400)
@@ -1569,7 +1577,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(app.state.state.feedingLog.first?.status, .reflected)
     }
 
-    // MARK: 5회차 검토 반영
+    // MARK: 회귀 시험 5
 
     func test_만료_정리_저장이_실패하면_만료된_항목을_보내지_않는다() async {
         let old = clock.addingTimeInterval(-8 * 86400)
@@ -1588,7 +1596,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(app.state.state.outbox.isEmpty)    // 저장이 되면 지운다
     }
 
-    // MARK: 6회차 검토 반영
+    // MARK: 회귀 시험 6
 
     func test_버려진_수유_전송은_실패_표시와_지우기를_함께_저장한다() async {
         app.recordCare.start(.feed)
@@ -1600,7 +1608,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertNotNil(app.status.ui.notice)
     }
 
-    // MARK: 7회차 검토 반영
+    // MARK: 회귀 시험 7
 
     func test_노래_삭제와_선택이_버려지면_실패를_알린다() async {
         let acc = SongStatusBody(songId: "01SONG", name: "나비야", status: .accepted, reason: nil, durationS: 30, candidate: false)
@@ -1617,7 +1625,7 @@ final class AppModelTests: XCTestCase {
     }
 
 
-    // MARK: 11회차 검토 반영
+    // MARK: 회귀 시험 11
 
     private func device(_ id: String, _ role: Role = .guardian) -> DeviceInfo {
         DeviceInfo(deviceId: id, role: role, platform: .ios, pairedAt: "2026-11-05T08:00:00Z", lastSeenAt: nil, online: false, handoffAlerts: true)
@@ -1659,7 +1667,7 @@ final class AppModelTests: XCTestCase {
     }
 
 
-    // MARK: 12회차 검토 반영
+    // MARK: 회귀 시험 12
 
     func test_더_새로운_목록을_적용한_뒤_오래된_목록_응답은_버린다() async {
         let paired = PairedBody(deviceId: "d_8", role: .guardian, platform: .ios, pairedAt: "2026-11-05T08:00:00Z", handoffAlerts: true)
@@ -1685,7 +1693,7 @@ final class AppModelTests: XCTestCase {
     }
 
 
-    // MARK: 13회차 검토 반영
+    // MARK: 회귀 시험 13
 
     private func tempDir() -> URL {
         let d = FileManager.default.temporaryDirectory.appendingPathComponent("state-\(UUID().uuidString)", isDirectory: true)
@@ -1735,16 +1743,16 @@ final class AppModelTests: XCTestCase {
         let broken = Data("{ not json".utf8)
         try broken.write(to: dir.appendingPathComponent("state.json"))
         let songId = ULID.generate()
-        try Data(repeating: 1, count: 10).write(to: SongFiles.url(for: songId))
+        let songs = FileSongStore(root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true))   // 상태 폴더와 다른 곳: 복원 실패가 옆으로 옮기는 폴더가 아니라 시작 정리가 건드리는지를 본다
+        try Data(repeating: 1, count: 10).write(to: songs.url(for: songId))
         let store = FileStateStore(directory: dir)
-        let m = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
+        let m = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false, songFiles: songs)
         XCTAssertTrue(store.restoreFailed)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: SongFiles.url(for: songId).path))   // 정리하지 않았다
+        XCTAssertTrue(FileManager.default.fileExists(atPath: songs.url(for: songId).path))   // 정리하지 않았다
         let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
         let side = try XCTUnwrap(names.first { $0.hasPrefix("state.json.broken-") })
         XCTAssertEqual(try Data(contentsOf: dir.appendingPathComponent(side)), broken)           // 원본이 옆에 남았다
         XCTAssertNotNil(m)
-        SongFiles.remove(songId)
     }
 
     func test_재요청_표시를_저장하지_못하면_받은_메시지를_적용하지_않는다() async {
@@ -1765,7 +1773,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(relay.sent.map(\.type), ["state_request"])
     }
 
-    // MARK: 14회차 검토 반영
+    // MARK: 회귀 시험 14
 
     func test_곡_폴더를_보존하지_못하면_저장을_거부한다() throws {
         let dir = tempDir()
@@ -2077,8 +2085,8 @@ final class AppModelTests: XCTestCase {
                                          ts: Rfc3339.string(clock), songId: id, createdAt: clock, nextTryAt: clock)]
         app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
         app.sendOutbox.autoFlush = false
-        try? Data("x".utf8).write(to: SongFiles.url(for: id))
-        defer { SongFiles.remove(id) }
+        try? Data("x".utf8).write(to: app.songFiles.url(for: id))
+        defer { app.songFiles.delete(id) }
         app.keepConnected.socketEvent(.unreachable)
         relay.sendError = .http(status: 429, code: "rate_limited", retryAfter: 60)   // 올리기는 성공, 보내기는 429
         await app.sendOutbox.run()
@@ -2225,8 +2233,8 @@ final class AppModelTests: XCTestCase {
         store.value.needsStateRequest = true
         app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
         app.sendOutbox.autoFlush = false
-        try? Data("x".utf8).write(to: SongFiles.url(for: id))
-        defer { SongFiles.remove(id) }
+        try? Data("x".utf8).write(to: app.songFiles.url(for: id))
+        defer { app.songFiles.delete(id) }
         relay.putError = .http(status: 429, code: "rate_limited", retryAfter: 3600)
         var puts = 0
         relay.putHook = { puts += 1 }
@@ -2285,7 +2293,7 @@ final class AppModelTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: rec) }
         for n in ["a", "b", "c"] { try app.recordSong(name: n, recording: rec, durationS: 10) }
         var st = app.state.state; st.songs[2].state = .failed("x"); store.value = st   // 셋째 곡이 올리기에 실패했다
-        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
+        app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false, songFiles: app.songFiles)
         app.sendOutbox.autoFlush = false
         let bad = app.songs().ui.songs[2].id
         XCTAssertThrowsError(try app.recordSong(name: "d", recording: rec, durationS: 10))   // 3곡 한도
@@ -2296,7 +2304,7 @@ final class AppModelTests: XCTestCase {
         // 이름이 비면 실패하고 기존 곡은 그대로다
         XCTAssertThrowsError(try app.recordSong(name: " ", recording: rec, durationS: 10, replacing: bad))
         XCTAssertTrue(app.songs().ui.songs.contains { $0.id == bad })
-        XCTAssertTrue(FileManager.default.fileExists(atPath: SongFiles.url(for: bad).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: app.songFiles.url(for: bad).path))
         // 정상이면 한 번에 바꾼다(지움이 새 올리기보다 먼저 선다)
         try app.recordSong(name: "d", recording: rec, durationS: 10, replacing: bad)
         XCTAssertFalse(app.songs().ui.songs.contains { $0.id == bad })
@@ -2304,8 +2312,8 @@ final class AppModelTests: XCTestCase {
         let types = app.state.state.outbox.map(\.type)
         XCTAssertEqual(types.filter { $0 == MessageType.songRemoved }.count, 1)
         XCTAssertLessThan(types.firstIndex(of: MessageType.songRemoved)!, types.lastIndex(of: MessageType.songAdded)!)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: SongFiles.url(for: bad).path))
-        for r in app.state.state.songs { SongFiles.remove(r.id) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: app.songFiles.url(for: bad).path))
+        for r in app.state.state.songs { app.songFiles.delete(r.id) }
     }
 
     func test_소켓_pong은_앞_HTTP_실패로_켠_띠를_끈다() {
@@ -2403,8 +2411,8 @@ final class AppModelTests: XCTestCase {
                                          ts: Rfc3339.string(clock), songId: id, createdAt: clock, nextTryAt: clock)]
         app = AppContainer(relay: relay, store: store, credentials: creds, now: { [unowned self] in self.clock }, sendsCareSummary: false)
         app.sendOutbox.autoFlush = false
-        try? Data("x".utf8).write(to: SongFiles.url(for: id))   // 시작 정리(목록에 없는 파일 지우기) 뒤에 둔다
-        defer { SongFiles.remove(id) }
+        try? Data("x".utf8).write(to: app.songFiles.url(for: id))   // 시작 정리(목록에 없는 파일 지우기) 뒤에 둔다
+        defer { app.songFiles.delete(id) }
         relay.putHook = { [unowned self] in app.keepConnected.socketEvent(.unreachable) }   // 올리는 사이 소켓이 닿지 않음을 봤다
         await app.sendOutbox.run()
         XCTAssertEqual(relay.sent.map(\.type), [MessageType.songAdded])
@@ -2653,7 +2661,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(app.state.state.needsStateRequest)       // 원본이 그대로라 다음 정상 실행이 읽는다
     }
 
-    // MARK: 15회차 검토 반영
+    // MARK: 회귀 시험 15
 
     func test_기록_지우기도_기기_목록_조회가_성공한_뒤에_상태를_요청한다() async {
         relay.devicesError = .network
@@ -2809,7 +2817,7 @@ final class IntroLayoutTests: XCTestCase {
         for r: CGFloat in [120, 121, 125, 126] { XCTAssertEqual(IntroLayout.heroHeight(window: base + r, text: 440, bar: 150), r) }
     }
 
-    /// 검토 2회차: 잰 글 높이가 무대 여부에 따라 바뀌면(무대 여백 6) 남는 높이 120~125pt 창에서 보임·숨김이 오갔다.
+    /// 잰 글 높이가 무대 여부에 따라 바뀌면(무대 여백 6) 남는 높이 120~125pt 창에서 보임·숨김이 오갔다.
     /// 글 높이는 무대 여부와 무관하게 재고 여백은 함수가 더하므로, 그린 뒤 다시 재어도 결과가 같다(한 번에 정해짐).
     func test_첫_안내_무대_높이는_같은_입력이면_한_번에_정해진다() {
         for window in stride(from: CGFloat(700), through: 800, by: 1) {

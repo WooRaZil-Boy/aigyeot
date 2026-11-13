@@ -86,7 +86,9 @@ final class AppContainer {
     init(relay: RelayClient, store stateStore: StateStore, credentials: CredentialStore, careStore: CareStore = MemoryCareStore(),
          baseURL: URL? = nil, network: NetworkWatcher? = nil, ongoing: OngoingNotice? = nil, marks: LinkMarks? = nil,
          now: @escaping () -> Date = Date.init, sendsCareSummary: Bool = true, version: String = AppInfo.version,
-         fileReader: PickedFileReader = CoordinatedFileReader()) {
+         fileReader: PickedFileReader = CoordinatedFileReader(),
+         // 시험·미리보기는 인스턴스마다 다른 임시 폴더(시작 정리가 실제 앱의 녹음을 지우지 않게), 앱은 shared가 실제 폴더를 넘긴다
+         songFiles: SongFileStore = FileSongStore(root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true))) {
         self.relay = relay
         self.fileReader = fileReader
         self.now = now
@@ -100,7 +102,7 @@ final class AppContainer {
         // 강제 끊김 정리가 남은 기기면(자격 없음) GONE 화면으로 시작한다(D1)
         state = PhoneStateRepository(store: stateStore, creds: credentials.load(), goneDevice: marks.get(.goneCleanupPending))
         care = CareRepository(store: careStore)
-        songFiles = FileSongStore()
+        self.songFiles = songFiles
         // 소켓 어댑터는 사건을 메인에서 알린다(도메인과 같은 실행기).
         sockets = baseURL.map { URLSessionRelaySockets(baseURL: $0) }
         tasks.owner = self   // 띄운 작업이 도는 동안 합성 루트를 붙든다(유스케이스끼리 잇는 클로저가 약하게 본다)
@@ -123,7 +125,8 @@ final class AppContainer {
         let client = HTTPRelayClient(baseURL: base)
         // 잠금 화면 '끝내기'로 앱이 뒤에서 떠도 진행 중 표시가 돌봄 저장마다 다시 그려진다(R9 OngoingNotice)
         let app = AppContainer(relay: client, store: FileStateStore(), credentials: creds, careStore: FileCareStore(), baseURL: base,
-                               network: PathNetworkWatcher(), ongoing: LiveActivityNotice(), marks: UserDefaultsLinkMarks())
+                               network: PathNetworkWatcher(), ongoing: LiveActivityNotice(), marks: UserDefaultsLinkMarks(),
+                               songFiles: FileSongStore())
         app.registerPush.source = PushToken.shared   // FCM 토큰(5.4). 연결 요청과 앱 열기의 PATCH가 이 값을 보낸다
         // HTTPRelayClient는 도메인과 같은 메인 액터에서 돈다. 응답을 돌려주기 전에 시계 차이를 반영해, 같은 응답의 처리(요약 보낸 값 판단)가 새 값을 본다.
         client.onServerDate = { [weak app] d in app?.keepConnected.noteServerDate(d) }
