@@ -62,12 +62,17 @@ class Scenario(
     /** 시연·측정 화면의 장면 행(id 순, assets/scenario + 흘려 넣은 장면). 부를 때마다 파일을 다시 본다. 읽지 못한 파일은 제목·녹음 없이 둔다. */
     fun list(): List<SceneInfo> = files().entries.sortedBy { it.key }.map { (id, f) -> sceneInfo(id, f.scene) }
 
+    /**
+     * '실행하기' 한 번은 끝 알림 하나로 끝난다: 결과 표([runAll] finally) 또는 '시작하지 못함' 한 줄.
+     * 끝 알림은 SCENARIO 로그와 결과 폴더의 .done 파일(첫 줄이 같은 알림 줄) 두 곳에 남긴다. scene-result.sh는 둘 중 먼저 오는 것을 본다(한쪽이 빠져도 끝난다).
+     */
     fun run(id: String, repeat: Int? = null) {
-        if (job?.isCompleted == false) return   // 취소 중인 이전 실행의 정리가 끝나기 전에는 새로 시작하지 않는다
+        if (job?.isCompleted == false) { notStarted("앞 실행의 정리가 아직 끝나지 않음"); return }   // 취소 중인 이전 실행의 정리가 끝나기 전에는 새로 시작하지 않는다
         val scene = try {
             parseScene((files()[id] ?: throw SceneError("장면 '$id'가 없다")).text.getOrThrow())
         } catch (e: Exception) {
             _progress.value = ScenarioProgress(id, 0, 0, 0.0, null, "장면 파일 오류: ${e.message}")
+            notStarted("장면 파일 오류: ${e.message}")
             return
         }
         _running.value = true
@@ -76,6 +81,25 @@ class Scenario(
     }
 
     fun stop() { job?.cancel() }
+
+    /** 시작하지 못함 알림: 로그 한 줄과 .done 파일(못 써도 로그는 남는다). */
+    private fun notStarted(why: String) {
+        val line = "$NOT_STARTED · $why"
+        Log.i(TAG, line)
+        writeDone(File(CarPaths.scenarioResults(context).also { it.mkdirs() }, "notstarted-${System.currentTimeMillis()}.done"), line)
+    }
+
+    /** 끝 알림 파일. 결과 CSV를 다 쓴 뒤에 쓴다(scene-result.sh는 이 파일이 보이면 CSV를 읽는다). */
+    private fun writeDone(f: File, line: String) {
+        try { writeWhole(f, line + "\n") } catch (e: Exception) { Log.w(TAG, "끝 알림 파일 쓰기 실패: $e") }
+    }
+
+    /** 다 쓴 임시 파일을 이름만 바꿔 놓는다. 읽는 쪽(scene-result.sh)이 쓰다 만 파일을 보지 않게. */
+    private fun writeWhole(f: File, text: String) {
+        val tmp = File(f.parentFile, f.name + ".tmp")
+        tmp.writeText(text)
+        if (!tmp.renameTo(f)) { tmp.delete(); throw java.io.IOException("이름 바꾸기 실패: ${f.name}") }
+    }
 
     /** 앱 안에서 Virtual Console(127.0.0.1:8088)에 닿는지(계약 7.1 미측정 항목). 세션 신호 뒤 차량 상태를 읽어 본다. */
     suspend fun checkVc(): String = withContext(Dispatchers.IO) {
@@ -106,12 +130,15 @@ class Scenario(
         val dir = CarPaths.scenarioResults(context).also { it.mkdirs() }
         val out = freeResultFile(dir, scene.id, SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date()))   // 같은 분에 다시 돌려도 덮어쓰지 않는다
         val rows = ArrayList<RunRow>()
-        fun save() {
+        /** 결과 CSV(scene-result.sh가 읽는 원본)와 보조 .txt를 쓴다. 이번에 CSV를 썼으면 true. 못 써도 장면은 이어 가고 끝의 결과 로그는 남긴다. */
+        fun save(): Boolean {
             _results.value = SceneResults(scene.id, rows.toList())
-            out.writeText(csv(rows))
-            File(dir, out.nameWithoutExtension + ".txt").writeText(rows.joinToString("\n") { r -> "run ${r.run}: " + (r.failures.ifEmpty { listOf("통과") }).joinToString(" | ") } + "\n")
+            val wrote = try { writeWhole(out, csv(rows)); true } catch (e: Exception) { Log.w(TAG, "결과 파일 쓰기 실패: $e"); false }
+            try { File(dir, out.nameWithoutExtension + ".txt").writeText(rows.joinToString("\n") { r -> "run ${r.run}: " + (r.failures.ifEmpty { listOf("통과") }).joinToString(" | ") } + "\n") }
+            catch (e: Exception) { Log.w(TAG, "결과 요약 글 쓰기 실패: $e") }   // 보조 파일이라 CSV 상태에 넣지 않는다
+            return wrote
         }
-        // 원래 마이크 상태는 한 번만 읽고 끝에서 한 번만 되돌린다(반복 사이에는 켜지 않는다). 마이크 서비스는 시작할 때만 입력원을 보므로 장면 동안은 끈다(scenario.md 2)
+        // 원래 마이크 상태는 한 번만 읽고 끝에서 한 번만 되돌린다(반복 사이에는 켜지 않는다). 마이크 서비스는 시작할 때만 입력원을 보므로 장면 동안은 끈다
         val micBefore = MicService.runningPauses() != null
         try {
             var micOff = true
@@ -125,11 +152,16 @@ class Scenario(
             }
         } finally {
             withContext(NonCancellable) {
-                var note = "결과 파일 · ${out.path}"
-                if (micBefore && !startMicIfForeground()) note += " · 앱 화면이 없어 마이크를 다시 켜지 못함"
-                save()
+                var note = "결과 파일 · ${out.path} · 요청 ${n}회"   // 요청 횟수: 멈춰서 회차가 모자라면 scene-result.sh가 실패로 친다
+                if (micBefore) when (runCatching { startMicIfForeground() }.onFailure { Log.w(TAG, "마이크 다시 켜기 실패: $it") }.getOrNull()) {
+                    true -> Unit
+                    false -> note += " · 앱 화면이 없어 마이크를 다시 켜지 못함"
+                    null -> note += " · 마이크를 다시 켜지 못함"   // 실패해도 아래 결과 로그는 남긴다
+                }
+                if (!save()) note += " · 결과 파일을 쓰지 못함(아래 표만 남음)"   // 마지막 저장의 결과만 본다(앞 회차 저장 실패는 이번에 다시 썼으면 상관없다)
                 _progress.value = _progress.value?.copy(note = note)
                 Log.i(TAG, "$note\n${csv(rows)}")
+                writeDone(File(dir, out.nameWithoutExtension + ".done"), note)
             }
         }
     }
@@ -262,6 +294,8 @@ class Scenario(
 
     private companion object {
         const val TAG = "SCENARIO"
+        /** 장면을 시작하지 못했을 때 남기는 SCENARIO 로그 줄의 머리(scene-result.sh가 읽는다). */
+        const val NOT_STARTED = "시작하지 못함"
         const val ASSET_DIR = "scenario"
         const val TICK_MS = 50L
         const val OVERTIME_MS = 60_000L

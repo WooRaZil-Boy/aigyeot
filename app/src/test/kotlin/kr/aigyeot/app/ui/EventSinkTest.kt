@@ -10,7 +10,6 @@ import kr.aigyeot.app.host.T0
 import kr.aigyeot.app.link.FakeCipher
 import kr.aigyeot.app.link.FakeRelay
 import kr.aigyeot.app.link.Link
-import kr.aigyeot.app.scenario.Scenario
 import kr.aigyeot.engine.AskButton
 import kr.aigyeot.engine.BabyAboard
 import kr.aigyeot.engine.BabyAboardFrom
@@ -47,7 +46,7 @@ class EventSinkTest {
         val app = AppViewModel(k.store, sink, ctx) { false }
         app.babyAboard(BabyAboardFrom.NOTICE)
         app.feedingConfirm(true)
-        DemoViewModel(Scenario(ctx, k.host, l), sink).clear()
+        app.clearRecords()   // 아기 설정 '모든 기록 지우기'(release에도 있는 정차 화면)
         assertEquals(listOf(AskButton(0), BabyAboard(0, BabyAboardFrom.NOTICE), FeedingConfirmed(0, true), ClearRecords(0)), sent.toList())
     }
 

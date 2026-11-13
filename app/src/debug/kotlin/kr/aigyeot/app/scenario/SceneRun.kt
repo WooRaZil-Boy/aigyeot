@@ -75,7 +75,7 @@ data class RunRow(
     val failures: List<String>,
 )
 
-/** exec가 control_log에 남기는 재생 줄의 이름(scenario가 읽는 약속, 보고서 '다른 갈래에 요청'). */
+/** exec가 control_log에 남기는 재생 줄의 이름(장면 모듈이 읽는 약속). */
 /**
  * 차 제어 결과 줄을 기다리는 가장 긴 시간(계약 7.4): 마지막 차 제어 할 일부터 verifyTimeoutMs × (verifyRetries + 2) + 2초.
  * exec는 바꾸기 전 값 읽기 한 번 + 확인 한 번(+ 재시도 verifyRetries번)을 각각 verifyTimeoutMs까지 기다릴 수 있고, 2초는 기록 여유다.

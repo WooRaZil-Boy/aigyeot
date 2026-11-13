@@ -105,7 +105,7 @@ class SceneRunTest {
     }
 
     @Test fun `say YES는 듣기가 열린 뒤에만 답하고 쉼터 응은 운전자 조작이 아니다`() {
-        val c = parseScene(java.io.File("src/main/assets/scenario/C.json").readText())
+        val c = parseScene(java.io.File("src/debug/assets/scenario/C.json").readText())
         val w = FakeWorld(mapOf("cry/stop_50s.pcm" to 20.0))
         val r = w.play(c)
         assertTrue(r.failures.toString(), r.completed)

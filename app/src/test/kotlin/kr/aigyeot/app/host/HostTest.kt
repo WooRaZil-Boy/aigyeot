@@ -5,10 +5,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kr.aigyeot.app.scenario.FakeWorld
-import kr.aigyeot.app.scenario.SceneGate
-import kr.aigyeot.app.scenario.SceneRun
-import kr.aigyeot.app.scenario.parseScene
 import kr.aigyeot.app.store.SnapshotJson
 import kr.aigyeot.app.store.dbPause
 import kr.aigyeot.app.store.toRecord
@@ -163,23 +159,6 @@ class HostTest {
         assertEquals((0 until 200).map { it.toDouble() }, got.toList(), "중간 Step을 건너뛰지 않고 순서대로")
     }
 
-    @Test fun stepLog_overflow_countedAndFailsSceneRun() {
-        k.profile(); k.boot()
-        val scene = parseScene("""{"format":1,"id":"T","title":"t","repeat":1,"setup":{"profile":{"birthYm":"2026-02","carseat":"RIGHT","feedingIntervalMin":null,"hasSibling":false},"methods":["WHITE_NOISE"],"history":[],"seed":1,"override":[],"otherGuardians":0},
-            "steps":[{"t":1,"tap":"BABY_ABOARD"}]}""")
-        val run = SceneRun(scene, 0, k.host, FakeWorld(), k.now)   // 반복 시작: 지금 유실 수를 기억한다
-        val gate = CountDownLatch(1)
-        val scope = collect(Dispatchers.Default) { gate.await() }   // 멈춘 수집자: 버퍼(4096)를 넘기면 버려진다
-        repeat(4_200) { k.host.post(CabinTemp(0, it.toDouble())) }
-        k.host.awaitIdle()
-        val lost = k.host.stepLogDrops.value
-        gate.countDown(); scope.cancel()
-        assertTrue(lost > 0, "버퍼가 넘친 수를 센다")
-        run.checkStepLog()
-        val row = run.row()
-        assertEquals(false, row.completed, "Step이 버려진 반복은 통과로 남지 않는다")
-        assertTrue(row.failures.any { "stepLog 유실 $lost" in it }, row.failures.toString())
-    }
 
     // ---- 복원 뒤 대조(contracts-link 8.3)·바로 다시 확인(8.6, C67) ----
 
@@ -791,10 +770,13 @@ class HostTest {
         k.boot()
         assertEquals(listOf(Sid.S06), k.state().speech.queue.map { it.sid }, "전제: 말하지 않는 S06이 큐에 있다")
         k.exec.clear()
+        assertNull(k.host.activeScene.value, "장면 전: 화면의 '모든 기록 지우기'가 켜져 있다")
         k.host.startScenario(setup()); k.host.awaitIdle()
+        assertEquals("A", k.host.activeScene.value?.id, "장면 중: 화면이 지우기를 끈다(호스트도 ClearRecords를 받지 않는다)")
         assertTrue(k.exec.any { it is CancelSpeech }, "말하지 않아도 실행기를 끊는다")
         assertTrue(k.store.loadSnapshot()!!.speech.queue.isEmpty(), "보관한 실제 상태(장면 직전 스냅숏)에 큐 줄이 없다")
         k.host.endScenario(); k.host.awaitIdle()
+        assertNull(k.host.activeScene.value, "장면 끝: 지우기가 다시 켜진다")
         k.ev(Tick(0), k.now + 10 * 60_000)   // 장면이 10분 돈 뒤
         assertTrue(k.exec.filterIsInstance<Speak>().none { it.sid == Sid.S06 }, "장면 전 값('1시간 10분')을 장면 뒤에 말하지 않는다")
     }
@@ -1287,25 +1269,6 @@ class HostTest {
         assertNull(k.state().speech.speaking, "콜백이 사라진 말하기는 복원처럼 비운다")
     }
 
-    @Test fun c92_startScenario_inheritsRealCar_startStepInStepLog() {
-        k.profile(); k.boot(); k.open()   // 실제: 마이크 켜짐, 뒷문 닫힘, 기어 D, 세션 열림
-        val real = k.state()
-        val gate = SceneGate(7)
-        val got = CopyOnWriteArrayList<Step>()
-        val scope = collect { if (gate.accept(it)) got += it }
-        k.host.post(CabinTemp(0, 21.0))   // startScenario보다 먼저 큐에 든 실제 사건
-        k.host.startScenario(setup()); k.host.awaitIdle()
-        k.ev(Tick(0), k.now + 1_000)
-        scope.cancel()
-        val first = got.first()
-        assertTrue(first.commands.isEmpty() && first.state.session == null, "장면 첫 Step부터 받는다")
-        assertTrue(got.none { it.state.session?.id == real.session!!.id }, "그 앞 실제 Step은 버린다")
-        assertEquals(Gear.D, first.state.car.gear, "실제 기어를 이어받는다")
-        assertTrue(first.state.car.micRunning, "실제 마이크 상태")
-        assertEquals(emptySet(), first.state.car.rearDoorOpen, "실제 뒷문(닫힘)")
-        assertEquals(real.ign.driverUserId, first.state.ign.driverUserId)
-        assertEquals(2, got.size, "시작 Step과 그 뒤 Tick")
-    }
 
     @Test fun c92_endScenario_restoresOverriddenGearAndDoor() {
         k.profile(); k.boot(); k.open()
@@ -1373,7 +1336,7 @@ class HostTest {
         assertTrue(k.ses().recordsCleared)
     }
 
-    // ---- 검토 수정 C1~C4 ----
+    // ---- 회귀 시험 C1~C4 ----
 
     @Test fun c78_restoreDropsOpenSteerWindow_doesNotOverwriteCommittedRow() {
         k.profile(); k.boot(); k.open()

@@ -28,13 +28,13 @@ class SceneFileTest {
     }
 
     @Test fun `assets의 장면 파일은 모두 읽힌다`() {
-        val files = File("src/main/assets/scenario").listFiles { f -> f.extension == "json" }!!
+        val files = File("src/debug/assets/scenario").listFiles { f -> f.extension == "json" }!!
         assertEquals(27, files.size)   // A~E, C2, D2, F14 20개
         files.forEach { f -> assertEquals(f.nameWithoutExtension, parseScene(f.readText()).id) }
     }
 
     @Test fun `장면 파일의 쉼터 이름은 모두 휴게소 자료의 한 줄로 찾아진다(자리표시 이름 금지)`() {
-        val files = File("src/main/assets/scenario").listFiles { f -> f.extension == "json" }!!
+        val files = File("src/debug/assets/scenario").listFiles { f -> f.extension == "json" }!!
         var n = 0
         files.forEach { f ->
             parseScene(f.readText()).steps.mapNotNull { (it.action as? Inject)?.takeIf { a -> a.event == "RouteState" } }.forEach { a ->

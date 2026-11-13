@@ -33,7 +33,8 @@ sealed interface Route {
     companion object {
         fun parse(key: String): Route = when {
             key.startsWith("report:") -> Report(key.removePrefix("report:"))
-            else -> listOf(Home, Setup, Connect, Songs, Reports, Demo, DemoScenes).firstOrNull { it.key == key } ?: Home
+            else -> listOf(Home, Setup, Connect, Songs, Reports, Demo, DemoScenes).firstOrNull { it.key == key }
+                ?.takeIf { DemoEntry.available || (it != Demo && it != DemoScenes) } ?: Home   // release에서 저장된 시연 경로는 홈으로
         }
         val saver = Saver<Route, String>(save = { it.key }, restore = ::parse)
     }
@@ -94,8 +95,10 @@ private fun ParkRoute(g: Graph, app: AppViewModel, route: Route, profile: Profil
                 go = { go(it) },
             )
         }
-        Route.Setup -> SetupScreen(profile.profile, g.clock, profile.noRearOutput, home, onSongs = { go(Route.Songs) }, onDemo = { go(Route.Demo) }) {
-            app.saveProfile(it); home()
+        Route.Setup -> {
+            val inScene = g.host.activeScene.collectAsStateWithLifecycle().value != null   // release에는 장면이 없어 늘 false
+            SetupScreen(profile.profile, g.clock, profile.noRearOutput, home, onSongs = { go(Route.Songs) }, onDemo = if (DemoEntry.available) ({ go(Route.Demo) }) else null,
+                onClear = app::clearRecords, clearEnabled = !inScene) { app.saveProfile(it); home() }
         }
         Route.Connect -> {
             val vm = viewModel<ConnectViewModel>(factory = viewModelFactory { initializer { ConnectViewModel(g.link, g.clock) } })
@@ -112,9 +115,6 @@ private fun ParkRoute(g: Graph, app: AppViewModel, route: Route, profile: Profil
                     .uiState.collectAsStateWithLifecycle().value
             }, onOpen = { go(Route.Report(it)) }, onBack = { go(if (it) Route.Reports else Route.Home) })
         }
-        Route.Demo, Route.DemoScenes -> {   // 장면 고르기는 시연·측정 화면 안으로 합쳤다(시안 demo()). DemoScenes는 저장된 경로를 위해 남긴다
-            val vm = viewModel<DemoViewModel>(factory = viewModelFactory { initializer { DemoViewModel(g.scenario, g.events) } })
-            DemoScreen(vm.uiState.collectAsStateWithLifecycle().value, vm.scenes.collectAsStateWithLifecycle().value, vm::run, vm::stop, vm::checkVc, vm::clear) { go(Route.Setup) }   // 화면이 안 보이면 CPU·메모리 재기를 멈춘다
-        }
+        Route.Demo, Route.DemoScenes -> DemoEntry.Screen(g) { go(Route.Setup) }   // 장면 고르기는 시연·측정 화면 안으로 합쳤다(시안 demo()). DemoScenes는 저장된 경로를 위해 남긴다. release에는 없다
     }
 }

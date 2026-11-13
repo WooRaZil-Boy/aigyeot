@@ -21,6 +21,7 @@ import kr.aigyeot.app.store.db.needsSetup
 import kr.aigyeot.app.store.toProfile
 import kr.aigyeot.engine.BabyAboard
 import kr.aigyeot.engine.BabyAboardFrom
+import kr.aigyeot.engine.ClearRecords
 import kr.aigyeot.engine.FeedingConfirmed
 import kr.aigyeot.engine.Notice
 import kr.aigyeot.engine.ProfileChanged
@@ -51,6 +52,9 @@ class AppViewModel(
     }
 
     fun babyAboard(from: BabyAboardFrom) = events.post(BabyAboard(0, from))
+
+    /** 정차 화면(아기 설정) '모든 기록 지우기'(명세서 13장·C40). 장면 중이면 호스트가 받지 않는다. */
+    fun clearRecords() = events.post(ClearRecords(0))
 
     fun feedingConfirm(yes: Boolean) {
         events.post(FeedingConfirmed(0, yes))

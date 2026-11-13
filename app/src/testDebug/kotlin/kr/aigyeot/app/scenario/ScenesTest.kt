@@ -14,9 +14,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** 가짜 호스트 + 진짜 판단 코어로 assets/scenario의 장면을 끝까지 돌린다(scenario.md 끝 기준). */
+/** 가짜 호스트 + 진짜 판단 코어로 assets/scenario의 장면을 끝까지 돌린다. */
 class ScenesTest {
-    private val dir = File("src/main/assets/scenario")
+    private val dir = File("src/debug/assets/scenario")
     private fun scene(id: String) = parseScene(File(dir, "$id.json").readText())
     /** 계약 7.5 뼈대의 녹음: 'stop'은 울음이 시작 20초 뒤 그침(rt_outcome.py 정답 '그침' 5~25초), 나머지는 녹음 내내 운다. */
     private val cryLen = mapOf("cry/stop_40s.pcm" to 20.0, "cry/stop_50s.pcm" to 20.0)
@@ -24,7 +24,7 @@ class ScenesTest {
     private fun runAll(id: String): List<RunRow> {
         val s = scene(id)
         return (0 until s.repeat).map { k -> FakeWorld(cryLen).play(s, k) }
-            .also { File("build/scenario-jvm").apply { mkdirs() }.resolve("$id.csv").writeText(csv(it)) }   // 보고서용 측정표(가짜 세상)
+            .also { File("build/scenario-jvm").apply { mkdirs() }.resolve("$id.csv").writeText(csv(it)) }   // 측정표(가짜 세상)
     }
 
     /** 15장 시나리오 기준: 끝까지 처리, 경보 지연 3초 이하, 시도 2회·에피소드 112초·세션 20분 이하, 운전자 조작 0, 이득 위반 0. */

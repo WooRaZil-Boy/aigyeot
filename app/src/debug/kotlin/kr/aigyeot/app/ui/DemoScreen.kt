@@ -69,18 +69,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kr.aigyeot.app.R
 import kr.aigyeot.app.detect.MicService
-import kr.aigyeot.app.host.EventSink
 import kr.aigyeot.app.scenario.Scenario
 import kr.aigyeot.app.scenario.ScenarioProgress
 import kr.aigyeot.app.scenario.SceneInfo
 import kr.aigyeot.app.scenario.SceneResults
-import kr.aigyeot.engine.ClearRecords
 import kr.aigyeot.engine.CrySegment
 import kr.aigyeot.engine.Params
 import java.io.File
 import java.util.Locale
 
-/** 시연·측정 화면 상태: 장면이 도는지(도는 동안은 고르기·지우기를 끈다), 장면 진행, Virtual Console 확인 결과, 측정표 네 칸, 울음 확률 선. */
+/** 시연·측정 화면 상태: 장면이 도는지(도는 동안은 고르기를 끈다), 장면 진행, Virtual Console 확인 결과, 측정표 네 칸, 울음 확률 선. */
 data class DemoUiState(
     val running: Boolean = false, val progress: ScenarioProgress? = null, val vcText: String? = null,
     val metrics: List<Metric> = metrics(null, null, null), val prob: List<ProbPoint> = emptyList(),
@@ -96,12 +94,11 @@ data class ProbPoint(val x: Float, val p: Float)
 data class ProcSample(val ticks: Long?, val atMs: Long, val pssKb: Long?)
 
 /**
- * 시연·측정(F18). 장면 재생기([Scenario])는 읽기·실행·멈춤만 한다. 기록 지우기는 장면 단계가 아니라 사용자가 실제 기록에 하는 일이라
- * 실제 입구([events], V3)로 보낸다(장면 중이면 버튼이 꺼져 있고, 호스트도 장면 중 ClearRecords를 받지 않는다).
+ * 시연·측정(F18). 장면 재생기([Scenario])는 읽기·실행·멈춤만 한다. '모든 기록 지우기'는 release에도 있는 아기 설정 화면에 있다.
  * CPU·메모리는 화면을 보는 동안만 [PROC_EVERY_MS]마다 잰다(구독이 끊기면 멈춘다). 울음 확률은 감지기가 판단 코어로 보내는 구간([segments])을 그대로 받는다.
  */
 class DemoViewModel(
-    private val scenario: Scenario, private val events: EventSink,
+    private val scenario: Scenario,
     segments: Flow<CrySegment> = micSegments(), private val sample: () -> ProcSample = ::readProcSample, private val hz: Long = clockTicks(),
 ) : ViewModel() {
     private val vc = MutableStateFlow<String?>(null)
@@ -127,7 +124,6 @@ class DemoViewModel(
     fun run(id: String, repeat: Int?) = scenario.run(id, repeat)
     fun stop() = scenario.stop()
     fun checkVc() { viewModelScope.launch { vc.value = scenario.checkVc() } }
-    fun clear() = events.post(ClearRecords(0))
 }
 
 /** CPU·메모리를 다시 재는 간격. */
@@ -135,7 +131,7 @@ internal const val PROC_EVERY_MS = 2_000L
 /** 울음 확률 선이 보여 주는 최근 길이(시안 그래프 한 폭). */
 internal const val PROB_WINDOW_MS = 60_000L
 
-/** 감지기가 내는 구간(읽기 전용 갈래). 구독하는 동안만 걸고, 끊기면 뗀다. */
+/** 감지기가 내는 구간(읽기 전용). 구독하는 동안만 걸고, 끊기면 뗀다. */
 private fun micSegments(): Flow<CrySegment> = callbackFlow {
     val tap: (kr.aigyeot.engine.CrySegment) -> Unit = { trySend(it) }
     MicService.segmentTaps += tap
@@ -208,14 +204,13 @@ internal fun repeatDown(repeat: Int?, sceneRepeat: Int) = ((repeat ?: sceneRepea
 internal fun repeatUp(repeat: Int?, sceneRepeat: Int) = (repeat ?: sceneRepeat) + 1
 
 /**
- * 시연·측정(시안 demo()): 왼쪽 장면 목록·반복·실행·멈춤, 오른쪽 측정(장면 진행·Virtual Console 확인)과 모든 기록 지우기(C40) → 확인 창.
+ * 시연·측정(시안 demo()): 왼쪽 장면 목록·반복·실행·멈춤, 오른쪽 측정(장면 진행·Virtual Console 확인).
  * 울음 확률 선(감지기 구간, 기준선 = Params 경보 문턱)과 측정표 네 칸은 실제로 잰 값만 그린다. 없는 값은 '—', 확률이 아직 없으면 기준선만.
  */
 @Composable
 fun DemoScreen(
-    ui: DemoUiState, scenes: List<SceneInfo>, onRun: (String, Int?) -> Unit, onStop: () -> Unit, onCheckVc: () -> Unit, onClear: () -> Unit, onBack: () -> Unit,
+    ui: DemoUiState, scenes: List<SceneInfo>, onRun: (String, Int?) -> Unit, onStop: () -> Unit, onCheckVc: () -> Unit, onBack: () -> Unit,
 ) {
-    var ask by rememberSaveable { mutableStateOf(false) }
     var picked by rememberSaveable { mutableStateOf<String?>(null) }   // 화면 재생성(회전)에도 남긴다(명세서 11장)
     val sel = picked ?: scenes.firstOrNull()?.id   // 고르기 전에는 첫 장면(장면 행은 IO에서 늦게 올 수 있다)
     var repeat by rememberSaveable { mutableStateOf<Int?>(null) }   // null = 장면 파일의 repeat
@@ -246,8 +241,6 @@ fun DemoScreen(
         }
         CarButton("Virtual Console 확인", Modifier.padding(top = 16.dp), size = BtnSize.M, enabled = !running, onClick = onCheckVc)
         ui.vcText?.let { Body("Virtual Console · $it") }
-        Body("프로필·연결·노래는 남기고 주행 기록과 성적을 모두 지워요. 중계 서버에 남은 기록도 지워요.")
-        CarButton("모든 기록 지우기", Modifier.padding(top = 24.dp), BtnKind.DANGER, icon = R.drawable.ic_trash_2, enabled = !running) { ask = true }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -263,7 +256,6 @@ fun DemoScreen(
             }
         }
     }
-    if (ask) Popup("모든 기록을 지울까요?", "지운 기록은 되돌릴 수 없어요", "지우기", "닫기", onConfirm = { ask = false; onClear() }, onDismiss = { ask = false })
 }
 
 /** 울음 확률 선(시안 .prob: 높이 200, 기준선 아이 주황 점선, 선 브랜드 파랑 4). 정차 화면이라 새 구간마다 다시 그린다. */
@@ -315,7 +307,7 @@ private fun SceneRow(s: SceneInfo, on: Boolean, enabled: Boolean, onClick: () ->
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (s.audio.isNotEmpty()) Text(s.audio.joinToString(" · "), style = CarType.label, color = p.textTertiary, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
         }
-        if (on) CheckBox(true)   // 선택 표시는 공용 체크 칸 하나(브랜드 파랑 바탕 + 흰 체크, 11-11 사용자 결정). 한 개만 고르는 목록이라 꺼진 칸은 그리지 않는다
+        if (on) CheckBox(true)   // 선택 표시는 공용 체크 칸 하나(브랜드 파랑 바탕 + 흰 체크, 11-11 결정). 한 개만 고르는 목록이라 꺼진 칸은 그리지 않는다
     }
 }
 

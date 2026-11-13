@@ -46,7 +46,7 @@ import java.time.Instant
 import java.util.PriorityQueue
 
 /**
- * 호스트 갈래 없이 장면을 끝까지 돌리는 가짜 세상(scenario.md '다른 갈래 없이 시험하는 법'): 진짜 판단 코어(Engine)를 돌리는 호스트,
+ * 호스트 없이 장면을 끝까지 돌리는 가짜 세상: 진짜 판단 코어(Engine)를 돌리는 호스트,
  * 할 일에 결과 사건을 돌려주는 가짜 실행기, Virtual Console을 기어·주행 사건으로 바꾸는 가짜 차, 녹음 대신 울음 구간을 내는 가짜 감지기.
  * 시간은 가상 시계(50ms씩)로 흐른다. 한 장면 실행에 하나씩 만든다.
  *

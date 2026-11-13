@@ -52,6 +52,8 @@ class Host(
 
     /** 지금 도는 장면 id(G44). store가 SaveSession 때 붙인다. */
     val scenarioId: String? get() = scene.scenario?.id
+    /** 지금 도는 장면(없으면 null). 장면 중에는 ClearRecords를 받지 않으므로(EngineRunner) 화면은 이것으로 '모든 기록 지우기'를 끈다. */
+    val activeScene: StateFlow<ScenarioSetup?> = scene.scenarioFlow
 
     override fun clock(): Long = clock.invoke()
 

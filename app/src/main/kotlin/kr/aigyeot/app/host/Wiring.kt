@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.onEach
 import kr.aigyeot.app.detect.MicService as MicFgs
 import kr.aigyeot.app.exec.Exec
 import kr.aigyeot.app.link.Link
-import kr.aigyeot.app.scenario.Scenario
 import kr.aigyeot.app.store.Store
 import kr.aigyeot.app.store.retryOnDbError
 import kr.aigyeot.app.store.db.AppDatabase
@@ -83,14 +82,13 @@ class Graph private constructor(ctx: Context) {
     val exec = Exec(ctx, clock, host::postReal, host::logControl, latest)
     private val sinks = host.linkSinks()
     val link = Link(ctx, db, clock, sinks.first, latest, sinks.second, stateReady = { host.steps.first { it != null } })
-    val scenario = Scenario(ctx, host, link)
     /** 화면·알림 사건의 입구(V3). */
     val events: EventSink = host.uiSink()
 
     init {
         host.targets = Targets(exec::handle, link::handle, { Notices.show(ctx, it) }, link::wake, link::restoreEvents, exec::reemitAll, lastGear = exec::lastGear, cancelIfSpeaking = exec::cancelIfSpeaking, linkNow = link::enqueueNow, hideNotice = { Notices.cancel(ctx, it) })
         MicFgs.clock = clock
-        // 마이크 사건은 장면 입력원이다: 장면은 실제 마이크를 끄고 장면 PCM을 마이크 서비스에 넣으며(Scenario.runAll·runOnce), 장면 끝 전에 다시 끈다.
+        // 마이크 사건은 장면 입력원이다: 장면은 실제 마이크를 끄고 장면 PCM을 마이크 서비스에 넣으며(debug 빌드 Scenario.runAll·runOnce), 장면 끝 전에 다시 끈다.
         // 그래서 장면 중 마이크 사건은 늘 장면 소리에서 나오고 override로 거르지 않는 주입 길(post)을 쓴다(C322)
         MicFgs.emit = host::post
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

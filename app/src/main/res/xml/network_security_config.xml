@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- release: 평문은 에뮬레이터 Virtual Console(127.0.0.1·localhost:8088)만. 실차에는 8088이 없다 -->
+<!-- release: 평문을 쓰지 않는다(배포 중계는 https). 시연·측정이 닿던 Virtual Console 평문 예외는 debug 설정(src/debug/res/xml)에만 있다 -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

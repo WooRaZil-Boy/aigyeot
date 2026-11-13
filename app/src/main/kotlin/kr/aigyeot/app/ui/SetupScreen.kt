@@ -94,12 +94,12 @@ internal fun carSeatOf(name: String?): CarSeat = CarSeat.entries.firstOrNull { i
  * 창은 한 번에 하나([Pick]), 굴리는 값은 '고르기'에서만 양식에 들어간다(저장은 '저장하기'). 양식 값은 rememberSaveable(AppRoot의 화면 상태 보관)이라
  * 주행 전환·화면 재생성 뒤에도 남지만, 창과 굴리던 값은 저장하지 않는다(remember, 시안 v8d-10 ⑨): 주행이 되면 AppRoot가 주행 중 화면만 그려 이 화면이 빠지므로,
  * 정차로 돌아오거나 다크 전환 등으로 화면이 다시 만들어지면 창은 닫혀 있고 확정하지 않은 값은 버려진다(정차 전용).
- * 첫 설정이 아니면(뒤로 있음) 아래에 '우리 노래'·'시연·측정'으로 가는 행을 둔다(시안 9장 ③: 홈 메뉴에서 설정 안으로).
+ * 첫 설정이 아니면(뒤로 있음) 아래에 '우리 노래'·'시연·측정'(debug 빌드만)으로 가는 행과 '모든 기록 지우기'(명세서 13장·C40, 확인 창 뒤)를 둔다(시안 9장 ③: 홈 메뉴에서 설정 안으로).
  */
 @Composable
 fun SetupScreen(
     old: ChildProfileEntity?, now: () -> Long, noRearOutput: Boolean, onBack: (() -> Unit)?,
-    onSongs: (() -> Unit)? = null, onDemo: (() -> Unit)? = null, onSave: (ChildProfileEntity) -> Unit,
+    onSongs: (() -> Unit)? = null, onDemo: (() -> Unit)? = null, onClear: (() -> Unit)? = null, clearEnabled: Boolean = true, onSave: (ChildProfileEntity) -> Unit,
 ) = Column(Modifier.fillMaxSize()) {
     val ym = birthMonthOf(old?.birthYm, now())
     var consent by rememberSaveable { mutableStateOf(old.consentChecked()) }
@@ -147,10 +147,12 @@ fun SetupScreen(
         CarButton("저장하기", Modifier.fillMaxWidth().padding(top = 28.dp), BtnKind.BRAND, enabled = canSave(consent, nickname)) {
             onSave(profileEntity(old, nickname, YearMonth.of(year, month), seat, interval, sibling, song, front, noRearOutput, now()))
         }
-        if (onSongs != null || onDemo != null) RowsCard(Modifier.padding(top = 28.dp)) {
+        if (onSongs != null || onDemo != null || onClear != null) RowsCard(Modifier.padding(top = 28.dp)) {
             val chev: @Composable () -> Unit = { LineIcon(R.drawable.ic_chevron_right, 36.dp, p.textTertiary) }
             if (onSongs != null) ListRow("우리 노래", icon = R.drawable.ic_song, onClick = onSongs, trailing = chev)
             if (onDemo != null) ListRow("시연·측정", icon = R.drawable.ic_activity, onClick = onDemo, trailing = chev)
+            if (onClear != null) ListRow("모든 기록 지우기", if (clearEnabled) "프로필·연결·노래는 남겨요" else "장면이 끝나면 지울 수 있어요", R.drawable.ic_trash_2,
+                enabled = clearEnabled, onClick = { pick = Pick.CLEAR })   // 장면 중에는 호스트가 지우기를 받지 않는다(debug 장면만)
         }
     }
 
@@ -185,12 +187,16 @@ fun SetupScreen(
             }
         }
         Pick.CONSENT -> Popup(CONSENT_DETAIL_TITLE, CONSENT_DETAIL, "닫기", null, onConfirm = { pick = null }, onDismiss = { pick = null })
+        Pick.CLEAR -> Popup("모든 기록을 지울까요?", CLEAR_DETAIL, "지우기", "닫기", onConfirm = { pick = null; onClear?.invoke() }, onDismiss = { pick = null })   // 장면은 시연 화면에서만 시작해 창이 열린 채 장면이 되지 않는다
         null -> {}
     }
 }
 
 /** 아기 설정 창(한 번에 하나): 태어난 해·달, 평소 수유 간격, 동의 '자세히 보기'. */
-internal enum class Pick { BIRTH, INTERVAL, CONSENT }
+internal enum class Pick { BIRTH, INTERVAL, CONSENT, CLEAR }
+
+/** '모든 기록 지우기' 확인 창 본문: 지우는 범위(명세서 13장 C40, 중계 보관분 L36), 휴대폰에 이미 온 기록은 남음(contracts-link 오류 표), 되돌릴 수 없음. */
+internal const val CLEAR_DETAIL = "주행 기록과 달래기 성적을 모두 지우고, 중계 서버에 남은 기록도 지워요. 이미 휴대폰에 온 리포트·알림은 남으니 휴대폰에서 지워 주세요. 지운 기록은 되돌릴 수 없어요."
 
 /**
  * 동의 블록(C387, 시안 su-consent): 카드 하나. 윗부분은 체크 하나(Role.Checkbox, 체크 48 + 굵은 줄 30/38·700 + 요약 두 문장 24/32 흐림)이고,

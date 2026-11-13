@@ -1,5 +1,7 @@
 package kr.aigyeot.app.host
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kr.aigyeot.app.store.Store
 import kr.aigyeot.app.store.bestEffort
 import kr.aigyeot.engine.CareCleared
@@ -32,9 +34,10 @@ internal class SceneController(
     private val clock: () -> Long,
     private val targets: () -> Targets,
 ) {
-    /** 지금 도는 장면(G44). 다른 스레드(store의 장면 id, 재생 시작 결과의 override)도 읽는다. */
-    @Volatile var scenario: ScenarioSetup? = null
-        private set
+    private val _scenario = MutableStateFlow<ScenarioSetup?>(null)
+    /** 지금 도는 장면(G44). 다른 스레드(store의 장면 id, 재생 시작 결과의 override)도 읽는다. 화면은 [scenarioFlow]로 본다. */
+    val scenario: ScenarioSetup? get() = _scenario.value
+    val scenarioFlow: StateFlow<ScenarioSetup?> = _scenario
     /** 장면 동안 보관한 실제 상태. */
     var real: EngineState? = null
         private set
@@ -88,7 +91,7 @@ internal class SceneController(
             runner.replace(step.state); runner.publish(step); router.dispatch(old, step); runner.scheduleTick(step.wakeAt)
             real = runner.state; router.snapshot(runner.state); store.resetContext()   // 장면 표본이 실제 맥락에 섞이지 않게(C92). 실제 스냅숏은 장면 직전 값으로 둔다(장면 중 죽어도 실제로 복원)
         }
-        scenario = setup
+        _scenario.value = setup
         runner.replace(start.scene)
         runner.publish(Step(runner.state, emptyList(), null))   // 장면 첫 Step(rng = 그 반복 시드, 할 일 없음). scenario의 SceneGate가 여기서부터 받는다
         setup.care?.let { runner.run(runner.stamp(CareSummary(clock(), it))) }   // C119: 첫 Step 뒤 요약 흉내
@@ -105,7 +108,7 @@ internal class SceneController(
         val end = engine.sceneEnd(runner.state)   // V8: 장면 상태 정리(수명 표 SCENE_END 열)는 판단 코어가 한다
         router.sendLoose(end.commands)   // 장면 재생·발화를 남기지 않고(StopPlayback·CancelSpeech) 장면 세션이 잠근 뒷창을 되돌린다(SetWindowLock, V11)
         store.settleSceneHandoffs(end.settle)   // C290: 쿼리 정리(restore 안) 전에 장면 상태의 알림 장부로 행을 정확히 확정(판단 코어와 같은 규칙, V20)
-        scenario = null
+        _scenario.value = null
         real = null
         store.resetContext()
         // 실제 상태의 말하기·질문·재생은 장면 시작이 끊었다(V9). 남은 잠금 결과 대기 등 장면 상태로 간 콜백은 프로세스 복원과 같은 길로 비운다(H7: Tick도 다시 예약)
