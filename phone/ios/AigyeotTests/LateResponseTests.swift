@@ -1,6 +1,6 @@
-import XCTest
-import Observation
 @testable import Aigyeot
+import Observation
+import XCTest
 
 /// 늦게 온 응답과 그사이 바뀐 연결: 옛 요청의 결과가 지금 상태를 덮지 않는지 본다.
 @MainActor

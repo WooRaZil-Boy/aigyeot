@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 연결·끊기·링크.
 @MainActor

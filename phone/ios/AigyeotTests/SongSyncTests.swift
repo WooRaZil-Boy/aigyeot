@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 노래 올리기·삭제.
 @MainActor

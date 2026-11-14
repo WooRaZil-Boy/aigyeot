@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 
 // 기록 가져오기. 아이곁·Huckleberry·Nara CSV를 돌봄 기록으로 바꾼다. 순수 함수이고 저장은 RecordCare.importRows가 한다.
 // 두 앱이 같은 파일(shared/src/test/resources/care/import/)에서 같은 결과(id·건너뛴 수까지)를 내야 한다.

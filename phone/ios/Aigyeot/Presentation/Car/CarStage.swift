@@ -1,6 +1,6 @@
-import SwiftUI
-import RealityKit
 import Combine
+import RealityKit
+import SwiftUI
 
 private typealias DS = DesignSystem
 
@@ -145,7 +145,7 @@ private final class StageMarkLayer: UIView {
         isAccessibilityElement = false   // 읽기 이름은 카드(CarStageCard)가 준비 중에만 단다
     }
 
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { fatalError("init(coder:) 미구현") }
 
     func applyColors() {
         track.strokeColor = UIColor(DS.textPrimary).withAlphaComponent(0.1).resolvedColor(with: traitCollection).cgColor
@@ -318,7 +318,7 @@ final class CarStageView: UIView {
         backgroundColor = .clear
     }
 
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { fatalError("init(coder:) 미구현") }
 
     /// 카드는 스크롤 화면 안에 있다: 가로로 끌 때만 돌리고, 세로로 끌면 화면이 굴러가게 둔다(세로 밀기로 차가 위에서 내려다보이게 뒤집히지 않게).
     override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {

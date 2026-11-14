@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 @MainActor
 /// 돌봄 기록 시험의 바탕: 가짜 중계·저장소로 `AppContainer`를 만들고 기록을 쉽게 만드는 도우미.

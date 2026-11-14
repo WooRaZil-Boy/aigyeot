@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 합성 루트 `AppContainer`를 그대로 쓰는 앱 단위 시험의 바탕. `FakeRelay`·메모리 저장소는 TestKit에 있다.
 @MainActor

@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 final class WaveformTests: XCTestCase {
     /// 막대 60개 × (4pt + 간격 3pt)가 화면 폭을 넘었다. 폭에 들어가는 만큼만 최근 막대를 그린다.

@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 받은 메시지·안내.
 @MainActor

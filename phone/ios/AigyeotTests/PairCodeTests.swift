@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 final class PairCodeTests: XCTestCase {
     func test_연결_코드는_6자리_숫자() {

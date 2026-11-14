@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 기록 지우기·연결 끊기·수유 옮기기.
 @MainActor

@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// Presentation 시험: 가짜 저장소·가짜 중계로 합성 루트를 만들고 화면 뷰모델의 상태를 본다.
 /// 안드로이드 ViewModelTest와 같은 이름의 시험은 아래 `ViewModelTests`다.

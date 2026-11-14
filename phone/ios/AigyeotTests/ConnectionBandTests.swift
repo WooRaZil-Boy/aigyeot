@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 오프라인 띠·소켓·앞뒤 전환.
 @MainActor

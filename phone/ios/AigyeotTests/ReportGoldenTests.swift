@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 리포트 화면에 나가는 문구를 공용 예제(`shared/src/test/resources/protocol/report_summary*.json`)마다 모아
 /// `Golden/report_text.txt`와 글자까지 견준다. 한 줄은 `<예제 파일>:<JSON 경로>: <글자>` 꼴이다.

@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 메시지 형식 시험:`shared/src/test/resources/protocol/` 의 모든 JSON을 해당 타입으로 decode → encode 해
 /// 원래 JSON과 트리로 같은지 본다. 표에 없는 파일, 파일 없는 표 항목은 실패한다.

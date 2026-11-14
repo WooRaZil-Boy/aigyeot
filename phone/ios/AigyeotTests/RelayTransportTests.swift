@@ -1,6 +1,6 @@
-import XCTest
-import Network
 @testable import Aigyeot
+import Network
+import XCTest
 
 /// 다시 붙자마자 밀린 봉투를 먼저 보내고 pong은 늦게(여기서는 아예) 주는 중계 흉내.
 final class EnvelopeFirstServer {

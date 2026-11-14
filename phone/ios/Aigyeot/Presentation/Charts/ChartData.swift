@@ -254,6 +254,8 @@ enum ChartData {
     static func kpis(_ b: ReportSummaryBody) -> Kpis {
         let lat = b.timeline.compactMap(\.alarmLatencyS)
         return Kpis(detectS: lat.isEmpty ? nil : lat.reduce(0, +) / Double(lat.count), cryS: b.timeline.reduce(0) { $0 + $1.totalCryS },
+                    // `count`는 컬렉션 길이가 아니라 횟수 속성이라 isEmpty로 바꿀 수 없다.
+                    // swiftlint:disable:next empty_count
                     actionKinds: Set(b.carActions.filter { $0.count > 0 }.map(\.action)).count,
                     stopNotices: b.timeline.compactMap(\.stop).filter { $0.toldDriver != false && $0.mode != .parked }.count)
     }

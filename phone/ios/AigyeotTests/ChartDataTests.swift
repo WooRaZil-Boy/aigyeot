@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 차트 값: 기록·리포트에서 그릴 때 계산한 값이 규칙대로다. 안드로이드 ChartDataTest와 같은 경우.
 final class ChartDataTests: XCTestCase {

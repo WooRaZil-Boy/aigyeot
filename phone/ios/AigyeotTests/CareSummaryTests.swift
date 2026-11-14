@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 차로 보내는 수유와 돌봄 요약.
 @MainActor

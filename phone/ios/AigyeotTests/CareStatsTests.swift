@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 집계 공통 규칙(CareStats). 패턴 숫자 칸·7일 막대·오늘 막대가 같은 함수를 쓴다.
 final class CareStatsTests: XCTestCase {

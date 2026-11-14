@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 잠금 화면 진행 표시·내보내기·보관.
 @MainActor

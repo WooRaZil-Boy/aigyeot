@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 화면에 보이는 값과 문구.
 @MainActor

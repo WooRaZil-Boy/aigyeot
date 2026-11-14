@@ -1,5 +1,5 @@
-import UIKit
 import Foundation
+import UIKit
 
 /// 합성 루트(수동 의존성 컨테이너, 생성자 주입). 원본·유스케이스·화면별 뷰모델을 만들어 넘긴다. 외부 DI 라이브러리를 쓰지 않는다.
 /// 유스케이스마다 필요한 것만 생성자로 받는다(안드로이드 di/AppContainer와 같다). 서로 부르는 길이 도는 곳

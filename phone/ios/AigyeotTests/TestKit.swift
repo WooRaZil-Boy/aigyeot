@@ -1,5 +1,5 @@
-import Foundation
 @testable import Aigyeot
+import Foundation
 
 // 시험 도구(안드로이드 Kit.kt와 같은 자리). 배선은 제품과 같은 AppContainer 하나다:
 // 시험은 `AppContainer(relay: FakeRelay(), store: MemoryStateStore(…), credentials: MemoryCredentialStore(…), …)`로 만들고

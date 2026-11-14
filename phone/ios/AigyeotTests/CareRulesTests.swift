@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 돌봄 기록 규칙(표준 예제·겹침·시간 한도).
 @MainActor
@@ -111,7 +111,6 @@ final class CareRulesTests: CareTestCase {
         XCTAssertEqual(app.care.care.events.first { $0.id == secondSleep.id }?.endUnknown, true)
         XCTAssertEqual(app.status.ui.notice, "앞 잠을 끝냈어요 · 끝 시각 모름")
         app.recordCare.end(CareRules.inProgress(.sleep, in: app.care.care.events)!.id)
-
     }
 
     func test_미래_시각과_최대_길이를_넘는_기록은_저장하지_않는다() {

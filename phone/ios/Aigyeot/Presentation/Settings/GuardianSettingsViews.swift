@@ -1,5 +1,5 @@
-import SwiftUI
 import CoreImage.CIFilterBuiltins
+import SwiftUI
 import UniformTypeIdentifiers
 
 /// 정보·라이선스의 한 줄: 앱에 링크되는 오픈소스와 그 라이선스. 누르면 `Licenses/`의 전문을 보인다.

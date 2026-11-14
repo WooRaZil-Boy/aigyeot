@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 final class SoundLabelTests: XCTestCase {
     func test_모르는_소리_방법의_음원_이름은_기타() throws {

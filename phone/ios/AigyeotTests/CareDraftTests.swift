@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 기록 시트 입력(CareDraft)과 종류별 칸 정리(CareRules.normalized). 화면에서 옮긴 규칙이라 화면 없이 본다.
 final class CareDraftTests: XCTestCase {

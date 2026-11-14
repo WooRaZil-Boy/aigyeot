@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 유스케이스 시험(안드로이드 UseCaseTest와 같은 이름).
 @MainActor

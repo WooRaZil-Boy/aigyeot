@@ -1,6 +1,6 @@
-import XCTest
-import UIKit
 @testable import Aigyeot
+import UIKit
+import XCTest
 
 /// 디자인 토큰: Swift 표가 공용 원본 `shared/src/test/resources/design/tokens.json`의 폰 값과 같은지 본다
 /// (안드로이드·차 시험도 같은 파일을 읽는다). 빠진 이름·남는 이름·다른 값 모두 실패다.
@@ -101,5 +101,4 @@ final class DesignTokenTests: XCTestCase {
         let steps = Set(DesignSystem.typeScale.values.map { "\($0.size)/\($0.weight)" })
         XCTAssertTrue(steps.isDisjoint(with: roles))
     }
-
 }

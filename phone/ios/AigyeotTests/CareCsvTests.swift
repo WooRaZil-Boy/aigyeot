@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 기록 가져오기.
 /// 예제는 복사하지 않고 공용 `shared/src/test/resources/care/import/`를 읽는다(안드로이드와 같은 파일·같은 결과).

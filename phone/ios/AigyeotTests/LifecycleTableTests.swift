@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 수명 표(AppLifecycle 주석) 행마다 하나. 이름은 안드로이드 LifecycleTableTest와 같고, iOS 결과가 다른 행은 뒷부분을 iOS 결과로 쓴다.
 @MainActor

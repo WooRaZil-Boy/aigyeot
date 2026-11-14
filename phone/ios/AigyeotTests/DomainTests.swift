@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// Domain/Rules·Repositories 시험. 화면·중계 없이 순수 함수와 저장소만 본다.
 final class DomainRulesTests: XCTestCase {

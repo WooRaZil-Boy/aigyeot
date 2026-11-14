@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 /// 시연 시드(안드로이드 DebugSeedTest와 같은 두 시험).
 @MainActor

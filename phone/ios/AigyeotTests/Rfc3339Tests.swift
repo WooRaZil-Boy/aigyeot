@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 final class Rfc3339Tests: XCTestCase {
     func test_소수점_있는_시각과_없는_시각이_같은_순간() {

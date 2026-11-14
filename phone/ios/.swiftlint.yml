@@ -9,52 +9,51 @@ excluded:
   - build
   - Aigyeot.xcodeproj
 
+opt_in_rules:
+  - sorted_imports
+  - closure_spacing
+  - operator_usage_whitespace
+  - modifier_order
+  - redundant_nil_coalescing
+  - toggle_bool
+  - empty_count
+  - first_where
+  - last_where
+  - contains_over_first_not_nil
+  - contains_over_filter_count
+  - empty_string
+  - joined_default_parameter
+  - vertical_whitespace_closing_braces
+  - unneeded_parentheses_in_closure_argument
+  - yoda_condition
+  - fatal_error_message
+  - overridden_super_call
+  - prohibited_super_call
+
+# 경고는 160자부터(기본 120자면 900여 줄이 떠 진짜 경고가 묻힌다). 오류는 기본값 200자.
 line_length:
   warning: 160
-  error: 250
   ignores_urls: true
 
-# 짧은 지역 이름(m, t, s …)을 허용한다. 시험 이름은 한글 문장이라 길다.
+# 경고는 기본값. 오류는 지금 최댓값(복잡도 32·함수 74줄·타입 371줄·튜플 5개) 바로 위로 잡았다. 쪼개는 일은 하지 않는다.
+cyclomatic_complexity:
+  error: 35
+function_body_length:
+  error: 80
+type_body_length:
+  error: 400
+large_tuple:
+  error: 6
+
+# 짧은 지역 이름(m, t, s …)을 허용한다.
 identifier_name:
   min_length: 1
-  max_length:
-    warning: 100
-    error: 200
   allowed_symbols: ["_"]
   excluded: [P, R, N, D]   # Gear(기어 P·R·N·D)의 값
 
-# 시험 이름은 길어도 된다.
 type_name:
   excluded: [DS, K]   # 디자인 시스템 별칭·키 이름 묶음
-  max_length:
-    warning: 60
-    error: 80
-
-# 판단 규칙과 연결 유지 흐름은 분기가 많다. 시험으로 모든 분기를 지킨다.
-cyclomatic_complexity:
-  warning: 25
-  error: 40
-function_body_length:
-  warning: 100
-  error: 200
-type_body_length:
-  warning: 400
-  error: 700
-file_length:
-  warning: 800
-  error: 1500
-large_tuple:
-  warning: 5
-  error: 7
-function_parameter_count:
-  warning: 8
-  error: 12
 
 # SwiftUI의 `Button { } label: { }` 꼴이 이 규칙에 걸린다. 뷰 문법이라 그대로 둔다.
 disabled_rules:
   - multiple_closures_with_trailing_closure
-
-# 시험 도우미와 파서 안의 보조 타입 한 겹 더는 허용한다.
-nesting:
-  type_level:
-    warning: 2

@@ -1,5 +1,5 @@
-import XCTest
 @testable import Aigyeot
+import XCTest
 
 final class OutboxPolicyTests: XCTestCase {
     private func http(_ s: Int, _ c: String? = nil, retry: TimeInterval? = nil) -> RelayError { .http(status: s, code: c, retryAfter: retry) }

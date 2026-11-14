@@ -1,7 +1,7 @@
-import SwiftUI
-import UserNotifications
 import FirebaseCore
 import FirebaseMessaging
+import SwiftUI
+import UserNotifications
 
 /// FCM 등록 토큰. Firebase 설정 파일이 없으면(시험) 늘 nil이다.
 final class PushToken: PushTokens {
