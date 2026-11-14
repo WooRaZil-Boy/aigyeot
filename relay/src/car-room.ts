@@ -1,16 +1,18 @@
-// 차 방(CarRoom, 차마다 하나, 계약 0장·4.2): 기기·토큰 해시, 받는 쪽별 메시지함, seq, 노래 파일, 푸시, WebSocket.
+// 차 방(CarRoom, 차마다 하나): 기기·토큰 해시, 받는 쪽별 메시지함, seq, 노래 파일, 푸시, WebSocket.
 import { DurableObject } from "cloudflare:workers";
 import type { CodeKind, Directory } from "./directory";
-import { AckBody, DropIdsBody, Envelope, PatchDeviceRequest, bodySchemas } from "./protocol";
+import { SENDS, checkOwnFields, decodeEnvelope, fixBody, sameBytes, senderRole } from "./message-rules";
+import { AckBody, DropIdsBody, Envelope, PatchDeviceRequest } from "./protocol";
 import { type PushJob, pushConfigured, sendPush } from "./push";
+import { DDL, type Device, type DeviceRole, type MessageRow, type Room, migrateRecordClears } from "./schema";
 import {
   DAY,
   HOUR,
   HttpError,
   MIN,
-  RATE_LIMITS_DDL,
   ULID_RE,
   bearer,
+  canonicalJson,
   decode,
   errorResponse,
   instant,
@@ -21,7 +23,6 @@ import {
   readBytes,
   readJson,
   rpc,
-  canonicalJson,
   sha256,
   take,
   ulid,
@@ -29,174 +30,16 @@ import {
   utf8Length,
 } from "./util";
 
-const DDL = `
-CREATE TABLE IF NOT EXISTS room (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  car_id TEXT NOT NULL,
-  next_seq INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL,
-  last_activity_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS devices (
-  device_id TEXT PRIMARY KEY,
-  role TEXT NOT NULL CHECK (role IN ('car','owner','guardian')),
-  platform TEXT NOT NULL CHECK (platform IN ('pleos','android','ios')),
-  token_hash BLOB NOT NULL UNIQUE,
-  push_token TEXT,
-  push_token_at INTEGER,
-  handoff_alerts INTEGER NOT NULL DEFAULT 0,
-  paired_at INTEGER NOT NULL,
-  last_seen_at INTEGER
-);
-CREATE TABLE IF NOT EXISTS messages (
-  id TEXT PRIMARY KEY,
-  seq INTEGER NOT NULL UNIQUE,
-  type TEXT NOT NULL,
-  sender_device TEXT,
-  sent_ts TEXT NOT NULL,
-  body TEXT,
-  body_hash BLOB NOT NULL,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS messages_created ON messages(created_at);
-CREATE TABLE IF NOT EXISTS deliveries (
-  recipient_device TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY (recipient_device, message_id)
-);
-CREATE INDEX IF NOT EXISTS deliveries_inbox ON deliveries(recipient_device, seq);
-CREATE INDEX IF NOT EXISTS deliveries_message ON deliveries(message_id);
-CREATE INDEX IF NOT EXISTS deliveries_created ON deliveries(created_at);
-CREATE TABLE IF NOT EXISTS songs (
-  song_id TEXT PRIMARY KEY,
-  uploader_device TEXT NOT NULL,
-  size_bytes INTEGER NOT NULL,
-  uploaded_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS songs_uploaded ON songs(uploaded_at);
-CREATE TABLE IF NOT EXISTS song_blobs (
-  song_id TEXT PRIMARY KEY,
-  data BLOB NOT NULL
-);
-CREATE TABLE IF NOT EXISTS push_jobs (
-  message_id TEXT NOT NULL,
-  device_id TEXT NOT NULL,
-  attempts INTEGER NOT NULL DEFAULT 0,
-  next_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  PRIMARY KEY (message_id, device_id)
-);
-CREATE INDEX IF NOT EXISTS push_jobs_next ON push_jobs(next_at);
-CREATE TABLE IF NOT EXISTS record_clears (
-  id TEXT PRIMARY KEY,
-  at INTEGER NOT NULL,
-  dropped INTEGER NOT NULL DEFAULT 0 -- 1: 지우기 때 차가 뺀 메시지 id의 버림 표시(L79)
-);
-${RATE_LIMITS_DDL}`;
-
-type DeviceRole = "car" | "owner" | "guardian";
-type Device = {
-  device_id: string;
-  role: DeviceRole;
-  platform: string;
-  token_hash: ArrayBuffer;
-  push_token: string | null;
-  handoff_alerts: number;
-  paired_at: number;
-  last_seen_at: number | null;
-};
-type Room = { car_id: string; next_seq: number; created_at: number; last_activity_at: number };
-type MessageRow = { id: string; seq: number; type: string; sender_device: string | null; sent_ts: string; body: string };
 type Attachment = { device_id: string; role: DeviceRole; connected_at: number };
 
-const SONG_MAX = 2_000_000; // G30
-const PUSH_VALID = 30 * MIN; // G28
-const ONLINE = 90_000; // 2장 '생존 확인'
-const KEEP = 7 * DAY; // 명세서 14장
-
-/** 역할별로 `POST /v1/messages`로 보낼 수 있는 type(6.3). 표에 없으면 403. */
-const SENDS: Record<"car" | "owner", readonly string[]> = {
-  car: ["song_selected", "song_status", "feeding_state", "report_summary", "handoff_alert"],
-  owner: ["feeding_started", "song_added", "song_removed", "song_selected", "state_request", "care_summary"],
-};
-const CAR_SENT = new Set(SENDS.car);
-
-/** 저장한 메시지의 `from.role`. 보낸 기기가 지워져도 type으로 정해진다(차가 보낸 song_selected는 받는 쪽이 없다). */
-const senderRole = (type: string, sender: string | null) =>
-  sender === null ? "relay" : CAR_SENT.has(type) && type !== "song_selected" ? "car" : "owner";
+const SONG_MAX = 2_000_000; // 노래 파일 하나의 상한(바이트)
+const PUSH_VALID = 30 * MIN; // 인계 알림 푸시의 유효 시간
+const ONLINE = 90_000; // 마지막 ping 뒤 이 시간 안이면 온라인
+const KEEP = 7 * DAY; // 메시지·노래·삭제 기록 보관 기간
 
 const need = (dev: Device, ...roles: DeviceRole[]) => {
   if (!roles.includes(dev.role)) throw new HttpError(403, "forbidden_role");
 };
-
-/** 봉투 검사(1.1 순서: 형식 → 판 → type). */
-export function decodeEnvelope(v: unknown): Envelope {
-  const env = decode(Envelope, v);
-  if (env.v !== 1) throw new HttpError(400, "unsupported_version");
-  if (!(env.type in bodySchemas)) throw new HttpError(400, "unknown_type");
-  if (!ULID_RE.test(env.id)) throw new HttpError(400, "bad_request", "id가 ULID가 아님");
-  return env;
-}
-
-/** 중계가 쓰는 body 필드만 검사한다(6.4). 나머지는 받는 쪽이 검사한다. */
-function checkOwnFields(env: Envelope) {
-  const b = env.body;
-  const bad = (what: string) => {
-    throw new HttpError(400, "bad_request", what);
-  };
-  switch (env.type) {
-    case "feeding_started":
-      if (instant(b.at) === null) bad("at");
-      break;
-    case "song_added":
-    case "song_status":
-      if (typeof b.song_id !== "string" || !ULID_RE.test(b.song_id)) bad("song_id");
-      break;
-    case "care_summary": {
-      // 예외(6.4, L60): 3.3 표를 전부 검사한다. 먼저 필수 칸·형(정수·bool·문자열)을 본 뒤 값을 본다.
-      const c = decode(bodySchemas.care_summary, b) as Record<string, unknown>;
-      // zone은 IANA 시간대 ID여야 한다(64자 이하, Intl이 받아야 한다)
-      const zone = c.zone as string;
-      try {
-        if (zone.length > 64) throw new Error("long");
-        new Intl.DateTimeFormat("en-US", { timeZone: zone });
-      } catch {
-        bad("zone");
-      }
-      for (const k of ["as_of", "last_sleep_start_at", "last_sleep_end_at", "sleeping_since", "last_diaper_at"]) {
-        if (c[k] !== null && instant(c[k]) === null) bad(k);
-      }
-      const ints = ["today_sleep_min", "night_wakeups", "today_diaper_count", "today_feed_count"];
-      for (const k of ints) if (c[k] !== null && ((c[k] as number) < 0 || (c[k] as number) > 2147483647)) bad(k);
-      const sd = ["last_sleep_start_at", "last_sleep_end_at", "sleeping_since", "today_sleep_min", "night_wakeups", "last_diaper_at", "today_diaper_count"];
-      if (c.sleep_diaper_enabled === false && sd.some((k) => c[k] !== null)) bad("sleep_diaper_enabled");
-      env.body = c; // decode가 모르는 칸을 버린 객체만 저장·전달한다(6.4)
-      break;
-    }
-    case "handoff_alert":
-      if (instant(b.occurred_at) === null) bad("occurred_at");
-      if (typeof b.text !== "string" || [...b.text].length > 80) bad("text");
-      break;
-  }
-}
-
-const sameBytes = (a: ArrayBuffer, b: ArrayBuffer) => {
-  const x = new Uint8Array(a);
-  const y = new Uint8Array(b);
-  return x.length === y.length && x.every((v, i) => v === y[i]);
-};
-
-/** 11-07 한 번짜리 맞춤: 같은 날 먼저 만든 옛 record_clears(칸 id·at, L78의 before_at)를 지금 꼴로 고친다. CREATE IF NOT EXISTS는 칸을 더하지 않는다. */
-export function migrateRecordClears(sql: SqlStorage) {
-  const cols = sql.exec<{ name: string }>("PRAGMA table_info(record_clears)").toArray().map((c) => c.name);
-  if (!cols.includes("dropped")) sql.exec("ALTER TABLE record_clears ADD COLUMN dropped INTEGER NOT NULL DEFAULT 0");
-  // L81: part·parts를 걷어냈다(L80 칸).
-  if (cols.includes("parts")) sql.exec("ALTER TABLE record_clears DROP COLUMN parts");
-  // before_at은 NOT NULL이라 남아 있으면 새 INSERT가 실패한다.
-  if (cols.includes("before_at")) sql.exec("ALTER TABLE record_clears DROP COLUMN before_at");
-}
 
 export class CarRoom extends DurableObject<Env> {
   private sql = this.ctx.storage.sql;
@@ -205,7 +48,7 @@ export class CarRoom extends DurableObject<Env> {
     super(ctx, env);
     this.sql.exec(DDL);
     migrateRecordClears(this.sql);
-    // ping은 방을 깨우지 않는다(2장 'Hibernation').
+    // ping은 방을 깨우지 않는다(WebSocket Hibernation).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
 
@@ -224,10 +67,10 @@ export class CarRoom extends DurableObject<Env> {
         now,
       );
     });
-    await this.scheduleAlarm(); // 폰이 붙지 않으면 30일 뒤 지운다(G35)
+    await this.scheduleAlarm(); // 폰이 붙지 않으면 30일 뒤 지운다
   }
 
-  /** `POST /v1/pair`의 차 방 몫: 초대 코드면 만든 기기가 지금도 `owner`인지 본 뒤 기기 행을 만든다(1.4, G38). */
+  /** `POST /v1/pair`의 차 방 몫: 초대 코드면 만든 기기가 지금도 `owner`인지 본 뒤 기기 행을 만든다. */
   pair(kind: CodeKind, createdBy: string, platform: "android" | "ios", pushToken: string | null) {
     return rpc(async () => {
       const role = kind === "pair" ? "owner" : "guardian";
@@ -247,7 +90,7 @@ export class CarRoom extends DurableObject<Env> {
           hash,
           pushToken,
           pushToken ? now : null,
-          role === "guardian" ? 1 : 0, // G12 기본값
+          role === "guardian" ? 1 : 0, // 보호자의 인계 알림 기본값은 켬
           now,
           now,
         );
@@ -259,7 +102,7 @@ export class CarRoom extends DurableObject<Env> {
     });
   }
 
-  /** `POST /v1/llm`의 차 방 몫: 토큰·역할·차당 횟수(G6). */
+  /** `POST /v1/llm`의 차 방 몫: 토큰·역할·차당 횟수. */
   llmGate(authorization: string | null) {
     return rpc(async () => {
       const dev = await this.auth(authorization);
@@ -280,59 +123,66 @@ export class CarRoom extends DurableObject<Env> {
   }
 
   private async route(req: Request): Promise<Response> {
-      const dev = await this.auth(req.headers.get("Authorization"));
-      const url = new URL(req.url);
-      const songId = /^\/v1\/songs\/([^/]+)$/.exec(url.pathname)?.[1];
-      const deviceId = /^\/v1\/devices\/([^/]+)$/.exec(url.pathname)?.[1];
-      const route = `${req.method} ${songId ? "/v1/songs/:id" : deviceId && deviceId !== "me" ? "/v1/devices/:id" : url.pathname}`;
-      switch (route) {
-        case "GET /v1/ws":
-          return this.webSocket(req, dev);
-        case "POST /v1/pair-codes":
-          return this.createPairCode(req, dev);
-        case "DELETE /v1/pair-codes":
-          need(dev, "car");
-          await this.directory().deletePairCodes(this.room()!.car_id);
-          return json(204);
-        case "POST /v1/invites":
-          return this.createInvite(req, dev);
-        case "GET /v1/devices":
-          return this.listDevices(dev);
-        case "PATCH /v1/devices/me":
-          return this.patchMe(req, dev);
-        case "DELETE /v1/devices/me":
-          need(dev, "owner", "guardian");
-          return this.removeDevice(dev, "self");
-        case "DELETE /v1/devices/:id": {
-          need(dev, "car");
-          const target = this.device(deviceId!);
-          if (!target || target.role === "car") throw new HttpError(404, "not_found");
-          return this.removeDevice(target, "car");
-        }
-        case "POST /v1/messages":
-          return this.postMessage(req, dev);
-        case "GET /v1/inbox":
-          return this.inbox(url, dev);
-        case "POST /v1/ack": {
-          const env = decodeEnvelope(await readJson(req));
-          if (env.type !== "ack") throw new HttpError(400, "bad_request", "ack 봉투가 아님");
-          this.ack(dev.device_id, decode(AckBody, env.body).ids);
-          return json(204);
-        }
-        case "PUT /v1/songs/:id":
-          return this.putSong(req, dev, songId!);
-        case "GET /v1/songs/:id":
-          return this.getSong(dev, songId!);
-        case "DELETE /v1/records":
-          return this.clearRecords(req, dev, url.searchParams);
+    const dev = await this.auth(req.headers.get("Authorization"));
+    const url = new URL(req.url);
+    const songId = /^\/v1\/songs\/([^/]+)$/.exec(url.pathname)?.[1];
+    const deviceId = /^\/v1\/devices\/([^/]+)$/.exec(url.pathname)?.[1];
+    const route = `${req.method} ${songId ? "/v1/songs/:id" : deviceId && deviceId !== "me" ? "/v1/devices/:id" : url.pathname}`;
+    switch (route) {
+      case "GET /v1/ws":
+        return this.webSocket(req, dev);
+      case "POST /v1/pair-codes":
+        return this.createPairCode(req, dev);
+      case "DELETE /v1/pair-codes":
+        need(dev, "car");
+        await this.directory().deletePairCodes(this.requireRoom().car_id);
+        return json(204);
+      case "POST /v1/invites":
+        return this.createInvite(req, dev);
+      case "GET /v1/devices":
+        return this.listDevices(dev);
+      case "PATCH /v1/devices/me":
+        return this.patchMe(req, dev);
+      case "DELETE /v1/devices/me":
+        need(dev, "owner", "guardian");
+        return this.removeDevice(dev, "self");
+      case "DELETE /v1/devices/:id": {
+        need(dev, "car");
+        const target = this.device(deviceId!);
+        if (!target || target.role === "car") throw new HttpError(404, "not_found");
+        return this.removeDevice(target, "car");
       }
-      throw new HttpError(404, "not_found");
+      case "POST /v1/messages":
+        return this.postMessage(req, dev);
+      case "GET /v1/inbox":
+        return this.inbox(url, dev);
+      case "POST /v1/ack": {
+        const env = decodeEnvelope(await readJson(req));
+        if (env.type !== "ack") throw new HttpError(400, "bad_request", "ack 봉투가 아님");
+        this.ack(dev.device_id, decode(AckBody, env.body).ids);
+        return json(204);
+      }
+      case "PUT /v1/songs/:id":
+        return this.putSong(req, dev, songId!);
+      case "GET /v1/songs/:id":
+        return this.getSong(dev, songId!);
+      case "DELETE /v1/records":
+        return this.clearRecords(req, dev, url.searchParams);
+    }
+    throw new HttpError(404, "not_found");
   }
 
   // ---------------------------------------------------------------- 인증·저장 도우미
 
   private room(): Room | undefined {
     return this.sql.exec<Room>("SELECT car_id, next_seq, created_at, last_activity_at FROM room").toArray()[0];
+  }
+
+  /** 인증을 통과한 요청 안에서 쓴다. 방 행은 `init`이 만든다. */
+  private requireRoom(): Room {
+    const room = this.room();
+    if (!room) throw new TypeError("room row missing");
+    return room;
   }
 
   private device(id: string, role?: DeviceRole): Device | undefined {
@@ -352,7 +202,7 @@ export class CarRoom extends DurableObject<Env> {
     this.sql.exec("UPDATE room SET last_activity_at = ?", now);
   }
 
-  /** 토큰 확인(1.2): SHA-256을 저장된 해시와 timingSafeEqual로 비교한다. */
+  /** 토큰 확인: SHA-256을 저장된 해시와 timingSafeEqual로 비교한다. */
   private async auth(header: string | null): Promise<Device> {
     const b = bearer(header);
     const hash = b ? await sha256(b.token) : null;
@@ -367,7 +217,7 @@ export class CarRoom extends DurableObject<Env> {
     return this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName("directory"));
   }
 
-  /** `seq`를 매겨 메시지와 받는 쪽마다 메시지함 줄을 넣는다. transactionSync 안에서 부른다(4.2). */
+  /** `seq`를 매겨 메시지와 받는 쪽마다 메시지함 줄을 넣는다. transactionSync 안에서 부른다. */
   private store(
     m: { id: string; type: string; sender: string | null; sentTs: string; body: object; hash: ArrayBuffer },
     recipients: string[],
@@ -389,7 +239,7 @@ export class CarRoom extends DurableObject<Env> {
     );
     for (const r of recipients) this.sql.exec("INSERT INTO deliveries VALUES (?, ?, ?, ?)", r, m.id, seq, now);
     const env = this.envelope({ id: m.id, seq, type: m.type, sender_device: m.sender, sent_ts: m.sentTs, body: "" }, m.body);
-    // 열린 소켓으로 바로 보낸다(seq를 매긴 그 동기 구간이라 기기마다 seq 순서가 지켜진다, G40).
+    // 열린 소켓으로 바로 보낸다(seq를 매긴 그 동기 구간이라 기기마다 seq 순서가 지켜진다).
     const text = JSON.stringify(env);
     for (const r of recipients) this.sendTo(r, text);
     return env;
@@ -417,17 +267,12 @@ export class CarRoom extends DurableObject<Env> {
     }
   }
 
-  /** 본문을 읽고 해시를 구하는 동안 기기가 끊겼을 수 있다. 저장 트랜잭션 안에서 다시 본다(1.4 '끊긴 폰은 다음 요청에서 401'). */
+  /** 본문을 읽고 해시를 구하는 동안 기기가 끊겼을 수 있다. 저장 트랜잭션 안에서 다시 본다(끊긴 폰은 다음 요청에서 401). */
   private stillPaired(dev: Device) {
     if (!this.device(dev.device_id, dev.role)) throw new HttpError(401, "unauthorized");
   }
 
-  /** 중계가 고치는 body 필드(6.4): 미래 수유 시각은 처음 받은 시각으로 고정한다(G33). */
-  private fixBody(type: string, body: Record<string, unknown>, receivedAt: number) {
-    return type === "feeding_started" && instant(body.at)! > receivedAt ? { ...body, at: iso(receivedAt) } : body;
-  }
-
-  private envelope(row: MessageRow, body?: object, car = this.room()!.car_id): Envelope {
+  private envelope(row: MessageRow, body?: object, car = this.requireRoom().car_id): Envelope {
     return {
       v: 1,
       id: row.id,
@@ -440,7 +285,7 @@ export class CarRoom extends DurableObject<Env> {
     };
   }
 
-  /** 중계가 만드는 메시지(`paired`·`unpaired`): 차와 `owner` 폰 전부에게(G14). */
+  /** 중계가 만드는 메시지(`paired`·`unpaired`): 차와 `owner` 폰 전부에게. */
   private relayMessage(type: "paired" | "unpaired", body: object, now: number) {
     return this.store(
       { id: ulid(now), type, sender: null, sentTs: iso(now), body, hash: new ArrayBuffer(0) },
@@ -464,7 +309,7 @@ export class CarRoom extends DurableObject<Env> {
     );
   }
 
-  /** 받는 쪽이 모두 ack한(메시지함 줄이 없는) 메시지의 본문을 비운다(4.4 '넘긴 뒤 바로 지움'). */
+  /** 받는 쪽이 모두 ack한(메시지함 줄이 없는) 메시지의 본문을 비운다(넘긴 뒤 바로 지움). */
   private dropDeliveredBodies(ids?: string[]) {
     // ids가 있으면 그 메시지만 본다(ack 경로). 없으면 전체(기기 삭제처럼 줄이 한꺼번에 사라진 경우).
     const where = "body IS NOT NULL AND NOT EXISTS (SELECT 1 FROM deliveries WHERE message_id = messages.id)";
@@ -472,7 +317,7 @@ export class CarRoom extends DurableObject<Env> {
     for (const id of ids) this.sql.exec(`UPDATE messages SET body = NULL WHERE id = ? AND ${where}`, id);
   }
 
-  /** 알람: 메시지·노래 7일, 푸시, 빈 방 정리 중 가장 이른 시각(4.4). 후보가 없으면 지운다. */
+  /** 알람: 메시지·노래 7일, 푸시, 빈 방 정리 중 가장 이른 시각. 후보가 없으면 지운다. */
   private async scheduleAlarm() {
     const t = this.sql
       .exec<{ t: number | null }>(
@@ -495,7 +340,7 @@ export class CarRoom extends DurableObject<Env> {
     need(dev, "car");
     await readBytes(req, 65_536); // 요청 본문({})은 쓰지 않지만 다 읽어야 스트림 오류가 나지 않는다
     take(this.sql, "paircode", 6, MIN);
-    const { code, expiresAt } = await this.directory().createPairCode(this.room()!.car_id, dev.device_id);
+    const { code, expiresAt } = await this.directory().createPairCode(this.requireRoom().car_id, dev.device_id);
     return json(201, { code, expires_at: iso(expiresAt), link: `aigyeot://pair?code=${code}` });
   }
 
@@ -505,9 +350,9 @@ export class CarRoom extends DurableObject<Env> {
     if (env.type !== "invite_created") throw new HttpError(400, "bad_request", "invite_created 봉투가 아님");
     this.stillPaired(dev);
     take(this.sql, `invite:${dev.device_id}`, 5, HOUR);
-    const { code, expiresAt } = unwrap(await this.directory().createInvite(this.room()!.car_id, dev.device_id));
+    const { code, expiresAt } = unwrap(await this.directory().createInvite(this.requireRoom().car_id, dev.device_id));
     if (!this.device(dev.device_id, "owner")) {
-      // 만드는 사이 끊겼으면 그 초대를 바로 폐기한다(G38).
+      // 만드는 사이 끊겼으면 그 초대를 바로 폐기한다.
       await this.directory().revokeInvites(dev.device_id);
       throw new HttpError(401, "unauthorized");
     }
@@ -522,12 +367,12 @@ export class CarRoom extends DurableObject<Env> {
   private listDevices(dev: Device) {
     need(dev, "car", "owner");
     const now = Date.now();
-    const snapshot = this.room()!.next_seq - 1; // 목록과 같은 동기 구간에서 읽는다
+    const snapshot = this.requireRoom().next_seq - 1; // 목록과 같은 동기 구간에서 읽는다
     const devices = this.sql
       .exec<Device>("SELECT * FROM devices ORDER BY paired_at")
       .toArray()
       .map((d) => {
-        // ping은 방을 깨우지 않으므로 자동 응답 시각(없으면 붙은 시각)과 견준다(4.2 '마지막 연락').
+        // ping은 방을 깨우지 않으므로 자동 응답 시각(없으면 붙은 시각)과 견준다.
         const pings = this.ctx
           .getWebSockets(`dev:${d.device_id}`)
           .map(
@@ -569,7 +414,7 @@ export class CarRoom extends DurableObject<Env> {
       const alerts = p.handoff_alerts === undefined ? cur.handoff_alerts : p.handoff_alerts ? 1 : 0;
       if (alerts !== cur.handoff_alerts) {
         this.sql.exec("UPDATE devices SET handoff_alerts = ? WHERE device_id = ?", alerts, cur.device_id);
-        this.pairedMessage(cur.device_id, now); // 바뀌면 paired를 다시 보낸다(G12)
+        this.pairedMessage(cur.device_id, now); // 바뀌면 paired를 다시 보낸다
       }
       return this.device(cur.device_id)!;
     });
@@ -583,7 +428,7 @@ export class CarRoom extends DurableObject<Env> {
     });
   }
 
-  /** 끊기(1.4): 기기 행·메시지함 줄·푸시 작업을 지우고 `unpaired`를 보낸 뒤 소켓을 4001로 닫는다. */
+  /** 끊기: 기기 행·메시지함 줄·푸시 작업을 지우고 `unpaired`를 보낸 뒤 소켓을 4001로 닫는다. */
   private async removeDevice(target: Device, by: "car" | "self") {
     const now = Date.now();
     const removed = this.ctx.storage.transactionSync(() => {
@@ -598,7 +443,7 @@ export class CarRoom extends DurableObject<Env> {
     if (!removed) return json(204);
     this.closeAll(`dev:${target.device_id}`, 4001, "unauthorized");
     if (target.role === "owner") {
-      // 실패해도 끊기는 성공이다. 남은 초대는 POST /v1/pair의 created_by 확인이 막는다(G38).
+      // 실패해도 끊기는 성공이다. 남은 초대는 POST /v1/pair의 created_by 확인이 막는다.
       await this.directory()
         .revokeInvites(target.device_id)
         .catch(() => console.warn("invite revoke failed"));
@@ -620,9 +465,9 @@ export class CarRoom extends DurableObject<Env> {
     const now = Date.now();
 
     const out = this.ctx.storage.transactionSync(() => {
-      // 같은 id 다시 보내기(1.4): 내용이 같으면 200과 처음 seq, 다르면 409.
+      // 같은 id 다시 보내기: 내용이 같으면 200과 처음 seq, 다르면 409.
       this.stillPaired(dev);
-      // L79·L87: 버림 표시를 먼저 본다. 지우기 때 차가 뺀 id가 늦게 도착했다. 저장·배달·푸시 없이 200(차는 보낼 함에서 지운다).
+      // 버림 표시를 먼저 본다. 지우기 때 차가 뺀 id가 늦게 도착했다. 저장·배달·푸시 없이 200(차는 보낼 함에서 지운다).
       if (this.sql.exec("SELECT 1 FROM record_clears WHERE id = ? AND dropped = 1", env.id).toArray().length) {
         return { status: 200, seq: 0, recipients: 0, body: env.body };
       }
@@ -639,7 +484,7 @@ export class CarRoom extends DurableObject<Env> {
           .exec<{ n: number }>("SELECT count(*) AS n FROM deliveries WHERE message_id = ?", env.id)
           .one().n;
         // 모두 ack해 본문을 비웠으면 처음 받은 시각으로 같은 보정을 다시 만든다(해시가 같으니 보낸 본문도 같다).
-        const body = old.body ? JSON.parse(old.body) : this.fixBody(env.type, env.body, old.created_at);
+        const body = old.body ? JSON.parse(old.body) : fixBody(env.type, env.body, old.created_at);
         return { status: 200, seq: old.seq, recipients: left, body };
       }
 
@@ -649,7 +494,7 @@ export class CarRoom extends DurableObject<Env> {
         throw new HttpError(422, "song_blob_missing");
       }
 
-      const body = this.fixBody(env.type, env.body, now);
+      const body = fixBody(env.type, env.body, now);
 
       const recipients = this.recipients(env.type, role, env.to);
       const stored = this.store(
@@ -658,12 +503,12 @@ export class CarRoom extends DurableObject<Env> {
         now,
       );
 
-      // 차가 그 곡의 song_status를 보내면 중계의 노래 파일을 지운다(G29).
+      // 차가 그 곡의 song_status를 보내면 중계의 노래 파일을 지운다.
       if (env.type === "song_status") {
         this.sql.exec("DELETE FROM song_blobs WHERE song_id = ?", body.song_id as string);
         this.sql.exec("DELETE FROM songs WHERE song_id = ?", body.song_id as string);
       }
-      // 인계 알림 푸시: 유효 시각은 occurred_at + 30분 고정(G28).
+      // 인계 알림 푸시: 유효 시각은 occurred_at + 30분 고정.
       if (env.type === "handoff_alert" && pushConfigured(this.env)) {
         const expires = instant(body.occurred_at)! + PUSH_VALID;
         if (expires - now >= 1000) {
@@ -681,7 +526,7 @@ export class CarRoom extends DurableObject<Env> {
     return json(out.status, { id: env.id, seq: out.seq, recipients: out.recipients, body: out.body });
   }
 
-  /** 받는 쪽은 중계가 type으로 정한다(3.2). `to`는 차의 상태 답에만(G39). */
+  /** 받는 쪽은 중계가 type으로 정한다. `to`는 차의 상태 답에만 쓴다. */
   private recipients(type: string, sender: "car" | "owner", to?: string): string[] {
     switch (type) {
       case "feeding_started":
@@ -690,7 +535,7 @@ export class CarRoom extends DurableObject<Env> {
       case "state_request":
         return this.ids("role = 'car'");
       case "song_selected":
-        return sender === "car" ? [] : this.ids("role = 'car'"); // 차가 보낸 것은 seq만 받는다(G20)
+        return sender === "car" ? [] : this.ids("role = 'car'"); // 차가 보낸 것은 seq만 받는다
       case "song_status":
       case "feeding_state":
         return to === undefined ? this.ids("role = 'owner'") : this.ids("role = 'owner' AND device_id = ?", to);
@@ -704,9 +549,9 @@ export class CarRoom extends DurableObject<Env> {
     return [];
   }
 
-  /** 이 기기 몫 중 ack하지 않은 것, seq 오름차순(G40). */
+  /** 이 기기 몫 중 ack하지 않은 것, seq 오름차순. */
   private pending(deviceId: string, afterSeq = 0, limit = -1): Envelope[] {
-    const car = this.room()!.car_id;
+    const car = this.requireRoom().car_id;
     return this.sql
       .exec<MessageRow>(
         `SELECT m.id, m.seq, m.type, m.sender_device, m.sent_ts, m.body FROM deliveries d
@@ -731,7 +576,7 @@ export class CarRoom extends DurableObject<Env> {
     if (ids.length < 1 || ids.length > 100) throw new HttpError(400, "bad_request", "ids는 1~100개");
     this.ctx.storage.transactionSync(() => {
       for (const id of ids) {
-        // 모르는 id는 조용히 넘긴다. 이 기기의 푸시 작업도 지운다(5.1).
+        // 모르는 id는 조용히 넘긴다. 이 기기의 푸시 작업도 지운다.
         this.sql.exec("DELETE FROM deliveries WHERE recipient_device = ? AND message_id = ?", deviceId, id);
         this.sql.exec("DELETE FROM push_jobs WHERE message_id = ? AND device_id = ?", id, deviceId);
       }
@@ -747,7 +592,7 @@ export class CarRoom extends DurableObject<Env> {
     if (Number(req.headers.get("Content-Length") ?? 0) > SONG_MAX) throw new HttpError(413, "too_large");
     take(this.sql, `song:${dev.device_id}`, 10, HOUR);
     const data = await readBytes(req, SONG_MAX);
-    // MP4 ftyp 상자: 4~8번째 바이트(1.4)
+    // MP4 ftyp 상자: 4~8번째 바이트
     if (data.byteLength < 8 || new TextDecoder().decode(data.subarray(4, 8)) !== "ftyp") {
       throw new HttpError(415, "unsupported_media");
     }
@@ -774,38 +619,41 @@ export class CarRoom extends DurableObject<Env> {
     return new Response(row.data, { headers: { "Content-Type": "audio/mp4", Date: new Date().toUTCString() } });
   }
 
-  /** '모든 기록 지우기'의 중계 몫: 리포트·인계 알림 보관분만(1.4, 돌봄 요약은 지우지 않는다. L68). 본문 `{"drop_ids":[...]}`는 차가 보낼 함에서 뺀 id(L79). */
+  /**
+   * '모든 기록 지우기'의 중계 몫: 리포트·인계 알림 보관분만 지운다(돌봄 요약은 지우지 않는다).
+   * 본문 `{"drop_ids":[...]}`는 차가 보낼 함에서 뺀 id다.
+   */
   private async clearRecords(req: Request, dev: Device, q: URLSearchParams) {
     need(dev, "car");
     const id = q.get("id");
     if (!id || !ULID_RE.test(id)) throw new HttpError(400, "bad_request", "id가 ULID가 아님");
     const raw = await readJson(req);
     const dropIds = decode(DropIdsBody, raw).drop_ids;
-    // 보낼 함 상한(8.5)과 별개로 본문 64 KB 안에 드는 개수만 받는다(ULID 26자 + 따옴표·쉼표).
+    // 차의 보낼 함 상한과 별개로 본문 64 KB 안에 드는 개수만 받는다(ULID 26자 + 따옴표·쉼표).
     if (dropIds.length > 1000 || !dropIds.every((x) => ULID_RE.test(x))) {
       throw new HttpError(400, "bad_request", "drop_ids는 ULID 1000개 이하");
     }
     this.ctx.storage.transactionSync(() => {
       const now = Date.now();
-      // 같은 id를 다시 받으면(204이 차에 닿지 못한 재시도) 아무것도 하지 않는다(L67).
+      // 같은 id를 다시 받으면(204이 차에 닿지 못한 재시도) 아무것도 하지 않는다.
       if (this.sql.exec("SELECT 1 FROM record_clears WHERE id = ? AND dropped = 0", id).toArray().length) return;
-      take(this.sql, "records_clear", 10, HOUR, now); // L97: 새 삭제 id만 센다(차당 시간당 10회, 설계값)
+      take(this.sql, "records_clear", 10, HOUR, now); // 새 삭제 id만 센다(차당 시간당 10회)
       this.sql.exec("INSERT INTO record_clears (id, at) VALUES (?, ?)", id, now);
-      // L87: 행이 있든 없든 버림 표시(이미 있는 것의 본문은 아래에서 비워지고, 행이 기한으로 지워져도 늦은 POST를 막는다).
+      // 행이 있든 없든 버림 표시(이미 있는 것의 본문은 아래에서 비워지고, 행이 기한으로 지워져도 늦은 POST를 막는다).
       for (const d of dropIds) {
         this.sql.exec("INSERT OR IGNORE INTO record_clears (id, at, dropped) VALUES (?, ?, 1)", d, now);
       }
       const sel = "SELECT id FROM messages WHERE type IN ('report_summary','handoff_alert')";
       this.sql.exec(`DELETE FROM deliveries WHERE message_id IN (${sel})`);
       this.sql.exec(`DELETE FROM push_jobs WHERE message_id IN (${sel})`);
-      // 행은 남기고 본문만 비운다: 폰이 같은 id로 다시 보내도 새 seq로 되살아나지 않게(1.4 같은 id 다시 보내기).
+      // 행은 남기고 본문만 비운다: 폰이 같은 id로 다시 보내도 새 seq로 되살아나지 않게(같은 id 다시 보내기).
       this.sql.exec("UPDATE messages SET body = NULL WHERE type IN ('report_summary','handoff_alert')");
     });
     await this.scheduleAlarm();
     return json(204);
   }
 
-  // ---------------------------------------------------------------- WebSocket(2장)
+  // ---------------------------------------------------------------- WebSocket
 
   private webSocket(req: Request, dev: Device) {
     if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
@@ -824,7 +672,7 @@ export class CarRoom extends DurableObject<Env> {
 
   /** 들어오는 프레임은 `ack` 봉투만 처리한다. 나머지는 무시한다. */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    // JSON 64 KB 상한(6.4). 계약에 이 경우의 닫기 코드는 없어 프레임만 버린다(답도 없다).
+    // JSON 64 KB 상한. 이 경우의 닫기 코드는 정해 두지 않아 프레임만 버린다(답도 없다).
     if (typeof message !== "string" || utf8Length(message) > 65_536) return;
     try {
       const env = decodeEnvelope(JSON.parse(message));
@@ -835,7 +683,7 @@ export class CarRoom extends DurableObject<Env> {
     }
   }
 
-  // ---------------------------------------------------------------- 정리(Alarm, 4.4)
+  // ---------------------------------------------------------------- 정리(Alarm)
 
   async alarm() {
     const now = Date.now();
@@ -855,7 +703,7 @@ export class CarRoom extends DurableObject<Env> {
     const room = this.room();
     const phones = this.sql.exec("SELECT 1 FROM devices WHERE role <> 'car'").toArray().length;
     if (room && !phones && room.last_activity_at + 30 * DAY <= now) {
-      // 폰이 없고 30일 활동이 없으면 방을 지운다(G35). 차는 다음에 401을 받고 다시 등록한다.
+      // 폰이 없고 30일 활동이 없으면 방을 지운다. 차는 다음에 401을 받고 다시 등록한다.
       this.closeAll(undefined, 4001, "unauthorized");
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
@@ -866,7 +714,7 @@ export class CarRoom extends DurableObject<Env> {
   }
 
   /**
-   * 때가 된 푸시 작업 보내기(5.5). 응답을 기다리는 사이 기기가 끊기거나 ack·토큰 갱신이 올 수 있으므로
+   * 때가 된 푸시 작업 보내기. 응답을 기다리는 사이 기기가 끊기거나 ack·토큰 갱신이 올 수 있으므로
    * 작업마다 보내기 직전에 작업·기기·지금 토큰·본문을 다시 읽는다. 유효 시간은 sendPush가 요청 직전에 다시 구한다.
    */
   private async runPush(now: number) {
@@ -880,7 +728,7 @@ export class CarRoom extends DurableObject<Env> {
     for (const due1 of due) {
       const { message_id, device_id } = due1;
       const done = () => this.sql.exec("DELETE FROM push_jobs WHERE message_id = ? AND device_id = ?", message_id, device_id);
-      // 처음 읽은 재시도 횟수. OAuth가 실패해 read()까지 가지 못해도 같은 상한(최대 3번, 5.5)을 쓴다.
+      // 처음 읽은 재시도 횟수. OAuth가 실패해 read()까지 가지 못해도 같은 상한(최대 3번)을 쓴다.
       let attempts = due1.attempts;
       // 보내기 직전마다(접근 토큰을 얻은 뒤, 401 재발송 포함) 다시 읽는다.
       const read = (): PushJob | null => {
@@ -904,7 +752,7 @@ export class CarRoom extends DurableObject<Env> {
       if ((r.status >= 200 && r.status < 300) || r.status === -1 || r.status === -2) {
         done(); // -2: 끊김·ack·토큰 지움·알림 끔이면 보내지 않는다(메시지함에만 남는다)
       } else if (r.errorCode === "UNREGISTERED" || r.errorCode === "SENDER_ID_MISMATCH") {
-        // 토큰 무효는 이 두 오류 코드로만 판단한다(5.5). 실패한 요청의 토큰이 지금 저장된 토큰과 같을 때만 지운다(L51).
+        // 토큰 무효는 이 두 오류 코드로만 판단한다. 실패한 요청의 토큰이 지금 저장된 토큰과 같을 때만 지운다.
         this.sql.exec("UPDATE devices SET push_token = NULL WHERE device_id = ? AND push_token = ?", device_id, r.token!);
         done();
       } else if (r.status === 429 || r.status === 0 || r.status >= 500) {
@@ -927,5 +775,4 @@ export class CarRoom extends DurableObject<Env> {
       }
     }
   }
-
 }

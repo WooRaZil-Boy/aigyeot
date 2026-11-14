@@ -1,14 +1,14 @@
-// 중계 공용 도구: id·토큰, 시각, HTTP 응답·오류(1.1), 횟수 제한(4.2 '횟수 창과 만료').
+// 중계 공용 도구: id·토큰, 시각, HTTP 응답·오류, 횟수 제한.
 import { type D, DecodeError } from "./protocol";
 
 export const MIN = 60_000;
 export const HOUR = 60 * MIN;
 export const DAY = 24 * HOUR;
 
-// ---- id·토큰(0장 '공통 표기', 1.2) ----
-export const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+// ---- id·토큰 ----
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 export const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
-export const TOKEN_RE = /^at1\.(c_[0-9A-HJKMNP-TV-Z]{26})\.(d_[0-9A-HJKMNP-TV-Z]{26})\.[A-Za-z0-9_-]{43}$/;
+const TOKEN_RE = /^at1\.(c_[0-9A-HJKMNP-TV-Z]{26})\.(d_[0-9A-HJKMNP-TV-Z]{26})\.[A-Za-z0-9_-]{43}$/;
 
 /** 무작위 Crockford 글자 n개. 256이 32의 배수라 `& 31`은 치우치지 않는다. */
 export const randomCrockford = (n: number) =>
@@ -64,7 +64,8 @@ export function bearer(header: string | null): { token: string; carId: string; d
 // ---- 시각 ----
 /** 중계가 쓰는 시각은 UTC(`Z`), 초 단위. */
 export const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
-const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;   // 차 OffsetDateTime.parse가 읽는 꼴의 부분집합(소수 초 1~9자리, T·Z 대문자)
+// 차 OffsetDateTime.parse가 읽는 꼴의 부분집합(소수 초 1~9자리, T·Z 대문자)
+const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 /** RFC 3339 문자열 → epoch ms. 형식이 아니면 null. */
 export function instant(s: unknown): number | null {
   if (typeof s !== "string" || !RFC3339.test(s)) return null;
@@ -73,9 +74,11 @@ export function instant(s: unknown): number | null {
   // Date.parse는 2월 30일 같은 날짜를 보정해 통과시키므로 실제 달력 날짜·시각 범위를 따로 본다(차의 OffsetDateTime.parse와 같게)
   const [y, mo, d, h, mi, sec] = s.match(/\d+/g)!.slice(0, 6).map(Number);
   const cal = new Date(0);
-  cal.setUTCFullYear(y, mo - 1, d);   // Date.UTC는 0~99년을 1900년대로 보정한다
-  if (cal.getUTCFullYear() !== y || cal.getUTCMonth() !== mo - 1 || cal.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return null;
-  const off = /([+-])(\d{2}):(\d{2})$/.exec(s);   // Java OffsetDateTime은 ±18:00까지만 받는다
+  cal.setUTCFullYear(y, mo - 1, d); // Date.UTC는 0~99년을 1900년대로 보정한다
+  if (cal.getUTCFullYear() !== y || cal.getUTCMonth() !== mo - 1 || cal.getUTCDate() !== d) return null;
+  if (h > 23 || mi > 59 || sec > 59) return null;
+  // Java OffsetDateTime은 ±18:00까지만 받는다
+  const off = /([+-])(\d{2}):(\d{2})$/.exec(s);
   if (off && (+off[2] > 18 || +off[3] > 59 || (+off[2] === 18 && +off[3] > 0))) return null;
   return t;
 }
@@ -92,7 +95,7 @@ export class HttpError extends Error {
   }
 }
 
-/** JSON 응답. 모든 응답에 `Date` 헤더를 단다(1.1 '시각 확인'). */
+/** JSON 응답. 모든 응답에 `Date` 헤더를 단다(클라이언트가 시각을 확인한다). */
 export function json(status: number, body?: unknown, headers: Record<string, string> = {}): Response {
   const h = new Headers(headers);
   h.set("Date", new Date().toUTCString());
@@ -101,7 +104,7 @@ export function json(status: number, body?: unknown, headers: Record<string, str
   return new Response(JSON.stringify(body), { status, headers: h });
 }
 
-/** 오류 본문(1.1). 본문·토큰은 로그에 남기지 않는다(6.6). */
+/** 오류 본문. 본문·토큰은 로그에 남기지 않는다. */
 export function errorResponse(e: unknown): Response {
   if (e instanceof HttpError) {
     const h: Record<string, string> = e.retryAfter ? { "Retry-After": String(e.retryAfter) } : {};
@@ -112,7 +115,7 @@ export function errorResponse(e: unknown): Response {
 }
 
 /**
- * 본문을 읽으며 바이트를 센다. `Content-Length`가 없어도 상한을 넘는 즉시 읽기를 멈추고 413(6.4).
+ * 본문을 읽으며 바이트를 센다. `Content-Length`가 없어도 상한을 넘는 즉시 읽기를 멈추고 413.
  */
 export async function readBytes(req: Request, max: number): Promise<Uint8Array> {
   if (Number(req.headers.get("Content-Length") ?? 0) > max) throw new HttpError(413, "too_large");
@@ -159,7 +162,7 @@ export function decode<T>(d: D<T>, v: unknown): T {
 }
 
 // ---- RPC(Durable Object 메서드)는 예외 종류가 넘어가지 않으므로 값으로 돌려준다 ----
-export type Result<T> = { ok: T } | { err: { status: number; code: string; message: string; retryAfter?: number } };
+type Result<T> = { ok: T } | { err: { status: number; code: string; message: string; retryAfter?: number } };
 
 export async function rpc<T>(f: () => T | Promise<T>): Promise<Result<T>> {
   try {
@@ -175,7 +178,7 @@ export function unwrap<T>(r: Result<T>): T {
   return r.ok;
 }
 
-// ---- 횟수 제한(고정 창, 4.2) ----
+// ---- 횟수 제한(고정 창) ----
 type Limit = { count: number; expires_at: number };
 
 /** 창 안 횟수가 `limit`에 닿았으면 429를 던진다. `bump`가 거짓이면 보기만 한다. */

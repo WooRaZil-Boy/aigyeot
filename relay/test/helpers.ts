@@ -1,5 +1,6 @@
 // 시험 도우미: Worker를 HTTP로 부르고 차·폰을 만든다.
-import { exports } from "cloudflare:workers";
+import { env, exports } from "cloudflare:workers";
+import { runInDurableObject } from "cloudflare:test";
 import { ulid } from "../src/util";
 
 export const BASE = "http://relay.test";
@@ -16,7 +17,6 @@ export async function call(method: string, path: string, o: CallOpts = {}) {
     body: o.raw ?? (o.body === undefined ? undefined : JSON.stringify(o.body)),
   });
   const text = res.status === 101 ? "" : await res.text();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const json: any = text && res.headers.get("Content-Type")?.includes("json") ? JSON.parse(text) : undefined;
   return { status: res.status, json, res };
 }
@@ -82,3 +82,25 @@ export const m4a = (size = 64) => {
   b.set(new TextEncoder().encode("ftypM4A "), 4);
   return b;
 };
+
+export const roomOf = (carId: string) => env.CAR_ROOM.get(env.CAR_ROOM.idFromName(carId));
+
+/** 차 방의 SQLite를 직접 읽거나 고친다. */
+export const sqlIn = <T>(carId: string, q: string, ...args: (string | number)[]) =>
+  runInDurableObject(roomOf(carId), (_: unknown, s: DurableObjectState) => s.storage.sql.exec(q, ...args).toArray() as T[]);
+
+/** 올바른 care_summary body. `o`로 칸을 덮어쓴다. */
+export const cs = (o: object = {}) => ({
+  as_of: "2026-11-06T15:00:00+09:00",
+  zone: "Asia/Seoul",
+  sleep_diaper_enabled: true,
+  last_sleep_start_at: "2026-11-06T12:20:00+09:00",
+  last_sleep_end_at: "2026-11-06T12:55:30+09:00",
+  sleeping_since: null,
+  today_sleep_min: 430,
+  night_wakeups: 2,
+  last_diaper_at: "2026-11-06T11:15:00+09:00",
+  today_diaper_count: 2,
+  today_feed_count: 3,
+  ...o,
+});

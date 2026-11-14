@@ -1,4 +1,4 @@
-// FCM HTTP v1 발송(계약 5.2). 서비스 계정 JWT를 WebCrypto로 서명해 접근 토큰으로 바꾼다.
+// FCM HTTP v1 발송. 서비스 계정 JWT를 WebCrypto로 서명해 접근 토큰으로 바꾼다.
 import { b64url } from "./util";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -52,15 +52,15 @@ async function accessToken(env: Env, now: number): Promise<string> {
   return access_token;
 }
 
-/** `expiresAt` = occurred_at + 30분(epoch ms, G28 고정). */
+/** `expiresAt` = occurred_at + 30분(epoch ms, 고정). */
 export type PushJob = { msgId: string; token: string; text: string; expiresAt: number };
 /**
  * status 0 = 네트워크 오류, -1 = 보내기 직전에 유효 시간이 1초 미만, -2 = 보내기 직전에 작업이 없어짐(끊김·ack·토큰 지움).
- * `token`은 실제로 보낸 기기 토큰(무효 응답 때 같은 토큰일 때만 지운다, L51). `errorCode`는 FCM `details[].errorCode`.
+ * `token`은 실제로 보낸 기기 토큰(무효 응답 때 같은 토큰일 때만 지운다). `errorCode`는 FCM `details[].errorCode`.
  */
-export type PushResult = { status: number; token?: string; errorCode?: string; retryAfterS?: number };
+type PushResult = { status: number; token?: string; errorCode?: string; retryAfterS?: number };
 
-/** FCM 요청 본문. `ttl`은 남은 시간을 내림한 초, `apns-expiration`은 고정 만료의 epoch 초(5.2). */
+/** FCM 요청 본문. `ttl`은 남은 시간을 내림한 초, `apns-expiration`은 고정 만료의 epoch 초. */
 function message(job: PushJob, leftMs: number) {
   return JSON.stringify({
     message: {
@@ -107,7 +107,7 @@ export async function sendPush(env: Env, read: () => PushJob | null): Promise<Pu
       const auth = `Bearer ${await accessToken(env, Date.now())}`;
       job = read();
       if (!job) return { status: -2 };
-      // 실제 요청 직전에 남은 시간을 다시 구한다(5.1).
+      // 실제 요청 직전에 남은 시간을 다시 구한다.
       const left = job.expiresAt - Date.now();
       if (left < 1000) return { status: -1 };
       res = await fetch(url, {
@@ -123,7 +123,7 @@ export async function sendPush(env: Env, read: () => PushJob | null): Promise<Pu
       error?: { details?: { errorCode?: string }[] };
     } | null;
     const errorCode = err?.error?.details?.find((d) => d.errorCode)?.errorCode;
-    // 401(OAuth 만료)이면 접근 토큰을 새로 받아 한 번 더(5.5). APNs 키 문제는 다시 보내지 않는다.
+    // 401(OAuth 만료)이면 접근 토큰을 새로 받아 한 번 더. APNs 키 문제는 다시 보내지 않는다.
     if (res.status === 401 && errorCode !== "THIRD_PARTY_AUTH_ERROR" && attempt === 0) {
       cached = undefined;
       continue;

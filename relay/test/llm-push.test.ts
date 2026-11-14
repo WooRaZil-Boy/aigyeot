@@ -1,4 +1,4 @@
-// POST /v1/llm(1.4)과 FCM 푸시(5장). 바깥 호출(Anthropic·Google)은 fetch를 가짜로 바꿔 시험한다.
+// POST /v1/llm과 FCM 푸시. 바깥 호출(Anthropic·Google)은 fetch를 가짜로 바꿔 시험한다.
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +8,7 @@ import { forgetAccessToken, retryAfterS } from "../src/push";
 import { ulid } from "../src/util";
 import { BASE, addGuardian, call, carWithOwner, newCar, send } from "./helpers";
 
-// 계약 1.4의 도구 JSON·시스템 지시 코드 블록을 그대로 옮긴 예제 파일과 견준다.
+// 도구 JSON·시스템 지시를 그대로 옮긴 예제 파일(fixtures/)과 견준다.
 const fixtures = import.meta.glob("./fixtures/llm_*", { query: "?raw", import: "default", eager: true });
 const fixture = (name: string) => fixtures[`./fixtures/${name}`] as string;
 const contractTools = JSON.parse(fixture("llm_tools.json"));
@@ -49,7 +49,7 @@ const claude = (content: object[], stop_reason = "end_turn") =>
   Response.json({ model: "claude-sonnet-5-5", stop_reason, content, usage: { input_tokens: 10, output_tokens: 5 } });
 
 describe("POST /v1/llm", () => {
-  it("state의 돌봄 선택 칸(L61)을 받아 Claude에 그대로 넘긴다", async () => {
+  it("state의 돌봄 선택 칸을 받아 Claude에 그대로 넘긴다", async () => {
     const car = await newCar();
     const seen = fakeFetch(() => claude([{ type: "text", text: "ok" }]));
     const care = { sleep: { sleeping_since_min: 40, woke_min_ago: null, last_sleep_min: 35, today_sleep_min: 430 }, diaper: { min_ago: 235, today_count: 2 }, feeds_today: 3, care_as_of_min_ago: 10 };
@@ -61,7 +61,7 @@ describe("POST /v1/llm", () => {
     expect(bad.status).toBe(400);
   });
 
-  it("계약대로 Claude API를 부르고 글을 돌려준다", async () => {
+  it("정해 둔 모양으로 Claude API를 부르고 글을 돌려준다", async () => {
     const car = await newCar();
     const seen = fakeFetch(() => claude([{ type: "thinking", thinking: "" }, { type: "text", text: "자장가가 " }, { type: "text", text: "잘 통했어요." }]));
     const r = await call("POST", "/v1/llm", { token: car.car_token, body: llmBody() });
@@ -83,7 +83,7 @@ describe("POST /v1/llm", () => {
     expect(s.body.messages[0].content).toMatch(/\n\n운전자 질문: 뭐가 제일 잘 통해\?$/);
   });
 
-  it("c194·c385 p7 지시: 버전 p7, 사실 주제는 글 없이 도구로, 글에는 숫자를 쓰지 않는다(계약 글자 그대로)", () => {
+  it("p7 지시: 버전 p7, 사실 주제는 글 없이 도구로, 글에는 숫자를 쓰지 않는다(예제 파일과 글자 그대로)", () => {
     expect(PROMPT_VERSION).toBe("p7");
     expect(SYSTEM_PROMPT).toBe(contractPrompt);
     expect(SYSTEM_PROMPT).toContain("이때 글은 쓰지 않는다");
@@ -99,7 +99,7 @@ describe("POST /v1/llm", () => {
     expect(r.json).toMatchObject({ text: "", tool_calls: [{ name: "answer", input: { topics: ["feeding", "sleep"] } }], stop_reason: "tool_use" });
   });
 
-  it("c118 switch_sound 도구 enum은 음원 넷(white_noise, womb, lullaby, parent_song)", () => {
+  it("switch_sound 도구 enum은 음원 넷(white_noise, womb, lullaby, parent_song)", () => {
     const t = TOOLS.find((x) => x.name === "switch_sound")!;
     expect((t.input_schema.properties as { method: { enum: string[] } }).method.enum).toEqual(["white_noise", "womb", "lullaby", "parent_song"]);
   });

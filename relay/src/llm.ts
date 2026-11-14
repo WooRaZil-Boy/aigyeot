@@ -1,11 +1,11 @@
-// ④ 상황판 대리 호출(계약 1.4 `POST /v1/llm`). 키를 공개 APK에 넣지 않으려고 중계가 Claude API를 부른다.
-// 단순화: 계약은 @anthropic-ai/sdk 1.x를 적었지만 이번 판은 내려받기 허락 범위 밖이라 Messages API를 fetch로 직접 부른다.
+// 상황판 질문 대리 호출(`POST /v1/llm`). 키를 공개 APK에 넣지 않으려고 중계가 Claude API를 부른다.
+// SDK 없이 Messages API를 fetch로 직접 부른다(의존성을 두지 않으려고).
 import type { LlmRequest, LlmResponse } from "./protocol";
 import { HttpError } from "./util";
 
 export const PROMPT_VERSION = "p7";
 const API_URL = "https://api.anthropic.com/v1/messages";
-const TIMEOUT_MS = 8000; // G6: 재시도 0회
+const TIMEOUT_MS = 8000; // 재시도 0회
 
 export const SYSTEM_PROMPT = `너는 차 안 운전자에게 뒷좌석 아기 상황을 알려 주는 음성 안내다.
 - 아기·차 상황의 사실(수유·잠·기저귀·울음·카시트·실내 온도·쉼터·잘 통한 소리)을 물으면 answer 도구로 주제를 고른다(1~3개, 물은 순서대로): feeding(수유·먹은 것), sleep(잠·지난밤), diaper(기저귀), cry(울음), carseat(카시트), cabin_temp(실내 온도), next_rest(쉼터·수유실), sound_stats(잘 통한 소리). 이때 글은 쓰지 않는다. 차가 상태값으로 정해진 문장을 말한다.
@@ -79,7 +79,8 @@ export async function askClaude(env: Env, req: LlmRequest): Promise<LlmResponse>
         "x-api-key": env.ANTHROPIC_API_KEY!,
         "anthropic-version": "2026-10-21",
       },
-      // temperature·top_p·top_k는 2026-10-21 판에서 400이라 보내지 않는다. thinking은 between_tools 하나만(다른 필드와 같이 보내면 400, L102).
+      // temperature·top_p·top_k는 이 API 버전(2026-10-21)에서 400이라 보내지 않는다.
+      // thinking은 between_tools 하나만 보낸다(다른 필드와 같이 보내면 400).
       body: JSON.stringify({
         model: env.LLM_MODEL,
         max_tokens: 1024,
@@ -101,11 +102,11 @@ export async function askClaude(env: Env, req: LlmRequest): Promise<LlmResponse>
     throw new HttpError(502, "llm_upstream", "Anthropic 응답을 읽지 못함");
   }
   const latency = Date.now() - started;
-  // 로그는 지연·종료 사유·토큰 수만(6.6). 질문·상태값·답은 남기지 않는다.
+  // 로그는 지연·종료 사유·토큰 수만 남긴다. 질문·상태값·답은 남기지 않는다.
   console.log("llm", status, latency, data.stop_reason, data.usage?.input_tokens, data.usage?.output_tokens);
   if (status < 200 || status >= 300) throw new HttpError(502, "llm_upstream", `Anthropic ${status}`);
   if (data.stop_reason === "refusal") throw new HttpError(422, "llm_refused");
-  // end_turn·tool_use만 정상이다. 잘린 응답(max_tokens, pause_turn 등)은 쓰지 않는다(L44).
+  // end_turn·tool_use만 정상이다. 잘린 응답(max_tokens, pause_turn 등)은 쓰지 않는다.
   if (data.stop_reason !== "end_turn" && data.stop_reason !== "tool_use") {
     throw new HttpError(502, "llm_upstream", `stop_reason ${data.stop_reason}`);
   }

@@ -1,4 +1,4 @@
-// 중계 Worker(계약 0장): 경로 나누기, 토큰에서 차 id 꺼내기, Claude API 호출(④ 상황판 대리).
+// 중계 Worker: 경로 나누기, 토큰에서 차 id 꺼내기, Claude API 호출(상황판 질문 대리).
 // 판정(토큰 해시·역할)은 차 방이 한다.
 import { CarRoom } from "./car-room";
 import { Directory } from "./directory";
@@ -27,10 +27,10 @@ const VERSION = "0.1.0"; // 진입 모듈은 처리기·Durable Object 클래스
 
 const room = (env: Env, carId: string) => env.CAR_ROOM.get(env.CAR_ROOM.idFromName(carId));
 const directory = (env: Env) => env.DIRECTORY.get(env.DIRECTORY.idFromName("directory"));
-// IP는 제한 창 동안만 안내 방에 둔다. 로그에는 남기지 않는다(4.3, 6.6).
+// IP는 제한 창 동안만 안내 방에 둔다. 로그에는 남기지 않는다.
 const clientIp = (req: Request) => req.headers.get("CF-Connecting-IP") ?? "local";
 
-/** 공백·하이픈을 지우고 대문자로. 6자리 숫자면 연결 코드, 아니면 Crockford 규칙을 적용한 초대 10자(1.4). */
+/** 공백·하이픈을 지우고 대문자로. 6자리 숫자면 연결 코드, 아니면 Crockford 규칙을 적용한 초대 10자. */
 function normalizeCode(raw: string): string {
   const s = raw.replace(/[\s-]/g, "").toUpperCase();
   if (/^\d{6}$/.test(s)) return s;
@@ -42,7 +42,7 @@ function normalizeCode(raw: string): string {
 async function registerCar(req: Request, env: Env) {
   const b = decode(RegisterCarRequest, await readJson(req));
   if (b.platform !== "pleos") throw new HttpError(400, "bad_request", "차 platform은 pleos");
-  unwrap(await directory(env).rate(`reg:ip:${clientIp(req)}`, 5, HOUR)); // G7
+  unwrap(await directory(env).rate(`reg:ip:${clientIp(req)}`, 5, HOUR)); // IP당 시간당 차 등록 5회
   const carId = newCarId();
   const deviceId = newDeviceId();
   const token = newToken(carId, deviceId);

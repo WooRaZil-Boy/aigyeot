@@ -1,4 +1,4 @@
-// 아이곁 중계(연결 계약 0장). 비밀값은 `wrangler secret put`, 로컬은 relay/.dev.vars(dev.vars.example 참고).
+// 아이곁 중계. 비밀값은 `wrangler secret put`, 로컬은 relay/.dev.vars(dev.vars.example 참고).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "aigyeot-relay",

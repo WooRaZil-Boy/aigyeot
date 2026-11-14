@@ -1,5 +1,5 @@
-// 연결 계약 1.4·3장의 JSON 모양. shared/의 Kotlin 타입과 같은 것을 런타임 검사기로 적는다.
-// 검사기는 계약 표 순서로 새 객체를 만들고 모르는 필드는 버린다(계약 '공통 표기': TypeScript는 검사 뒤 버림).
+// 중계 HTTP·메시지의 JSON 모양. shared/의 Kotlin 타입과 같은 것을 런타임 검사기로 적는다.
+// 검사기는 표 순서로 새 객체를 만들고 모르는 필드는 버린다.
 // "또는 null"은 nullable(필드가 꼭 있어야 함), "선택"은 opt(빠질 수 있음)다.
 
 export class DecodeError extends Error {}
@@ -51,16 +51,16 @@ export const obj =
   };
 export type Infer<X> = X extends D<infer T> ? T : never;
 
-// ---- 공통 열거(0장) ----
-export const Role = enm("car", "owner", "guardian", "relay");
-export const Platform = enm("pleos", "android", "ios");
+// ---- 공통 열거 ----
+const Role = enm("car", "owner", "guardian", "relay");
+const Platform = enm("pleos", "android", "ios");
 const PhoneRole = enm("owner", "guardian");
 const PhonePlatform = enm("android", "ios");
 const SoundMethod = enm("white_noise", "womb", "lullaby", "parent_song");
 const EpisodeResult = enm("success", "failure", "undetermined");
 const HandoffKind = enm("rest_offer", "arrival_notice", "no_rest", "parked");
 
-// ---- 봉투(3.1) ----
+// ---- 봉투 ----
 export const Envelope = obj({
   v: int,
   id: str,
@@ -74,7 +74,7 @@ export const Envelope = obj({
 });
 export type Envelope = Infer<typeof Envelope>;
 
-// ---- body(3.3) ----
+// ---- body ----
 const Empty = obj({});
 const SongRef = obj({ song_id: str });
 const SoundRef = obj({ method: SoundMethod, label: str });
@@ -215,7 +215,7 @@ const ReportSummaryBody = obj({
   method_stats: opt(arr(MethodStat)),
 });
 
-/** 메시지 type → body 검사기(3.2 표의 type 전부). Kotlin `bodySerializers`와 같다. */
+/** 메시지 type → body 검사기(보낼 수 있는 type 전부). Kotlin `bodySerializers`와 같다. */
 export const bodySchemas: Record<string, D<unknown>> = {
   paired: obj({ device_id: str, role: PhoneRole, platform: PhonePlatform, paired_at: str, handoff_alerts: bool }),
   unpaired: obj({ device_id: str, role: PhoneRole, by: enm("car", "self", "relay") }),
@@ -242,7 +242,7 @@ export const bodySchemas: Record<string, D<unknown>> = {
   ack: AckBody,
 };
 
-// ---- 중계 HTTP API(1.4) ----
+// ---- 중계 HTTP API ----
 export const ErrorResponse = obj({ error: obj({ code: str, message: str }) });
 export const HealthResponse = obj({ ok: bool, version: str, llm: bool, push: bool });
 export const RegisterCarRequest = obj({ platform: Platform, app_version: str });
@@ -288,7 +288,7 @@ export const LlmRequest = obj({
     next_rest: nullable(obj({ id: str, name: str, distance_km: num, nursing_room: bool })),
     method_stats: arr(MethodStat),
     last_night_wakeups: nullable(int),
-    // 11-06 L61 선택 칸
+    // 선택 칸
     sleep: opt(
       obj({
         sleeping_since_min: nullable(int),

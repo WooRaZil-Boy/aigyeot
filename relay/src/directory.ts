@@ -1,4 +1,4 @@
-// 안내 방(Directory, 전역 하나, 계약 G8·4.3): 연결·초대 코드 → 차 id 색인, IP·전역 횟수 제한.
+// 안내 방(Directory, 전역 하나): 연결·초대 코드 → 차 id 색인, IP·전역 횟수 제한.
 import { DurableObject } from "cloudflare:workers";
 import { HOUR, HttpError, MIN, RATE_LIMITS_DDL, randomCrockford, rpc, sixDigits, take } from "./util";
 
@@ -15,9 +15,9 @@ CREATE INDEX IF NOT EXISTS codes_car ON codes(car_id, kind);
 CREATE INDEX IF NOT EXISTS codes_expires ON codes(expires_at);
 ${RATE_LIMITS_DDL}`;
 
-const PAIR_TTL = 5 * MIN; // 명세서 14장
+const PAIR_TTL = 5 * MIN;
 const INVITE_TTL = 24 * HOUR;
-const LIVE_INVITES = 3; // G6
+const LIVE_INVITES = 3; // 차당 동시에 살아 있는 초대 수
 
 export type CodeKind = "pair" | "invite";
 
@@ -42,7 +42,7 @@ export class Directory extends DurableObject<Env> {
     return { code, expiresAt: now + ttl };
   }
 
-  /** 새 연결 코드. 그 차의 이전 연결 코드는 지운다(1.4). */
+  /** 새 연결 코드. 그 차의 이전 연결 코드는 지운다. */
   createPairCode(carId: string, createdBy: string) {
     const now = Date.now();
     this.sql.exec("DELETE FROM codes WHERE car_id = ? AND kind = 'pair'", carId);
@@ -56,7 +56,7 @@ export class Directory extends DurableObject<Env> {
     this.sql.exec("DELETE FROM codes WHERE car_id = ? AND kind = 'pair'", carId);
   }
 
-  /** 초대 코드(10자 Crockford, 24시간, G9). 차당 살아 있는 초대 3개까지. */
+  /** 초대 코드(10자 Crockford, 24시간). 차당 살아 있는 초대 3개까지. */
   createInvite(carId: string, createdBy: string) {
     return rpc(() => {
       const now = Date.now();
@@ -75,13 +75,13 @@ export class Directory extends DurableObject<Env> {
     });
   }
 
-  /** 끊긴 `owner`가 만든 쓰지 않은 초대 폐기(G38). */
+  /** 끊긴 `owner`가 만든 쓰지 않은 초대 폐기. */
   revokeInvites(createdBy: string) {
     this.sql.exec("DELETE FROM codes WHERE kind = 'invite' AND created_by = ?", createdBy);
   }
 
   /**
-   * 코드 쓰기(한 번만). 틀리면 IP·설치 id·전역 틀린 시도를 센다(6.2).
+   * 코드 쓰기(한 번만). 틀리면 IP·설치 id·전역 틀린 시도를 센다.
    * 틀림·만료·이미 씀은 모두 404 `code_invalid`.
    */
   consumeCode(code: string, ip: string, installId: string | null) {

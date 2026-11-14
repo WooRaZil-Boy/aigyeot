@@ -1,4 +1,4 @@
-// 계약 시험(구현 계획 7장 ②): shared/의 JSON 예제를 TypeScript 검사기로 읽고 다시 써 트리가 같은지 본다.
+// 형식 시험: shared/의 JSON 예제를 TypeScript 검사기로 읽고 다시 써 트리가 같은지 본다.
 import { describe, expect, it } from "vitest";
 import * as P from "../src/protocol";
 
@@ -82,12 +82,12 @@ describe("protocol 예제", () => {
     });
   }
 
-  it("report_summary body는 계약 표 순서로 쓴다", () => {
+  it("report_summary body는 표 순서로 쓴다", () => {
     const body = JSON.parse(files.report_summary).body;
     expect(Object.keys(roundTrip(P.bodySchemas.report_summary, body))).toEqual(Object.keys(body));
   });
 
-  it("llm 요청 cry.unavailable(C245): 있으면 통과, 잘못된 타입은 거절", () => {
+  it("llm 요청 cry.unavailable: 있으면 통과, 잘못된 타입은 거절", () => {
     const base = JSON.parse(files.api_llm_request);
     const withCry = (extra: object) => ({ ...base, state: { ...base.state, cry: { ...base.state.cry, ...extra } } });
     expect(P.LlmRequest(withCry({ unavailable: true }), "$").state.cry.unavailable).toBe(true);
