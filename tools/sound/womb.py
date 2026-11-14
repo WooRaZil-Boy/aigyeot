@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""뱃속 소리(음원 후보 C118) 합성: 심장 박동 72회/분 + 저역 통과한 '쉬' 소리, 60초 반복용.
+"""뱃속 소리 합성: 심장 박동 72회/분 + 저역 통과한 '쉬' 소리, 60초 반복용.
 
 python3 tools/sound/womb.py          # app/src/main/assets/sound/womb.m4a 생성
 python3 tools/sound/womb.py --check  # 만든 m4a를 두 번 이어 붙여 반복 이음새 확인

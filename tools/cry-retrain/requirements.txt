@@ -1,0 +1,6 @@
+mediapipe==0.10.14
+numpy==1.26.4
+scikit-learn==1.5.2
+# 아래 둘은 평가에 쓴 판을 기록하지 않아 고정하지 않는다.
+scipy
+soundfile

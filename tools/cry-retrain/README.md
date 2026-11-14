@@ -26,6 +26,8 @@ YAMNet(MediaPipe `yamnet.tflite`)이 0.975초 창마다 내는 521개 점수 위
 - `mediapipe==0.10.14`(평가할 때 앱의 `tasks-audio` 판과 맞췄다. 앱은 뒤에 0.10.32로 올렸고 같은 입력의 확률이 같았다: [mediapipe_1108.txt](../measure/mediapipe_1108.txt))
 - `numpy==1.26.4`, `scikit-learn==1.5.2`, `scipy`, `soundfile`. NumPy 2(2.4.2)에서는 MediaPipe 0.10.14 오디오 분류가 프로세스째 죽어(종료 코드 139) NumPy 1.x로 고정한다. Apple Silicon에서 2.4.2는 죽고 1.26.4는 같은 입력을 정상 처리한 것을 확인했다
 
+설치: `python3 -m pip install -r requirements.txt`
+
 ## 데이터 폴더(`S`)
 
 스크립트는(`csd_list.py` 빼고) 첫 인자로 데이터 폴더 `S`를 받는다. 구성은 아래와 같다.

@@ -432,6 +432,10 @@ def drive_cases(root):
     check(c, rc == 1 and "/vehicle/controls?speed=0&accelerator=0&brake=30&steering=0" in v and "/vehicle/body?door_rl=0&door_rr=0" in v,
           "기준 상태 요청 하나가 실패해도 나머지를 보내고 1", out)
 
+    c = Case(root, "stop")
+    rc, out = run(c, "stop.sh")
+    check(c, rc in (0, 1) and "지웠다" in out, "정리 스크립트가 공용 함수를 읽고 세션 신호·포트 연결 정리까지 간다", out)
+
 
 def main():
     root = tempfile.mkdtemp(prefix="aigyeot-demo-selftest-")
@@ -443,7 +447,7 @@ def main():
         os.chmod(os.path.join(bin_dir, name), 0o755)
     print("scene-result.sh")
     scene_cases(root)
-    print("drive.sh·reset.sh")
+    print("drive.sh·reset.sh·stop.sh")
     drive_cases(root)
     if failures:
         print(f"\n시연 스크립트 자체 시험 실패 {len(failures)}건:\n")

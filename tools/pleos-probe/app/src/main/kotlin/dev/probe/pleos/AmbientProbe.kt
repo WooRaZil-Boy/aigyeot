@@ -8,7 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 
-// 앰비언트 라이트(기능 D 준비) 실측: 영역·밝기 범위·읽기·주행 모드 자동 색, 밝기 set 6번과 되읽기, 원래 값 복구
+// 앰비언트 라이트 실측: 영역·밝기 범위·읽기·주행 모드 자동 색, 밝기 set 6번과 되읽기, 원래 값 복구
 // 실행: am start --user 10 -n dev.probe.pleos/.AmbientProbe --es phase stop|drive
 class AmbientProbe : Activity() {
     private fun log(msg: String) { Log.i("AMB", msg) }

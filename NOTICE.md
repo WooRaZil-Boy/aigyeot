@@ -6,7 +6,7 @@
 - **울음 판별 바탕 모델:** YAMNet(TensorFlow Model Garden, Apache 2.0)과 MediaPipe tasks-audio(Apache 2.0). Apache 2.0 전문은 [app/src/main/assets/licenses/Apache-2.0.txt](app/src/main/assets/licenses/Apache-2.0.txt)에 있습니다.
 - **AudioSet 온톨로지:** YAMNet 모델 파일에 들어 있는 클래스 이름은 AudioSet 온톨로지(CC BY-SA 4.0)에서 왔습니다.
 - **판별층:** YAMNet 점수 위에 얹은 판별층의 학습·평가 데이터와 라이선스는 아래 표에 있습니다.
-- **말로 묻기의 LLM 답:** 중계가 외부 LLM API를 부릅니다(모델은 `relay/wrangler.jsonc`의 `LLM_MODEL`). 상태값과 운전자 질문 글자(아이 별명은 '아기'로 바꿈)만 보내고, 키는 중계에만 둡니다.
+- **말로 묻기의 LLM 답:** 중계가 외부 LLM API를 부릅니다(모델은 `relay/wrangler.jsonc`의 `LLM_MODEL`). 운전자 질문 글자(아이 별명은 '아기'로 바꿈)와 그때의 상태 값(울음·수유·잠·기저귀 요약, 카시트 시간, 실내 온도, 소리별 성적, 다음 쉼터의 이름·거리·수유실 유무와 식별값(쉼터 종류와 이름으로 만든 값))만 보내고, 키는 중계에만 둡니다.
 - **서체:** Pretendard Variable 1.3.9(SIL OFL 1.1)를 세 앱에 넣었습니다. 전문은 [app/src/main/assets/licenses/Pretendard-OFL.txt](app/src/main/assets/licenses/Pretendard-OFL.txt)에 있습니다.
 - **아이콘:** Lucide(ISC, Feather에서 온 일부 아이콘은 MIT). 두 전문 모두 [app/src/main/assets/licenses/Lucide-ISC.txt](app/src/main/assets/licenses/Lucide-ISC.txt)에 있습니다.
 - **3D 차:** 차 앱과 안드로이드 휴대폰 앱은 Filament 1.77.3(Apache 2.0)으로, iOS 휴대폰 앱은 RealityKit으로 그립니다. 차 모델은 직접 만들었습니다(엠블럼 없음, 외부 모델·텍스처 파일을 쓰지 않음).

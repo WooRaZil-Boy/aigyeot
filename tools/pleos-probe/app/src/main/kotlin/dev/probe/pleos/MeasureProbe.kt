@@ -48,7 +48,7 @@ class MeasureProbe : Activity() {
         log("PLAY end")
     }
 
-    // files가 있으면 마이크 대신 PCM(16kHz mono s16le, 5초)을 sendAudio로 100ms씩 실시간 속도로 넣는다(명세서 6장의 공유 PCM 경로). 파일 하나가 시도 하나
+    // files가 있으면 마이크 대신 PCM(16kHz mono s16le, 5초)을 sendAudio로 100ms씩 실시간 속도로 넣는다(공유 PCM 경로). 파일 하나가 시도 하나
     private fun stt(files: List<String>? = null) {
         val n = files?.size ?: intent.getIntExtra("n", 10); val sec = intent.getIntExtra("sec", 5)
         val bus = intent.getStringExtra("bus"); val file = intent.getStringExtra("file")

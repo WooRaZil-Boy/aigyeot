@@ -50,7 +50,7 @@ stop_log() { kill $lp 2>/dev/null; wait $lp 2>/dev/null; }   # wait로 거둬 �
 trap 'stop_log; rm -f "$log" "$log.cut" "$log.ok" "$log.csv"' EXIT
 trap 'echo "멈춤: 장면이 돌고 있으면 앱에서 \"멈추기\"를 누른 뒤 reset.sh로 정차 상태로 되돌린다" >&2; exit 130' INT TERM
 
-# 이 실행만의 표식 줄을 로그에 남기고, 그 뒤의 줄만 본다. 표식 한 줄이 로그에 들어가지 않은 일이 있어(11-14 에뮬레이터 한 번, 원인 미판정) 새 표식으로 세 번까지 다시 남긴다
+# 이 실행만의 표식 줄을 로그에 남기고, 그 뒤의 줄만 본다. 표식 한 줄이 로그에 들어가지 않은 일이 있어(에뮬레이터에서 한 번 있었고 원인은 미판정) 새 표식으로 세 번까지 다시 남긴다
 mark=""
 for _ in 1 2 3; do
   m="scene-result-start-$$-$RANDOM"

@@ -3,7 +3,7 @@
 import numpy as np
 rng = np.random.default_rng(0)
 import sys
-N, T, K = 20000, int(sys.argv[1]) if len(sys.argv) > 1 else 20, int(sys.argv[2]) if len(sys.argv) > 2 else 3   # 둘째 인자 = 음원 수(기본 3, 뱃속 소리 더하면 4)
+N, T, K = 20000, int(sys.argv[1]) if len(sys.argv) > 1 else 20, int(sys.argv[2]) if len(sys.argv) > 2 else 3   # 둘째 인자 = 음원 수(기본 3: 백색소음·뱃속 소리·자장가, 부모 노래를 더하면 4)
 if T <= 0: sys.exit('울음 횟수 T는 1 이상이어야 한다 (받은 값: %d)' % T)
 P_FALSE_STOP = 1 / 180; P_FALSE_CONT = 0 / 180
 def observe(true_ok):

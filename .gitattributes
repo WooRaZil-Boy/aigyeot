@@ -1,0 +1,17 @@
+# 바이너리
+*.apk binary
+*.tflite binary
+*.filamat binary
+*.glb binary
+*.ttf binary
+*.png binary
+*.jpg binary
+*.m4a binary
+
+# 줄바꿈 문자가 시험 대상인 예제(가져오기 CSV)는 바꾸지 않는다
+*.csv -text
+
+# GitHub 언어 통계에서 빼는 것
+phone/ios/Aigyeot.xcodeproj/** linguist-generated
+tools/measure/** linguist-documentation
+shared/src/test/resources/** linguist-vendored
