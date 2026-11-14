@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kover)
 }
 
 // release 서명: 루트 local.properties(공개 안 함)의 aigyeot.release.storeFile·storePassword·keyAlias·keyPassword.
@@ -66,7 +67,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.core)
-    implementation(libs.filament.android)   // 홈 무대 3D(디자인 v6): GLB 그리기
+    implementation(libs.filament.android)   // 홈 무대 3D: GLB 그리기
     implementation(libs.filament.gltfio)
     implementation(libs.filament.utils)     // 환경광(IBL) 미리 거르기·KTX
     debugImplementation(libs.compose.ui.tooling)

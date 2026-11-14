@@ -5,10 +5,11 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kover)
 }
 if (file("google-services.json").exists()) apply(plugin = libs.plugins.google.services.get().pluginId)
 
-// 중계 주소. debug는 에뮬레이터에서 맥의 wrangler dev(10.0.2.2:8787), release는 배포한 주소(계약 L98·L101, 차 RelayAddress.RELEASE·iOS RelayBaseURL과 같은 글자).
+// 중계 주소. debug는 에뮬레이터에서 맥의 wrangler dev(10.0.2.2:8787), release는 배포한 주소(차 RelayAddress.RELEASE·iOS RelayBaseURL과 같은 글자).
 // 다른 주소로 시험할 때만 -Paigyeot.relayUrl=https://… 로 바꾼다.
 val relayDebug = providers.gradleProperty("aigyeot.relayUrl.debug").getOrElse("http://10.0.2.2:8787")
 val relayRelease = providers.gradleProperty("aigyeot.relayUrl").getOrElse("https://aigyeot-relay.byuncorry.workers.dev")
@@ -73,7 +74,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.code.scanner)
     implementation(libs.zxing.core) // 초대 QR 만들기
-    // 디자인 v6 실시간 3D 차. 차 앱과 같은 판을 공용 버전 카탈로그 한 곳에서 쓴다.
+    // 실시간 3D 차. 차 앱과 같은 판을 공용 버전 카탈로그 한 곳에서 쓴다.
     implementation(libs.filament.android)
     implementation(libs.filament.gltfio)
     implementation(platform(libs.firebase.bom))

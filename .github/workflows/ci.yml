@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 아이곁은 한국 시간대·한국어만 다룬다. 시험도 같은 환경에서 돌린다.
+  TZ: Asia/Seoul
+  JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Seoul -Duser.language=ko -Duser.country=KR
+
+jobs:
+  jvm:
+    name: 판단 코어·차 앱·안드로이드 폰
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 단위 시험
+        run: ./gradlew --console=plain :engine:test :shared:test :app:testDebugUnitTest :phone:testDebugUnitTest
+      - name: 판단 코어 커버리지 하한(줄 95%)
+        run: ./gradlew --console=plain -Pcoverage :engine:koverVerify :engine:koverLog :engine:koverHtmlReport
+      - name: 시험·커버리지 보고서 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-reports
+          path: |
+            */build/reports/tests
+            phone/android/build/reports/tests
+            engine/build/reports/kover
+          if-no-files-found: ignore
+
+  relay:
+    name: 중계 서버
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: 타입 검사
+        run: npm run typecheck
+      - name: 단위 시험
+        run: npm test

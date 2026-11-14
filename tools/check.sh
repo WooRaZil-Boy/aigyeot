@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# 시험을 한 번에 돌린다(engine·shared·app·phone JVM, 시연 스크립트, relay, iOS). 저장소 루트에서 ./tools/check.sh
+# 시험을 한 번에 돌린다(engine·shared·app·phone JVM, 시연 스크립트, relay, iOS 시험·린트). 저장소 루트에서 ./tools/check.sh
 # iOS 시뮬레이터: IOS_SIM=<시뮬레이터 id> ./tools/check.sh. 없으면 켜진 iPhone, 그다음 available 목록의 마지막 iPhone을 쓴다.
 # 건너뛰기: npm이 없으면 중계 서버, Xcode(xcodebuild·simctl)를 쓸 수 없으면 iOS를 건너뛰고 마지막 줄에 적는다.
 # 실패로 멈춤: 시험 실패, IOS_SIM을 지정했는데 Xcode를 쓸 수 없을 때, 쓸 iPhone 시뮬레이터가 없을 때.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}"
+# 아이곁은 한국 시간대만 다룬다. 시험도 그 시간대에서 돌린다(TEST_RUNNER_TZ는 xcodebuild가 시험 프로세스에 TZ로 넘긴다).
+export TZ=Asia/Seoul TEST_RUNNER_TZ=Asia/Seoul
 
 skipped=()
 ./gradlew --console=plain :engine:test :shared:test :app:testDebugUnitTest :phone:testDebugUnitTest
@@ -29,5 +31,9 @@ elif [ -d phone/ios ]; then
   if [ -z "$sim" ]; then echo "check: 실패 — 쓸 수 있는 iPhone 시뮬레이터가 없습니다(xcrun simctl list devices available)" >&2; exit 1; fi
   xcodebuild test -project phone/ios/Aigyeot.xcodeproj -scheme Aigyeot \
     -destination "platform=iOS Simulator,id=$sim" -quiet
+fi
+# iOS 린트: 설정은 phone/ios/.swiftlint.yml. 오류가 있으면 멈추고 경고는 넘어간다. SwiftLint가 없으면 건너뛴다.
+if [ -d phone/ios ]; then
+  if command -v swiftlint >/dev/null; then (cd phone/ios && swiftlint lint --quiet); else skipped+=("SwiftLint(없음)"); fi
 fi
 if [ ${#skipped[@]} -gt 0 ]; then echo "check: 통과(건너뜀: ${skipped[*]})"; else echo "check: 통과"; fi

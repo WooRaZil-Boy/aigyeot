@@ -1,0 +1,36 @@
+name: iOS
+
+# macOS 러너의 Xcode 판이 프로젝트와 맞는지 확인하기 전이라 손으로만 돌린다(Actions 탭 → Run workflow).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # 아이곁은 한국 시간대만 다룬다. xcodebuild는 TEST_RUNNER_ 머리를 뗀 이름(TZ)으로 시험 프로세스에 넘긴다.
+  TEST_RUNNER_TZ: Asia/Seoul
+
+jobs:
+  ios:
+    name: iOS 폰 앱·시연 스크립트
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: 시연 스크립트 자체 시험(기기 없이)
+        run: python3 tools/demo/selftest.py
+      - name: SwiftLint
+        working-directory: phone/ios
+        run: |
+          if command -v swiftlint >/dev/null; then swiftlint lint --quiet; else echo "SwiftLint 없음: 건너뜀"; fi
+      - name: 시뮬레이터 고르기
+        id: sim
+        run: |
+          id=$(xcrun simctl list devices available | sed -nE 's/^ +iPhone[^(]*\(([0-9A-Fa-f-]{36})\).*/\1/p' | tail -1)
+          test -n "$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - name: 단위 시험
+        run: |
+          xcodebuild test -project phone/ios/Aigyeot.xcodeproj -scheme Aigyeot \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.id }}" -quiet
