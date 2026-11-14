@@ -19,7 +19,7 @@ import java.io.File
 
 /**
  * `phone_state.json`과 지금 자격(연결 세대)의 원본. 만들 때 자격을 읽고, 상태가 그 차 것이 아니면 그 차의 빈 상태로 복구한다.
- * 토큰은 썼는데 상태 파일을 바꾸기 전에 앱이 죽었으면 다른 차의 상태다(7.4, L47). 자격이 있는데 읽지 못했으면(예외) 이번 실행은
+ * 토큰은 썼는데 상태 파일을 바꾸기 전에 앱이 죽었으면 다른 차의 상태다. 자격이 있는데 읽지 못했으면(예외) 이번 실행은
  * 연결 없이 두되 지난 상태는 그대로 쓴다: 빈 상태로 보면 녹음 정리가 남은 녹음을 지우고, 기록 지우기가 차 정보 없는 상태 파일을 써
  * 다음 실행의 연결이 받는 것을 모두 버린다.
  */
@@ -28,11 +28,11 @@ class FilePhoneStateRepository(
     credentials: CredentialRepository,
     private val log: Logger,
     clock: Clock,
-    /** 수유 옮기기(R11)를 아직 마치지 못했다: 연결이 바뀌어도 옮길 원본 수유 기록은 남긴다. */
+    /** 수유 옮기기를 아직 마치지 못했다: 연결이 바뀌어도 옮길 원본 수유 기록은 남긴다. */
     migrating: () -> Boolean,
     /** commit·commitLocal의 저장 실패(U·W·R 범주): 띠로 알린다. */
     private val onSaveFailed: () -> Unit,
-    /** 앞 프로세스가 강제 끊김을 정리한 뒤 GONE 화면에서 고르기 전에 죽었으면 그 기기 id(재시작 복구 기록, U25 a). */
+    /** 앞 프로세스가 강제 끊김을 정리한 뒤 GONE 화면에서 고르기 전에 죽었으면 그 기기 id(재시작 복구 기록). */
     goneCleanupPending: String?,
 ) : PhoneStateRepository {
     private val store = StateStore(file)
@@ -111,7 +111,7 @@ class FilePhoneStateRepository(
     override suspend fun deleteRecoveryCopy(): Boolean = withContext(Dispatchers.IO) { store.backup.let { !it.exists() || it.delete() } }
 
     override suspend fun discardRecovery() = withContext(Dispatchers.IO) {
-        // 지우다 만 '기록 지우기'가 있으면 그 표시를 담은 새 상태 파일은 남긴다(R10). 옮기기를 마치지 못한 원본 수유 기록도 같은 이유로 남긴다(R11·U22).
+        // 지우다 만 '기록 지우기'가 있으면 그 표시를 담은 새 상태 파일은 남긴다. 옮기기를 마치지 못한 원본 수유 기록도 같은 이유로 남긴다.
         // 판단과 삭제를 잠금 안에서 한다(그사이 저장된 지울 id를 지우지 않게).
         lock.withLock { store.discardRecovery(keepFile = _state.value.let { it.clearingCareIds != null || it.migrationFeedings.isNotEmpty() }) }
     }

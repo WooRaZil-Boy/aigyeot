@@ -11,16 +11,16 @@ import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.CareUndo
 import kr.aigyeot.phone.domain.model.Connection
+import kr.aigyeot.phone.domain.model.DisconnectRun
 import kr.aigyeot.phone.domain.model.HOUR
 import kr.aigyeot.phone.domain.model.MINUTE
-import kr.aigyeot.phone.domain.model.text
-import kr.aigyeot.phone.domain.model.DisconnectRun
 import kr.aigyeot.phone.domain.model.OutboxPayload
 import kr.aigyeot.phone.domain.model.PairRun
-import kr.aigyeot.phone.domain.model.outboxItem
-import kr.aigyeot.phone.domain.model.rfc3339
 import kr.aigyeot.phone.domain.model.SAVE_FAILED
+import kr.aigyeot.phone.domain.model.outboxItem
 import kr.aigyeot.phone.domain.model.restartNotice
+import kr.aigyeot.phone.domain.model.rfc3339
+import kr.aigyeot.phone.domain.model.text
 import kr.aigyeot.phone.domain.repository.Mark
 import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.shared.DevicesResponse
@@ -34,7 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** 유스케이스 동작(가짜 중계·prefs·Keystore, 진짜 파일). 옛 AppModel과 같은 결과인지 본다(arch-phone-android 9장 대조표). */
+/** 유스케이스 동작(가짜 중계·prefs·Keystore, 진짜 파일). 각 유스케이스가 화면 없이 기대한 상태 변화를 내는지 본다. */
 class UseCaseTest {
     private fun feedingState(at: String) = buildJsonObject {
         put("last_feeding_start", JsonPrimitive(at))
@@ -65,7 +65,7 @@ class UseCaseTest {
         relay.inboxResult = { RelayResult.Err(429, "rate_limited", 120) }
         assertEquals(SyncInbox.Sync.FAILED, inbox.sync(OWNER))
         assertEquals(now + 120_000, inbox.inboxHoldUntil(OWNER, now))
-        assertNull(inbox.inboxHoldUntil(OWNER.copy(token = "other"), now)) // 다른 자격에는 걸리지 않는다(P5)
+        assertNull(inbox.inboxHoldUntil(OWNER.copy(token = "other"), now)) // 다른 자격에는 걸리지 않는다
         // 옛 자격의 늦은 429는 지금 자격의 기한을 덮지 않는다.
         assertEquals(SyncInbox.Sync.FAILED, inbox.sync(OWNER.copy(token = "old")))
         assertEquals(now + 120_000, inbox.inboxHoldUntil(OWNER, now))
@@ -179,15 +179,15 @@ class UseCaseTest {
         recordCare.start(CareKind.FEED)
         until("망 실패 기다림") { state.state.value.outbox.singleOrNull()?.networkWait == true }
         val first = state.state.value.outbox.single()
-        assertEquals(OutboxPayload.CareSummary(first.body, tried = false), first.payload) // '보내 봄'을 걷었다(U57)
+        assertEquals(OutboxPayload.CareSummary(first.body, tried = false), first.payload) // '보내 봄'을 걷었다
         assertEquals(1, first.attempts)
         clearRecords()
         until("지움") { care.care.value.events.isEmpty() && state.state.value.clearingCareIds == null }
         relay.sendResult = ok
         outbox.hurryNetworkWaits() // 망이 돌아왔다
         until("보낼 함 비움") { state.state.value.outbox.isEmpty() }
-        assertEquals(1, relay.sent.count { it.id == first.id }) // 지운 기록으로 만든 요약은 실패한 그 한 번뿐이다(R10)
-        // 응답을 잃은 망 실패는 닿았을 수 있어 '보내 봄'을 둔다(U57).
+        assertEquals(1, relay.sent.count { it.id == first.id }) // 지운 기록으로 만든 요약은 실패한 그 한 번뿐이다
+        // 응답을 잃은 망 실패는 닿았을 수 있어 '보내 봄'을 둔다.
         relay.sendResult = { RelayResult.Offline }
         state.commit(OWNER) { it.copy(outbox = listOf(outboxItem(OutboxPayload.CareSummary(first.body, tried = false), now))) }
         outbox.pump()
@@ -284,7 +284,7 @@ class UseCaseTest {
         assertEquals("코드가 맞지 않거나 시간이 지났어요. 차 화면의 코드를 다시 확인해 주세요.", (pair.run.value as PairRun.Failed).error)
         relay.pairResult = RelayResult.Err(429, null, 600)
         pair.start("123456")
-        // 429는 글을 굳히지 않는다: 화면이 잠금 끝 시각에서 그때그때 잰다(7.2, 11-12 결정). 10분 잠금이 9분 지나면 "600초"가 아니라 "60초".
+        // 429는 글을 굳히지 않는다: 화면이 잠금 끝 시각에서 그때그때 잰다. 10분 잠금이 9분 지나면 "600초"가 아니라 "60초".
         until("429") { pair.run.value == PairRun.Limited("123456") }
         assertEquals(now + 600_000, pair.lockedUntil.value)
         val wait = { t: Long -> kr.aigyeot.phone.domain.model.pairWaitText(pair.lockedUntil.value!! - t) }
@@ -334,17 +334,17 @@ class UseCaseTest {
 
     @Test
     fun `기록 지우기는 돌봄 기록을 지우고 지우기 표시를 마친다`() = kitTest {
-        recordCare.start(CareKind.FEED) // 오늘 수유 1회: 요약이 한 번 간다(값 없는 요약은 처음에 보내지 않는다, U61)
+        recordCare.start(CareKind.FEED) // 오늘 수유 1회: 요약이 한 번 간다(값 없는 요약은 처음에 보내지 않는다)
         until("요약 보냄") { relay.sent.any { it.type == "care_summary" } }
         val gen = clearRecords.generation()
         clearRecords()
         assertEquals(gen + 1, clearRecords.generation())
         until("지움") { care.care.value.events.isEmpty() && state.state.value.clearingCareIds == null }
-        // 넣은 적이 있으면 빈 요약을 보낸다(R10·R19). 지우기 표시를 끈 저장 다음 저장에서 넣으므로 기다린다.
+        // 넣은 적이 있으면 빈 요약을 보낸다. 지우기 표시를 끈 저장 다음 저장에서 넣으므로 기다린다.
         until("빈 요약") { state.state.value.lastSentCareSummary != null }
     }
 
-    // ---- 기록 가져오기(U64·U67): 저장은 RecordCare 입구 하나, 차 보내기는 다른 저장과 같은 계기 ----
+    // ---- 기록 가져오기: 저장은 RecordCare 입구 하나, 차 보내기는 다른 저장과 같은 계기 ----
 
     private fun Kit.imported(vararg rows: String) =
         CareCsv.parse((listOf(CSV_HEADER) + rows).joinToString("\r\n") + "\r\n", care.care.value, now).rows
@@ -422,7 +422,7 @@ class UseCaseTest {
     fun `지우다 만 기록 지우기를 마치지 못하면 가져오지 않는다`() {
         lateinit var locked: File
         kitTest(prepare = { dir ->
-            // 내보낸 CSV 사본(7.4 '캐시')을 지울 수 없게 해 기록 지우기의 정리가 끝나지 않게 한다.
+            // 내보낸 CSV 사본('캐시')을 지울 수 없게 해 기록 지우기의 정리가 끝나지 않게 한다.
             locked = File(dir, "export/locked").apply { mkdirs(); File(this, "x.csv").writeText("x"); setWritable(false) }
         }) {
             try {
@@ -444,7 +444,7 @@ class UseCaseTest {
             "FEED,${rfc3339(now - 30 * HOUR)},,true,LEFT,,,EXAMPLE 24시간 밖",
             "FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE",
         )
-        // U67 11-09 보충(결정): 저장 직후가 아니라 되돌리기 띠가 끝난 뒤 한 번 보낸다.
+        // 저장 직후가 아니라 되돌리기 띠가 끝난 뒤 한 번 보낸다.
         kitTest(undoMs = 1_000) {
             assertTrue(recordCare.importRows(rows()))
             settle()
@@ -452,11 +452,11 @@ class UseCaseTest {
             assertNull(state.state.value.lastSentFeedingAt)
             until("띠가 끝난 뒤 수유 보냄") { relay.sent.any { it.type == "feeding_started" } }
             assertNull(notices.undo.value)
-            assertEquals(now - HOUR, state.state.value.lastSentFeedingAt) // 가장 늦은 수유 하나(R5)
+            assertEquals(now - HOUR, state.state.value.lastSentFeedingAt) // 가장 늦은 수유 하나
             assertEquals(1, relay.sent.count { it.type == "feeding_started" })
         }
         kitTest(creds = OWNER.copy(role = Role.GUARDIAN), undoMs = 300) {
-            assertTrue(recordCare.importRows(rows())) // guardian도 가져온다(U64). 차로는 보내지 않는다(R5)
+            assertTrue(recordCare.importRows(rows())) // guardian도 가져온다. 차로는 보내지 않는다
             assertEquals(2, care.care.value.events.size)
             until("띠가 끝남") { notices.undo.value == null }
             settle()
@@ -495,7 +495,7 @@ class UseCaseTest {
     @Test
     fun `가져오기를 되돌리기 띠 안에 되돌리면 차로 아무것도 보내지 않는다`() = kitTest(undoMs = 1_000) {
         assertTrue(recordCare.importRows(threeRows()))
-        // 띠가 떠 있는 동안 온 다른 계기(앞으로 오기)는 가져온 줄을 빼고 맞춘다: 되돌릴 수유를 먼저 보내지 않는다(값 없는 요약은 보내지 않는다, U61).
+        // 띠가 떠 있는 동안 온 다른 계기(앞으로 오기)는 가져온 줄을 빼고 맞춘다: 되돌릴 수유를 먼저 보내지 않는다(값 없는 요약은 보내지 않는다).
         recordCare.syncToCar(kr.aigyeot.phone.domain.model.FeedTrigger.FOREGROUND)
         settle()
         assertTrue(relay.sent.isEmpty())
@@ -541,7 +541,7 @@ class UseCaseTest {
         val u = notices.undo.value!!
         val block = File(dir, "care.json.new").apply { mkdirs() } // care.json 저장 한 번 실패
         recordCare.undo(u).join()
-        assertEquals(u, notices.undo.value) // 띠가 남아 남은 시간 안에 다시 누를 수 있다(U38 11-09 보충)
+        assertEquals(u, notices.undo.value) // 띠가 남아 남은 시간 안에 다시 누를 수 있다
         assertTrue(care.care.value.events.single().deletedAt != null)
         block.deleteRecursively()
         recordCare.undo(u).join()
@@ -551,7 +551,7 @@ class UseCaseTest {
 
     @Test
     fun `기록을 지우면 되돌리기 띠도 걷는다`() = kitTest(undoMs = 1_000) {
-        // 지우기 띠: 지운 기록은 id째 빠지므로 되돌릴 것이 없다(U38 11-09 보충).
+        // 지우기 띠: 지운 기록은 id째 빠지므로 되돌릴 것이 없다.
         val hand = CareEvent("01JXHAND000000000000000005", CareKind.DIAPER, now - HOUR, zone = "Asia/Seoul", createdAt = now, updatedAt = now)
         assertTrue(recordCare.saveEvent(hand))
         recordCare.delete(hand.id)

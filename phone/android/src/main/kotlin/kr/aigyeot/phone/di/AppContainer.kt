@@ -40,7 +40,7 @@ import kr.aigyeot.phone.domain.usecase.Disconnect
 import kr.aigyeot.phone.domain.usecase.Invite
 import kr.aigyeot.phone.domain.usecase.KeepConnected
 import kr.aigyeot.phone.domain.usecase.LoseConnection
-import kr.aigyeot.phone.domain.usecase.Pair
+import kr.aigyeot.phone.domain.usecase.PairDevice
 import kr.aigyeot.phone.domain.usecase.ReconcileCareSummary
 import kr.aigyeot.phone.domain.usecase.RecordCare
 import kr.aigyeot.phone.domain.usecase.RecordSong
@@ -94,7 +94,7 @@ class AppContainer(app: Application) {
     )
 
     init {
-        // 지난 실행에서 버리고 아직 띠를 닫지 않은 메시지를 다시 알린다(U54).
+        // 지난 실행에서 버리고 아직 띠를 닫지 않은 메시지를 다시 알린다.
         notices.showDrops(state.state.value.unseenDrops)
     }
 
@@ -117,9 +117,10 @@ class AppContainer(app: Application) {
     val outbox: SendOutbox = SendOutbox(state, care, relay, UploadSong(relay, songs), lose, notices, visibility, clock, scope)
     val inbox: SyncInbox = SyncInbox(state, relay, lose, notices, songs, clock, scope)
     val push: RegisterPush = RegisterPush(state, relay, lose, pushTokens, scope)
-    val connection: KeepConnected = KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, AndroidNetworkWatcher(app), visibility, clock, scope)
+    val connection: KeepConnected =
+        KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, AndroidNetworkWatcher(app), visibility, clock, scope)
     private val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
-    /** 되돌리기 띠 시간(U87): 띠를 띄울 때 화면 읽기(TalkBack 등)와 시스템 권장 시간('조치를 취할 시간', API 29+)을 읽어 넘긴다. */
+    /** 되돌리기 띠 시간: 띠를 띄울 때 화면 읽기(TalkBack 등)와 시스템 권장 시간('조치를 취할 시간', API 29+)을 읽어 넘긴다. */
     private val undoBand: () -> Long = {
         val am = app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
         val recommended = if (am != null && android.os.Build.VERSION.SDK_INT >= 29) {
@@ -132,13 +133,16 @@ class AppContainer(app: Application) {
     }
     val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, log, allowDebugSeed = BuildConfig.DEBUG, undoMs = undoBand)
     val clearRecords = ClearRecords(care, state, recordCare, notices, songs, connection, outbox, clock, scope)
-    val pair = Pair(state, care, credentials, relay, link, disconnect, lose, marks, pushTokens, songs, recordCare, notices, clock, scope, log)
+    val pair = PairDevice(state, care, credentials, relay, link, disconnect, lose, marks, pushTokens, songs, recordCare, notices, clock, scope, log)
     val recordSong = RecordSong(state, songs, clearRecords, outbox, notices, clock, scope)
     val selectSong = SelectSong(state, outbox, clock, scope)
     val removeSong = RemoveSong(state, songs, outbox, clock, scope)
     val invite = Invite(state, relay, lose, log)
     val setHandoffAlerts = SetHandoffAlerts(state, relay, lose)
-    val lifecycle = AppLifecycle(state, care, songs, link, marks, visibility, connection, outbox, recordCare, disconnect, OngoingNotice { CareNotify.update(app, it) }, scope)
+    val lifecycle = AppLifecycle(
+        state, care, songs, link, marks, visibility, connection, outbox, recordCare, disconnect,
+        OngoingNotice { CareNotify.update(app, it) }, scope,
+    )
 
     /** 화면마다 ViewModel을 만든다(생성자 주입). 경로 인자(기록·리포트·알림 id)는 Navigation이 넘긴 SavedStateHandle에서 꺼낸다. */
     val viewModels: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -154,7 +158,10 @@ class AppContainer(app: Application) {
                 CareSheetViewModel::class.java -> CareSheetViewModel(care, notices, recordCare, clock, handle())
                 RecordsViewModel::class.java -> RecordsViewModel(state, care, recordCare, notices)
                 CarViewModel::class.java -> CarViewModel(state, connection)
-                SettingsViewModel::class.java -> SettingsViewModel(state, care, recordCare, clearRecords, disconnect, clock, { readDocument(app.contentResolver, it, CareCsv.MAX_BYTES + 1) })
+                SettingsViewModel::class.java -> SettingsViewModel(
+                    state, care, recordCare, clearRecords, disconnect, clock,
+                    { readDocument(app.contentResolver, it, CareCsv.MAX_BYTES + 1) },
+                )
                 SongsViewModel::class.java -> SongsViewModel(state, connection, recordSong, selectSong, removeSong, songs, Recorder(app), clock, handle())
                 ReportsViewModel::class.java -> ReportsViewModel(state)
                 ReportDetailViewModel::class.java -> ReportDetailViewModel(handle().toRoute<Route.Report>().id, state)

@@ -9,33 +9,33 @@ import java.time.format.ResolverStyle
 import java.util.TreeSet
 import kotlin.math.floor
 
-// 기록 가져오기(phone-care-plan U64~U69). 순수 규칙만 둔다: 파일 고르기·읽기는 화면 층, 저장은 RecordCare.importRows(P7).
-// 두 앱이 같은 파일에서 같은 결과(같은 id·같은 건너뛴 수)를 내야 한다(U69 표준 예제).
+// 기록 가져오기. 순수 규칙만 둔다: 파일 고르기·읽기는 화면 층, 저장은 RecordCare.importRows.
+// 두 앱이 같은 파일에서 같은 결과(같은 id·같은 건너뛴 수)를 내야 한다(표준 예제로 맞춘다).
 
 enum class ImportFormat { AIGYEOT, HUCKLEBERRY, NARA, UNKNOWN }
 
-/** U67 건너뛴 이유별 수. 줄마다 처음 걸린 이유 하나로 센다. */
+/** 건너뛴 이유별 수. 줄마다 처음 걸린 이유 하나로 센다. */
 data class ImportSkipped(val unsupported: Int = 0, val unreadable: Int = 0, val future: Int = 0, val old: Int = 0, val duplicate: Int = 0) {
     val total get() = unsupported + unreadable + future + old + duplicate
 }
 
-/** `profiles`: Nara 아이 이름(파일에 처음 나온 순서). `rows`: 가져올 기록(startAt 오름차순). 고른 이름은 넣지 않는다(U69). */
+/** `profiles`: Nara 아이 이름(파일에 처음 나온 순서). `rows`: 가져올 기록(startAt 오름차순). 고른 이름은 넣지 않는다. */
 data class ImportDraft(val format: ImportFormat, val profiles: List<String>, val rows: List<CareEvent>, val skipped: ImportSkipped) {
-    /** 이름이 둘 이상이면 아이를 골라야 미리 보기로 간다(U64). */
+    /** 이름이 둘 이상이면 아이를 골라야 미리 보기로 간다. */
     val needsChild get() = profiles.size > 1
 }
 
 object CareCsv {
-    const val MAX_BYTES = 5 * 1024 * 1024 // 설계값(U65)
-    const val MAX_LINES = 20_000 // 설계값(U65)
+    const val MAX_BYTES = 5 * 1024 * 1024 // 설계값
+    const val MAX_LINES = 20_000 // 설계값
     const val MAX_COLUMNS = 256 // 설계값: 한 레코드의 칸 상한(Nara 넓은 표도 50칸 안팎). 넘으면 파일째 읽지 않는다
-    const val OLD_MS = 14 * DAY // 설계값(U67 ④)
-    const val DUPLICATE_MS = MINUTE // 설계값(U67 ⑤)
+    const val OLD_MS = 14 * DAY // 설계값
+    const val DUPLICATE_MS = MINUTE // 설계값
     private const val OZ_ML = 29.57
 
     /**
-     * U65: 5MB 또는 2만 줄을 넘으면 null(import.tooLarge). UTF-8로 읽고 앞 BOM은 버린다. 화면 층은 MAX_BYTES + 1바이트까지만 읽어 넘긴다.
-     * UTF-8로 풀 수 없으면 빈 글: 헤더가 없어 [parse]가 UNKNOWN(import.unreadable)으로 끝낸다(U65 11-09 보충).
+     * 5MB 또는 2만 줄을 넘으면 null(import.tooLarge). UTF-8로 읽고 앞 BOM은 버린다. 화면 층은 MAX_BYTES + 1바이트까지만 읽어 넘긴다.
+     * UTF-8로 풀 수 없으면 빈 글: 헤더가 없어 [parse]가 UNKNOWN(import.unreadable)으로 끝낸다.
      */
     fun read(bytes: ByteArray): String? {
         if (bytes.size > MAX_BYTES) return null
@@ -45,7 +45,7 @@ object CareCsv {
     }
 
     /**
-     * U65~U67: 헤더로 형식을 정하고(모르면 UNKNOWN, 줄은 읽지 않는다) 줄마다 기록으로 바꾼다.
+     * 헤더로 형식을 정하고(모르면 UNKNOWN, 줄은 읽지 않는다) 줄마다 기록으로 바꾼다.
      * `profile`은 고른 아이(Nara 이름이 둘 이상일 때만 본다). 둘 이상인데 null이면 아직 고르기 전이라 줄은 비고 건너뛴 수는 0이다.
      */
     fun parse(text: String, existing: CareFile, now: Long, profile: String? = null): ImportDraft =
@@ -87,7 +87,13 @@ object CareCsv {
             }
             if (skip != null) skips[skip.ordinal]++ else { rows += e!!; seen.take(e) }
         }
-        val skipped = ImportSkipped(skips[Skip.UNSUPPORTED.ordinal], skips[Skip.UNREADABLE.ordinal], skips[Skip.FUTURE.ordinal], skips[Skip.OLD.ordinal], skips[Skip.DUPLICATE.ordinal])
+        val skipped = ImportSkipped(
+            skips[Skip.UNSUPPORTED.ordinal],
+            skips[Skip.UNREADABLE.ordinal],
+            skips[Skip.FUTURE.ordinal],
+            skips[Skip.OLD.ordinal],
+            skips[Skip.DUPLICATE.ordinal],
+        )
         return ImportDraft(format, profiles, rows.sortedBy { it.startAt }, skipped)
     }
 
@@ -142,7 +148,7 @@ object CareCsv {
         }
     }
 
-    /** 한 줄: 칸 이름(소문자)으로 읽는다. 없는 칸은 빈 글자. 메모 말고는 앞뒤 공백을 지운다(공백뿐이면 값 없음, U66). */
+    /** 한 줄: 칸 이름(소문자)으로 읽는다. 없는 칸은 빈 글자. 메모 말고는 앞뒤 공백을 지운다(공백뿐이면 값 없음). */
     private class Line(private val index: Map<String, Int>, private val cells: List<String>) {
         fun raw(name: String) = index[name]?.let { cells.getOrNull(it) }.orEmpty()
         operator fun get(name: String) = raw(name).trim()
@@ -153,10 +159,18 @@ object CareCsv {
 
     private enum class Skip : Read { UNSUPPORTED, UNREADABLE, FUTURE, OLD, DUPLICATE }
 
-    private class Got(val kind: CareKind, val start: Long, val end: Long?, val side: FeedSide?, val amount: Int?, val diaper: Diaper?, val note: String) : Read {
+    private class Got(
+        val kind: CareKind,
+        val start: Long,
+        val end: Long?,
+        val side: FeedSide?,
+        val amount: Int?,
+        val diaper: Diaper?,
+        val note: String,
+    ) : Read {
         /**
-         * 끝이 비었거나 시작보다 이르거나 최대 길이(R3)를 넘거나 지금 + 1분보다 늦으면(R3 미래 금지, U66 11-09 보충) 끝 모름.
-         * 진행 중은 만들지 않는다(R1). 수유·잠 말고는 끝이 없다.
+         * 끝이 비었거나 시작보다 이르거나 최대 길이를 넘거나 지금 + 1분보다 늦으면(미래 시각 금지) 끝 모름.
+         * 진행 중은 만들지 않는다. 수유·잠 말고는 끝이 없다.
          */
         fun event(now: Long): CareEvent {
             val max = kind.maxMs
@@ -179,12 +193,12 @@ object CareCsv {
         }
     }
 
-    /** 아이곁(U29의 역): 시각은 오프셋 있는 ISO 8601, kind·side·diaper는 enum 글자. 모르는 side·diaper는 null, amount_ml이 정수가 아니면 ②. */
+    /** 아이곁(내보내기의 역): 시각은 오프셋 있는 ISO 8601, kind·side·diaper는 enum 글자. 모르는 side·diaper는 null, amount_ml이 정수가 아니면 읽을 수 없는 줄. */
     private fun aigyeot(l: Line): Read {
         val kind = CareKind.entries.find { it.name == l["kind"] } ?: return Skip.UNSUPPORTED
         val start = time(l["start"]) ?: return Skip.UNREADABLE
         val amount = l["amount_ml"].ifEmpty { null }?.let { if (it.toIntOrNull() == null) return Skip.UNREADABLE else ml(it, "ml") ?: return Skip.UNREADABLE }
-        // 값은 종류에 맞는 칸에만(U66 11-09 보충, 두 앱 같은 id): 쪽·양은 FEED만, 기저귀는 DIAPER만. 양 검사는 위에서 모든 줄에 했다.
+        // 값은 종류에 맞는 칸에만(두 앱 같은 id): 쪽·양은 FEED만, 기저귀는 DIAPER만. 양 검사는 위에서 모든 줄에 했다.
         val feed = kind == CareKind.FEED
         val side = FeedSide.entries.find { it.name == l["side"] }?.takeIf { feed }
         val diaper = Diaper.entries.find { it.name == l["diaper"] }?.takeIf { kind == CareKind.DIAPER }
@@ -193,7 +207,7 @@ object CareCsv {
 
     /**
      * 부피 조각: 숫자 + ml·oz(단위 대소문자 없이, 사이 공백 허용). 앞뒤는 칸 끝이거나 공백이다("120mls"는 아니다).
-     * 숫자는 부호를 포함해 읽어 범위 검사로 보낸다("-0.4ml"는 읽을 수 없는 줄, U68 11-09 보충 ⑤).
+     * 숫자는 부호를 포함해 읽어 범위 검사로 보낸다("-0.4ml"는 읽을 수 없는 줄).
      */
     private val VOLUME = Regex("""(?:^|\s)([+-]?\d+(?:\.\d+)?)\s*(ml|oz)(?=\s|$)""", RegexOption.IGNORE_CASE)
 
@@ -263,11 +277,11 @@ object CareCsv {
         }
     }
 
-    /** Nara 모유 초(U66 11-09 보충): 소수 허용. 숫자가 아니거나 음수면 그 쪽은 없음(0). */
+    /** Nara 모유 초: 소수 허용. 숫자가 아니거나 음수면 그 쪽은 없음(0). */
     private fun seconds(s: String): Double = s.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 } ?: 0.0
 
     /**
-     * 부피(세 형식 공통, U66 11-09 보충): 소수 허용, ml면 그대로, oz면 ×29.57. 범위(0 이상 400 이하)는 반올림 **전** 값으로 보고
+     * 부피(세 형식 공통): 소수 허용, ml면 그대로, oz면 ×29.57. 범위(0 이상 400 이하)는 반올림 **전** 값으로 보고
      * 0.5에서 올린다. 단위가 없거나 범위 밖이면 null(그 줄은 ②).
      */
     private fun ml(value: String, unit: String): Int? {
@@ -294,27 +308,27 @@ object CareCsv {
 
     private val WALL = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm[:ss]").withResolverStyle(ResolverStyle.STRICT)
 
-    /** 오프셋 있는 ISO 8601(`Z`·`±HH:MM`)이면 그대로, 없으면 `YYYY-MM-DD HH:MM[:SS]`를 Asia/Seoul 벽시계로(U66). 못 읽으면 null. */
+    /** 오프셋 있는 ISO 8601(`Z`·`±HH:MM`)이면 그대로, 없으면 `YYYY-MM-DD HH:MM[:SS]`를 Asia/Seoul 벽시계로. 못 읽으면 null. */
     private fun time(s: String): Long? {
         if (s.isEmpty()) return null
         return runCatching { OffsetDateTime.parse(s).toInstant().toEpochMilli() }.getOrNull()
             ?: runCatching { LocalDateTime.parse(s, WALL).atZone(APP_ZONE).toInstant().toEpochMilli() }.getOrNull()
     }
 
-    /** 메모 200자(U24, 코드 포인트)에서 자른다. */
+    /** 메모 200자(코드 포인트)에서 자른다. */
     private fun clipNote(s: String): String =
         if (s.codePointCount(0, s.length) <= NOTE_MAX) s else s.substring(0, s.offsetByCodePoints(0, NOTE_MAX))
 }
 
-/** U66 id: "imp-" + SHA-256("kind|startAt|endAt|feedSide|amountMl", null은 빈 글자, 시각은 epoch ms) 16진수 앞 16글자. 다시 가져와도 겹치지 않는다. */
+/** id: "imp-" + SHA-256("kind|startAt|endAt|feedSide|amountMl", null은 빈 글자, 시각은 epoch ms) 16진수 앞 16글자. 다시 가져와도 겹치지 않는다. */
 fun importId(kind: CareKind, startAt: Long, endAt: Long?, side: FeedSide?, amountMl: Int?): String {
     val key = "${kind.name}|$startAt|${endAt ?: ""}|${side?.name ?: ""}|${amountMl ?: ""}"
     return "imp-" + MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
 }
 
 /**
- * U67 ⑤ 중복 판정 한 곳: 같은 id(지운 기록 포함), 또는 같은 종류·시작 60초 이하인 지우지 않은 기록.
- * 미리 보기([CareCsv.parse])와 저장 순간([imported])이 같이 쓴다(U68 11-09 보충 ④). 받아들인 줄은 [take]로 더해 그 뒤 줄과도 견준다.
+ * 중복 판정 한 곳: 같은 id(지운 기록 포함), 또는 같은 종류·시작 60초 이하인 지우지 않은 기록.
+ * 미리 보기([CareCsv.parse])와 저장 순간([imported])이 같이 쓴다. 받아들인 줄은 [take]로 더해 그 뒤 줄과도 견준다.
  */
 private class Seen(events: List<CareEvent>) {
     private val ids = events.mapTo(HashSet()) { it.id }
@@ -343,7 +357,7 @@ private class Seen(events: List<CareEvent>) {
 }
 
 /**
- * U67: 가져온 줄을 한 번에 넣는다. 저장하는 순간의 기록으로 중복을 다시 본다(U68 11-09 보충 ④):
+ * 가져온 줄을 한 번에 넣는다. 저장하는 순간의 기록으로 중복을 다시 본다:
  * 미리 보기 뒤 손으로 넣은 기록과 겹치는 줄, 같은 미리 보기를 두 번 저장한 줄은 넣지 않는다.
  */
 fun CareFile.imported(rows: List<CareEvent>): CareFile {
@@ -352,16 +366,23 @@ fun CareFile.imported(rows: List<CareEvent>): CareFile {
     return copy(events = events + fresh)
 }
 
-/** U67 되돌리기: 이번에 넣은 id를 완전히 뺀다(지운 표시가 아니다. 다시 가져올 수 있게). */
+/** 되돌리기: 이번에 넣은 id를 완전히 뺀다(지운 표시가 아니다. 다시 가져올 수 있게). */
 fun CareFile.withoutIds(ids: Collection<String>): CareFile {
     val drop = ids.toHashSet() // 기록마다 id 목록을 훑지 않게
     return copy(events = events.filter { it.id !in drop })
 }
 
-// ---- 미리 보기 글(U68, 7.1 import.*) ----
+// ---- 미리 보기 글(import.*) ----
 
 /** 화면은 이것을 그리기만 한다. 가져올 기록이 0이면 [title]이 import.nothing이고 버튼은 '닫기'만. */
-data class ImportPreview(val title: String, val lines: List<String>, val skipTitle: String?, val skips: List<String>, val note: String?, val buttons: List<String>)
+data class ImportPreview(
+    val title: String,
+    val lines: List<String>,
+    val skipTitle: String?,
+    val skips: List<String>,
+    val note: String?,
+    val buttons: List<String>,
+)
 
 fun importPreview(d: ImportDraft, now: Long, zone: ZoneId): ImportPreview {
     if (d.rows.isEmpty()) return ImportPreview("가져올 기록이 없어요", emptyList(), null, emptyList(), null, listOf("닫기"))
@@ -387,7 +408,7 @@ fun importPreview(d: ImportDraft, now: Long, zone: ZoneId): ImportPreview {
     )
 }
 
-/** 끝내는 안내(7.1 import.unreadable·tooLarge·failed). 화면은 글과 '닫기'만 보인다. */
+/** 끝내는 안내(import.unreadable·tooLarge·failed). 화면은 글과 '닫기'만 보인다. */
 const val IMPORT_UNREADABLE = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요."
 const val IMPORT_TOO_LARGE = "파일이 너무 커요"
 const val IMPORT_FAILED = "가져오지 못했어요. 다시 해 주세요."

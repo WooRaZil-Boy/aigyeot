@@ -1,0 +1,64 @@
+report_summary.date: 11월 5일(목)
+report_summary.rowTitle: 11월 5일(목) 오전 8:00–8:42
+report_summary.cries: 울음 1번
+report_summary.rowSub: 울음 1번
+report_summary.route: 소리 나간 곳 · 뒷좌석
+report_summary.sectionHead: 울음
+report_summary.preCry[0].drive: 기어 D
+report_summary.preCry[0].cabinTemp: 24.5℃
+report_summary.timeline[0].trigger: 울음 감지
+report_summary.timeline[0].head: 울음
+report_summary.timeline[0].line.감지까지: 2.4초
+report_summary.timeline[0].line.소리: 자장가
+report_summary.timeline[0].line.재생: 56초
+report_summary.timeline[0].line.결과: 그침
+report_summary.timeline[0].line.울음 시간: 1분 1초
+report_summary.timeline[0].plays[0]: 자동 1차 자장가 오전 8:05–8:06 56초
+report_summary.carActions[0]: 뒷좌석 재생
+report_summary.carActions[1]: 뒷좌석 열선 끔
+report_summary.carActions[2]: 조명 낮춤
+report_summary.controls[0].title: Seat.setHvacSeatTemperature · ROW_2_LEFT
+report_summary.controls[0].stats: 시도 1 · 성공 1 · 실패 0 · 다시 0
+report_summary_handoff.date: 11월 5일(목)
+report_summary_handoff.rowTitle: 11월 5일(목) 오후 3:00–3:49
+report_summary_handoff.cries: 울음 1번
+report_summary_handoff.rowSub: 울음 1번 · 연습 장면
+report_summary_handoff.route: 소리 나간 곳 · 앞에서도 들림
+report_summary_handoff.sectionHead: 울음
+report_summary_handoff.preCry[0].drive: 기어 D
+report_summary_handoff.preCry[0].cabinTemp: -
+report_summary_handoff.timeline[0].trigger: 울음 감지
+report_summary_handoff.timeline[0].head: 울음
+report_summary_handoff.timeline[0].line.감지까지: 3.1초
+report_summary_handoff.timeline[0].line.소리: 자장가
+report_summary_handoff.timeline[0].line.재생: 1분 52초
+report_summary_handoff.timeline[0].line.결과: 계속 울음
+report_summary_handoff.timeline[0].line.다시 울음: 있음
+report_summary_handoff.timeline[0].line.2차: 다른 소리로 바꿨어요 · 백색소음 · 계속 울음
+report_summary_handoff.timeline[0].line.정차: 두 번 시도 뒤 · 도착 안내는 하지 못했어요 · 다른 보호자에게 알림
+report_summary_handoff.timeline[0].line.울음 시간: 3분 30초
+report_summary_handoff.timeline[0].plays[0]: 자동 1차 자장가 오후 3:10 56초
+report_summary_handoff.timeline[0].plays[1]: 자동 2차 백색소음 오후 3:12–3:13 56초
+report_summary_handoff.carActions[0]: 앞에서도 들리게 재생
+report_summary_handoff.carActions[1]: 도착 안내
+report_summary_handoff.carActions[2]: 다른 보호자 알림
+report_summary_womb.date: 11월 5일(목)
+report_summary_womb.rowTitle: 11월 5일(목) 오전 8:00–8:42
+report_summary_womb.cries: 울음 1번
+report_summary_womb.rowSub: 울음 1번
+report_summary_womb.route: 소리 나간 곳 · 뒷좌석
+report_summary_womb.sectionHead: 울음
+report_summary_womb.preCry[0].drive: 기어 D
+report_summary_womb.preCry[0].cabinTemp: 24.5℃
+report_summary_womb.timeline[0].trigger: 울음 감지
+report_summary_womb.timeline[0].head: 울음
+report_summary_womb.timeline[0].line.감지까지: 2.4초
+report_summary_womb.timeline[0].line.소리: 뱃속 소리
+report_summary_womb.timeline[0].line.재생: 56초
+report_summary_womb.timeline[0].line.결과: 그침
+report_summary_womb.timeline[0].line.울음 시간: 1분 1초
+report_summary_womb.timeline[0].plays[0]: 자동 1차 뱃속 소리 오전 8:05–8:06 56초
+report_summary_womb.carActions[0]: 뒷좌석 재생
+report_summary_womb.carActions[1]: 뒷좌석 열선 끔
+report_summary_womb.controls[0].title: Seat.setHvacSeatTemperature · ROW_2_LEFT
+report_summary_womb.controls[0].stats: 시도 1 · 성공 1 · 실패 0 · 다시 0

@@ -45,8 +45,8 @@ import kr.aigyeot.shared.Role
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 연결 유지(계약 2장·7.2·7.4). 폰은 앱이 화면 앞에 있을 때만 WebSocket으로 붙는다. 연결 반복은 한 자격(연결 세대)으로만 돈다.
- * 수명(P6): 자격이 바뀌면(끊기·401·새 연결) 이 클래스가 자격 구독 한 곳에서 반복을 멈추고 표시를 처음으로 돌린 뒤, 앞에 있으면 새 자격으로 다시 연다.
+ * 연결 유지. 폰은 앱이 화면 앞에 있을 때만 WebSocket으로 붙는다. 연결 반복은 한 자격(연결 세대)으로만 돈다.
+ * 수명: 자격이 바뀌면(끊기·401·새 연결) 이 클래스가 자격 구독 한 곳에서 반복을 멈추고 표시를 처음으로 돌린 뒤, 앞에 있으면 새 자격으로 다시 연다.
  */
 class KeepConnected(
     private val state: PhoneStateRepository,
@@ -64,7 +64,7 @@ class KeepConnected(
 ) {
     private val _status = MutableStateFlow(LinkStatus())
 
-    /** 오프라인·소켓·시계 차이(9장·7.2). 쓰는 곳은 이 클래스뿐이다. */
+    /** 오프라인·소켓·시계 차이. 쓰는 곳은 이 클래스뿐이다. */
     val status: StateFlow<LinkStatus> = _status.asStateFlow()
 
     private val kick = Channel<Unit>(Channel.CONFLATED)
@@ -96,7 +96,7 @@ class KeepConnected(
     fun start() {
         if (!visibility.visible.value || loop?.isActive == true || state.creds == null) return
         network.watch {
-            kick.trySend(Unit) // 기다림을 건너뛰고 바로 다시 붙고, 보낼 함의 망 실패 기다림도 당겨 비운다(7.5)
+            kick.trySend(Unit) // 기다림을 건너뛰고 바로 다시 붙고, 보낼 함의 망 실패 기다림도 당겨 비운다
             outbox.hurryNetworkWaits()
         }
         loop = scope.launch { connectLoop() }
@@ -110,8 +110,8 @@ class KeepConnected(
     }
 
     /**
-     * 오프라인 띠의 '다시 시도'(7.2): 연결 반복의 기다림을 건너뛰어 다시 붙고, 중계에 한 번 물어 닿으면 띠를 끈다(iOS `retryNow`와 같은 뜻).
-     * 보낼 함은 망 실패 기다림만 당긴다(7.5, 결정 11-07). 429 Retry-After·5xx 백오프와 받은 함 429 기다림은 지킨다.
+     * 오프라인 띠의 '다시 시도': 연결 반복의 기다림을 건너뛰어 다시 붙고, 중계에 한 번 물어 닿으면 띠를 끈다(iOS `retryNow`와 같은 뜻).
+     * 보낼 함은 망 실패 기다림만 당긴다. 429 Retry-After·5xx 백오프와 받은 함 429 기다림은 지킨다.
      */
     fun retryNow() {
         kick.trySend(Unit)
@@ -124,7 +124,7 @@ class KeepConnected(
     }
 
     /**
-     * 토큰을 실은 모든 HTTP 요청의 결과(9장 '중계 불통'): 상태 요청·푸시 등록·ack·알림 설정도 오프라인 띠에 반영한다.
+     * 토큰을 실은 모든 HTTP 요청의 결과('중계 불통'): 상태 요청·푸시 등록·ack·알림 설정도 오프라인 띠에 반영한다.
      * IO 스레드에서 불리므로 메인 흐름으로 넘겨, 토큰·순번 확인과 표시 변경을 연결 전환과 끼어들 틈 없이 한다.
      */
     fun observed(token: String, ticket: Long, up: Boolean) {
@@ -161,25 +161,25 @@ class KeepConnected(
     /** 한 자격(연결 세대)으로만 돈다. 자격이 바뀌면 [stop]의 취소로 끝난다. */
     private suspend fun connectLoop() {
         val c = state.creds ?: return
-        // WebSocket·받은 함을 처리하기 전에 24시간을 본다(7.4).
+        // WebSocket·받은 함을 처리하기 전에 24시간을 본다.
         if (!outbox.commitPruned(c) { it.onAppOpen(clock.now()) }) return retryConnectLater(c)
         push.now(c)
         var attempts = 0
         while (state.isCurrent(c)) {
-            // 받은 함 429 기다림 중이면 기기 목록·소켓도 열지 않고 기한 뒤에 다시 한다(1.1, iOS `beginRefresh`와 같음). 깨워도 기한을 다시 본다.
+            // 받은 함 429 기다림 중이면 기기 목록·소켓도 열지 않고 기한 뒤에 다시 한다(iOS `beginRefresh`와 같음). 깨워도 기한을 다시 본다.
             inbox.inboxHoldUntil(c, clock.now())?.let { until ->
                 outbox.pump() // 보낼 함은 따로 보낸다(iOS와 같음)
                 kick.tryReceive()
                 withTimeoutOrNull(until - clock.now()) { kick.receive() }
                 continue
             }
-            // 붙을 때마다(통신이 돌아올 때 포함) 기기 목록을 다시 받고 상태 요청이 필요한지 다시 본다(7.4).
+            // 붙을 때마다(통신이 돌아올 때 포함) 기기 목록을 다시 받고 상태 요청이 필요한지 다시 본다.
             if (!refreshDevices(c)) return
             val code = runSocket(c) { attempts = 0 }
             when (code) {
                 4001, 401 -> return // 소켓 콜백이 이미 LoseConnection에 넘겼다
                 4002 -> return // 같은 기기의 새 연결로 바뀜
-                in 500..599 -> observedBySocket(c, false) // 소켓 협상 5xx: 중계 장애(9장, iOS `unreachable`과 같음)
+                in 500..599 -> observedBySocket(c, false) // 소켓 협상 5xx: 중계 장애(iOS `unreachable`과 같음)
             }
             // 붙지 못했거나 끊긴 사이 온 것은 HTTPS로 받는다.
             if (inbox.sync(c) == SyncInbox.Sync.LOST) return
@@ -190,7 +190,7 @@ class KeepConnected(
         }
     }
 
-    /** owner: 기기 목록(차 타일) → 필요하면 state_request(7.4). 401이거나 세대가 바뀌었으면 거짓. 기록 지우기 뒤에도 부른다. */
+    /** owner: 기기 목록(차 타일) → 필요하면 state_request. 401이거나 세대가 바뀌었으면 거짓. 기록 지우기 뒤에도 부른다. */
     suspend fun refreshDevices(c: Credentials): Boolean {
         val fetched = fetchDevices(c)
         if (fetched == true) requestState(c)
@@ -265,7 +265,7 @@ class KeepConnected(
             is RelayResult.Ok -> if (r.status == 201) state.commit(c) { it.stateRequestDone(gen) }
             is RelayResult.Err -> when (r.status) {
                 401 -> lose.lost(c)
-                // 상태 요청도 메시지 POST다: 같은 기다림에 넣어 보낼 함도 지키고, 끝나면 다시 판단한다(1.1). 옛 연결의 늦은 429는 새 연결을 멈추지 않는다.
+                // 상태 요청도 메시지 POST다: 같은 기다림에 넣어 보낼 함도 지키고, 끝나면 다시 판단한다. 옛 연결의 늦은 429는 새 연결을 멈추지 않는다.
                 429 -> if (state.isCurrent(c)) rateLimitWaitMs(r.retryAfterS).let { w ->
                     outbox.holdInMemory(c, clock.now() + w)
                     state.commit(c) { it.withMessageHold(clock.now(), w) }
@@ -276,7 +276,7 @@ class KeepConnected(
         }
     }
 
-    /** 429 기다림 때문에 미룬 상태 요청: 끝나면 목록 확인부터 다시 판단한다(7.4 '목록 성공 뒤'). */
+    /** 429 기다림 때문에 미룬 상태 요청: 끝나면 목록 확인부터 다시 판단한다('목록 성공 뒤'). */
     private fun retryStateAt(c: Credentials, at: Long) {
         stateRetry?.cancel()
         stateRetry = scope.launch {
@@ -292,7 +292,7 @@ class KeepConnected(
     private suspend fun runSocket(c: Credentials, onOpen: () -> Unit): Int {
         val frames = Channel<String>(Channel.UNLIMITED)
         var closeCode = -1
-        // 4001·업그레이드 401은 콜백에서 바로 앱 범위로 넘긴다. 받은 함 처리 중이거나 화면이 뒤로 가 이 반복이 취소돼도 잃지 않는다(7.1).
+        // 4001·업그레이드 401은 콜백에서 바로 앱 범위로 넘긴다. 받은 함 처리 중이거나 화면이 뒤로 가 이 반복이 취소돼도 잃지 않는다.
         fun lostIf(code: Int) {
             if (code == 4001 || code == 401) scope.launch { lose.lost(c) }
         }
@@ -326,7 +326,7 @@ class KeepConnected(
         val devicePoll = scope.launch {
             while (isActive) {
                 delay(DEVICE_POLL_MS)
-                // 목록을 받았으면 상태 요청 표시도 다시 판단한다(7.4 '목록 성공 뒤'): 앞 판단이 목록 실패로 끊겼어도 이어진다.
+                // 목록을 받았으면 상태 요청 표시도 다시 판단한다('목록 성공 뒤'): 앞 판단이 목록 실패로 끊겼어도 이어진다.
                 when (fetchDevices(c)) {
                     null -> return@launch
                     true -> requestState(c)
@@ -335,7 +335,7 @@ class KeepConnected(
             }
         }
         val pinger = scope.launch {
-            // 글자 ping, 보낸 뒤 10초 안에 pong이 없으면 끊고 다시 붙는다(2장).
+            // 글자 ping, 보낸 뒤 10초 안에 pong이 없으면 끊고 다시 붙는다.
             delay(PING_FIRST_MS)
             while (isActive) {
                 val sentAt = clock.now()
@@ -359,7 +359,7 @@ class KeepConnected(
                     }
                     "pong" -> {
                         lastPong = clock.now()
-                        observedBySocket(c, true) // 소켓이 살아 있으면 중계에 닿는다: 앞서 HTTP 실패로 켠 오프라인 띠를 끈다(9장)
+                        observedBySocket(c, true) // 소켓이 살아 있으면 중계에 닿는다: 앞서 HTTP 실패로 켠 오프라인 띠를 끈다
                     }
                     else -> {
                         observedBySocket(c, true)
@@ -376,7 +376,7 @@ class KeepConnected(
         return closeCode
     }
 
-    /** 저장하지 못했으면 거짓: ack 없이 연결을 닫게 해, 재접속 뒤 받은 함에서 다시 받는다(5.6, 8.3). */
+    /** 저장하지 못했으면 거짓: ack 없이 연결을 닫게 해, 재접속 뒤 받은 함에서 다시 받는다. */
     private suspend fun handleFrame(c: Credentials, ws: SocketHandle, text: String): Boolean {
         val m = socket.read(text) ?: return true
         if (!inbox.store(c, m, live = true)) return !state.isCurrent(c) // 세대가 바뀐 경우는 반복이 알아서 끝난다

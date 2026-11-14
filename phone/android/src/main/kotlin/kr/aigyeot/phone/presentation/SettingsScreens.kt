@@ -37,7 +37,7 @@ import kr.aigyeot.phone.domain.model.DisconnectRun
 import kr.aigyeot.phone.domain.model.SAVE_FAILED
 import kr.aigyeot.phone.domain.model.importPreview
 
-// 설정 탭(디자인 v6 시안 phone.js S.settings: 흰 묶음 다섯, 행 56 + 흐린 아이콘). 항목 글자는 7.1 settings.*.
+// 설정 탭(흰 묶음 다섯, 행 56 + 흐린 아이콘). 항목 글자는 settings.*.
 
 /**
  * 설정: [보호자 · 아기 별명] [잠·기저귀도 적기] [내 기록 내보내기 · 다른 앱 기록 가져오기] [연결 끊기 · 이 휴대폰의 기록 지우기] [정보·라이선스].
@@ -57,7 +57,7 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
     var confirm by rememberSaveable { mutableStateOf<String?>(null) }
     var nicknameOpen by rememberSaveable { mutableStateOf(false) }
     val importUi by vm.import.collectAsStateWithLifecycle()
-    // 기록 가져오기(U64): 시스템 파일 고르기 → 주소만 ViewModel로(읽기는 ViewModel이 쥔 작업, 회전해도 이어진다).
+    // 기록 가져오기: 시스템 파일 고르기 → 주소만 ViewModel로(읽기는 ViewModel이 쥔 작업, 회전해도 이어진다).
     val pickCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { vm.pick(it.toString()) } }
     TabPage("설정") {
         StatusBands(connected = ui.connected)
@@ -78,11 +78,20 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
                     context.startActivity(Intent.createChooser(send, null))
                 }
             })
-            // settings.import(U64) / settings.import.sub
+            // settings.import / settings.import.sub
             SettingRow("다른 앱 기록 가져오기", R.drawable.ic_file_up, sub = "아이곁·Huckleberry·Nara에서 내보낸 CSV를 읽어요", onClick = { pickCsv.launch(CSV_TYPES) })
         }
         Group {
-            if (ui.connected) SettingRow("연결 끊기", R.drawable.ic_unlink, sub = if (busy) "끊고 있어요" else null, destructive = true, enabled = !busy, onClick = { confirm = "disconnect" })
+            if (ui.connected) {
+                SettingRow(
+                    "연결 끊기",
+                    R.drawable.ic_unlink,
+                    sub = if (busy) "끊고 있어요" else null,
+                    destructive = true,
+                    enabled = !busy,
+                    onClick = { confirm = "disconnect" },
+                )
+            }
             SettingRow("이 휴대폰의 기록 지우기", R.drawable.ic_trash_2, danger = true, onClick = { confirm = "clear" }, trailing = null)
         }
         if (ui.connected) FootNote("기록을 지워도 연결은 그대로예요. 차에 남은 기록은 차 화면에서 지워요.")
@@ -134,10 +143,10 @@ private fun NicknameDialog(current: String, onSave: (String) -> Unit, onDismiss:
     )
 }
 
-/** 고르는 화면의 종류(U64). 파일 앱마다 CSV를 다른 이름으로 알려 넷 다 연다. */
+/** 고르는 화면의 종류. 파일 앱마다 CSV를 다른 이름으로 알려 넷 다 연다. */
 private val CSV_TYPES = arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/octet-stream")
 
-/** 기록 가져오기(U64~U68) 대화창. 단계는 [ImportUi]가 정하고 글은 7.1 import.* 그대로다(미리 보기 글은 [importPreview]가 고른다). */
+/** 기록 가져오기 대화창. 단계는 [ImportUi]가 정하고 글은 import.* 그대로다(미리 보기 글은 [importPreview]가 고른다). */
 @Composable
 private fun ImportDialog(ui: ImportUi, vm: SettingsViewModel) {
     val shape = Radius.dialog

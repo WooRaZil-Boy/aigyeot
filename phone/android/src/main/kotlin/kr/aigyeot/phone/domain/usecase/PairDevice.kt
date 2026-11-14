@@ -36,10 +36,10 @@ import kr.aigyeot.shared.Role
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 코드로 연결하기(1.4·7.1, G16·G17·U49·U52). 이미 연결된 차가 있으면 먼저 끊고, 둘 다 성공해야 역할이 실린다.
+ * 코드로 연결하기. 이미 연결된 차가 있으면 먼저 끊고, 둘 다 성공해야 역할이 실린다.
  * 작업은 앱 수명에서 끝나고 화면은 [run]만 본다. 토큰 저장부터 자격 전환·되돌림까지 끊기지 않게 앱 범위에서만 한다.
  */
-class Pair(
+class PairDevice(
     private val state: PhoneStateRepository,
     private val care: CareRepository,
     private val credentials: CredentialRepository,
@@ -86,18 +86,18 @@ class Pair(
         if (link.disconnectActive()) link.pairDuringLeave = true
         link.pairReplacing = state.creds != null
         link.pairJob = scope.launch {
-            // 시작할 때 자격을 읽지 못했으면 연결 전에 다시 읽는다(G16·U49 끊기 → 연결).
+            // 시작할 때 자격을 읽지 못했으면 연결 전에 다시 읽는다(끊기 → 연결).
             when (reread()) {
                 Reread.FOUND -> {
                     // 옛 연결이 있었다: 확인 화면이 "끊고 연결하기"로 바뀌어 동의를 다시 받게 멈춘다(수신은 자격 구독이 다시 켠다).
-                    // 시작 때 자격을 못 읽어 건너뛴 수유·요약 판단도 한다(R6·R19 앱 시작 계기).
+                    // 시작 때 자격을 못 읽어 건너뛴 수유·요약 판단도 한다(앱 시작 계기).
                     recordCare.syncAtStart()
                     _run.value = PairRun.Failed(code, "지금 연결된 차가 있어요. 끊고 연결할지 다시 눌러 주세요.")
                     return@launch
                 }
                 Reread.FAILED -> {
                     // 옛 연결을 끊지 못한 채 덮어쓰지 않는다(중계에 옛 기기가 남는다). 거듭 실패하면(보안 저장소 고장) 그 정보를 지우고
-                    // 새로 연결할지 묻는다: 앱 데이터를 지우지 않고도(돌봄 기록을 잃지 않고) 다시 연결할 길(11-07 결정).
+                    // 새로 연결할지 묻는다: 앱 데이터를 지우지 않고도(돌봄 기록을 잃지 않고) 다시 연결할 길.
                     rereadFailures++
                     _run.value = PairRun.Failed(code, "지금 연결 정보를 읽지 못했어요. 앱을 다시 켠 뒤 해 주세요.", resetOffer = rereadFailures >= REREAD_LIMIT)
                     return@launch
@@ -128,14 +128,14 @@ class Pair(
     private enum class Reread { NONE, FOUND, FAILED }
 
     /**
-     * 시작할 때 자격을 읽지 못했으면 연결 전에 다시 읽는다: 읽히면 옛 연결을 먼저 끊는다(G16·U49). 계속 못 읽으면 중계의 옛 기기 행을 지울 수 없다
+     * 시작할 때 자격을 읽지 못했으면 연결 전에 다시 읽는다: 읽히면 옛 연결을 먼저 끊는다. 계속 못 읽으면 중계의 옛 기기 행을 지울 수 없다
      * (차 화면에서 지운다).
      */
     private suspend fun reread(): Reread {
         if (state.creds != null || !credsUnresolved) return Reread.NONE
         val c = credentials.load().getOrElse { return Reread.FAILED }
         if (c == null) return Reread.NONE.also { credsUnresolved = false }
-        // 시작할 때와 같은 복구를 저장한 뒤에 자격을 공개한다: 상태에 차 id가 없으면 받은 것을 저장하지 않고 ack해 잃는다(1.4).
+        // 시작할 때와 같은 복구를 저장한 뒤에 자격을 공개한다: 상태에 차 id가 없으면 받은 것을 저장하지 않고 ack해 잃는다.
         val ok = state.adopt(c) { s -> PhoneState.recoverIfNeeded(s, c.carId, c.deviceId, c.role, clock.now())?.keepingClear(s, migrating()) }
         if (!ok) return Reread.FAILED
         credsUnresolved = false
@@ -167,10 +167,10 @@ class Pair(
         }
     }
 
-    /** U52: 지금 새 연결 링크·QR을 받을 수 있는가. 받은 순간과 화면이 처리할 때 모두 이것을 본다. */
+    /** 지금 새 연결 링크·QR을 받을 수 있는가. 받은 순간과 화면이 처리할 때 모두 이것을 본다. */
     fun canTakeLink(): Boolean = _run.value.let { canOpenConfirm(pairBusy = it is PairRun.Running, doneUnshown = it is PairRun.Done && it.role != null) }
 
-    /** 지금 연결의 성공인가(완료 화면으로 가도 되는가, 7.1·U25). */
+    /** 지금 연결의 성공인가(완료 화면으로 가도 되는가). */
     private fun doneValid(r: PairRun): Boolean = r is PairRun.Done && pairDoneValid(r.role, state.connection.value is Connection.Gone, state.creds?.role)
 
     /** 화면이 끝난 연결 결과로 완료 화면에 가기 직전에 부른다. 지금 연결의 성공일 때만 결과를 비우고 참. 그사이 GONE이면 거짓. */
@@ -184,7 +184,7 @@ class Pair(
         if (!link.pairActive()) _run.value = null
     }
 
-    /** 새로 연 화면에서: 끝난 결과 중 지금 연결의 성공은 남겨 완료 화면으로 보내게 하고, 실패·지난 결과만 비워 새 링크를 막지 않는다(U52, 7.1). */
+    /** 새로 연 화면에서: 끝난 결과 중 지금 연결의 성공은 남겨 완료 화면으로 보내게 하고, 실패·지난 결과만 비워 새 링크를 막지 않는다. */
     fun clearStale() {
         val r = _run.value ?: return
         if (link.pairActive()) return
@@ -196,7 +196,7 @@ class Pair(
 
     /**
      * 새 프로세스의 첫 화면에서만: 저장된 화면 이력이 복원돼 시작 화면을 쓰지 않았어도 완료 화면으로 보낼 역할.
-     * 같은 프로세스에서 화면만 다시 만들면(회전) null이다: 그사이 받은 새 링크의 확인 화면을 지우지 않게(U52).
+     * 같은 프로세스에서 화면만 다시 만들면(회전) null이다: 그사이 받은 새 링크의 확인 화면을 지우지 않게.
      */
     fun takeRestoredDone(): Role? = if (doneRestoreChecked) null else pendingDoneRole().also { doneRestoreChecked = true }
 
@@ -219,7 +219,7 @@ class Pair(
         return if (removed) "연결 정보를 저장하지 못했어요" else "연결 정보를 저장하지 못했어요. 차 화면에서 이 휴대폰 연결을 끊어 주세요."
     }
 
-    /** 코드 쓰기(1.4). 실패하면 화면 문구(7.2). */
+    /** 코드 쓰기. 실패하면 화면 문구. */
     private suspend fun pair(code: String): String? {
         val token = push.token()
         return when (val r = relay.pair(code, token, marks.installId)) {
@@ -227,8 +227,8 @@ class Pair(
                 // 진행 중인 옛 연결 정리(지우기)가 끝난 뒤에만 새 토큰·상태·파일을 바꾼다. 옛 연결 반복은 자격이 바뀌면 멈춘다.
                 val c = Credentials(r.value.carId, r.value.deviceId, r.value.deviceToken, r.value.role)
                 val prev = state.creds
-                // 완료 화면(guardian 알림 권한, 7.1)을 보이기 전에 죽어도 다음 실행이 그 화면부터 보이게 먼저 적는다.
-                // 토큰을 디스크에 쓴 것이 확인된 뒤에 상태를 커밋하고 자격을 공개한다(7.4).
+                // 완료 화면(guardian 알림 권한)을 보이기 전에 죽어도 다음 실행이 그 화면부터 보이게 먼저 적는다.
+                // 토큰을 디스크에 쓴 것이 확인된 뒤에 상태를 커밋하고 자격을 공개한다.
                 if (!(marks.commitInBackground(MarkEdit.Put(Mark.PAIR_DONE, c.deviceId)) && credentials.save(c))) return discardPaired(c)
                 link.secretsLeft = false // 옛 비밀값을 새 자격이 덮었다
                 if (!state.switchTo(c, { PhoneState.paired(c.carId, c.deviceId, c.role, clock.now()).keepingClear(it, migrating()) })) {
@@ -241,7 +241,7 @@ class Pair(
                 link.clearDisconnectRun() // 지난 끊기 결과가 새 연결의 설정 화면을 닫지 않게
                 link.goneCleanup(GoneCleanupEvent.Paired)
                 songs.clean()
-                recordCare.syncToCar(FeedTrigger.PAIRED) // 새 차에는 24시간 안의 최신 수유가 다시 간다(U6)
+                recordCare.syncToCar(FeedTrigger.PAIRED) // 새 차에는 24시간 안의 최신 수유가 다시 간다
                 null
             }
             is RelayResult.Err -> when {
@@ -251,7 +251,7 @@ class Pair(
                     retryAfterS.set(r.retryAfterS ?: 0L)
                     "rate_limited" // 화면 글이 아니다: 결과는 PairRun.Limited가 되고 글은 화면이 잠금 끝 시각에서 만든다
                 }
-                // 화면 문구는 앱이 정한다(1.1): 중계의 코드는 로그에만 남긴다(iOS와 같은 글).
+                // 화면 문구는 앱이 정한다: 중계의 코드는 로그에만 남긴다(iOS와 같은 글).
                 else -> "연결하지 못했어요. 잠시 뒤에 다시 해 주세요.".also { log.w("연결 실패 ${r.status} ${r.code}") }
             }
             RelayResult.Offline, RelayResult.Unreached -> "인터넷에 연결한 뒤 다시 해 주세요"

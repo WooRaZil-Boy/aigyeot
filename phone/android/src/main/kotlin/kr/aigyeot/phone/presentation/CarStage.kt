@@ -1,21 +1,11 @@
 package kr.aigyeot.phone.presentation
 
-import androidx.compose.animation.AnimatedVisibility
 import android.os.SystemClock
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.snap
-import androidx.compose.foundation.Canvas
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import kotlinx.coroutines.delay
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -24,47 +14,61 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
 import kr.aigyeot.phone.R
 import kr.aigyeot.phone.presentation.car3d.CarPose
 import kr.aigyeot.phone.presentation.car3d.CarScene
 import kr.aigyeot.phone.presentation.car3d.CarTextureView
 
-/** 3D 차 카메라 자리(시안 js/car3d.js PRESET 중 폰이 쓰는 둘): 오늘·차 탭 카드 `tile`, 첫 안내 `phone`. */
+/** 3D 차 카메라 자리(폰이 쓰는 둘): 오늘·차 탭 카드 `tile`, 첫 안내 `phone`. */
 enum class CarPreset(internal val pose: CarPose) { TILE(CarPose.TILE), PHONE(CarPose.PHONE) }
 
-/** 3D 준비 표시(U90): 아무것도 안 보임 · 도는 고리 · 정지 표시(동작 줄이기, 읽음) · 실패 정지 표시(읽지 않음). */
+/** 3D 준비 표시: 아무것도 안 보임 · 도는 고리 · 정지 표시(동작 줄이기, 읽음) · 실패 정지 표시(읽지 않음). */
 enum class StageMark { HIDDEN, RING, STILL, FAILED }
 
-/** U90 설계값: 이만큼 지나도 첫 그림이 없을 때만 보이고, 한 번 보이면 [STAGE_MARK_MIN_MS]는 둔다. */
+/** 설계값: 이만큼 지나도 첫 그림이 없을 때만 보이고, 한 번 보이면 [STAGE_MARK_MIN_MS]는 둔다. */
 const val STAGE_MARK_DELAY_MS = 800L
 const val STAGE_MARK_MIN_MS = 400L
 
 /**
- * 3D 준비 표시 규칙(U90, 차 앱·iOS와 같은 규칙). 시각은 모두 무대를 붙인 때부터 잰 ms.
+ * 3D 준비 표시 규칙(차 앱·iOS와 같은 규칙). 시각은 모두 무대를 붙인 때부터 잰 ms.
  * 실패하면 그때부터 실패 정지 표시. 첫 그림이 [STAGE_MARK_DELAY_MS] 안에 오면 끝까지 아무것도 없다.
  * 아니면 800ms부터 첫 그림과 '800 + 400' 중 늦은 때까지 고리(동작 줄이기면 정지 표시).
  */
 fun stageMark(elapsedMs: Long, firstFrameMs: Long?, failedMs: Long?, reduced: Boolean): StageMark {
     if (failedMs != null && elapsedMs >= failedMs) return StageMark.FAILED
     if (elapsedMs < STAGE_MARK_DELAY_MS) return StageMark.HIDDEN
-    if (firstFrameMs != null && (firstFrameMs <= STAGE_MARK_DELAY_MS || elapsedMs >= maxOf(firstFrameMs, STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS))) return StageMark.HIDDEN
+    if (firstFrameMs != null &&
+        (firstFrameMs <= STAGE_MARK_DELAY_MS || elapsedMs >= maxOf(firstFrameMs, STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS))
+    ) {
+        return StageMark.HIDDEN
+    }
     return if (reduced) StageMark.STILL else StageMark.RING
 }
 
@@ -88,11 +92,11 @@ private sealed interface SceneLoad {
 }
 
 /**
- * 실시간 3D 차(Filament + gltfio, 디자인 v6 시안 phone.js `data-car3d`). 가로로 끌면 돌고(감쇠), 돌린 뒤에는 '처음 자리로' 단추가 보인다.
- * 오른쪽 아래 작은 회전 표시는 '끌어서 돌려 보기'(시안 .car-tile .ct-img.live3d::after). 동작 줄이기면 끌기는 되지만 감쇠·되돌리기 이동 없이 바로 바뀐다.
- * 돌리는 양·방향·감쇠는 시안 OrbitControls 그대로(높이만큼 끌면 198도, 오른쪽으로 끌면 방위가 줄어듦, 남은 양의 0.09씩).
+ * 실시간 3D 차(Filament + gltfio). 가로로 끌면 돌고(감쇠), 돌린 뒤에는 '처음 자리로' 단추가 보인다.
+ * 오른쪽 아래 작은 회전 표시는 '끌어서 돌려 보기'. 동작 줄이기면 끌기는 되지만 감쇠·되돌리기 이동 없이 바로 바뀐다.
+ * 돌리는 양·방향·감쇠는 three.js OrbitControls와 같다(높이만큼 끌면 198도, 오른쪽으로 끌면 방위가 줄어듦, 남은 양의 0.09씩).
  * 대기 중에는 그리지 않는다(0프레임). 화면을 떠나면 보기를 지운다(엔진·모델은 앱 수명에 하나).
- * 첫 그림 전에는 무대 가운데에 준비 표시([stageMark], U90·디자인 v8c)를 겹친다.
+ * 첫 그림 전에는 무대 가운데에 준비 표시([stageMark])를 겹친다.
  */
 @Composable
 fun CarStage(modifier: Modifier, preset: CarPreset) {
@@ -122,7 +126,7 @@ fun CarStage(modifier: Modifier, preset: CarPreset) {
     val mark = stageMark(elapsed, firstFrameMs, failedMs, reduced)
     var view by remember { mutableStateOf<CarTextureView?>(null) }
     var moved by remember { mutableStateOf(false) }
-    // 고리가 보인 뒤 온 첫 그림(800ms 넘어): 3D를 숨겼다가 고리가 걷힐 때 360ms(enter)로 들인다(U90). 숨기기는 첫 그림 알림 안에서 TextureView alpha로 한다:
+    // 고리가 보인 뒤 온 첫 그림(800ms 넘어): 3D를 숨겼다가 고리가 걷힐 때 360ms(enter)로 들인다. 숨기기는 첫 그림 알림 안에서 TextureView alpha로 한다:
     // 그 장을 그리는 중이라 차가 한 장도 비치지 않고, 보기는 계속 그려져 표면이 산다(Compose 층 alpha 0이면 보기를 그리지 않아 첫 그림이 오지 않을 수 있다).
     LaunchedEffect(firstFrameMs != null, mark == StageMark.HIDDEN) {
         val v = view ?: return@LaunchedEffect
@@ -174,7 +178,7 @@ fun CarStage(modifier: Modifier, preset: CarPreset) {
 }
 
 /**
- * 준비 표시(U90·v8c-3, 세 앱 같은 값): 고리 지름 28·굵기 2.5, 바탕 `textPrimary` 10%, 호 `accentInk` ¼바퀴·둥근 끝, 1초에 한 바퀴 일정하게.
+ * 준비 표시(세 앱 같은 값): 고리 지름 28·굵기 2.5, 바탕 `textPrimary` 10%, 호 `accentInk` ¼바퀴·둥근 끝, 1초에 한 바퀴 일정하게.
  * 정지 표시는 차 선 아이콘 28 `textTertiary` 50%. 나타남·사라짐 220ms(`base`), 동작 줄이기면 바로. 실패 표시는 읽지 않는다.
  */
 @Composable
@@ -198,12 +202,21 @@ private fun StageMarkView(mark: StageMark, reduced: Boolean, modifier: Modifier)
                 val inset = w / 2
                 val arcSize = Size(size.width - w, size.height - w)
                 drawCircle(p.textPrimary.copy(alpha = 0.1f), radius = (size.minDimension - w) / 2, style = Stroke(w))
-                rotate(turn) { drawArc(p.accentInk, -90f, 90f, false, topLeft = Offset(inset, inset), size = arcSize, style = Stroke(w, cap = StrokeCap.Round)) }
+                rotate(turn) {
+                    drawArc(p.accentInk, -90f, 90f, false, topLeft = Offset(inset, inset), size = arcSize, style = Stroke(w, cap = StrokeCap.Round))
+                }
             }
         }
         AnimatedVisibility(mark == StageMark.STILL || mark == StageMark.FAILED, enter = fadeIn(fade), exit = fadeOut(fade)) {
             val read = mark == StageMark.STILL
-            Box(Modifier.size(28.dp).semantics { if (read) { contentDescription = STAGE_LOADING; progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate } }) {
+            Box(
+                Modifier.size(28.dp).semantics {
+                    if (read) {
+                        contentDescription = STAGE_LOADING
+                        progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                    }
+                },
+            ) {
                 AIcon(R.drawable.ic_car_front, Modifier.size(28.dp), p.textTertiary.copy(alpha = 0.5f))
             }
         }
@@ -213,5 +226,5 @@ private fun StageMarkView(mark: StageMark, reduced: Boolean, modifier: Modifier)
 /** 준비 고리를 다시 그리는 횟수(초당). */
 private const val RING_FPS = 15
 
-/** 7.1 design.stage.loading(U90). */
+/** design.stage.loading. */
 private const val STAGE_LOADING = "3D 차 준비 중"

@@ -33,7 +33,7 @@ sealed interface Take {
 }
 
 data class SongsUiState(val songs: List<SongEntry>, val selecting: Set<String>, val online: Boolean) {
-    /** 3곡이 찼다(거절된 곡은 세지 않는다, `songsFull`. P4: 목록에서 계산). */
+    /** 3곡이 찼다(거절된 곡은 세지 않는다, `songsFull`. 목록에서 계산). */
     val full: Boolean get() = songs.songsFull()
 }
 
@@ -54,8 +54,8 @@ data class SheetUiState(
 }
 
 /**
- * 우리 노래(owner): 1~3곡 녹음·다시 듣기·지우기·고르기, 차로 보낸 상태. 노래 화면과 차 탭 '우리 노래' 섹션(U39)이 함께 쓴다.
- * 녹음기는 이 ViewModel이 들고, 화면이 떠나면 놓는다. 녹음은 앱 화면에서만 한다(명세서 12장).
+ * 우리 노래(owner): 1~3곡 녹음·다시 듣기·지우기·고르기, 차로 보낸 상태. 노래 화면과 차 탭 '우리 노래' 섹션이 함께 쓴다.
+ * 녹음기는 이 ViewModel이 들고, 화면이 떠나면 놓는다. 녹음은 앱 화면에서만 한다.
  */
 class SongsViewModel(
     state: PhoneStateRepository,
@@ -80,7 +80,7 @@ class SongsViewModel(
         edit { it } // 되살리며 바꾼 것(새 이름·처음으로)을 바로 저장한다
     }
 
-    /** 시트 상태를 바꾸는 곳은 여기 하나다(P3): 메모리와 화면 저장 상태를 함께 쓴다. 하던 녹음(녹음 중)은 저장하지 않는다(다시 만들면 녹음기는 멈췄다). */
+    /** 시트 상태를 바꾸는 곳은 여기 하나다: 메모리와 화면 저장 상태를 함께 쓴다. 하던 녹음(녹음 중)은 저장하지 않는다(다시 만들면 녹음기는 멈췄다). */
     private fun edit(f: (Sheet) -> Sheet) {
         val s = sheet.updateAndGet(f)
         saved[K_FILE] = s.file?.path
@@ -148,7 +148,7 @@ class SongsViewModel(
 
     /**
      * 시트를 닫았다(회전·시스템이 화면만 없앤 때는 부르지 않는다): 녹음을 멈추고, 임시 파일은 보내기가 끝나면(보내는 중이면 끝난 뒤) 지운다.
-     * 실패한 보내기의 원본도 남기지 않는다(7.4 '녹음 파일').
+     * 실패한 보내기의 원본도 남기지 않는다('녹음 파일').
      */
     fun closeSheet() {
         recorder.stop()

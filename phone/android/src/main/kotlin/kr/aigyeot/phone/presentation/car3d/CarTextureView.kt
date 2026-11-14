@@ -13,6 +13,7 @@ import com.google.android.filament.View
 import com.google.android.filament.Viewport
 import com.google.android.filament.android.FilamentHelper
 import com.google.android.filament.android.UiHelper
+import kr.aigyeot.phone.presentation.Motion
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan
@@ -22,9 +23,8 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.tan
-import kr.aigyeot.phone.presentation.Motion
 
-/** 카메라 자리(시안 js/car3d.js PRESET 중 폰이 쓰는 둘. 차 좌표: 앞 +X, 위 +Y, 오른쪽 +Z, az는 앞에서 왼쪽으로 도는 각). */
+/** 카메라 자리(폰이 쓰는 둘. 차 좌표: 앞 +X, 위 +Y, 오른쪽 +Z, az는 앞에서 왼쪽으로 도는 각). */
 enum class CarPose(val az: Float, val el: Float, val d: Float, val r: Float, val fov: Float, val tx: Float, val ty: Float, val tz: Float) {
     /** 오늘·차 탭 카드. */
     TILE(34f, 13f, 8.3f, 2.75f, 26f, 0.05f, 0.58f, 0f),
@@ -32,7 +32,7 @@ enum class CarPose(val az: Float, val el: Float, val d: Float, val r: Float, val
     PHONE(34f, 14f, 10.6f, 3.0f, 26f, 0.05f, 0.6f, 0f),
     ;
 
-    /** 세로로 긴 화면에서는 반폭 [r]이 가로로 들어오게 물러난다(시안 fitD). */
+    /** 세로로 긴 화면에서는 반폭 [r]이 가로로 들어오게 물러난다. */
     fun distance(aspect: Float): Float = max(d, r / tan(atan(tan(fov * D2R / 2) * aspect)))
 }
 
@@ -61,7 +61,7 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
     private var swapChain: SwapChain? = null
     private var aspect = 1.6f
     private var az = pose.az
-    /** 아직 돌지 않은 회전량(도). 시안 OrbitControls처럼 끌기는 쌓고, 프레임마다 남은 양의 0.09씩 돈다(감쇠). */
+    /** 아직 돌지 않은 회전량(도). OrbitControls처럼 끌기는 쌓고, 프레임마다 남은 양의 0.09씩 돈다(감쇠). */
     private var pending = 0f
     private var lastFrame = 0L
     private var back: Back? = null
@@ -97,7 +97,7 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
         }
     }
 
-    /** 첫 그림(U90): 그린 장이 처음 TextureView에 들어왔을 때 한 번 부른다(메인 스레드). */
+    /** 첫 그림: 그린 장이 처음 TextureView에 들어왔을 때 한 번 부른다(메인 스레드). */
     var onFirstFrame: (() -> Unit)? = null
     private var shown = false
 
@@ -121,7 +121,7 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
     }
 
     /**
-     * 가로 끌기 dx(px)(시안 OrbitControls: 보기 높이만큼 끌면 2π × 0.55 = 198도, 오른쪽으로 끌면 방위가 줄어든다).
+     * 가로 끌기 dx(px)(OrbitControls: 보기 높이만큼 끌면 2π × 0.55 = 198도, 오른쪽으로 끌면 방위가 줄어든다).
      * 동작 줄이기면 쌓지 않고 바로 돈다.
      */
     fun drag(dxPx: Float) {
@@ -163,7 +163,7 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
         var more = false
         back?.let { b ->
             val k = min(1f, (System.nanoTime() - b.start) / 1e6f / Motion.camera.ms)
-            val e = Motion.camera.easing.transform(k) // 시안 카메라 cb(.65,0,.35,1)
+            val e = Motion.camera.easing.transform(k) // 카메라 이동 곡선 cubic-bezier(.65,0,.35,1)
             az = b.from + (b.to - b.from) * e
             if (k >= 1f) { back = null; az = pose.az } else more = true
         }

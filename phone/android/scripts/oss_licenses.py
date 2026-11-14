@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""폰 앱 '정보·라이선스'(phone-care-plan U28·U30) 목록을 만든다.
+"""폰 앱 '정보·라이선스' 목록을 만든다.
 
 release 런타임 의존성마다 POM의 <licenses> 이름·주소를 그대로 가져온다(부모 POM까지 따라간다).
 사용:
@@ -47,7 +47,7 @@ def licenses(g, a, v, depth=0):
     raise SystemExit(f"라이선스 없음: {g}:{a}:{v}")
 
 
-# Maven 의존성이 아닌 앱 자산(디자인 v6): res/font의 Pretendard, res/drawable의 Lucide 선 아이콘.
+# Maven 의존성이 아닌 앱 자산: res/font의 Pretendard, res/drawable의 Lucide 선 아이콘.
 EXTRA = [
     {"name": "Pretendard", "artifact": "pretendard@1.3.9 (res/font/pretendard_variable.ttf)",
      "licenses": [{"name": "SIL Open Font License 1.1", "url": "https://openfontlicense.org", "file": "OFL-1.1-pretendard.txt"}]},

@@ -1,13 +1,11 @@
 package kr.aigyeot.phone.domain.model
 
-import java.io.File
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZonedDateTime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kr.aigyeot.phone.fixture
+import kr.aigyeot.phone.sharedFile
 import kr.aigyeot.shared.CareSummaryBody
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStateBody
@@ -20,10 +18,14 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
- * 돌봄 기록 규칙 R1~R17, 표준 예제, 내보내기(U29)(phone-care-plan 6·13장). 시험 이름은 13장 글자 그대로다(iOS는 `test_` + 같은 글자).
- * 계획 0장 U14~U24(최대 길이 넘은 진행 중은 끝 모름, 차 기록 글자, 겹침 정의, 경과 형식, 잠 재시작, 옮길 때 보낸 표시, 코드 포인트)도 여기서 본다.
+ * 돌봄 기록 규칙, 표준 예제, 내보내기. 시험 이름은 iOS와 같은 글자다(iOS는 `test_` + 같은 글자).
+ * 최대 길이 넘은 진행 중은 끝 모름, 차 기록 글자, 겹침 정의, 경과 형식, 잠 재시작, 옮길 때 보낸 표시, 코드 포인트도 여기서 본다.
  */
 class CareTest {
     private val seoul = ZoneId.of("Asia/Seoul")
@@ -69,7 +71,7 @@ class CareTest {
         assertNull(f.upsert(ev("other", CareKind.FEED, now - 5 * MINUTE), now))
         assertNotNull(f.upsert(running.copy(feedSide = FeedSide.LEFT), now))
         assertNotNull(f.upsert(feed("past", now - 2 * HOUR), now)) // 끝 모름은 진행 중이 아니다
-        // 고치기(시트의 옛 사본)는 아직 있는 기록에만 얹는다. 그사이 지웠으면 되살리지 않는다(R10).
+        // 고치기(시트의 옛 사본)는 아직 있는 기록에만 얹는다. 그사이 지웠으면 되살리지 않는다.
         val note = ev("n", CareKind.NOTE, now - HOUR, note = "x")
         val withNote = f.upsert(note, now)!!
         assertNotNull(withNote.upsert(note.copy(note = "y"), now, editing = true))
@@ -94,7 +96,7 @@ class CareTest {
         assertEquals(now + 20 * MINUTE, prev.endAt)
         assertFalse(prev.endUnknown)
         assertEquals(now + 20 * MINUTE, prev.updatedAt)
-        // 3시간을 넘긴 진행 중 수유는 끝 모름으로 닫는다(U14, R3을 어기지 않음). 잠금 화면 '끝내기'도 같다.
+        // 3시간을 넘긴 진행 중 수유는 끝 모름으로 닫는다(최대 길이 규칙을 어기지 않음). 잠금 화면 '끝내기'도 같다.
         val lateStart = first.file.start(CareKind.FEED, now + 3 * HOUR + 1, zone)
         val late = lateStart.file.events.single { it.id == first.event.id }
         assertNull(late.endAt)
@@ -109,7 +111,7 @@ class CareTest {
         assertNull(ended.endAt)
         assertTrue(ended.endUnknown)
         assertEquals(now + 3 * HOUR, first.file.endNow(first.event.id, now + 3 * HOUR).events.single().endAt) // 꼭 3시간은 된다
-        // 잠은 16시간이 기준이고, 잠을 또 시작해도 같은 규칙이다(U21).
+        // 잠은 16시간이 기준이고, 잠을 또 시작해도 같은 규칙이다.
         val sleep = CareFile().start(CareKind.SLEEP, now, zone)
         assertEquals(now + 16 * HOUR, sleep.file.endNow(sleep.event.id, now + 16 * HOUR).events.single().endAt)
         assertTrue(sleep.file.endNow(sleep.event.id, now + 16 * HOUR + 1).events.single().endUnknown)
@@ -137,7 +139,7 @@ class CareTest {
         assertEquals(CareProblem.AMOUNT, p(ev("b", CareKind.FEED, now, endUnknown = true, side = FeedSide.BOTTLE, ml = 401)))
         assertEquals(CareProblem.AMOUNT, p(ev("b", CareKind.FEED, now, endUnknown = true, side = FeedSide.BOTTLE, ml = -1)))
         assertNull(p(ev("n", CareKind.NOTE, now, note = "가".repeat(200))))
-        assertNull(p(ev("n", CareKind.NOTE, now, note = "👶".repeat(200)))) // 코드 포인트로 센다(U24): 이모지 200개는 된다
+        assertNull(p(ev("n", CareKind.NOTE, now, note = "👶".repeat(200)))) // 코드 포인트로 센다: 이모지 200개는 된다
         assertEquals(CareProblem.NOTE_TOO_LONG, p(ev("n", CareKind.NOTE, now, note = "👶".repeat(201))))
         assertEquals(CareProblem.NOTE_TOO_LONG, p(ev("n", CareKind.NOTE, now, note = "가".repeat(201))))
         // 저장 거부: 파일은 그대로.
@@ -170,7 +172,7 @@ class CareTest {
         val ongoing = CareFile(events = listOf(ev("r", CareKind.FEED, at(2026, 11, 5, 14))))
         assertTrue(o(feed("b", at(2026, 11, 5, 14, 50)), ongoing))
         assertFalse(o(feed("b", now), ongoing))
-        // 기저귀·메모는 겹침을 보지 않는다(U16).
+        // 기저귀·메모는 겹침을 보지 않는다.
         val diapers = CareFile(events = listOf(ev("d1", CareKind.DIAPER, now)))
         assertFalse(o(ev("d2", CareKind.DIAPER, now), diapers))
         // 지운 기록과는 겹치지 않는다.
@@ -226,7 +228,7 @@ class CareTest {
                 .toList()
         }
         assertEquals(listOf("kr/aigyeot/phone/domain/model/PhoneState.kt" to "fun PhoneState.reconciledFeeding"), callers)
-        // 앱은 정해진 네 계기에서만 차로 보낼지 본다(R6): 앱 소스 전체에서 계기마다 한 곳.
+        // 앱은 정해진 네 계기에서만 차로 보낼지 본다: 앱 소스 전체에서 계기마다 한 곳.
         val app = sources.values.joinToString("\n")
         val calls = Regex("""syncToCar\(FeedTrigger\.(\w+)\)""").findAll(app).map { it.groupValues[1] }.toSet()
         assertEquals(FeedTrigger.entries.map { it.name }.toSet(), calls)
@@ -261,7 +263,7 @@ class CareTest {
         assertEquals(listOf("n"), d.dayEvents(LocalDate.of(2026, 11, 5), seoul).map { it.id })
         assertNull(lastFeedingAt(d, owner))
         assertEquals(f, d.undoDelete("a")) // 되돌리기
-        // 진행 중 수유를 지우고 새로 시작한 뒤 되돌리면 되살린 것은 끝 모름(R1: 진행 중은 하나만).
+        // 진행 중 수유를 지우고 새로 시작한 뒤 되돌리면 되살린 것은 끝 모름(진행 중은 하나만).
         val running = CareFile().start(CareKind.FEED, now - 10 * MINUTE, zone)
         val restarted = running.file.delete(running.event.id, now - 5 * MINUTE).start(CareKind.FEED, now - MINUTE, zone).file
         val undone = restarted.undoDelete(running.event.id)
@@ -288,7 +290,7 @@ class CareTest {
         state.discardRecovery() // 끊기의 복구 파일 정리는 상태 파일에만 한다
         assertEquals(file, care.load())
         assertNull(state.load().lastSentFeedingAt)
-        // 새 차에 붙으면 24시간 안의 최신 수유가 다시 간다(U6).
+        // 새 차에 붙으면 24시간 안의 최신 수유가 다시 간다.
         val again = PhoneState.paired("c_NEW", "d_NEW", Role.OWNER, now + MINUTE).reconciledFeeding(care.load().events, now + MINUTE)
         assertEquals(now - HOUR, again.lastSentFeedingAt)
         dir.deleteRecursively()
@@ -313,7 +315,7 @@ class CareTest {
         assertTrue(cleared.migratedFeedings) // 지운 수유 기록을 다시 옮겨 오지 않는다
         val clearedState = state.clearedRecords()
         assertTrue(clearedState.feedings.isEmpty())
-        // 차에 이미 보낸 표시는 남는다(R7). 지운 뒤 더 이른 수유를 적어도 다시 보내지 않고, 더 늦은 수유는 보낸다.
+        // 차에 이미 보낸 표시는 남는다. 지운 뒤 더 이른 수유를 적어도 다시 보내지 않고, 더 늦은 수유는 보낸다.
         assertEquals(now - HOUR, clearedState.lastSentFeedingAt)
         assertEquals(clearedState, clearedState.reconciledFeeding(cleared.events, now))
         assertEquals(clearedState, clearedState.reconciledFeeding(listOf(feed("early", now - 2 * HOUR)), now))
@@ -339,7 +341,7 @@ class CareTest {
         // 두 번째 실행은 하지 않는다.
         val r3 = FeedingRecord("01JC8Y2K6N3T5Q9W0ZB4H7X2DP", "2026-11-05T12:00:00+09:00")
         assertEquals(m, m.migrated(listOf(r1, r2, r3), zone))
-        // U22: 같은 일에서 state.json의 보낸 표시를 옮긴 수유 중 가장 늦은 시각으로 채운다. 그래서 옛 경로가 보낸 수유를 다시 보내지 않는다.
+        // 같은 일에서 state.json의 보낸 표시를 옮긴 수유 중 가장 늦은 시각으로 채운다. 그래서 옛 경로가 보낸 수유를 다시 보내지 않는다.
         val old = owner.copy(feedings = listOf(r1, r2))
         val marked = old.markedMigratedFeedings()
         assertEquals(instantOf(r2.at), marked.lastSentFeedingAt)
@@ -375,23 +377,23 @@ class CareTest {
         assertEquals(LocalDate.of(2026, 11, 4), utc.day(seoul))
         assertEquals("오후 2:00", koClock(utc.startAt, ZoneId.of(utc.zone)))
         assertEquals("오후 11:00", koClock(sleep.startAt, seoul))
-        // 하루 목록 줄(7.1 log.row): 구간은 그 기록 시간대, 끝 오전·오후는 같으면 뺀다(U20). 자정을 넘으면 붙인다.
+        // 하루 목록 줄(log.row): 구간은 그 기록 시간대, 끝 오전·오후는 같으면 뺀다. 자정을 넘으면 붙인다.
         assertEquals("잠 · 오후 11:00–오전 2:00 · 3시간", logRowText(sleep, seoul))
-        // U20: 끝이 시작과 같은 오전·오후면 날짜가 달라도 끝의 오전·오후를 뺀다(iOS와 같음).
+        // 끝이 시작과 같은 오전·오후면 날짜가 달라도 끝의 오전·오후를 뺀다(iOS와 같음).
         assertEquals("오후 11:00–1:00", "${koClock(at(2026, 11, 4, 23), seoul)}–${koClockAfter(at(2026, 11, 4, 23), at(2026, 11, 5, 13), seoul)}")
         assertEquals("수유 · 오후 12:52–1:07 · 왼쪽", logRowText(ev("f", CareKind.FEED, at(2026, 11, 5, 12, 52), at(2026, 11, 5, 13, 7), side = FeedSide.LEFT), seoul))
         assertEquals("수유 · 오후 3:00–3:05 · 젖병 120ml", logRowText(ev("b", CareKind.FEED, at(2026, 11, 5, 15), at(2026, 11, 5, 15, 5), side = FeedSide.BOTTLE, ml = 120), seoul))
         assertEquals("수유 · 오후 3:00–3:05", logRowText(ev("b", CareKind.FEED, at(2026, 11, 5, 15), at(2026, 11, 5, 15, 5)), seoul))
-        // U41: 시작과 끝이 같은 분이면 시각 하나만. 초가 달라도 같은 분이면 같다. 분이 바뀌면 구간.
+        // 시작과 끝이 같은 분이면 시각 하나만. 초가 달라도 같은 분이면 같다. 분이 바뀌면 구간.
         val f457 = at(2026, 11, 5, 16, 57)
         assertEquals("수유 · 오후 4:57 · 왼쪽", logRowText(ev("u", CareKind.FEED, f457, f457 + 30_000, side = FeedSide.LEFT), seoul))
         assertEquals("잠 · 오후 4:57 · 1분 미만", logRowText(ev("u", CareKind.SLEEP, f457, f457 + 30_000), seoul))
         assertEquals("수유 · 오후 4:57–4:58", logRowText(ev("u", CareKind.FEED, f457 + 59_000, f457 + MINUTE), seoul))
         assertEquals("탑승 · 오후 4:57", CarLine("s", null, f457, f457 + 1_000, null, null).text(seoul))
         assertEquals("수유 · 오후 12:00 · 끝 시각 모름", logRowText(feed("u", at(2026, 11, 5, 12)), seoul))
-        assertEquals("수유 · 오후 12:00 · 왼쪽 · 끝 시각 모름", logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.LEFT), seoul)) // U37
+        assertEquals("수유 · 오후 12:00 · 왼쪽 · 끝 시각 모름", logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.LEFT), seoul))
         assertEquals("수유 · 오후 12:00 · 젖병 80ml · 끝 시각 모름", logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.BOTTLE, ml = 80), seoul))
-        // U37: 수유·잠·기저귀에 단 메모는 둘째 줄, 메모 기록은 첫 줄에만.
+        // 수유·잠·기저귀에 단 메모는 둘째 줄, 메모 기록은 첫 줄에만.
         assertEquals("트림 함", memoLine(ev("m", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, note = "트림 함")))
         assertNull(memoLine(ev("m", CareKind.NOTE, at(2026, 11, 5, 12), note = "트림 함")))
         assertNull(memoLine(feed("u", at(2026, 11, 5, 12))))
@@ -416,7 +418,7 @@ class CareTest {
         assertEquals(at(2026, 11, 5, 10, 0) + 30_000, firstAtOrAfter(10, 0, at(2026, 11, 5, 10, 0) + 30_000, seoul))
         assertEquals(at(2026, 11, 5, 10, 1), firstAtOrAfter(10, 1, at(2026, 11, 5, 10, 0) + 30_000, seoul))
         assertEquals(at(2026, 11, 6, 9, 59), firstAtOrAfter(9, 59, at(2026, 11, 5, 10, 0) + 30_000, seoul))
-        // 진행 중·끝 모름은 길이를 세지 않는다(R14).
+        // 진행 중·끝 모름은 길이를 세지 않는다.
         val live = listOf(ev("o", CareKind.SLEEP, at(2026, 11, 5, 14)), ev("u", CareKind.SLEEP, at(2026, 11, 5, 9), endUnknown = true), sleep)
         assertEquals(2 * HOUR, durationOn(live, CareKind.SLEEP, LocalDate.of(2026, 11, 5), seoul))
     }
@@ -424,7 +426,7 @@ class CareTest {
     @Test
     fun `패턴은 7일 중앙값이고 5개 미만이면 숨긴다`() {
         fun day(d: Int, h: Int, mi: Int = 0) = at(2026, 11, d, h, mi)
-        // 11-05가 오늘. 11-04 수유 2번, 11-05 수유 4번: 간격 3h, (11-04 12시 → 11-05 0시) 12h는 빠짐, 2h, 2h30m, 4h(끝 모름도 시작은 셈)
+        // 오늘은 11월 5일. 4일 수유 2번, 5일 수유 4번: 간격 3h, (4일 12시 → 5일 0시) 12h는 빠짐, 2h, 2h30m, 4h(끝 모름도 시작은 셈)
         val feeds = listOf(
             feed("a", day(4, 9), day(4, 9, 20)),
             feed("b", day(4, 12)),
@@ -438,7 +440,7 @@ class CareTest {
         assertEquals(LocalDate.of(2026, 10, 30), p4.days.first())
         assertEquals(LocalDate.of(2026, 11, 5), p4.days.last())
         assertEquals(listOf(0, 0, 0, 0, 0, 2, 3), p4.feedsPerDay)
-        // U27: 평균은 그 종류 기록이 있는 날만 나눠 센다(5개 ÷ 2일). 기록한 날이 없으면 "기록 없음"이고 "n일 기준"은 보이지 않는다.
+        // 평균은 그 종류 기록이 있는 날만 나눠 센다(5개 ÷ 2일). 기록한 날이 없으면 "기록 없음"이고 "n일 기준"은 보이지 않는다.
         assertEquals(2, p4.feedDays)
         assertEquals("평균 2.5번", avgCountText(p4.feedsPerDay))
         assertEquals("2일 기준", daysText(p4.feedDays))
@@ -459,7 +461,7 @@ class CareTest {
         // 10h+1ms 간격을 넣으면 5개가 되어 보이고, 빼면 4개라 숨는다.
         val overTenH = listOf(feed("y", day(4, 0) - 1)) + tenH.drop(1)
         assertNull(carePattern(CareFile(events = overTenH), emptyList(), now, seoul).feedIntervalMs)
-        // R3의 1분 여유로 적은 내일 0시 수유는 오늘까지의 간격에 넣지 않는다(넣으면 간격 5개가 되어 보인다).
+        // 미래 허용 1분 여유로 적은 내일 0시 수유는 오늘까지의 간격에 넣지 않는다(넣으면 간격 5개가 되어 보인다).
         val late = at(2026, 11, 5, 23, 59) + 30_000
         val evening = listOf(18, 19, 20, 21, 22).map { feed("e$it", day(5, it)) } + feed("next", at(2026, 11, 6, 0))
         assertNull(carePattern(CareFile(events = evening), emptyList(), late, seoul).feedIntervalMs)
@@ -478,14 +480,14 @@ class CareTest {
         assertEquals("2시간 10분 전", agoText(now - 130 * MINUTE, now))
         assertEquals("방금", agoText(now - 59_000, now))
         assertEquals("방금", elapsedText(59_999))
-        // U27: 길이·평균은 "방금"을 쓰지 않는다.
+        // 길이·평균은 "방금"을 쓰지 않는다.
         assertEquals("0분", durationText(0))
         assertEquals("1분 미만", durationText(59_999))
         assertEquals("1분", durationText(MINUTE))
         assertEquals("2시간", durationText(2 * HOUR))
         assertEquals("2시간 10분", durationText(130 * MINUTE))
         assertEquals("12분", elapsedText(12 * MINUTE + 59_000))
-        assertEquals("1시간", elapsedText(HOUR)) // 딱 맞는 시간(11-05 결정)
+        assertEquals("1시간", elapsedText(HOUR)) // 딱 맞는 시간
         assertEquals("1시간 1분", elapsedText(HOUR + MINUTE))
         assertEquals(started.file, started.file) // 진행 중 표시는 파일을 바꾸지 않는다
     }
@@ -499,9 +501,9 @@ class CareTest {
         assertNull(off.sleepPerDayMs)
         assertNull(off.diapersPerDay)
         val on = carePattern(CareFile(events = events + ev("o", CareKind.SLEEP, at(2026, 11, 5, 14)), sleepDiaperEnabled = true), emptyList(), now, seoul)
-        assertEquals(HOUR, on.sleepPerDayMs!!.last()) // 진행 중 잠은 합계에 넣지 않는다(R14)
+        assertEquals(HOUR, on.sleepPerDayMs!!.last()) // 진행 중 잠은 합계에 넣지 않는다
         assertEquals(1, on.sleepDays)
-        // U31: 자정을 넘는 잠은 걸친 두 날을 모두 센다(23시~2시 → 11-04·11-05). 길이는 그날 몫만 더한다.
+        // 자정을 넘는 잠은 걸친 두 날을 모두 센다(23시~2시 → 11월 4일·5일). 길이는 그날 몫만 더한다.
         val cross = carePattern(CareFile(events = listOf(ev("x", CareKind.SLEEP, at(2026, 11, 4, 23), at(2026, 11, 5, 2))), sleepDiaperEnabled = true), emptyList(), now, seoul)
         assertEquals(2, cross.sleepDays)
         assertEquals("평균 1시간 30분", avgDurationText(cross.sleepPerDayMs!!))
@@ -516,16 +518,16 @@ class CareTest {
 
     @Test
     fun `리포트에서 차 기록 줄을 만든다`() {
-        val env = ProtocolJson.decodeFromString(Envelope.serializer(), File("../../shared/src/test/resources/protocol/report_summary.json").readText())
+        val env = fixture("report_summary")
         val report = ProtocolJson.decodeFromJsonElement(ReportSummaryBody.serializer(), env.body)
-        assertTrue(report.carActions.any { actionText(it.action) == "조명 낮춤" }) // 기능 D ambient_dim(리포트 '차가 대신 한 일')
+        assertTrue(report.carActions.any { actionText(it.action) == "조명 낮춤" }) // ambient_dim(리포트 '차가 대신 한 일')
         val lines = carLines(listOf(report))
         assertEquals(2, lines.size)
         val drive = lines[0]
         assertTrue(drive.isDrive)
         assertEquals(report.sessionId, drive.sessionId)
         assertEquals("탑승 · 오전 8:00–8:42", drive.text(seoul))
-        assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 그침", lines[1].text(seoul)) // U37: 한 줄에 시각
+        assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 그침", lines[1].text(seoul)) // 한 줄에 시각
         assertEquals(instantOf("2026-11-05T08:05:12+09:00"), lines[1].startAt)
         // 리포트에 없는 값은 칸째 뺀다. 결과 글자는 리포트 값만 옮긴다.
         val ep = report.timeline.single()
@@ -533,17 +535,28 @@ class CareTest {
         assertEquals("차에서 울음 · 오전 8:05", none.text(seoul))
         val failed = carLines(listOf(report.copy(timeline = listOf(ep.copy(result = kr.aigyeot.shared.EpisodeResult.FAILURE)))))[1]
         assertEquals("차에서 울음 · 오전 8:05 · 자장가 · 계속 울음", failed.text(seoul))
-        val unknown = carLines(listOf(report.copy(timeline = listOf(ep.copy(sound = kr.aigyeot.shared.SoundRef(kr.aigyeot.shared.SoundMethod.WHITE_NOISE, "x"), result = kr.aigyeot.shared.EpisodeResult.UNDETERMINED)))))[1]
+        val unknown = carLines(
+            listOf(
+                report.copy(
+                    timeline = listOf(
+                        ep.copy(
+                            sound = kr.aigyeot.shared.SoundRef(kr.aigyeot.shared.SoundMethod.WHITE_NOISE, "x"),
+                            result = kr.aigyeot.shared.EpisodeResult.UNDETERMINED,
+                        ),
+                    ),
+                ),
+            ),
+        )[1]
         assertEquals("차에서 울음 · 오전 8:05 · 백색소음 · 판정하지 못함", unknown.text(seoul))
-        // 소리 바꾸기 요청으로 시작한 에피소드는 '울음' 줄로 만들지 않는다(11-05 결정).
+        // 소리 바꾸기 요청으로 시작한 에피소드는 '울음' 줄로 만들지 않는다.
         val switched = report.copy(timeline = listOf(ep, ep.copy(episodeId = "e2", trigger = kr.aigyeot.shared.EpisodeTrigger.SWITCH_SOUND)))
         assertEquals(listOf(null, ep.episodeId), carLines(listOf(switched)).map { it.episodeId })
         // 차 기록 줄은 저장하지 않는다(리포트에서 그릴 때 만든다). 패턴의 '차 울음 에피소드 수'도 같은 줄에서 센다.
         assertEquals(1, carePattern(CareFile(), listOf(switched), now, seoul).carCryEpisodes)
-        assertEquals(0, carePattern(CareFile(), listOf(switched), at(2026, 11, 4, 23, 59), seoul).carCryEpisodes) // 기기 기준 내일이면 7일에 넣지 않는다(R14)
-        // 탑승 끝 시각: 같은 오전·오후면 생략, 다르면 붙인다(11-05 결정).
+        assertEquals(0, carePattern(CareFile(), listOf(switched), at(2026, 11, 4, 23, 59), seoul).carCryEpisodes) // 기기 기준 내일이면 7일에 넣지 않는다
+        // 탑승 끝 시각: 같은 오전·오후면 생략, 다르면 붙인다.
         assertEquals("탑승 · 오전 11:50–오후 12:20", CarLine("s", null, at(2026, 11, 5, 11, 50), at(2026, 11, 5, 12, 20), null, null).text(seoul))
-        // U47 리포트 글자: 목록 첫 줄 "{날짜} {구간}", 둘째 줄의 울음 수는 위 '차에서 울음' 줄 수와 같다(소리 바꾸기 요청은 세지 않는다).
+        // 리포트 글자: 목록 첫 줄 "{날짜} {구간}", 둘째 줄의 울음 수는 위 '차에서 울음' 줄 수와 같다(소리 바꾸기 요청은 세지 않는다).
         assertEquals("11월 5일(목) 오전 8:00–8:42", reportRowTitle(report, seoul))
         assertEquals("11월 5일(목)", reportDate(report, seoul))
         assertEquals("울음 1번", reportRowSub(switched))
@@ -594,9 +607,9 @@ class CareTest {
 
     @Test
     fun `돌봄 요약은 표준 예제에서 기대 요약과 같다`() {
-        // 13장 표준 예제: 입력·기대 파일은 저장소 경로 그대로 읽는다(복사본 없음). 키 순서는 따지지 않고 null 키도 같아야 한다.
-        val input = CareJson.decodeFromString(CareFile.serializer(), File("../../shared/src/test/resources/care/summary_input.json").readText())
-        fun expected(name: String) = Json.parseToJsonElement(File("../../shared/src/test/resources/protocol/$name.json").readText()).jsonObject["body"]
+        // 표준 예제: 입력·기대 파일은 저장소 경로 그대로 읽는다(복사본 없음). 키 순서는 따지지 않고 null 키도 같아야 한다.
+        val input = CareJson.decodeFromString(CareFile.serializer(), sharedFile("care/summary_input.json").readText())
+        fun expected(name: String) = Json.parseToJsonElement(sharedFile("protocol/$name.json").readText()).jsonObject["body"]
         fun body(f: CareFile) = ProtocolJson.encodeToJsonElement(CareSummaryBody.serializer(), careSummary(f, 1793944800000, seoul))
         assertEquals(expected("care_summary"), body(input))
         // 잠·기저귀 끔: 잠·기저귀 칸은 모두 null, 수유 수는 센다.
@@ -605,7 +618,7 @@ class CareTest {
 
     @Test
     fun `지우지 않은 돌봄 기록은 오래돼도 남는다`() {
-        // U44: 기간으로 지우는 규칙이 없다. 앱을 열 때의 정리(R8)는 지운 표시가 30일 지난 것만 뺀다(리포트의 90일은 state.json에만).
+        // 기간으로 지우는 규칙이 없다. 앱을 열 때의 정리는 지운 표시가 30일 지난 것만 뺀다(리포트의 90일은 state.json에만).
         val file = CareFile(
             events = listOf(
                 feed("old", now - 400 * DAY, now - 400 * DAY + 10 * MINUTE),

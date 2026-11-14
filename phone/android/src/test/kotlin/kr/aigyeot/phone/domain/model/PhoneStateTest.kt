@@ -6,6 +6,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kr.aigyeot.phone.data.inbound
+import kr.aigyeot.phone.fixture
 import kr.aigyeot.shared.DeviceInfo
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.Platform
@@ -23,14 +24,11 @@ import java.io.File
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-/** 폰 메시지 처리·상태 로직(계약 3.2·5.6·7.4·7.5). 예제는 shared/의 계약 JSON을 그대로 쓴다. */
+/** 폰 메시지 처리·상태 로직. 예제는 shared/의 메시지 JSON을 그대로 쓴다. */
 class PhoneStateTest {
     private val now = 1_762_300_000_000L
     private val owner = PhoneState.paired("c_7F3AK2N9X0Q4M8T1V6B5R3H2CD", "d_5KQ2M8T1V6B5R3H2CD7F3AK2N9", Role.OWNER, now)
     private val guardian = owner.copy(role = Role.GUARDIAN)
-
-    private fun fixture(name: String): Envelope =
-        ProtocolJson.decodeFromString(Envelope.serializer(), File("../../shared/src/test/resources/protocol/$name.json").readText())
 
     /** 받은 봉투는 데이터 층의 바꾸기([inbound])를 거쳐 적용한다(앱과 같은 길). */
     private fun PhoneState.receive(env: Envelope, now: Long, live: Boolean, newId: () -> String = { ulid(now) }) =
@@ -40,38 +38,7 @@ class PhoneStateTest {
     private fun Envelope.withSeq(seq: Long, id: String = ulid()) = copy(seq = seq, id = id, car = owner.carId)
 
     @Test
-    fun 연결_코드_정규화와_링크_검사() {
-        assertEquals("042917", normalizeCode(" 042-917 "))
-        assertEquals("7K3QM2XW9D", normalizeCode("7k3qm-2xw9d"))
-        assertEquals("0110000000", normalizeCode("OIL0000000")) // Crockford: O→0, I·L→1
-        assertNull(normalizeCode("12345"))
-        assertNull(normalizeCode("7K3QM2XW9U")) // U는 Crockford에 없다
-        assertEquals("042917", codeFromLink("aigyeot://pair?code=042917"))
-        assertEquals("7K3QM2XW9D", codeFromLink("aigyeot://pair?code=7K3QM-2XW9D"))
-        assertNull(codeFromLink("aigyeot://pair?code=evil"))
-        assertNull(codeFromLink("https://example.com/pair?code=042917"))
-        assertNull(codeFromLink("aigyeot://pair?code=%ZZ")) // 잘못된 인코딩도 죽지 않고 잘못된 링크
-        assertTrue(isUlid("01JC9A00Q4M8T1V6B5R3H2CD7F"))
-        assertFalse(isUlid("x/y"))
-        assertFalse(isUlid("01JC9A00Q4M8T1V6B5R3H2CD7U")) // U는 Crockford에 없다
-        assertTrue(isInviteCode("7K3QM2XW9D"))
-    }
-
-    @Test
-    fun 시각은_초와_시차를_늘_쓴다() {
-        val t = 1_762_300_800_000L // 정각(0초)
-        assertEquals("2025-11-05T09:00:00+09:00", rfc3339(t, ZoneId.of("Asia/Seoul")))
-        assertEquals("2025-11-05T00:00:00Z", rfc3339(t, ZoneOffset.UTC))
-        assertEquals(t, instantOf("2025-11-05T09:00:00+09:00"))
-        assertEquals(instantOf("2026-11-05T08:12:21+09:00"), instantOf("2026-11-04T23:12:21Z"))
-        assertNull(instantOf("어제"))
-        assertEquals(1000L, backoffMs(0))
-        assertEquals(60_000L, backoffMs(10))
-        assertEquals(26, ulid().length)
-    }
-
-    @Test
-    fun 같은_id는_한_번만_처리한다() {
+    fun `같은 id는 한 번만 처리한다`() {
         val env = fixture("feeding_state")
         val once = owner.receive(env, now, live = true).state
         assertEquals(413L, once.feeding?.seq)
@@ -82,7 +49,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun feeding_state는_큰_seq가_이기고_보낸_시각이면_차에_반영됨() {
+    fun `feeding_state는 큰 seq가 이기고 보낸 시각이면 차에 반영됨`() {
         val pressed = owner.startFeeding(now, id = "01JC8Y2K6N3T5Q9W0ZB4H7X2DM")
             .let { it.copy(feedings = it.feedings.map { f -> f.copy(at = "2026-11-04T23:12:21Z") }) }
         val newer = fixture("feeding_state") // seq 413, last_feeding_start 08:12:21+09:00
@@ -94,7 +61,7 @@ class PhoneStateTest {
 
     @Test
     fun `차에 반영된 수유는 버림 안내를 띄우지 않고 늦게 반영되면 걷는다`() {
-        // 7.5 '차에 반영됨'·U54: 기록 줄에 실패를 적지 않는 수유는 '보내지 못했어요' 띠도 띄우지 않는다.
+        // '차에 반영됨': 기록 줄에 실패를 적지 않는 수유는 '보내지 못했어요' 띠도 띄우지 않는다.
         val id = "01JC8Y2K6N3T5Q9W0ZB4H7X2DM"
         val pressed = owner.startFeeding(now, id = id).let { it.copy(feedings = it.feedings.map { f -> f.copy(at = "2026-11-04T23:12:21Z") }) }
         val later = now + 8 * 24 * 60 * MINUTE
@@ -129,7 +96,7 @@ class PhoneStateTest {
 
     @Test
     fun `다시 녹음은 옛 곡 지움을 새 곡보다 먼저 한 저장에 넣는다`() {
-        // 9장 '노래 거절': 거절·실패한 곡을 그 자리에서 바꾼다(iOS addSong(replacing:)과 같음).
+        // '노래 거절': 거절·실패한 곡을 그 자리에서 바꾼다(iOS addSong(replacing:)과 같음).
         val one = owner.addSong("s_OLD", "옛 노래", 30.0, "s_OLD.m4a", now).let { s -> s.copy(songs = s.songs.map { it.copy(phase = SongPhase.REJECTED) }) }
         val swapped = one.replacedSong("s_OLD", "s_NEW", "새 노래", 40.0, "s_NEW.m4a", now + 1)
         assertEquals(SongPhase.REMOVED, swapped.songs.first { it.songId == "s_OLD" }.phase)
@@ -138,12 +105,12 @@ class PhoneStateTest {
         // 옛 곡이 이미 지워졌으면 더하기만 한다(지움을 두 번 보내지 않는다).
         val gone = one.removeSong("s_OLD", now)
         assertEquals(1, gone.replacedSong("s_OLD", "s_NEW", "새 노래", 40.0, "s_NEW.m4a", now + 1).outbox.count { it.envelope.type == "song_removed" })
-        // 3곡이 찼는지는 바꿀 곡을 빼고 센다(G40, iOS와 같음).
+        // 3곡이 찼는지는 바꿀 곡을 빼고 센다(iOS와 같음).
         val fullThree = owner.addSong("s_A", "a", 1.0, "a.m4a", now).addSong("s_B", "b", 1.0, "b.m4a", now).addSong("s_C", "c", 1.0, "c.m4a", now)
         assertTrue(fullThree.songsFull())
         assertFalse(fullThree.songsFull(replacing = "s_A"))
         assertFalse(one.songsFull())
-        // 거절된 곡은 줄은 보여도 자동 지움이 먼저 가므로 자리를 차지하지 않는다(8.4, iOS songSlots와 같음).
+        // 거절된 곡은 줄은 보여도 자동 지움이 먼저 가므로 자리를 차지하지 않는다(iOS songSlots와 같음).
         val three = one.addSong("s_B", "b", 1.0, "b.m4a", now).addSong("s_C", "c", 1.0, "c.m4a", now)
         assertFalse(three.songsFull())
         // 시트를 연 사이 차가 받아들였으면 바꾸지 않고 새 곡으로 넣고, 3곡 한도는 그 곡까지 센다(iOS와 같음).
@@ -161,7 +128,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun song_status는_곡마다_큰_seq가_이기고_거절이면_owner가_지움을_보낸다() {
+    fun `song_status는 곡마다 큰 seq가 이기고 거절이면 owner가 지움을 보낸다`() {
         val accepted = fixture("song_status") // seq 425, accepted, candidate
         val rejected = fixture("song_status_rejected").withSeq(430)
         val s1 = owner.receive(accepted, now, live = true).state
@@ -183,21 +150,26 @@ class PhoneStateTest {
         // 이 폰에서 A를 골랐어도 차가 B를 후보로 알리면 A는 후보가 아니다(마지막 선택이 이긴다)
         val a = "01JC90A0Q4M8T1V6B5R3H2CD7F"
         val chose = s1.selectSong(a, now)
-        val other = accepted.withSeq(600).copy(body = buildJsonObject { put("song_id", a); put("name", "나비야"); put("status", "accepted"); put("reason", null as String?); put("duration_s", 94.5); put("candidate", false) })
+        val other = accepted.withSeq(600).copy(
+            body = buildJsonObject {
+                put("song_id", a); put("name", "나비야"); put("status", "accepted"); put("reason", null as String?)
+                put("duration_s", 94.5); put("candidate", false)
+            },
+        )
         assertFalse(chose.receive(other, now, live = true).state.songs.single { it.songId == a }.candidate)
         // guardian은 보내지 않는다
         assertTrue(guardian.receive(rejected, now, live = true).state.outbox.isEmpty())
         // 이 폰에서 지운 곡은 늦게 온 받음으로 되살리지 않는다
         val removed = s1.removeSong(song.songId, now)
         assertEquals(SongPhase.REMOVED, removed.receive(accepted.withSeq(440), now, live = true).state.songs.single().phase)
-        // 이름을 모르는 곡의 removed(L45)
+        // 이름을 모르는 곡의 removed
         val unknown = owner.receive(fixture("song_status_removed"), now, live = true).state
         assertEquals(SongPhase.REMOVED, unknown.songs.single().phase)
         assertTrue(unknown.visibleSongs.isEmpty())
     }
 
     @Test
-    fun 앞_곡_승인_상태가_와도_목록_순서는_그대로이고_새_곡은_끝에_붙는다() {
+    fun `앞 곡 승인 상태가 와도 목록 순서는 그대로이고 새 곡은 끝에 붙는다`() {
         fun status(id: String, seq: Long, st: String = "accepted") = fixture("song_status").withSeq(seq).copy(body = buildJsonObject {
             put("song_id", id); put("name", id); put("status", st); put("reason", null as String?); put("duration_s", 30.0); put("candidate", false)
         })
@@ -215,7 +187,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun report_summary는_세션마다_큰_seq가_이긴다() {
+    fun `report_summary는 세션마다 큰 seq가 이긴다`() {
         val r = fixture("report_summary")
         val s = owner.receive(r, now, live = false).state
         val sid = s.reports.keys.single()
@@ -227,7 +199,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 오래된_인계_알림은_배너_없이_목록에만_들어간다() {
+    fun `오래된 인계 알림은 배너 없이 목록에만 들어간다`() {
         val alert = fixture("handoff_alert")
         val at = { ms: Long -> alert.copy(body = JsonObject(alert.body.toMap() + ("occurred_at" to JsonPrimitive(rfc3339(ms))))) }
         val old = guardian.receive(at(now - 3 * 3600_000L), now, live = true)
@@ -237,7 +209,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 인계_알림은_같은_id를_한_번만_띄운다() {
+    fun `인계 알림은 같은 id를 한 번만 띄운다`() {
         val alert = fixture("handoff_alert")
         // WebSocket으로 먼저 오면 배너
         val live = guardian.receive(alert, now, live = true)
@@ -257,7 +229,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 다른_차_방의_메시지와_모르는_type은_적용하지_않는다() {
+    fun `다른 차 방의 메시지와 모르는 type은 적용하지 않는다`() {
         val other = fixture("feeding_state").copy(car = "c_OTHER00000000000000000000")
         assertEquals(owner, owner.receive(other, now, live = true).state) // 다른 방: 처리한 id도 남기지 않는다(iOS와 같다)
         assertNull(owner.receive(fixture("feeding_state").copy(car = null), now, live = true).state.feeding)
@@ -273,7 +245,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 수유_보내기_결과() {
+    fun `수유 보내기 결과`() {
         val s = owner.startFeeding(now)
         val item = s.outbox.single()
         assertEquals(item, s.nextToSend(now))
@@ -303,7 +275,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 버려진_노래_삭제와_선택은_안내가_있다() {
+    fun `버려진 노래 삭제와 선택은 안내가 있다`() {
         val id = "01JC90A0Q4M8T1V6B5R3H2CD7F"
         assertNotNull(dropNotice("song_removed"))
         assertNotNull(dropNotice("song_selected"))
@@ -315,7 +287,7 @@ class PhoneStateTest {
 
     @Test
     fun `버린 메시지 안내는 서로 덮지 않는다`() {
-        // U54: 7.1 outbox.dropped 글. 같은 글은 한 번, 노래 추가는 항목에만 표시한다.
+        // outbox.dropped 글. 같은 글은 한 번, 노래 추가는 항목에만 표시한다.
         val lines = withDropNotices(null, listOf("feeding_started", "song_removed", "feeding_started", "song_added", "song_selected", "care_summary"))!!.lines()
         assertEquals(
             listOf(
@@ -342,7 +314,7 @@ class PhoneStateTest {
 
     @Test
     fun `만료로 버린 메시지도 띠로 알린다`() {
-        // 7.5 '7일 지난 항목도 버린다' + U54 '7.5대로 버린 것은 outbox.dropped로 알린다'.
+        // '7일 지난 항목도 버린다' + '버린 것은 outbox.dropped로 알린다'.
         val s = owner.startFeeding(now).selectSong("01JC90A0Q4M8T1V6B5R3H2CD7F", now)
         assertTrue(s.pruned(now + KEEP_IDS_MS - 1).unseenDrops.isEmpty())
         val pruned = s.pruned(now + KEEP_IDS_MS)
@@ -353,7 +325,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 노래는_파일을_먼저_올린_뒤_song_added() {
+    fun `노래는 파일을 먼저 올린 뒤 song_added를 보낸다`() {
         val s = owner.addSong("01JC90A0Q4M8T1V6B5R3H2CD7F", "나비야", 94.5, "x.m4a", now)
         val item = s.outbox.single()
         assertEquals("song_added", item.envelope.type)
@@ -362,7 +334,7 @@ class PhoneStateTest {
         assertTrue(up.outbox.single().uploaded)
         val missing = up.afterSend(up.outbox.single(), SendResult.Failed(422, "song_blob_missing"), now)
         assertFalse(missing.outbox.single().uploaded)
-        // 파일부터 다시 올리되 기다림을 둔다: 되풀이되면 기다림이 는다(7.5).
+        // 파일부터 다시 올리되 기다림을 둔다: 되풀이되면 기다림이 는다.
         assertEquals(1, missing.outbox.single().attempts)
         assertTrue(missing.outbox.single().nextTryAt > now)
         assertEquals(1, missing.afterSend(missing.outbox.single(), SendResult.Uploaded, now).outbox.single().attempts)
@@ -384,7 +356,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 보낼_함은_종류마다_자기_칸만_바뀐다() {
+    fun `보낼 함은 종류마다 자기 칸만 바뀐다`() {
         // 노래: 파일을 올리면 Song.uploaded, 422 song_blob_missing면 다시 거짓.
         val song = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now)
         val up = song.afterSend(song.outbox.single(), SendResult.Uploaded, now).outbox.single()
@@ -398,7 +370,7 @@ class PhoneStateTest {
         assertEquals(OutboxPayload.Message("feeding_started", feeding.outbox.single().body, reflected = true), reflected.payload)
         // 다른 종류의 표시는 바꾸지 않는다(불가능한 조합을 만들지 않는다).
         assertEquals(feeding.outbox.single(), feeding.outbox.single().markUploaded(true).markTried(true))
-        // 돌봄 요약: 보내기 전 '보내 봄' → CareSummary.tried. 429·연결 전 실패면 걷고(중계에 없다), 응답을 잃으면 둔다(닿았을 수 있다, U57).
+        // 돌봄 요약: 보내기 전 '보내 봄' → CareSummary.tried. 429·연결 전 실패면 걷고(중계에 없다), 응답을 잃으면 둔다(닿았을 수 있다).
         val summary = outboxItem(OutboxPayload.CareSummary(buildJsonObject { put("as_of", "x") }, tried = false), now)
         val queued = owner.copy(outbox = listOf(summary))
         val marked = queued.markSentOnce(summary.id)
@@ -411,53 +383,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 재시도_기본값은_iOS와_같다() {
-        val s = owner.selectSong("a", now)
-        val item = s.outbox.single()
-        // 429에 Retry-After가 없으면 60초(메시지는 기기 기다림도), 0이어도 1초(iOS `max(retryAfter ?? 60, 1)`).
-        val held = s.afterSend(item, SendResult.Failed(429, "rate_limited"), now)
-        assertEquals(now + 60_000, held.outbox.single().nextTryAt)
-        assertEquals(now + 60_000, held.messageHoldUntil)
-        assertEquals(now + 1_000, s.afterSend(item, SendResult.Failed(429, "rate_limited", 0), now).outbox.single().nextTryAt)
-        // 노래 PUT 429도 60초(그 항목만).
-        val song = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now)
-        val put = song.afterSend(song.outbox.single(), SendResult.Failed(429, "rate_limited"), now)
-        assertEquals(now + 60_000, put.outbox.single().nextTryAt)
-        assertNull(put.messageHoldUntil)
-        // 409 song_quota: 차가 켜져 파일을 처리한 뒤 다시, 60초(iOS `songQuota`). 시도 횟수와 상관없다.
-        val up = song.afterSend(song.outbox.single(), SendResult.Uploaded, now)
-        val quota = up.afterSend(up.outbox.single(), SendResult.Failed(409, "song_quota"), now)
-        assertEquals(now + 60_000, quota.outbox.single().nextTryAt)
-        assertEquals(now + 60_000, quota.afterSend(quota.outbox.single(), SendResult.Failed(409, "song_quota"), now).outbox.single().nextTryAt)
-    }
-
-    @Test
-    fun 망_실패_기다림만_당길_수_있다() {
-        val s = owner.selectSong("a", now)
-        val item = s.outbox.single()
-        fun after(r: SendResult) = s.afterSend(item, r, now).outbox.single()
-        // 기다림 이유: 망 실패(응답 없음·닿지 않음)만 참. 중계가 준 기다림(429·song_quota)과 5xx는 거짓(iOS `scheduleRetry`).
-        assertTrue(after(SendResult.Offline).networkWait)
-        assertTrue(after(SendResult.Unreached).networkWait)
-        assertFalse(after(SendResult.Failed(503, "unavailable")).networkWait)
-        assertFalse(after(SendResult.Failed(429, "rate_limited", 30)).networkWait)
-        assertFalse(after(SendResult.Failed(409, "song_quota")).networkWait)
-        // 이유는 마지막 결과를 따른다.
-        val offline = s.afterSend(item, SendResult.Offline, now)
-        assertFalse(offline.afterSend(offline.outbox.single(), SendResult.Failed(503, "unavailable"), now).outbox.single().networkWait)
-        // 당기기: 망 실패 기다림만 지금으로, 5xx 백오프는 그대로.
-        val two = owner.selectSong("a", now, id = "01JC90A0Q4M8T1V6B5R3H2CD7A").selectSong("b", now, id = "01JC90A0Q4M8T1V6B5R3H2CD7B")
-        val waited = two.afterSend(two.outbox[0], SendResult.Offline, now).afterSend(two.outbox[1], SendResult.Failed(503, "unavailable"), now)
-        assertTrue(waited.hasNetworkWait(now))
-        val hurried = waited.hurriedNetworkWaits(now + 1)
-        assertEquals(now + 1, hurried.outbox[0].nextTryAt)
-        assertEquals(waited.outbox[1], hurried.outbox[1])
-        assertFalse(hurried.hasNetworkWait(now + 1))
-        assertEquals(waited, waited.hurriedNetworkWaits(now + 60_000)) // 이미 지난 기다림은 그대로
-    }
-
-    @Test
-    fun 보낼_함_저장_형식은_평평한_키_그대로다() {
+    fun `보낼 함 저장 형식은 평평한 키 그대로다`() {
         val s = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now).startFeeding(now)
             .let { it.copy(outbox = it.outbox + outboxItem(OutboxPayload.CareSummary(buildJsonObject { put("as_of", "x") }, tried = true), now)) }
             .let { it.afterSend(it.outbox.first(), SendResult.Uploaded, now) }
@@ -467,7 +393,7 @@ class PhoneStateTest {
         assertTrue(s.outbox.last().networkWait)
         val text = ProtocolJson.encodeToString(PhoneState.serializer(), s)
         assertEquals(s, ProtocolJson.decodeFromString(PhoneState.serializer(), text))
-        // 옛 판이 쓴 줄을 그대로 읽는다(형식이 바뀌지 않았다).
+        // 이전 버전이 쓴 줄을 그대로 읽는다(형식이 바뀌지 않았다).
         val env = """{"v":1,"id":"01JC90A0Q4M8T1V6B5R3H2CD7F","type":"%s","ts":"2026-11-05T08:00:00+09:00","body":{"song_id":"s_9"}}"""
         val old = """[{"created_at":1,"envelope":${env.format("song_added")},"song_file":"s_9.m4a","uploaded":true,"attempts":2,"next_try_at":3},
             {"created_at":1,"envelope":${env.format("care_summary")},"sent_once":true},
@@ -483,7 +409,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 상태_요청은_24시간_넘게_못_받았을_때_owner만_10분_간격으로() {
+    fun `상태 요청은 24시간 넘게 못 받았을 때 owner만 10분 간격으로`() {
         val stale = owner.copy(lastMessageAt = now - 25 * HOUR).onAppOpen(now)
         assertTrue(stale.stateRequestNeeded)
         assertFalse(owner.onAppOpen(now).stateRequestNeeded)
@@ -515,7 +441,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 만료된_보낼_함은_수유와_곡에_만료_표시를_남긴다() {
+    fun `만료된 보낼 함은 수유와 곡에 만료 표시를 남긴다`() {
         val t = owner.startFeeding(now).addSong("s_1", "a", 30.0, "s_1.m4a", now)
         val p = t.pruned(now + 8 * DAY)
         assertTrue(p.outbox.isEmpty())
@@ -531,7 +457,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 만료_뒤_반영_상태를_받으면_수유_실패_표시가_지워진다() {
+    fun `만료 뒤 반영 상태를 받으면 수유 실패 표시가 지워진다`() {
         val t = owner.startFeeding(now)
         val expired = t.pruned(now + 8 * DAY)
         assertNotNull(expired.feedings.single().failed)
@@ -544,7 +470,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 만료_뒤_반영_상태를_받으면_곡_실패_표시가_지워진다() {
+    fun `만료 뒤 반영 상태를 받으면 곡 실패 표시가 지워진다`() {
         val expired = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now).pruned(now + 8 * DAY)
         assertNotNull(expired.songs.single().error)
         val body = buildJsonObject { put("song_id", "s_1"); put("name", "a"); put("status", "accepted"); put("reason", null as String?); put("duration_s", 30.0); put("candidate", true) }
@@ -555,7 +481,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 차_봉투를_받으면_차_타일이_바로_연결됨이_된다() {
+    fun `차 봉투를 받으면 차 타일이 바로 연결됨이 된다`() {
         val car = DeviceInfo("d_car", Role.CAR, Platform.ANDROID, "2026-11-05T08:00:00Z", "2026-11-04T08:00:00Z", online = false)
         val s = owner.copy(devices = listOf(car))
         val r = s.receive(fixture("feeding_state").withSeq(5), now, live = true).state
@@ -567,14 +493,14 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 만료된_보낼_함_항목은_보내지_않는다() {
+    fun `만료된 보낼 함 항목은 보내지 않는다`() {
         val t = owner.startFeeding(now)
         assertNotNull(t.nextToSend(now + 6 * DAY))
         assertNull(t.nextToSend(now + 8 * DAY))
     }
 
     @Test
-    fun 만료_항목이_맨_앞이면_정리_뒤_다음_항목이_선택된다() {
+    fun `만료 항목이 맨 앞이면 정리 뒤 다음 항목이 선택된다`() {
         val t = owner.startFeeding(now).startFeeding(now + 7 * DAY)
         val later = now + 8 * DAY
         assertTrue(t.frontExpired(later))
@@ -585,7 +511,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 오래된_id와_기록을_버리고_상태는_파일로_왕복한다() {
+    fun `오래된 id와 기록을 버리고 상태는 파일로 왕복한다`() {
         val s = owner.receive(fixture("report_summary"), now, live = false).state.startFeeding(now)
         assertTrue(s.pruned(now + 8 * DAY).processed.isEmpty())
         assertTrue(s.pruned(now + 8 * DAY).outbox.isEmpty())
@@ -597,7 +523,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 상태_파일은_커밋이_확인될_때만_성공한다() {
+    fun `상태 파일은 커밋이 확인될 때만 성공한다`() {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         val store = kr.aigyeot.phone.data.StateStore(File(dir, "state.json"))
         val s = owner.startFeeding(now)
@@ -611,10 +537,10 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 옛_판_상태_파일은_기본값으로_읽고_깨진_파일은_옆에_옮겨_둔다() {
+    fun `필드가 빠진 상태 파일은 기본값으로 읽고 깨진 파일은 옆에 옮겨 둔다`() {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         val f = File(dir, "phone_state.json")
-        // deviceMarks·devicesSnapshotSeq·stateNeedGen·handoffAlerts가 없던 판, 모르는 필드 하나
+        // 나중에 생긴 필드(deviceMarks 등)가 빠진 파일과 모르는 필드 하나가 든 파일
         f.writeText(
             """{"car_id":"c_7F3AK2N9X0Q4M8T1V6B5R3H2CD","my_device_id":"d_5KQ2M8T1V6B5R3H2CD7F3AK2N9","role":"owner",""" +
                 """"songs":[{"song_id":"01JC90A0Q4M8T1V6B5R3H2CD7F","name":"나비야","file":"a.m4a","phase":"ACCEPTED"}],""" +
@@ -639,7 +565,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 백업하지_못하면_그_실행에서는_원본을_덮어쓰지_않는다() {
+    fun `백업하지 못하면 그 실행에서는 원본을 덮어쓰지 않는다`() {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         val f = File(dir, "phone_state.json").apply { writeText("깨짐") }
         // 백업 자리에 비어 있지 않은 폴더가 있으면 옮기기·복사가 모두 실패한다
@@ -660,7 +586,7 @@ class PhoneStateTest {
 
     @Test
     fun `끊을 때 빈 상태 저장이 실패해도 옛 차 기록이 다시 보이지 않는다`() {
-        // 7.4 '연결 끊기: 위 전부를 지운다'. 빈 상태 저장이 실패해 옛 차 상태가 파일에 남아도
+        // '연결 끊기: 위 전부를 지운다'. 빈 상태 저장이 실패해 옛 차 상태가 파일에 남아도
         val dir = kotlin.io.path.createTempDirectory().toFile()
         val f = File(dir, "phone_state.json")
         val store = kr.aigyeot.phone.data.StateStore(f)
@@ -679,7 +605,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 기존_자격으로_빈_상태를_복구하면_상태를_요청한다() {
+    fun `기존 자격으로 빈 상태를 복구하면 상태를 요청한다`() {
         val r = PhoneState.recoverIfNeeded(PhoneState(), owner.carId!!, owner.myDeviceId!!, Role.OWNER, now)
         assertNotNull(r)
         assertTrue(r!!.stateRequestNeeded)
@@ -688,7 +614,7 @@ class PhoneStateTest {
     }
 
     @Test
-    fun 기기_목록은_snapshot_seq보다_새로운_변경을_되돌리지_않는다() {
+    fun `기기 목록은 snapshot_seq보다 새로운 변경을 되돌리지 않는다`() {
         val g = "d_8HN1X0Q4M8T1V6B5R3H2CD7F3A"
         val car = DeviceInfo("d_19BE4W7Y2P5S8K1M3N6Q9T0VXA", Role.CAR, Platform.PLEOS, "2026-11-05T07:59:00Z", "2026-11-05T08:21:40Z", true)
         val guardianRow = DeviceInfo(g, Role.GUARDIAN, Platform.IOS, "2026-11-05T09:01:44Z", null, false, true)
@@ -708,7 +634,14 @@ class PhoneStateTest {
         assertEquals(listOf(Role.CAR), merged.receive(latePaired, now, live = true).state.devices.map { it.role })
 
         // paired(seq 105, 알림 끔)를 먼저 적용 → snapshot 100(알림 켬)은 그 기기를 덮어쓰지 않는다
-        val offAlerts = latePaired.copy(id = ulid(), seq = 105, body = buildJsonObject { put("device_id", g); put("role", "guardian"); put("platform", "ios"); put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", false) })
+        val offAlerts = latePaired.copy(
+            id = ulid(),
+            seq = 105,
+            body = buildJsonObject {
+                put("device_id", g); put("role", "guardian"); put("platform", "ios")
+                put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", false)
+            },
+        )
         val fresh = owner.mergeDevices(90, listOf(car)).receive(offAlerts, now, live = true).state
         assertEquals(false, fresh.mergeDevices(100, listOf(car, guardianRow)).devices.single { it.deviceId == g }.handoffAlerts)
         // 목록보다 늦게 붙은 기기는 목록에 없어도 남고, snapshot 이하에서 붙은 기기는 목록에 없으면 빠진다
@@ -722,7 +655,14 @@ class PhoneStateTest {
         // 적용한 snapshot_seq 이하의 연결 변경도 버린다
         val newG = "d_NEWG0Q4M8T1V6B5R3H2CD7F3AK"
         val pairedAt = { seq: Long ->
-            latePaired.copy(id = ulid(), seq = seq, body = buildJsonObject { put("device_id", newG); put("role", "guardian"); put("platform", "ios"); put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", true) })
+            latePaired.copy(
+                id = ulid(),
+                seq = seq,
+                body = buildJsonObject {
+                    put("device_id", newG); put("role", "guardian"); put("platform", "ios")
+                    put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", true)
+                },
+            )
         }
         assertFalse(at200.receive(pairedAt(150), now, live = true).state.devices.any { it.deviceId == newG })
         assertTrue(at200.receive(pairedAt(201), now, live = true).state.devices.any { it.deviceId == newG })
@@ -734,7 +674,7 @@ class PhoneStateTest {
 
     @Test
     fun `버린 메시지 안내는 버린 저장과 함께 남는다`() {
-        // U54·7.5: 띠를 보기 전에 앱이 죽어도 다시 켜면 알린다. 보낼 함에서 빼는 같은 상태에 type을 적고 state.json으로 다시 읽는다.
+        // 띠를 보기 전에 앱이 죽어도 다시 켜면 알린다. 보낼 함에서 빼는 같은 상태에 type을 적고 state.json으로 다시 읽는다.
         val s = owner.startFeeding(now)
         val item = s.outbox.single()
         val dropped = s.afterSend(item, SendResult.Failed(400, "bad_request"), now)
@@ -751,9 +691,9 @@ class PhoneStateTest {
         assertEquals(2, twice.unseenDrops.size)
         assertEquals("수유 기록을 차로 보내지 못했어요", withDropNotices(null, twice.unseenDrops.values.toList()))
         assertEquals(listOf("feeding_started"), (twice.unseenDrops - dropped.unseenDrops.keys).values.toList())
-        // 보내는 사이 새 요약이 바꾼 옛것(보낼 함에 없음)의 실패는 알리지 않는다(R19).
+        // 보내는 사이 새 요약이 바꾼 옛것(보낼 함에 없음)의 실패는 알리지 않는다.
         assertTrue(s.copy(outbox = emptyList()).afterSend(item, SendResult.Failed(400, "bad_request"), now).unseenDrops.isEmpty())
-        // 기록 지우기는 다른 안내를 남기고(띠를 닫을 때만 지운다), 지운 수유의 버림 안내와 그 시각은 걷는다(7.4 '기록을 지운다').
+        // 기록 지우기는 다른 안내를 남기고(띠를 닫을 때만 지운다), 지운 수유의 버림 안내와 그 시각은 걷는다('기록을 지운다').
         val mixed = dropped.copy(unseenDrops = dropped.unseenDrops + ("m" to "song_removed"))
         assertTrue(mixed.droppedFeedingAt.isNotEmpty())
         assertEquals(mapOf("m" to "song_removed"), mixed.clearedRecords().unseenDrops)
@@ -762,7 +702,7 @@ class PhoneStateTest {
 
     @Test
     fun `보내는 중인 메시지는 만료 정리에서 빼고 결과를 기다린다`() {
-        // 7.5: 보내는 사이 7일을 넘겨도 정리가 먼저 지우고 실패로 적으면, 201을 받아도 실패 표시와 띠가 남는다.
+        // 보내는 사이 7일을 넘겨도 정리가 먼저 지우고 실패로 적으면, 201을 받아도 실패 표시와 띠가 남는다.
         val s = owner.startFeeding(now)
         val item = s.outbox.single()
         val late = now + KEEP_IDS_MS
@@ -779,12 +719,12 @@ class PhoneStateTest {
 
     private val seoul = ZoneId.of("Asia/Seoul")
     private val care1 = CareFile(migratedFeedings = true).start(CareKind.FEED, now - 60 * MINUTE, seoul.id).file
-    // 오늘 값은 없지만 기록에서 온 값(마지막 기저귀 시각)이 있는 폰: 날이 바뀌어도 내용이 같다. 빈 요약은 처음에 보내지 않는다(U61).
+    // 오늘 값은 없지만 기록에서 온 값(마지막 기저귀 시각)이 있는 폰: 날이 바뀌어도 내용이 같다. 빈 요약은 처음에 보내지 않는다.
     private val oldOnly = CareFile(sleepDiaperEnabled = true, migratedFeedings = true).start(CareKind.DIAPER, now - 10 * DAY, seoul.id).file
 
     @Test
     fun `기록이 없는 폰은 요약을 보내지 않고 지운 뒤에는 빈 요약을 보낸다`() {
-        // U61: 같은 차에 owner 폰이 여럿이면 차는 마지막 요약을 쓴다. 기록이 없는 새 폰이 빈 요약으로 다른 폰의 요약을 덮지 않는다.
+        // 같은 차에 owner 폰이 여럿이면 차는 마지막 요약을 쓴다. 기록이 없는 새 폰이 빈 요약으로 다른 폰의 요약을 덮지 않는다.
         val empty = CareFile(migratedFeedings = true)
         assertEquals(owner, owner.reconciledCareSummary(empty, now, seoul))
         // 지운(되돌리기를 기다리는) 기록만, 메모만, 옛 수유만 있어도 요약에 기록에서 온 값이 없어 같다(판단은 보낼 요약 그대로 본다).
@@ -795,7 +735,7 @@ class PhoneStateTest {
         // 값이 하나라도 있으면 보낸다(오늘 수유, 옛 기저귀 시각).
         assertEquals(listOf("care_summary"), types(owner.reconciledCareSummary(care1, now, seoul)))
         assertEquals(listOf("care_summary"), types(owner.reconciledCareSummary(oldOnly, now, seoul)))
-        // 이 연결에서 요약을 넣은 적이 있으면, 기록을 지운 뒤 빈 요약을 보내 차의 옛 요약을 바꾼다(R10).
+        // 이 연결에서 요약을 넣은 적이 있으면, 기록을 지운 뒤 빈 요약을 보내 차의 옛 요약을 바꾼다.
         val cleared = owner.reconciledCareSummary(care1, now, seoul).clearedRecords(care1.events.map { it.id }).copy(clearingCareIds = null)
         assertEquals(listOf("care_summary"), types(cleared.reconciledCareSummary(empty, now + MINUTE, seoul)))
     }
@@ -804,7 +744,7 @@ class PhoneStateTest {
 
     @Test
     fun `돌봄 요약은 owner가 바뀌었을 때만 보내고 보낼 함에 하나만 둔다`() {
-        // R19(U45): as_of를 뺀 body가 보낸 것과 다를 때만, 안 보낸 요약은 하나만. 표시는 같은 상태에서 바뀐다.
+        // as_of를 뺀 body가 보낸 것과 다를 때만, 안 보낸 요약은 하나만. 표시는 같은 상태에서 바뀐다.
         val a = owner.reconciledCareSummary(care1, now, seoul)
         val first = a.outbox.single()
         assertEquals("care_summary", first.envelope.type)
@@ -822,7 +762,7 @@ class PhoneStateTest {
         val c = b.reconciledCareSummary(care2.start(CareKind.FEED, now + 2 * MINUTE, seoul.id).file, now + 2 * MINUTE, seoul)
         assertEquals(listOf("care_summary", "feeding_started"), types(c))
         assertEquals(3, feeds(c))
-        // guardian·연결 없음·옮기기(R11) 전은 보내지 않는다. 끊으면 새 상태라 표시도 없다(R9).
+        // guardian·연결 없음·옮기기 전은 보내지 않는다. 끊으면 새 상태라 표시도 없다.
         assertEquals(guardian, guardian.reconciledCareSummary(care1, now, seoul))
         assertEquals(PhoneState(), PhoneState().reconciledCareSummary(care1, now, seoul))
         assertEquals(owner, owner.reconciledCareSummary(care1.copy(migratedFeedings = false), now, seoul))
@@ -830,7 +770,7 @@ class PhoneStateTest {
 
     @Test
     fun `요약을 바꿔 넣어도 자리와 다시 보낼 기다림을 이어받는다`() {
-        // 7.5 넣은 순서·같은 id 다시 보내기. 안 보낸 요약만 바꾸며 그 자리에 둔다.
+        // 넣은 순서·같은 id 다시 보내기. 안 보낸 요약만 바꾸며 그 자리에 둔다.
         val queued = owner.reconciledCareSummary(care1, now, seoul).startFeeding(now)
         val s1 = queued.outbox.first()
         // 같은 날 같은 내용이면 그대로 둔다: 같은 id로 다시 보내야 응답을 잃어도 중계가 한 번만 처리한다.
@@ -841,7 +781,7 @@ class PhoneStateTest {
         assertEquals(listOf("care_summary", "feeding_started"), types(changed))
         assertNotEquals(s1.envelope.id, changed.outbox.first().envelope.id)
         assertEquals(2, feeds(changed))
-        // 응답을 잃은(중계가 받았을 수 있는) 요약은 바꾸지 않고 새것을 뒤에 둔다(U57): 새것도 그 기다림 뒤에 간다.
+        // 응답을 잃은(중계가 받았을 수 있는) 요약은 바꾸지 않고 새것을 뒤에 둔다: 새것도 그 기다림 뒤에 간다.
         val unsure = queued.markSentOnce(s1.envelope.id).afterSend(s1, SendResult.Offline, now)
         val behind = unsure.reconciledCareSummary(care2, now + 10_000, seoul)
         assertEquals(listOf(s1.envelope.id), behind.outbox.take(1).map { it.envelope.id })
@@ -854,13 +794,13 @@ class PhoneStateTest {
         assertNotEquals(s1.envelope.id, replaced.outbox.first().envelope.id)
         assertEquals(now + 60_000, replaced.outbox.first().nextTryAt)
         assertFalse(replaced.outbox.first().networkWait)
-        // 보내 보지 않은 요약의 망 실패 기다림은 새것이 이유까지 이어받는다: 망이 돌아오면 당긴다(7.5, iOS `SummaryRules.enqueue`와 같다).
+        // 보내 보지 않은 요약의 망 실패 기다림은 새것이 이유까지 이어받는다: 망이 돌아오면 당긴다(iOS `SummaryRules.enqueue`와 같다).
         val swappedNet = queued.afterSend(s1, SendResult.Offline, now).reconciledCareSummary(care2, now + 10_000, seoul)
         assertNotEquals(s1.envelope.id, swappedNet.outbox.first().envelope.id)
         assertTrue(swappedNet.outbox.first().networkWait)
-        // 날이 바뀌면 같은 내용이어도 새 as_of로 바꾼다(1.4 24시간·'오늘' 값).
+        // 날이 바뀌면 같은 내용이어도 새 as_of로 바꾼다(24시간·'오늘' 값).
         val nextDay = java.time.Instant.ofEpochMilli(now).atZone(seoul).toLocalDate().plusDays(1).atStartOfDay(seoul).toInstant().toEpochMilli()
-        val quiet = oldOnly // 오늘 기록이 없는 폰(옛 기록만). 기록이 아예 없으면 보내지 않는다(U61)
+        val quiet = oldOnly // 오늘 기록이 없는 폰(옛 기록만). 기록이 아예 없으면 보내지 않는다
         val pend = owner.reconciledCareSummary(quiet, now, seoul)
         val rolled = pend.reconciledCareSummary(quiet, nextDay, seoul)
         assertEquals(rfc3339(nextDay, seoul), rolled.outbox.single().envelope.body["as_of"]?.jsonPrimitive?.content)
@@ -882,7 +822,7 @@ class PhoneStateTest {
         val dropped = a.afterSend(s1, SendResult.Failed(400, "unknown_type"), now)
         assertNull(dropped.lastSentCareSummary)
         assertEquals(listOf("care_summary"), types(dropped.reconciledCareSummary(care1, now + MINUTE, seoul)))
-        // 시계가 뒤로 갔으면(지금이 마지막 as_of보다 이르다) 차가 무시했을 수 있어 다시 보낸다(3.3).
+        // 시계가 뒤로 갔으면(지금이 마지막 as_of보다 이르다) 차가 무시했을 수 있어 다시 보낸다.
         val sent = a.afterSend(s1, SendResult.Sent(buildJsonObject { }), now)
         val back = sent.reconciledCareSummary(care1, now - MINUTE, seoul)
         assertEquals(listOf("care_summary"), types(back))
@@ -895,14 +835,14 @@ class PhoneStateTest {
         assertEquals(rfc3339(now + 5 * MINUTE, seoul), freed.outbox.single().envelope.body["as_of"]?.jsonPrimitive?.content)
         val caught = backSent.reconciledCareSummary(care1, now + 10_000, seoul).let { it.afterSend(it.outbox.single(), SendResult.Sent(buildJsonObject { }), now) }
         assertEquals(caught, caught.reconciledCareSummary(care1, now + 20_000, seoul))
-        // 폰 시계가 중계보다 5분 넘게 앞서 보냈으면 차가 미래 요약으로 버렸을 수 있어 표시를 지운다(3.3).
+        // 폰 시계가 중계보다 5분 넘게 앞서 보냈으면 차가 미래 요약으로 버렸을 수 있어 표시를 지운다.
         assertNull(a.afterSend(s1, SendResult.Sent(buildJsonObject { }), now, aheadMs = 6 * MINUTE).lastSentCareSummary)
         assertNotNull(a.afterSend(s1, SendResult.Sent(buildJsonObject { }), now, aheadMs = 4 * MINUTE).lastSentCareSummary)
     }
 
     @Test
     fun `기록 지우기를 마치기 전에는 요약을 보내지 않는다`() {
-        // R10·R19: 상태 저장 뒤 care.json을 쓰다 죽거나 저장에 실패해도, 남은 기록으로 요약을 보내지 않고 다음 저장·시작에 이어서 지운다.
+        // 상태 저장 뒤 care.json을 쓰다 죽거나 저장에 실패해도, 남은 기록으로 요약을 보내지 않고 다음 저장·시작에 이어서 지운다.
         val ids = care1.events.map { it.id }
         val clearing = owner.reconciledCareSummary(care1, now, seoul).clearedRecords(ids)
         assertEquals(ids, clearing.clearingCareIds)
@@ -933,11 +873,11 @@ class PhoneStateTest {
 
     @Test
     fun `수유 옮기기 전에는 수유도 요약도 보내지 않는다`() {
-        // R11: 옮기기 전에 보낸 수유 기록은 다음 옮기기에서 다른 id의 수유로 또 옮겨진다(중복). 요약도 수유가 빠진다.
+        // 옮기기 전에 보낸 수유 기록은 다음 옮기기에서 다른 id의 수유로 또 옮겨진다(중복). 요약도 수유가 빠진다.
         val unmigrated = care1.copy(migratedFeedings = false)
         assertEquals(owner, owner.reconciled(unmigrated, now, seoul))
         assertEquals(listOf("feeding_started", "care_summary"), types(owner.reconciled(care1, now, seoul)))
-        // 보내기 직전 재계산·지우기 마침은 요약만 맞춘다: 수유는 정해진 네 계기에서만 보낸다(R6). 막는 조건은 같다.
+        // 보내기 직전 재계산·지우기 마침은 요약만 맞춘다: 수유는 정해진 네 계기에서만 보낸다. 막는 조건은 같다.
         assertEquals(listOf("care_summary"), types(owner.reconciledSummary(care1, now, seoul)))
         assertEquals(owner, owner.reconciledSummary(unmigrated, now, seoul))
         assertEquals(owner.copy(clearingCareIds = listOf("x")), owner.copy(clearingCareIds = listOf("x")).reconciledSummary(care1, now, seoul))
@@ -945,8 +885,8 @@ class PhoneStateTest {
 
     @Test
     fun `날이 바뀌면 같은 내용의 요약도 다시 보낸다`() {
-        // 1.4: 날이 바뀌면 차는 앞 요약의 '오늘' 값을 빼고 24시간 뒤에는 요약을 쓰지 않는다(iOS와 같음).
-        val nothing = oldOnly // 오늘 기록이 없는 폰(옛 기록만). 기록이 아예 없으면 보내지 않는다(U61)
+        // 날이 바뀌면 차는 앞 요약의 '오늘' 값을 빼고 24시간 뒤에는 요약을 쓰지 않는다(iOS와 같음).
+        val nothing = oldOnly // 오늘 기록이 없는 폰(옛 기록만). 기록이 아예 없으면 보내지 않는다
         val a = owner.reconciledCareSummary(nothing, now, seoul).let { it.afterSend(it.outbox.single(), SendResult.Sent(buildJsonObject { }), now) }
         assertEquals(a, a.reconciledCareSummary(nothing, now + MINUTE, seoul))
         val nextDay = java.time.Instant.ofEpochMilli(now).atZone(seoul).toLocalDate().plusDays(1).atStartOfDay(seoul).toInstant().toEpochMilli()
@@ -964,7 +904,7 @@ class PhoneStateTest {
 
     @Test
     fun `늦게 온 기기 목록은 그사이 받은 차의 연결을 덮지 않는다`() {
-        // 7.2: 실시간으로 받은 차의 봉투는 그 자리에서 차 행을 켠다. 그 전에 요청한 목록이 늦게 와 '꺼짐'으로 되돌리면 안 된다.
+        // 실시간으로 받은 차의 봉투는 그 자리에서 차 행을 켠다. 그 전에 요청한 목록이 늦게 와 '꺼짐'으로 되돌리면 안 된다.
         val car = DeviceInfo(deviceId = "d_CAR", role = Role.CAR, platform = Platform.PLEOS, pairedAt = rfc3339(now - DAY), lastSeenAt = rfc3339(now - HOUR), online = false)
         val stale = owner.mergeDevices(5, listOf(car))
         assertFalse(stale.devices.single().online)
@@ -975,20 +915,20 @@ class PhoneStateTest {
 
     @Test
     fun `메시지 429는 그 항목을 지워도 Retry-After까지 기다린다`() {
-        // 1.1 '429 … Retry-After 뒤', 1.4 메시지는 기기당 분당 60회. 항목을 지우거나 바꿔도, 다시 켜도 지킨다.
+        // '429 … Retry-After 뒤', 메시지는 기기당 분당 60회. 항목을 지우거나 바꿔도, 다시 켜도 지킨다.
         val s = owner.startFeeding(now)
         val item = s.outbox.single()
         val held = s.afterSend(item, SendResult.Failed(429, "rate_limited", 60), now)
         assertEquals(now + 60_000, held.messageHoldUntil)
         assertEquals(held.messageHoldUntil, held.clearedRecords().messageHoldUntil)
-        // 첫 보내기가 429로 거절된 요약은 기록 지우기가 뺀다(중계에 없다, R10). 빈 요약도 그 기다림 뒤에 간다.
+        // 첫 보내기가 429로 거절된 요약은 기록 지우기가 뺀다(중계에 없다). 빈 요약도 그 기다림 뒤에 간다.
         val summary = owner.reconciledCareSummary(care1, now, seoul)
         val sid = summary.outbox.single().envelope.id
         val rejected = summary.markSentOnce(sid).afterSend(summary.outbox.single(), SendResult.Failed(429, "rate_limited", 60), now)
         val wiped = rejected.clearedRecords(care1.events.map { it.id })
         assertTrue(wiped.outbox.none { it.envelope.type == "care_summary" })
         assertEquals(now + 60_000, wiped.messageHoldUntil)
-        // 응답을 잃은 요약은 남긴다(중계가 받았을 수 있다, U57).
+        // 응답을 잃은 요약은 남긴다(중계가 받았을 수 있다).
         val unsure = summary.markSentOnce(sid).afterSend(summary.outbox.single(), SendResult.Offline, now)
         assertEquals(listOf(sid), unsure.clearedRecords(care1.events.map { it.id }).outbox.map { it.envelope.id })
         // 연결 전 실패(이름 풀기·연결 실패)도 중계에 없는 것이 확정이다: 기록 지우기가 뺀다. 다시 보낼 간격은 늘린다.
@@ -996,7 +936,7 @@ class PhoneStateTest {
         assertFalse(unreached.outbox.single().tried(null))
         assertEquals(1, unreached.outbox.single().attempts)
         assertTrue(unreached.clearedRecords(care1.events.map { it.id }).outbox.none { it.envelope.type == "care_summary" })
-        // 앞서 응답을 잃은 요약은 그 뒤 연결 전에 실패해도 남긴다(앞 시도가 늦게 닿을 수 있다, U57).
+        // 앞서 응답을 잃은 요약은 그 뒤 연결 전에 실패해도 남긴다(앞 시도가 늦게 닿을 수 있다).
         val lostThenUnreached = unsure.afterSend(unsure.outbox.single(), SendResult.Unreached, now + 1_000)
         assertEquals(listOf(sid), lostThenUnreached.clearedRecords(care1.events.map { it.id }).outbox.map { it.envelope.id })
         assertEquals(held, ProtocolJson.decodeFromString(PhoneState.serializer(), ProtocolJson.encodeToString(PhoneState.serializer(), held)))
@@ -1011,8 +951,8 @@ class PhoneStateTest {
 
     @Test
     fun `보내는 중인 요약은 바꾸지 않고 뒤에 둔다`() {
-        // U57: 맨 앞 요약이 이미 보낸 적이 있으면 바꾸지 않고 그 뒤에 새것을 하나 둔다(뒤에 있으면 그것만 바꾼다).
-        // 바꿔치우면 같은 초의 옛 요약이 중계에 늦게 닿아 seq가 커져 새 요약을 덮을 수 있다(3.3).
+        // 맨 앞 요약이 이미 보낸 적이 있으면 바꾸지 않고 그 뒤에 새것을 하나 둔다(뒤에 있으면 그것만 바꾼다).
+        // 바꿔치우면 같은 초의 옛 요약이 중계에 늦게 닿아 seq가 커져 새 요약을 덮을 수 있다.
         val a = owner.reconciledCareSummary(care1, now, seoul)
         val s1 = a.outbox.single()
         val care2 = care1.start(CareKind.FEED, now, seoul.id).file
@@ -1043,7 +983,7 @@ class PhoneStateTest {
 
     @Test
     fun `보내지 않고 멈춘 요약은 표시를 걷고 그사이 남긴 것을 정리한다`() {
-        // U57: '보내 봄'을 적은 뒤 429 기다림으로 보내지 않고 멈췄다. 그사이 그 표시 때문에 남긴 것을 걷는 저장에서 정리한다.
+        // '보내 봄'을 적은 뒤 429 기다림으로 보내지 않고 멈췄다. 그사이 그 표시 때문에 남긴 것을 걷는 저장에서 정리한다.
         val a = owner.reconciledCareSummary(care1, now, seoul)
         val s1 = a.outbox.single().envelope.id
         val marked = a.markSentOnce(s1)
@@ -1078,14 +1018,14 @@ class PhoneStateTest {
 
     @Test
     fun `수유 옮기기를 마치기 전에는 끊어도 옮길 원본을 남긴다`() {
-        // R11·U22: care.json 저장이 실패해 옮기기를 마치지 못한 채 끊기·새 연결·연결 없는 시작을 거쳐도, 다음 옮기기가 같은 원본을 옮긴다.
+        // care.json 저장이 실패해 옮기기를 마치지 못한 채 끊기·새 연결·연결 없는 시작을 거쳐도, 다음 옮기기가 같은 원본을 옮긴다.
         val old = owner.startFeeding(now)
         assertEquals(old.feedings, PhoneState().keepingClear(old, migrating = true).migrationFeedings)
         assertEquals(old.feedings, PhoneState.atStart(old, recovered = null, connected = false, migrating = true).migrationFeedings)
         // 옮기기를 마쳤으면 옛 연결의 것이라 남기지 않는다.
         assertTrue(PhoneState().keepingClear(old).migrationFeedings.isEmpty())
         assertEquals(PhoneState(), PhoneState.atStart(old, recovered = null, connected = false))
-        // 새 차에 붙으면 24시간 안의 최신 수유가 다시 간다(U6): 넘어온 원본은 새 연결의 보낸 표시를 채우지 않는다(U22는 지금 연결의 기록만).
+        // 새 차에 붙으면 24시간 안의 최신 수유가 다시 간다: 넘어온 원본은 새 연결의 보낸 표시를 채우지 않는다(지금 연결의 기록만).
         val fresh = PhoneState.paired("c_NEW", "d_NEW", Role.OWNER, now).keepingClear(old, migrating = true)
         assertNull(fresh.markedMigratedFeedings().lastSentFeedingAt)
         val migrated = CareFile().migrated(fresh.feedings + fresh.migrationFeedings, seoul.id)

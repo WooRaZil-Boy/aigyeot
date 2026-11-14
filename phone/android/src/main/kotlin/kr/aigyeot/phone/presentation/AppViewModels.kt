@@ -5,13 +5,13 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.domain.model.BANNER_MS
 import kr.aigyeot.phone.domain.model.Banner
@@ -27,14 +27,14 @@ import kr.aigyeot.phone.domain.state.LinkSwitch
 import kr.aigyeot.phone.domain.state.Notices
 import kr.aigyeot.phone.domain.usecase.KeepConnected
 import kr.aigyeot.phone.domain.usecase.LoseConnection
-import kr.aigyeot.phone.domain.usecase.Pair
+import kr.aigyeot.phone.domain.usecase.PairDevice
 import kr.aigyeot.phone.domain.usecase.SendOutbox
 import kr.aigyeot.shared.Role
 
 /** ViewModel 범위. 화면은 메인 흐름(`viewModelScope`와 같은 디스패처), 시험은 가짜 범위를 넘긴다. ViewModel이 지워지면 취소된다. */
 fun vmScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-/** 원본 StateFlow들에서 화면 상태를 계산한다(P4: 저장하지 않고 쓸 때 계산). 처음 값도 같은 함수로 바로 계산한다. */
+/** 원본 StateFlow들에서 화면 상태를 계산한다(저장하지 않고 쓸 때 계산). 처음 값도 같은 함수로 바로 계산한다. */
 internal fun <T> ViewModel.derive(vararg sources: StateFlow<*>, compute: () -> T): StateFlow<T> =
     combine(sources.toList()) { compute() }.stateIn(viewModelScope, SharingStarted.Eagerly, compute())
 
@@ -45,7 +45,7 @@ data class AppUiState(
     val pairRun: PairRun?,
     val disconnectRun: DisconnectRun?,
     val banner: Banner?,
-    /** 링크·QR로 받은 코드. 확인 화면을 거친 뒤에만 쓴다(G17). 확인 화면 경로에 실으면 비운다. */
+    /** 링크·QR로 받은 코드. 확인 화면을 거친 뒤에만 쓴다. 확인 화면 경로에 실으면 비운다. */
     val pendingCode: String?,
     /** 시스템 알림을 눌러 연 인계 알림 id. */
     val openAlert: String?,
@@ -55,7 +55,7 @@ class AppViewModel(
     private val state: PhoneStateRepository,
     private val notices: Notices,
     private val link: LinkSwitch,
-    private val pair: Pair,
+    private val pair: PairDevice,
     private val lose: LoseConnection,
     scope: CoroutineScope = vmScope(),
     private val bannerMs: Long = BANNER_MS,
@@ -68,7 +68,7 @@ class AppViewModel(
     }
 
     init {
-        // 앱 안 배너(연결 계약 5.6): 뜬 지 [bannerMs] 뒤 그 배너만 닫는다. 새 배너가 뜨거나 닫히면 앞 기다림은 버리고 새로 센다(소비 코루틴 하나).
+        // 앱 안 배너: 뜬 지 [bannerMs] 뒤 그 배너만 닫는다. 새 배너가 뜨거나 닫히면 앞 기다림은 버리고 새로 센다(소비 코루틴 하나).
         viewModelScope.launch {
             notices.banner.collectLatest { b ->
                 if (b == null) return@collectLatest
@@ -80,13 +80,13 @@ class AppViewModel(
 
     /**
      * 새로 연 화면(저장된 화면 상태 없음)에서만: 지난 연결 결과를 받을 확인 화면이 없다. 실패·지난 결과는 새 링크를 막지 않게 먼저 비우고,
-     * 지금 연결의 성공은 남겨 완료 화면으로 보낸다(U52, 7.1). 화면을 다시 만든 때(회전·시스템이 화면만 없앤 뒤)는 부르지 않는다.
+     * 지금 연결의 성공은 남겨 완료 화면으로 보낸다. 화면을 다시 만든 때(회전·시스템이 화면만 없앤 뒤)는 부르지 않는다.
      */
     fun clearStalePairRun() = pair.clearStale()
 
     /**
-     * 시작 화면은 처음 한 번만 정한다. 앞 실행의 강제 끊김을 고르기 전에 죽었으면 끊김 화면부터, 완료 화면을 넘기기 전에 죽었으면 그 화면부터(7.1),
-     * 연결이 없어도 '먼저 기록만 쓸게요'를 골랐으면 바로 탭으로(U7).
+     * 시작 화면은 처음 한 번만 정한다. 앞 실행의 강제 끊김을 고르기 전에 죽었으면 끊김 화면부터, 완료 화면을 넘기기 전에 죽었으면 그 화면부터,
+     * 연결이 없어도 '먼저 기록만 쓸게요'를 골랐으면 바로 탭으로.
      */
     fun startRoute(): Route = when {
         state.connection.value is Connection.Gone -> Route.Gone
@@ -96,7 +96,7 @@ class AppViewModel(
     /** 이력을 비우고 갈 기본 화면. */
     fun afterReset(): Route = if (state.creds == null && !link.recordsOnly) Route.Intro else Route.Home
 
-    /** 연결 링크(7.6). U52: 받은 순간에 연결이 돌고 있으면 버린다. 버렸으면 짧게 보일 글. */
+    /** 연결 링크. 받은 순간에 연결이 돌고 있으면 버린다. 버렸으면 짧게 보일 글. */
     fun onLink(raw: String): String? {
         val code = codeFromLink(raw) ?: return "올바른 연결 링크가 아니에요"
         if (!pair.canTakeLink()) return PAIR_BUSY
@@ -108,7 +108,7 @@ class AppViewModel(
         pendingCode.value = null
     }
 
-    /** 인계 알림 누름(5.3). 밖에서 온 값이라 ULID가 아니면 버린다(경로에 그대로 들어간다). */
+    /** 인계 알림 누름. 밖에서 온 값이라 ULID가 아니면 버린다(경로에 그대로 들어간다). */
     fun onAlert(id: String) {
         if (isUlid(id)) openAlert.value = id
     }
@@ -135,7 +135,7 @@ data class ConnectUiState(val run: PairRun?, val lockedUntil: Long?, val connect
 
 class ConnectViewModel(
     private val state: PhoneStateRepository,
-    private val pair: Pair,
+    private val pair: PairDevice,
     scope: CoroutineScope = vmScope(),
 ) : ViewModel(scope) {
     val ui: StateFlow<ConnectUiState> = derive(pair.run, pair.lockedUntil, state.connection) {

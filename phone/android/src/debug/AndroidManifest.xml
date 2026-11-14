@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- debug 빌드만: 로컬 중계(wrangler dev)로 평문 HTTP를 허용한다(계약 0장). release는 HTTPS·WSS만. -->
+<!-- debug 빌드만: 로컬 중계(wrangler dev)로 평문 HTTP를 허용한다. release는 HTTPS·WSS만. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:networkSecurityConfig="@xml/network_security_config">
-        <!-- 시연 시드(U50). adb shell만 보낼 수 있게 DUMP 권한을 건다(다른 앱은 이 권한을 받을 수 없다). -->
+        <!-- 시연 시드. adb shell만 보낼 수 있게 DUMP 권한을 건다(다른 앱은 이 권한을 받을 수 없다). -->
         <receiver
             android:name=".DebugSeedReceiver"
             android:exported="true"

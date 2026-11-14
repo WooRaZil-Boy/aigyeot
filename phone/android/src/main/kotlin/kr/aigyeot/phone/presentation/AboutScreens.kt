@@ -4,18 +4,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kr.aigyeot.phone.BuildConfig
 import kr.aigyeot.phone.domain.model.CareJson
 
-// 정보·라이선스(phone-care-plan U28·U30). 목록은 `scripts/oss_licenses.py`가 release 런타임 의존성의 POM에서 만든 assets/licenses/oss.json이다.
+// 정보·라이선스. 목록은 `scripts/oss_licenses.py`가 release 런타임 의존성의 POM에서 만든 assets/licenses/oss.json이다.
 // 전문이 있는 것(Apache 2.0, protobuf BSD-3-Clause)은 전문을, Google 약관은 이름과 POM의 공식 주소를 보인다.
 
 @Serializable

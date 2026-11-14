@@ -22,9 +22,9 @@ import kr.aigyeot.phone.domain.state.LinkSwitch
 import kr.aigyeot.phone.domain.state.Notices
 import kr.aigyeot.shared.Role
 
-// 연결 끊기(사용자 끊기 U25 b, 강제 끊김 U25 a, 둘의 공통 정리). 연결 세대가 바뀌면 연결 반복은 KeepConnected가 자격 구독으로 멈춘다(P6).
+// 연결 끊기(사용자 끊기, 강제 끊김, 둘의 공통 정리). 연결 세대가 바뀌면 연결 반복은 KeepConnected가 자격 구독으로 멈춘다.
 
-/** 연결 캐시 지우기(끊기·401 공통, 7.4). 돌봄 기록과 지우다 만 '기록 지우기'는 남긴다(R9·R10). */
+/** 연결 캐시 지우기(끊기·401 공통). 돌봄 기록과 지우다 만 '기록 지우기'는 남긴다. */
 class WipeLink(
     private val state: PhoneStateRepository,
     private val care: CareRepository,
@@ -52,7 +52,7 @@ class WipeLink(
     }
 }
 
-/** 어느 요청이든 401, 소켓 닫기 4001(7.1 "어디서든 → GONE"). 사용자 끊기 중이면 그 끊기에 맡긴다. */
+/** 어느 요청이든 401, 소켓 닫기 4001("어디서든 → GONE"). 사용자 끊기 중이면 그 끊기에 맡긴다. */
 class LoseConnection(
     private val state: PhoneStateRepository,
     private val link: LinkSwitch,
@@ -75,13 +75,13 @@ class LoseConnection(
     suspend fun lost(c: Credentials) {
         if (!state.isCurrent(c) || absorbed(c)) return
         link.lostLock.withLock {
-            // 잠금을 기다리는 사이 사용자 끊기가 시작됐으면 그 끊기가 결과를 맡는다(U25 b, 실패하면 그 끊기가 GONE으로 보낸다).
+            // 잠금을 기다리는 사이 사용자 끊기가 시작됐으면 그 끊기가 결과를 맡는다(실패하면 그 끊기가 GONE으로 보낸다).
             if (!state.isCurrent(c) || absorbed(c)) return
             // 정리를 마친 뒤 GONE을 켠다. 그사이 새 연결을 시작했으면 켜지 않는다: 확인 화면이 그 결과를 맡는다.
-            // 바꿔 연결(끊고 연결하기) 중이면 그 연결은 이 끊김 때문에 멈추므로 GONE을 켠다(7.1).
+            // 바꿔 연결(끊고 연결하기) 중이면 그 연결은 이 끊김 때문에 멈추므로 GONE을 켠다.
             val gen = link.pairGen
             if (link.leavingId() == c.deviceId) {
-                // 앞 프로세스가 보낸 사용자 끊기가 중계에 닿았다: 강제 끊김이 아니라 U25 b로 마친다.
+                // 앞 프로세스가 보낸 사용자 끊기가 중계에 닿았다: 강제 끊김이 아니라 사용자 끊기로 마친다.
                 link.leftConfirmed(c) // 401·4001도 끊기 확인이다: 정리 도중 죽어도 다음 실행이 묻지 않고 마친다
                 if (wipe(c)) {
                     link.goneCleanup(GoneCleanupEvent.UserLeft(c.deviceId))
@@ -92,7 +92,7 @@ class LoseConnection(
                 }
                 return
             }
-            // 정리한 뒤 GONE 화면을 고르기 전에 죽어도 다음 실행이 GONE을 보이게 먼저 적는다(9장).
+            // 정리한 뒤 GONE 화면을 고르기 전에 죽어도 다음 실행이 GONE을 보이게 먼저 적는다.
             val marked = link.goneCleanupStarted(c.deviceId)
             // 표시를 적는 사이 사용자 끊기가 시작됐다: 그 끊기에 맡기고 표시를 지운다.
             if (absorbed(c)) {
@@ -126,7 +126,7 @@ class LoseConnection(
     }
 }
 
-/** 설정의 '연결 끊기'(U25 b). 중계의 토큰을 지워야 해서 인터넷이 필요하다(7.2). */
+/** 설정의 '연결 끊기'. 중계의 토큰을 지워야 해서 인터넷이 필요하다. */
 class Disconnect(
     private val state: PhoneStateRepository,
     private val relay: RelayClient,
@@ -173,7 +173,7 @@ class Disconnect(
         if (!link.disconnectActive() && link.disconnectRun.value is DisconnectRun.Failed) link.setDisconnectRun(null)
     }
 
-    /** 탭이 끊은 뒤 화면(오늘·띠)을 보였다. 그때까지 끊기 표시를 남겨, 그 전에 죽으면 다음 실행이 다시 보인다(U25 b). */
+    /** 탭이 끊은 뒤 화면(오늘·띠)을 보였다. 그때까지 끊기 표시를 남겨, 그 전에 죽으면 다음 실행이 다시 보인다. */
     fun shown() {
         link.clearDisconnectRun()
         if (state.creds == null && !link.secretsLeft) link.leavingCleared(now = true)
@@ -201,7 +201,7 @@ class Disconnect(
                 RelayResult.Offline, RelayResult.Unreached -> "인터넷이 필요해요"
             }.also { failed = it != null }
         } finally {
-            // 끊기가 실패로 끝났는데 그사이 이 연결의 401·4001이 왔다: 중계 토큰은 이미 없으니 GONE으로 간다(7.1).
+            // 끊기가 실패로 끝났는데 그사이 이 연결의 401·4001이 왔다: 중계 토큰은 이미 없으니 GONE으로 간다.
             if (failed) link.goneCleanup(GoneCleanupEvent.LeaveFailed(c.deviceId, link.leave.lostFor(c)))
             if (link.leave.end(failed)) lose.lost(c)
         }
@@ -227,19 +227,19 @@ class Disconnect(
     }
 
     /**
-     * 앞 프로세스가 사용자 끊기 중이거나 끊은 뒤 화면을 보이기 전에, 또는 강제 끊김 정리 중에 죽었다(U25). 시작 화면을 정하기 전에 부른다.
+     * 앞 프로세스가 사용자 끊기 중이거나 끊은 뒤 화면을 보이기 전에, 또는 강제 끊김 정리 중에 죽었다. 시작 화면을 정하기 전에 부른다.
      * 중계에 묻거나 정리하는 일은 메인 흐름의 다음 차례로 미룬다(앱 시작 정리보다 뒤). 자격을 읽지 못한 실행은 어느 쪽인지 알 수 없으니 표시를 남긴다.
      */
     fun recoverAtStart() {
         if (state.credsUnreadableAtStart) return
         val c = state.creds
         link.leavingId()?.let { id ->
-            // 같은 기기의 복구 표시가 있으면 중계가 토큰을 지운 것이 확인됐다. 결과는 사용자 끊기(U25 b)가 맡는다.
+            // 같은 기기의 복구 표시가 있으면 중계가 토큰을 지운 것이 확인됐다. 결과는 사용자 끊기가 맡는다.
             val goneToo = link.goneCleanupPending() == id
             when {
                 // 중계가 끊기를 확인했다: 묻지 않고 정리를 마친다(복구 표시는 정리 뒤 LoseConnection이 걷는다).
                 c?.deviceId == id && (link.leavingDone() || goneToo) -> later { lose.lost(c) }
-                // DELETE가 중계에 닿았는지 모른다. 다시 보내지 않고 중계에 물어, 이미 지웠으면(401) U25 b로 마치고, 남아 있으면 표시만 지운다.
+                // DELETE가 중계에 닿았는지 모른다. 다시 보내지 않고 중계에 물어, 이미 지웠으면(401) 사용자 끊기로 마치고, 남아 있으면 표시만 지운다.
                 c?.deviceId == id -> later { checkLeft(c) }
                 // 정리가 끝났다(자격 없음): 끊기 성공과 같은 결과를 낸다. 저장된 화면이 복원돼도 탭의 오늘로 간다.
                 c == null -> {
@@ -268,7 +268,7 @@ class Disconnect(
 
     /** 앞 프로세스가 끊기를 보낸 뒤 죽었다: 이 기기가 중계에 남았는지만 본다. 오프라인이면 표시를 두고 다음 실행에 다시 본다. */
     private suspend fun checkLeft(c: Credentials) {
-        if (c.role != Role.OWNER) return // guardian은 GET /v1/devices가 403(6.3): 소켓이 붙거나(stillPaired) 401·4001이 오면 확인된다
+        if (c.role != Role.OWNER) return // guardian은 GET /v1/devices가 403: 소켓이 붙거나(stillPaired) 401·4001이 오면 확인된다
         when (val r = relay.devices(c.token)) {
             is RelayResult.Ok -> stillPaired(c)
             is RelayResult.Err -> if (r.status == 401) lose.lost(c) else if (r.status < 500) stillPaired(c)

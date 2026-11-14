@@ -5,7 +5,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.Uri
-import java.io.ByteArrayOutputStream
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
@@ -20,6 +19,7 @@ import kr.aigyeot.phone.domain.repository.Mark
 import kr.aigyeot.phone.domain.repository.MarkEdit
 import kr.aigyeot.phone.domain.repository.NetworkWatcher
 import kr.aigyeot.phone.domain.repository.PushTokens
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 import kotlin.coroutines.resume
 
@@ -64,9 +64,9 @@ class PrefsLinkMarks(context: Context) : LinkMarks {
     }
 
     private fun key(mark: Mark) = when (mark) {
-        Mark.GONE_CLEANUP_PENDING -> "gone_device" // 강제 끊김(401·4001) 정리·확인이 남은 기기 id(재시작 복구 기록, 9장)
-        Mark.LEAVING -> "leaving_device" // 사용자 끊기를 시작한 연결의 기기 id(U25 b), 중계가 확인하면 뒤에 `|done`
-        Mark.PAIR_DONE -> "pair_done_device" // 완료 화면을 아직 넘기지 않은 연결의 기기 id(7.1)
+        Mark.GONE_CLEANUP_PENDING -> "gone_device" // 강제 끊김(401·4001) 정리·확인이 남은 기기 id(재시작 복구 기록)
+        Mark.LEAVING -> "leaving_device" // 사용자 끊기를 시작한 연결의 기기 id, 중계가 확인하면 뒤에 `|done`
+        Mark.PAIR_DONE -> "pair_done_device" // 완료 화면을 아직 넘기지 않은 연결의 기기 id
         Mark.RECORDS_ONLY -> "records_only"
         Mark.ASKED_NOTIFICATIONS -> "asked_notifications"
     }
@@ -74,7 +74,7 @@ class PrefsLinkMarks(context: Context) : LinkMarks {
 
 class FcmPushTokens(private val context: Context, private val log: Logger) : PushTokens {
     /** Firebase 설정 파일이 없으면 null. */
-    @Suppress("DEPRECATION") // Firebase Messaging 26의 register() 대신 계약 5.4의 token을 쓴다
+    @Suppress("DEPRECATION") // Firebase Messaging 26의 register() 대신 token을 쓴다
     override suspend fun token(): String? {
         if (FirebaseApp.getApps(context).isEmpty()) return null
         return withTimeoutOrNull(PUSH_TOKEN_TIMEOUT_MS) {
@@ -107,7 +107,7 @@ class AndroidNetworkWatcher(private val context: Context) : NetworkWatcher {
 }
 
 /**
- * 기록 가져오기(U64·U65): 고른 문서를 메모리로만 읽는다(앱 폴더에 두지 않는다). `limit`바이트까지만 읽어
+ * 기록 가져오기: 고른 문서를 메모리로만 읽는다(앱 폴더에 두지 않는다). `limit`바이트까지만 읽어
  * 너무 큰 파일은 나머지를 읽지 않는다. 열거나 읽지 못하면 null(import.failed).
  */
 suspend fun readDocument(resolver: ContentResolver, uri: String, limit: Int): ByteArray? = withContext(Dispatchers.IO) {

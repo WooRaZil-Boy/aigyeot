@@ -5,9 +5,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-// 돌봄 기록 편집 규칙(C2 타이머·C3 시트). 화면은 동작만 보내고, 입력을 기록으로 만들고 검사하는 일은 여기서 한다(iOS `CareDraft`와 같은 이름).
+// 돌봄 기록 편집 규칙(타이머·시트). 화면은 동작만 보내고, 입력을 기록으로 만들고 검사하는 일은 여기서 한다(iOS `CareDraft`와 같은 이름).
 
-/** 저장 전 검사: R3 문제가 먼저, 그다음 R4 겹침. 시트와 타이머가 같이 쓴다. */
+/** 저장 전 검사: 값 문제가 먼저, 그다음 겹침. 시트와 타이머가 같이 쓴다. */
 sealed interface EditCheck {
     data object Ok : EditCheck
 
@@ -22,7 +22,7 @@ fun CareFile.check(e: CareEvent, now: Long): EditCheck =
 /** 새 기록 시트의 몇 분 전 칩(분). */
 val AGO_CHIPS = listOf(0, 5, 15, 30, 60)
 
-/** 몇 분 전 칩 글(7.1 sheet.chip.*): "지금", "5분 전", "1시간 전". */
+/** 몇 분 전 칩 글(sheet.chip.*): "지금", "5분 전", "1시간 전". */
 fun agoChipText(min: Int) = when (min) {
     0 -> "지금"
     60 -> "1시간 전"
@@ -64,7 +64,7 @@ data class CareDraft(
 
     val endUnknown: Boolean get() = end == null
 
-    /** R13: 고치는 기록은 그 기록의 시간대로 보인다. 새 기록은 기기 시간대. */
+    /** 고치는 기록은 그 기록의 시간대로 보인다. 새 기록은 기기 시간대. */
     val zone: ZoneId get() = original?.let { runCatching { ZoneId.of(it.zone) }.getOrNull() } ?: APP_ZONE
 
     /** 쓸 수 있는가(메모는 글이 있어야 저장한다). */
@@ -104,7 +104,7 @@ data class CareDraft(
 
 /**
  * 몇 분 전 칩: 누른 때 기준으로 시작을 정한다. null('직접')이면 지금 값에서 날짜·시각을 고른다.
- * 시작을 옮겨도 사용자가 고른 끝은 말없이 바꾸지 않는다: 끝이 시작보다 빠르면 저장 검사(R3)가 알린다(C384, setStart도 같다).
+ * 시작을 옮겨도 사용자가 고른 끝은 말없이 바꾸지 않는다: 끝이 시작보다 빠르면 저장 검사가 알린다(setStart도 같다).
  */
 fun CareDraft.pick(chip: Int?, now: Long) =
     if (chip == null) copy(chip = null) else copy(chip = chip, start = now - chip * MINUTE, datePicked = false)
@@ -132,7 +132,7 @@ fun CareDraft.setEndUnknown() = copy(end = null)
 /** 쪽은 고르지 않아도 된다: 고른 칸을 다시 누르면 비운다. */
 fun CareDraft.toggleSide(s: FeedSide) = copy(side = if (side == s) null else s)
 
-/** U17·U24: 메모는 200자(코드 포인트)에서 더 받지 않는다. */
+/** 메모는 200자(코드 포인트)에서 더 받지 않는다. */
 fun CareDraft.setNote(text: String) = if (text.codePointCount(0, text.length) <= NOTE_MAX) copy(note = text) else this
 
 /**
@@ -153,7 +153,7 @@ fun CareDraft.event(now: Long, base: CareEvent? = original): CareEvent {
     ).normalized()
 }
 
-/** 종류에 맞지 않는 칸을 비운다(iOS `CareRules.normalized`): 쪽·양은 수유만(양은 젖병만), 기저귀 종류는 기저귀만, 메모는 앞뒤 빈칸을 걷는다(U37). */
+/** 종류에 맞지 않는 칸을 비운다(iOS `CareRules.normalized`): 쪽·양은 수유만(양은 젖병만), 기저귀 종류는 기저귀만, 메모는 앞뒤 빈칸을 걷는다. */
 fun CareEvent.normalized(): CareEvent = copy(
     feedSide = if (kind == CareKind.FEED) feedSide else null,
     amountMl = if (kind == CareKind.FEED && feedSide == FeedSide.BOTTLE) amountMl else null,
@@ -161,9 +161,9 @@ fun CareEvent.normalized(): CareEvent = copy(
     note = note?.trim()?.ifEmpty { null },
 )
 
-// ---- 기록 시트 v8(U80~U84): 질문·줄 값·저장 단추 글. 화면은 이 글을 그리기만 한다(iOS `CareDraft`와 같은 규칙) ----
+// ---- 기록 시트 v8: 질문·줄 값·저장 단추 글. 화면은 이 글을 그리기만 한다(iOS `CareDraft`와 같은 규칙) ----
 
-/** 7.1 sheet.q.*(U81): 새 기록·고치기·지난 기록이 같은 질문이다. 시트의 읽기 이름도 이것이다. */
+/** sheet.q.*: 새 기록·고치기·지난 기록이 같은 질문이다. 시트의 읽기 이름도 이것이다. */
 fun sheetQuestion(k: CareKind) = when (k) {
     CareKind.FEED -> "어떻게 먹였어요?"
     CareKind.SLEEP -> "언제 잤어요?"
@@ -171,10 +171,10 @@ fun sheetQuestion(k: CareKind) = when (k) {
     CareKind.NOTE -> "무엇을 적을까요?"
 }
 
-/** 시트에서 값을 고르는 자리(U82). 줄은 [SheetField.START]·[END]·[MEMO], [AMOUNT]는 젖병 양 칸이다. */
+/** 시트에서 값을 고르는 자리. 줄은 [SheetField.START]·[END]·[MEMO], [AMOUNT]는 젖병 양 칸이다. */
 enum class SheetField { START, END, MEMO, AMOUNT }
 
-/** 접힌 줄(U82): 수유 = 시작·끝·메모, 기저귀 = 시각·메모, 잠 = 끝·메모(시작은 주인공 칸), 메모 = 시각(글은 주인공 글칸). */
+/** 접힌 줄: 수유 = 시작·끝·메모, 기저귀 = 시각·메모, 잠 = 끝·메모(시작은 주인공 칸), 메모 = 시각(글은 주인공 글칸). */
 val CareDraft.rows: List<SheetField>
     get() = when (kind) {
         CareKind.FEED -> listOf(SheetField.START, SheetField.END, SheetField.MEMO)
@@ -183,7 +183,7 @@ val CareDraft.rows: List<SheetField>
         CareKind.NOTE -> listOf(SheetField.START)
     }
 
-/** 줄 이름(7.1 sheet.row.*). 빈 메모 줄은 누르면 하는 줄 '메모 더하기'(`sheet.memo.add`). */
+/** 줄 이름(sheet.row.*). 빈 메모 줄은 누르면 하는 줄 '메모 더하기'(`sheet.memo.add`). */
 fun CareDraft.rowName(f: SheetField) = when (f) {
     SheetField.START -> if (hasDuration) "시작" else "시각"
     SheetField.END -> "끝"
@@ -192,7 +192,7 @@ fun CareDraft.rowName(f: SheetField) = when (f) {
 }
 
 /**
- * 시작·시각 줄 값(U82): 몇 분 전을 고른 동안 '{시각} · {칩}', 직접 고른 오늘이면 '{시각}', 다른 날·고치기면 '{날짜} {시각}'(`log.date.*`).
+ * 시작·시각 줄 값: 몇 분 전을 고른 동안 '{시각} · {칩}', 직접 고른 오늘이면 '{시각}', 다른 날·고치기면 '{날짜} {시각}'(`log.date.*`).
  */
 fun CareDraft.startValue(now: Long): String {
     val time = koClock(start, zone)
@@ -202,7 +202,7 @@ fun CareDraft.startValue(now: Long): String {
     return if (original != null || this.day != null || day != today) "${dayLabel(day, today)} $time" else time
 }
 
-/** 끝 줄 값(U82): 모르면 '모름'(`sheet.end.unknownValue`), 알면 '{시각} · {길이}'(U27). 끝이 시작보다 이르면 '{시각}'만. */
+/** 끝 줄 값: 모르면 '모름'(`sheet.end.unknownValue`), 알면 '{시각} · {길이}'. 끝이 시작보다 이르면 '{시각}'만. */
 fun CareDraft.endValue(): String {
     val e = end ?: return "모름"
     val time = koClock(e, zone)
@@ -212,7 +212,7 @@ fun CareDraft.endValue(): String {
 /** 메모 줄 값: 적었으면 글 한 줄(넘치면 화면이 말줄임), 비었으면 없음(줄 이름이 '메모 더하기'). */
 fun CareDraft.memoValue(): String? = note.trim().lineSequence().firstOrNull()?.takeIf { it.isNotEmpty() }
 
-/** 저장 검사(R3)에 걸린 탓이 된 자리(U82 끝): 미래인 시각이 시작이면 시작·시각, 끝이면 끝, 끝·길이 → 끝, 양 → 양 칸, 메모 길이 → 메모. */
+/** 저장 검사에 걸린 탓이 된 자리: 미래인 시각이 시작이면 시작·시각, 끝이면 끝, 끝·길이 → 끝, 양 → 양 칸, 메모 길이 → 메모. */
 fun CareProblem.field(): SheetField = when (this) {
     CareProblem.FUTURE_START -> SheetField.START
     CareProblem.FUTURE_END, CareProblem.END_BEFORE_START, CareProblem.TOO_LONG -> SheetField.END
@@ -220,7 +220,7 @@ fun CareProblem.field(): SheetField = when (this) {
     CareProblem.NOTE_TOO_LONG -> SheetField.MEMO
 }
 
-/** 오류 한 줄이 붙는 자리(U82: 탓이 된 칸 바로 아래, iOS와 같음): 접힌 줄, 젖병 양 칸, 주인공 칸(잠 시작·메모 글칸). */
+/** 오류 한 줄이 붙는 자리(탓이 된 칸 바로 아래, iOS와 같음): 접힌 줄, 젖병 양 칸, 주인공 칸(잠 시작·메모 글칸). */
 enum class ErrorSpot { ROW, AMOUNT, HERO }
 
 /** 탓이 된 자리 [f]가 이 시트의 접힌 줄이면 그 줄 아래, 양이면 양 칸 아래, 그 밖(잠 시작·메모 종류의 글)은 주인공 칸 아래. */
@@ -231,20 +231,20 @@ fun CareDraft.errorSpot(f: SheetField): ErrorSpot = when {
 }
 
 /**
- * 쪽 칸의 '지난번'(U80, `sheet.last`, iOS `lastSide`와 같은 규칙): 새 기록(빠른 기록·지난 기록 적기)에만 두고 고치기에서는 숨긴다(null).
+ * 쪽 칸의 '지난번'(`sheet.last`, iOS `lastSide`와 같은 규칙): 새 기록(빠른 기록·지난 기록 적기)에만 두고 고치기에서는 숨긴다(null).
  * 새 기록이면 지우지 않은 가장 늦은 수유의 쪽이다. 표시만 하고 미리 고르지 않는다.
  */
 fun CareFile.sheetLastSide(d: CareDraft): FeedSide? =
     if (d.original != null) null else events.filter { it.kind == CareKind.FEED && it.deletedAt == null }.maxByOrNull { it.startAt }?.feedSide
 
-/** 첫 기록 도움말 조건(U84): 지우지 않은 손 기록이 0건(차 기록 줄은 `care.json`에 없어 세지 않는다). */
+/** 첫 기록 도움말 조건: 지우지 않은 손 기록이 0건(차 기록 줄은 `care.json`에 없어 세지 않는다). */
 val CareFile.firstRecord: Boolean get() = events.none { it.deletedAt == null }
 
-/** U83 저장 단추 글을 줄이는 길이(공백 포함 코드 포인트). */
+/** 저장 단추 글을 줄이는 길이(공백 포함 코드 포인트). */
 const val SAVE_LABEL_MAX = 22
 
 /**
- * 저장 단추 글(U83 `sheet.save.label`): '{시각} {고른 것} {종류} 저장하기'. 시각은 시작(잠이고 끝을 알면 구간), 고른 것은 수유 쪽(젖병이면 양이 있을 때
+ * 저장 단추 글(`sheet.save.label`): '{시각} {고른 것} {종류} 저장하기'. 시각은 시작(잠이고 끝을 알면 구간), 고른 것은 수유 쪽(젖병이면 양이 있을 때
  * '젖병 {n}ml'이고 '수유'를 뺀다, 양이 없으면 '젖병 수유')·기저귀 종류. 메모는 '메모 저장하기'. [shorten]이면 22자를 넘을 때 ① 잠 구간 → 시작만
  * ② 고른 것을 뺀다 ③ 시각을 뺀다 순서로 처음 22자 안에 드는 것을 쓴다(큰 글자는 줄이지 않고 두 줄까지).
  */
@@ -273,7 +273,7 @@ fun CareDraft.saveLabel(shorten: Boolean = true): String {
 fun CareEvent.withStartPicked(hour: Int, minute: Int, limit: Long) =
     copy(startAt = nearestAtOrBefore(hour, minute, startAt, limit, runCatching { ZoneId.of(zone) }.getOrDefault(APP_ZONE)))
 
-/** 끝 시각 고르기(최대 길이를 넘긴 기록, U14): 시작 뒤 처음 오는 그 시각. */
+/** 끝 시각 고르기(최대 길이를 넘긴 기록): 시작 뒤 처음 오는 그 시각. */
 fun CareEvent.withEndPicked(hour: Int, minute: Int) =
     copy(endAt = firstAtOrAfter(hour, minute, startAt, runCatching { ZoneId.of(zone) }.getOrDefault(APP_ZONE)))
 

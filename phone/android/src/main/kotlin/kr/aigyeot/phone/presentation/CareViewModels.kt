@@ -3,8 +3,6 @@ package kr.aigyeot.phone.presentation
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import java.io.File
-import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,19 +14,10 @@ import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareCsv
 import kr.aigyeot.phone.domain.model.CareDraft
-import kr.aigyeot.phone.domain.model.CareProblem
-import kr.aigyeot.phone.domain.model.latestPick
-import kr.aigyeot.phone.domain.model.toggleSide
-import kr.aigyeot.phone.domain.model.setStart
-import kr.aigyeot.phone.domain.model.setNote
-import kr.aigyeot.phone.domain.model.setEndUnknown
-import kr.aigyeot.phone.domain.model.setEnd
-import kr.aigyeot.phone.domain.model.pick
-import kr.aigyeot.phone.domain.model.moveStartDay
-import kr.aigyeot.phone.domain.model.event
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.CareProblem
 import kr.aigyeot.phone.domain.model.CareUndo
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Diaper
@@ -43,9 +32,18 @@ import kr.aigyeot.phone.domain.model.ImportFormat
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SAVE_FAILED
 import kr.aigyeot.phone.domain.model.check
+import kr.aigyeot.phone.domain.model.event
 import kr.aigyeot.phone.domain.model.exportFileName
+import kr.aigyeot.phone.domain.model.latestPick
+import kr.aigyeot.phone.domain.model.moveStartDay
+import kr.aigyeot.phone.domain.model.pick
 import kr.aigyeot.phone.domain.model.problemText
+import kr.aigyeot.phone.domain.model.setEnd
+import kr.aigyeot.phone.domain.model.setEndUnknown
+import kr.aigyeot.phone.domain.model.setNote
+import kr.aigyeot.phone.domain.model.setStart
 import kr.aigyeot.phone.domain.model.toCsv
+import kr.aigyeot.phone.domain.model.toggleSide
 import kr.aigyeot.phone.domain.model.withEndPicked
 import kr.aigyeot.phone.domain.model.withSide
 import kr.aigyeot.phone.domain.model.withStartPicked
@@ -60,8 +58,10 @@ import kr.aigyeot.phone.domain.usecase.KeepConnected
 import kr.aigyeot.phone.domain.usecase.RecordCare
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
+import java.io.File
+import java.time.LocalDate
 
-// 돌봄 기록 화면(phone-care-plan 5·7장)의 ViewModel. 원본은 care.json(CareRepository)·state.json(PhoneStateRepository)이고, 화면 상태는 그것에서 계산한다.
+// 돌봄 기록 화면의 ViewModel. 원본은 care.json(CareRepository)·state.json(PhoneStateRepository)이고, 화면 상태는 그것에서 계산한다.
 
 private val Connection.role: Role? get() = (this as? Connection.Paired)?.creds?.role
 
@@ -82,14 +82,14 @@ class CareTabsViewModel(
     /** 떠 있는 되돌리기 띠(방금 지운 손 기록·가져온 기록). 수명(5초·바뀜)은 RecordCare 한 곳이 정한다. */
     val undo: StateFlow<CareUndo?> = notices.undo
 
-    /** 끝날 때까지 기다릴 작업. 끝난 뒤에도 [undo]가 그 띠면 되돌리기 저장이 실패한 것이다(U38 11-09 보충). */
+    /** 끝날 때까지 기다릴 작업. 끝난 뒤에도 [undo]가 그 띠면 되돌리기 저장이 실패한 것이다. */
     fun undo(u: CareUndo) = recordCare.undo(u)
 
-    /** 끊은 뒤 오늘·띠를 한 번 그렸다(U25 b). */
+    /** 끊은 뒤 오늘·띠를 한 번 그렸다. */
     fun disconnectShown() = disconnect.shown()
 }
 
-/** 오늘 탭(C1). */
+/** 오늘 탭. */
 data class CareUiState(
     val care: CareFile,
     val phone: PhoneState,
@@ -103,7 +103,7 @@ data class CareUiState(
     val owner get() = role == Role.OWNER
 }
 
-/** 오늘 탭(C1). guardian은 인계 알림·최근 리포트도 본다. */
+/** 오늘 탭. guardian은 인계 알림·최근 리포트도 본다. */
 class TodayViewModel(
     state: PhoneStateRepository,
     care: CareRepository,
@@ -120,18 +120,18 @@ class TodayViewModel(
     fun start(kind: CareKind) = recordCare.start(kind)
     fun clearCareNotice() = notices.clearCare()
 
-    /** 막 저장한 기록 id(U88 하루 띠 새 표시). 띠가 보인 뒤 걷는다. */
+    /** 막 저장한 기록 id(하루 띠 새 표시). 띠가 보인 뒤 걷는다. */
     val fresh: StateFlow<String?> = notices.fresh
     fun clearFresh(id: String) = notices.clearFresh(id)
 
-    /** 알림 권한은 처음 타이머를 시작할 때 한 번만 묻는다(9장). */
+    /** 알림 권한은 처음 타이머를 시작할 때 한 번만 묻는다. */
     fun takeNotificationAsk() = lifecycle.takeNotificationAsk()
     fun refreshOngoingNotice() = lifecycle.refreshOngoingNotice()
 }
 
-/** 타이머(C2). 끝났거나 지운 기록이면 `event`가 null이고 화면이 닫힌다. */
+/** 타이머. 끝났거나 지운 기록이면 `event`가 null이고 화면이 닫힌다. */
 data class TimerUiState(val id: String, val care: CareFile, val connected: Boolean, val guardian: Boolean) {
-    /** 이 타이머의 기록(P4: 돌봄 파일에서 찾는다). 지웠으면 null. */
+    /** 이 타이머의 기록(돌봄 파일에서 찾는다). 지웠으면 null. */
     val event: CareEvent? get() = care.events.find { it.id == id }
 }
 
@@ -158,10 +158,10 @@ class TimerViewModel(
     fun setSide(side: FeedSide) { viewModelScope.launch { recordCare.editOngoing(id) { it.withSide(side) } } }
     fun setAmount(ml: Int?) { viewModelScope.launch { recordCare.editOngoing(id) { it.copy(amountMl = ml) } } }
 
-    /** 어느 시각을 고르나(iOS `TimeField`): 시작 시각 수정, 끝 시각 고르기(최대 길이를 넘긴 기록, U14). */
+    /** 어느 시각을 고르나(iOS `TimeField`): 시작 시각 수정, 끝 시각 고르기(최대 길이를 넘긴 기록). */
     enum class TimeField { START, END }
 
-    /** 고른 시각을 검사한다: R3 문제면 글, R4 겹침이면 확인을 기다리고, 아니면 저장한다(시트와 같은 규칙). */
+    /** 고른 시각을 검사한다: 값 문제면 글, 겹침이면 확인을 기다리고, 아니면 저장한다(시트와 같은 규칙). */
     fun setTime(field: TimeField, hour: Int, minute: Int) {
         val e = ui.value.event ?: return
         if (_phase.value == CareSheetViewModel.Phase.Saving) return
@@ -205,13 +205,13 @@ sealed interface CareSheetTarget {
     data class Edit(val id: String) : CareSheetTarget
 }
 
-/** 열린 시트 하나: 입력과 단계를 한 값으로 둔다(늦게 끝난 저장 결과는 그 시트에만 닿는다, P5). */
+/** 열린 시트 하나: 입력과 단계를 한 값으로 둔다(늦게 끝난 저장 결과는 그 시트에만 닿는다). */
 data class SheetState(val draft: CareDraft, val phase: CareSheetViewModel.Phase = CareSheetViewModel.Phase.Editing) {
     val sheetId: String get() = draft.sheetId
 }
 
 /**
- * 빠른 기록·고치기 시트(C3). 입력([CareDraft])과 단계([Phase])를 여기서 갖고, 화면은 동작만 보낸다(iOS `CareSheetViewModel`과 같은 이름).
+ * 빠른 기록·고치기 시트. 입력([CareDraft])과 단계([Phase])를 여기서 갖고, 화면은 동작만 보낸다(iOS `CareSheetViewModel`과 같은 이름).
  * 입력은 화면 저장 상태에도 둬 시스템이 화면만 없앤 뒤에도 이어 쓴다(옛 rememberSaveable과 같다). 어느 시트인지는 `sheetId`가 말하고,
  * 늦게 끝난 저장·닫기는 그 시트가 아직 열려 있을 때만 반영한다(닫고 새 시트를 열었으면 새 시트를 건드리지 않는다).
  */
@@ -225,12 +225,12 @@ class CareSheetViewModel(
 ) : ViewModel(scope) {
     /**
      * 시트 단계(iOS `Phase{editing, confirmOverlap, failed, closed}`와 같은 이름). 안드로이드 저장은 비동기라 [Saving]이 더 있다.
-     * [ConfirmOverlap]은 R4 겹침 경고를 띄운 채 '그래도 저장'을 기다린다. [Failed]는 저장하지 않았다는 시트 안 글(규칙 위반·저장 실패, 없을 수도 있다).
+     * [ConfirmOverlap]은 겹침 경고를 띄운 채 '그래도 저장'을 기다린다. [Failed]는 저장하지 않았다는 시트 안 글(규칙 위반·저장 실패, 없을 수도 있다).
      */
     sealed interface Phase {
         /**
          * 입력·저장·지우기를 받는 단계(편집 중·실패). 저장 중·겹침 확인 중·닫힘(확인 표시가 머무는 동안)에는 받지 않는다
-         * (U88 11-12 보충). 시트의 휴지통·저장 단추 켜짐도 이 값 하나를 쓴다.
+         * 시트의 휴지통·저장 단추 켜짐도 이 값 하나를 쓴다.
          */
         val editable: Boolean get() = this is Editing || this is Failed
 
@@ -239,16 +239,16 @@ class CareSheetViewModel(
         data class ConfirmOverlap(val event: CareEvent) : Phase
 
         /**
-         * [problem]이 있으면 저장 검사(R3)에 걸린 것이라 시트가 탓이 된 줄을 펼친다(U82). 없으면 저장 실패 글(단추 위).
-         * [attempt]는 실패마다 하나씩 는다: 같은 오류가 다시 나도 새 값이라 펼침·흔들림·오류 햅틱이 매번 돈다(U82 오류, 11-12 보충).
+         * [problem]이 있으면 저장 검사에 걸린 것이라 시트가 탓이 된 줄을 펼친다. 없으면 저장 실패 글(단추 위).
+         * [attempt]는 실패마다 하나씩 는다: 같은 오류가 다시 나도 새 값이라 펼침·흔들림·오류 햅틱이 매번 돈다.
          */
         data class Failed(val message: String?, val problem: CareProblem? = null, val attempt: Int = 0) : Phase
 
         data object Saving : Phase
 
         /**
-         * 시트를 닫는다. [saved]는 이번 닫힘이 실제로 저장한 것인지다(U88 끝: 확인 표시·성공 햅틱은 저장되어 닫힐 때만, 화면은 짐작하지 않는다).
-         * 저장 성공만 참이고, 지우기·고치던 기록이 그사이 지워져 저장하지 않은 닫힘(R10)은 거짓이다.
+         * 시트를 닫는다. [saved]는 이번 닫힘이 실제로 저장한 것인지다(확인 표시·성공 햅틱은 저장되어 닫힐 때만, 화면은 짐작하지 않는다).
+         * 저장 성공만 참이고, 지우기·고치던 기록이 그사이 지워져 저장하지 않은 닫힘은 거짓이다.
          */
         data class Closed(val saved: Boolean) : Phase
     }
@@ -278,7 +278,7 @@ class CareSheetViewModel(
         if (_sheet.value?.sheetId == sheetId) set(null)
     }
 
-    /** 시트 상태를 바꾸는 곳은 여기 하나다(P3): 메모리와 화면 저장 상태(입력만)를 함께 쓴다. */
+    /** 시트 상태를 바꾸는 곳은 여기 하나다: 메모리와 화면 저장 상태(입력만)를 함께 쓴다. */
     private fun set(s: SheetState?) {
         _sheet.value = s
         saved[K_DRAFT] = s?.draft?.let { ProtocolJson.encodeToString(CareDraft.serializer(), it) }
@@ -311,8 +311,8 @@ class CareSheetViewModel(
     fun setNote(text: String) = edit { it.setNote(text) }
 
     /**
-     * 저장: R3 문제면 글, R4 겹침이면 확인을 기다린다([allowOverlap]이면 겹쳐도 저장, '그래도 저장').
-     * 고치던 기록이 그사이 지워졌으면 저장하지 않고 닫는다(되살리지 않는다, R10).
+     * 저장: 값 문제면 글, 겹침이면 확인을 기다린다([allowOverlap]이면 겹쳐도 저장, '그래도 저장').
+     * 고치던 기록이 그사이 지워졌으면 저장하지 않고 닫는다(되살리지 않는다).
      */
     fun save(allowOverlap: Boolean = false) {
         val cur = _sheet.value ?: return
@@ -346,7 +346,7 @@ class CareSheetViewModel(
             phase(
                 sheetId,
                 when {
-                    recordCare.saveEvent(e, editing) -> Phase.Closed(saved = true).also { notices.markFresh(e.id) } // U88 새 줄 강조·하루 띠 새 표시
+                    recordCare.saveEvent(e, editing) -> Phase.Closed(saved = true).also { notices.markFresh(e.id) } // 새 줄 강조·하루 띠 새 표시
                     editing && care.care.value.events.none { it.id == e.id && it.deletedAt == null } -> Phase.Closed(saved = false) // 저장 중 지워짐
                     // 저장 실패는 시트 안에서도 보인다. 띠의 다른 줄(버림 안내)은 시트에 옮기지 않는다.
                     else -> Phase.Failed(SAVE_FAILED.takeIf { notices.notice.value?.lines()?.contains(it) == true }, attempt = ++failures)
@@ -355,7 +355,7 @@ class CareSheetViewModel(
         }
     }
 
-    /** 고치던 기록을 지운다(5초 되돌리기 띠는 RecordCare가 띄운다). 저장 중·확인 표시가 머무는 동안에는 받지 않는다(U88 11-12 보충). */
+    /** 고치던 기록을 지운다(5초 되돌리기 띠는 RecordCare가 띄운다). 저장 중·확인 표시가 머무는 동안에는 받지 않는다. */
     fun delete() {
         val cur = _sheet.value ?: return
         if (!cur.phase.editable) return
@@ -369,7 +369,7 @@ class CareSheetViewModel(
     }
 }
 
-/** 시트가 닫힐 때의 연출(U88 끝). */
+/** 시트가 닫힐 때의 연출. */
 enum class SheetExit {
     /** 확인 표시 + 성공 햅틱 + 잠깐(320ms) 머문 뒤 닫힘. */
     CHECK,
@@ -382,7 +382,7 @@ enum class SheetExit {
 }
 
 /**
- * 닫힘 연출은 VM이 정한 저장 결과와 종류로만 정한다: 저장 안 됨 → 바로, 메모 저장·동작 줄이기 → 햅틱만 내고 바로(U88, iOS와 같음),
+ * 닫힘 연출은 VM이 정한 저장 결과와 종류로만 정한다: 저장 안 됨 → 바로, 메모 저장·동작 줄이기 → 햅틱만 내고 바로(iOS와 같음),
  * 그 밖 저장 → 확인 표시.
  */
 fun sheetExit(closed: CareSheetViewModel.Phase.Closed, kind: CareKind, reduced: Boolean = false): SheetExit = when {
@@ -391,7 +391,7 @@ fun sheetExit(closed: CareSheetViewModel.Phase.Closed, kind: CareKind, reduced: 
     else -> SheetExit.CHECK
 }
 
-/** 기록 탭(C4·C5·C14): 하루 타임라인과 패턴. */
+/** 기록 탭: 하루 타임라인과 패턴. */
 data class RecordsUiState(val care: CareFile, val phone: PhoneState, val connection: Connection) {
     val guardian get() = connection.role == Role.GUARDIAN
 }
@@ -410,12 +410,12 @@ class RecordsViewModel(
     /** 밀어서 지우기. 저장하지 못하면 `onFail`(밀린 줄을 되돌린다). */
     fun delete(id: String, onFail: () -> Unit) = recordCare.delete(id, onFail)
 
-    /** 막 저장한 기록 id(U88 새 줄 강조). 줄이 강조를 마치면 걷는다. */
+    /** 막 저장한 기록 id(새 줄 강조). 줄이 강조를 마치면 걷는다. */
     val fresh: StateFlow<String?> = notices.fresh
     fun clearFresh(id: String) = notices.clearFresh(id)
 }
 
-/** 차 탭: 연결 상태 → 우리 노래 → 리포트(5장). */
+/** 차 탭: 연결 상태 → 우리 노래 → 리포트. */
 data class CarUiState(val phone: PhoneState, val connection: Connection, val online: Boolean) {
     val owner get() = connection.role == Role.OWNER
 }
@@ -430,10 +430,10 @@ class CarViewModel(
     }
 }
 
-/** 설정 탭. `phones`는 차를 뺀 연결된 휴대폰 수('보호자 n명', 시안 S.settings). */
+/** 설정 탭. `phones`는 차를 뺀 연결된 휴대폰 수('보호자 n명'). */
 data class SettingsUiState(val care: CareFile, val connected: Boolean, val disconnect: DisconnectRun?, val phones: Int = 0)
 
-/** 기록 가져오기(U64~U68) 단계. 파일 글은 이 메모리에만 두고 저장하지 않는다. */
+/** 기록 가져오기 단계. 파일 글은 이 메모리에만 두고 저장하지 않는다. */
 sealed interface ImportUi {
     data object Closed : ImportUi
 
@@ -443,7 +443,7 @@ sealed interface ImportUi {
     /** Nara 이름이 둘 이상(import.pickChild). 고르면 같은 글을 다시 읽는다. */
     data class PickChild(val text: String, val profiles: List<String>) : ImportUi
 
-    /** 미리 보기(U68). 가져올 기록이 0이면 '닫기'만. */
+    /** 미리 보기. 가져올 기록이 0이면 '닫기'만. */
     data class Preview(val draft: ImportDraft) : ImportUi
 
     data class Saving(val draft: ImportDraft) : ImportUi
@@ -475,13 +475,13 @@ class SettingsViewModel(
     fun setNickname(name: String?) = recordCare.setNickname(name)
     fun setSleepDiaper(on: Boolean) = recordCare.setSleepDiaper(on)
 
-    /** 내 기록 내보내기(C7, U29): 캐시 export/에 CSV를 쓰고 그 파일을 돌려준다. 실패하면 null. */
+    /** 내 기록 내보내기: 캐시 export/에 CSV를 쓰고 그 파일을 돌려준다. 실패하면 null. */
     suspend fun export(): File? = care.export(exportFileName(clock.now(), APP_ZONE)) { it.toCsv(APP_ZONE) }
 
     private val _import = MutableStateFlow<ImportUi>(ImportUi.Closed)
     val import: StateFlow<ImportUi> = _import.asStateFlow()
 
-    /** 가져오기 작업은 하나다: 새 고르기·아이 고르기·저장·닫기가 앞 작업을 취소하고, 결과는 그 작업 안에서만 적용한다(P5). */
+    /** 가져오기 작업은 하나다: 새 고르기·아이 고르기·저장·닫기가 앞 작업을 취소하고, 결과는 그 작업 안에서만 적용한다. */
     private var importJob: Job? = null
 
     private fun runImport(now: ImportUi, block: suspend () -> ImportUi) {
@@ -506,7 +506,7 @@ class SettingsViewModel(
         runImport(ImportUi.Reading) { show(p.text, name) }
     }
 
-    /** 읽기는 지금 돌봄 기록을 기준으로 건너뛸 줄을 정한다(U67). 아이를 골라야 하면 고르기로. */
+    /** 읽기는 지금 돌봄 기록을 기준으로 건너뛸 줄을 정한다. 아이를 골라야 하면 고르기로. */
     private suspend fun show(text: String, profile: String?): ImportUi {
         val d = withContext(Dispatchers.Default) { CareCsv.parse(text, care.care.value, clock.now(), profile) }
         return when {

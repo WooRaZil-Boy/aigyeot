@@ -4,11 +4,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Credentials
-import kr.aigyeot.phone.domain.model.creds
 import kr.aigyeot.phone.domain.model.PhoneState
+import kr.aigyeot.phone.domain.model.creds
 import java.io.File
 
-// 저장소 인터페이스(arch-phone-android 2.1). 구현은 data/에 있다. 사실 하나는 저장소 하나가 원본이다(P1).
+// 저장소 인터페이스. 구현은 data/에 있다. 사실 하나는 저장소 하나가 원본이다.
 
 fun interface Clock {
     fun now(): Long
@@ -23,7 +23,7 @@ interface Logger {
 /**
  * `phone_state.json`(PhoneState)과 지금 연결([Connection])의 원본. 둘은 한 잠금에서 함께 바뀐다.
  * 상태 쓰기 입구는 넷뿐이다: [commit](그 자격일 때만), [commitLocal](연결과 따로인 표시), [switchTo](연결 세대 바꿈), [adopt](다시 읽은 자격).
- * 저장이 확인됐을 때만 메모리를 바꾼다. 받은 메시지는 저장이 참일 때만 ack한다(계약 1.4).
+ * 저장이 확인됐을 때만 메모리를 바꾼다. 받은 메시지는 저장이 참일 때만 ack한다.
  */
 interface PhoneStateRepository {
     val state: StateFlow<PhoneState>
@@ -98,7 +98,7 @@ interface CredentialRepository {
     suspend fun reset(): Boolean
 }
 
-/** 녹음 파일(`files/songs/`)과 임시 녹음(`cache/recording-*`). 파일 잠금으로 새 녹음의 이동·커밋과 정리를 줄 세운다(7.4·7.5). iOS와 같은 이름. */
+/** 녹음 파일(`files/songs/`)과 임시 녹음(`cache/recording-*`). 파일 잠금으로 새 녹음의 이동·커밋과 정리를 줄 세운다. iOS와 같은 이름. */
 interface SongFileStore {
     fun file(name: String): File
 
@@ -161,12 +161,12 @@ interface NetworkWatcher {
     fun unwatch()
 }
 
-/** 잠금 화면 진행 중 알림(C6). 기록이 바뀔 때만 다시 그린다(R15). */
+/** 잠금 화면 진행 중 알림. 기록이 바뀔 때만 다시 그린다. */
 fun interface OngoingNotice {
     fun show(care: CareFile)
 }
 
-/** 우리 노래 녹음·듣기(명세서 12장, 구현 계획 4장). 녹음은 앱 화면에서만 한다. */
+/** 우리 노래 녹음·듣기. 녹음은 앱 화면에서만 한다. */
 interface SongRecorder {
     /** 녹음을 시작한다. 실패하면(마이크를 다른 앱이 씀 등) 거짓. 최대 길이·크기에 닿으면 멈추고 `onLimit`. */
     fun start(file: File, onLimit: () -> Unit): Boolean

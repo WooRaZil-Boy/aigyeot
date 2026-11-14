@@ -67,16 +67,12 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
 import kr.aigyeot.phone.domain.model.AGO_CHIPS
 import kr.aigyeot.phone.domain.model.CarLine
-import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareEvent
+import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Diaper
@@ -88,10 +84,12 @@ import kr.aigyeot.phone.domain.model.avgDurationText
 import kr.aigyeot.phone.domain.model.carLines
 import kr.aigyeot.phone.domain.model.carePattern
 import kr.aigyeot.phone.domain.model.dayEvents
+import kr.aigyeot.phone.domain.model.dayLabel
 import kr.aigyeot.phone.domain.model.daysText
 import kr.aigyeot.phone.domain.model.diaperName
 import kr.aigyeot.phone.domain.model.durationText
 import kr.aigyeot.phone.domain.model.isOngoing
+import kr.aigyeot.phone.domain.model.kindName
 import kr.aigyeot.phone.domain.model.koClock
 import kr.aigyeot.phone.domain.model.koDate
 import kr.aigyeot.phone.domain.model.logRowText
@@ -100,27 +98,33 @@ import kr.aigyeot.phone.domain.model.quickKinds
 import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.text
 import kr.aigyeot.phone.domain.model.ulid
-import kr.aigyeot.phone.domain.model.kindName
-import kr.aigyeot.phone.domain.model.dayLabel
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
-// 기록 탭(C4·C5·C14)과 빠른 기록·고치기 시트(C3). 디자인 v6 시안 phone.js S.log·S.pattern·S.sheet.
+// 기록 탭(하루·패턴)과 빠른 기록·고치기 시트.
 
-/** 하루 줄을 제목(앞 두 조각: 종류·시각/구간)과 둘째 줄(나머지)로 나눈다(시안 ev(a, b), 결정 1). 글은 7.1 log.row.* 그대로다. */
+/** 하루 줄을 제목(앞 두 조각: 종류·시각/구간)과 둘째 줄(나머지)로 나눈다. 글은 log.row.* 그대로다. */
 internal fun splitRow(text: String): Pair<String, String?> {
     val parts = text.split(" · ")
     return if (parts.size <= 2) text to null else parts.take(2).joinToString(" · ") to parts.drop(2).joinToString(" · ")
 }
 
-// ---------------------------------------------------------------- 빈 상태(U85)
+// ---------------------------------------------------------------- 빈 상태
 
-/** 빈 상태 판(U85): 아이콘 고리(spring.bouncy 0.92 → 1, 읽지 않음) + 글(7장 그대로) + 할 일 하나. 동작 줄이기면 바로 보인다. */
+/** 빈 상태 판: 아이콘 고리(spring.bouncy 0.92 → 1, 읽지 않음) + 글 + 할 일 하나. 동작 줄이기면 바로 보인다. */
 @Composable
 internal fun EmptyState(@androidx.annotation.DrawableRes icon: Int, text: String, action: @Composable () -> Unit) {
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
     val ring = remember { androidx.compose.animation.core.Animatable(if (reduced) 1f else 0.92f) }
     LaunchedEffect(Unit) { if (!reduced) ring.animateTo(1f, Springs.bouncy.spec()) }
-    Column(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
         Box(
             Modifier.size(64.dp).scale(ring.value).clip(androidx.compose.foundation.shape.CircleShape).background(p.surface),
             contentAlignment = Alignment.Center,
@@ -130,31 +134,38 @@ internal fun EmptyState(@androidx.annotation.DrawableRes icon: Int, text: String
     }
 }
 
-/** 패턴 수유 간격 5개 미만(U85 ③): 막대 자리 위 가운데 '기록이 더 쌓이면 보여 드려요' + 점 다섯(쌓인 만큼 채움). 읽기 이름은 감싼 판이 한 번 말한다. */
+/** 패턴 수유 간격 5개 미만: 막대 자리 위 가운데 '기록이 더 쌓이면 보여 드려요' + 점 다섯(쌓인 만큼 채움). 읽기 이름은 감싼 판이 한 번 말한다. */
 @Composable
 private fun IntervalProgress(count: Int) {
     val p = Tokens.colors
-    Column(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Text("기록이 더 쌓이면 보여 드려요", style = Type.sheetValue, color = p.textSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             repeat(5) { i ->
                 Box(
                     Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                        .then(if (i < count) Modifier.background(p.textPrimary) else Modifier.border(1.5.dp, p.textPrimary.copy(alpha = 0.26f), androidx.compose.foundation.shape.CircleShape)),
+                        .then(
+                            if (i < count) Modifier.background(p.textPrimary)
+                            else Modifier.border(1.5.dp, p.textPrimary.copy(alpha = 0.26f), androidx.compose.foundation.shape.CircleShape),
+                        ),
                 )
             }
         }
     }
 }
 
-// ---------------------------------------------------------------- 기록(C4·C5·C14)
+// ---------------------------------------------------------------- 기록
 
-/** 기록 줄 판과 밀어 지우기 바탕 모서리(시안 .tl .ev 18). */
+/** 기록 줄 판과 밀어 지우기 바탕 모서리(18). */
 private val CardShape = RoundedCornerShape(18.dp)
 
 /**
- * 고른 날의 줄: 지우지 않은 손 기록 + 그날 시작한 차 기록, 새 것이 위(시안). 화면은 3시간 칸마다 시각 머리("오후 12시")를 단다.
- * 비면 화면 가운데 빈 상태 판 하나(U85 ①)이고 목록 끝 '지난 기록 적기' 줄은 숨긴다.
+ * 고른 날의 줄: 지우지 않은 손 기록 + 그날 시작한 차 기록, 새 것이 위. 화면은 3시간 칸마다 시각 머리("오후 12시")를 단다.
+ * 비면 화면 가운데 빈 상태 판 하나이고 목록 끝 '지난 기록 적기' 줄은 숨긴다.
  */
 internal fun dayRows(care: CareFile, allCars: List<CarLine>, day: LocalDate, zone: java.time.ZoneId): List<Pair<Long, Any>> {
     val hand = care.dayEvents(day, zone)
@@ -162,7 +173,7 @@ internal fun dayRows(care: CareFile, allCars: List<CarLine>, day: LocalDate, zon
     return (hand.map { it.startAt to it } + cars.map { it.startAt to it }).sortedByDescending { it.first }
 }
 
-/** 기록(시안 S.log·S.pattern): 큰 제목 → 하루·패턴 세그먼트 → (하루) 날짜 띠 + 타임라인 + '지난 기록 적기' / (패턴) 차트 블록들. */
+/** 기록: 큰 제목 → 하루·패턴 세그먼트 → (하루) 날짜 띠 + 타임라인 + '지난 기록 적기' / (패턴) 차트 블록들. */
 @Composable
 fun RecordsTab(go: (Route) -> Unit, vm: RecordsViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -180,7 +191,10 @@ fun RecordsTab(go: (Route) -> Unit, vm: RecordsViewModel = appViewModel()) {
         // 하루·패턴을 바꾸면 그 아래 새 블록만 한 줄씩 올라온다(세그먼트는 그대로, iOS와 같음).
         StaggerColumn(replay = pattern, animateFirst = false) {
             if (pattern) PatternView(ui, now)
-            else DayView(ui, today, LocalDate.ofEpochDay(dayEpoch), { dayEpoch = it.toEpochDay() }, go, vm::delete, { editingId = it }, { adding = true }, fresh, vm::clearFresh)
+            else DayView(
+                ui, today, LocalDate.ofEpochDay(dayEpoch), { dayEpoch = it.toEpochDay() }, go, vm::delete,
+                { editingId = it }, { adding = true }, fresh, vm::clearFresh,
+            )
         }
     }
     val editing = editingId?.let { id -> ui.care.events.firstOrNull { it.id == id && it.deletedAt == null } }
@@ -211,7 +225,7 @@ private fun DayView(
     val care = ui.care
     val s = ui.phone
     val allCars = remember(s.reports) { carLines(s.reports.values.map { it.body }) }
-    // 지난 30일. 기록이 있는 날이 그 밖이면(더 오래됨) 그날까지 늘린다: 돌봄 기록은 기간으로 지우지 않으니(U44) 열 수 있어야 한다(iOS `DayStrip`과 같음).
+    // 지난 30일. 기록이 있는 날이 그 밖이면(더 오래됨) 그날까지 늘린다: 돌봄 기록은 기간으로 지우지 않으니 열 수 있어야 한다(iOS `DayStrip`과 같음).
     val recordDays = care.events.filter { it.deletedAt == null }.map { Instant.ofEpochMilli(it.startAt).atZone(it.zoneOrDevice()).toLocalDate() } +
         allCars.map { Instant.ofEpochMilli(it.startAt).atZone(deviceZone).toLocalDate() }
     val first = minOf(today.minusDays(29), recordDays.minOrNull() ?: today)
@@ -221,17 +235,27 @@ private fun DayView(
     val strip = rememberLazyListState(initialFirstVisibleItemIndex = (ChronoUnit.DAYS.between(first, today) - 4).coerceIn(0, span - 1L).toInt())
     val p = Tokens.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(state = strip, horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) {
+        LazyRow(
+            state = strip,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+        ) {
             items(span, key = { first.toEpochDay() + it }) { i ->
                 val d = first.plusDays(i.toLong())
                 val on = d == day
                 Column(
-                    Modifier.width(46.dp).heightIn(min = 62.dp).clip(RoundedCornerShape(23.dp)).background(if (on) p.textPrimary else androidx.compose.ui.graphics.Color.Transparent)
-                        .selectable(on, interactionSource = null, indication = null, role = Role.Tab) { pickDay(d) }.semantics { contentDescription = dayLabel(d, today) }.padding(vertical = 8.dp),
+                    Modifier.width(46.dp).heightIn(min = 62.dp).clip(RoundedCornerShape(23.dp))
+                        .background(if (on) p.textPrimary else androidx.compose.ui.graphics.Color.Transparent)
+                        .selectable(on, interactionSource = null, indication = null, role = Role.Tab) { pickDay(d) }
+                        .semantics { contentDescription = dayLabel(d, today) }.padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
                 ) {
-                    Text(if (d == today) "오늘" else "월화수목금토일"[d.dayOfWeek.value - 1].toString(), style = Type.micro, color = if (on) p.bg.copy(alpha = 0.75f) else p.textTertiary)
+                    Text(
+                        if (d == today) "오늘" else "월화수목금토일"[d.dayOfWeek.value - 1].toString(),
+                        style = Type.micro,
+                        color = if (on) p.bg.copy(alpha = 0.75f) else p.textTertiary,
+                    )
                     Text("${d.dayOfMonth}", style = Type.dateNumber, color = if (on) p.bg else p.textPrimary)
                 }
             }
@@ -239,7 +263,7 @@ private fun DayView(
         // 고른 날 제목(log.date.*). 띠는 요일·날짜 숫자뿐이라 기록이 여러 달이면 달을 알 수 없다(iOS와 같음).
         Text(dayLabel(day, today), Modifier.padding(start = 4.dp, top = 2.dp).semantics { heading() }, style = Type.headline, color = p.textPrimary)
         val rows = dayRows(care, allCars, day, deviceZone)
-        // U85 ①: 빈 날은 화면 가운데 달력 고리 + '이 날 기록이 없어요' + '＋ 지난 기록 적기' 하나(목록 끝 줄은 숨긴다: 같은 일 두 번 금지).
+        // 빈 날은 화면 가운데 달력 고리 + '이 날 기록이 없어요' + '＋ 지난 기록 적기' 하나(목록 끝 줄은 숨긴다: 같은 일 두 번 금지).
         if (rows.isEmpty()) {
             EmptyState(R.drawable.ic_calendar, "이 날 기록이 없어요") {
                 Box(
@@ -266,7 +290,13 @@ private fun DayView(
                 }
                 when (row) {
                     is CareEvent -> key(row.id) {
-                        HandRow(row, fresh = fresh == row.id, onFreshDone = { clearFresh(row.id) }, onOpen = { if (row.isOngoing) go(Route.Timer(row.id)) else edit(row.id) }, onDelete = { fail -> delete(row.id, fail) })
+                        HandRow(
+                            row,
+                            fresh = fresh == row.id,
+                            onFreshDone = { clearFresh(row.id) },
+                            onOpen = { if (row.isOngoing) go(Route.Timer(row.id)) else edit(row.id) },
+                            onDelete = { fail -> delete(row.id, fail) },
+                        )
                     }
                     is CarLine -> key(row.sessionId + (row.episodeId ?: "")) {
                         val (title, sub) = splitRow(row.text(deviceZone))
@@ -289,7 +319,13 @@ private fun HourHead(hour: Int) {
         Text(label, Modifier.padding(start = 4.dp, end = 8.dp), style = Type.hourMark, color = p.textTertiary)
         Box(
             Modifier.weight(1f).height(1.dp).drawBehind {
-                drawLine(p.line, Offset(0f, 0f), Offset(size.width, 0f), size.height, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+                drawLine(
+                    p.line,
+                    Offset(0f, 0f),
+                    Offset(size.width, 0f),
+                    size.height,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())),
+                )
             },
         )
     }
@@ -307,7 +343,16 @@ private fun Timeline(content: @Composable () -> Unit) {
 
 /** 타임라인 카드(.tl .ev): 줄기 위 종류 점 8(바탕색 테) + 흰 카드(모서리 18, 아이콘 18 흐림 · 제목 14.5/20·500 · 둘째 줄 12.5/17). */
 @Composable
-private fun TimelineCard(kind: CareKind?, title: String, sub: String?, memo: String?, tall: Boolean = false, glow: Float = 0f, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun TimelineCard(
+    kind: CareKind?,
+    title: String,
+    sub: String?,
+    memo: String?,
+    tall: Boolean = false,
+    glow: Float = 0f,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val p = Tokens.colors
     val dot = kindColor(kind, p)
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -326,13 +371,13 @@ private fun TimelineCard(kind: CareKind?, title: String, sub: String?, memo: Str
             Column(Modifier.weight(1f)) {
                 Text(title, style = Type.eventTitle, color = p.textPrimary)
                 sub?.let { Text(it, style = Type.footnote, color = p.textSecondary) }
-                memo?.let { Text(it, style = Type.footnote, color = p.textTertiary) } // log.row.memoLine(U37)
+                memo?.let { Text(it, style = Type.footnote, color = p.textTertiary) } // log.row.memoLine
             }
         }
     }
 }
 
-/** 손 기록 한 줄(log.row.*): 글은 7.1 줄 글자를 나눈 것(종류 이름이 글자에 있어 색만으로 구분하지 않는다, 8장). 밀면 지우기. */
+/** 손 기록 한 줄(log.row.*): 글은 줄 글자를 나눈 것(종류 이름이 글자에 있어 색만으로 구분하지 않는다). 밀면 지우기. */
 @Composable
 private fun HandRow(e: CareEvent, fresh: Boolean, onFreshDone: () -> Unit, onOpen: () -> Unit, onDelete: (onFail: () -> Unit) -> Unit) {
     val swipe = rememberSwipeToDismissBoxState()
@@ -342,7 +387,7 @@ private fun HandRow(e: CareEvent, fresh: Boolean, onFreshDone: () -> Unit, onOpe
     LaunchedEffect(swipe.currentValue) { if (swipe.currentValue == SwipeToDismissBoxValue.EndToStart) onDelete(restore) }
     val p = Tokens.colors
     val (title, sub) = splitRow(logRowText(e, e.zoneOrDevice()))
-    // 시트로 막 저장한 줄(U88, iOS TimelineCard fresh와 같음): 옅은 accentSoft 바탕이 1.4초 뒤 light 900ms로 걷힌다(동작 줄이기면 1.6초 뒤 바로).
+    // 시트로 막 저장한 줄(iOS TimelineCard fresh와 같음): 옅은 accentSoft 바탕이 1.4초 뒤 light 900ms로 걷힌다(동작 줄이기면 1.6초 뒤 바로).
     val reduced = LocalReducedMotion.current
     val glow = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(fresh) {
@@ -378,8 +423,8 @@ private fun HandRow(e: CareEvent, fresh: Boolean, onFreshDone: () -> Unit, onOpe
 }
 
 /**
- * 패턴(C5, R14·R16·U27, 시안 S.pattern): '지난 7일' 숫자 줄 → 수유 간격 7일 막대(평소 선) → 잠 패턴 히트맵(잠·기저귀 켤 때) →
- * 차에서 울음 7일 막대 → 안내. 칸 이름과 값은 7.1 pattern.*.
+ * 패턴: '지난 7일' 숫자 줄 → 수유 간격 7일 막대(평소 선) → 잠 패턴 히트맵(잠·기저귀 켤 때) →
+ * 차에서 울음 7일 막대 → 안내. 칸 이름과 값은 pattern.*.
  */
 @Composable
 private fun PatternView(ui: RecordsUiState, now: Long) {
@@ -396,7 +441,7 @@ private fun PatternView(ui: RecordsUiState, now: Long) {
             buildList {
                 // pattern.days는 늘 보이고, 앞 주와 견줄 수 있으면 그 아래 '지난주보다 …'(design.chart).
                 add(Kpi("하루 수유", avgCountText(p.feedsPerDay), daysText(p.feedDays), trend))
-                // 보통 간격이 아직 없으면(5개 미만, R14) 7장 문구를 값 아래에 그대로 보인다.
+                // 보통 간격이 아직 없으면(5개 미만) 안내 문구를 값 아래에 그대로 보인다.
                 add(Kpi("수유 간격", p.feedIntervalMs?.let(::durationText) ?: "—", if (p.feedIntervalMs != null) "보통" else "기록이 더 쌓이면 보여 드려요"))
                 add(Kpi("차에서 울음", "${p.carCryEpisodes}번", "7일 동안"))
                 p.sleepPerDayMs?.let { add(Kpi("하루 잠", avgDurationText(it), daysText(p.sleepDays))) }
@@ -408,7 +453,7 @@ private fun PatternView(ui: RecordsUiState, now: Long) {
         BlockHeader("수유 간격")
         val progress = p.intervalProgress
         if (progress != null) {
-            // U85 ③: 간격이 5개 미만(R14)이면 가짜 막대 없이 바닥 눈금(요일)만 + 가운데 문구와 쌓인 간격 수 점 다섯. 한 요소로 읽는다.
+            // 간격이 5개 미만이면 가짜 막대 없이 바닥 눈금(요일)만 + 가운데 문구와 쌓인 간격 수 점 다섯. 한 요소로 읽는다.
             Box(Modifier.clearAndSetSemantics { contentDescription = progress }) {
                 WeekBars(iw.bars.map { it.copy(value = null, tip = null) }, c.cFeed, ::durationText, progress)
                 IntervalProgress(p.feedIntervalCount)

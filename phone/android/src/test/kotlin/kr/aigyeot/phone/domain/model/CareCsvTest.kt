@@ -9,6 +9,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kr.aigyeot.phone.sharedFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -16,16 +17,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** 기록 가져오기(phone-care-plan U64~U69). 표준 예제는 shared의 파일을 경로 그대로 읽는다(복사본 없음, iOS와 같은 파일). */
+/** 기록 가져오기. 표준 예제는 shared의 파일을 경로 그대로 읽는다(복사본 없음, iOS와 같은 파일). */
 class CareCsvTest {
-    private val dir = File("../../shared/src/test/resources/care/import")
-    private val now = 1_793_944_800_000L // 2026-11-06T15:00:00+09:00(U69)
+    private val dir = sharedFile("care/import")
+    private val now = 1_793_944_800_000L // 2026-11-06T15:00:00+09:00
     private val existing = CareJson.decodeFromString(CareFile.serializer(), File(dir, "existing.json").readText())
 
     private fun csv(name: String) = File(dir, "$name.csv").readText()
     private fun expected(name: String) = Json.parseToJsonElement(File(dir, "$name.expected.json").readText()).jsonObject
 
-    /** U69: 기대 JSON의 `profile`은 결과가 아니라 고른 아이(입력)다. 없으면 null. */
+    /** 기대 JSON의 `profile`은 결과가 아니라 고른 아이(입력)다. 없으면 null. */
     private fun parse(name: String): ImportDraft =
         CareCsv.parse(csv(name), existing, now, expected(name)["profile"]?.jsonPrimitive?.contentOrNull)
 
@@ -59,7 +60,7 @@ class CareCsvTest {
         assertEquals(ImportFormat.UNKNOWN, CareCsv.parse("kind,start,end,end_unknown,side,amount_ml,diaper\n", existing, now).format)
         assertEquals(ImportFormat.UNKNOWN, CareCsv.parse("Type,Start,End,Notes\nFeed,2026-11-06 09:00,,\n", existing, now).format)
         assertEquals(ImportFormat.UNKNOWN, CareCsv.parse("", existing, now).format)
-        // U68 ③: 빈 줄·공백뿐인 레코드·빈 칸만 있는 레코드는 건너뛰고, 헤더는 첫 번째로 비지 않은 레코드다(iOS와 같은 단언).
+        // 빈 줄·공백뿐인 레코드·빈 칸만 있는 레코드는 건너뛰고, 헤더는 첫 번째로 비지 않은 레코드다(iOS와 같은 단언).
         val lead = CareCsv.parse("\r\n \n,,\n" + aigyeot("FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,"), CareFile(), now)
         assertEquals(ImportFormat.AIGYEOT, lead.format)
         assertEquals(1, lead.rows.size)
@@ -110,7 +111,7 @@ class CareCsvTest {
 
     @Test
     fun `같은 줄은 두 앱에서 같은 id다`() {
-        // U66: "imp-" + SHA-256("kind|startAt|endAt|feedSide|amountMl", null은 빈 글자) 16진수 앞 16글자. 값은 shasum으로 따로 구했다.
+        // "imp-" + SHA-256("kind|startAt|endAt|feedSide|amountMl", null은 빈 글자) 16진수 앞 16글자. 값은 shasum으로 따로 구했다.
         assertEquals("imp-47fd89f213c9a86d", importId(CareKind.FEED, 1_792_735_200_000, 1_792_735_920_000, FeedSide.RIGHT, null))
         assertEquals("imp-a1eabd74ef98fbee", importId(CareKind.DIAPER, 1_793_404_800_000, null, null, null))
         // 메모·기저귀 값은 id에 들지 않는다. 다른 형식에서 같은 기록이 오면 같은 id다: 가져온 Nara 기록을 아이곁 CSV로 내보내 다시 읽어도 같다.
@@ -177,7 +178,7 @@ class CareCsvTest {
 
     @Test
     fun `부피와 모유 초는 소수를 읽고 범위는 반올림 전에 본다`() {
-        // U66 11-09 보충: Nara 모유 초는 소수 허용(음수·숫자 아님은 그 쪽 없음), 끝 = 시작 + (합 × 1000을 ms 아래 버림).
+        // Nara 모유 초는 소수 허용(음수·숫자 아님은 그 쪽 없음), 끝 = 시작 + (합 × 1000을 ms 아래 버림).
         val nara = listOf(
             "Type,Profile Name,Start Date/time,Note,[Breastfeed] Left Duration (Seconds),[Breastfeed] Right Duration (Seconds),[Bottle Feed] Volume,[Bottle Feed] Volume Unit",
             "Breastfeed,,2026-11-01 09:00:00,,600.0,,,",
@@ -203,7 +204,7 @@ class CareCsvTest {
         // 같은 함수: Huckleberry Duration의 부피 조각, 아이곁 amount_ml(정수만)
         val huck = CareCsv.parse(
             "Type,Start,End,Duration,Notes\nFeed,2026-11-03 09:00,,400.4ml,\nFeed,2026-11-03 10:00,,399.5ml,\n" +
-                "Feed,2026-11-03 11:00,,-0.4ml 0:10R,\n", // 부호도 숫자다: 범위 밖이라 쪽 조각으로 살리지 않는다(U68 보충 ⑤)
+                "Feed,2026-11-03 11:00,,-0.4ml 0:10R,\n", // 부호도 숫자다: 범위 밖이라 쪽 조각으로 살리지 않는다
             CareFile(), now,
         )
         assertEquals(listOf(400), huck.rows.map { it.amountMl })
@@ -215,7 +216,7 @@ class CareCsvTest {
 
     @Test
     fun `아이곁 값은 종류에 맞는 칸에만 넣고 양 검사는 모든 줄에 한다`() {
-        // U66 11-09 보충(두 앱 같은 id): 쪽·양은 FEED만, 기저귀는 DIAPER만. 다른 종류의 값은 null이고 id 해시도 null로 센다.
+        // 두 앱 같은 id: 쪽·양은 FEED만, 기저귀는 DIAPER만. 다른 종류의 값은 null이고 id 해시도 null로 센다.
         val sleepAt = now - 6 * HOUR
         val d = CareCsv.parse(
             aigyeot(
@@ -300,7 +301,7 @@ class CareCsvTest {
     fun `손으로 지운 가져온 기록은 다시 가져오지 않는다`() {
         val first = CareCsv.parse(csv("aigyeot"), CareFile(), now)
         val gone = first.rows.first { it.kind == CareKind.FEED }
-        // 가져온 뒤 손으로 지웠다(R8: 지운 표시만). 같은 파일을 다시 가져오면 그 줄은 같은 id라 건너뛴다.
+        // 가져온 뒤 손으로 지웠다(지운 표시만). 같은 파일을 다시 가져오면 그 줄은 같은 id라 건너뛴다.
         val care = CareFile(events = first.rows).delete(gone.id, now)
         val again = CareCsv.parse(csv("aigyeot"), care, now)
         assertEquals(emptyList<CareEvent>(), again.rows)

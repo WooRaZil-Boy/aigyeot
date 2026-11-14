@@ -78,7 +78,7 @@ class FakeRelay : RelayClient, RelaySocket {
     /** 있으면 받은 함 요청이 이것이 끝날 때까지 답하지 않는다(도는 받기를 만든다). */
     var inboxGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
 
-    /** 받은 함은 봉투(계약 DTO)로 정하고 진짜 바꾸기([inbound])를 거쳐 돌려준다. */
+    /** 받은 함은 봉투(메시지 DTO)로 정하고 진짜 바꾸기([inbound])를 거쳐 돌려준다. */
     override suspend fun inbox(token: String, afterSeq: Long): RelayResult<InboxPage> {
         inboxAfter += afterSeq
         ticket++
@@ -173,7 +173,7 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
         goneCleanupPending = this.marks.get(Mark.GONE_CLEANUP_PENDING),
     )
     init {
-        notices.showDrops(state.state.value.unseenDrops) // AppContainer와 같다(U54)
+        notices.showDrops(state.state.value.unseenDrops) // AppContainer와 같다
     }
 
     val link = LinkSwitch(this.marks, notices)
@@ -189,11 +189,11 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     val push = RegisterPush(state, relay, lose, pushTokens, scope)
     val connection = KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, network, visibility, clock, scope)
     val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
-    /** 띠 시간(앱은 화면 읽기·시스템 권장 시간으로 정한다, U87). 시험이 띠를 띄우기 전후에 바꿔 볼 수 있다. */
+    /** 띠 시간(앱은 화면 읽기·시스템 권장 시간으로 정한다). 시험이 띠를 띄우기 전후에 바꿔 볼 수 있다. */
     var undoBand = undoMs
     val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, Quiet, allowDebugSeed = true, undoMs = { undoBand })
     val clearRecords = ClearRecords(care, state, recordCare, notices, songs, connection, outbox, clock, scope)
-    val pair = Pair(state, care, credentials, relay, link, disconnect, lose, this.marks, pushTokens, songs, recordCare, notices, clock, scope, Quiet)
+    val pair = PairDevice(state, care, credentials, relay, link, disconnect, lose, this.marks, pushTokens, songs, recordCare, notices, clock, scope, Quiet)
     val recordSong = RecordSong(state, songs, clearRecords, outbox, notices, clock, scope)
     val selectSong = SelectSong(state, outbox, clock, scope)
     val removeSong = RemoveSong(state, songs, outbox, clock, scope)

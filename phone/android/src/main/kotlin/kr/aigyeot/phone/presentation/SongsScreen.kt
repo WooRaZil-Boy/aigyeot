@@ -53,8 +53,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlin.math.abs
-import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kr.aigyeot.phone.R
 import kr.aigyeot.phone.domain.model.SONGS_FULL
@@ -62,8 +60,10 @@ import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.SongPhase
 import kr.aigyeot.phone.domain.model.replaceable
 import kr.aigyeot.phone.domain.model.songStatusText
+import kotlin.math.abs
+import kotlin.math.sin
 
-// 우리 노래(owner): 차 탭 '우리 노래' 블록(U39)과 노래 녹음 화면(시안 S.song: 위 녹음, 아래 목록).
+// 우리 노래(owner): 차 탭 '우리 노래' 블록과 노래 녹음 화면(위 녹음, 아래 목록).
 
 /**
  * 우리 노래 블록: 1~3곡, 차로 보낸 상태. 행을 누르면 듣기·실험에 쓰기·다시 녹음·지우기를 고른다.
@@ -80,9 +80,14 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
     fun play(e: SongEntry) {
         if (!vm.play(e)) android.widget.Toast.makeText(context, "녹음 파일을 읽지 못했어요.", android.widget.Toast.LENGTH_SHORT).show()
     }
-    // 녹음 화면(시안 S.song)은 머리 없이 목록만 둔다(위 막대 제목이 '우리 노래'). 아직 곡이 없으면 위 안내가 대신한다.
+    // 녹음 화면은 머리 없이 목록만 둔다(위 막대 제목이 '우리 노래'). 아직 곡이 없으면 위 안내가 대신한다.
     if (!header && songs.isEmpty()) { FootNote("차에서는 다음 주행부터 써요"); return }
-    ListBlock(if (header) "우리 노래" else null, if (header && onRecord != null && !ui.full) "녹음하기" else null, onRecord?.let { { it(null) } }) { // car.section.songs
+    // car.section.songs
+    ListBlock(
+        if (header) "우리 노래" else null,
+        if (header && onRecord != null && !ui.full) "녹음하기" else null,
+        onRecord?.let { { it(null) } },
+    ) {
         if (songs.isEmpty()) Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Modifier.padding(bottom = 14.dp), style = Type.body, color = p.textTertiary)
         // 행 상태(메뉴 열림)는 곡 id에 묶는다: 곡 상태가 바뀌거나 다른 폰이 곡을 지워 자리가 달라져도 열린 메뉴가 다른 곡으로 옮겨 가지 않는다.
         for (e in songs) key(e.songId) {
@@ -106,21 +111,21 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
                 DropdownMenu(menu, { menu = false }, shape = Radius.control, containerColor = p.surface) {
                     if (e.file != null) DropdownMenuItem({ Text("듣기") }, { menu = false; play(e) })
                     if (e.phase == SongPhase.ACCEPTED && !e.candidate) DropdownMenuItem({ Text("실험에 쓰기") }, { menu = false; vm.select(e.songId) })
-                    // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다(9장 '노래 거절', iOS와 같음).
+                    // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다('노래 거절', iOS와 같음).
                     if (e.replaceable && onRecord != null) DropdownMenuItem({ Text("다시 녹음하기") }, { menu = false; vm.stopPlaying(); onRecord(e.songId) })
                     DropdownMenuItem({ Text("지우기", color = p.danger) }, { menu = false; vm.remove(e.songId) })
                 }
             }
         }
-        if (ui.full) Text(SONGS_FULL, Modifier.padding(bottom = 12.dp), style = Type.caption, color = p.textTertiary) // car.songs.full(7.1)
+        if (ui.full) Text(SONGS_FULL, Modifier.padding(bottom = 12.dp), style = Type.caption, color = p.textTertiary) // car.songs.full
     }
-    FootNote("차에서는 다음 주행부터 써요") // car.songs.note(문구표, 확정 시안 그대로. 3분 한도는 녹음 화면 "0:00 / 3:00"이 보인다)
+    FootNote("차에서는 다음 주행부터 써요") // car.songs.note(문구 그대로. 3분 한도는 녹음 화면 "0:00 / 3:00"이 보인다)
 }
 
 /**
- * 노래 녹음(시안 S.song): 위 소리 결(브랜드 파랑, 녹음 중에만 움직임) + 경과 "0:42 / 3:00" + 녹음 단추(84, 멈춤은 빨간 네모) →
- * 멈춘 뒤 다시 듣기·다시 녹음·이름·차로 보내기(구현 계획 8장) → 아래 우리 노래 목록.
- * `replacing`이 있으면 그 곡을 바꾼다(9장 '노래 거절'). 보내기가 목록·보낼 함에 커밋되면 닫는다.
+ * 노래 녹음: 위 소리 결(브랜드 파랑, 녹음 중에만 움직임) + 경과 "0:42 / 3:00" + 녹음 단추(84, 멈춤은 빨간 네모) →
+ * 멈춘 뒤 다시 듣기·다시 녹음·이름·차로 보내기 → 아래 우리 노래 목록.
+ * `replacing`이 있으면 그 곡을 바꾼다('노래 거절'). 보내기가 목록·보낼 함에 커밋되면 닫는다.
  */
 @Composable
 fun RecordScreen(replacing: String?, onBack: () -> Unit, vm: SongsViewModel = appViewModel()) {
@@ -142,7 +147,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
     var denied by remember { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it; denied = !it }
     LaunchedEffect(Unit) { if (!granted) ask.launch(Manifest.permission.RECORD_AUDIO) }
-    // 설정에서 권한을 켜고 돌아왔을 때(7.3)
+    // 설정에서 권한을 켜고 돌아왔을 때
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (granted) denied = false
@@ -160,7 +165,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
             if (activity?.isChangingConfigurations != true && (visible || activity?.isFinishing == true)) vm.closeSheet()
         }
     }
-    // 녹음은 앱 화면에서만 한다(명세서 12장). 배경으로 가면 멈추고 그때까지 녹음한 것을 남긴다.
+    // 녹음은 앱 화면에서만 한다. 배경으로 가면 멈추고 그때까지 녹음한 것을 남긴다.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.onBackground() }
     var name by rememberSaveable { mutableStateOf("") }
     // 경과는 화면이 그릴 때만 시계를 읽는다(녹음 중 0.2초마다).
@@ -178,7 +183,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
         is Take.Idle -> take.ms
     }
     val p = Tokens.colors
-    // 시안 .rec: 흰 블록 없이 바탕 위에(안쪽 10/20, 칸 사이 18).
+    // 녹음 영역: 흰 블록 없이 바탕 위에(안쪽 10/20, 칸 사이 18).
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)) {
         if (!granted) {
             if (denied) {
@@ -195,7 +200,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
             Text("%d:%02d / 3:00".format(sec / 60, sec % 60), style = Type.recordTimer, color = p.textPrimary)
             RecButton(take is Take.Recording, enabled = !s.sending, onClick = vm::toggleRecording) // 보내는 동안 그 원본을 바꾸는 녹음은 막는다
             s.startError?.let { Text(it, style = Type.caption, color = p.danger) }
-            if (take !is Take.Recorded) Text("평소 불러 주던 노래를 녹음해 보세요", style = Type.footnote, color = p.textTertiary) // 시안 .rec .foot-note
+            if (take !is Take.Recorded) Text("평소 불러 주던 노래를 녹음해 보세요", style = Type.footnote, color = p.textTertiary) // 녹음 영역 아래 각주
         }
         if (take is Take.Recorded) {
             Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -213,7 +218,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
                 )
                 s.sendError?.let { Text(it, style = Type.caption, color = p.danger) }
                 Btn(if (s.sending) "보내는 중" else "차로 보내기", { vm.send(name.trim(), replacing) }, enabled = name.isNotBlank() && !s.sending, big = true)
-                if (!online) Text("연결되면 보내요", style = Type.caption, color = p.textTertiary) // 7.2 우리 노래·오프라인(iOS 시트와 같음)
+                if (!online) Text("연결되면 보내요", style = Type.caption, color = p.textTertiary) // 우리 노래·오프라인(iOS 시트와 같음)
             }
         }
     }
@@ -226,7 +231,12 @@ private fun Wave(live: Boolean) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
     // 녹음 중이고 화면에 보일 때만 움직인다(굴려 가리면 멈춤).
-    val t = if (live && !reduced && shown) rememberInfiniteTransition(label = "wave").animateFloat(0f, 1f, infiniteRepeatable(Motion.wave.spec<Float>(), RepeatMode.Restart), label = "wave").value else 0f
+    val t = if (live && !reduced && shown) {
+        rememberInfiniteTransition(label = "wave")
+            .animateFloat(0f, 1f, infiniteRepeatable(Motion.wave.spec<Float>(), RepeatMode.Restart), label = "wave").value
+    } else {
+        0f
+    }
     Canvas(Modifier.fillMaxWidth().height(120.dp).onScreen { shown = it }.semantics { contentDescription = if (live) "녹음 중" else "녹음 대기" }) {
         val n = 44
         val bw = 4.dp.toPx()
@@ -237,7 +247,12 @@ private fun Wave(live: Boolean) {
             val base = 0.2f + abs(sin(i * 0.7f)) * 0.7f
             val k = if (live) (0.35f + 0.65f * abs(sin((t * 2f * Math.PI.toFloat()) + i * 0.55f))) else 0.25f
             val h = size.height * base * k
-            drawRoundRect(p.accentInk.copy(alpha = if (live) 1f else 0.45f), Offset(x0 + i * (bw + gap), (size.height - h) / 2), Size(bw, h), CornerRadius(bw / 2))
+            drawRoundRect(
+                p.accentInk.copy(alpha = if (live) 1f else 0.45f),
+                Offset(x0 + i * (bw + gap), (size.height - h) / 2),
+                Size(bw, h),
+                CornerRadius(bw / 2),
+            )
         }
     }
 }

@@ -57,22 +57,24 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
-import kr.aigyeot.phone.domain.model.CareStats
 import kotlinx.coroutines.launch
+import kr.aigyeot.phone.domain.model.CareStats
+import kotlin.math.roundToInt
 
-// 차트(시안 js/charts.js·css/charts.css를 Compose Canvas로). 규칙(dataviz): 막대 24 이하·위 4 둥근 끝·바닥 각짐, 격자 1 실선,
+// 차트(Compose Canvas). 규칙(dataviz): 막대 24 이하·위 4 둥근 끝·바닥 각짐, 격자 1 실선,
 // 글자는 글자 토큰(데이터 색 금지), 하나를 강조하고 나머지는 회색, 툴팁은 보조(값은 라벨에도 있다).
 // 상호작용: 누르거나 끌면 가장 가까운 표시의 값 말풍선. 처음 보일 때 한 번: 띠·히트맵은 왼쪽에서 그려지고(0.9초),
 // 막대는 바닥에서 자란다(0.04초 간격, 0.6초). 동작 줄이기면 바로 그린다.
 
-/** 처음 보일 때 0→1(차트가 화면에 들어올 때 한 번, 시안 charts.js grow). 시각·데이터가 바뀌어도 다시 하지 않는다. 동작 줄이기면 1. */
+/** 처음 보일 때 0→1(차트가 화면에 들어올 때 한 번). 시각·데이터가 바뀌어도 다시 하지 않는다. 동작 줄이기면 1. */
 @Composable
 private fun rememberReveal(ms: Int, curve: Curve): Animatable<Float, *> {
     val reduced = LocalReducedMotion.current
     val a = remember { Animatable(if (reduced) 1f else 0f) }
     // 도중에 동작 줄이기가 켜지면 바로 끝 상태로.
-    LaunchedEffect(reduced) { if (reduced) a.snapTo(1f) else if (a.value < 1f) a.animateTo(1f, androidx.compose.animation.core.tween(ms, easing = curve.easing)) }
+    LaunchedEffect(reduced) {
+        if (reduced) a.snapTo(1f) else if (a.value < 1f) a.animateTo(1f, androidx.compose.animation.core.tween(ms, easing = curve.easing))
+    }
     return a
 }
 
@@ -90,7 +92,12 @@ internal fun pickHit(hits: List<Hit>, o: Offset, reach: Float): Int? {
         return dx * dx + dy * dy
     }
     return hits.indices.filter { dist(hits[it].rect) <= reach * reach }.minWithOrNull(
-        compareBy<Int>({ !hits[it].point }, { dist(hits[it].rect) }, { hits[it].rect.width * hits[it].rect.height }, { (hits[it].rect.center - o).getDistanceSquared() }),
+        compareBy<Int>(
+            { !hits[it].point },
+            { dist(hits[it].rect) },
+            { hits[it].rect.width * hits[it].rect.height },
+            { (hits[it].rect.center - o).getDistanceSquared() },
+        ),
     )
 }
 
@@ -109,7 +116,7 @@ private fun TipHost(hits: List<Hit>, modifier: Modifier, height: Dp, content: @C
             .pointerInput(hits) { detectHorizontalDragGestures(onDragEnd = { sel = null }, onDragCancel = { sel = null }) { c, _ -> sel = pick(c.position) } },
     ) {
         content(sel)
-        // 말풍선은 아래 4에서 120ms linear로 나타나고 사라진다(시안 .ch-tip). 끄는 동안 다른 값으로 옮기면 자리만 바뀐다. 동작 줄이기면 바로.
+        // 말풍선은 아래 4에서 120ms linear로 나타나고 사라진다. 끄는 동안 다른 값으로 옮기면 자리만 바뀐다. 동작 줄이기면 바로.
         val reduced = LocalReducedMotion.current
         var lastSel by remember(hits.size) { mutableStateOf<Int?>(null) }
         if (sel != null) lastSel = sel
@@ -151,13 +158,20 @@ private fun DrawScope.text(m: TextMeasurer, s: String, style: TextStyle, x: Floa
 }
 
 private fun chartStyle(size: Float, weight: Int = 500, color: Color) =
-    TextStyle(fontFamily = Pretendard, fontSize = size.sp, lineHeight = (size * 1.3f).sp, fontWeight = FontWeight(weight), color = color, fontFeatureSettings = "tnum")
+    TextStyle(
+        fontFamily = Pretendard,
+        fontSize = size.sp,
+        lineHeight = (size * 1.3f).sp,
+        fontWeight = FontWeight(weight),
+        color = color,
+        fontFeatureSettings = "tnum",
+    )
 
 /** 차트 글자 기본 크기(7일 막대·히트맵·에피소드·조향). 하루 띠는 칸 폭 배율을 곱해 쓴다. */
 private const val CHART_FS = 12f
 
 /**
- * 차트 글자 역할(시안 charts.js: 눈금 500, 오늘·강조 700, 값 fs+1, 이름 600). 모든 차트가 이것을 쓴다.
+ * 차트 글자 역할(눈금 500, 오늘·강조 700, 값 fs+1, 이름 600). 모든 차트가 이것을 쓴다.
  * [fs]는 기준 크기(하루 띠는 칸 폭 배율을 곱한 값).
  */
 private class ChartText(fs: Float, p: Palette) {
@@ -171,7 +185,7 @@ private class ChartText(fs: Float, p: Palette) {
 // ---------------------------------------------------------------- 오늘 하루(24시간 띠)
 
 /**
- * 오늘 하루(시안 Charts.day 6차): 줄마다 머리('● 이름 … 부가 값') + 0~24시 회색 트랙(높이 18) 위 표시.
+ * 오늘 하루: 줄마다 머리('● 이름 … 부가 값') + 0~24시 회색 트랙(높이 18) 위 표시.
  * 잠·수유는 트랙 높이 블록(최소 폭 6, 모서리 4), 기저귀는 점, 차에서 울음은 바탕색 테 마름모, 탑승 구간은 연한 주황 칸.
  * 지금 선은 모든 줄을 가로지르고 지금 뒤 트랙은 흐리다. 아래 눈금 0·6·12·18·24시, '지금 HH:MM'과 겹치는 눈금은 뺀다.
  */
@@ -182,7 +196,7 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh?
     val d = LocalDensity.current
     val n = data.lanes.size
     val reveal = rememberReveal(Motion.chartReveal.ms, Motion.chartReveal)
-    // U88 새 표시(iOS FreshPulse와 같은 값): 시트가 닫힌 뒤(340ms) 표시 점이 톡(1 → 1.5 → 1, spring.bouncy) 하고 같은 색 고리가 1.2초 동안
+    // 새 표시(iOS FreshPulse와 같은 값): 시트가 닫힌 뒤(340ms) 표시 점이 톡(1 → 1.5 → 1, spring.bouncy) 하고 같은 색 고리가 1.2초 동안
     // 3배로 퍼지며 사라진다. 동작 줄이기면 움직이지 않고 바로 걷는다. 띠에 그 줄이 없으면 그리지도 걷지도 않는다(기록 탭이 걷는다).
     val freshOn = fresh?.takeIf { f -> data.lanes.any { it.kind == f.lane } }
     val reducedMotion = LocalReducedMotion.current
@@ -201,12 +215,12 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh?
     }
     BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = data.summary }) {
         val w = with(d) { maxWidth.toPx() }
-        // 시안 Charts.day는 폭 320 기준 SVG를 칸 폭에 맞춰 늘린다(412 폰의 흰 블록 안 348 → 1.09배). 같은 크기로 보이게 글자·간격에
+        // 폭 320 기준 값을 칸 폭에 맞춰 늘린다(412 폰의 흰 블록 안 348 → 1.09배). 같은 크기로 보이게 글자·간격에
         // 같은 배율을 건다(좁은 화면에서 글자가 작아지지 않게 1 이상, 넓은 화면은 1.15에서 멈춤).
         val k = (maxWidth.value / 320f).coerceIn(1f, 1.15f)
         val fs = 13f * k
         val ct = ChartText(fs, p)
-        // 하루 띠 머리는 시안 Charts.day 값(줄 이름 먹색 600, 값 fs+2).
+        // 하루 띠 머리(줄 이름 먹색 600, 값 fs+2).
         val lane = chartStyle(fs, 600, p.textPrimary)
         val sub = ct.tick
         val value = chartStyle(fs + 2 * k, 700, p.textPrimary)
@@ -220,10 +234,11 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh?
         val pad = 7 * k * px
         val gap = 16 * k * px
         fun x(min: Int) = w * min / 1440f
-        // 머리가 한 줄에 들지 않으면(큰 글자, R13) 이름 아래 줄에 부가·값을 둔다.
+        // 머리가 한 줄에 들지 않으면(큰 글자) 이름 아래 줄에 부가·값을 둔다.
         val two = remember(data, w, headH) {
             data.lanes.map { l ->
-                val need = 14 * px + m.measure(l.name, lane).size.width + 12 * px + (l.sub?.let { m.measure(it, sub).size.width + 8 * px } ?: 0f) + m.measure(l.value, value).size.width
+                val need = 14 * px + m.measure(l.name, lane).size.width + 12 * px +
+                    (l.sub?.let { m.measure(it, sub).size.width + 8 * px } ?: 0f) + m.measure(l.value, value).size.width
                 need > w
             }
         }
@@ -248,7 +263,12 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh?
                         val ty = trackY(i)
                         drawRoundRect(p.surfaceRaised, Offset(0f, ty), Size(size.width, th), CornerRadius(th / 2))
                         if (l.kind == LaneKind.CAR) l.spans.forEach { s ->
-                            drawRoundRect(lerpColor(p.surfaceRaised, p.cCar, 0.22f), Offset(x(s.from), ty), Size(maxOf(2 * px, x(s.to) - x(s.from)), th), CornerRadius(4 * px))
+                            drawRoundRect(
+                                lerpColor(p.surfaceRaised, p.cCar, 0.22f),
+                                Offset(x(s.from), ty),
+                                Size(maxOf(2 * px, x(s.to) - x(s.from)), th),
+                                CornerRadius(4 * px),
+                            )
                         } else l.spans.forEach { s ->
                             drawRoundRect(color, Offset(x(s.from), ty), Size(maxOf(6 * px, x(s.to) - x(s.from) - 2 * px), th), CornerRadius(4 * px))
                         }
@@ -262,7 +282,7 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh?
                             } else drawCircle(color, th * 0.3f, c)
                         }
                     }
-                    // U88 새 표시(점 톡 + 고리 퍼짐). 동작 줄이기면 그리지 않는다.
+                    // 새 표시(점 톡 + 고리 퍼짐). 동작 줄이기면 그리지 않는다.
                     if (!reducedMotion) freshOn?.let { f ->
                         val i = data.lanes.indexOfFirst { it.kind == f.lane }
                         val c = Offset(x(f.at), trackY(i) + th / 2)
@@ -272,13 +292,15 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh?
                         drawCircle(col, r * pop.value, c)
                     }
                     // 고른 표시 강조(살짝 밝게)
-                    selected?.let { hits.getOrNull(it) }?.let { h -> drawRoundRect(Color.White.copy(alpha = 0.18f), h.rect.topLeft, h.rect.size, CornerRadius(4 * px)) }
+                    selected?.let { hits.getOrNull(it) }?.let { h ->
+                        drawRoundRect(Color.White.copy(alpha = 0.18f), h.rect.topLeft, h.rect.size, CornerRadius(4 * px))
+                    }
                     data.nowMin?.let { now ->
                         val nx = x(now)
                         for (i in 0 until n) drawRect(p.surface.copy(alpha = 0.6f), Offset(nx + px, trackY(i) - px), Size(size.width - nx, th + 2 * px))
                         drawLine(p.textPrimary, Offset(nx, trackY(0) - 3 * px), Offset(nx, trackBottom + 5 * px), 1.5f * px)
                     }
-                    // 줄 머리는 지금 선 위에 바탕색 테(halo)를 두르고 그린다: 선이 글자를 긋지 않게(시안 .halo).
+                    // 줄 머리는 지금 선 위에 바탕색 테(halo)를 두르고 그린다: 선이 글자를 긋지 않게.
                     data.lanes.forEachIndexed { i, l ->
                         val top = tops[i]
                         val baseline = top + headH * 0.8f
@@ -302,7 +324,7 @@ fun DayStrip(data: DayChartData, modifier: Modifier = Modifier, fresh: DayFresh?
                     val tx = x(h * 60)
                     val lo = when (align) { TextAlign.Start -> tx; TextAlign.End -> tx - tw; else -> tx - tw / 2 }
                     if (nowX != null && lo + tw > nowX - nowW && lo < nowX + nowW) continue
-                    if (lo < right + 4 * px) continue // 큰 글자에서 앞 눈금과 겹치면 뺀다(R13)
+                    if (lo < right + 4 * px) continue // 큰 글자에서 앞 눈금과 겹치면 뺀다
                     text(m, label, tick, tx, ay - tickH * 0.2f, align)
                     right = lo + tw
                 }
@@ -327,7 +349,7 @@ fun lerpColor(a: Color, b: Color, t: Float) = Color(
 // ---------------------------------------------------------------- 7일 막대
 
 /**
- * 7일 막대(시안 Charts.week): 오늘만 데이터 색(`hot`), 나머지는 먹색 13%. 막대 22, 위 4 둥근 끝, 바닥선 1.
+ * 7일 막대: 오늘만 데이터 색(`hot`), 나머지는 먹색 13%. 막대 22, 위 4 둥근 끝, 바닥선 1.
  * `target`이 있으면 기준선과 왼쪽 위 라벨(평소 3시간). 오늘 값만 막대 위에 라벨.
  */
 @Composable
@@ -351,9 +373,13 @@ fun WeekBars(
     val tlab = ct.name
     val tickH = remember(m, tick) { m.measure("오늘", tick).size.height.toFloat() }
     val px = with(d) { 1.dp.toPx() }
-    // 막대마다 0.6초 enter 곡선, 0.04초씩 늦게(8개마다 다시). 전체 시간은 고르게 흐르고 곡선은 막대마다 건다(시안 charts.js grow).
+    // 막대마다 0.6초 enter 곡선, 0.04초씩 늦게(8개마다 다시). 전체 시간은 고르게 흐르고 곡선은 막대마다 건다.
     val grow = rememberReveal(Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 7, Curve(0, 0f, 0f, 1f, 1f))
-    BoxWithConstraints(modifier.fillMaxWidth().semantics { contentDescription = label + ": " + bars.joinToString(", ") { b -> "${b.label} ${b.value?.let(fmt) ?: "기록 없음"}" } }) {
+    BoxWithConstraints(
+        modifier.fillMaxWidth().semantics {
+            contentDescription = label + ": " + bars.joinToString(", ") { b -> "${b.label} ${b.value?.let(fmt) ?: "기록 없음"}" }
+        },
+    ) {
         val w = with(d) { maxWidth.toPx() }
         val h = with(d) { height.toPx() }
         val top = 20 * px + tickH
@@ -378,9 +404,12 @@ fun WeekBars(
                     val isHot = i == bars.lastIndex
                     text(m, b.label, if (isHot) tickOn else tick, cx, h - 5 * px, TextAlign.Center)
                     val v = b.value ?: return@forEachIndexed
-                    // 오늘 값은 0이어도 기준선 위에 라벨을 남긴다(시안 charts.js week: 값 라벨은 막대와 따로).
+                    // 오늘 값은 0이어도 기준선 위에 라벨을 남긴다(값 라벨은 막대와 따로).
                     if (isHot && v == 0L && grow.value >= 1f) text(m, fmt(v), valStyle, minOf(cx + bw / 2, size.width), base - 7 * px, TextAlign.End)
-                    val local = ((grow.value * (Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 7) - Motion.CHART_BAR_STAGGER_MS * (i % 8)) / Motion.chartBar.ms.toFloat()).coerceIn(0f, 1f)
+                    val local = (
+                        (grow.value * (Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 7) - Motion.CHART_BAR_STAGGER_MS * (i % 8)) /
+                            Motion.chartBar.ms.toFloat()
+                        ).coerceIn(0f, 1f)
                     val k = if (grow.value >= 1f) 1f else Motion.chartBar.easing.transform(local)
                     val yy = y(v)
                     val full = base - yy
@@ -397,7 +426,8 @@ fun WeekBars(
                         quadraticTo(left, base - barH, left + r, base - barH); lineTo(left + bw - r, base - barH)
                         quadraticTo(left + bw, base - barH, left + bw, base - barH + r); lineTo(left + bw, base); close()
                     }
-                    drawPath(path, if (selected == hits.indexOfFirst { it.rect.left <= cx && it.rect.right >= cx }) lerpColor(color, Color.White, 0.15f) else color)
+                    val hit = selected == hits.indexOfFirst { it.rect.left <= cx && it.rect.right >= cx }
+                    drawPath(path, if (hit) lerpColor(color, Color.White, 0.15f) else color)
                     if (isHot && k >= 1f) text(m, fmt(v), valStyle, minOf(cx + bw / 2, size.width), yy - 7 * px, TextAlign.End)
                 }
             }
@@ -407,7 +437,7 @@ fun WeekBars(
 
 // ---------------------------------------------------------------- 잠 패턴 히트맵
 
-/** 잠 패턴(시안 Charts.heat): 7일 × 48칸(30분), 잔 칸만 잠 색. 왼쪽 요일, 아래 0·6·12·18·24시. 툴팁 '11월 9일 00:00 잠'. */
+/** 잠 패턴: 7일 × 48칸(30분), 잔 칸만 잠 색. 왼쪽 요일, 아래 0·6·12·18·24시. 툴팁 '11월 9일 00:00 잠'. */
 @Composable
 fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
     val p = Tokens.colors
@@ -418,7 +448,7 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
     val tickOn = ct.tickOn
     val px = with(d) { 1.dp.toPx() }
     val tickH = remember(m, tick) { m.measure("0시", tick).size.height.toFloat() }
-    // 칸 높이 14(시안), 큰 글자에서는 요일 글자 높이만큼 늘려 줄끼리 겹치지 않게 한다(R13).
+    // 칸 높이 14, 큰 글자에서는 요일 글자 높이만큼 늘려 줄끼리 겹치지 않게 한다.
     val cellH = maxOf(14 * px, remember(m, tickOn) { m.measure("오늘", tickOn).size.height.toFloat() })
     val rowsH = g.rows.size * (cellH + 2 * px)
     val totalH = rowsH + 6 * px + tickH
@@ -430,7 +460,12 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
         val cw = (w - lead) / 48f
         val hits = remember(g, w) {
             g.rows.flatMapIndexed { r, row ->
-                row.indices.filter { row[it] }.map { c -> Hit(Rect(lead + c * cw, r * (cellH + 2 * px), lead + (c + 1) * cw, r * (cellH + 2 * px) + cellH), "${monthDay(g.days[r])} ${hhmm(c * 30)} 잠") }
+                row.indices.filter { row[it] }.map { c ->
+                    Hit(
+                        Rect(lead + c * cw, r * (cellH + 2 * px), lead + (c + 1) * cw, r * (cellH + 2 * px) + cellH),
+                        "${monthDay(g.days[r])} ${hhmm(c * 30)} 잠",
+                    )
+                }
             }
         }
         TipHost(hits, Modifier, with(d) { totalH.toDp() }) { selected ->
@@ -445,12 +480,19 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
                     g.rows.forEachIndexed { r, row ->
                         val yy = r * (cellH + 2 * px)
                         row.forEachIndexed { c, on ->
-                            drawRoundRect(if (on) p.cSleep else p.surfaceRaised, Offset(lead + c * cw, yy), Size(cw - 1.2f * px, cellH), CornerRadius(1.5f * px))
+                            drawRoundRect(
+                                if (on) p.cSleep else p.surfaceRaised,
+                                Offset(lead + c * cw, yy),
+                                Size(cw - 1.2f * px, cellH),
+                                CornerRadius(1.5f * px),
+                            )
                         }
                     }
-                    selected?.let { hits.getOrNull(it) }?.let { h -> drawRoundRect(Color.White.copy(alpha = 0.25f), h.rect.topLeft, Size(cw - 1.2f * px, cellH), CornerRadius(1.5f * px)) }
+                    selected?.let { hits.getOrNull(it) }?.let { h ->
+                        drawRoundRect(Color.White.copy(alpha = 0.25f), h.rect.topLeft, Size(cw - 1.2f * px, cellH), CornerRadius(1.5f * px))
+                    }
                 }
-                // 큰 글자에서 앞 눈금과 겹치는 눈금은 뺀다(R13, 200%에서 '18시24시'가 붙었다).
+                // 큰 글자에서 앞 눈금과 겹치는 눈금은 뺀다(200%에서 '18시24시'가 붙지 않게).
                 var right = Float.NEGATIVE_INFINITY
                 for (h in listOf(0, 6, 12, 18, 24)) {
                     val align = when (h) { 0 -> TextAlign.Start; 24 -> TextAlign.End; else -> TextAlign.Center }
@@ -469,8 +511,8 @@ fun SleepHeat(g: SleepGrid, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------- 에피소드 띠
 
 /**
- * 에피소드 띠(시안 Charts.episode). 소리 줄(먹색 막대 + 안에 방법 이름, 재생 사이 칸은 회색·이름 없이 시간만), 아래 표시(감지·다시 울음·쉼터 제안·그침).
- * 리포트에 울음 구간이 없어 울음 줄은 그리지 않는다(결정 7).
+ * 에피소드 띠. 소리 줄(먹색 막대 + 안에 방법 이름, 재생 사이 칸은 회색·이름 없이 시간만), 아래 표시(감지·다시 울음·쉼터 제안·그침).
+ * 리포트에 울음 구간이 없어 울음 줄은 그리지 않는다.
  */
 @Composable
 fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
@@ -478,12 +520,12 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
     val fs = CHART_FS
-    // 에피소드 띠만의 색(줄 이름·막대 안 글·표시는 시안 .ch-ep 값).
+    // 에피소드 띠만의 색(줄 이름·막대 안 글·표시).
     val laneStyle = chartStyle(fs + 1, 600, p.textSecondary)
     val inStyle = chartStyle(fs, 600, p.surface)
     val markStyle = chartStyle(fs, 600, p.textSecondary)
     val px = with(d) { 1.dp.toPx() }
-    // 막대(줄 높이 − 8)는 안 글자 높이 + 위아래 4 이상(큰 글자, R13).
+    // 막대(줄 높이 − 8)는 안 글자 높이 + 위아래 4 이상(큰 글자).
     val inH = remember(m, inStyle) { m.measure("가", inStyle).size.height.toFloat() }
     val lh = maxOf(30 * px, inH + 16 * px)
     val markH = remember(m, markStyle) { m.measure("가", markStyle).size.height.toFloat() }
@@ -504,13 +546,22 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
                 val laneL = m.measure("소리", laneStyle)
                 text(m, "소리", laneStyle, 0f, 2 * px + (lh - 8 * px - laneL.size.height) / 2 + laneL.firstBaseline)
                 clipRect(right = left + (size.width - left) * reveal.value) {
-                    band.gaps.forEach { s -> drawRoundRect(p.surfaceRaised, Offset(x(s.from), 2 * px), Size(maxOf(2 * px, x(s.to) - x(s.from) - 2 * px), lh - 8 * px), CornerRadius(4 * px)) }
+                    band.gaps.forEach { s ->
+                        drawRoundRect(
+                            p.surfaceRaised,
+                            Offset(x(s.from), 2 * px),
+                            Size(maxOf(2 * px, x(s.to) - x(s.from) - 2 * px), lh - 8 * px),
+                            CornerRadius(4 * px),
+                        )
+                    }
                     band.sounds.forEach { s ->
                         val bw = maxOf(2 * px, x(s.to) - x(s.from) - 2 * px)
                         drawRoundRect(p.textPrimary, Offset(x(s.from), 2 * px), Size(bw, lh - 8 * px), CornerRadius(4 * px))
                         s.name?.let { n ->
                             val t = m.measure(n, inStyle)
-                            if (bw > t.size.width + 16 * px) text(m, n, inStyle, x(s.from) + 8 * px, 2 * px + (lh - 8 * px - t.size.height) / 2 + t.firstBaseline)
+                            if (bw > t.size.width + 16 * px) {
+                                text(m, n, inStyle, x(s.from) + 8 * px, 2 * px + (lh - 8 * px - t.size.height) / 2 + t.firstBaseline)
+                            }
                         }
                     }
                     band.marks.forEachIndexed { i, mk ->
@@ -526,13 +577,15 @@ fun EpisodeStrip(band: EpisodeBand, modifier: Modifier = Modifier) {
         }
     }
     // 결과(쉼터 제안·그쳤어요): 그 시각이 리포트에 없어 축 밖에 둔다.
-    if (band.outcomes.isNotEmpty()) Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { band.outcomes.forEach { Badge(it) } }
+    if (band.outcomes.isNotEmpty()) {
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { band.outcomes.forEach { Badge(it) } }
+    }
     }
 }
 
 // ---------------------------------------------------------------- 소리별 성적
 
-/** 소리별 성적(시안 Charts.methods): 이름 · 점 행렬(튼 횟수만큼, 그친 만큼 채움, 먹색 한 색) · '6/7번', 3번 미만은 '아직 모름'. */
+/** 소리별 성적: 이름 · 점 행렬(튼 횟수만큼, 그친 만큼 채움, 먹색 한 색) · '6/7번', 3번 미만은 '아직 모름'. */
 /** 소리별 성적 한 줄. 순서는 [CareStats.methodOrder]가 정해 넘긴다. */
 data class MethodRow(val name: String, val ok: Int, val n: Int) {
     val known get() = n >= CareStats.methodKnownAttempts
@@ -545,14 +598,16 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
     var tip by remember { mutableStateOf<Int?>(null) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         rows.forEachIndexed { r, row ->
-            val before = rows.take(r).sumOf { it.ok } // 찬 점은 모든 줄을 이어 0.02초씩 늦게 튄다(시안 charts.js: spring 강성 600·감쇠 30)
+            val before = rows.take(r).sumOf { it.ok } // 찬 점은 모든 줄을 이어 0.02초씩 늦게 튄다(spring 강성 600·감쇠 30)
             Row(
-                Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "${row.name}: " + if (row.known) "${row.n}번 틀어서 ${row.ok}번 그침" else "아직 모름, ${row.n}번 틀었어요" }
+                Modifier.fillMaxWidth().semantics(mergeDescendants = true) {
+                    contentDescription = "${row.name}: " + if (row.known) "${row.n}번 틀어서 ${row.ok}번 그침" else "아직 모름, ${row.n}번 틀었어요"
+                }
                     .pointerInput(r) { detectTapGestures { tip = if (tip == r) null else r } },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // 이름 칸은 80 이상(시안 74), 큰 글자에서는 이름 폭만큼 늘어 낱말 가운데서 끊기지 않게(R13).
+                // 이름 칸은 80 이상, 큰 글자에서는 이름 폭만큼 늘어 낱말 가운데서 끊기지 않게.
                 // 144에서 멈춰 긴 우리 노래 이름(30자까지)은 줄을 바꾸고 점·횟수 자리를 남긴다.
                 Text(row.name, Modifier.widthIn(min = 80.dp, max = 144.dp), style = Type.chip, color = if (row.known) p.textPrimary else p.textTertiary)
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -560,7 +615,12 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
                         val on = i < row.ok
                         val pop = remember { Animatable(if (reduced || !on) 1f else 0f) }
                         LaunchedEffect(reduced) {
-                            if (reduced) pop.snapTo(1f) else if (on && pop.value < 1f) { kotlinx.coroutines.delay(Motion.DOT_STAGGER_MS * (before + i)); pop.animateTo(1f, Motion.dotPop.spec()) }
+                            if (reduced) {
+                                pop.snapTo(1f)
+                            } else if (on && pop.value < 1f) {
+                                kotlinx.coroutines.delay(Motion.DOT_STAGGER_MS * (before + i))
+                                pop.animateTo(1f, Motion.dotPop.spec())
+                            }
                         }
                         Canvas(Modifier.size(12.dp)) {
                             val rr = size.minDimension / 2
@@ -588,7 +648,7 @@ fun MethodDots(rows: List<MethodRow>, modifier: Modifier = Modifier) {
 
 // ---------------------------------------------------------------- 조향 비교
 
-/** 평소 대비 조향 보정(시안 Charts.steer): 평소·울음 중·달랜 뒤 셋, '울음 중'만 주황. 값 라벨은 막대 위. */
+/** 평소 대비 조향 보정: 평소·울음 중·달랜 뒤 셋, '울음 중'만 주황. 값 라벨은 막대 위. */
 @Composable
 fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modifier = Modifier) {
     val p = Tokens.colors
@@ -606,7 +666,8 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
     val grow = rememberReveal(Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 2, Curve(0, 0f, 0f, 1f, 1f)) // 막대 셋
     BoxWithConstraints(
         modifier.fillMaxWidth().semantics {
-            contentDescription = "1분당 큰 조향 보정: " + items.mapNotNull { (k, v, _) -> v?.let { "$k ${perMinText(it)}번" } }.joinToString(", ") // 값이 없는 막대는 읽지 않는다(iOS·차와 같음)
+            // 값이 없는 막대는 읽지 않는다(iOS·차와 같음)
+            contentDescription = "1분당 큰 조향 보정: " + items.mapNotNull { (k, v, _) -> v?.let { "$k ${perMinText(it)}번" } }.joinToString(", ")
         },
     ) {
     val w = with(d) { maxWidth.toPx() }
@@ -627,7 +688,10 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
             val cx = slot * i + slot / 2
             text(m, k, if (hotBar) tickOn else tick, cx, size.height - 5 * px, TextAlign.Center)
             v ?: return@forEachIndexed
-            val local = ((grow.value * (Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 2) - Motion.CHART_BAR_STAGGER_MS * i) / Motion.chartBar.ms.toFloat()).coerceIn(0f, 1f)
+            val local = (
+                (grow.value * (Motion.chartBar.ms + Motion.CHART_BAR_STAGGER_MS * 2) - Motion.CHART_BAR_STAGGER_MS * i) /
+                    Motion.chartBar.ms.toFloat()
+                ).coerceIn(0f, 1f)
             val kk = if (grow.value >= 1f) 1f else Motion.chartBar.easing.transform(local)
             val full = ((base - top) * v / max).toFloat()
             val bh = full * kk
@@ -652,12 +716,23 @@ fun SteerBars(baseline: Double?, during: Double?, after: Double?, modifier: Modi
 fun FeedMeter(fraction: Float, windowAt: Float?, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
-    val v by androidx.compose.animation.core.animateFloatAsState(fraction.coerceIn(0f, 1f), if (reduced) androidx.compose.animation.core.tween(0) else Springs.smooth.spec(), label = "meter")
+    val v by androidx.compose.animation.core.animateFloatAsState(
+        fraction.coerceIn(0f, 1f),
+        if (reduced) androidx.compose.animation.core.tween(0) else Springs.smooth.spec(),
+        label = "meter",
+    )
     Canvas(modifier.fillMaxWidth().height(18.dp)) {
         val y = size.height / 2
         val h = 6.dp.toPx()
         drawRoundRect(p.surfaceRaised, Offset(0f, y - h / 2), Size(size.width, h), CornerRadius(h / 2))
         if (v > 0f) drawRoundRect(p.textPrimary, Offset(0f, y - h / 2), Size(size.width * v, h), CornerRadius(h / 2))
-        windowAt?.let { w -> drawRoundRect(p.child, Offset(size.width * w - 1.5.dp.toPx(), y - h / 2 - 6.dp.toPx()), Size(3.dp.toPx(), h + 12.dp.toPx()), CornerRadius(1.5.dp.toPx())) }
+        windowAt?.let { w ->
+            drawRoundRect(
+                p.child,
+                Offset(size.width * w - 1.5.dp.toPx(), y - h / 2 - 6.dp.toPx()),
+                Size(3.dp.toPx(), h + 12.dp.toPx()),
+                CornerRadius(1.5.dp.toPx()),
+            )
+        }
     }
 }

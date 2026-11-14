@@ -4,27 +4,28 @@ import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
-import kr.aigyeot.phone.domain.model.HOUR
-import kr.aigyeot.phone.domain.model.MINUTE
-import kr.aigyeot.phone.domain.model.onDate
-import kr.aigyeot.phone.domain.model.carePattern
-import kr.aigyeot.phone.domain.model.reportRowSub
 import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.FeedGap
+import kr.aigyeot.phone.domain.model.HOUR
+import kr.aigyeot.phone.domain.model.MINUTE
+import kr.aigyeot.phone.domain.model.carePattern
+import kr.aigyeot.phone.domain.model.onDate
+import kr.aigyeot.phone.domain.model.reportRowSub
+import kr.aigyeot.phone.fixture
 import kr.aigyeot.shared.CarAction
 import kr.aigyeot.shared.CarActionKind
+import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
-import kr.aigyeot.shared.MethodStat
 import kr.aigyeot.shared.HandoffKind
-import kr.aigyeot.shared.StopInfo
-import kr.aigyeot.shared.StopReason
-import kr.aigyeot.shared.Envelope
+import kr.aigyeot.shared.MethodStat
 import kr.aigyeot.shared.PlayEntry
 import kr.aigyeot.shared.PlayPurpose
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.SoundMethod
+import kr.aigyeot.shared.StopInfo
+import kr.aigyeot.shared.StopReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -33,7 +34,7 @@ import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 
-/** 차트 값(디자인 v6, 진행 기록 '결정' 1~8): 기록·리포트에서 그릴 때 계산한 값이 규칙대로다. */
+/** 차트 값: 기록·리포트에서 그릴 때 계산한 값이 규칙대로다. */
 class ChartDataTest {
     private val zone = APP_ZONE
     private val today = LocalDate.of(2026, 11, 9)
@@ -44,7 +45,7 @@ class ChartDataTest {
         CareEvent("e${n++}", kind, start, end, zone = zone.id, createdAt = start, updatedAt = start, deletedAt = if (deleted) start else null)
 
     private fun report(): ReportSummaryBody {
-        val env = ProtocolJson.decodeFromString(Envelope.serializer(), File("../../shared/src/test/resources/protocol/report_summary.json").readText())
+        val env = fixture("report_summary")
         return ProtocolJson.decodeFromJsonElement(ReportSummaryBody.serializer(), env.body)
     }
 
@@ -52,7 +53,7 @@ class ChartDataTest {
 
     @Test
     fun `오늘 하루 띠 새 표시는 막 저장한 기록의 줄과 분이다`() {
-        // U88(iOS ChartData.fresh와 같은 규칙): 그날 시작한 수유·잠·기저귀만, 메모와 다른 날은 없다.
+        // iOS ChartData.fresh와 같은 규칙: 그날 시작한 수유·잠·기저귀만, 메모와 다른 날은 없다.
         assertEquals(DayFresh("f", LaneKind.FEED, 9 * 60), dayFresh(ev(CareKind.FEED, at(9)).copy(id = "f"), today, zone))
         assertEquals(LaneKind.DIAPER, dayFresh(ev(CareKind.DIAPER, at(11)), today, zone)?.lane)
         assertNull(dayFresh(ev(CareKind.NOTE, at(9)), today, zone))
@@ -61,7 +62,7 @@ class ChartDataTest {
 
     @Test
     fun `빈 날에는 가운데 지난 기록 적기 하나만 보인다`() {
-        // 고른 날의 줄이 비면 DayView는 빈 상태 판(달력 고리 + '이 날 기록이 없어요' + '＋ 지난 기록 적기')만 그리고 목록 끝 줄은 숨긴다(U85 ①, 그림은 캡처로 확인).
+        // 고른 날의 줄이 비면 DayView는 빈 상태 판(달력 고리 + '이 날 기록이 없어요' + '＋ 지난 기록 적기')만 그리고 목록 끝 줄은 숨긴다(그림은 캡처로 확인).
         val yesterday = today.minusDays(1)
         val car = kr.aigyeot.phone.domain.model.CarLine("EXAMPLE-S", null, at(9), at(10), null, null)
         val care = CareFile(events = listOf(ev(CareKind.FEED, at(8, day = yesterday), deleted = true), ev(CareKind.NOTE, at(11))))
@@ -72,7 +73,7 @@ class ChartDataTest {
 
     @Test
     fun `수유 간격이 5개 미만이면 쌓인 수만 점으로 보인다`() {
-        // 간격 3개(1h씩): 보통 간격은 없고 점 다섯 중 셋을 채운다(U85 ③, 7.1 pattern.intervalProgress).
+        // 간격 3개(1h씩): 보통 간격은 없고 점 다섯 중 셋을 채운다(pattern.intervalProgress).
         val few = CareFile(events = (0..3).map { ev(CareKind.FEED, at(8 + it)) })
         val p3 = carePattern(few, emptyList(), now, zone)
         assertNull(p3.feedIntervalMs)
@@ -119,7 +120,13 @@ class ChartDataTest {
         assertEquals(853, d.nowMin)
         assertTrue(d.summary.startsWith("오늘 하루: 잠 2시간 20분"))
         // 자정에 딱 끝난 어제 잠은 오늘 줄에 없다. 오늘 시작한 끝 모름 수유는 점으로 남는다.
-        val edge = CareFile(sleepDiaperEnabled = true, events = listOf(ev(CareKind.SLEEP, at(23, 0, today.minusDays(1)), at(0, 0)), CareEvent("u", CareKind.FEED, at(5, 0), endUnknown = true, zone = zone.id, createdAt = 0, updatedAt = 0)))
+        val edge = CareFile(
+            sleepDiaperEnabled = true,
+            events = listOf(
+                ev(CareKind.SLEEP, at(23, 0, today.minusDays(1)), at(0, 0)),
+                CareEvent("u", CareKind.FEED, at(5, 0), endUnknown = true, zone = zone.id, createdAt = 0, updatedAt = 0),
+            ),
+        )
         val e2 = dayChart(edge, emptyList(), today, now, zone, showCar = false)
         assertTrue(e2.lanes[0].spans.isEmpty())
         assertEquals(listOf(300 to 300), e2.lanes[1].spans.map { it.from to it.to })
@@ -221,22 +228,36 @@ class ChartDataTest {
 
     @Test
     fun `리포트 결과와 뺀 이유는 정해진 낱말로 보인다`() {
-        // U73(차·두 앱 같은 글자): 결과는 명사형, 뺀 이유는 열거 이름을 보이지 않는다. 줄은 '이름 · 값' 두 칸(콜론 없음).
-        assertEquals(listOf("그침", "계속 울음", "판정하지 못함", "1차 시도 없음"), listOf(EpisodeResult.SUCCESS, EpisodeResult.FAILURE, EpisodeResult.UNDETERMINED, null).map { kr.aigyeot.phone.domain.model.resultText(it) })
+        // 차·두 앱 같은 글자: 결과는 명사형, 뺀 이유는 열거 이름을 보이지 않는다. 줄은 '이름 · 값' 두 칸(콜론 없음).
+        assertEquals(
+            listOf("그침", "계속 울음", "판정하지 못함", "1차 시도 없음"),
+            listOf(EpisodeResult.SUCCESS, EpisodeResult.FAILURE, EpisodeResult.UNDETERMINED, null).map { kr.aigyeot.phone.domain.model.resultText(it) },
+        )
         val reasons = kr.aigyeot.shared.ExcludedReason.entries.associateWith { kr.aigyeot.phone.domain.model.excludedText(it) }
         assertEquals("마이크 오류", reasons[kr.aigyeot.shared.ExcludedReason.MIC_ERROR])
         assertEquals("달래기 20분 끝남", reasons[kr.aigyeot.shared.ExcludedReason.SESSION_CAP])
         assertEquals("탑승이 끝남", reasons[kr.aigyeot.shared.ExcludedReason.SESSION_END])
         assertEquals("차가 절전에 들어감", reasons[kr.aigyeot.shared.ExcludedReason.SUSPEND])
         assertTrue(reasons.values.none { it.any { c -> c in 'a'..'z' || c == '_' } }) // 'mic_error' 같은 열거 이름이 화면에 나오지 않는다
-        val e = report().timeline.first().copy(result = EpisodeResult.FAILURE, excludedReason = kr.aigyeot.shared.ExcludedReason.INPUT_SILENCED, recried = true, second = null, stop = null, totalCryS = 75)
+        val e = report().timeline.first().copy(
+            result = EpisodeResult.FAILURE,
+            excludedReason = kr.aigyeot.shared.ExcludedReason.INPUT_SILENCED,
+            recried = true,
+            second = null,
+            stop = null,
+            totalCryS = 75,
+        )
         val names = (episodeSoundLines(emptyList(), e) + episodeResultLines(emptyList(), e)).map { it.first }
         assertEquals(listOf("감지까지", "소리", "재생", "결과", "성적에서 뺌", "다시 울음", "울음 시간"), names)
         assertEquals(listOf("결과" to "계속 울음", "성적에서 뺌" to "마이크 입력이 막힘", "다시 울음" to "있음", "울음 시간" to "1분 15초"), episodeResultLines(emptyList(), e))
         assertTrue((episodeSoundLines(emptyList(), e) + episodeResultLines(emptyList(), e)).none { ":" in it.first || ":" in it.second })
         // 소리 바꾸기 요청으로 연 울음은 '감지까지'가 없고, 틀지 않았으면 소리 '재생 없음'이고 '재생' 줄은 없다(같은 말 두 번 금지).
         assertTrue(episodeSoundLines(emptyList(), e.copy(sound = null, playS = 0)).none { it.first == "재생" })
-        assertEquals("재생 없음", episodeSoundLines(emptyList(), e.copy(trigger = EpisodeTrigger.SWITCH_SOUND, sound = null)).let { l -> assertTrue(l.none { it.first == "감지까지" }); l.first { it.first == "소리" }.second })
+        assertEquals(
+            "재생 없음",
+            episodeSoundLines(emptyList(), e.copy(trigger = EpisodeTrigger.SWITCH_SOUND, sound = null))
+                .let { l -> assertTrue(l.none { it.first == "감지까지" }); l.first { it.first == "소리" }.second },
+        )
     }
 
     @Test
@@ -247,7 +268,11 @@ class ChartDataTest {
         assertEquals("잠 12:00–12:00 · 1분 미만", tip)
         // 시작과 끝이 같은 기록은 길이를 붙이지 않는다.
         val zero = e.copy(endAt = e.startAt)
-        assertEquals("잠 12:00–12:00", dayChart(CareFile(sleepDiaperEnabled = true, events = listOf(zero)), emptyList(), today, now, zone, showCar = false).lanes.first { it.kind == LaneKind.SLEEP }.spans.single().tip)
+        assertEquals(
+            "잠 12:00–12:00",
+            dayChart(CareFile(sleepDiaperEnabled = true, events = listOf(zero)), emptyList(), today, now, zone, showCar = false)
+                .lanes.first { it.kind == LaneKind.SLEEP }.spans.single().tip,
+        )
     }
 
     @Test
@@ -349,14 +374,14 @@ class ChartDataTest {
 
     @Test
     fun `집계 공통 규칙 한 곳을 패턴 숫자와 7일 막대가 같이 쓴다`() {
-        // 중앙값·하루 평균(U27·U31)
+        // 중앙값·하루 평균
         assertNull(CareStats.median(emptyList()))
         assertEquals(3L, CareStats.median(listOf(5L, 1L, 3L)))
         assertEquals(2L, CareStats.median(listOf(1L, 3L, 4L, 1L)))
         assertEquals(3.0, CareStats.perRecordedDay(listOf<Int>(0, 3, 3))!!, 0.0)
         assertNull(CareStats.perRecordedDay(listOf<Int>(0, 0)))
         assertEquals(90 * MINUTE, CareStats.perRecordedDay(listOf(0L, 60 * MINUTE, 120 * MINUTE)))
-        // R14 간격: 지운 것·지금 뒤로 찍힌 것·10시간 넘는 간격은 빼고, 간격은 뒤 수유에 속한다.
+        // 수유 간격: 지운 것·지금 뒤로 찍힌 것·10시간 넘는 간격은 빼고, 간격은 뒤 수유에 속한다.
         fun feed(id: String, t: Long, deleted: Boolean = false) =
             CareEvent(id, CareKind.FEED, t, endAt = t + 10 * MINUTE, zone = APP_ZONE.id, createdAt = t, updatedAt = t, deletedAt = if (deleted) t else null)
         val base = now - 20 * HOUR
@@ -364,7 +389,7 @@ class ChartDataTest {
         assertEquals(listOf(FeedGap(base + 14 * HOUR, 3 * HOUR)), CareStats.feedGaps(CareStats.feedStarts(file.events, until = now)))
         assertNull(CareStats.usualGap(List(4) { HOUR }))
         assertEquals(HOUR, CareStats.usualGap(List(5) { HOUR }))
-        // U47: 울음 경보 에피소드만 센다. 소리 바꾸기 요청이 섞여도 리포트 줄·패턴·7일 막대가 같은 수다.
+        // 울음 경보 에피소드만 센다. 소리 바꾸기 요청이 섞여도 리포트 줄·패턴·7일 막대가 같은 수다.
         val r = report().let { b ->
             b.copy(startedAt = iso(at(9, 0)), endedAt = iso(at(9, 40)), timeline = b.timeline.map { it.copy(startedAt = iso(at(9, 10))) } +
                 b.timeline.first().copy(episodeId = "sw", trigger = EpisodeTrigger.SWITCH_SOUND, startedAt = iso(at(9, 20))))

@@ -24,7 +24,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * 수명 표(arch-phone-android 5장, P6) — 행 하나에 시험 하나. 사건: 연결 끊김(401·4001·사용자), 방 바뀜(새 연결), 기록 지우기, 앱 재시작.
+ * 수명 표 — 행 하나에 시험 하나. 사건: 연결 끊김(401·4001·사용자), 방 바뀜(새 연결), 기록 지우기, 앱 재시작.
  * 재시작은 같은 폴더·같은 표시로 Kit을 다시 만들어 본다.
  */
 class LifecycleTableTest {
@@ -66,7 +66,7 @@ class LifecycleTableTest {
         clearAndWait()
         assertEquals(now + 60_000, outbox.holdUntil(now))
         assertEquals(now + 60_000, restart().outbox.holdUntil(now))
-        // 끊기: 저장된 기다림은 새 상태와 함께 사라지고, 메모리 기다림은 그 자격에만 걸린다(P5).
+        // 끊기: 저장된 기다림은 새 상태와 함께 사라지고, 메모리 기다림은 그 자격에만 걸린다.
         outbox.holdInMemory(OWNER, now + 120_000)
         lose.lost(OWNER)
         assertNull(outbox.holdUntil(now))
@@ -144,7 +144,7 @@ class LifecycleTableTest {
 
     @Test
     fun `띠와 배너 - 끊기·새 연결에 비우고 기록 지우기는 배너만 걷고 재시작은 저장된 버림만 다시 띄운다`() = kitTest {
-        relay.sendResult = { RelayResult.Err(403, "forbidden", null) } // 다시 보내도 같은 실패: 버리고 띠로 알린다(U54)
+        relay.sendResult = { RelayResult.Err(403, "forbidden", null) } // 다시 보내도 같은 실패: 버리고 띠로 알린다
         selectSong("s1")
         until("버림 띠") { notices.notice.value != null }
         val dropLine = notices.notice.value
@@ -192,7 +192,7 @@ class LifecycleTableTest {
     fun `보낼 함 업로드 결과는 SendResult로 바뀐다`() = kitTest {
         val item = outboxItem(OutboxPayload.Song("s1", songRef("s1"), uploaded = false, file = "none.m4a"), now)
         assertEquals(SendResult.Failed(415, "file_missing"), UploadSong(relay, songs)(OWNER, item))
-        // 파일을 올린 노래(재시작 뒤 저장에서 읽은 것 포함)와 노래가 아닌 항목은 PUT 없이 봉투로 간다(7.5 두 단계).
+        // 파일을 올린 노래(재시작 뒤 저장에서 읽은 것 포함)와 노래가 아닌 항목은 PUT 없이 봉투로 간다(두 단계).
         assertNull(UploadSong(relay, songs)(OWNER, item.markUploaded(true)))
         assertNull(UploadSong(relay, songs)(OWNER, outboxItem(OutboxPayload.Message("song_selected", songRef("s1")), now)))
     }

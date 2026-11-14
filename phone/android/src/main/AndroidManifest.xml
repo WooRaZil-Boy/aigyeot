@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- 연결 비밀값·기록은 백업에서 뺀다(계약 6.1·7.4). -->
+    <!-- 연결 비밀값·기록은 백업에서 뺀다. -->
     <application
         android:name=".AigyeotApp"
         android:allowBackup="false"
@@ -24,7 +24,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 연결 링크 aigyeot://pair?code=…(7.6). 코드는 형식 검사 뒤 확인 화면을 거친다. -->
+            <!-- 연결 링크 aigyeot://pair?code=…. 코드는 형식 검사 뒤 확인 화면을 거친다. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -33,7 +33,7 @@
             </intent-filter>
         </activity>
 
-        <!-- 내 기록 내보내기(C7): 캐시 export/ 파일 하나를 공유 시트로 넘긴다. -->
+        <!-- 내 기록 내보내기: 캐시 export/ 파일 하나를 공유 시트로 넘긴다. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"
@@ -44,7 +44,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- 진행 중 알림의 '끝내기'(C6). 이 앱의 PendingIntent만 보낸다. -->
+        <!-- 진행 중 알림의 '끝내기'. 이 앱의 PendingIntent만 보낸다. -->
         <receiver
             android:name=".CareNotify$CareEndReceiver"
             android:exported="false" />
@@ -59,7 +59,7 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="handoff_alert" />
-        <!-- 앱이 닫혀 있을 때 시스템이 띄우는 인계 알림의 작은 아이콘·색(디자인 v6: 앞 층 흰 실루엣 + 브랜드 파랑). -->
+        <!-- 앱이 닫혀 있을 때 시스템이 띄우는 인계 알림의 작은 아이콘·색(앞 층 흰 실루엣 + 브랜드 파랑). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_aigyeot" />

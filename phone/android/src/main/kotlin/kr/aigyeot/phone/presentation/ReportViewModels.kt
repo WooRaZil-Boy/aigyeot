@@ -20,7 +20,7 @@ import kr.aigyeot.shared.InviteResponse
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.Role
 
-// 리포트·인계 알림·보호자 화면. 리포트·알림은 state.json이 원본이고 읽기만 한다(저장소를 바로 읽는다, 11-08 구조 원칙).
+// 리포트·인계 알림·보호자 화면. 리포트·알림은 state.json이 원본이고 읽기만 한다(저장소를 바로 읽는다).
 
 /** 리포트 목록: 새 것이 위. */
 fun reportsNewestFirst(reports: Collection<ReportSummaryBody>) = reports.sortedByDescending { instantOf(it.startedAt) ?: 0 }
@@ -43,7 +43,7 @@ class AlertViewModel(id: String, state: PhoneStateRepository, scope: CoroutineSc
     val alert: StateFlow<StoredAlert?> = derive(state.state) { state.state.value.alerts.find { it.id == id } }
 }
 
-/** 보호자: owner는 초대·목록, guardian은 인계 알림 받기(7.1). */
+/** 보호자: owner는 초대·목록, guardian은 인계 알림 받기. */
 data class GuardiansUiState(
     val role: Role?,
     val handoffAlerts: Boolean,

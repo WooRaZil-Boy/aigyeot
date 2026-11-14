@@ -21,9 +21,9 @@ import kr.aigyeot.phone.domain.repository.Mark
 import kr.aigyeot.phone.domain.repository.MarkEdit
 import java.util.concurrent.ConcurrentHashMap
 
-// 앱 수명 메모리 상태의 원본(arch-phone-android 4장). 칸마다 뜻 하나(P2), 바꾸는 곳은 그 클래스의 메서드뿐이다(P3).
+// 앱 수명 메모리 상태의 원본. 칸마다 뜻 하나, 바꾸는 곳은 그 클래스의 메서드뿐이다.
 
-/** 화면 위쪽 띠·배너·되돌리기. 저장된 버림(`PhoneState.unseenDrops`)이 원본인 줄은 그것에서 계산해 더한다(U54). */
+/** 화면 위쪽 띠·배너·되돌리기. 저장된 버림(`PhoneState.unseenDrops`)이 원본인 줄은 그것에서 계산해 더한다. */
 class Notices {
     private val _notice = MutableStateFlow<String?>(null)
 
@@ -32,7 +32,7 @@ class Notices {
 
     private val _careNotice = MutableStateFlow<String?>(null)
 
-    /** 돌봄 기록 알림 띠("앞 수유를 끝냈어요", "연결을 끊었어요…", 7장). 닫을 때까지 보인다. */
+    /** 돌봄 기록 알림 띠("앞 수유를 끝냈어요", "연결을 끊었어요…"). 닫을 때까지 보인다. */
     val careNotice: StateFlow<String?> = _careNotice.asStateFlow()
 
     private val _banner = MutableStateFlow<Banner?>(null)
@@ -40,7 +40,7 @@ class Notices {
 
     private val _undo = MutableStateFlow<CareUndo?>(null)
 
-    /** 방금 지운 손 기록·가져온 기록. 탭 화면이 "지웠어요"·"기록 n건을 가져왔어요" + "되돌리기"를 5초 보인다(7장·U64). */
+    /** 방금 지운 손 기록·가져온 기록. 탭 화면이 "지웠어요"·"기록 n건을 가져왔어요" + "되돌리기"를 5초 보인다. */
     val undo: StateFlow<CareUndo?> = _undo.asStateFlow()
 
     /** 사용자가 닫은 버림(메시지 id). 지우는 저장을 기다리는 사이 다른 버림의 저장이 끝나도 다시 띄우지 않는다. */
@@ -50,11 +50,11 @@ class Notices {
 
     fun saveFailed() = addLine(SAVE_FAILED)
 
-    /** U54: 저장해 둔 버린 메시지 안내를 띠에 더한다. 떠 있는 안내는 덮지 않고, 같은 글은 한 번. */
+    /** 저장해 둔 버린 메시지 안내를 띠에 더한다. 떠 있는 안내는 덮지 않고, 같은 글은 한 번. */
     fun showDrops(unseenDrops: Map<String, String>) =
         _notice.update { withDropNotices(it, unseenDrops.filterKeys { id -> id !in dismissed }.values.toList()) }
 
-    /** 뒤늦게 차 반영이 확인돼 버림 표시에서 걷은 수유가 있으면, 남은 수유 버림이 없을 때 띠의 그 줄을 지운다(U54). */
+    /** 뒤늦게 차 반영이 확인돼 버림 표시에서 걷은 수유가 있으면, 남은 수유 버림이 없을 때 띠의 그 줄을 지운다. */
     fun pruneFeedingDrop(unseenDrops: Map<String, String>) {
         val line = dropNotice("feeding_started") ?: return
         if (unseenDrops.any { (id, type) -> type == "feeding_started" && id !in dismissed }) return
@@ -86,7 +86,7 @@ class Notices {
         _banner.value = b
     }
 
-    /** 배너를 닫는다. `onlyId`가 있으면 그 id의 배너일 때만(그사이 새 배너가 떴으면 새 것은 남긴다, 연결 계약 5.6). */
+    /** 배너를 닫는다. `onlyId`가 있으면 그 id의 배너일 때만(그사이 새 배너가 떴으면 새 것은 남긴다). */
     fun clearBanner(onlyId: String? = null) = _banner.update { if (onlyId == null || it?.alertId == onlyId) null else it }
 
     fun showCare(text: String) {
@@ -103,7 +103,7 @@ class Notices {
 
     private val _fresh = MutableStateFlow<String?>(null)
 
-    /** 기록 시트가 막 저장한 기록 id(U88). 기록 탭 줄 강조·오늘 하루 띠 새 표시가 한 번 보인 뒤 [clearFresh]로 걷는다(iOS `fresh`). */
+    /** 기록 시트가 막 저장한 기록 id. 기록 탭 줄 강조·오늘 하루 띠 새 표시가 한 번 보인 뒤 [clearFresh]로 걷는다(iOS `fresh`). */
     val fresh: StateFlow<String?> = _fresh.asStateFlow()
 
     fun markFresh(id: String) {
@@ -118,7 +118,7 @@ class Notices {
     }
 }
 
-/** 화면이 앞에 있는지(액티비티 onStart~onStop). 폰은 앞에 있을 때만 붙고, 뒤에서는 보낼 함 타이머를 걸지 않는다(2장·7.5). */
+/** 화면이 앞에 있는지(액티비티 onStart~onStop). 폰은 앞에 있을 때만 붙고, 뒤에서는 보낼 함 타이머를 걸지 않는다. */
 class AppVisibility {
     private val _visible = MutableStateFlow(false)
     val visible: StateFlow<Boolean> = _visible.asStateFlow()
@@ -197,7 +197,7 @@ class LinkSwitch(private val marks: LinkMarks, private val notices: Notices) {
     /** 중계가 사용자 끊기를 확인했다(204·401): 다음 실행은 중계에 묻지 않고 정리를 마친다. */
     fun leavingDone(): Boolean = marks.get(Mark.LEAVING)?.endsWith(LEFT_MARK) == true
 
-    /** 끊기를 시작한다: 중계가 지운 뒤 화면을 보이기 전에 죽어도 다음 실행이 U25 b로 마치게 적는다. 적지 못하면 거짓. */
+    /** 끊기를 시작한다: 중계가 지운 뒤 화면을 보이기 전에 죽어도 다음 실행이 사용자 끊기로 마치게 적는다. 적지 못하면 거짓. */
     fun leavingStarted(c: Credentials): Boolean {
         if (marks.commit(MarkEdit.Put(Mark.LEAVING, c.deviceId))) return true
         marks.commit(MarkEdit.Remove(Mark.LEAVING)) // commit이 실패해도 메모리 값은 바뀌었다: 뒤의 401이 사용자 끊기로 보이지 않게
@@ -218,8 +218,8 @@ class LinkSwitch(private val marks: LinkMarks, private val notices: Notices) {
     }
 
     // ---- goneCleanupPending(prefs `gone_device`) ----
-    // 강제 끊김(401·4001) 정리·확인이 남은 기기 id. 재시작 복구 기록이며 화면 상태가 아니다(화면 GONE은 `Connection.Gone`, 11-08 결정).
-    // 수명(P6) — 쓰는 곳은 아래 두 함수뿐이다:
+    // 강제 끊김(401·4001) 정리·확인이 남은 기기 id. 재시작 복구 기록이며 화면 상태가 아니다(화면 GONE은 `Connection.Gone`).
+    // 수명 — 쓰는 곳은 아래 두 함수뿐이다:
     // | 사건                                         | 표시                                            |
     // | 401·4001 정리 시작(지우기 전)                 | 세움(디스크에 쓴 것을 확인) — goneCleanupStarted |
     // | 표시를 적는 사이 사용자 끊기가 정리를 맡음    | 걷음                                            |
@@ -247,7 +247,7 @@ class LinkSwitch(private val marks: LinkMarks, private val notices: Notices) {
             is GoneCleanupEvent.LeaveFailed ->
                 marks.commit(*listOfNotNull(MarkEdit.Remove(Mark.LEAVING), MarkEdit.Put(pending, e.deviceId).takeIf { e.lost }).toTypedArray())
             is GoneCleanupEvent.Acknowledged -> {
-                // '기록만 계속 쓸게요'는 같은 편집에 적는다: 둘 사이에 죽어 첫 안내로 가지 않게(U25 a). 바로 쓴다: 고른 뒤 곧 죽어도 끊김 화면이 다시 뜨지 않게.
+                // '기록만 계속 쓸게요'는 같은 편집에 적는다: 둘 사이에 죽어 첫 안내로 가지 않게. 바로 쓴다: 고른 뒤 곧 죽어도 끊김 화면이 다시 뜨지 않게.
                 val before = goneCleanupPending() to marks.flag(Mark.RECORDS_ONLY)
                 val edits = listOfNotNull(MarkEdit.Remove(pending).takeIf { !secretsLeft }, MarkEdit.Flag(Mark.RECORDS_ONLY, true).takeIf { e.recordsOnly })
                 if (!marks.commit(*edits.toTypedArray())) {
@@ -260,14 +260,14 @@ class LinkSwitch(private val marks: LinkMarks, private val notices: Notices) {
         return true
     }
 
-    // ---- 기록만 쓰기·사용자 끊기 끝(U7·U25) ----
+    // ---- 기록만 쓰기·사용자 끊기 끝 ----
 
     /** 첫 화면에서 '먼저 기록만 쓸게요'를 골랐거나 끊긴 뒤 기록만 쓰기로 했다. 다음 실행부터 바로 탭으로 간다. */
     val recordsOnly: Boolean get() = marks.flag(Mark.RECORDS_ONLY)
 
     fun chooseRecordsOnly() = marks.apply(MarkEdit.Flag(Mark.RECORDS_ONLY, true))
 
-    /** 설정에서 직접 끊은 뒤(U25 b): 탭(연결 안 됨)의 오늘로 가고 띠를 보인다. */
+    /** 설정에서 직접 끊은 뒤: 탭(연결 안 됨)의 오늘로 가고 띠를 보인다. */
     fun afterUserDisconnect() {
         chooseRecordsOnly()
         notices.showCare("연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요.")

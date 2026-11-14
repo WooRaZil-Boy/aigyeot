@@ -1,31 +1,32 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.APP_ZONE
+import kr.aigyeot.phone.domain.model.CareStats
+import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.actionText
 import kr.aigyeot.phone.domain.model.cabinTempText
 import kr.aigyeot.phone.domain.model.controlStatsText
 import kr.aigyeot.phone.domain.model.controlTitle
-import kr.aigyeot.phone.domain.model.excludedText
 import kr.aigyeot.phone.domain.model.episodeSectionHead
+import kr.aigyeot.phone.domain.model.excludedText
 import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.outputRouteText
 import kr.aigyeot.phone.domain.model.playName
@@ -33,10 +34,9 @@ import kr.aigyeot.phone.domain.model.preCryDrive
 import kr.aigyeot.phone.domain.model.purposeText
 import kr.aigyeot.phone.domain.model.reportCries
 import kr.aigyeot.phone.domain.model.reportRowSub
-import kr.aigyeot.phone.domain.model.resultText
-import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.reportRowTitle
 import kr.aigyeot.phone.domain.model.reportSpan
+import kr.aigyeot.phone.domain.model.resultText
 import kr.aigyeot.phone.domain.model.secondText
 import kr.aigyeot.phone.domain.model.soundLabel
 import kr.aigyeot.phone.domain.model.soundText
@@ -46,9 +46,9 @@ import kr.aigyeot.phone.domain.model.stopNoticeCount
 import kr.aigyeot.phone.domain.model.triggerText
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
-import kr.aigyeot.shared.TimelineEpisode
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.SteeringUnavailableReason
+import kr.aigyeot.shared.TimelineEpisode
 import java.util.Locale
 
 /** 리포트 목록: 새 것이 위. */
@@ -63,9 +63,9 @@ fun ReportsScreen(onBack: () -> Unit, open: (String) -> Unit, vm: ReportsViewMod
 }
 
 /**
- * 주행 리포트(시안 S.report): 머리('{날짜} {구간} · {n}분' + 큰 '울음 n번' + 감지까지·그칠 때까지·차가 한 일) → 울음(띠 + 이름·값 줄) →
+ * 주행 리포트: 머리('{날짜} {구간} · {n}분' + 큰 '울음 n번' + 감지까지·그칠 때까지·차가 한 일) → 울음(띠 + 이름·값 줄) →
  * 소리별 성적(점 행렬) → 평소 대비 조향 보정(막대 셋) → 울음 직전 주행(이름·값) → 차가 대신 한 일 → 제어 기록.
- * 울음 한 건의 줄 이름·차례와 결과·뺀 이유 낱말은 U73(iOS와 같다), 2차·정차 문장은 U53·U55.
+ * 울음 한 건의 줄 이름·차례와 결과·뺀 이유 낱말은 iOS와 같다.
  */
 @Composable
 fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewModel()) {
@@ -83,7 +83,7 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
             KpiRow(
                 listOf(
                     Kpi("감지까지", k.detectS?.let(::secondsText) ?: "—"),
-                    // 시안 '그칠 때까지'는 그친 시각이 리포트에 없어 쓰지 않고, 기존 타일 '울음 시간'(totalCryS 합)을 쓴다(거짓 시간 방지).
+                    // '그칠 때까지'는 그친 시각이 리포트에 없어 쓰지 않고, 기존 타일 '울음 시간'(totalCryS 합)을 쓴다(거짓 시간 방지).
                     Kpi("울음 시간", seconds(k.cryS)),
                     Kpi("차가 한 일", "${k.actionKinds}가지"),
                     Kpi("정차 안내", "${stopNoticeCount(b.timeline.map { it.stop })}번"),
@@ -103,7 +103,13 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
                 if (e.plays.isNotEmpty()) EpisodeStrip(remember(e, songs) { episodeBand(e, songs) }, Modifier.padding(bottom = 12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     for ((name, value) in episodeSoundLines(songs, e)) EpisodeLine(name, value)
-                    for (pl in e.plays) Text("· ${purposeText(pl.purpose)} ${playName(songs, pl)} ${reportSpan(pl.startedAt, pl.endedAt, zone)} ${seconds(pl.playS)}", style = Type.footnote, color = p.textTertiary)
+                    for (pl in e.plays) {
+                        Text(
+                            "· ${purposeText(pl.purpose)} ${playName(songs, pl)} ${reportSpan(pl.startedAt, pl.endedAt, zone)} ${seconds(pl.playS)}",
+                            style = Type.footnote,
+                            color = p.textTertiary,
+                        )
+                    }
                     for ((name, value) in episodeResultLines(songs, e)) EpisodeLine(name, value)
                 }
             }
@@ -131,7 +137,12 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
                 if (i > 0) HorizontalDivider(Modifier.padding(vertical = 12.dp), color = p.line)
                 // '울음 감지 전 {n}초'(iOS·차와 같음): 차는 표본을 경보(감지) 시각까지 모으므로 감지에 걸린 몇 초는 이미 울던 때다. 울음이 둘 이상이면 어느 울음인지 시각을 앞에 붙인다.
                 val at = if (b.preCryContext.size > 1) b.timeline.find { it.episodeId == c.episodeId }?.let { clock(it.startedAt) } else null
-                Text(listOfNotNull(at, "울음 감지 전 ${c.windowS}초").joinToString(" · "), Modifier.padding(bottom = 6.dp), style = Type.caption, color = p.textTertiary)
+                Text(
+                    listOfNotNull(at, "울음 감지 전 ${c.windowS}초").joinToString(" · "),
+                    Modifier.padding(bottom = 6.dp),
+                    style = Type.caption,
+                    color = p.textTertiary,
+                )
                 KeyValues(
                     listOfNotNull(
                         "속도" to "평균 ${"%.0f".format(c.speedKmhAvg)} · 최고 ${"%.0f".format(c.speedKmhMax)}km/h",
@@ -153,14 +164,15 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
             BlockHeader("제어 기록")
             if (b.controls.isEmpty()) Text("없어요", style = Type.body, color = p.textTertiary)
             for (c in b.controls) Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(controlTitle(c), style = Type.footnote.copy(fontFamily = FontFamily.Monospace), color = p.textPrimary) // 고정폭 식별자(iOS .footnote.monospaced())
+                // 고정폭 식별자(iOS .footnote.monospaced())
+                Text(controlTitle(c), style = Type.footnote.copy(fontFamily = FontFamily.Monospace), color = p.textPrimary)
                 Text(controlStatsText(c), style = Type.note, color = p.textTertiary)
             }
         }
     }
 }
 
-/** 울음 한 건의 이름·값 줄(U73, iOS `line`과 같다): 이름 84 폭 흐림, 값 진하게. */
+/** 울음 한 건의 이름·값 줄(iOS `line`과 같다): 이름 84 폭 흐림, 값 진하게. */
 @Composable
 private fun EpisodeLine(name: String, value: String) {
     val p = Tokens.colors
@@ -170,18 +182,18 @@ private fun EpisodeLine(name: String, value: String) {
     }
 }
 
-/** 울음 한 건의 앞 줄(U73): '감지까지'(울음 경보만) · '소리'(틀지 않았으면 '재생 없음') · '재생'(틀었을 때만). 재생 줄은 그 뒤에 화면이 그린다. */
+/** 울음 한 건의 앞 줄: '감지까지'(울음 경보만) · '소리'(틀지 않았으면 '재생 없음') · '재생'(틀었을 때만). 재생 줄은 그 뒤에 화면이 그린다. */
 internal fun episodeSoundLines(songs: List<SongEntry>, e: TimelineEpisode): List<Pair<String, String>> = buildList {
     if (e.trigger == EpisodeTrigger.CRY_ALARM) e.alarmLatencyS?.let { add("감지까지" to secondsText(it)) }
     add("소리" to soundText(songs, e.sound, e.plays.firstOrNull()?.songId))
     if (e.sound != null) add("재생" to seconds(e.playS)) // 틀지 않았으면 '소리 · 재생 없음'이 이미 말한다
 }
 
-/** 울음 한 건의 뒤 줄(U73): '결과' · '성적에서 뺌'(뺐을 때) · '다시 울음'('있음') · '2차' · '정차' · '울음 시간'. '이름: 값' 콜론을 쓰지 않는다. */
+/** 울음 한 건의 뒤 줄: '결과' · '성적에서 뺌'(뺐을 때) · '다시 울음'('있음') · '2차' · '정차' · '울음 시간'. '이름: 값' 콜론을 쓰지 않는다. */
 internal fun episodeResultLines(songs: List<SongEntry>, e: TimelineEpisode): List<Pair<String, String>> = buildList {
     add("결과" to resultText(e.result))
     e.excludedReason?.let { add("성적에서 뺌" to excludedText(it)) }
-    if (e.recried) add("다시 울음" to "있음") // U58: 확인한 재울음만
+    if (e.recried) add("다시 울음" to "있음") // 확인한 재울음만
     e.second?.let { add("2차" to secondText(songs, it)) }
     e.stop?.let { add("정차" to stopLine(it)) }
     add("울음 시간" to seconds(e.totalCryS))

@@ -20,9 +20,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +32,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -60,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,6 +94,7 @@ import kr.aigyeot.phone.domain.model.AGO_CHIPS
 import kr.aigyeot.phone.domain.model.CareDraft
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.Diaper
+import kr.aigyeot.phone.domain.model.ErrorSpot
 import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.NOTE_MAX
 import kr.aigyeot.phone.domain.model.SheetField
@@ -102,17 +103,16 @@ import kr.aigyeot.phone.domain.model.dayLabel
 import kr.aigyeot.phone.domain.model.diaperName
 import kr.aigyeot.phone.domain.model.endValue
 import kr.aigyeot.phone.domain.model.errorSpot
-import kr.aigyeot.phone.domain.model.ErrorSpot
 import kr.aigyeot.phone.domain.model.field
 import kr.aigyeot.phone.domain.model.firstRecord
 import kr.aigyeot.phone.domain.model.kindName
 import kr.aigyeot.phone.domain.model.koClock
-import kr.aigyeot.phone.domain.model.sheetLastSide
 import kr.aigyeot.phone.domain.model.memoValue
 import kr.aigyeot.phone.domain.model.quickKinds
 import kr.aigyeot.phone.domain.model.rowName
 import kr.aigyeot.phone.domain.model.rows
 import kr.aigyeot.phone.domain.model.saveLabel
+import kr.aigyeot.phone.domain.model.sheetLastSide
 import kr.aigyeot.phone.domain.model.sheetQuestion
 import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.startValue
@@ -121,10 +121,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-// 빠른 기록·고치기·지난 기록 적기 시트(C3, 디자인 v8 2판 안 1, phone-care-plan U80~U89). 시안 sheet.html?v=1&pl=android.
+// 빠른 기록·고치기·지난 기록 적기 시트.
 
 /**
- * 기록 시트(U80, 위 → 아래): 손잡이·(고치기) 휴지통 → (지난 기록) 작은 종류 칸 → (고치기) '고치는 중' → 질문 → (첫 기록) 도움말 →
+ * 기록 시트(위 → 아래): 손잡이·(고치기) 휴지통 → (지난 기록) 작은 종류 칸 → (고치기) '고치는 중' → 질문 → (첫 기록) 도움말 →
  * 꼭 고를 것 하나(수유 쪽·젖병 양 / 기저귀 종류 / 잠 시작 / 메모 글칸) → 접힌 줄 → 오류 한 줄 → 보호자 안내·저장 실패 → 저장 단추 하나.
  * 입력·검사·저장 단계는 [CareSheetViewModel]이 갖고, 이 화면은 그리기와 동작 전달만 한다. 펼친 줄은 화면 상태다(VM에 두지 않는다).
  * '취소' 단추는 없다: 끌어 내림·뒤로·가림막으로 닫는다.
@@ -150,7 +150,7 @@ fun CareSheet(
         vm.close(sheetId)
         onClose()
     }
-    // 닫힘 연출(U88 끝): VM 닫힘 단계의 저장 결과로만 정한다([sheetExit]). 저장된 수유·잠·기저귀는 확인 표시가 잠깐 머문 뒤,
+    // 닫힘 연출: VM 닫힘 단계의 저장 결과로만 정한다([sheetExit]). 저장된 수유·잠·기저귀는 확인 표시가 잠깐 머문 뒤,
     // 저장된 메모와 동작 줄이기는 햅틱만 내고 바로, 저장하지 않은 닫힘(지우기·지워진 기록)은 바로 닫는다.
     var done by remember { mutableStateOf(false) }
     LaunchedEffect(mine?.phase) {
@@ -175,14 +175,14 @@ fun CareSheet(
     val failed = phase as? CareSheetViewModel.Phase.Failed
     val errField = failed?.problem?.field()
     var expanded by rememberSaveable(sheetId) { mutableStateOf<SheetField?>(null) }
-    // 오류 한 줄은 탓이 된 칸 바로 아래(U82, iOS와 같음). 그 칸(과 오류 줄)을 감싼 자리마다 굴림 요청을 둔다.
+    // 오류 한 줄은 탓이 된 칸 바로 아래(iOS와 같음). 그 칸(과 오류 줄)을 감싼 자리마다 굴림 요청을 둔다.
     val errText = failed?.takeIf { it.problem != null }?.message
     val errSpot = errField?.let { d.errorSpot(it) }
     val rowReq = remember { SheetField.entries.associateWith { BringIntoViewRequester() } }
     val amountReq = remember { BringIntoViewRequester() }
     val heroReq = remember { BringIntoViewRequester() }
     var shakeAt by remember { mutableStateOf<Int?>(null) } // 흔들 실패 번호: 굴린 뒤에 정한다
-    // 실패 한 번 = 한 묶음(U82 오류, 11-12 보충): 탓이 된 줄 펼침 → (펼친 뒤) 그 자리가 본문 안에 보이게 굴림 → 흔들림 → 오류 햅틱.
+    // 실패 한 번 = 한 묶음: 탓이 된 줄 펼침 → (펼친 뒤) 그 자리가 본문 안에 보이게 굴림 → 흔들림 → 오류 햅틱.
     // 키는 실패 값(시도 번호 포함)이라 같은 오류가 다시 나도 매번 돈다. 동작 줄이기(시스템 애니메이션 0)면 굴림·펼침은 Compose가 바로 끝낸다.
     LaunchedEffect(failed) {
         val f = failed ?: return@LaunchedEffect
@@ -217,28 +217,28 @@ fun CareSheet(
         containerColor = p.surface,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 10.dp).size(36.dp, 5.dp).clip(CircleShape).background(p.textTertiary.copy(alpha = 0.4f))) },
     ) {
-        // 시트(대화 상자)의 읽기 이름은 질문이다(U81).
+        // 시트(대화 상자)의 읽기 이름은 질문이다.
         Column(Modifier.fillMaxWidth().semantics { paneTitle = sheetQuestion(d.kind) }.imePadding().padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
             Column(
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).animateContentSize(if (reduced) snap() else Springs.smooth.spec()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // ① 머리 + ③ 상태 라벨: 고치기면 '고치는 중'과 오른쪽 휴지통 하나(읽기 이름 '지우기', 48dp)를 한 줄에 둔다(고치기에는 ② 종류 칸이 없다).
-                // 확인 창 없이 바로 지우고 띠가 되돌리기를 준다(U38).
+                // 확인 창 없이 바로 지우고 띠가 되돌리기를 준다.
                 if (d.original != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("고치는 중", Modifier.weight(1f), style = Type.footnote, color = p.textTertiary) // sheet.editing
                     Box(
                         Modifier.size(48.dp).clip(CircleShape).pressable(enabled = editable, onClick = vm::delete).semantics { contentDescription = "지우기" },
                         contentAlignment = Alignment.Center,
-                    ) { AIcon(R.drawable.ic_trash_2, Modifier.size(22.dp), p.textSecondary) } // 지우기는 5초 되돌리기가 있어(U38) 빨강으로 칠하지 않는다(빨강은 되돌릴 수 없는 줄만)
+                    ) { AIcon(R.drawable.ic_trash_2, Modifier.size(22.dp), p.textSecondary) } // 지우기는 5초 되돌리기가 있어 빨강으로 칠하지 않는다(빨강은 되돌릴 수 없는 줄만)
                 }
-                // ② 지난 기록 적기: 작은 종류 칸(U86, quickKinds 순서).
+                // 지난 기록 적기: 작은 종류 칸(quickKinds 순서).
                 if (chooseKind && d.original == null) {
                     val kinds = quickKinds(care.sleepDiaperEnabled)
                     OptionTiles(kinds.map { Tile(kindName(it), kindIcon(it)) }, kinds.indexOf(d.kind), small = true, group = "종류") { i -> vm.setKind(kinds[i]) }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // ④ 질문(머리글, 시트 읽기 이름) ⑤ 첫 기록 도움말(U84)
+                    // ④ 질문(머리글, 시트 읽기 이름) ⑤ 첫 기록 도움말
                     Text(sheetQuestion(d.kind), Modifier.semantics { heading() }, style = Type.title, color = p.textPrimary)
                     if (d.original == null && care.firstRecord) Text("필요한 것만 고르고 저장하면 돼요", style = Type.note, color = p.textTertiary) // sheet.hint.first
                 }
@@ -247,7 +247,11 @@ fun CareSheet(
                     CareKind.FEED -> {
                         val sides = FeedSide.entries
                         val last = care.sheetLastSide(d)
-                        OptionTiles(sides.map { Tile(sideName(it), sideIcon(it), note = "지난번".takeIf { _ -> it == last }) }, sides.indexOf(d.side), group = "쪽") { i -> vm.toggleSide(sides[i]) }
+                        OptionTiles(
+                            sides.map { Tile(sideName(it), sideIcon(it), note = "지난번".takeIf { _ -> it == last }) },
+                            sides.indexOf(d.side),
+                            group = "쪽",
+                        ) { i -> vm.toggleSide(sides[i]) }
                         if (d.side == FeedSide.BOTTLE) Column(Modifier.bringIntoViewRequester(amountReq), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Shake(shakeKey(SheetField.AMOUNT)) { AmountBlock(d.amount, err = errField == SheetField.AMOUNT, onChange = vm::setAmount) }
                             if (errSpot == ErrorSpot.AMOUNT) errText?.let { ErrorLine(it) }
@@ -281,7 +285,9 @@ fun CareSheet(
                                 onEndUnknown = vm::setEndUnknown, onNote = vm::setNote,
                             )
                         }
-                        if (errSpot == ErrorSpot.ROW && errField == f) errText?.let { Box(Modifier.padding(start = 10.dp, end = 14.dp, bottom = 12.dp)) { ErrorLine(it) } }
+                        if (errSpot == ErrorSpot.ROW && errField == f) {
+                            errText?.let { Box(Modifier.padding(start = 10.dp, end = 14.dp, bottom = 12.dp)) { ErrorLine(it) } }
+                        }
                         }
                     }
                 }
@@ -297,7 +303,8 @@ fun CareSheet(
                     d.saveLabel(shorten = !bigText()),
                     enabled = editable && d.savable,
                     // 확인 표시로 닫힐 때만 그 표시 전까지 고리를 둔다(메모·저장 안 한 닫힘은 바로 닫혀 고리가 남지 않는다).
-                    saving = phase == CareSheetViewModel.Phase.Saving || (phase is CareSheetViewModel.Phase.Closed && sheetExit(phase, d.kind) == SheetExit.CHECK && !done),
+                    saving = phase == CareSheetViewModel.Phase.Saving ||
+                        (phase is CareSheetViewModel.Phase.Closed && sheetExit(phase, d.kind) == SheetExit.CHECK && !done),
                     done = done,
                     onClick = { vm.save() },
                 )
@@ -322,17 +329,19 @@ fun CareSheet(
             pickDate = false
         }
     }
-    (phase as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = { vm.save(allowOverlap = true) }, onDismiss = vm::keepEditing) }
+    (phase as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { o ->
+        OverlapDialog(o.event.kind, onSave = { vm.save(allowOverlap = true) }, onDismiss = vm::keepEditing)
+    }
 }
 
-/** 줄 펼침(U82): 시트를 열면 모두 접혀 있고(null), 누른 줄만 펼친다. 펼친 줄을 다시 누르면 접히고, 다른 줄을 누르면 앞 줄은 접힌다. */
+/** 줄 펼침: 시트를 열면 모두 접혀 있고(null), 누른 줄만 펼친다. 펼친 줄을 다시 누르면 접히고, 다른 줄을 누르면 앞 줄은 접힌다. */
 internal fun toggleRow(open: SheetField?, tapped: SheetField): SheetField? = if (open == tapped) null else tapped
 
 /** 아이콘 칸 하나. [note]는 글 아래 작은 상태 라벨('지난번', 표시만). */
 private class Tile(val label: String, @DrawableRes val icon: Int, val note: String? = null)
 
 /**
- * 아이콘 칸(U80 ⑥·② `OptionTiles`): 회색 판 + 흰 엄지 하나(spring.snappy), 큰 칸 높이 92·아이콘 28, 작은 종류 칸 48·아이콘 20.
+ * 아이콘 칸(`OptionTiles`): 회색 판 + 흰 엄지 하나(spring.snappy), 큰 칸 높이 92·아이콘 28, 작은 종류 칸 48·아이콘 20.
  * 라디오 묶음(읽기 이름 [group]), 항목 이름 = 글(+ ', 지난번'), 아이콘은 읽지 않는다. 엄지가 옮겨 가면 가볍게 톡(CLOCK_TICK).
  */
 @Composable
@@ -340,7 +349,7 @@ private fun OptionTiles(tiles: List<Tile>, selected: Int, small: Boolean = false
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
     val view = LocalView.current
-    // 큰 글자(U89)면 2×2(엄지는 칸과 줄을 함께 옮긴다).
+    // 큰 글자면 2×2(엄지는 칸과 줄을 함께 옮긴다).
     val big = bigText()
     val anyNote = tiles.any { it.note != null }
     val cols = if (big && tiles.size == 4) 2 else tiles.size
@@ -392,11 +401,11 @@ private fun OptionTiles(tiles: List<Tile>, selected: Int, small: Boolean = false
     }
 }
 
-/** 큰 글자(글꼴 1.3배 이상, U83·U89): 단추 글을 줄이지 않고, 아이콘 칸은 2×2, 줄 값은 이름 아래로. */
+/** 큰 글자(글꼴 1.3배 이상): 단추 글을 줄이지 않고, 아이콘 칸은 2×2, 줄 값은 이름 아래로. */
 @Composable
 private fun bigText() = LocalDensity.current.fontScale >= 1.3f
 
-/** 젖병 양(U80 ⑥ `AmountBlock`, U39): 작은 '양' + 큰 숫자 + 'ml' + 둥근 −/＋(48dp). 읽기는 '줄이기'·'늘리기' + 값 '양, {n}ml'. */
+/** 젖병 양(`AmountBlock`): 작은 '양' + 큰 숫자 + 'ml' + 둥근 −/＋(48dp). 읽기는 '줄이기'·'늘리기' + 값 '양, {n}ml'. */
 @Composable
 private fun AmountBlock(ml: Int?, err: Boolean, onChange: (Int?) -> Unit) {
     val p = Tokens.colors
@@ -405,8 +414,13 @@ private fun AmountBlock(ml: Int?, err: Boolean, onChange: (Int?) -> Unit) {
             .border(if (err) 1.5.dp else 0.dp, if (err) p.danger else p.surface.copy(alpha = 0f), Radius.large).padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RoundStep(R.drawable.ic_minus, "줄이기", enabled = ml != null) { onChange(ml?.let { (it - 10).coerceAtLeast(kr.aigyeot.phone.domain.model.AMOUNT_ML.first) }) }
-        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = "양, " + (ml?.let { "${it}ml" } ?: "없음") }, horizontalAlignment = Alignment.CenterHorizontally) {
+        RoundStep(R.drawable.ic_minus, "줄이기", enabled = ml != null) {
+            onChange(ml?.let { (it - 10).coerceAtLeast(kr.aigyeot.phone.domain.model.AMOUNT_ML.first) })
+        }
+        Column(
+            Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = "양, " + (ml?.let { "${it}ml" } ?: "없음") },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text("양", style = Type.micro, color = p.textTertiary)
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(ml?.toString() ?: "—", style = Type.runningTimer, color = if (err) p.danger else p.textPrimary)
@@ -427,7 +441,7 @@ private fun RoundStep(@DrawableRes icon: Int, desc: String, enabled: Boolean = t
     ) { AIcon(icon, Modifier.size(22.dp), if (enabled) p.textPrimary else p.textTertiary) }
 }
 
-/** 잠의 주인공 칸(U80 ⑥·U82): '시작' + 큰 시각(누르면 시각 고르기) + (직접·칩 없는 시트) 날짜 알약 + 몇 분 전 줄(늘 보임). */
+/** 잠의 주인공 칸: '시작' + 큰 시각(누르면 시각 고르기) + (직접·칩 없는 시트) 날짜 알약 + 몇 분 전 줄(늘 보임). */
 @Composable
 private fun SleepHero(d: CareDraft, err: Boolean, onAgo: (Int?) -> Unit, onTime: () -> Unit, onDate: () -> Unit) {
     val p = Tokens.colors
@@ -447,7 +461,12 @@ private fun SleepHero(d: CareDraft, err: Boolean, onAgo: (Int?) -> Unit, onTime:
                 Text(clock.substringAfter(' '), style = Type.runningTimer, color = if (err) p.danger else p.textPrimary)
             }
             if (!d.showsAgoChips || d.chip == null) Row(Modifier.padding(top = 4.dp)) {
-                Pill(dayLabel(t.toLocalDate(), LocalDate.now(d.zone)), selected = false, desc = "날짜, ${dayLabel(t.toLocalDate(), LocalDate.now(d.zone))}", onClick = onDate)
+                Pill(
+                    dayLabel(t.toLocalDate(), LocalDate.now(d.zone)),
+                    selected = false,
+                    desc = "날짜, ${dayLabel(t.toLocalDate(), LocalDate.now(d.zone))}",
+                    onClick = onDate,
+                )
             }
         }
         if (d.showsAgoChips) {
@@ -457,7 +476,7 @@ private fun SleepHero(d: CareDraft, err: Boolean, onAgo: (Int?) -> Unit, onTime:
     }
 }
 
-/** 메모 글칸(U17·U24, 200자). 큰 칸(메모 종류의 주인공)이나 펼친 메모 줄 안. 입력 중이거나 150자부터 '{n}/200'. */
+/** 메모 글칸(200자). 큰 칸(메모 종류의 주인공)이나 펼친 메모 줄 안. 입력 중이거나 150자부터 '{n}/200'. */
 @Composable
 private fun NoteBox(note: String, onNote: (String) -> Unit, big: Boolean, focus: Boolean = false) {
     val p = Tokens.colors
@@ -473,7 +492,7 @@ private fun NoteBox(note: String, onNote: (String) -> Unit, big: Boolean, focus:
     ) {
         BasicTextField(
             value = note,
-            onValueChange = onNote, // U17·U24: 200자에서 더 받지 않는다(도메인 규칙)
+            onValueChange = onNote, // 200자에서 더 받지 않는다(도메인 규칙)
             textStyle = Type.sheetRow.copy(color = p.textPrimary),
             cursorBrush = SolidColor(p.accent),
             // 본문은 칸 최소 높이에서 글자 수 줄을 뺀 만큼은 차지하고, 길면 늘어난다(무한 높이 안이라 weight를 쓰지 않는다).
@@ -494,7 +513,7 @@ private fun NoteBox(note: String, onNote: (String) -> Unit, big: Boolean, focus:
 }
 
 /**
- * 접힌 줄(U82 `FoldRow`): 이름 · 값 · ⌄(54dp 이상). 누르면 펼치고 다른 줄은 접힌다. 읽기는 '{이름}, {값}' 단추 + 펼침 상태.
+ * 접힌 줄(`FoldRow`): 이름 · 값 · ⌄(54dp 이상). 누르면 펼치고 다른 줄은 접힌다. 읽기는 '{이름}, {값}' 단추 + 펼침 상태.
  * 빈 메모 줄은 '메모 더하기 ＋'(브랜드 글자). 저장 검사에 걸린 줄은 빨간 테·값이 빨갛다.
  */
 @Composable
@@ -537,9 +556,18 @@ private fun FoldRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val valueText: @Composable (Modifier) -> Unit = { m ->
-                if (value != null) SwapText(value, Type.sheetValue.copy(fontFeatureSettings = "tnum"), if (err) p.danger else p.textPrimary, m, maxLines = if (big) 2 else 1, overflow = TextOverflow.Ellipsis)
+                if (value != null) {
+                    SwapText(
+                        value,
+                        Type.sheetValue.copy(fontFeatureSettings = "tnum"),
+                        if (err) p.danger else p.textPrimary,
+                        m,
+                        maxLines = if (big) 2 else 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            // 큰 글자면 값이 이름 아래로 내려간다(U89).
+            // 큰 글자면 값이 이름 아래로 내려간다.
             if (big) Column(Modifier.weight(1f)) {
                 Text(name, style = Type.sheetRow, color = if (memoAdd) p.accentInk else p.textSecondary)
                 valueText(Modifier)
@@ -580,7 +608,7 @@ private fun FoldRow(
     }
 }
 
-/** 몇 분 전 한 줄(U80 `AgoStrip`, 읽기 묶음 '시작 시각 빠르게 고르기'): 글자 + 먹색 엄지, 넘치면 가로 넘김, 48dp. */
+/** 몇 분 전 한 줄(`AgoStrip`, 읽기 묶음 '시작 시각 빠르게 고르기'): 글자 + 먹색 엄지, 넘치면 가로 넘김, 48dp. */
 @Composable
 private fun AgoStrip(chip: Int?, onAgo: (Int?) -> Unit, modifier: Modifier = Modifier) {
     val p = Tokens.colors
@@ -592,7 +620,11 @@ private fun AgoStrip(chip: Int?, onAgo: (Int?) -> Unit, modifier: Modifier = Mod
     ) {
         (AGO_CHIPS.map { it as Int? } + listOf(null)).forEach { c ->
             val on = chip == c
-            val bg by animateColorAsState(if (on) p.textPrimary else p.textPrimary.copy(alpha = 0f), if (reduced) snap() else Springs.snappy.spec(), label = "agoBg")
+            val bg by animateColorAsState(
+                if (on) p.textPrimary else p.textPrimary.copy(alpha = 0f),
+                if (reduced) snap() else Springs.snappy.spec(),
+                label = "agoBg",
+            )
             val fg by animateColorAsState(if (on) p.surface else p.textSecondary, if (reduced) snap() else Springs.snappy.spec(), label = "agoFg")
             Box(
                 Modifier.heightIn(min = 48.dp).clip(CircleShape)
@@ -602,13 +634,18 @@ private fun AgoStrip(chip: Int?, onAgo: (Int?) -> Unit, modifier: Modifier = Mod
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(c?.let(::agoChipText) ?: "직접", Modifier.clip(CircleShape).background(bg).padding(horizontal = 12.dp, vertical = 7.dp), style = Type.quickLabel, color = fg)
+                Text(
+                    c?.let(::agoChipText) ?: "직접",
+                    Modifier.clip(CircleShape).background(bg).padding(horizontal = 12.dp, vertical = 7.dp),
+                    style = Type.quickLabel,
+                    color = fg,
+                )
             }
         }
     }
 }
 
-/** 알약(U82): 날짜·시각·'끝 시각 모름'. 고르면 먹색, 아니면 회색 바탕. 누름 영역은 48dp. */
+/** 알약: 날짜·시각·'끝 시각 모름'. 고르면 먹색, 아니면 회색 바탕. 누름 영역은 48dp. */
 @Composable
 private fun Pill(text: String, selected: Boolean, desc: String = text, onClick: () -> Unit) {
     val p = Tokens.colors
@@ -618,13 +655,14 @@ private fun Pill(text: String, selected: Boolean, desc: String = text, onClick: 
     ) {
         Text(
             text,
-            Modifier.clip(CircleShape).background(if (selected) p.textPrimary else p.textPrimary.copy(alpha = 0.08f)).padding(horizontal = 14.dp, vertical = 9.dp),
+            Modifier.clip(CircleShape).background(if (selected) p.textPrimary else p.textPrimary.copy(alpha = 0.08f))
+                .padding(horizontal = 14.dp, vertical = 9.dp),
             style = Type.quickLabel.copy(fontFeatureSettings = "tnum"), color = if (selected) p.surface else p.textSecondary,
         )
     }
 }
 
-/** 오류 한 줄(U82, 7장 글 그대로): 빨간 느낌표 + 글. 나타날 때 읽는다. */
+/** 오류 한 줄: 빨간 느낌표 + 글. 나타날 때 읽는다. */
 @Composable
 private fun ErrorLine(text: String) {
     val p = Tokens.colors
@@ -634,12 +672,12 @@ private fun ErrorLine(text: String) {
     }
 }
 
-/** 탓이 된 칸을 가볍게 흔든다(U88: 360ms, 0 → −6 → 6 → −4 → 4 → −2 → 0). 동작 줄이기면 흔들지 않는다. */
+/** 탓이 된 칸을 가볍게 흔든다(360ms, 0 → −6 → 6 → −4 → 4 → −2 → 0). 동작 줄이기면 흔들지 않는다. */
 @Composable
 private fun Shake(key: Int?, content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
     val x = remember { Animatable(0f) }
-    // [key]는 이 칸을 탓한 실패의 시도 번호(아니면 null): 같은 오류가 다시 나도 번호가 달라 다시 흔든다(U82 오류).
+    // [key]는 이 칸을 탓한 실패의 시도 번호(아니면 null): 같은 오류가 다시 나도 번호가 달라 다시 흔든다.
     LaunchedEffect(key) {
         if (key != null && !reduced) x.animateTo(0f, keyframes {
             durationMillis = 360
@@ -650,7 +688,7 @@ private fun Shake(key: Int?, content: @Composable () -> Unit) {
 }
 
 /**
- * 저장 단추 하나(U83 `SaveButton`): 56 높이·모서리 16·17/700, 글은 [label](저장될 것). 메모가 비면 꺼진다. 저장 중이면 고리, 저장되면 확인 표시(spring.bouncy 0.5 → 1).
+ * 저장 단추 하나(`SaveButton`): 56 높이·모서리 16·17/700, 글은 [label](저장될 것). 메모가 비면 꺼진다. 저장 중이면 고리, 저장되면 확인 표시(spring.bouncy 0.5 → 1).
  * 읽기 이름은 보이는 글 그대로(저장 중이면 꺼진 단추).
  */
 @Composable
@@ -668,12 +706,18 @@ private fun SaveButton(label: String, enabled: Boolean, saving: Boolean, done: B
         when {
             done -> AIcon(R.drawable.ic_check, Modifier.size(26.dp).scale(check), p.onAccent)
             saving -> CircularProgressIndicator(Modifier.size(24.dp), color = p.onAccent, strokeWidth = 2.5.dp)
-            else -> SwapText(label, Type.strong, if (on) p.onAccent else p.textTertiary, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            else -> SwapText(
+                label,
+                Type.strong,
+                if (on) p.onAccent else p.textTertiary,
+                maxLines = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
         }
     }
 }
 
-/** 쪽 아이콘(시안 sheet.js side-*: 채운 원이 그 쪽). */
+/** 쪽 아이콘(채운 원이 그 쪽). */
 @DrawableRes
 private fun sideIcon(s: FeedSide) = when (s) {
     FeedSide.LEFT -> R.drawable.ic_side_left
@@ -682,7 +726,7 @@ private fun sideIcon(s: FeedSide) = when (s) {
     FeedSide.BOTTLE -> R.drawable.ic_bottle
 }
 
-/** 기저귀 종류 아이콘(시안 sheet.js: droplet·poo·pee-poo·clean). */
+/** 기저귀 종류 아이콘(droplet·poo·pee-poo·clean). */
 @DrawableRes
 private fun diaperIcon(d: Diaper) = when (d) {
     Diaper.WET -> R.drawable.ic_droplet

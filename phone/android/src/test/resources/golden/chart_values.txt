@@ -1,0 +1,70 @@
+dayChart.nowMin: 853
+dayChart.summary: 오늘 하루: 잠 2시간 20분, 수유 2번, 기저귀 1번
+dayChart.잠.head: 2번 | 2시간 20분
+dayChart.잠.span: 0-60 잠 00:00–01:00 · 1시간
+dayChart.잠.span: 620-700 잠 10:20–11:40 · 1시간 20분
+dayChart.수유.head: - | 2번
+dayChart.수유.span: 195-215 수유 03:15–03:35 · 20분
+dayChart.수유.span: 840-853 수유 14:00–14:13 · 13분
+dayChart.기저귀.head: - | 1번
+dayChart.기저귀.mark: 778 기저귀 12:58
+intervalWeek.usualMs: -
+intervalWeek.bar: 화 - -
+intervalWeek.bar: 수 - -
+intervalWeek.bar: 목 - -
+intervalWeek.bar: 금 - -
+intervalWeek.bar: 토 - -
+intervalWeek.bar: 일 - -
+intervalWeek.bar: 오늘 - -
+sleepGrid.row[0]: 000000000000000000000000000000000000000000000000
+sleepGrid.row[1]: 000000000000000000000000000000000000000000000000
+sleepGrid.row[2]: 000000000000000000000000000000000000000000000000
+sleepGrid.row[3]: 000000000000000000000000000000000000000000000000
+sleepGrid.row[4]: 000000000000000000000000000000000000000000000000
+sleepGrid.row[5]: 000000000000000000000000000000000000000000000011
+sleepGrid.row[6]: 110000000000000000001111000000000000000000000000
+sleepGrid.perDayMs: [0, 0, 0, 0, 0, 3600000, 8400000]
+report_summary.kpis: detectS=2.4 cryS=61 actionKinds=3
+report_summary.minutes: 42
+report_summary.carCryWeek.avgLatencyS: 2.4
+report_summary.carCryWeek.bar: 화 0 11월 3일 · 0번
+report_summary.carCryWeek.bar: 수 0 11월 4일 · 0번
+report_summary.carCryWeek.bar: 목 1 11월 5일 · 1번
+report_summary.carCryWeek.bar: 금 0 11월 6일 · 0번
+report_summary.carCryWeek.bar: 토 0 11월 7일 · 0번
+report_summary.carCryWeek.bar: 일 0 11월 8일 · 0번
+report_summary.carCryWeek.bar: 오늘 0 11월 9일 · 0번
+report_summary.episode[0].head: 울음
+report_summary.episode[0].sound: 3-59 자장가 56
+report_summary.episode[0].mark: 0 감지 2.4초
+report_summary.episode[0].outcomes: [그침]
+report_summary_handoff.kpis: detectS=3.1 cryS=210 actionKinds=3
+report_summary_handoff.minutes: 49
+report_summary_handoff.carCryWeek.avgLatencyS: 3.1
+report_summary_handoff.carCryWeek.bar: 화 0 11월 3일 · 0번
+report_summary_handoff.carCryWeek.bar: 수 0 11월 4일 · 0번
+report_summary_handoff.carCryWeek.bar: 목 1 11월 5일 · 1번
+report_summary_handoff.carCryWeek.bar: 금 0 11월 6일 · 0번
+report_summary_handoff.carCryWeek.bar: 토 0 11월 7일 · 0번
+report_summary_handoff.carCryWeek.bar: 일 0 11월 8일 · 0번
+report_summary_handoff.carCryWeek.bar: 오늘 0 11월 9일 · 0번
+report_summary_handoff.episode[0].head: 울음
+report_summary_handoff.episode[0].sound: 3-59 자장가 56
+report_summary_handoff.episode[0].sound: 150-206 백색소음 56
+report_summary_handoff.episode[0].mark: 0 감지 3.1초
+report_summary_handoff.episode[0].mark: 150 다시 울음
+report_summary_handoff.episode[0].outcomes: []
+report_summary_womb.kpis: detectS=2.4 cryS=61 actionKinds=2
+report_summary_womb.minutes: 42
+report_summary_womb.carCryWeek.avgLatencyS: 2.4
+report_summary_womb.carCryWeek.bar: 화 0 11월 3일 · 0번
+report_summary_womb.carCryWeek.bar: 수 0 11월 4일 · 0번
+report_summary_womb.carCryWeek.bar: 목 1 11월 5일 · 1번
+report_summary_womb.carCryWeek.bar: 금 0 11월 6일 · 0번
+report_summary_womb.carCryWeek.bar: 토 0 11월 7일 · 0번
+report_summary_womb.carCryWeek.bar: 일 0 11월 8일 · 0번
+report_summary_womb.carCryWeek.bar: 오늘 0 11월 9일 · 0번
+report_summary_womb.episode[0].head: 울음
+report_summary_womb.episode[0].sound: 3-59 뱃속 소리 56
+report_summary_womb.episode[0].mark: 0 감지 2.4초
+report_summary_womb.episode[0].outcomes: [그침]

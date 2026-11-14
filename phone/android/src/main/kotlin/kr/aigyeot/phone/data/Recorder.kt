@@ -9,8 +9,8 @@ import kr.aigyeot.phone.domain.repository.SongRecorder
 import java.io.File
 
 /**
- * 우리 노래 녹음(구현 계획 4장): MPEG_4 + AAC, 44.1 kHz 모노 64 kbps, 3분에서 멈춘다(명세서 12장).
- * 파일 크기 상한은 중계의 2,000,000바이트보다 조금 작게 둔다(G30).
+ * 우리 노래 녹음: MPEG_4 + AAC, 44.1 kHz 모노 64 kbps, 3분에서 멈춘다.
+ * 파일 크기 상한은 중계의 2,000,000바이트보다 조금 작게 둔다.
  */
 class Recorder(private val context: Context) : SongRecorder {
     private var recorder: MediaRecorder? = null

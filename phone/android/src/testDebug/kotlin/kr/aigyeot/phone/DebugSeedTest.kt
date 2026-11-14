@@ -4,8 +4,8 @@ import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.MINUTE
-import kr.aigyeot.phone.domain.model.careSummary
 import kr.aigyeot.phone.domain.model.carePattern
+import kr.aigyeot.phone.domain.model.careSummary
 import kr.aigyeot.phone.domain.model.lastFeedStart
 import kr.aigyeot.phone.domain.model.overlaps
 import kr.aigyeot.phone.domain.model.problem
@@ -22,7 +22,7 @@ class DebugSeedTest {
     private val seoul = ZoneId.of("Asia/Seoul")
 
     @Test
-    fun `시연 시드는 U50 숫자를 낸다`() {
+    fun `시연 시드는 시연 장면 숫자를 낸다`() {
         val t = ZonedDateTime.of(2026, 11, 6, 15, 0, 30, 0, seoul).toInstant().toEpochMilli()
         val m = t / MINUTE * MINUTE // 분 내림
         val f = demoSeed(t, seoul, CareFile(childNickname = "콩이"))
@@ -55,7 +55,7 @@ class DebugSeedTest {
             }
             assertEquals(t - 120 * MINUTE, f.lastFeedStart())
             assertEquals(t - 60 * MINUTE, f.events.filter { it.kind == CareKind.DIAPER }.maxOf { it.startAt })
-            // U50 오늘 숫자는 08:30부터 모두 맞는다. 그 전에는 6시간 전 수유가 0시 앞이고, 마지막 잠 끝(T−150)이 오늘 6시 전이라 밤중 깸에 들어간다.
+            // 시연 오늘 숫자는 08:30부터 모두 맞는다. 그 전에는 6시간 전 수유가 0시 앞이고, 마지막 잠 끝(T−150)이 오늘 6시 전이라 밤중 깸에 들어간다.
             if (half >= 17) assertU50(f, t)
         }
     }
@@ -80,7 +80,7 @@ class DebugSeedTest {
                 assertFalse("$zone ${e.kind} ${e.startAt}", f.overlaps(e, t))
             }
             assertU50(f, t, z)
-            // U50: 지난 6일은 날마다 잠 합 13~14시간(바뀐 날도). 보정을 빼면 바뀐 날이 12시간 30분·14시간 30분이 된다.
+            // 지난 6일은 날마다 잠 합 13~14시간(바뀐 날도). 보정을 빼면 바뀐 날이 12시간 30분·14시간 30분이 된다.
             for (ms in carePattern(f, emptyList(), t, z).sleepPerDayMs!!.take(6)) assertTrue("$zone ${ms / MINUTE}", ms in 780 * MINUTE..840 * MINUTE)
         }
     }

@@ -15,7 +15,6 @@ import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.phone.domain.repository.RelaySocket
 import kr.aigyeot.phone.domain.repository.SocketHandle
 import kr.aigyeot.phone.domain.repository.SocketListener
-import okhttp3.Response
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.ErrorResponse
@@ -44,6 +43,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.io.File
@@ -51,7 +51,7 @@ import java.io.IOException
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-/** 중계 HTTP API·WebSocket(계약 1·2장). 토큰은 `Authorization` 헤더로만 보낸다. 본문·토큰은 로그에 남기지 않는다. */
+/** 중계 HTTP API·WebSocket. 토큰은 `Authorization` 헤더로만 보낸다. 본문·토큰은 로그에 남기지 않는다. */
 class OkHttpRelayClient(
     private val baseUrl: String,
     private val appVersion: String,
@@ -61,7 +61,7 @@ class OkHttpRelayClient(
     /** 토큰을 실은 요청이 끝날 때마다 중계에 닿았는지(IO 스레드). `ticket`은 요청을 시작한 순번이다. */
     private val onObserved: (token: String, ticket: Long, up: Boolean) -> Unit = { _, _, _ -> },
 ) : RelayClient, RelaySocket {
-    /** 중계 `Date` 헤더 − 폰 시계(ms). 2분 넘게 다르면 홈에 경고한다(9장). */
+    /** 중계 `Date` 헤더 − 폰 시계(ms). 2분 넘게 다르면 홈에 경고한다. */
     @Volatile
     override var clockSkewMs: Long? = null
         private set
@@ -91,21 +91,21 @@ class OkHttpRelayClient(
     override fun lastTicket(): Long = tickets.get()
 
     private suspend fun <T> exec(req: Request, read: (String) -> T): RelayResult<T> = withContext(Dispatchers.IO) {
-        // 토큰을 실은 요청은 중계에 닿았는지를 순번과 함께 넘긴다(9장 '중계 불통': 네트워크 실패·5xx면 닿지 않음).
+        // 토큰을 실은 요청은 중계에 닿았는지를 순번과 함께 넘긴다('중계 불통': 네트워크 실패·5xx면 닿지 않음).
         val ticket = tickets.incrementAndGet()
         val token = req.header("Authorization")?.removePrefix("Bearer ")
         var up = false // 본문까지 받은 최종 결과로 요청마다 한 번 알린다(헤더 뒤 본문이 끊기면 닿지 않음)
         val started = Started()
         try {
             http.newCall(req.newBuilder().tag(Started::class.java, started).build()).execute().use { res ->
-                // 본문을 읽기 전에 넘긴다: 부른 코루틴이 취소되면 이 결과는 돌아가지 못한다(7.1 어디서든 401 → GONE).
+                // 본문을 읽기 전에 넘긴다: 부른 코루틴이 취소되면 이 결과는 돌아가지 못한다(어디서든 401 → GONE).
                 if (res.code == 401) req.header("Authorization")?.removePrefix("Bearer ")?.let(onUnauthorized)
                 res.header("Date")?.let { d ->
                     runCatching { ZonedDateTime.parse(d, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() }
                         .getOrNull()?.let { clockSkewMs = it - System.currentTimeMillis() }
                 }
                 // 상태 줄을 받았는데 본문이 끊겼으면: 오류 코드 없이도 처리가 정해지는 401·429·5xx만 상태와 Retry-After로 돌려준다
-                // (429를 오프라인으로 잃지 않게, 1.1). 나머지(409 song_quota·422 song_blob_missing 등)와 성공 응답은 내용을 모르니 오프라인으로 보고 다시 보낸다.
+                // (429를 오프라인으로 잃지 않게). 나머지(409 song_quota·422 song_blob_missing 등)와 성공 응답은 내용을 모르니 오프라인으로 보고 다시 보낸다.
                 val text = try {
                     res.body.string()
                 } catch (e: IOException) {
@@ -116,7 +116,13 @@ class OkHttpRelayClient(
                 up = res.code < 500
                 if (res.isSuccessful) {
                     // 성공 본문을 해석하지 못하면(형식이 다름) 앱을 끝내지 않고 오프라인처럼 다시 시도한다(같은 id라 중계는 한 번만 처리).
-                    val value = try { read(text) } catch (e: kotlinx.serialization.SerializationException) { return@use RelayResult.Offline } catch (e: IllegalArgumentException) { return@use RelayResult.Offline }
+                    val value = try {
+                        read(text)
+                    } catch (e: kotlinx.serialization.SerializationException) {
+                        return@use RelayResult.Offline
+                    } catch (e: IllegalArgumentException) {
+                        return@use RelayResult.Offline
+                    }
                     RelayResult.Ok(res.code, value)
                 } else {
                     val code = runCatching { ProtocolJson.decodeFromString(ErrorResponse.serializer(), text).error.code }.getOrNull()
@@ -175,7 +181,7 @@ class OkHttpRelayClient(
         parse(UploadSongResponse.serializer()),
     )
 
-    /** `GET /v1/ws`. 업그레이드 요청에 Authorization 헤더를 싣는다. OkHttp `pingInterval`은 쓰지 않는다(2장). */
+    /** `GET /v1/ws`. 업그레이드 요청에 Authorization 헤더를 싣는다. OkHttp `pingInterval`은 쓰지 않는다. */
     override fun open(token: String, listener: SocketListener): SocketHandle {
         val ws = http.newWebSocket(
             request("/v1/ws", token).url(baseUrl.replaceFirst("http", "ws") + "/v1/ws").build(),
@@ -212,8 +218,8 @@ class OkHttpRelayClient(
 }
 
 /**
- * 봉투(계약 DTO) → 도메인 [Inbound]. 받은 봉투를 바꾸는 곳은 여기 한 곳이다(iOS `Data/Protocol/EnvelopeMapping`의 `Envelope.inbound`).
- * body를 type에 맞는 계약 값으로 읽는다. 모르는 판·type, 폰이 적용하지 않는 type(feeding_started 등), 읽지 못한 body는 Ignored(G19).
+ * 봉투(메시지 DTO) → 도메인 [Inbound]. 받은 봉투를 바꾸는 곳은 여기 한 곳이다(iOS `Domain/Protocol/EnvelopeMapping`의 `Envelope.inbound`).
+ * body를 type에 맞는 메시지 값으로 읽는다. 모르는 버전·type, 폰이 적용하지 않는 type(feeding_started 등), 읽지 못한 body는 Ignored.
  */
 internal val Envelope.inbound: Inbound
     get() = Inbound(id, seq ?: 0, from?.role == Role.CAR, message(), car)

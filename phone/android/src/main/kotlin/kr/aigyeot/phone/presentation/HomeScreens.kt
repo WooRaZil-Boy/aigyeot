@@ -50,7 +50,7 @@ import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.phoneSub
 import kr.aigyeot.shared.Role
 
-/** 위쪽 띠(오프라인·안내·시계 차이, 7.2). 연결 안 됨이면 차와 관계된 띠는 뜻이 없고, 저장 실패 같은 안내만 보인다(U7). */
+/** 위쪽 띠(오프라인·안내·시계 차이). 연결 안 됨이면 차와 관계된 띠는 뜻이 없고, 저장 실패 같은 안내만 보인다. */
 @Composable
 internal fun StatusBands(connected: Boolean = true, vm: StatusViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -67,8 +67,8 @@ private fun isNotifOff(context: Context): Boolean {
 }
 
 /**
- * guardian 오늘 탭 위쪽: 상태 띠, 알림 권한 띠, 받은 인계 알림(7.2, 시안 .alert-c: 아이 주황 배지 '차에서 · {경과}' + 문장 17/25·600).
- * U39: 머리 없이 최근 5개. 누르면 인계 알림 상세.
+ * guardian 오늘 탭 위쪽: 상태 띠, 알림 권한 띠, 받은 인계 알림(아이 주황 배지 '차에서 · {경과}' + 문장 17/25·600).
+ * 머리 없이 최근 5개. 누르면 인계 알림 상세.
  */
 @Composable
 internal fun GuardianAlerts(s: PhoneState, go: (Route) -> Unit) {
@@ -84,11 +84,11 @@ internal fun GuardianAlerts(s: PhoneState, go: (Route) -> Unit) {
     }
     val now = rememberNow(60_000)
     val p = Tokens.colors
-    // 화면이 떠 있는 동안 새로 온 인계 알림 판만 들어온다(시안 .alert-c.enter).
+    // 화면이 떠 있는 동안 새로 온 인계 알림 판만 들어온다.
     val known = remember { s.alerts.map { it.id }.toSet() }
     for (a in s.alerts.asReversed().take(5)) key(a.id) { EnterNew(a.id !in known) {
         Block(padding = androidx.compose.foundation.layout.PaddingValues(18.dp), onClick = { go(Route.Alert(a.id)) }) {
-            Badge("차에서 · ${agoText(instantOf(a.body.occurredAt) ?: a.receivedAt, now)}", R.drawable.ic_car_front, child = true) // U20 '~ 전'
+            Badge("차에서 · ${agoText(instantOf(a.body.occurredAt) ?: a.receivedAt, now)}", R.drawable.ic_car_front, child = true) // '~ 전'
             Text(a.body.text, Modifier.padding(top = 10.dp), style = Type.headline, color = p.textPrimary)
         }
     } }
@@ -105,7 +105,11 @@ fun AlertScreen(onBack: () -> Unit, vm: AlertViewModel = appViewModel()) {
             FootNote("알림 내용을 받고 있어요")
         } else {
             Block {
-                Badge("차에서 · ${agoText(instantOf(alert.body.occurredAt) ?: alert.receivedAt, System.currentTimeMillis())}", R.drawable.ic_car_front, child = true)
+                Badge(
+                    "차에서 · ${agoText(instantOf(alert.body.occurredAt) ?: alert.receivedAt, System.currentTimeMillis())}",
+                    R.drawable.ic_car_front,
+                    child = true,
+                )
                 Text(alert.body.text, Modifier.padding(top = 10.dp, bottom = 6.dp), style = Type.headline, color = p.textPrimary)
                 // 이름·값 두 칸(iOS detailRow와 같음, '이름: 값' 콜론 없음)
                 KeyValues(listOfNotNull(alert.body.restName?.let { "쉼터" to it }, alert.body.minutesToArrival?.let { "도착까지" to "${it}분" }))
@@ -115,15 +119,21 @@ fun AlertScreen(onBack: () -> Unit, vm: AlertViewModel = appViewModel()) {
     }
 }
 
-/** 초대 QR. 가운데에 앱 아이콘을 얹으므로 오류 정정 H(30%)로 만든다(IMPLEMENT 4장 'QR: 실제 QR에 가운데 로고만'). */
+/** 초대 QR. 가운데에 앱 아이콘을 얹으므로 오류 정정 H(30%)로 만든다. */
 private fun qr(text: String): Bitmap {
-    val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 512, 512, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 1))
+    val m = QRCodeWriter().encode(
+        text,
+        BarcodeFormat.QR_CODE,
+        512,
+        512,
+        mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 1),
+    )
     return Bitmap.createBitmap(m.width, m.height, Bitmap.Config.RGB_565).apply {
         for (x in 0 until m.width) for (y in 0 until m.height) setPixel(x, y, if (m[x, y]) 0xFF000000.toInt() else -1)
     }
 }
 
-/** 보호자: owner는 초대·목록, guardian은 인계 알림 받기(7.1). */
+/** 보호자: owner는 초대·목록, guardian은 인계 알림 받기. */
 @Composable
 fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -134,7 +144,7 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
         if (ui.role == Role.GUARDIAN) {
             Group {
                 SettingRow(
-                    "인계 알림 받기", R.drawable.ic_bell, sub = "아기가 계속 울면 알려요", // guardian.handoff.sub
+                    "인계 알림 받기", R.drawable.ic_bell, sub = "아기가 계속 울면 알려요", // 인계 알림 부제
                     enabled = !ui.busy,
                     checked = ui.handoffAlerts,
                     onCheckedChange = { on ->
@@ -143,9 +153,9 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
                     },
                 )
             }
-            FootNote("리포트는 알림을 꺼도 받아요") // guardian.handoff.note
+            FootNote("리포트는 알림을 꺼도 받아요") // 인계 알림 안내 글
         } else {
-            // 보호자 초대(v8b-10 ⑧, contracts-link 7.2): 블록 머리 + 정보 줄 셋. 코드를 만든 뒤에는 코드·기한·QR + 주 단추 '링크로 보내기' + 글자 단추 '새 코드 만들기'.
+            // 보호자 초대: 블록 머리 + 정보 줄 셋. 코드를 만든 뒤에는 코드·기한·QR + 주 단추 '링크로 보내기' + 글자 단추 '새 코드 만들기'.
             Block {
                 BlockHeader("다른 보호자 초대")
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -158,7 +168,11 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
                     Column(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(inv.display, style = Type.inviteCode, color = p.textPrimary)
                         Text("${dateTime(inv.expiresAt)}까지", Modifier.padding(top = 4.dp, bottom = 16.dp), style = Type.caption, color = p.textTertiary)
-                        Box(Modifier.size(196.dp).clip(Radius.control).background(androidx.compose.ui.graphics.Color.White).padding(10.dp).semantics { contentDescription = "초대 QR" }, contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(196.dp).clip(Radius.control).background(androidx.compose.ui.graphics.Color.White).padding(10.dp)
+                                .semantics { contentDescription = "초대 QR" },
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Image(qr(inv.link).asImageBitmap(), null, Modifier.size(176.dp))
                             AppMark(40.dp, 11.dp)
                         }

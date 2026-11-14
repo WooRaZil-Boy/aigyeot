@@ -102,7 +102,7 @@ class CareDraftTest {
         }
     }
 
-    // U82 끝(iOS test_끝만_미래면_끝_줄을_탓한다 등과 같은 이름): 검사 차례는 시작 미래 → 끝 미래 → 끝이 이름 → 너무 김 → 양 → 메모, 글은 7장 R3 그대로.
+    // iOS test_끝만_미래면_끝_줄을_탓한다 등과 같은 이름: 검사 차례는 시작 미래 → 끝 미래 → 끝이 이름 → 너무 김 → 양 → 메모.
     private val two = onDate(today, 14, 0, zone)
     private fun timed(start: Long, end: Long?) = CareEvent("e", CareKind.FEED, start, end, zone = zone.id, createdAt = two, updatedAt = two)
 
@@ -137,7 +137,7 @@ class CareDraftTest {
 
     @Test
     fun `오류 한 줄은 탓이 된 칸 바로 아래에 붙는다`() {
-        // U82(11-12): 접힌 줄이면 그 줄, 젖병 양이면 양 칸, 잠 시작·메모 글이면 주인공 칸 아래(iOS와 같은 자리).
+        // 접힌 줄이면 그 줄, 젖병 양이면 양 칸, 잠 시작·메모 글이면 주인공 칸 아래(iOS와 같은 자리).
         val feed = CareDraft.new("s", CareKind.FEED, day = null, now = now)
         assertEquals(ErrorSpot.ROW, feed.errorSpot(SheetField.START))
         assertEquals(ErrorSpot.ROW, feed.errorSpot(SheetField.END))
@@ -168,7 +168,7 @@ class CareDraftTest {
 
     @Test
     fun `지난번 쪽은 새 기록에만 보이고 고치기에서는 숨긴다`() {
-        // U80(11-12, iOS lastSide와 같음): 새 기록은 지우지 않은 가장 늦은 수유의 쪽, 고치기는 어느 기록이든 없음.
+        // iOS lastSide와 같음: 새 기록은 지우지 않은 가장 늦은 수유의 쪽, 고치기는 어느 기록이든 없음.
         val f1 = CareEvent("a", CareKind.FEED, now - HOUR, zone = zone.id, feedSide = FeedSide.LEFT, createdAt = now, updatedAt = now)
         val f2 = CareEvent("b", CareKind.FEED, now - MINUTE, zone = zone.id, feedSide = FeedSide.RIGHT, createdAt = now, updatedAt = now)
         val file = CareFile(events = listOf(f1, f2))
@@ -206,7 +206,7 @@ class CareDraftTest {
     fun `시작을 끝 뒤로 옮겨도 고른 끝은 그대로 두고 저장 검사가 알린다`() {
         val ten = onDate(today, 10, 0, zone)
         fun at(h: Int, m: Int) = onDate(today, h, m, zone)
-        // 새 수유: 30분 전(9:30) → 끝 9:50 → '지금'(10:00). 사용자가 고른 끝은 말없이 바꾸지 않고(0분 수유를 만들지 않게, C384) 저장 검사가 R3로 알린다.
+        // 새 수유: 30분 전(9:30) → 끝 9:50 → '지금'(10:00). 사용자가 고른 끝은 말없이 바꾸지 않고(0분 수유를 만들지 않게) 저장 검사가 알린다.
         val d = CareDraft.new("s", CareKind.FEED, day = null, now = ten).pick(30, ten).setEnd(9, 50).pick(0, ten)
         assertEquals(ten, d.start)
         assertEquals(at(9, 50), d.end)
@@ -215,7 +215,7 @@ class CareDraftTest {
         val manual = CareDraft.new("s", CareKind.FEED, day = null, now = ten).pick(30, ten).setEnd(9, 50).pick(null, ten).setStart(9, 55, ten)
         assertEquals(at(9, 50), manual.end)
         assertNull(CareDraft.new("s", CareKind.SLEEP, day = null, now = ten).pick(30, ten).pick(0, ten).end)
-        // 저장된 끝이 있는 기록을 고칠 때도 끝은 그대로 두고 저장 검사(R3)가 잡는다.
+        // 저장된 끝이 있는 기록을 고칠 때도 끝은 그대로 두고 저장 검사가 잡는다.
         val e = CareEvent("e", CareKind.FEED, at(9, 0), endAt = at(9, 20), zone = zone.id, createdAt = ten, updatedAt = ten)
         val edit = CareDraft.editing("s", e).setStart(9, 40, ten)
         assertEquals(at(9, 40), edit.start)
@@ -245,7 +245,7 @@ class CareDraftTest {
     }
 
     @Test
-    fun `저장 전 검사는 R3 문제가 먼저이고 그다음 R4 겹침이다`() {
+    fun `저장 전 검사는 값 문제가 먼저이고 그다음 겹침이다`() {
         val a = CareEvent("a", CareKind.FEED, now - 30 * MINUTE, endAt = now - 10 * MINUTE, zone = zone.id, createdAt = now, updatedAt = now)
         val file = CareFile(events = listOf(a))
         assertEquals(EditCheck.Ok, file.check(a.copy(id = "b", startAt = now - 5 * MINUTE, endAt = now), now))

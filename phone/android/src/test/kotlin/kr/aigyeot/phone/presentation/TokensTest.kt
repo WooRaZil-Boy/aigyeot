@@ -8,14 +8,14 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kr.aigyeot.phone.sharedFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
-/** 디자인 v6 토큰: Kotlin 값이 공개 사본 tokens.json(시안 원본과 같은 파일)과 같다. 새 토큰이 생기면 여기서 먼저 걸린다. */
+/** 디자인 토큰: Kotlin 값이 공개 사본 tokens.json과 같다. 새 토큰이 생기면 여기서 먼저 걸린다. */
 class TokensTest {
-    private val json = Json.parseToJsonElement(File("../../shared/src/test/resources/design/tokens.json").readText()).jsonObject
+    private val json = Json.parseToJsonElement(sharedFile("design/tokens.json").readText()).jsonObject
 
     /** "#RRGGBB" 또는 "#RRGGBBAA"(CSS 순서) → ARGB. */
     private fun css(hex: String): Int {
@@ -36,7 +36,7 @@ class TokensTest {
 
     @Test
     fun `tokens json의 영역은 이 시험이 아는 것뿐이고 서체는 Pretendard다`() {
-        // 새 영역이 생기면 여기서 걸린다. glass는 안드로이드가 쓰지 않는다(시안 v5-3: 글래스는 iOS 기능 층·차 칩만).
+        // 새 영역이 생기면 여기서 걸린다. glass는 안드로이드가 쓰지 않는다(글래스는 iOS 기능 층·차 칩만).
         // type·radius의 car 값은 차 앱 몫이다.
         assertEquals(setOf("\$comment", "font", "color", "glass", "type", "radius", "motion", "spring"), json.keys)
         assertEquals(setOf("car", "phone"), json.getValue("type").jsonObject.keys)
@@ -77,7 +77,7 @@ class TokensTest {
 
     @Test
     fun `글자 역할은 iOS 표와 같은 값이고 크기·굵기 조합 하나에 이름 하나다`() {
-        // iOS 진행 기록 '결정 7' 표(크기/줄 높이/굵기). 두 앱이 같은 이름·값을 쓴다.
+        // iOS 진행 기록 글자 표(크기/줄 높이/굵기). 두 앱이 같은 이름·값을 쓴다.
         val roles: Map<String, Pair<TextStyle, Triple<Float, Float, Int>>> = mapOf(
             "hourMark" to (Type.hourMark to Triple(11f, 14f, 600)), "micro" to (Type.micro to Triple(12f, 16f, 500)),
             "footnote" to (Type.footnote to Triple(12.5f, 17f, 500)), "tag" to (Type.tag to Triple(12.5f, 16f, 600)),

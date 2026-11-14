@@ -11,7 +11,7 @@ import kr.aigyeot.shared.SendMessageResponse
 import kr.aigyeot.shared.UploadSongResponse
 import java.io.File
 
-/** 중계 요청 결과(계약 1장). 네트워크 실패는 둘로 나눈다: 보냈을 수 있음([Offline]), 닿지 않은 것이 확실함([Unreached]). */
+/** 중계 요청 결과. 네트워크 실패는 둘로 나눈다: 보냈을 수 있음([Offline]), 닿지 않은 것이 확실함([Unreached]). */
 sealed interface RelayResult<out T> {
     data class Ok<T>(val status: Int, val value: T) : RelayResult<T>
     data class Err(val status: Int, val code: String?, val retryAfterS: Long?) : RelayResult<Nothing>
@@ -22,7 +22,7 @@ sealed interface RelayResult<out T> {
 }
 
 /**
- * 중계 HTTP API(계약 1장, iOS와 같은 이름). 토큰을 실은 요청이 401을 받으면, 그리고 끝날 때마다 중계에 닿았는지를
+ * 중계 HTTP API(iOS와 같은 이름). 토큰을 실은 요청이 401을 받으면, 그리고 끝날 때마다 중계에 닿았는지를
  * 만들 때 넘긴 콜백으로 알린다(부른 쪽이 취소돼도 잃지 않게).
  */
 interface RelayClient {
@@ -46,7 +46,7 @@ interface RelayClient {
 /** 받은 함 한 쪽(`GET /v1/inbox`). 봉투는 데이터 층이 [Inbound]로 바꿔 준다. */
 data class InboxPage(val messages: List<Inbound>, val more: Boolean)
 
-/** 중계 WebSocket(계약 2장, iOS와 같은 이름). */
+/** 중계 WebSocket(iOS와 같은 이름). */
 interface RelaySocket {
     fun open(token: String, listener: SocketListener): SocketHandle
 

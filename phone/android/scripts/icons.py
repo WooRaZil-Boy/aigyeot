@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""폰 앱 아이콘 자원을 만든다(디자인 v6).
+"""폰 앱 아이콘 자원을 만든다.
 
-1) 선 아이콘: Lucide SVG(ISC) + 직접 그린 셋(젖병·기저귀·부모 노래. 시안의 넷째 카시트는 폰 화면에 쓰지 않아 뺐다) → res/drawable/ic_*.xml(VectorDrawable).
+1) 선 아이콘: Lucide SVG(ISC) + 직접 그린 셋(젖병·기저귀·부모 노래. 디자인 원본의 넷째 카시트는 폰 화면에 쓰지 않아 뺐다) → res/drawable/ic_*.xml(VectorDrawable).
    Lucide의 circle·rect·line·polyline·polygon·ellipse는 path로 바꾼다. 선 2, 둥근 끝·이음, 24 칸 그대로.
 2) 앱 아이콘: 앞 층 SVG(초승달 + 아이 점) → 적응형 앞 층·단색(monochrome)·알림 작은 아이콘(흰 실루엣).
-   적응형 앞 층은 시안 시스템 탭 '안드로이드 · 원'(1024 원본을 원으로 자름)과 같게, 원본 전체를 런처가 보이는
+   적응형 앞 층은 디자인 원본의 '안드로이드 · 원'(1024 원본을 원으로 자름)과 같게, 원본 전체를 런처가 보이는
    지름 72dp(108dp 중)에 맞춘다: 72/108 = 0.667배. 표지의 가장 먼 점(중심에서 318.6/1024)이 212가 되어 안전 원(지름 66dp = 반지름 313) 안이다.
 
 사용:
@@ -23,11 +23,11 @@ NAMES = [
     "share", "shield-check", "smartphone", "sparkles", "square", "trash-2", "unlink", "users", "x",
 ]
 
-# 직접 그린 셋(시안 scripts/build.py CUSTOM과 같은 글자, 카시트는 폰에 쓰지 않음)
+# 직접 그린 셋(디자인 원본과 같은 글자, 카시트는 폰에 쓰지 않음)
 CUSTOM = {
     "bottle": '<path d="M9 2h6"/><path d="M10 2v3.2L8.4 7.4A3 3 0 0 0 8 9v10a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3V9a3 3 0 0 0-.4-1.6L14 5.2V2"/><path d="M8 12h3"/><path d="M8 16h3"/>',
     "diaper": '<path d="M3 6h18v3a9 9 0 0 1-6.2 8.6L14 18h-4l-.8-.4A9 9 0 0 1 3 9z"/><path d="M3 9c2.5 0 4 1.5 5 4"/><path d="M21 9c-2.5 0-4 1.5-5 4"/>',
-    # 기록 시트 v8(시안 js/sheet.js ICONS): 쪽 셋(채운 원 = 그 쪽), 대변·깨끗함. 둘 다는 아래 GROUPS.
+    # 기록 시트: 쪽 셋(채운 원 = 그 쪽), 대변·깨끗함. 둘 다는 아래 GROUPS.
     "side-left": '<circle cx="7" cy="12" r="4.5" fill="currentColor"/><circle cx="17" cy="12" r="4.5"/>',
     "side-right": '<circle cx="7" cy="12" r="4.5"/><circle cx="17" cy="12" r="4.5" fill="currentColor"/>',
     "side-both": '<circle cx="7" cy="12" r="4.5" fill="currentColor"/><circle cx="17" cy="12" r="4.5" fill="currentColor"/>',
@@ -37,7 +37,7 @@ CUSTOM = {
 }
 
 
-# 줄인 그림을 겹친 아이콘: (옮김 x, y, 배율, 본문). 시안의 non-scaling-stroke처럼 선 굵기는 배율로 나눠 2를 지킨다.
+# 줄인 그림을 겹친 아이콘: (옮김 x, y, 배율, 본문). non-scaling-stroke처럼 선 굵기는 배율로 나눠 2를 지킨다.
 _DROP = '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>'
 GROUPS = {
     "pee-poo": [(0.5, 1.5, 0.6, _DROP), (7.6, 7.4, 0.68, CUSTOM["poo"])],
@@ -123,7 +123,7 @@ def app_icon(fg_svg, res):
     # 초승달 상자(그러데이션은 objectBoundingBox 세로 0→1): 필렛 호까지 넣은 실제 path의 위아래.
     top, bot = moon_bounds(moon)
     g = "".join(f'<item android:offset="{o}" android:color="#FF{col[1:]}" />' for o, col in stops)
-    head = '<?xml version="1.0" encoding="utf-8"?>\n<!-- 생성 파일(scripts/icons.py) ← 시안 assets/brand/app-icon-fg.svg -->\n'
+    head = '<?xml version="1.0" encoding="utf-8"?>\n<!-- 생성 파일(scripts/icons.py) ← 디자인 원본 app-icon-fg.svg(저장소 밖) -->\n'
 
     def doc(size, scale, moon_fill, dot_fill, gradient):
         pivot = 512

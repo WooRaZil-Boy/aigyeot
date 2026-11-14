@@ -15,13 +15,13 @@ import kr.aigyeot.phone.domain.model.ulid
 import java.time.Instant
 import java.time.ZoneId
 
-// debug 빌드만: 시연 시드(phone-care-plan U50). release에는 들어가지 않는다.
+// debug 빌드만: 시연 시드. release에는 들어가지 않는다.
 // 넣기: adb shell am broadcast -n kr.aigyeot.phone/.DebugSeedReceiver (앱이 꺼져 있어도 된다)
 
 /**
  * 지난 6일은 날마다 같은 목록(현지 "시:분"). iOS도 이 목록을 따른다. 잠은 그날 안에서 끝나 오늘 칸에 섞이지 않는다.
  * 잠 끝도 벽시계로 정한다. 서머타임 바뀌는 날 길이를 더하면 밤잠 끝이 한 시간 밀려 다음 잠과 겹친다.
- * 그날은 밤잠(00:10~06:40)이 한 시간 짧거나 길어, 합을 13~14시간(U50)에 두게 보정한다(iOS `DemoSeed`와 같은 방법).
+ * 그날은 밤잠(00:10~06:40)이 한 시간 짧거나 길어, 합을 13~14시간에 두게 보정한다(iOS `DemoSeed`와 같은 방법).
  */
 private val PAST_FEEDS = listOf("06:50", "09:50", "12:50", "15:50", "18:50", "21:30", "23:40") // 20분씩, 왼쪽·오른쪽 번갈아
 private val PAST_SLEEPS = listOf("00:10" to "06:40", "07:20" to "09:40", "10:20" to "12:40", "16:20" to "18:40") // 합 13시간 30분
@@ -31,7 +31,7 @@ private val PAST_DIAPERS = listOf(
 )
 
 /**
- * U50: 기준은 시드를 넣는 순간(분 내림). 오늘 값은 차 시연 장면 C2와 같다:
+ * 기준은 시드를 넣는 순간(분 내림). 오늘 값은 차 시연 장면과 같다:
  * 마지막 수유 120분 전(양쪽, 끝 100분 전)·다른 수유 6시간 전, 마지막 잠 210~150분 전(진행 중 없음), 지난밤 끝난 잠 1번(01:00~02:00),
  * 오늘 잠 합 120분, 마지막 기저귀 60분 전(소변)·오늘 기저귀 2번. 별명은 그대로 두고 잠·기저귀는 켠다.
  */
@@ -60,7 +60,7 @@ fun demoSeed(nowMs: Long, zone: ZoneId, keep: CareFile = CareFile()): CareFile {
     val night = hm(today, "01:00")
     val nightEnd = night + 60 * MINUTE
     // 오늘 장면의 첫 기록(6시간 전 수유)보다 앞설 때만 넣는다(이른 시드에서는 뺀다). 마지막 잠(T−210)만 보면 07~08시 시드에서
-    // 6시간 전 수유와 겹친다. U50 숫자를 지키는 08:30 이후에는 늘 넣는다.
+    // 6시간 전 수유와 겹친다. 시연 숫자를 지키는 08:30 이후에는 늘 넣는다.
     if (nightEnd <= t - 360 * MINUTE) add(CareKind.SLEEP, night, nightEnd)
     fun ago(min: Int) = t - min * MINUTE
     add(CareKind.FEED, ago(360), ago(340), side = FeedSide.LEFT)

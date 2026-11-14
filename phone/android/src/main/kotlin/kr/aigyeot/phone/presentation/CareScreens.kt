@@ -68,6 +68,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -95,17 +96,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import java.time.Instant
-import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
-import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.AMOUNT_ML
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
+import kr.aigyeot.phone.domain.model.CareStats
 import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.PhoneState
@@ -115,6 +114,7 @@ import kr.aigyeot.phone.domain.model.elapsed
 import kr.aigyeot.phone.domain.model.feedingSendText
 import kr.aigyeot.phone.domain.model.instantOf
 import kr.aigyeot.phone.domain.model.isOngoing
+import kr.aigyeot.phone.domain.model.kindName
 import kr.aigyeot.phone.domain.model.koClock
 import kr.aigyeot.phone.domain.model.lastFeedingAt
 import kr.aigyeot.phone.domain.model.ongoing
@@ -126,13 +126,13 @@ import kr.aigyeot.phone.domain.model.reportRowTitle
 import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.text
 import kr.aigyeot.phone.domain.model.timerText
-import kr.aigyeot.phone.domain.model.kindName
 import kr.aigyeot.shared.ReportSummaryBody
+import java.time.Instant
+import java.time.ZoneId
 
-// 돌봄 기록 화면(phone-care-plan 5·7·7.1장, 디자인 v6 시안 phone.js S.today·S.timer). 화면 글자는 7장·7.1 표 그대로이고,
-// 표에 없는 글자는 시안 IMPLEMENT 6장의 확정 라벨만 쓴다. 주석의 `tab.today` 같은 이름은 7.1 표의 ID다.
+// 돌봄 기록 화면(오늘·타이머). 주석의 `tab.today` 같은 이름은 문구 ID다.
 
-/** 종류 아이콘(시안 data.js CARE: 젖병·달·기저귀·수첩, 차는 car-front). */
+/** 종류 아이콘(젖병·달·기저귀·수첩, 차는 car-front). */
 @DrawableRes
 internal fun kindIcon(k: CareKind?) = when (k) {
     CareKind.FEED -> R.drawable.ic_bottle
@@ -151,11 +151,11 @@ internal fun kindColor(k: CareKind?, p: Palette) = when (k) {
     null -> p.cCar
 }
 
-internal const val GUARDIAN_ONLY = "보호자 기록은 이 휴대폰에만 남아요" // 7장(U23)
+internal const val GUARDIAN_ONLY = "보호자 기록은 이 휴대폰에만 남아요"
 
 /**
- * 화면이 앞에 있는 동안만 시계를 다시 읽는다(진행 중 경과 표시, R15: 저장하지 않는다).
- * 구성은 뒤로 가도 남으므로 STARTED일 때만 돈다(11-05 성능 확인: 뒤에서 30초에 90번 깨어나던 것). 돌아오면 바로 다시 읽는다.
+ * 화면이 앞에 있는 동안만 시계를 다시 읽는다(진행 중 경과 표시. 저장하지 않는다).
+ * 구성은 뒤로 가도 남으므로 STARTED일 때만 돈다(뒤에서 30초에 90번 깨어나지 않게). 돌아오면 바로 다시 읽는다.
  */
 @Composable
 internal fun rememberNow(periodMs: Long): Long {
@@ -174,38 +174,49 @@ internal val deviceZone: ZoneId get() = APP_ZONE
 
 internal fun CareEvent.zoneOrDevice(): ZoneId = runCatching { ZoneId.of(zone) }.getOrDefault(deviceZone)
 
-// ---------------------------------------------------------------- 탭(5장)
+// ---------------------------------------------------------------- 탭
 
-private data class Tab(val name: String, @DrawableRes val icon: Int)
+/** 아래 탭. 저장하는 값(`rememberSaveable`)은 화면에 보이는 [label] 글자 그대로다. */
+enum class HomeTab(val label: String, @DrawableRes val icon: Int) {
+    TODAY("오늘", R.drawable.ic_house),
+    RECORDS("기록", R.drawable.ic_list),
+    CAR("차", R.drawable.ic_car_front),
+    SETTINGS("설정", R.drawable.ic_settings),
+    ;
+
+    companion object {
+        val Saver = Saver<HomeTab, String>(save = { it.label }, restore = { label -> entries.firstOrNull { it.label == label } ?: TODAY })
+    }
+}
 
 /**
  * owner·연결 안 됨: [오늘] [기록] [차] [설정], guardian: [오늘] [기록] [설정](tab.*). 손 기록 지우기의 되돌리기 띠도 여기서 보인다.
- * 탭 막대는 흰 막대 + 먹색 선택(시안 v5 안드로이드, 알약 없음). 탭을 바꾸면 내용이 220ms에 걸쳐 바뀐다.
+ * 탭 막대는 흰 막대 + 먹색 선택(알약 없음). 탭을 바꾸면 내용이 220ms에 걸쳐 바뀐다.
  */
 @Composable
-fun CareTabs(go: (Route) -> Unit, tab: String, onTab: (String) -> Unit, vm: CareTabsViewModel = appViewModel()) {
+fun CareTabs(go: (Route) -> Unit, tab: HomeTab, onTab: (HomeTab) -> Unit, vm: CareTabsViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val tabs = tabsFor(ui.guardian)
-    LaunchedEffect(tab, ui.guardian) { if (tabs.none { it.name == tab }) onTab("오늘") }
+    LaunchedEffect(tab, ui.guardian) { if (tab !in tabs) onTab(HomeTab.TODAY) }
     val snack = remember { SnackbarHostState() }
-    // U25 b: 설정에서 끊기가 끝나면 오늘로 간다. 띠와 '기록만 쓰기'는 끊기 유스케이스가 정한다(끊는 사이 다른 탭으로 가도 빠지지 않게).
+    // 사용자 끊기: 설정에서 끊기가 끝나면 오늘로 간다. 띠와 '기록만 쓰기'는 끊기 유스케이스가 정한다(끊는 사이 다른 탭으로 가도 빠지지 않게).
     LaunchedEffect(ui.disconnectDone) {
         if (ui.disconnectDone) {
-            onTab("오늘")
+            onTab(HomeTab.TODAY)
             // 오늘·띠를 한 번 그린 뒤 끊기 표시를 지운다: 그 전에 죽으면 다음 실행이 다시 보인다.
             withFrameNanos { }
             withFrameNanos { }
             vm.disconnectShown()
         }
     }
-    // 7장 '기록 지우기 되돌리기': "지웠어요" + "되돌리기"(5초). 타이머에서 지운 것도 돌아와서 보인다(U38).
-    // 설정의 기록 가져오기도 같은 띠다: "기록 n건을 가져왔어요" + "되돌리기"(5초, U64).
+    // '기록 지우기 되돌리기': "지웠어요" + "되돌리기"(5초). 타이머에서 지운 것도 돌아와서 보인다.
+    // 설정의 기록 가져오기도 같은 띠다: "기록 n건을 가져왔어요" + "되돌리기"(5초).
     // 띠의 수명(5초, 다른 띠로 바뀜)은 RecordCare 한 곳이 정하고 화면은 떠 있는 띠를 그리기만 한다: 띠가 걷히거나 바뀌면 이 효과가 취소돼 닫힌다.
-    // 가져오기는 띠가 끝난 뒤에야 차로 보내므로(U67 11-09 보충) 화면 시계로 띠를 닫지 않는다.
+    // 가져오기는 띠가 끝난 뒤에야 차로 보내므로 화면 시계로 띠를 닫지 않는다.
     val undo by vm.undo.collectAsStateWithLifecycle()
     LaunchedEffect(undo) {
         val u = undo ?: return@LaunchedEffect
-        // 눌러 닫힌 띠가 되돌리기 저장 실패로 남았으면 다시 띄운다: 남은 시간 안에 다시 누를 수 있게(U38 11-09 보충). 띠 시간이 끝나면 키가 바뀌어 멈춘다.
+        // 눌러 닫힌 띠가 되돌리기 저장 실패로 남았으면 다시 띄운다: 남은 시간 안에 다시 누를 수 있게. 띠 시간이 끝나면 키가 바뀌어 멈춘다.
         while (snack.showSnackbar(u.text, "되돌리기", duration = SnackbarDuration.Indefinite) == SnackbarResult.ActionPerformed) {
             vm.undo(u).join()
             if (vm.undo.value != u) break
@@ -217,16 +228,22 @@ fun CareTabs(go: (Route) -> Unit, tab: String, onTab: (String) -> Unit, vm: Care
             val reduced = LocalReducedMotion.current
             Crossfade(tab, animationSpec = if (reduced) tween<Float>(0) else Motion.base.spec(), label = "tab") { t ->
                 when (t) {
-                    "기록" -> RecordsTab(go)
-                    "차" -> CarTab(go)
-                    "설정" -> SettingsTab(go)
-                    else -> TodayTab(go, openTab = onTab)
+                    HomeTab.RECORDS -> RecordsTab(go)
+                    HomeTab.CAR -> CarTab(go)
+                    HomeTab.SETTINGS -> SettingsTab(go)
+                    HomeTab.TODAY -> TodayTab(go, openTab = onTab)
                 }
             }
             SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(12.dp)) { d ->
                 // 되돌리기 띠 글자는 iOS와 같은 역할(글 bodyMedium, 단추 action). Snackbar는 Material bodyMedium·labelLarge를 읽는다.
                 MaterialTheme(typography = MaterialTheme.typography.copy(bodyMedium = Type.bodyMedium, labelLarge = Type.action)) {
-                    Snackbar(d, shape = Radius.control, containerColor = p.textPrimary, contentColor = p.surface, actionColor = if (p.dark) p.accent else p.glow)
+                    Snackbar(
+                        d,
+                        shape = Radius.control,
+                        containerColor = p.textPrimary,
+                        contentColor = p.surface,
+                        actionColor = if (p.dark) p.accent else p.glow,
+                    )
                 }
             }
         }
@@ -234,48 +251,43 @@ fun CareTabs(go: (Route) -> Unit, tab: String, onTab: (String) -> Unit, vm: Care
     }
 }
 
-private fun tabsFor(guardian: Boolean) = buildList {
-    add(Tab("오늘", R.drawable.ic_house))
-    add(Tab("기록", R.drawable.ic_list))
-    if (!guardian) add(Tab("차", R.drawable.ic_car_front))
-    add(Tab("설정", R.drawable.ic_settings))
-}
+private fun tabsFor(guardian: Boolean) = HomeTab.entries.filter { !guardian || it != HomeTab.CAR }
 
 /** 탭 밖 화면(리포트·노래 녹음) 아래에 같은 탭 막대를 둔다. 내용은 아래 시스템 막대 자리를 탭 막대에 넘긴다. */
 @Composable
-fun WithTabs(guardian: Boolean, selected: String, onSelect: (String) -> Unit, content: @Composable () -> Unit) {
+fun WithTabs(guardian: Boolean, selected: HomeTab, onSelect: (HomeTab) -> Unit, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { content() }
         BottomTabs(tabsFor(guardian), selected, onSelect)
     }
 }
 
-/** 탭 막대(시안 .p-android .nav v5): 흰 막대, 위 1dp 선, 아이콘 24 + 이름 11/14·500, 고르면 먹색. */
+/** 탭 막대: 흰 막대, 위 1dp 선, 아이콘 24 + 이름 11/14·500, 고르면 먹색. */
 @Composable
-private fun BottomTabs(tabs: List<Tab>, selected: String, onSelect: (String) -> Unit) {
+private fun BottomTabs(tabs: List<HomeTab>, selected: HomeTab, onSelect: (HomeTab) -> Unit) {
     val p = Tokens.colors
     Row(
         Modifier.fillMaxWidth().background(p.surface).drawBehind { drawLine(p.line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
             .windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         for (t in tabs) {
-            val on = t.name == selected
+            val on = t == selected
             val c = if (on) p.textPrimary else p.textTertiary
             Column(
                 Modifier.weight(1f).heightIn(min = 56.dp).clip(Radius.field)
-                    .selectable(on, interactionSource = null, indication = null, role = SRole.Tab) { onSelect(t.name) },
+                    .selectable(on, interactionSource = null, indication = null, role = SRole.Tab) { onSelect(t) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
                 AIcon(t.icon, Modifier.size(24.dp), c)
                 Spacer(Modifier.height(4.dp))
-                Text(t.name, style = Type.navLabel, color = c)
+                Text(t.label, style = Type.navLabel, color = c)
             }
         }
     }
 }
 
-// ---------------------------------------------------------------- 오늘(C1)
+// ---------------------------------------------------------------- 오늘
 
 /** 알림 권한은 처음 타이머를 시작할 때 한 번만 묻고(13+), 묻기 전에 한 줄을 보인다(notify.permission). 거절하면 앱 안에서만 보인다. */
 @Composable
@@ -292,11 +304,11 @@ private fun rememberStarter(vm: TodayViewModel): (CareKind) -> Unit {
 }
 
 /**
- * 오늘(시안 S.today). 인계 알림(guardian) → 진행 중 기록 → 마지막 수유 → 빠른 기록 → 오늘 하루 → 차(owner) → 최근 리포트.
- * guardian은 다음 수유 시간대·차 타일이 없다(U35). 빠른 기록은 guardian에게도 있다(U26: 이 휴대폰에만 남는 기록).
+ * 오늘. 인계 알림(guardian) → 진행 중 기록 → 마지막 수유 → 빠른 기록 → 오늘 하루 → 차(owner) → 최근 리포트.
+ * guardian은 다음 수유 시간대·차 타일이 없다. 빠른 기록은 guardian에게도 있다(이 휴대폰에만 남는 기록).
  */
 @Composable
-fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel = appViewModel()) {
+fun TodayTab(go: (Route) -> Unit, openTab: (HomeTab) -> Unit, vm: TodayViewModel = appViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val freshId by vm.fresh.collectAsStateWithLifecycle()
     val s = ui.phone
@@ -306,7 +318,7 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
     var sheet by rememberSaveable { mutableStateOf<CareKind?>(null) } // 회전·다시 그리기에도 시트를 둔다
     val reports = remember(s.reports) { reportsNewestFirst(s.reports.values.map { it.body }) }
     val knownReports = remember { s.reports.values.map { it.body.sessionId }.toSet() }
-    TabPage(care.childNickname?.let { "${it}의 오늘" } ?: "오늘") { // today.header(U34)
+    TabPage(care.childNickname?.let { "${it}의 오늘" } ?: "오늘") { // today.header
         if (ui.guardian) GuardianAlerts(s, go) else StatusBands(connected = ui.connected)
         ui.careNotice?.let { BandCard(it, "닫기") { vm.clearCareNotice() } }
         for (kind in listOf(CareKind.FEED, CareKind.SLEEP)) RunSlot(care.ongoing(kind)) { e -> go(Route.Timer(e.id)) }
@@ -317,21 +329,21 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
             dayChart(care, s.reports.values.map { it.body }, Instant.ofEpochMilli(now).atZone(deviceZone).toLocalDate(), now, deviceZone, showCar)
         }
         Block {
-            BlockHeader("오늘 하루", "기록") { openTab("기록") }
+            BlockHeader("오늘 하루", "기록") { openTab(HomeTab.RECORDS) }
             val today = Instant.ofEpochMilli(now).atZone(deviceZone).toLocalDate()
             val fresh = freshId?.let { id -> care.events.firstOrNull { it.id == id && it.deletedAt == null } }?.let { dayFresh(it, today, deviceZone) }
             DayStrip(day, fresh = fresh, freshDone = { fresh?.id?.let(vm::clearFresh) })
         }
         when {
-            ui.guardian -> Unit // U35: 차 타일 없음(기기 목록을 받지 못한다)
+            ui.guardian -> Unit // 차 타일 없음(기기 목록을 받지 못한다)
             !ui.connected -> ConnectCarCard(go)
-            else -> CarTileBlock(s, ui.online, onOpen = { openTab("차") })
+            else -> CarTileBlock(s, ui.online, onOpen = { openTab(HomeTab.CAR) })
         }
         if (ui.guardian && reports.isEmpty() && s.alerts.isEmpty()) FootNote("아직 받은 리포트·인계 알림이 없어요")
         if (reports.isNotEmpty()) {
             // today.recentReports: 새 것 셋. '전체'는 owner는 차 탭, guardian은 리포트 목록.
-            ListBlock("최근 리포트", "전체", { if (ui.guardian) go(Route.Reports) else openTab("차") }) {
-                // 화면이 떠 있는 동안 새로 온 리포트 줄만 들어온다(시안 .enter).
+            ListBlock("최근 리포트", "전체", { if (ui.guardian) go(Route.Reports) else openTab(HomeTab.CAR) }) {
+                // 화면이 떠 있는 동안 새로 온 리포트 줄만 들어온다.
                 reports.take(3).forEach { r -> key(r.sessionId) { EnterNew(r.sessionId !in knownReports) { ReportRow(r) { id -> go(Route.Report(id)) } } } }
             }
         }
@@ -341,7 +353,7 @@ fun TodayTab(go: (Route) -> Unit, openTab: (String) -> Unit, vm: TodayViewModel 
 
 /** 진행 중 기록(.run-c): 살아 있는 점 + "수유 중 · 왼쪽" + "오후 2:01부터" + 흐르는 시간(굵게 28). 누르면 타이머. */
 /**
- * 진행 중 판 자리. 기록을 시작하면 판이 위 10에서 0.98배·투명으로 들어오고(시안 .enter phEnter) 자리가 spring.smooth로 펼쳐져
+ * 진행 중 판 자리. 기록을 시작하면 판이 위 10에서 0.98배·투명으로 들어오고 자리가 spring.smooth로 펼쳐져
  * 아래 블록이 함께 비킨다(iOS cardEnter와 같음). 끝내면 흐려지며 접힌다. 화면을 열 때 이미 진행 중이면 그대로 보인다. 동작 줄이기면 바로.
  */
 @Composable
@@ -363,7 +375,8 @@ private fun RunCard(e: CareEvent, onOpen: () -> Unit) {
     val now = rememberNow(1_000)
     val title = if (e.kind == CareKind.FEED) listOfNotNull("수유 중", e.feedSide?.let(::sideName)).joinToString(" · ") else "자는 중"
     Row(
-        Modifier.sharedRun("run-${e.id}").fillMaxWidth().clip(Radius.large).background(p.surface).pressable(scale = 0.98f, onClick = onOpen).padding(horizontal = 20.dp, vertical = 18.dp)
+        Modifier.sharedRun("run-${e.id}").fillMaxWidth().clip(Radius.large).background(p.surface).pressable(scale = 0.98f, onClick = onOpen)
+            .padding(horizontal = 20.dp, vertical = 18.dp)
             .semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -386,7 +399,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
     val p = Tokens.colors
     val last = lastFeedingAt(care, s)
     val reduced = LocalReducedMotion.current
-    // 새 수유가 들어오면(화면이 떠 있는 동안 마지막 수유 시각이 바뀜) 판 둘레로 파란 빛이 1.2초 한 번 퍼진다(시안 .flash, iOS와 같음).
+    // 새 수유가 들어오면(화면이 떠 있는 동안 마지막 수유 시각이 바뀜) 판 둘레로 파란 빛이 1.2초 한 번 퍼진다(iOS와 같음).
     val flash = remember { Animatable(1f) }
     var seen by remember { mutableStateOf(last) }
     LaunchedEffect(last) {
@@ -408,7 +421,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
     }
     Block(glow, padding = PaddingValues(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 20.dp)) {
         if (last == null) {
-            // U85 ②: 같은 판 자리에 젖병 고리 + 글 + 빈 간격 트랙 + 주 단추(7장 글 그대로).
+            // 같은 판 자리에 젖병 고리 + 글 + 빈 간격 트랙 + 주 단추.
             Label("마지막 수유")
             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(48.dp).clip(CircleShape).background(p.surfaceRaised), contentAlignment = Alignment.Center) {
@@ -422,7 +435,7 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
         }
         Label("마지막 수유")
         RollingText(agoText(last, now), Type.hero, p.textPrimary, Modifier.padding(top = 6.dp)) // 바뀐 자리만 굴러간다(roll)
-        // 그 시각의 손 기록이 있으면 그 기록의 시간대(R13)와 쪽을 쓴다. 차 값에는 둘 다 없다.
+        // 그 시각의 손 기록이 있으면 그 기록의 시간대와 쪽을 쓴다. 차 값에는 둘 다 없다.
         val mine = care.events.filter { it.kind == CareKind.FEED && it.deletedAt == null && it.startAt == last }
         val side = mine.firstNotNullOfOrNull { it.feedSide }
         Text(
@@ -431,11 +444,11 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
             style = Type.valueKey,
             color = p.textTertiary,
         )
-        // 카드에 보인 그 수유를 이 폰이 보냈을 때만 전송 상태를 붙인다(계약 7.5). 차 값이 더 늦으면 붙이지 않는다.
+        // 카드에 보인 그 수유를 이 폰이 보냈을 때만 전송 상태를 붙인다. 차 값이 더 늦으면 붙이지 않는다.
         if (owner) s.feedings.findLast { (it.startAt ?: instantOf(it.at)) == last }?.let { r ->
             Text(feedingSendText(r, deviceZone), style = Type.caption, color = p.textTertiary)
         }
-        val window = if (guardian) null else instantOf(s.feeding?.value?.windowStartExpected) // U35: guardian은 feeding_state를 받지 못한다
+        val window = if (guardian) null else instantOf(s.feeding?.value?.windowStartExpected) // guardian은 feeding_state를 받지 못한다
         val meter = remember(care, last, now / MINUTE, window) {
             feedMeter(last, now, instantOf(s.feeding?.value?.lastFeedingStart), window, CareStats.usualFeedGapMs(care.events, now, deviceZone))
         }
@@ -450,13 +463,13 @@ private fun HeroFeed(care: CareFile, s: PhoneState, owner: Boolean, guardian: Bo
 }
 
 /**
- * 빠른 기록(.qblock: 흰 블록 안 회색 원 56 넷, 7장 순서). 수유·잠은 누르면 바로 시작하고, 진행 중이면 원이 먹색으로 뒤집혀
+ * 빠른 기록(.qblock: 흰 블록 안 회색 원 56 넷). 수유·잠은 누르면 바로 시작하고, 진행 중이면 원이 먹색으로 뒤집혀
  * "수유 중"·"자는 중"이 되어 타이머를 연다. 메모·기저귀는 시트를 연다. 길게 누르면 그 종류의 시트(지난 시각).
  */
 @Composable
 private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKind) -> Unit, go: (Route) -> Unit) {
     val p = Tokens.colors
-    // 시안 렌더: .qblock(18/8)보다 .p-android .pcard(22/20)가 앞서 실제 안쪽 여백은 22/20, 칸 사이 8(.quick gap).
+    // 안쪽 여백은 22/20, 칸 사이 8.
     Block {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (k in quickKinds(care.sleepDiaperEnabled)) {
@@ -466,7 +479,7 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
                     k == CareKind.FEED -> "수유 중"
                     else -> "자는 중"
                 }
-                // 시안 .qb: 누르면 원만 0.94배(spring.snappy)·바탕 조금 짙게, 진행 중이면 원이 먹색으로 뒤집힌다(색은 motion.fast). 동작 줄이기면 바로.
+                // 빠른 기록 단추: 누르면 원만 0.94배(spring.snappy)·바탕 조금 짙게, 진행 중이면 원이 먹색으로 뒤집힌다(색은 motion.fast). 동작 줄이기면 바로.
                 val source = remember { MutableInteractionSource() }
                 val pressed by source.collectIsPressedAsState()
                 val reduced = LocalReducedMotion.current
@@ -481,7 +494,7 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
                         null,
                         role = Role.Button,
                         onLongClick = { sheet(k) },
-                        onLongClickLabel = "지난 기록 적기", // 7.1 today.quick.past(iOS accessibilityAction과 같음)
+                        onLongClickLabel = "지난 기록 적기", // today.quick.past(iOS accessibilityAction과 같음)
                         onClick = {
                             when {
                                 running != null -> go(Route.Timer(running.id))
@@ -492,7 +505,10 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
                     ).padding(vertical = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Box(Modifier.size(56.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.size(56.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape).background(bg),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         AIcon(kindIcon(k), Modifier.size(24.dp), fg)
                     }
                     Spacer(Modifier.height(10.dp))
@@ -503,7 +519,7 @@ private fun QuickBlock(care: CareFile, start: (CareKind) -> Unit, sheet: (CareKi
     }
 }
 
-/** 오늘 탭·차 탭의 차 타일(연결 안 됨, 7장): "차와 연결하면 수유 기록이 차에도 가요" + "차와 연결하기". */
+/** 오늘 탭·차 탭의 차 타일(연결 안 됨): "차와 연결하면 수유 기록이 차에도 가요" + "차와 연결하기". */
 @Composable
 internal fun ConnectCarCard(go: (Route) -> Unit) = Block {
     Text("차와 연결하면 수유 기록이 차에도 가요", Modifier.padding(bottom = 16.dp), style = Type.body, color = Tokens.colors.textPrimary)
@@ -511,20 +527,27 @@ internal fun ConnectCarCard(go: (Route) -> Unit) = Block {
 }
 
 /**
- * 차 타일(시안 .car-tile): 위 3D 차(실시간, 끌어서 돌리기) + 아래 '● 연결됨' · 부제(7.2 차 타일 글을 ' · '에서 나눔).
+ * 차 타일: 위 3D 차(실시간, 끌어서 돌리기) + 아래 '● 연결됨' · 부제(차 타일 글을 ' · '에서 나눔).
  * `onOpen`이 있으면 아래 줄을 누르면 차 탭으로 간다(오늘 탭). `right`는 오른쪽 작은 라벨(차 탭의 '휴대폰 n대').
  */
 @Composable
-internal fun CarTileBlock(s: PhoneState, online: Boolean, onOpen: (() -> Unit)? = null, stageHeight: androidx.compose.ui.unit.Dp = 150.dp, right: String? = null) {
+internal fun CarTileBlock(
+    s: PhoneState,
+    online: Boolean,
+    onOpen: (() -> Unit)? = null,
+    stageHeight: androidx.compose.ui.unit.Dp = 150.dp,
+    right: String? = null,
+) {
     val p = Tokens.colors
     val text = carTileText(s.devices, online, rememberNow(60_000))
     val head = text.substringBefore(" · ")
     val sub = text.substringAfter(" · ", "").ifEmpty { null }
-    // 시안 렌더: .car-tile의 padding 0보다 .p-android .pcard(22/20)가 앞서 무대가 안쪽 22/20에 들고, 글 줄은 그 안에서 다시 20 들어간다.
+    // 무대는 안쪽 22/20에 들고, 글 줄은 그 안에서 다시 20 들어간다.
     Column(Modifier.fillMaxWidth().clip(Radius.large).background(p.surface).padding(horizontal = 20.dp, vertical = 22.dp)) {
         CarStage(Modifier.fillMaxWidth().height(stageHeight), preset = CarPreset.TILE)
         Row(
-            (if (onOpen != null) Modifier.pressable(scale = 0.98f, onClick = onOpen) else Modifier).fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 18.dp),
+            (if (onOpen != null) Modifier.pressable(scale = 0.98f, onClick = onOpen) else Modifier)
+                .fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 18.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
@@ -551,8 +574,8 @@ internal fun ReportRow(b: ReportSummaryBody, open: (String) -> Unit) =
 // ---------------------------------------------------------------- 차 탭
 
 /**
- * 차(시안 S.car): 차 타일(3D 190, '● 연결됨' · 마지막 연락, 오른쪽 휴대폰 n대) → (owner) 우리 노래 → 리포트(5장).
- * 블록 머리는 지금 화면 제목 "우리 노래"·"리포트"(U39). 연결 안 됨이면 차 타일(연결 안내)만.
+ * 차: 차 타일(3D 190, '● 연결됨' · 마지막 연락, 오른쪽 휴대폰 n대) → (owner) 우리 노래 → 리포트.
+ * 블록 머리는 지금 화면 제목 "우리 노래"·"리포트". 연결 안 됨이면 차 타일(연결 안내)만.
  */
 @Composable
 fun CarTab(go: (Route) -> Unit, vm: CarViewModel = appViewModel()) {
@@ -574,10 +597,10 @@ fun CarTab(go: (Route) -> Unit, vm: CarViewModel = appViewModel()) {
     }
 }
 
-// ---------------------------------------------------------------- 타이머(C2)
+// ---------------------------------------------------------------- 타이머
 
 /**
- * 타이머(시안 S.timer): 300 고리(1시간을 한 바퀴로 지난 분만큼 호, 초침 점이 60초에 한 바퀴) 안에 흐르는 시간(timer 64/72·650)과
+ * 타이머: 300 고리(1시간을 한 바퀴로 지난 분만큼 호, 초침 점이 60초에 한 바퀴) 안에 흐르는 시간(timer 64/72·650)과
  * "수유 중 · 왼쪽", 쪽 세그먼트, 끝내기(큰 파랑), 시작 시각 수정(회색), 이 기록 지우기(빨간 글자).
  */
 @Composable
@@ -594,7 +617,11 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
     BackPage(kindName(e.kind), onBack) { // timer.title.*
         StatusBands(connected = ui.connected)
         if (ui.guardian) FootNote(GUARDIAN_ONLY)
-        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
             TimerRing(e, now)
             if (e.kind == CareKind.FEED) {
                 val sides = FeedSide.entries
@@ -602,9 +629,9 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
                 if (e.feedSide == FeedSide.BOTTLE) AmountRow(e.amountMl, vm::setAmount)
             }
             if (e.overMax(now)) {
-                // U14: R3 안내와 함께 끝 시각 고르기·끝 시각 모름으로 닫기.
+                // 길이 초과 안내와 함께 끝 시각 고르기·끝 시각 모름으로 닫기.
                 Text(
-                    if (e.kind == CareKind.FEED) "수유가 3시간째예요. 끝내는 걸 잊으셨나요?" else "잠이 16시간째예요. 끝내는 걸 잊으셨나요?", // timer.overMax.*(U36)
+                    if (e.kind == CareKind.FEED) "수유가 3시간째예요. 끝내는 걸 잊으셨나요?" else "잠이 16시간째예요. 끝내는 걸 잊으셨나요?", // timer.overMax.*
                     style = Type.headline,
                     color = p.textPrimary,
                 )
@@ -628,7 +655,7 @@ fun TimerScreen(onBack: () -> Unit, vm: TimerViewModel = appViewModel()) {
             pick = null
         }
     }
-    // R4: 시트와 같은 경고
+    // 시트와 같은 경고
     (phase as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { o -> OverlapDialog(o.event.kind, onSave = vm::confirmTime, onDismiss = vm::keepEditing) }
 }
 
@@ -641,7 +668,12 @@ private fun TimerRing(e: CareEvent, now: Long) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
     // 초침은 보일 때만 돈다(굴려 가리면 멈춤). 동작 줄이기면 지난 초 자리에 멈춘 점.
-    val sweep = if (reduced || !shown) (elapsed / 1000 % 60) / 60f else rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(Motion.secondHand.spec<Float>(), RepeatMode.Restart), label = "sweep").value
+    val sweep = if (reduced || !shown) {
+        (elapsed / 1000 % 60) / 60f
+    } else {
+        rememberInfiniteTransition(label = "sweep")
+            .animateFloat(0f, 1f, infiniteRepeatable(Motion.secondHand.spec<Float>(), RepeatMode.Restart), label = "sweep").value
+    }
     val sub = if (e.kind == CareKind.FEED) listOfNotNull("수유 중", e.feedSide?.let(::sideName)).joinToString(" · ") else "자는 중"
     // 고리 지름: 300, 좁은 화면이면 화면 폭 − 바깥 여백(12·2 + 8·2). BoxWithConstraints(SubcomposeLayout)를 공유 요소 위에 두면
     // 타이머에서 돌아갈 때 나가는 화면의 형제 칸(세그먼트·단추)이 오늘 화면 위에 남아 겹쳐 그려졌다(녹화로 확인).
@@ -656,7 +688,7 @@ private fun TimerRing(e: CareEvent, now: Long) {
                 drawArc(color, -90f, 360f * ((elapsed / 1000 % 3600) / 3600f), false, tl, Size(r * 2, r * 2), style = Stroke(stroke, cap = StrokeCap.Round))
                 rotate(360f * sweep) { drawCircle(color, 6.dp.toPx(), Offset(center.x, center.y - r)) }
             }
-            // 큰 글자(200%)에서도 고리 안에 들게 숫자 크기를 고리 폭의 78%로 줄인다(R13). 평소 크기에서는 그대로 64.
+            // 큰 글자(200%)에서도 고리 안에 들게 숫자 크기를 고리 폭의 78%로 줄인다. 평소 크기에서는 그대로 64.
             val text = timerText(elapsed)
             val density = LocalDensity.current
             val k = with(density) { minOf(1f, d.toPx() * 0.78f / (Type.timer.fontSize.toPx() * 0.62f * text.length)) }
@@ -670,7 +702,7 @@ private fun TimerRing(e: CareEvent, now: Long) {
     }
 }
 
-/** R4 겹침 확인(7장 겹침, U71): 제목 "그래도 저장할까요?" / 본문 겹침 글 / "저장"·"닫기"(닫으면 시트·타이머로 돌아가 고친다). */
+/** 겹침 확인: 제목 "그래도 저장할까요?" / 본문 겹침 글 / "저장"·"닫기"(닫으면 시트·타이머로 돌아가 고친다). */
 @Composable
 internal fun OverlapDialog(kind: CareKind, onSave: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
@@ -683,7 +715,7 @@ internal fun OverlapDialog(kind: CareKind, onSave: () -> Unit, onDismiss: () -> 
     )
 }
 
-/** 젖병 양(timer.amount · sheet.row.amount): "양" + "{n}ml", ±10ml, 0~400. 빈 값에서 +는 10ml(U39). */
+/** 젖병 양(timer.amount · sheet.row.amount): "양" + "{n}ml", ±10ml, 0~400. 빈 값에서 +는 10ml. */
 @Composable
 internal fun AmountRow(ml: Int?, onChange: (Int?) -> Unit) {
     val p = Tokens.colors
@@ -696,13 +728,19 @@ internal fun AmountRow(ml: Int?, onChange: (Int?) -> Unit) {
     }
 }
 
-/** 젖병 양 −/＋(±10ml, 빈 값에서 +는 10ml, U39). 범위는 도메인 `AMOUNT_ML`. 타이머 행과 기록 시트 행이 같이 쓴다. */
+/** 젖병 양 −/＋(±10ml, 빈 값에서 +는 10ml). 범위는 도메인 `AMOUNT_ML`. 타이머 행과 기록 시트 행이 같이 쓴다. */
 @Composable
 internal fun AmountStepper(ml: Int?, onChange: (Int?) -> Unit) {
     val p = Tokens.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         StepButton(R.drawable.ic_minus, "줄이기", enabled = ml != null) { onChange(ml?.let { (it - 10).coerceAtLeast(AMOUNT_ML.first) }) }
-        Text(ml?.let { "${it}ml" } ?: "", Modifier.widthIn(min = 72.dp), style = Type.sheetValue.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(
+            ml?.let { "${it}ml" } ?: "",
+            Modifier.widthIn(min = 72.dp),
+            style = Type.sheetValue.copy(fontFeatureSettings = "tnum"),
+            color = p.textPrimary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
         StepButton(R.drawable.ic_plus, "늘리기") { onChange(((ml ?: 0) + 10).coerceAtMost(AMOUNT_ML.last)) }
     }
 }
@@ -723,7 +761,7 @@ internal fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onUnknown
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = { onPick(state.hour, state.minute) }) { Text(stringResource(android.R.string.ok)) } },
-        // 끝 시각이면 왼쪽에 '끝 시각 모름'(U82, 시안 시계판 창 '끝 시각 모름'·'취소'·'확인').
+        // 끝 시각이면 왼쪽에 '끝 시각 모름'(시계판 창의 '끝 시각 모름'·'취소'·'확인').
         dismissButton = {
             androidx.compose.foundation.layout.Row {
                 onUnknown?.let { TextButton(onClick = it) { Text("끝 시각 모름") } }

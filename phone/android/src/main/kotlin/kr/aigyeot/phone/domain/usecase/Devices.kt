@@ -12,9 +12,9 @@ import kr.aigyeot.shared.InviteResponse
 import kr.aigyeot.shared.PatchDeviceRequest
 import kr.aigyeot.shared.PushTokenPatch
 
-// 이 기기의 중계 설정(초대·인계 알림 받기·푸시 토큰, 5.4·G12). 401은 어디서든 연결 끊김이다(7.1).
+// 이 기기의 중계 설정(초대·인계 알림 받기·푸시 토큰). 401은 어디서든 연결 끊김이다.
 
-/** owner의 '초대 코드 만들기'(7.1). */
+/** owner의 '초대 코드 만들기'. */
 class Invite(
     private val state: PhoneStateRepository,
     private val relay: RelayClient,
@@ -37,7 +37,7 @@ class Invite(
     }
 }
 
-/** guardian의 '인계 알림 받기'(G12). 중계가 원본이고 응답으로 맞춘다. 실패하면 문구. */
+/** guardian의 '인계 알림 받기'. 중계가 원본이고 응답으로 맞춘다. 실패하면 문구. */
 class SetHandoffAlerts(
     private val state: PhoneStateRepository,
     private val relay: RelayClient,
@@ -53,7 +53,7 @@ class SetHandoffAlerts(
     }
 }
 
-/** 푸시 토큰 등록(5.4). 앱을 열 때마다 같은 값이어도 보낸다. 실패하면 다음 열기 때 다시. */
+/** 푸시 토큰 등록. 앱을 열 때마다 같은 값이어도 보낸다. 실패하면 다음 열기 때 다시. */
 class RegisterPush(
     private val state: PhoneStateRepository,
     private val relay: RelayClient,

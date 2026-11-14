@@ -12,7 +12,7 @@ import java.io.File
 
 /**
  * 녹음 파일(`files/songs/`)과 임시 녹음(`cache/recording-*`). 파일 잠금은 새 녹음의 이동·상태 커밋과 파일 정리를 줄 세워,
- * 정리가 읽은 목록보다 늦게 저장된 새 녹음을 지우지 않게 한다(7.4·7.5). 잡는 순서는 파일 잠금 → 상태 잠금뿐이다.
+ * 정리가 읽은 목록보다 늦게 저장된 새 녹음을 지우지 않게 한다. 잡는 순서는 파일 잠금 → 상태 잠금뿐이다.
  */
 class AppSongFileStore(
     private val songsDir: File,
@@ -50,7 +50,7 @@ class AppSongFileStore(
     }
 
     override suspend fun purge() = lock.withLock {
-        // 지킬 기록이 없으므로 백업·녹음을 모두 지운다(7.4). 정리 건너뛰기 조건을 타지 않는다.
+        // 지킬 기록이 없으므로 백업·녹음을 모두 지운다. 정리 건너뛰기 조건을 타지 않는다.
         state.discardRecovery()
         withContext(Dispatchers.IO) { songsDir.listFiles()?.forEach { it.delete() } }
         Unit

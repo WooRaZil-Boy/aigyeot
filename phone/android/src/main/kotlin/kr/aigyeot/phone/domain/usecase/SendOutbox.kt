@@ -34,8 +34,8 @@ import kr.aigyeot.phone.domain.state.AppVisibility
 import kr.aigyeot.phone.domain.state.Notices
 
 /**
- * 보낼 함 일꾼(7.5). 한 일꾼이 넣은 순서대로 하나씩 보낸다. 신호는 합쳐지므로 도는 중에 온 신호는 한 번 더 돌게 한다.
- * 결과는 보낼 때 잡은 자격·항목으로 처리한다(P5). 메시지 POST의 429 기다림은 그 항목을 지우거나 바꿔도, 다시 켜도 지킨다(1.1).
+ * 보낼 함 일꾼. 한 일꾼이 넣은 순서대로 하나씩 보낸다. 신호는 합쳐지므로 도는 중에 온 신호는 한 번 더 돌게 한다.
+ * 결과는 보낼 때 잡은 자격·항목으로 처리한다. 메시지 POST의 429 기다림은 그 항목을 지우거나 바꿔도, 다시 켜도 지킨다.
  */
 class SendOutbox(
     private val state: PhoneStateRepository,
@@ -61,7 +61,7 @@ class SendOutbox(
 
     /** 저장하지 못한 메시지 429 기다림의 끝과 그것을 받은 자격. 자격이 바뀌면 걸리지 않는다(저장된 것은 새 상태와 함께 사라졌다). */
     @Volatile
-    private var memHold: kotlin.Pair<Credentials, Long>? = null
+    private var memHold: Pair<Credentials, Long>? = null
 
     init {
         scope.launch { for (x in signal) pumpOnce() }
@@ -72,7 +72,7 @@ class SendOutbox(
     }
 
     /**
-     * 망 실패(응답 없음)로 생긴 보낼 함 기다림을 지금으로 당기고 보낸다(계약 7.5 '네트워크가 돌아올 때, 앱이 앞으로 올 때', iOS `hurryNetworkWaits`).
+     * 망 실패(응답 없음)로 생긴 보낼 함 기다림을 지금으로 당기고 보낸다('네트워크가 돌아올 때, 앱이 앞으로 올 때', iOS `hurryNetworkWaits`).
      * 중계가 준 기다림(429 Retry-After·song_quota)과 5xx 백오프는 둔다. 저장하지 못하면 기다림 그대로 보낸다(다음 계기에 다시 당긴다).
      */
     fun hurryNetworkWaits() {
@@ -84,7 +84,7 @@ class SendOutbox(
         }
     }
 
-    /** 뒤로 갔다: 깨움 타이머를 걷는다. 앞으로 올 때(연결 반복) 이어 보낸다(7.5). */
+    /** 뒤로 갔다: 깨움 타이머를 걷는다. 앞으로 올 때(연결 반복) 이어 보낸다. */
     fun cancelWake() {
         wake?.cancel()
     }
@@ -98,14 +98,14 @@ class SendOutbox(
         memHold = c to maxOf(memHold?.takeIf { it.first == c }?.second ?: 0, until)
     }
 
-    /** 7일 지난 것을 정리해 저장하고(7.5), 그때 버린 메시지를 띠로 알린다(U54). 저장하지 못하면 거짓. */
+    /** 7일 지난 것을 정리해 저장하고, 그때 버린 메시지를 띠로 알린다. 저장하지 못하면 거짓. */
     suspend fun commitPruned(c: Credentials, then: (PhoneState) -> PhoneState = { it }): Boolean {
         if (!state.commit(c) { then(it.pruned(clock.now(), sending)) }) return false
         showDrops()
         return true
     }
 
-    /** 띠를 닫았다(U54): 닫은 띠에 있던 버림(메시지 id)만 지운다. 그사이 새로 버린 것은 같은 종류여도 남긴다. */
+    /** 띠를 닫았다: 닫은 띠에 있던 버림(메시지 id)만 지운다. 그사이 새로 버린 것은 같은 종류여도 남긴다. */
     fun dismissNotice() {
         val seen = state.state.value.unseenDrops.keys
         notices.dismiss(seen)
@@ -115,7 +115,7 @@ class SendOutbox(
 
     private fun showDrops() = notices.showDrops(state.state.value.unseenDrops)
 
-    /** 뒤에서는 타이머를 걸지 않는다. 앞으로 올 때(연결 반복) 이어 보낸다(7.5). */
+    /** 뒤에서는 타이머를 걸지 않는다. 앞으로 올 때(연결 반복) 이어 보낸다. */
     private fun wakeAt(at: Long) {
         wake?.cancel()
         if (!visibility.visible.value) return
@@ -145,13 +145,15 @@ class SendOutbox(
             if (item?.payload is OutboxPayload.CareSummary && refreshed != item.id) {
                 // 보내기 직전에 다시 계산한다: 오래 기다린 요약의 as_of·'오늘' 값이 낡지 않게(자정을 넘긴 복구, 그사이 지운 기록).
                 // 같은 날 같은 내용이면 그대로(같은 id). 바꿨으면 처음부터 다시 고른다. 저장하지 못하면 옛 요약을 보내지 않는다(iOS와 같음).
-                // 요약만 다시 계산한다: 수유 보내기는 정해진 네 계기에서만(R6). 되돌릴 수 있는 가져오기 줄은 뺀다([forCar], U67).
-                if (!state.commit(c) { it.reconciledSummary(care.care.value.forCar(notices.undo.value), clock.now(), APP_ZONE, sending) }) return retrySaveLater()
+                // 요약만 다시 계산한다: 수유 보내기는 정해진 네 계기에서만. 되돌릴 수 있는 가져오기 줄은 뺀다([forCar]).
+                if (!state.commit(c) { it.reconciledSummary(care.care.value.forCar(notices.undo.value), clock.now(), APP_ZONE, sending) }) {
+                    return retrySaveLater()
+                }
                 refreshed = state.state.value.outbox.firstOrNull { it.payload is OutboxPayload.CareSummary }?.id
                 if (refreshed != item.id) continue
             }
             if (item == null) return wakeAt(state.state.value.outbox.firstOrNull()?.nextTryAt ?: return)
-            // 요약은 보내기 전에 '보내 봄'을 저장한다(U57): 응답 전에 죽거나 결과 저장이 실패해도 바꿔치우지 않는다.
+            // 요약은 보내기 전에 '보내 봄'을 저장한다: 응답 전에 죽거나 결과 저장이 실패해도 바꿔치우지 않는다.
             var marked = false
             if (item.payload is OutboxPayload.CareSummary && !item.sentOnce) {
                 var present = false
@@ -159,8 +161,8 @@ class SendOutbox(
                 if (!present) continue // 그사이 지워졌다(기록 지우기 등): 다시 고른다
                 marked = true
             }
-            // 위 저장을 기다리는 사이 다른 메시지(상태 요청 등)가 429를 받았을 수 있다: 보내기 바로 앞에서 다시 본다(1.1).
-            // 방금 적은 '보내 봄'은 걷는다: 보내지 않았으니 기다리는 사이 기록을 지우면 이 요약도 빠져야 한다(R10).
+            // 위 저장을 기다리는 사이 다른 메시지(상태 요청 등)가 429를 받았을 수 있다: 보내기 바로 앞에서 다시 본다.
+            // 방금 적은 '보내 봄'은 걷는다: 보내지 않았으니 기다리는 사이 기록을 지우면 이 요약도 빠져야 한다.
             holdUntil(clock.now())?.let { h ->
                 if (marked && !state.commit(c) { it.untried(item.id) }) untryPending = item.id
                 return wakeAt(h)

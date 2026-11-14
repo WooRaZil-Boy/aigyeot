@@ -12,10 +12,10 @@ import kr.aigyeot.phone.domain.repository.CareRepository
 import kr.aigyeot.phone.domain.repository.Logger
 import java.io.File
 
-/** 돌봄 기록(`care.json`, phone-care-plan 6장). 연결과 상관없이 쓴다(U7). 끊어도 지우지 않는다(U6·R9). */
+/** 돌봄 기록(`care.json`). 연결과 상관없이 쓴다. 끊어도 지우지 않는다. */
 class FileCareRepository(
     file: File,
-    /** 내 기록 내보내기 캐시(C7). 기록 지우기가 함께 지운다(7.4 '캐시'). */
+    /** 내 기록 내보내기 캐시. 기록 지우기가 함께 지운다. */
     private val exportDir: File,
     private val log: Logger,
     private val onSaveFailed: () -> Unit,

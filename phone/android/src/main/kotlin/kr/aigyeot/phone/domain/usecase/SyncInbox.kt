@@ -8,9 +8,9 @@ import kr.aigyeot.phone.domain.model.Banner
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.Inbound
 import kr.aigyeot.phone.domain.model.InboundMessage
-import kr.aigyeot.phone.domain.model.rateLimitWaitMs
 import kr.aigyeot.phone.domain.model.StoredAlert
 import kr.aigyeot.phone.domain.model.isUlid
+import kr.aigyeot.phone.domain.model.rateLimitWaitMs
 import kr.aigyeot.phone.domain.model.receive
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 받기(1.4·5.6, R 범주): 받은 봉투를 저장한 뒤에만 ack한다. 저장하지 못하면 ack하지 않는다(중계가 다시 준다).
+ * 받기: 받은 봉투를 저장한 뒤에만 ack한다. 저장하지 못하면 ack하지 않는다(중계가 다시 준다).
  * 같은 id는 한 번만 띄운다. 차 id 확인은 [receive]가 한다.
  */
 class SyncInbox(
@@ -40,15 +40,15 @@ class SyncInbox(
     /** 앞에 있을 때 푸시가 온 메시지 id. 본문이 지금 자격·같은 차로 들어오면 그때 배너로 띄운다. */
     private val pendingPush: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    /** 차의 실시간 봉투를 적용한 횟수와 그 시각. 기기 목록을 기다리는 사이 받았는지 KeepConnected가 본다(7.2, iOS `carLiveSeen`과 같음). */
+    /** 차의 실시간 봉투를 적용한 횟수와 그 시각. 기기 목록을 기다리는 사이 받았는지 KeepConnected가 본다(iOS `carLiveSeen`과 같음). */
     private val carLiveSeen = AtomicInteger(0)
 
     @Volatile
     private var lastCarLiveAt: Long? = null
 
-    /** 받은 함 429의 Retry-After 기한과 그것을 받은 자격(1.1, iOS `inboxHoldUntil`). 자격이 바뀌면 걸리지 않는다(P5). 메모리에만 둔다(iOS와 같다). */
+    /** 받은 함 429의 Retry-After 기한과 그것을 받은 자격(iOS `inboxHoldUntil`). 자격이 바뀌면 걸리지 않는다. 메모리에만 둔다(iOS와 같다). */
     @Volatile
-    private var inboxHold: kotlin.Pair<Credentials, Long>? = null
+    private var inboxHold: Pair<Credentials, Long>? = null
 
     /** 받은 함 429 기다림이 끝나는 시각. 없으면 null. 기다리는 동안은 받은 함도 소켓도 열지 않는다(iOS `beginRefresh`와 같다). */
     fun inboxHoldUntil(c: Credentials, now: Long): Long? = inboxHold?.takeIf { it.first == c }?.second?.takeIf { it > now }
@@ -72,7 +72,7 @@ class SyncInbox(
     private class Pulled(val c: Credentials, val sync: Sync, val number: Long)
 
     /**
-     * 받은 함을 모두 받아 저장한 뒤 ack한다(배너 없이, 5.6). 받기는 한 번에 하나다.
+     * 받은 함을 모두 받아 저장한 뒤 ack한다(배너 없이). 받기는 한 번에 하나다.
      * - 기본: 같은 자격의 받기가 돌고 있으면 새로 묻지 않고 그 결과에 합류한다(연결 반복의 대체 경로. iOS `refresh`가 '갱신 중'이면 새로 열지 않는 것과 같다).
      * - `fresh`: 도는 받기는 부른 때보다 앞선 것이라 끝난 뒤 한 번 더 받는다. 소켓이 붙음(iOS `reconnectedDuringRefresh`)과 푸시(그 메시지가 도는 받기보다 늦게 왔을 수 있다)다.
      *   기다리는 사이 부른 뒤에 시작한 받기가 끝났으면 그것에 합류한다(한 번 더는 한 번).
@@ -87,7 +87,7 @@ class SyncInbox(
     }
 
     private suspend fun pull(c: Credentials): Sync {
-        if (inboxHoldUntil(c, clock.now()) != null) return Sync.FAILED // 429 기다림 중: 기한 전에는 묻지 않는다(1.1)
+        if (inboxHoldUntil(c, clock.now()) != null) return Sync.FAILED // 429 기다림 중: 기한 전에는 묻지 않는다
         var after = 0L
         while (true) {
             when (val r = relay.inbox(c.token, after)) {
@@ -150,13 +150,13 @@ class SyncInbox(
 
     private suspend fun afterStore(banner: StoredAlert?, songStatus: Boolean) {
         banner?.let { notices.showBanner(Banner(it.body.text, it.id)) }
-        // 다른 owner 폰에서 지운 곡(song_status removed)의 녹음 파일도 지움 상태를 저장한 뒤 정리한다(7.4).
+        // 다른 owner 폰에서 지운 곡(song_status removed)의 녹음 파일도 지움 상태를 저장한 뒤 정리한다.
         if (songStatus) songs.clean()
         notices.pruneFeedingDrop(state.state.value.unseenDrops)
     }
 
     /**
-     * 앞에 있을 때 온 푸시(5.6). 푸시 문장은 바로 띄우지 않는다: 이전 차의 늦은 푸시일 수 있다.
+     * 앞에 있을 때 온 푸시. 푸시 문장은 바로 띄우지 않는다: 이전 차의 늦은 푸시일 수 있다.
      * id를 보류해 두고 지금 자격으로 받은 함을 받아, 이 차의 본문이 저장될 때 배너로 띄운다.
      */
     fun onPush(msgId: String) {

@@ -1,11 +1,11 @@
 package kr.aigyeot.phone.presentation
 
-import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kr.aigyeot.phone.R
 
-// 디자인 토큰(디자인 v6 확정, 시안 tokens.json의 폰 값). 같은 이름·같은 값을 iOS가 쓴다.
+// 디자인 토큰(tokens.json의 폰 값). 같은 이름·같은 값을 iOS가 쓴다.
 // 공개 사본 shared/src/test/resources/design/tokens.json과 TokensTest가 값을 대조한다.
 // 원칙(한국 앱 결): 회색 바탕 + 흰 블록, 숫자·진행은 먹색, 브랜드 파랑(accent)은 행동(버튼·선택·스위치)에만,
 // 아이의 신호는 주황(child). 데이터 색은 잠·수유·차에서 울음 세 칸, 기저귀·메모는 회색.
@@ -73,15 +73,12 @@ data class Palette(
 
 /**
  * 회색 바탕(bg) 위 옅은 판(톤 단추, 첫 안내 아이콘 칸, 3D '처음 자리로' 원, 타이머 고리). 라이트의 surfaceRaised는 bg와 같은 #F2F4F6이라
- * 보이지 않아 먹색 8%(시안 .pbtn.ton 7%·세그먼트 판과 같은 결), 다크는 surfaceRaised. 흰 블록 위 판은 surfaceRaised 그대로(iOS DS.tonal과 같음).
+ * 보이지 않아 먹색 8%(세그먼트 판과 같은 결), 다크는 surfaceRaised. 흰 블록 위 판은 surfaceRaised 그대로(iOS DS.tonal과 같음).
  */
 val Palette.tonal: Color get() = if (dark) surfaceRaised else textPrimary.copy(alpha = 0.08f)
 
-/** 세그먼트 고른 칸(시안 .segp .sthumb: 라이트 흰 면, 다크 .t-dark .segp .sthumb #3A3F46). */
+/** 세그먼트 고른 칸(라이트 흰 면, 다크 #3A3F46). */
 val Palette.segmentThumb: Color get() = if (dark) Color(0xFF3A3F46) else surface
-
-/** 첫 안내 무대 가운데 빛(시안 .intro-hero: 라이트 stage에 흰빛 60%, 다크 #232931). */
-val Palette.stageGlow: Color get() = if (dark) Color(0xFF232931) else lerp(stage, Color.White, 0.6f)
 
 /** 3D 차 색(iOS `CarPaint`와 같은 이름). 재질 표는 car3d `SPECS` 한 곳에 있다. */
 object CarPaint {
@@ -164,13 +161,13 @@ private fun style(size: Double, line: Int, weight: Int, tracking: Double = 0.0) 
     letterSpacing = tracking.em,
     // 줄 높이 안에서 글자를 가운데에 둔다(웹 line-height와 같은 놓임).
     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-    // 한국어는 낱말 단위로 줄을 바꾼다(시안 word-break: keep-all, README 4.4). API 33+에서 먹고 그 아래는 기본 줄바꿈.
+    // 한국어는 낱말 단위로 줄을 바꾼다(word-break: keep-all). API 33+에서 먹고 그 아래는 기본 줄바꿈.
     lineBreak = LineBreak(LineBreak.Strategy.HighQuality, LineBreak.Strictness.Strict, LineBreak.WordBreak.Phrase),
     // 기기 언어가 한국어가 아니어도 한국어 규칙으로 줄을 바꾼다(낱말 단위 줄바꿈은 글자의 로케일을 본다).
     localeList = LocaleList("ko-KR"),
 )
 
-/** 글자 단계(tokens.json type.phone: 크기/줄 높이/굵기). 자간은 시안 CSS의 em 값. `timer`는 고정폭 숫자(tnum). */
+/** 글자 단계(tokens.json type.phone: 크기/줄 높이/굵기). 자간은 em 값. `timer`는 고정폭 숫자(tnum). */
 object Type {
     val hero = style(30.0, 38, 700, -0.03)
     val display = style(26.0, 34, 700, -0.03)
@@ -180,7 +177,7 @@ object Type {
     val caption = style(13.0, 18, 500)
     val timer = style(64.0, 72, 650, -0.03).copy(fontFeatureSettings = "tnum")
 
-    // 글자 역할(iOS `DesignSystem.TextRole`과 같은 이름·값). 단계(위 7개)와 같은 조합은 단계를 쓰고, 시안 phone.css가 단계 사이 크기를 쓰는 자리만 역할이다.
+    // 글자 역할(iOS `DesignSystem.TextRole`과 같은 이름·값). 단계(위 7개)와 같은 조합은 단계를 쓰고, 단계 사이 크기를 쓰는 자리만 역할이다.
     // 크기·굵기 조합 하나에 이름 하나(시험이 겹침을 막는다). 화면은 단계·역할로만 고르고 크기·굵기를 직접 쓰지 않는다(고정폭 숫자·자간·색은 덧붙여도 된다).
     /** 타임라인 시간 머리(.tl .hr span 11·600). */
     val hourMark = style(11.0, 14, 600)
@@ -233,7 +230,7 @@ object Type {
     /** 녹음 시간(.rec .rt 44·600, 고정폭 숫자). */
     val recordTimer = style(44.0, 48, 600, -0.02).copy(fontFeatureSettings = "tnum")
 
-    // 안드로이드 화면에만 있는 자리(시안 .p-android 값).
+    // 안드로이드 화면에만 있는 자리.
     /** 아래 내비게이션 이름(.p-android .nav button 11/14·500, 고른 칸도 색만 바뀐다). */
     val navLabel = style(11.0, 14, 500)
     /** 알림 행동 단추(.anoti .acts span 13.5·600). */
@@ -274,7 +271,7 @@ data class Curve(val ms: Int, val x1: Float, val y1: Float, val x2: Float, val y
     fun <T> spec(delayMs: Int = 0): TweenSpec<T> = tween(ms, delayMs, easing)
 }
 
-/** 모션 표(시안 README 4.7). 시스템 애니메이션이 꺼져 있으면 바로 바뀐다. */
+/** 모션 표. 시스템 애니메이션이 꺼져 있으면 바로 바뀐다. */
 object Motion {
     val press = Curve(90, 0f, 0f, 1f, 1f)
     val fast = Curve(150, 0.4f, 0f, 0.2f, 1f)
@@ -285,7 +282,7 @@ object Motion {
     val light = Curve(900, 0.4f, 0f, 0.2f, 1f)
     val ripple = Curve(2400, 0.2f, 0.6f, 0.35f, 1f)
 
-    // 부품 모션(시안 css·js 값 그대로, 위 곡선을 시간만 바꿔 쓴다).
+    // 부품 모션(위 곡선을 시간만 바꿔 쓴다).
     /** 화면 교체 때 블록이 한 줄씩 올라옴(rise): 시작 지연과 간격(core.js enter: startDelay 0.06·stagger 0.05, 열째 줄부터 같이). */
     const val RISE_DELAY_MS = 60
     const val RISE_STAGGER_MS = 50
@@ -325,7 +322,7 @@ object Springs {
     val smooth = SpringToken(1.0f, 385f)
     val bouncy = SpringToken(0.78f, 420f)
 
-    /** 숫자 굴림(README 4.7 roll, Dorr): .85·632. */
+    /** 숫자 굴림(roll, Dorr): .85·632. */
     val roll = SpringToken(0.85f, 632f)
 }
 
@@ -375,7 +372,7 @@ fun AigyeotTheme(content: @Composable () -> Unit) {
         inverseSurface = p.textPrimary,
         inverseOnSurface = p.surface,
         inversePrimary = p.surface, // 스낵바 '되돌리기' 글자(먹색 띠 위 흰 글자)
-        scrim = Color(0x520A0C0E), // 시안 .scrim rgba(10,12,14,.32)
+        scrim = Color(0x520A0C0E), // 스크림 rgba(10,12,14,.32)
         error = p.danger,
     )
     val type = Typography().run {
@@ -397,7 +394,11 @@ fun AigyeotTheme(content: @Composable () -> Unit) {
             labelSmall = labelSmall.copy(fontFamily = Pretendard),
         )
     }
-    MaterialTheme(colorScheme = scheme, typography = type, shapes = Shapes(small = Radius.small, medium = Radius.medium, large = Radius.large, extraLarge = Radius.xl)) {
+    MaterialTheme(
+        colorScheme = scheme,
+        typography = type,
+        shapes = Shapes(small = Radius.small, medium = Radius.medium, large = Radius.large, extraLarge = Radius.xl),
+    ) {
         CompositionLocalProvider(LocalPalette provides p, content = content)
     }
 }

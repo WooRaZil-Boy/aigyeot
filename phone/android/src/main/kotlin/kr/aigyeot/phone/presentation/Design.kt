@@ -104,10 +104,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kr.aigyeot.phone.R
 
-// 디자인 v6 부품(시안 css/phone.css의 v5 '한국 앱 결' 값). 화면은 이 부품만 조립한다(Material 꼴을 쓰지 않는다).
-// 값은 시안 CSS의 px = dp. 글자는 Theme.kt `Type`.
+// 디자인 부품('한국 앱 결' 값). 화면은 이 부품만 조립한다(Material 꼴을 쓰지 않는다).
+// 값의 단위는 dp. 글자는 Theme.kt `Type`.
 
-/** 동작 줄이기: 시스템 '애니메이션 삭제'(animator 길이 배율 0). 그러면 모든 움직임이 바로 바뀐다(README 4.7). */
+/** 동작 줄이기: 시스템 '애니메이션 삭제'(animator 길이 배율 0). 그러면 모든 움직임이 바로 바뀐다. */
 val LocalReducedMotion = staticCompositionLocalOf { false }
 
 @Composable
@@ -131,7 +131,7 @@ fun rememberReducedMotion(): Boolean {
 fun AIcon(@DrawableRes id: Int, modifier: Modifier = Modifier.size(24.dp), tint: Color = LocalContentColor.current) =
     Icon(painterResource(id), null, modifier, tint)
 
-/** 누름(README 4.7 press: 90ms linear, 0.97배, Pleos·quietly). 물결 없이 크기로만 답한다. */
+/** 누름(press: 90ms linear, 0.97배, Pleos·quietly). 물결 없이 크기로만 답한다. */
 fun Modifier.pressable(
     enabled: Boolean = true,
     scale: Float = 0.97f,
@@ -151,7 +151,7 @@ fun Modifier.pressable(
 
 /**
  * 탭 첫 화면: 큰 제목(display 26/34·700) + 회색 바탕 위 흰 블록들(.pad 12, 간격 12).
- * 내려 굴리면 큰 제목이 위 막대(22/28·600)로 접힌다(시안 .ph-mini). 블록은 처음 보일 때 한 줄씩 올라온다(README 4.7 enter).
+ * 내려 굴리면 큰 제목이 위 막대(22/28·600)로 접힌다. 블록은 처음 보일 때 한 줄씩 올라온다.
  */
 @Composable
 fun TabPage(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -159,7 +159,7 @@ fun TabPage(title: String, modifier: Modifier = Modifier, content: @Composable (
     val collapseAt = with(LocalDensity.current) { 56.dp.toPx() }
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-            Spacer(Modifier.height(54.dp)) // 시안 .ptop: 위 10 + 행동 줄 44
+            Spacer(Modifier.height(54.dp)) // 위 10 + 행동 줄 44
             LargeTitle(title)
             StaggerColumn(Modifier.padding(horizontal = 12.dp), content = content)
             Spacer(Modifier.height(28.dp))
@@ -170,7 +170,13 @@ fun TabPage(title: String, modifier: Modifier = Modifier, content: @Composable (
 
 /** 탭 안이 아닌 화면: 뒤로(arrow-left 48) + 제목(22/28·600) 한 줄, 아래는 같은 블록. */
 @Composable
-fun BackPage(title: String, onBack: (() -> Unit)?, padContent: Boolean = true, trailing: @Composable RowScope.() -> Unit = {}, content: @Composable () -> Unit) {
+fun BackPage(
+    title: String,
+    onBack: (() -> Unit)?,
+    padContent: Boolean = true,
+    trailing: @Composable RowScope.() -> Unit = {},
+    content: @Composable () -> Unit,
+) {
     // 아래 시스템 막대·자판 자리(탭 밖 화면은 스스로 비운다).
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
         TopBar(title, onBack, trailing)
@@ -184,7 +190,10 @@ fun BackPage(title: String, onBack: (() -> Unit)?, padContent: Boolean = true, t
 @Composable
 fun TopBar(title: String, onBack: (() -> Unit)?, trailing: @Composable RowScope.() -> Unit = {}) {
     val p = Tokens.colors
-    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp).heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp).heightIn(min = 52.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         if (onBack != null) {
             Box(
                 Modifier.size(48.dp).clip(CircleShape).pressable(scale = 0.92f, onClick = onBack).semantics { contentDescription = "뒤로" },
@@ -207,7 +216,7 @@ fun LargeTitle(title: String) = Text(
     color = Tokens.colors.textPrimary,
 )
 
-/** 큰 제목이 접힌 위 막대(시안 .p-android .ph-mini: 22/28·600, 바탕색). */
+/** 큰 제목이 접힌 위 막대(22/28·600, 바탕색). */
 @Composable
 private fun CollapsedTitle(title: String, shown: Boolean) {
     val p = Tokens.colors
@@ -219,8 +228,8 @@ private fun CollapsedTitle(title: String, shown: Boolean) {
 }
 
 /**
- * 블록을 세로로 12dp 간격으로 쌓고, 처음 보일 때 한 줄씩 올라오게 한다(시안 UI.enter: 0.05초 간격, 16dp 아래에서, 블러 6 → 0).
- * 블러는 API 31+만(R10), 그 아래는 페이드만. 움직임은 그림 층(layer)에서만 바뀌어 다시 그리기만 한다.
+ * 블록을 세로로 12dp 간격으로 쌓고, 처음 보일 때 한 줄씩 올라오게 한다(0.05초 간격, 16dp 아래에서, 블러 6 → 0).
+ * 블러는 API 31+만, 그 아래는 페이드만. 움직임은 그림 층(layer)에서만 바뀌어 다시 그리기만 한다.
  */
 @Composable
 fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? = null, animateFirst: Boolean = true, content: @Composable () -> Unit) {
@@ -330,12 +339,12 @@ fun Label(text: String, modifier: Modifier = Modifier) = Text(text, modifier, st
 /** 목록 블록(.list: 안쪽 22/20/8). 머리가 있으면 그 아래에 64dp 행들. */
 @Composable
 fun ListBlock(title: String? = null, link: String? = null, onLink: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) =
-    Block(padding = PaddingValues(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 8.dp)) { // 시안 .list: 22/20/8(제목이 없어도 같다)
+    Block(padding = PaddingValues(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 8.dp)) { // 목록 안쪽 여백 22/20/8(제목이 없어도 같다)
         if (title != null) BlockHeader(title, link, onLink)
         content()
     }
 
-/** 새로 생긴 판·줄이 들어오는 모양(시안 .enter phEnter): 위 10에서 0.98배·투명으로 spring.smooth, 자리도 펼쳐져 아래가 함께 비킨다. */
+/** 새로 생긴 판·줄이 들어오는 모양: 위 10에서 0.98배·투명으로 spring.smooth, 자리도 펼쳐져 아래가 함께 비킨다. */
 fun cardEnter(rise: Int): EnterTransition =
     expandVertically(Springs.smooth.spec(), expandFrom = Alignment.Top) + fadeIn(Springs.smooth.spec()) +
         slideInVertically(Springs.smooth.spec()) { -rise } + scaleIn(Springs.smooth.spec(), initialScale = 0.98f)
@@ -371,7 +380,8 @@ fun ListRow(
     titleColor: Color? = null,
     onClick: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = if (onClick != null) ({ AIcon(R.drawable.ic_chevron_right, Modifier.size(18.dp), Tokens.colors.textTertiary) }) else null,
+    trailing: (@Composable () -> Unit)? =
+        if (onClick != null) ({ AIcon(R.drawable.ic_chevron_right, Modifier.size(18.dp), Tokens.colors.textTertiary) }) else null,
 ) {
     val p = Tokens.colors
     val base = Modifier.fillMaxWidth().heightIn(min = 64.dp)
@@ -405,7 +415,7 @@ fun SettingRow(
     sub: String? = null,
     /** 제목을 빨강으로(이 휴대폰의 기록 지우기). */
     danger: Boolean = false,
-    /** 되돌릴 수 없는 동작 줄(지우기·연결 끊기): 아이콘을 빨강으로(11-11 사용자, 세 앱 같음). 글자 색은 [danger]가 따로 정한다. */
+    /** 되돌릴 수 없는 동작 줄(지우기·연결 끊기): 아이콘을 빨강으로(세 앱 같음). 글자 색은 [danger]가 따로 정한다. */
     destructive: Boolean = danger,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
@@ -426,7 +436,7 @@ fun SettingRow(
         onClick != null -> base.pressable(enabled = enabled, scale = 0.98f, onClick = onClick)
         else -> base
     }
-    // 아이콘은 제목 줄에 위 맞춤(v8b-10 ②: 부제가 두 줄이어도 아이콘이 제목 옆), 꼬리(스위치·›)는 행 가운데.
+    // 아이콘은 제목 줄에 위 맞춤(부제가 두 줄이어도 아이콘이 제목 옆), 꼬리(스위치·›)는 행 가운데.
     val line = with(LocalDensity.current) { Type.rowTitle.lineHeight.toDp() }
     Row(
         act.padding(vertical = 10.dp),
@@ -434,7 +444,10 @@ fun SettingRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.width(32.dp).height(line), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(19.dp), if (destructive) p.danger else p.textTertiary) } // 시안 .grp .li: 아이콘은 흐린 색, 되돌릴 수 없는 줄만 빨강(surface 위 5.04·6.13:1)
+            // 줄 아이콘은 흐린 색, 되돌릴 수 없는 줄만 빨강(surface 위 5.04·6.13:1)
+            Box(Modifier.width(32.dp).height(line), contentAlignment = Alignment.Center) {
+                AIcon(icon, Modifier.size(19.dp), if (destructive) p.danger else p.textTertiary)
+            }
             Column(Modifier.weight(1f)) {
                 Text(title, style = Type.rowTitle, color = if (danger) p.danger else p.textPrimary)
                 sub?.let { Text(it, Modifier.padding(top = 2.dp), style = Type.rowSub, color = p.textTertiary) }
@@ -445,24 +458,30 @@ fun SettingRow(
 }
 
 /**
- * 정보 줄(v8b-10 ②, 첫 안내·보호자 초대): 선 아이콘 22(칸 폭 24 × 제목 줄 높이, 위 맞춤, 바탕 없음) · 16 · 제목 `rowTitle` / 부제 `rowSub`.
- * 줄 하나가 읽기 요소 하나이고 아이콘은 읽지 않는다. [plain]이면 제목 굵기 500(블록 안 줄, 시안 .ob-block .ob-t).
+ * 정보 줄(첫 안내·보호자 초대): 선 아이콘 22(칸 폭 24 × 제목 줄 높이, 위 맞춤, 바탕 없음) · 16 · 제목 `rowTitle` / 부제 `rowSub`.
+ * 줄 하나가 읽기 요소 하나이고 아이콘은 읽지 않는다. [plain]이면 제목 굵기 500(블록 안 줄).
  */
 @Composable
 fun InfoLine(@DrawableRes icon: Int, title: String, sub: String? = null, child: Boolean = false, plain: Boolean = false, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     val line = with(LocalDensity.current) { Type.rowTitle.lineHeight.toDp() }
     Row(modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-        Box(Modifier.width(24.dp).height(line), contentAlignment = Alignment.Center) { AIcon(icon, Modifier.size(22.dp), if (child) p.child else p.textSecondary) }
+        Box(Modifier.width(24.dp).height(line), contentAlignment = Alignment.Center) {
+            AIcon(icon, Modifier.size(22.dp), if (child) p.child else p.textSecondary)
+        }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = if (plain) Type.rowTitle.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium) else Type.rowTitle, color = p.textPrimary)
+            Text(
+                title,
+                style = if (plain) Type.rowTitle.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium) else Type.rowTitle,
+                color = p.textPrimary,
+            )
             sub?.let { Text(it, Modifier.padding(top = 2.dp), style = Type.rowSub, color = p.textTertiary) }
         }
     }
 }
 
-/** 결과 화면(v8b-10 ⑧ 연결됐어요·연결이 끊겼어요): 위 막대 없이 가운데 원 64 + 큰 제목(display) + 한 줄, 단추는 아래 고정. */
+/** 결과 화면(연결됐어요·연결이 끊겼어요): 위 막대 없이 가운데 원 64 + 큰 제목(display) + 한 줄, 단추는 아래 고정. */
 @Composable
 fun ResultPage(@DrawableRes icon: Int, title: String, body: String, child: Boolean = false, buttons: @Composable ColumnScope.() -> Unit) {
     val p = Tokens.colors
@@ -472,13 +491,31 @@ fun ResultPage(@DrawableRes icon: Int, title: String, body: String, child: Boole
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
-            Box(Modifier.padding(bottom = 8.dp).size(64.dp).clip(CircleShape).background(if (child) p.childSoft else p.accentSoft), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.padding(bottom = 8.dp).size(64.dp).clip(CircleShape).background(if (child) p.childSoft else p.accentSoft),
+                contentAlignment = Alignment.Center,
+            ) {
                 AIcon(icon, Modifier.size(32.dp), if (child) p.child else p.onAccentSoft)
             }
-            Text(title, Modifier.semantics { heading() }, style = Type.display, color = p.textPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            Text(body, style = Type.lead.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = p.textSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(
+                title,
+                Modifier.semantics { heading() },
+                style = Type.display,
+                color = p.textPrimary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Text(
+                body,
+                style = Type.lead.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
+                color = p.textSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
         }
-        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = buttons)
+        Column(
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            content = buttons,
+        )
     }
 }
 
@@ -490,7 +527,13 @@ fun ToggleSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, enabled: Bool
     val x by animateDpAsState(if (checked) 20.dp else 0.dp, if (reduced) tween(0) else Springs.bouncy.spec(), label = "sw")
     val track = if (checked) p.accent else p.textPrimary.copy(alpha = 0.18f)
     val base = modifier.size(52.dp, 32.dp).clip(CircleShape).background(track).graphicsLayer { alpha = if (enabled) 1f else 0.45f }
-    Box(if (onChange != null) base.toggleable(checked, interactionSource = null, indication = null, enabled = enabled, role = Role.Switch, onValueChange = onChange) else base) {
+    Box(
+        if (onChange != null) {
+            base.toggleable(checked, interactionSource = null, indication = null, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+        } else {
+            base
+        },
+    ) {
         Box(
             Modifier.padding(3.dp).offset(x = x).size(26.dp)
                 .drawBehind { drawCircle(Color.Black.copy(alpha = 0.2f), radius = size.minDimension / 2, center = center + Offset(0f, 2.dp.toPx())) }
@@ -511,7 +554,14 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, mod
             content = {
                 Box(
                     Modifier
-                        .drawBehind { drawRoundRect(Color.Black.copy(alpha = 0.06f), topLeft = Offset(0f, 2.dp.toPx()), size = size, cornerRadius = androidx.compose.ui.geometry.CornerRadius(Radius.rInner.toPx())) }
+                        .drawBehind {
+                            drawRoundRect(
+                                Color.Black.copy(alpha = 0.06f),
+                                topLeft = Offset(0f, 2.dp.toPx()),
+                                size = size,
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(Radius.rInner.toPx()),
+                            )
+                        }
                         .clip(Radius.inner).background(thumb),
                 )
                 options.forEachIndexed { i, label ->
@@ -520,7 +570,13 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, mod
                             .selectable(i == selected, interactionSource = null, indication = null, role = Role.Tab, onClick = { onSelect(i) }),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(label, Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = Type.chip, color = if (i == selected) p.textPrimary else p.textSecondary, maxLines = 2)
+                        Text(
+                            label,
+                            Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                            style = Type.chip,
+                            color = if (i == selected) p.textPrimary else p.textSecondary,
+                            maxLines = 2,
+                        )
                     }
                 }
             },
@@ -559,7 +615,7 @@ fun Btn(
         BtnKind.PRIMARY -> p.accent to p.onAccent
         BtnKind.TONAL -> p.tonal to p.textPrimary
         BtnKind.DANGER_TEXT -> Color.Transparent to p.danger
-        BtnKind.TEXT -> Color.Transparent to p.textSecondary // 글자 단추(v8b-10: 600/16 흐림, 높이 48)
+        BtnKind.TEXT -> Color.Transparent to p.textSecondary // 글자 단추(600/16 흐림, 높이 48)
     }
     val h = when {
         kind == BtnKind.DANGER_TEXT || kind == BtnKind.TEXT -> 48.dp
@@ -578,30 +634,15 @@ fun Btn(
     }
 }
 
-/** 칩(작은 선택지: 고르면 먹색 채움, 아니면 회색 판. k-style 칩 규칙). */
-@Composable
-fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val p = Tokens.colors
-    val reduced = LocalReducedMotion.current
-    // 고름은 fast 150ms 색 바뀜, 누름은 0.97배(README 4.7). 동작 줄이기면 바로.
-    val bg by animateColorAsState(if (selected) p.textPrimary else p.surfaceRaised, if (reduced) tween(0) else Motion.fast.spec(), label = "chip")
-    val fg by animateColorAsState(if (selected) p.surface else p.textSecondary, if (reduced) tween(0) else Motion.fast.spec(), label = "chipText")
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed && !reduced) 0.97f else 1f, Motion.press.spec(), label = "chipPress")
-    Box(
-        modifier.graphicsLayer { scaleX = s; scaleY = s }.heightIn(min = 40.dp).clip(Radius.medium).background(bg)
-            .selectable(selected, interactionSource = source, indication = null, role = Role.RadioButton, onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
-        contentAlignment = Alignment.Center,
-    ) { Text(text, style = Type.chip, color = fg) }
-}
-
 /** 배지(.badge: 높이 24, 모서리 6, 12.5·600). 아이 신호면 childSoft/child. 뜻 하나에 색 하나. */
 @Composable
 fun Badge(text: String, @DrawableRes icon: Int? = null, child: Boolean = false) {
     val p = Tokens.colors
     val (bg, fg) = if (child) p.childSoft to p.child else p.surfaceRaised to p.textSecondary
-    Row(Modifier.heightIn(min = 24.dp).clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.heightIn(min = 24.dp).clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         icon?.let { AIcon(it, Modifier.size(14.dp), fg); Spacer(Modifier.width(4.dp)) }
         Text(text, style = Type.tag, color = fg)
     }
@@ -626,7 +667,7 @@ fun KpiRow(items: List<Kpi>, modifier: Modifier = Modifier) {
     }
 }
 
-/** 상태 띠(오프라인·안내·시계 차이, 7.2): 흰 블록 안 한 줄 + 오른쪽 행동 글자(브랜드). */
+/** 상태 띠(오프라인·안내·시계 차이): 흰 블록 안 한 줄 + 오른쪽 행동 글자(브랜드). */
 @Composable
 fun BandCard(text: String, action: String? = null, onAction: () -> Unit = {}) {
     val p = Tokens.colors
@@ -638,7 +679,10 @@ fun BandCard(text: String, action: String? = null, onAction: () -> Unit = {}) {
     ) {
         Text(text, Modifier.weight(1f).padding(vertical = 6.dp), style = Type.meta, color = p.textSecondary)
         if (action != null) {
-            Box(Modifier.clip(Radius.inner).pressable(onClick = onAction).heightIn(min = 40.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.clip(Radius.inner).pressable(onClick = onAction).heightIn(min = 40.dp).padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text(action, style = Type.metaStrong, color = p.accentInk)
             }
         }
@@ -650,8 +694,13 @@ fun BandCard(text: String, action: String? = null, onAction: () -> Unit = {}) {
 fun LiveDot(color: Color, size: Dp = 10.dp) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(true) }
-    // 시안 live: 1.8초마다 앞 60% 동안 둘레 빛이 0 → 12로 퍼지며(진하기 50% → 0, base 곡선) 사라지고 나머지는 쉰다(iOS와 같음).
-    val t = if (reduced || !shown) 1f else rememberInfiniteTransition(label = "live").animateFloat(0f, 1f, infiniteRepeatable(tween(Motion.live.ms, easing = LinearEasing), RepeatMode.Restart), label = "live").value
+    // live 표시: 1.8초마다 앞 60% 동안 둘레 빛이 0 → 12로 퍼지며(진하기 50% → 0, base 곡선) 사라지고 나머지는 쉰다(iOS와 같음).
+    val t = if (reduced || !shown) {
+        1f
+    } else {
+        rememberInfiniteTransition(label = "live")
+            .animateFloat(0f, 1f, infiniteRepeatable(tween(Motion.live.ms, easing = LinearEasing), RepeatMode.Restart), label = "live").value
+    }
     val ring = Motion.live.easing.transform((t / 0.6f).coerceAtMost(1f))
     Box(
         Modifier.size(size).onScreen { shown = it }.drawBehind {
@@ -662,8 +711,8 @@ fun LiveDot(color: Color, size: Dp = 10.dp) {
 }
 
 /**
- * 숫자 굴림(README 4.7 roll: 자리마다, spring .85·632). 바뀐 자리만 아래에서 올라온다. 길이가 바뀌면 통째로 바꾼다.
- * 글자를 한 줄 Row로 놓으므로, 큰 글자에서 폭을 넘으면 줄을 바꾸는 보통 글로 그린다(R13, iOS minimumScaleFactor 대신).
+ * 숫자 굴림(roll: 자리마다, spring .85·632). 바뀐 자리만 아래에서 올라온다. 길이가 바뀌면 통째로 바꾼다.
+ * 글자를 한 줄 Row로 놓으므로, 큰 글자에서 폭을 넘으면 줄을 바꾸는 보통 글로 그린다(iOS minimumScaleFactor 대신).
  * 화면 읽기는 문구 하나로 읽는다. 동작 줄이기면 바로 바뀐다.
  */
 @Composable
@@ -682,7 +731,8 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
                             targetState = ch,
                             modifier = Modifier.clipToBounds(),
                             transitionSpec = {
-                                (slideInVertically(Springs.roll.spec()) { it / 2 } + fadeIn(Motion.rollIn.spec())) togetherWith (slideOutVertically(Springs.roll.spec()) { -it / 2 } + fadeOut(Motion.rollOut.spec()))
+                                (slideInVertically(Springs.roll.spec()) { it / 2 } + fadeIn(Motion.rollIn.spec())) togetherWith
+                                    (slideOutVertically(Springs.roll.spec()) { -it / 2 } + fadeOut(Motion.rollOut.spec()))
                             },
                             label = "roll",
                         ) { c -> Text(c.toString(), style = style, color = color) }
@@ -704,11 +754,19 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
 }
 
 /**
- * 글 통째 바뀜(U88 값 글 바뀜: 단추·줄 값). 새 글이 6 아래에서 올라오며 나타난다(roll 0.85·632). 동작 줄이기면 바로 바뀐다.
+ * 글 통째 바뀜(단추·줄 값). 새 글이 6 아래에서 올라오며 나타난다(roll 0.85·632). 동작 줄이기면 바로 바뀐다.
  * ponytail: 블러 4 → 0은 뺐다(Modifier.blur는 API 31+), 필요하면 API 31 이상에서만 graphicsLayer renderEffect로 더한다.
  */
 @Composable
-fun SwapText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, textAlign: androidx.compose.ui.text.style.TextAlign? = null, overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip) {
+fun SwapText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+    textAlign: androidx.compose.ui.text.style.TextAlign? = null,
+    overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+) {
     if (LocalReducedMotion.current) {
         Text(text, modifier, style = style, color = color, maxLines = maxLines, textAlign = textAlign, overflow = overflow)
         return
@@ -722,10 +780,14 @@ fun SwapText(text: String, style: TextStyle, color: Color, modifier: Modifier = 
     ) { t -> Text(t, style = style, color = color, maxLines = maxLines, textAlign = textAlign, overflow = overflow) }
 }
 
-/** 둘레 테가 있는 앱 아이콘 칸(흰 바탕 아이콘이라 흰 면 위에서 경계가 보이게 검정 10% 테, 시안 v6-6). */
+/** 둘레 테가 있는 앱 아이콘 칸(흰 바탕 아이콘이라 흰 면 위에서 경계가 보이게 검정 10% 테). */
 @Composable
 fun AppMark(size: Dp, corner: Dp) {
-    Box(Modifier.size(size).clip(RoundedCornerShape(corner)).background(Color.White).border(1.dp, Color.Black.copy(alpha = 0.1f), RoundedCornerShape(corner)), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.size(size).clip(RoundedCornerShape(corner)).background(Color.White)
+            .border(1.dp, Color.Black.copy(alpha = 0.1f), RoundedCornerShape(corner)),
+        contentAlignment = Alignment.Center,
+    ) {
         androidx.compose.foundation.Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(size * 1.5f))
     }
 }
@@ -756,7 +818,7 @@ val LocalNavScope = staticCompositionLocalOf<AnimatedVisibilityScope?> { null }
 fun NavScope(scope: AnimatedVisibilityScope, content: @Composable () -> Unit) = CompositionLocalProvider(LocalNavScope provides scope, content = content)
 
 /**
- * 진행 중 판 → 타이머 고리 공유 요소(README 4.7 spring.smooth, 시안 view-transition-name run-{id}). 같은 [key]를 두 화면에 둔다.
+ * 진행 중 판 → 타이머 고리 공유 요소(spring.smooth). 같은 [key]를 두 화면에 둔다.
  * 동작 줄이기면 그냥 바뀐다.
  */
 @Composable

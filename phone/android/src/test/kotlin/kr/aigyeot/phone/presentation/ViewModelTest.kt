@@ -11,20 +11,20 @@ import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.CareUndo
-import kr.aigyeot.phone.domain.model.HOUR
-import kr.aigyeot.phone.domain.model.FeedSide
-import kr.aigyeot.phone.domain.model.MINUTE
-import kr.aigyeot.phone.domain.model.onDate
-import kr.aigyeot.phone.domain.model.field
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.DisconnectRun
+import kr.aigyeot.phone.domain.model.FeedSide
+import kr.aigyeot.phone.domain.model.HOUR
+import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.OutboxPayload
 import kr.aigyeot.phone.domain.model.PAIR_BUSY
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.SongPhase
 import kr.aigyeot.phone.domain.model.SongSend
+import kr.aigyeot.phone.domain.model.field
+import kr.aigyeot.phone.domain.model.onDate
 import kr.aigyeot.phone.domain.model.outboxItem
 import kr.aigyeot.phone.domain.model.songRef
 import kr.aigyeot.phone.domain.repository.Mark
@@ -56,12 +56,12 @@ class ViewModelTest {
         assertEquals(CareTabsUiState(guardian = true, disconnectDone = false), careTabsUi(Connection.Paired(guardian), DisconnectRun.Running))
         assertEquals(CareTabsUiState(guardian = false, disconnectDone = true), careTabsUi(Connection.None, DisconnectRun.Done))
         assertEquals(CareTabsUiState(guardian = false, disconnectDone = false), careTabsUi(Connection.Gone("d"), DisconnectRun.Failed("x")))
-        // '기록만'으로 쓰다 차 탭에서 연결하고 완료하면 오늘 탭(phone-care-plan 5장). 끊겨도 오늘. 같은 연결(회전·복원)이면 고른 탭 그대로.
-        assertEquals("오늘", homeTabAfter("차", before = null, now = "d_new"))
-        assertEquals("오늘", homeTabAfter("차", before = "d_old", now = "d_new"))
-        assertEquals("오늘", homeTabAfter("설정", before = "d_old", now = null))
-        assertEquals("차", homeTabAfter("차", before = "d_old", now = "d_old"))
-        assertEquals("기록", homeTabAfter("기록", before = null, now = null))
+        // '기록만'으로 쓰다 차 탭에서 연결하고 완료하면 오늘 탭. 끊겨도 오늘. 같은 연결(회전·복원)이면 고른 탭 그대로.
+        assertEquals(HomeTab.TODAY, homeTabAfter(HomeTab.CAR, before = null, now = "d_new"))
+        assertEquals(HomeTab.TODAY, homeTabAfter(HomeTab.CAR, before = "d_old", now = "d_new"))
+        assertEquals(HomeTab.TODAY, homeTabAfter(HomeTab.SETTINGS, before = "d_old", now = null))
+        assertEquals(HomeTab.CAR, homeTabAfter(HomeTab.CAR, before = "d_old", now = "d_old"))
+        assertEquals(HomeTab.RECORDS, homeTabAfter(HomeTab.RECORDS, before = null, now = null))
     }
 
     @Test
@@ -172,7 +172,7 @@ class ViewModelTest {
         assertEquals("s3", vm.sheet.value?.sheetId)
         assertEquals(CareSheetViewModel.Phase.Editing, vm.sheet.value?.phase)
         vm.close("s3")
-        // 고치던 기록이 그사이 지워졌으면 저장하지 않고 닫는다(되살리지 않는다, R10).
+        // 고치던 기록이 그사이 지워졌으면 저장하지 않고 닫는다(되살리지 않는다).
         val e = care.care.value.events.first()
         vm.open("s4", CareSheetTarget.Edit(e.id))
         recordCare.delete(e.id)
@@ -199,7 +199,7 @@ class ViewModelTest {
 
     @Test
     fun `저장 중에 고치던 기록이 지워지면 저장하지 않은 닫힘이다`() = kitTest {
-        // U88 끝: 저장 단계를 거쳤어도 실제로 저장하지 않았으면 확인 표시를 내지 않는다(화면이 단계 순서로 짐작하지 않게).
+        // 저장 단계를 거쳤어도 실제로 저장하지 않았으면 확인 표시를 내지 않는다(화면이 단계 순서로 짐작하지 않게).
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         vm.open("m", CareSheetTarget.New(CareKind.NOTE, day = null))
         vm.setNote("처음")
@@ -214,7 +214,7 @@ class ViewModelTest {
         recordCare.delete(e.id) // 그 저장이 기록에 닿기 전에 지운다
         until("닫힘") { vm.sheet.value?.phase is CareSheetViewModel.Phase.Closed }
         assertEquals(CareSheetViewModel.Phase.Closed(saved = false), vm.sheet.value?.phase)
-        assertTrue(care.care.value.events.first { it.id == e.id }.deletedAt != null) // 되살리지 않았다(R10)
+        assertTrue(care.care.value.events.first { it.id == e.id }.deletedAt != null) // 되살리지 않았다
     }
 
     @Test
@@ -234,7 +234,7 @@ class ViewModelTest {
 
     @Test
     fun `저장 중이나 저장 확인 표시 중에는 지우기를 받지 않는다`() = kitTest {
-        // U88(11-12 보충): 저장 중·확인 표시가 머무는 동안 VM도 지우기를 받지 않는다(화면 단추 잠금과 같은 판단 Phase.editable).
+        // 저장 중·확인 표시가 머무는 동안 VM도 지우기를 받지 않는다(화면 단추 잠금과 같은 판단 Phase.editable).
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         vm.open("m", CareSheetTarget.New(CareKind.NOTE, day = null))
         vm.setNote("처음")
@@ -260,7 +260,7 @@ class ViewModelTest {
 
     @Test
     fun `같은 저장 오류를 다시 내도 새 실패 값이다`() = kitTest {
-        // U82 오류(11-12 보충): 같은 미래 끝 시각으로 두 번 저장하면 시도 번호가 다른 실패 둘(펼침·흔들림·햅틱이 매번 돈다).
+        // 같은 미래 끝 시각으로 두 번 저장하면 시도 번호가 다른 실패 둘(펼침·흔들림·햅틱이 매번 돈다).
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         vm.open("f", CareSheetTarget.New(CareKind.FEED, day = null))
         vm.pick(30)
@@ -293,20 +293,20 @@ class ViewModelTest {
 
     @Test
     fun `닫힘 연출은 저장 결과와 종류로만 정한다`() {
-        // U88 끝: 메모 저장은 햅틱만, 그 밖 저장은 확인 표시, 저장하지 않은 닫힘은 바로 닫힘.
+        // 메모 저장은 햅틱만, 그 밖 저장은 확인 표시, 저장하지 않은 닫힘은 바로 닫힘.
         assertEquals(SheetExit.HAPTIC, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.NOTE))
         assertEquals(SheetExit.CHECK, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.FEED))
         assertEquals(SheetExit.CHECK, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.DIAPER))
         assertEquals(SheetExit.NONE, sheetExit(CareSheetViewModel.Phase.Closed(saved = false), CareKind.FEED))
         assertEquals(SheetExit.NONE, sheetExit(CareSheetViewModel.Phase.Closed(saved = false), CareKind.NOTE))
-        // 동작 줄이기면 확인 표시 없이 햅틱만 내고 바로 닫는다(U88, iOS SheetCloseFeedback과 같음)
+        // 동작 줄이기면 확인 표시 없이 햅틱만 내고 바로 닫는다(iOS SheetCloseFeedback과 같음)
         assertEquals(SheetExit.HAPTIC, sheetExit(CareSheetViewModel.Phase.Closed(saved = true), CareKind.FEED, reduced = true))
         assertEquals(SheetExit.NONE, sheetExit(CareSheetViewModel.Phase.Closed(saved = false), CareKind.FEED, reduced = true))
     }
 
     @Test
     fun `시트로 저장한 기록은 새 표시가 되고 보인 뒤 걷힌다`() = kitTest {
-        // U88: 기록 탭 줄 강조·오늘 하루 띠 새 표시가 같은 '막 저장한 기록 id' 하나를 본다(iOS markFresh·clearFresh와 같음).
+        // 기록 탭 줄 강조·오늘 하루 띠 새 표시가 같은 '막 저장한 기록 id' 하나를 본다(iOS markFresh·clearFresh와 같음).
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         vm.open("n", CareSheetTarget.New(CareKind.FEED, day = null))
         vm.save()
@@ -350,7 +350,7 @@ class ViewModelTest {
 
     @Test
     fun `지난 기록 적기는 종류를 고를 수 있고 처음은 수유다`() = kitTest {
-        // 기록 탭 '지난 기록 적기'는 종류 칸이 있는 시트를 수유로 연다(U86). 종류 칸 차례는 quickKinds(수유·메모, 켜면 잠·기저귀).
+        // 기록 탭 '지난 기록 적기'는 종류 칸이 있는 시트를 수유로 연다. 종류 칸 차례는 quickKinds(수유·메모, 켜면 잠·기저귀).
         assertEquals(listOf(CareKind.FEED, CareKind.NOTE, CareKind.SLEEP, CareKind.DIAPER), kr.aigyeot.phone.domain.model.quickKinds(true))
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         val yesterday = java.time.Instant.ofEpochMilli(NOW).atZone(APP_ZONE).toLocalDate().minusDays(1)
@@ -365,7 +365,7 @@ class ViewModelTest {
 
     @Test
     fun `고른 끝은 시작을 옮겨도 그대로이고 시작이 끝을 넘으면 저장하지 않는다`() = kitTest {
-        // iOS test_고른_끝은_시작을_옮겨도_그대로이고_시작이_끝을_넘으면_저장하지_않는다와 같은 순서(C384: 0분 수유를 말없이 저장하지 않게).
+        // iOS test_고른_끝은_시작을_옮겨도_그대로이고_시작이_끝을_넘으면_저장하지_않는다와 같은 순서(0분 수유를 말없이 저장하지 않게).
         val vm = CareSheetViewModel(care, notices, recordCare, clock, SavedStateHandle(), vmScope())
         fun hm(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(APP_ZONE)
         vm.open("n", CareSheetTarget.New(CareKind.FEED, day = null))
@@ -407,7 +407,7 @@ class ViewModelTest {
         vm.save(allowOverlap = true)
         until("겹쳐도 저장") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) } // 겹침 확인 뒤 저장
         assertEquals(2, care.care.value.events.size)
-        // 타이머: 시작 시각을 앞으로 옮기면 R3 글이고 저장하지 않는다.
+        // 타이머: 시작 시각을 앞으로 옮기면 미래 시각 글이고 저장하지 않는다.
         recordCare.start(CareKind.SLEEP)
         until("잠 시작") { care.care.value.events.any { it.kind == CareKind.SLEEP } }
         val sleep = care.care.value.events.first { it.kind == CareKind.SLEEP }
@@ -475,7 +475,7 @@ class ViewModelTest {
             ),
         )
         suspend fun ended(message: String) = until(message) { vm.import.value == ImportUi.Ended(message) }
-        // 끝내는 안내 셋(7.1 import.unreadable·tooLarge·failed): 글과 '닫기'만.
+        // 끝내는 안내 셋(import.unreadable·tooLarge·failed): 글과 '닫기'만.
         val unreadable = "이 파일은 읽을 수 없어요. 아이곁·Huckleberry·Nara에서 내보낸 CSV인지 확인해 주세요."
         vm.pick("content://unknown")
         ended(unreadable)
@@ -508,7 +508,7 @@ class ViewModelTest {
 
     @Test
     fun `앱 안 배너는 8초 뒤 그 배너만 닫히고 옛 배너의 시간이 새 배너를 닫지 않는다`() = kitTest {
-        assertEquals(8_000L, kr.aigyeot.phone.domain.model.BANNER_MS) // 연결 계약 5.6, iOS bannerNanos와 같음
+        assertEquals(8_000L, kr.aigyeot.phone.domain.model.BANNER_MS) // iOS bannerNanos와 같음
         AppViewModel(state, notices, link, pair, lose, vmScope(), bannerMs = 1_000) // 시험은 1초로 센다
         val a = kr.aigyeot.phone.domain.model.Banner("가", "01JXALERTA000000000000000A")
         val b = kr.aigyeot.phone.domain.model.Banner("나", "01JXALERTB000000000000000B")

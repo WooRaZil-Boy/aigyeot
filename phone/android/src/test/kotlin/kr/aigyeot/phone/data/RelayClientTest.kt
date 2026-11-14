@@ -8,6 +8,8 @@ import kotlinx.serialization.json.JsonObject
 import kr.aigyeot.phone.domain.model.Inbound
 import kr.aigyeot.phone.domain.model.InboundMessage
 import kr.aigyeot.phone.domain.repository.RelayResult
+import kr.aigyeot.phone.fixture
+import kr.aigyeot.phone.sharedFile
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.HandoffAlertBody
 import kr.aigyeot.shared.ProtocolJson
@@ -67,7 +69,7 @@ class RelayClientTest {
 
     @Test
     fun `토큰을 실은 요청마다 중계에 닿았는지 순번과 함께 알린다`() {
-        // 9장 '중계 불통(네트워크·중계 장애)' → 오프라인 띠. 상태 요청·푸시 등록·ack 같은 요청도 같은 길로 본다.
+        // '중계 불통(네트워크·중계 장애)' → 오프라인 띠. 상태 요청·푸시 등록·ack 같은 요청도 같은 길로 본다.
         val seen = CopyOnWriteArrayList<Triple<String, Long, Boolean>>()
         val relay = OkHttpRelayClient("http://127.0.0.1:${server.localPort}", "test", onObserved = { t, n, up -> seen += Triple(t, n, up) })
         runBlocking {
@@ -82,7 +84,7 @@ class RelayClientTest {
         seen.clear()
         runBlocking { assertEquals(RelayResult.Offline, relay.devices("cut")) }
         assertEquals(listOf("cut" to false), seen.map { it.first to it.third })
-        // 429 헤더 뒤 본문이 끊겨도 상태와 Retry-After는 지킨다(1.1): 오프라인으로 바꾸면 기다림을 잃는다.
+        // 429 헤더 뒤 본문이 끊겨도 상태와 Retry-After는 지킨다: 오프라인으로 바꾸면 기다림을 잃는다.
         seen.clear()
         runBlocking { assertEquals(RelayResult.Err(429, null, 120), relay.devices("cut429")) }
         assertEquals(listOf("cut429" to true), seen.map { it.first to it.third })
@@ -112,7 +114,7 @@ class RelayClientTest {
 
     @Test
     fun `어느 요청이든 401이면 부른 쪽이 취소돼도 알린다`() {
-        // 7.1 "어디서든 401 → GONE". 화면이 뒤로 가 부른 코루틴이 취소되면 결과가 돌아가지 못하므로 HTTP 층이 바로 넘긴다.
+        // "어디서든 401 → GONE". 화면이 뒤로 가 부른 코루틴이 취소되면 결과가 돌아가지 못하므로 HTTP 층이 바로 넘긴다.
         val got = CopyOnWriteArrayList<String>()
         val relay = OkHttpRelayClient("http://127.0.0.1:${server.localPort}", "test", onUnauthorized = { got += it })
         runBlocking {
@@ -128,9 +130,6 @@ class RelayClientTest {
         }
         assertEquals(listOf("bad", "slow"), got)
     }
-
-    private fun fixture(name: String): Envelope =
-        ProtocolJson.decodeFromString(Envelope.serializer(), File("../../shared/src/test/resources/protocol/$name.json").readText())
 
     @Test
     fun `받은 봉투는 종류마다 InboundMessage로 바뀌고 id·seq·보낸 쪽·차를 옮긴다`() {
@@ -148,7 +147,7 @@ class RelayClientTest {
             assertEquals(name, kind, m.message::class)
             assertEquals(Inbound(env.id, env.seq!!, env.from?.role == Role.CAR, m.message, env.car), m)
         }
-        // 본문은 계약 값 그대로 담는다.
+        // 본문은 메시지 형식 값 그대로 담는다.
         val alert = fixture("handoff_alert")
         assertEquals(InboundMessage.HandoffAlert(ProtocolJson.decodeFromJsonElement(HandoffAlertBody.serializer(), alert.body)), alert.inbound.message)
         assertTrue(alert.inbound.fromCar)
@@ -172,7 +171,7 @@ class RelayClientTest {
     @Test
     fun `소켓 프레임은 봉투면 Inbound, 아니면 null이다`() {
         val c = OkHttpRelayClient("http://127.0.0.1:${server.localPort}", "test")
-        val text = File("../../shared/src/test/resources/protocol/feeding_state.json").readText()
+        val text = sharedFile("protocol/feeding_state.json").readText()
         assertEquals(fixture("feeding_state").inbound, c.read(text))
         assertNull(c.read("pong"))
     }

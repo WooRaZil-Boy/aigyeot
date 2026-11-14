@@ -1,14 +1,14 @@
 package kr.aigyeot.phone.presentation
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
-/** 3D 준비 표시(U90)와 첫 안내 등장 안무(v8b-10 ⑤). 시각은 무대를 붙인 때부터 ms. */
+/** 3D 준비 표시와 첫 안내 등장 안무. 시각은 무대를 붙인 때부터 ms. */
 class StageTest {
     private fun marks(firstFrame: Long?, failed: Long? = null, reduced: Boolean = false, until: Long = 5_000) =
         (0..until step 10).associateWith { stageMark(it, firstFrame, failed, reduced) }
@@ -74,8 +74,8 @@ class StageTest {
 
     @Test
     fun `첫 안내는 3D 보기를 만들지 않는다`() {
-        // U43·U90: 첫 안내 무대는 정지 그림이라 3D 무대·준비 표시가 없다(차 탭만 3D).
-        val src = File("src/main/kotlin/kr/aigyeot/phone/presentation/ConnectScreens.kt").readText()
+        // 첫 안내 무대는 정지 그림이라 3D 무대·준비 표시가 없다(차 탭만 3D).
+        val src = File("src/main/kotlin/kr/aigyeot/phone/presentation/IntroScreen.kt").readText()
         assertFalse(src.contains("CarStage(") || src.contains("CarTextureView"))
         assertTrue(src.contains("R.drawable.intro_car"))
     }

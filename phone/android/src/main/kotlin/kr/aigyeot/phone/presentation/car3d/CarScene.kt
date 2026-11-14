@@ -25,12 +25,6 @@ import com.google.android.filament.gltfio.Gltfio
 import com.google.android.filament.gltfio.MaterialProvider
 import com.google.android.filament.gltfio.ResourceLoader
 import com.google.android.filament.gltfio.UbershaderProvider
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import kotlin.math.abs
-import kotlin.math.ln
-import kotlin.math.pow
-import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -41,11 +35,17 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kr.aigyeot.phone.presentation.CarPaint
 import org.json.JSONObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.math.abs
+import kotlin.math.ln
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 /**
- * 폰 3D 장면 하나(프로세스 수명, Filament 호출은 메인 스레드): GLB(assets/car/aigyeot_car.glb), 재질 덮어쓰기(이름이 계약), 스튜디오 환경광, 열쇠 빛, 바닥 그림자.
+ * 폰 3D 장면 하나(프로세스 수명, Filament 호출은 메인 스레드): GLB(assets/car/aigyeot_car.glb), 재질 덮어쓰기(재질 이름으로 찾는다), 스튜디오 환경광, 열쇠 빛, 바닥 그림자.
  * 폰은 바깥 보기(PRESET tile·phone, X-ray 0)만 쓰므로 유령 껍데기·제어 표시는 없다(차 앱 레시피 1~8·11·12, progress-1110-car '3D 레시피').
- * 빛 상태는 시안 phone.js의 data-light="listen"(실내 앰비언트 선이 곁의 응답 파랑으로 켜짐) 하나다.
+ * 빛 상태는 듣는 중(listen: 실내 앰비언트 선이 곁의 응답 파랑으로 켜짐) 하나다.
  */
 class CarScene private constructor(val engine: Engine) {
     companion object {
@@ -128,9 +128,11 @@ class CarScene private constructor(val engine: Engine) {
         LightManager.Builder(LightManager.Type.DIRECTIONAL).color(1f, 1f, 1f).intensity(1.4f).direction(-3f, -6f, 2f).castShadows(false).build(engine, key)
         scene.addEntity(key)
         shadow()
-        // 듣는 중(listen): 실내 앰비언트 선 파랑 2.2(시안 applyState)
+        // 듣는 중(listen): 실내 앰비언트 선 파랑 2.2
         val g = lin(CarPaint.ambientGlow.toArgb() and 0xFFFFFF)
-        mats["Ambient"]?.let { mi -> if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", g[0] * 2.2f, g[1] * 2.2f, g[2] * 2.2f) }
+        mats["Ambient"]?.let { mi ->
+            if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", g[0] * 2.2f, g[1] * 2.2f, g[2] * 2.2f)
+        }
     }
 
     /** 준비 실패 때 만든 것까지 놓는다(엔진을 지우면 엔진이 만든 재질 인스턴스·텍스처·빛·장면도 함께 놓인다). */
@@ -165,7 +167,7 @@ class CarScene private constructor(val engine: Engine) {
                 val base = provider.getMaterial(keyFor(spec, colors.getOrElse(p) { false }, if (spec?.blend == true) 2 else 0), IntArray(8), name)
                 val mi = mats.getOrPut(name) { orig.also { if (spec != null && base != null) spec.applyTo(it, base); if (base != null) matOf[it] = base } }
                 if (mi !== orig) rm.setMaterialInstanceAt(ri, p, mi)
-                // 제어 표시(열선 패드·뒷창 잠금 테)는 차가 한 일을 보일 때만 쓴다(시안: 상태가 없으면 불투명도 0). 폰 카드는 바깥 보기라 숨긴다.
+                // 제어 표시(열선 패드·뒷창 잠금 테)는 차가 한 일을 보일 때만 쓴다(상태가 없으면 불투명도 0). 폰 카드는 바깥 보기라 숨긴다.
                 if (name == "Heat_Pad" || name == "Indicator") rm.setLayerMask(ri, 0xFF, 0)
             }
             rm.setCastShadows(ri, false); rm.setReceiveShadows(ri, false)
@@ -173,7 +175,7 @@ class CarScene private constructor(val engine: Engine) {
     }
 
     /**
-     * 손으로 그린 부드러운 바닥 그림자(시안 shadow: 겹친 둥근 사각형 + 바퀴 접지 네 점)를 꼭짓점 알파 격자로.
+     * 손으로 그린 부드러운 바닥 그림자(겹친 둥근 사각형 + 바퀴 접지 네 점)를 꼭짓점 알파 격자로.
      * 맞춤 재질(filamat) 없이 gltfio 우버셰이더의 unlit·꼭짓점 색·BLEND 조합으로 그린다(폰은 맞춤 재질이 필요 없다).
      */
     private fun shadow() {
@@ -215,7 +217,7 @@ class CarScene private constructor(val engine: Engine) {
         scene.addEntity(entity)
     }
 
-    /** 시안 캔버스(512×256)의 그림자 알파: 둥근 사각형 26겹(0.028+0.02k) + 바퀴 자리 방사 그러데이션(0.55→0). */
+    /** 그림자 캔버스(512×256)의 알파: 둥근 사각형 26겹(0.028+0.02k) + 바퀴 자리 방사 그러데이션(0.55→0). */
     private fun shadowAlpha(x: Float, y: Float): Float {
         var a = 0f
         for (i in 0 until 26) {
@@ -238,7 +240,8 @@ class CarScene private constructor(val engine: Engine) {
     /** 미리 계산한 큐브맵 단계별 면 픽셀로 환경광을 만든다(메인 스레드). */
     private fun iblFrom(levels: List<Array<FloatArray>>): IndirectLight {
         val size = 64
-        val tex = Texture.Builder().width(size).height(size).levels(levels.size).sampler(Texture.Sampler.SAMPLER_CUBEMAP).format(Texture.InternalFormat.RGB16F).build(engine)
+        val tex = Texture.Builder().width(size).height(size).levels(levels.size).sampler(Texture.Sampler.SAMPLER_CUBEMAP)
+            .format(Texture.InternalFormat.RGB16F).build(engine)
         var s = size
         levels.forEachIndexed { lv, faces ->
             val buf = ByteBuffer.allocateDirect(s * s * 3 * 4 * 6).order(ByteOrder.nativeOrder())
@@ -252,7 +255,7 @@ class CarScene private constructor(val engine: Engine) {
 }
 
 /**
- * 스튜디오 환경광(시안 v7 studio: 어두운 방 + 천장 띠 조명 셋 + 벽 띠 + 바닥의 밝은 자리, 외부 HDRI 없음, 레시피 6)의 큐브맵 픽셀: 64px 0단계를 해석적으로 그리고
+ * 스튜디오 환경광(어두운 방 + 천장 띠 조명 셋 + 벽 띠 + 바닥의 밝은 자리, 외부 HDRI 없음)의 큐브맵 픽셀: 64px 0단계를 해석적으로 그리고
  * 2×2 평균으로 밉 7단(순수 계산, 작업 스레드).
  */
 private fun studioFaces(dark: Boolean): List<Array<FloatArray>> {
@@ -262,7 +265,14 @@ private fun studioFaces(dark: Boolean): List<Array<FloatArray>> {
         FloatArray(size * size * 3).also { px ->
             for (y in 0 until size) for (x in 0 until size) {
                 val sc = (x + 0.5f) / size * 2 - 1; val tc = (y + 0.5f) / size * 2 - 1
-                val d = when (f) { 0 -> floatArrayOf(1f, -tc, -sc); 1 -> floatArrayOf(-1f, -tc, sc); 2 -> floatArrayOf(sc, 1f, tc); 3 -> floatArrayOf(sc, -1f, -tc); 4 -> floatArrayOf(sc, -tc, 1f); else -> floatArrayOf(-sc, -tc, -1f) }
+                val d = when (f) {
+                    0 -> floatArrayOf(1f, -tc, -sc)
+                    1 -> floatArrayOf(-1f, -tc, sc)
+                    2 -> floatArrayOf(sc, 1f, tc)
+                    3 -> floatArrayOf(sc, -1f, -tc)
+                    4 -> floatArrayOf(sc, -tc, 1f)
+                    else -> floatArrayOf(-sc, -tc, -1f)
+                }
                 val l = sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])
                 val c = studioRadiance(d[0] / l, d[1] / l, d[2] / l, room, floor, dark)
                 val o = (y * size + x) * 3; px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]
@@ -280,7 +290,10 @@ private fun studioFaces(dark: Boolean): List<Array<FloatArray>> {
             FloatArray(h * h * 3).also { o ->
                 val a = src[f]
                 for (y in 0 until h) for (x in 0 until h) for (c in 0 until 3) {
-                    o[(y * h + x) * 3 + c] = (a[((2 * y) * s + 2 * x) * 3 + c] + a[((2 * y) * s + 2 * x + 1) * 3 + c] + a[((2 * y + 1) * s + 2 * x) * 3 + c] + a[((2 * y + 1) * s + 2 * x + 1) * 3 + c]) / 4
+                    o[(y * h + x) * 3 + c] = (
+                        a[((2 * y) * s + 2 * x) * 3 + c] + a[((2 * y) * s + 2 * x + 1) * 3 + c] +
+                            a[((2 * y + 1) * s + 2 * x) * 3 + c] + a[((2 * y + 1) * s + 2 * x + 1) * 3 + c]
+                        ) / 4
                 }
             }
         }
@@ -290,9 +303,9 @@ private fun studioFaces(dark: Boolean): List<Array<FloatArray>> {
 }
 
 /**
- * 원점에서 (dx,dy,dz)로 본 스튜디오 밝기(선형, 시안 v7 car3d.js studio). 판(가로×세로 m, 세기): 바닥 밝은 자리 11×7(라이트 0.62·다크 0.10),
+ * 원점에서 (dx,dy,dz)로 본 스튜디오 밝기(선형). 판(가로×세로 m, 세기): 바닥 밝은 자리 11×7(라이트 0.62·다크 0.10),
  * 천장 가운데 띠 20×2.4(4.2)·옆 띠 20×1.5(3.4), 벽 띠 22×1.6 높이 6.0(3.2), 낮은 띠 22×0.7(1.8), 앞뒤 세로 판 5×8(2.2). 다크는 조명 0.55배.
- * 판은 축에 나란한 면으로 본다(시안의 살짝 기운 천장 옆 띠·벽 띠도 같은 자리의 평면으로 근사).
+ * 판은 축에 나란한 면으로 본다(살짝 기운 천장 옆 띠·벽 띠도 같은 자리의 평면으로 근사).
  */
 private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, floor: FloatArray, dark: Boolean): FloatArray {
         var best = Float.MAX_VALUE; var k = -1f
@@ -336,7 +349,7 @@ private fun readGlbJson(b: ByteArray): Map<String, List<Boolean>> {
     return out
 }
 
-/** 재질 하나의 덮어쓸 값(시안 car3d.js materials(): 색은 sRGB → 선형). */
+/** 재질 하나의 덮어쓸 값(색은 sRGB → 선형). */
 private class Spec(
     hex: Int, val roughness: Float, val metallic: Float = 0f, val clearCoat: Float? = null, val ccRough: Float = 0f,
     val blend: Boolean = false, val alpha: Float = 1f, val emissive: FloatArray? = null, val emissiveStrength: Float = 1f,
@@ -364,9 +377,9 @@ private class Spec(
 }
 
 /**
- * 시안 v7 car3d.js materials()의 값(차 앱 CarEngine과 같은 표). 유리는 투과 대신 BLEND(GLB 알파)에 틴트 색. 램프 발광은 GLB 값(앞 4·뒤 3)을 한 번만.
+ * 재질 값(차 앱 CarEngine과 같은 표). 유리는 투과 대신 BLEND(GLB 알파)에 틴트 색. 램프 발광은 GLB 값(앞 4·뒤 3)을 한 번만.
  * Filament 표준 재질에는 재질마다 환경광 배율이 없어, 크롬 1.5배는 금속 1의 반사색(기본색)을 1.5배로 올려 옮긴다(차 앱과 같음). 휠 1.8배는 차 앱처럼 옮기지 않는다.
- * Brake·Caliper·Headliner는 새 GLB에 없지만 시안 표와 같게 둔다.
+ * Brake·Caliper·Headliner는 새 GLB에 없지만 같은 표에 둔다.
  */
 private val SPECS: Map<String, Spec> = mapOf(
     "Paint" to Spec(0xE4E7EA, 0.42f, 0.26f, clearCoat = 1f, ccRough = 0.03f),
@@ -408,7 +421,7 @@ private val SPECS: Map<String, Spec> = mapOf(
     "ChildSeat_Base" to Spec(0x3B3D41, 0.45f),
 )
 
-/** 유리 정반사 세기(시안 specularIntensity 0.25가 F0 0.04를 0.01로 → Filament reflectance 0.25: F0 = 0.16·r², 차 앱과 같은 값). */
+/** 유리 정반사 세기(specularIntensity 0.25가 F0 0.04를 0.01로 → Filament reflectance 0.25: F0 = 0.16·r², 차 앱과 같은 값). */
 private const val GLASS_REFLECTANCE = 0.25f
 
 internal fun lin(hex: Int): FloatArray = intArrayOf((hex shr 16) and 0xFF, (hex shr 8) and 0xFF, hex and 0xFF).let { c ->

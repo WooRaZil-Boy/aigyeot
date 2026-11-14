@@ -8,8 +8,8 @@ import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.ExcludedReason
 import kr.aigyeot.shared.HandoffKind
 import kr.aigyeot.shared.OutputRoute
-import kr.aigyeot.shared.PlayEntry
 import kr.aigyeot.shared.Platform
+import kr.aigyeot.shared.PlayEntry
 import kr.aigyeot.shared.PlayPurpose
 import kr.aigyeot.shared.PreCryContext
 import kr.aigyeot.shared.Role
@@ -22,14 +22,14 @@ import kr.aigyeot.shared.StopInfo
 import kr.aigyeot.shared.StopReason
 import java.time.ZoneId
 
-// 화면 문구 고르기(P1: 규칙 하나 함수 하나). 리포트·노래·차 타일·수유 전송 상태. 화면은 이 함수의 글을 그리기만 한다.
+// 화면 문구 고르기(규칙 하나 함수 하나). 리포트·노래·차 타일·수유 전송 상태. 화면은 이 함수의 글을 그리기만 한다.
 
 
-/** car.songs.full(7.1)·거절 이유 `limit_reached`(9장): 3곡이 찼을 때 목록 아래 안내와 거절 글이 같다(iOS와 같음). */
+/** car.songs.full·거절 이유 `limit_reached`: 3곡이 찼을 때 목록 아래 안내와 거절 글이 같다(iOS와 같음). */
 const val SONGS_FULL = "노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요."
-// ---- 리포트 상세(명세서 11장) ----
+// ---- 리포트 상세 ----
 
-/** 조향 비교 불가 사유 문구(7.2). */
+/** 조향 비교 불가 사유 문구. */
 fun steeringUnavailableText(noCry: Boolean) = if (noCry) "울음이 없어 비교하지 않았어요" else "비교할 구간이 없어요"
 
 fun triggerText(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM) "울음 감지" else "소리 바꾸기 요청"
@@ -38,7 +38,7 @@ fun triggerText(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM) "울음 
 fun episodeHead(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM) "울음" else "소리 바꾸기 요청"
 
 /**
- * 리포트 상세 에피소드 블록 머리(copy-audit 14-1, 11-12 보충): 모두 울음 경보(또는 없음)면 "울음", 모두 운전자 요청이면 "소리 바꾸기 요청",
+ * 리포트 상세 에피소드 블록 머리: 모두 울음 경보(또는 없음)면 "울음", 모두 운전자 요청이면 "소리 바꾸기 요청",
  * 섞이면 "울음과 소리 바꾸기 요청". 낱말은 [episodeHead] 그대로다.
  */
 fun episodeSectionHead(triggers: List<EpisodeTrigger>): String {
@@ -52,7 +52,7 @@ fun episodeSectionHead(triggers: List<EpisodeTrigger>): String {
 }
 
 /**
- * report.route(문구표, iOS와 같음). 폴백은 한 번이라도 앞에서 들렸다는 뜻이라 원인·전부를 말하지 않는다.
+ * report.route(iOS와 같음). 폴백은 한 번이라도 앞에서 들렸다는 뜻이라 원인·전부를 말하지 않는다.
  * 재생이 없었으면 출력 경로를 보이지 않는다(null).
  */
 fun outputRouteText(r: OutputRoute): String? = when (r) {
@@ -67,7 +67,7 @@ fun purposeText(p: PlayPurpose) = when (p) {
     PlayPurpose.REQUEST -> "운전자 요청"
 }
 
-/** 울음 한 건의 소리. 우리 노래는 이 폰이 아는 곡 이름, 모르면 차가 보낸 글자. 틀지 않았으면 "재생 없음"(U73). */
+/** 울음 한 건의 소리. 우리 노래는 이 폰이 아는 곡 이름, 모르면 차가 보낸 글자. 틀지 않았으면 "재생 없음". */
 fun soundText(songs: List<SongEntry>, r: SoundRef?, songId: String? = null): String = when {
     r == null -> "재생 없음"
     r.method == SoundMethod.PARENT_SONG -> songs.find { it.songId == songId }?.name ?: soundLabel(r.method, r.label)
@@ -78,7 +78,7 @@ fun soundText(songs: List<SongEntry>, r: SoundRef?, songId: String? = null): Str
 fun playName(songs: List<SongEntry>, p: PlayEntry): String =
     if (p.method == SoundMethod.PARENT_SONG) songs.find { it.songId == p.songId }?.name?.let { "우리 노래($it)" } ?: "우리 노래" else methodName(p.method)
 
-/** report.preCry.more(문구표, iOS와 같음): 기어 → 방향지시등 → 소리 재생 → 창 순서, 거짓·null은 쓰지 않는다. */
+/** report.preCry.more(iOS와 같음): 기어 → 방향지시등 → 소리 재생 → 창 순서, 거짓·null은 쓰지 않는다. */
 fun preCryDrive(p: PreCryContext) =
     "기어 ${p.gear.name}" + (if (p.turnSignalUsed) ", 방향지시등 씀" else "") + (if (p.playing) ", 소리 재생 중" else "") + (if (p.windowOpen == true) ", 창 열림" else "")
 
@@ -95,7 +95,7 @@ fun secondText(songs: List<SongEntry>, sec: SecondAttempt): String {
     return what + (sec.result?.let { " · ${resultText(it)}" } ?: "")
 }
 
-/** 성적에서 뺀 이유(U73, 차·두 앱 같은 낱말). 열거 이름을 화면에 보이지 않는다. */
+/** 성적에서 뺀 이유(차·두 앱 같은 낱말). 열거 이름을 화면에 보이지 않는다. */
 fun excludedText(e: ExcludedReason) = when (e) {
     ExcludedReason.DRIVER_STOP -> "운전자가 멈춤"
     ExcludedReason.CALL -> "통화 중"
@@ -111,8 +111,15 @@ fun excludedText(e: ExcludedReason) = when (e) {
     ExcludedReason.SUSPEND -> "차가 절전에 들어감"
 }
 
-/** U53: 차가 운전자에게 말하지 못한 인계(toldDriver == false)는 제안했다고 보이지 않는다. */
-fun stopText(reason: StopReason, mode: HandoffKind, rest: String?, toldDriver: Boolean? = null, waypointAdded: Boolean = false, guardianNotified: Boolean = false) = buildString {
+/** 차가 운전자에게 말하지 못한 인계(toldDriver == false)는 제안했다고 보이지 않는다. */
+fun stopText(
+    reason: StopReason,
+    mode: HandoffKind,
+    rest: String?,
+    toldDriver: Boolean? = null,
+    waypointAdded: Boolean = false,
+    guardianNotified: Boolean = false,
+) = buildString {
     append(
         when (reason) {
             StopReason.ATTEMPT_LIMIT -> "두 번 시도 뒤"
@@ -127,17 +134,17 @@ fun stopText(reason: StopReason, mode: HandoffKind, rest: String?, toldDriver: B
             HandoffKind.REST_OFFER -> if (toldDriver == false) "쉼터는 묻지 못했어요" else "${rest ?: "쉼터"}에 들르자고 제안했어요"
             HandoffKind.ARRIVAL_NOTICE -> if (toldDriver == false) "도착 안내는 하지 못했어요" else "도착 안내를 했어요"
             HandoffKind.NO_REST -> if (toldDriver == false) "안전한 곳에 세우도록 안내하지 못했어요" else "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요"
-            HandoffKind.PARKED -> if (reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"   // U59
+            HandoffKind.PARKED -> if (reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"
         },
     )
     if (waypointAdded) append(" · 경유지 추가")
     if (guardianNotified) append(" · 다른 보호자에게 알림")
 }
 
-/** 정차 한 줄의 값(뒤붙임 포함). 줄 이름 '정차'는 화면이 붙인다(U73, '이름: 값' 콜론 없음). */
+/** 정차 한 줄의 값(뒤붙임 포함). 줄 이름 '정차'는 화면이 붙인다('이름: 값' 콜론 없음). */
 fun stopLine(st: StopInfo) = stopText(st.reason, st.mode, st.restName, st.toldDriver, st.waypointAdded, st.guardianNotified)
 
-/** U53·U55: told_driver == false인 정차와 정차 인계(parked, 운전자에게 말하지 않음)는 안내가 아니니 세지 않는다(null은 참). 실제 정차 횟수가 아니다. */
+/** told_driver == false인 정차와 정차 인계(parked, 운전자에게 말하지 않음)는 안내가 아니니 세지 않는다(null은 참). 실제 정차 횟수가 아니다. */
 fun stopNoticeCount(stops: List<StopInfo?>) = stops.count { it != null && it.toldDriver != false && it.mode != HandoffKind.PARKED }
 
 fun actionText(a: CarActionKind) = when (a) {
@@ -147,7 +154,7 @@ fun actionText(a: CarActionKind) = when (a) {
     CarActionKind.REAR_WINDOW_LOCK -> "뒷창 잠금"
     CarActionKind.CABIN_COOL -> "실내 온도 낮춤"
     CarActionKind.READING_LIGHT_OFF -> "독서등 끔"
-    CarActionKind.AMBIENT_DIM -> "조명 낮춤" // 기능 D(명세 17장 L99), iOS와 같은 글자
+    CarActionKind.AMBIENT_DIM -> "조명 낮춤" // iOS와 같은 글자
     CarActionKind.WAYPOINT_ADDED -> "경유지 추가"
     CarActionKind.ARRIVAL_NOTICE -> "도착 안내"
     CarActionKind.GUARDIAN_ALERT -> "다른 보호자 알림"
@@ -163,9 +170,9 @@ fun controlTitle(c: ControlRecord) = "${c.api} · ${c.target}"
 /** 리포트 '제어 기록' 한 줄의 둘째 줄(iOS ReportViews와 같은 글). */
 fun controlStatsText(c: ControlRecord) = "시도 ${c.attempts} · 성공 ${c.succeeded} · 실패 ${c.failed} · 다시 ${c.retries}"
 
-// ---- 우리 노래(계약 3.3 표, 7.2) ----
+// ---- 우리 노래 ----
 
-/** 거절 이유 문구(계약 3.3 표). */
+/** 거절 이유 문구. */
 fun rejectText(r: SongRejectReason?) = when (r) {
     SongRejectReason.PEAK_LIMIT -> "조금 더 크게 다시 녹음해 주세요"
     SongRejectReason.SILENT -> "소리가 거의 들리지 않아요. 다시 녹음해 주세요."
@@ -180,7 +187,7 @@ fun rejectText(r: SongRejectReason?) = when (r) {
 /** 곡 상태 한 줄. '실험 후보'는 최신 song_status의 candidate로만 보이고, 고른 뒤 아직 못 보냈으면 그것만 덧붙인다. */
 fun songStatusText(e: SongEntry, online: Boolean, selecting: Boolean): String = (
     e.error ?: when (e.phase) {
-        SongPhase.UPLOADING -> if (online) "올리고 있어요" else "연결되면 보내요" // 7.2 우리 노래·오프라인: 보낼 함에서 기다린다
+        SongPhase.UPLOADING -> if (online) "올리고 있어요" else "연결되면 보내요" // 우리 노래·오프라인: 보낼 함에서 기다린다
         SongPhase.WAITING -> "차가 받기를 기다려요"
         SongPhase.ACCEPTED -> if (e.candidate) "다음 주행부터 써요 · 실험 후보" else "다음 주행부터 써요"
         SongPhase.REJECTED -> "거절됨: ${rejectText(e.reason)}"
@@ -188,11 +195,11 @@ fun songStatusText(e: SongEntry, online: Boolean, selecting: Boolean): String = 
     }
     ) + if (selecting && !e.candidate) " · 고르는 중" else ""
 
-// ---- 차 타일(7.2)·수유 전송 상태(7.5) ----
+// ---- 차 타일·수유 전송 상태 ----
 
 /**
  * 홈 차 타일: 오프라인이면 알 수 없음, 아니면 연결됨 또는 "차 꺼짐 · 마지막 연락 {경과} 전".
- * {경과}는 U20 경과 형식([agoText]): 1분 미만 "마지막 연락 방금", "5분 전"·"1시간 전"·"1시간 15분 전"(연결 계약 차 타일 값, 명세 17장 L100).
+ * {경과}는 경과 형식([agoText]): 1분 미만 "마지막 연락 방금", "5분 전"·"1시간 전"·"1시간 15분 전"(차 타일 값).
  */
 fun carTileText(devices: List<DeviceInfo>, online: Boolean, now: Long): String {
     val car = devices.find { it.role == Role.CAR }
@@ -204,7 +211,7 @@ fun carTileText(devices: List<DeviceInfo>, online: Boolean, now: Long): String {
     }
 }
 
-/** 오늘 카드의 수유 전송 상태(계약 7.5, U39). */
+/** 오늘 카드의 수유 전송 상태. */
 fun feedingSendText(r: FeedingRecord, zone: ZoneId): String = when {
     r.failed != null -> r.failed
     r.reflected -> "차에 반영됨"

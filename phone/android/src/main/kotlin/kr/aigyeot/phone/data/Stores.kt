@@ -26,7 +26,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Android Keystore AES-GCM 키로 감싸 앱 전용 SharedPreferences에 둔다. 백업에서 뺀다(매니페스트).
- * 단순화: 계약 7.4는 DataStore지만 버전 목록에 없어 SharedPreferences를 쓴다. 감싸는 방식은 같다.
+ * DataStore 대신 SharedPreferences를 쓴다(의존성을 늘리지 않으려고). 감싸는 방식은 같다.
  */
 class KeystoreCredentialRepository(context: Context) : CredentialRepository {
     private val prefs = context.getSharedPreferences("secret", Context.MODE_PRIVATE)
@@ -56,7 +56,7 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
     /**
      * 저장된 자격. 없거나 키를 지웠으면([revokeKey], 끊기 확정. 백업은 꺼 두어 다른 기기로 암호문만 옮겨지지 않는다) null.
      * 읽지 못하면(Keystore 오류, 암호문이 키와 맞지 않거나 형식이 깨짐) 예외: 끊었다고 확정된 것이 아니므로 부르는 쪽은 '연결 없음'과 달리
-     * 녹음 파일·보낼 함·옮길 수유를 지우지 않고, 거듭 실패하면 지우고 새로 연결할지 묻는다(11-07 결정).
+     * 녹음 파일·보낼 함·옮길 수유를 지우지 않고, 거듭 실패하면 지우고 새로 연결할지 묻는다.
      */
     private fun read(): Credentials? {
         val stored = prefs.getString(VALUE, null) ?: return null
@@ -75,7 +75,7 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
     }.getOrDefault(false)
 
     /**
-     * 읽지 못하는 연결 정보를 버린다('지우고 연결하기', 11-07 결정): 암호문과 키를 둘 다 지운다.
+     * 읽지 못하는 연결 정보를 버린다('지우고 연결하기'): 암호문과 키를 둘 다 지운다.
      * 읽기 실패의 원인이 키 고장이면 키를 남겨서는 새 자격도 저장하지 못한다. 다음 [save]가 새 키를 만든다. IO 스레드에서 부른다.
      */
     private fun wipe(): Boolean {
@@ -84,7 +84,7 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
     }
 
     /**
-     * 연결 끊기·401에서 지우기를 디스크에 쓰지 못했다: 키를 지워 남은 암호문을 다시 못 읽게 한다(7.4).
+     * 연결 끊기·401에서 지우기를 디스크에 쓰지 못했다: 키를 지워 남은 암호문을 다시 못 읽게 한다.
      * 다음 실행의 [load]는 키가 없어 null(연결 없음)이 되고, 다음 연결은 새 키로 덮어쓴다.
      */
     private fun revokeKey(): Boolean =
@@ -100,12 +100,12 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
 /** 폰 상태(`PhoneState`) 파일. */
 fun StateStore(file: File) = FileStore(file, PhoneState.serializer(), ProtocolJson) { PhoneState() }
 
-/** 돌봄 기록(`care.json`, phone-care-plan 6장). 키는 iOS와 같은 camelCase다. */
+/** 돌봄 기록(`care.json`). 키는 iOS와 같은 camelCase다. */
 fun CareStore(file: File) = FileStore(file, CareFile.serializer(), CareJson) { CareFile() }
 
 /**
  * JSON 한 파일. 임시 파일에 쓰고 fsync한 뒤 이름을 바꾼다. 어느 단계든 실패하면 IOException을 던져,
- * 부르는 쪽이 메모리 상태를 바꾸거나 ack하지 않게 한다(계약 1.4 'ack는 처리를 저장한 뒤').
+ * 부르는 쪽이 메모리 상태를 바꾸거나 ack하지 않게 한다('ack는 처리를 저장한 뒤').
  * `AtomicFile.finishWrite`는 동기화·이름 바꾸기 실패를 기록만 하고 돌아올 수 있어 쓰지 않는다.
  */
 class FileStore<T>(private val file: File, private val serializer: KSerializer<T>, private val json: Json, private val empty: () -> T) {
@@ -123,7 +123,7 @@ class FileStore<T>(private val file: File, private val serializer: KSerializer<T
         private set
 
     /**
-     * 옛 판 파일은 새 필드의 기본값과 `ignoreUnknownKeys`로 읽힌다. 파일이 없으면 빈 상태.
+     * 이전 버전 파일은 새 필드의 기본값과 `ignoreUnknownKeys`로 읽힌다. 파일이 없으면 빈 상태.
      * 있는데 읽지 못하면 원본을 [backup]으로 옮겨(안 되면 복사해) 두고 빈 상태를 돌려준다. 백업이 확인되지 않으면 [unsafe].
      */
     fun load(): T {
@@ -139,7 +139,7 @@ class FileStore<T>(private val file: File, private val serializer: KSerializer<T
     }
 
     /**
-     * 연결 끊기·401: 지킬 것이 없다. 백업·원본을 모두 지우고 [unsafe]를 푼다(7.4 '연결 끊기: 위 전부를 지운다').
+     * 연결 끊기·401: 지킬 것이 없다. 백업·원본을 모두 지우고 [unsafe]를 푼다('연결 끊기: 위 전부를 지운다').
      * 원본도 지우는 까닭: 빈 상태 저장이 실패했으면 옛 차의 상태가 파일에 남는다. 없는 파일은 빈 상태로 읽힌다.
      * `keepFile`이면 원본은 남긴다(연결과 따로인 기록 지우기 표시를 담았다. 연결 없는 시작은 그 표시만 읽는다).
      */
@@ -164,7 +164,7 @@ class FileStore<T>(private val file: File, private val serializer: KSerializer<T
     }
 
     /**
-     * 저장 실패 처리 도우미 하나(arch-phone-android 6장): IO 스레드에서 저장하고 실패는 로그로 남긴다. 저장이 확인되면 참.
+     * 저장 실패 처리 도우미 하나: IO 스레드에서 저장하고 실패는 로그로 남긴다. 저장이 확인되면 참.
      * `report`가 있으면(화면·일꾼이 부른 쓰기, U·W 범주) 실패를 띠로도 알린다. 연결 전환·시작 저장은 로그만(T·S 범주, 부른 쪽이 처리).
      */
     suspend fun saveLogged(s: T, log: Logger, what: String, report: (() -> Unit)? = null): Boolean =

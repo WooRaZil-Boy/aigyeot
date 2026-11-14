@@ -12,9 +12,9 @@ import kr.aigyeot.phone.domain.model.ongoing
 import kr.aigyeot.phone.domain.model.sideName
 
 /**
- * 잠금 화면 진행 표시(C6, phone-care-plan 9장). 진행 중 수유·잠마다 알림 하나: 경과는 시스템 시계(`setUsesChronometer`)가 그린다.
- * 포그라운드 서비스·매초 갱신 없이 기록이 바뀔 때만 다시 띄운다(R15). 알림 권한이 없으면 아무것도 보이지 않는다(앱 안에서만 보임).
- * 플랫폼다움(13장): 7장 "수유 중 · 12:34 · 왼쪽"을 제목 "수유 중"·내용 "왼쪽"·시스템 시계로 나눠 보인다.
+ * 잠금 화면 진행 표시. 진행 중 수유·잠마다 알림 하나: 경과는 시스템 시계(`setUsesChronometer`)가 그린다.
+ * 포그라운드 서비스·매초 갱신 없이 기록이 바뀔 때만 다시 띄운다. 알림 권한이 없으면 아무것도 보이지 않는다(앱 안에서만 보임).
+ * 플랫폼다움: "수유 중 · 12:34 · 왼쪽"을 제목 "수유 중"·내용 "왼쪽"·시스템 시계로 나눠 보인다.
  */
 object CareNotify {
     const val CHANNEL = "care_running"
@@ -42,7 +42,7 @@ object CareNotify {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
             val n = NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(R.drawable.ic_stat_aigyeot) // 앱 아이콘 앞 층의 흰 실루엣(디자인 v6)
+                .setSmallIcon(R.drawable.ic_stat_aigyeot) // 앱 아이콘 앞 층의 흰 실루엣
                 .setColor(context.getColor(R.color.notification_accent))
                 .setContentTitle(if (kind == CareKind.FEED) "수유 중" else "자는 중")
                 .setContentText(e.feedSide?.let(::sideName))

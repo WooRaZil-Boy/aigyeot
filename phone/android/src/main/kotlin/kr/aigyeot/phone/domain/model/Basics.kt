@@ -19,7 +19,7 @@ const val DAY = 24 * HOUR
 private const val CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 private val random = SecureRandom()
 
-/** ULID(대문자 Crockford base32 26자, 계약 0장). */
+/** ULID(대문자 Crockford base32 26자). */
 fun ulid(now: Long = System.currentTimeMillis()): String {
     val out = CharArray(26)
     var t = now
@@ -33,10 +33,10 @@ fun ulid(now: Long = System.currentTimeMillis()): String {
 
 private val ULID_RE = Regex("[0-9A-HJKMNP-TV-Z]{26}")
 
-/** 메시지 id 형식 검사(계약 0장). 밖에서 온 값(인텐트·푸시)은 이것을 통과해야 쓴다. */
+/** 메시지 id 형식 검사. 밖에서 온 값(인텐트·푸시)은 이것을 통과해야 쓴다. */
 fun isUlid(s: String) = ULID_RE.matches(s)
 
-/** 앱의 시간대. 한국 전용이라 기기 설정과 상관없이 고정한다(결정 11-07: 서머타임·날짜변경선·다른 시간대는 다루지 않는다). */
+/** 앱의 시간대. 한국 전용이라 기기 설정과 상관없이 고정한다(서머타임·날짜변경선·다른 시간대는 다루지 않는다). */
 val APP_ZONE: ZoneId = ZoneId.of("Asia/Seoul")
 
 /** RFC 3339(시차 포함, 초 단위). `OffsetDateTime.toString()`은 0초를 빼므로 쓰지 않는다. */
@@ -45,14 +45,14 @@ fun rfc3339(now: Long, zone: ZoneId = APP_ZONE): String =
         Instant.ofEpochMilli(now).atZone(zone).toOffsetDateTime().truncatedTo(ChronoUnit.SECONDS),
     )
 
-/** RFC 3339 → epoch ms. 형식이 틀리면 null. 비교는 문자열이 아니라 순간으로 한다(계약 '공통 표기'). */
+/** RFC 3339 → epoch ms. 형식이 틀리면 null. 비교는 문자열이 아니라 순간으로 한다. */
 fun instantOf(s: String?): Long? = s?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
 
-/** 보낼 봉투. `seq`·`car`·`from`은 중계가 채운다(3.1). */
+/** 보낼 봉투. `seq`·`car`·`from`은 중계가 채운다. */
 fun envelope(type: String, body: JsonObject, now: Long, id: String = ulid(now), to: String? = null) =
     Envelope(v = 1, id = id, type = type, to = to, ts = rfc3339(now), body = body)
 
-/** 연결 코드 정규화(1.4): 공백·하이픈 제거, 대문자. 6자리 숫자 또는 Crockford 규칙을 적용한 초대 10자. 아니면 null. */
+/** 연결 코드 정규화: 공백·하이픈 제거, 대문자. 6자리 숫자 또는 Crockford 규칙을 적용한 초대 10자. 아니면 null. */
 fun normalizeCode(raw: String): String? {
     val s = raw.replace(Regex("[\\s-]"), "").uppercase()
     if (Regex("\\d{6}").matches(s)) return s
@@ -60,7 +60,7 @@ fun normalizeCode(raw: String): String? {
     return if (Regex("[0-9A-HJKMNP-TV-Z]{10}").matches(c)) c else null
 }
 
-/** `aigyeot://pair?code=…` 링크의 코드. 형식 검사를 통과한 것만 돌려준다(7.6, 다른 앱도 같은 scheme을 등록할 수 있다). */
+/** `aigyeot://pair?code=…` 링크의 코드. 형식 검사를 통과한 것만 돌려준다(다른 앱도 같은 scheme을 등록할 수 있다). */
 fun codeFromLink(link: String): String? {
     val m = Regex("^aigyeot://pair\\?(?:.*&)?code=([^&#]+)").find(link.trim()) ?: return null
     // `%ZZ` 같은 잘못된 인코딩은 IllegalArgumentException을 던진다. 잘못된 링크로 본다.
@@ -71,7 +71,7 @@ fun codeFromLink(link: String): String? {
 /** 6자리면 연결 코드(owner), 아니면 초대 코드(guardian). */
 fun isInviteCode(code: String) = code.length == 10
 
-/** 코드가 들어온 길. QR·링크만 확인 화면을 거치고, 직접 친 코드는 바로 연결한다(G17, 명세서 17장 L57). */
+/** 코드가 들어온 길. QR·링크만 확인 화면을 거치고, 직접 친 코드는 바로 연결한다. */
 enum class CodeSource { LINK, QR, TYPED }
 
 fun needsConfirm(source: CodeSource) = source != CodeSource.TYPED
@@ -80,8 +80,8 @@ fun needsConfirm(source: CodeSource) = source != CodeSource.TYPED
 enum class TypedAction { BAD_FORMAT, IGNORE, CONFIRM_REPLACE, PAIR }
 
 /**
- * 직접 친 코드 제출(자동 제출 포함). 요청 중이거나 429 잠금 중이면 요청하지 않는다(9장).
- * 이미 연결된 폰이면 요청 전에 교체 확인 화면(G16)으로 보낸다. 코드 대조 생략(G17)과 교체 동의는 별개다.
+ * 직접 친 코드 제출(자동 제출 포함). 요청 중이거나 429 잠금 중이면 요청하지 않는다.
+ * 이미 연결된 폰이면 요청 전에 교체 확인 화면으로 보낸다. 코드 대조 생략과 교체 동의는 별개다.
  */
 fun typedSubmitAction(code: String?, connected: Boolean, busy: Boolean, lockUntil: Long?, now: Long): TypedAction = when {
     code == null -> TypedAction.BAD_FORMAT
@@ -94,26 +94,26 @@ fun typedSubmitAction(code: String?, connected: Boolean, busy: Boolean, lockUnti
 fun isPairLocked(lockUntil: Long?, now: Long) = lockUntil != null && lockUntil > now
 
 /**
- * U52: 연결(직접 친 코드·'연결하기'·'끊고 연결하기'의 끊기까지)이 도는 동안 온 QR·링크로는 확인 화면에 가지 않는다.
+ * 연결(직접 친 코드·'연결하기'·'끊고 연결하기'의 끊기까지)이 도는 동안 온 QR·링크로는 확인 화면에 가지 않는다.
  * 성공했지만 화면이 아직 완료로 옮기지 않은 동안(`doneUnshown`)도 같다. 늦게 도는 완료 이동이 새 확인 화면을 지운다(iOS `confirming`과 같음).
  * 화면의 코드와 도는 연결의 코드가 어긋나지 않게 하고, [PAIR_BUSY]를 짧게 보인다.
  */
 fun canOpenConfirm(pairBusy: Boolean, doneUnshown: Boolean) = !pairBusy && !doneUnshown
 
-/** 끝난 연결 결과(`role`)로 완료 화면에 가도 되는가. 그사이 401·4001로 끊겼거나(GONE) 자격이 바뀌었으면 아니다(7.1, U25). */
+/** 끝난 연결 결과(`role`)로 완료 화면에 가도 되는가. 그사이 401·4001로 끊겼거나(GONE) 자격이 바뀌었으면 아니다. */
 fun pairDoneValid(role: Role?, gone: Boolean, currentRole: Role?) = role != null && !gone && role == currentRole
 
 /** 저장 실패 띠. 버림 안내와 함께 떠도 서로 덮지 않는다([withNoticeLine]). */
 const val SAVE_FAILED = "저장하지 못했어요. 저장 공간을 확인해 주세요."
 
-/** 7.1 pair.busy. */
+/** pair.busy. */
 const val PAIR_BUSY = "연결하는 중이에요. 끝난 뒤 링크를 다시 열어 주세요."
 
-/** 확인 화면 제목. 초대 코드에 "차 화면에…"라고 묻지 않는다(G17). */
+/** 확인 화면 제목. 초대 코드에 "차 화면에…"라고 묻지 않는다. */
 fun confirmTitle(code: String) = if (isInviteCode(code)) "받은 초대 코드가 이것과 같나요?" else "차 화면에 이 코드가 보이나요?"
 
 /**
- * 사용자가 요청한 끊기(연결 7.1 "어디서든 401·4001 → GONE"). 그사이 온 401·4001은 끊기의 결과일 수 있어 바로 GONE으로 가지 않고 적어 둔다.
+ * 사용자가 요청한 끊기("어디서든 401·4001 → GONE"). 그사이 온 401·4001은 끊기의 결과일 수 있어 바로 GONE으로 가지 않고 적어 둔다.
  * 끊기가 성공하면 평소 끊기(GONE 안내 없음), 실패로 끝나면 적어 둔 것이 있을 때만 GONE으로 간다(iOS `lostWhileLeaving`).
  */
 class LeaveWatch<C : Any> {
@@ -138,7 +138,7 @@ class LeaveWatch<C : Any> {
     }
 }
 
-// ---- 첫 안내(U43 안 B, 7.1 intro.*·intro.short.*·intro.more·intro.sheet.*, iOS `CareText.intro*`와 같은 글자) ----
+// ---- 첫 안내(intro.*·intro.short.*·intro.more·intro.sheet.*, iOS `CareText.intro*`와 같은 글자) ----
 
 object IntroText {
     /** intro.title: 머리 이름(작은 글자). */
@@ -163,7 +163,7 @@ object IntroText {
     const val SHEET_TITLE = "오가는 정보"
     const val SHEET_CLOSE = "닫기"
 
-    /** 시트 라벨(intro.sheet.*)과 원문 intro.* 넷. 원문의 '주고받는 것: '·'보내지 않는 것: ' 머리는 라벨로 뗐다(글자는 그대로, U43·E5). */
+    /** 시트 라벨(intro.sheet.*)과 원문 intro.* 넷. 원문의 '주고받는 것: '·'보내지 않는 것: ' 머리는 라벨로 뗐다(글자는 그대로). */
     val SHEET = listOf(
         "주고받는 것" to "수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장",
         "보내지 않는 것" to "아기 울음 소리, 차 안 마이크 소리, 차의 위치",
@@ -176,13 +176,13 @@ object IntroText {
     const val RECORDS_ONLY = "먼저 기록만 쓸게요"
 }
 
-/** 첫 안내 무대 최대 높이(v8b-10 ⑦, 안드로이드 222·iOS 232)와 그리지 않는 아래 한계. */
+/** 첫 안내 무대 최대 높이(안드로이드 222·iOS 232)와 그리지 않는 아래 한계. */
 const val INTRO_STAGE_MAX = 222
 const val INTRO_STAGE_MIN = 120
 
 /**
- * 첫 안내 무대 높이(dp, v8b-10 ⑦): 창 높이 − 글 칸(머리 이름 위 ~ '자세히 보기' 아래) − 아래 단추 띠 − 32(흐림 24 + 여유 8), [max]를 넘지 않는다.
- * [INTRO_STAGE_MIN]보다 작으면 null(무대를 그리지 않는다): 무엇이 오가는지가 결정 단추보다 먼저 보여야 한다(U62).
+ * 첫 안내 무대 높이(dp): 창 높이 − 글 칸(머리 이름 위 ~ '자세히 보기' 아래) − 아래 단추 띠 − 32(흐림 24 + 여유 8), [max]를 넘지 않는다.
+ * [INTRO_STAGE_MIN]보다 작으면 null(무대를 그리지 않는다): 무엇이 오가는지가 결정 단추보다 먼저 보여야 한다.
  */
 fun introStageHeight(window: Int, text: Int, bar: Int, max: Int = INTRO_STAGE_MAX): Int? =
     minOf(window - text - bar - 32, max).takeIf { it >= INTRO_STAGE_MIN }

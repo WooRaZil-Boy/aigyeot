@@ -12,7 +12,7 @@ import org.junit.Test
 class StopTextTest {
     @Test
     fun `리포트 에피소드 블록 머리는 시작 사건으로 정한다`() {
-        // copy-audit 14-1(11-12 보충): 없음·울음만 → 울음, 요청만 → 소리 바꾸기 요청, 섞임 → 울음과 소리 바꾸기 요청(낱말은 episodeHead).
+        // 없음·울음만 → 울음, 요청만 → 소리 바꾸기 요청, 섞임 → 울음과 소리 바꾸기 요청(낱말은 episodeHead).
         val cry = kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM
         val switch = kr.aigyeot.shared.EpisodeTrigger.SWITCH_SOUND
         assertEquals("울음", episodeSectionHead(emptyList()))
@@ -35,7 +35,7 @@ class StopTextTest {
         assertEquals("시도 2 · 성공 1 · 실패 1 · 다시 1", controlStatsText(c))
     }
 
-    @Test fun `리포트 출력 경로·울음 직전 덧줄·실내 온도는 문구표와 iOS 글 그대로`() {
+    @Test fun `리포트 출력 경로·울음 직전 덧줄·실내 온도는 iOS 글 그대로`() {
         assertEquals("소리 나간 곳 · 뒷좌석", outputRouteText(OutputRoute.REAR_ZONE))
         assertEquals("소리 나간 곳 · 앞에서도 들림", outputRouteText(OutputRoute.DEFAULT_ZONE_FALLBACK))
         assertEquals(null, outputRouteText(OutputRoute.NO_PLAYBACK))
@@ -81,7 +81,7 @@ class StopTextTest {
         assertEquals(1, stopNoticeCount(listOf(parked, told)))
     }
 
-    @Test fun `뒷좌석 출력이 없어 정차한 인계는 소리를 틀지 못했다고 쓴다`() {   // U59
+    @Test fun `뒷좌석 출력이 없어 정차한 인계는 소리를 틀지 못했다고 쓴다`() {
         assertEquals("뒷좌석 출력 없음 · 차가 선 채로 소리를 틀지 못했어요", stopText(StopReason.NO_SOUND, HandoffKind.PARKED, null, null, false, false))
     }
 
@@ -94,8 +94,8 @@ class StopTextTest {
         assertEquals("두 번 시도 뒤 · 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요", stopText(a, HandoffKind.NO_REST, null, null))
     }
 
-    @Test fun `차 타일 마지막 연락은 U20 경과로 쓴다`() {
-        // 연결 계약 차 타일 값(명세 17장 L100): 1분 미만 '방금', 그 밖은 U20 경과 + ' 전'
+    @Test fun `차 타일 마지막 연락은 경과 형식으로 쓴다`() {
+        // 차 타일 값: 1분 미만 '방금', 그 밖은 경과 + ' 전'
         val now = 1_793_944_800_000L
         fun tile(agoMs: Long) = carTileText(
             listOf(kr.aigyeot.shared.DeviceInfo("d_car", kr.aigyeot.shared.Role.CAR, kr.aigyeot.shared.Platform.PLEOS, rfc3339(now - DAY), rfc3339(now - agoMs), false)),
