@@ -1,7 +1,7 @@
 import XCTest
 @testable import Aigyeot
 
-/// 차트 값(디자인 v6, 진행 기록 '결정' 1~8): 기록·리포트에서 그릴 때 계산한 값이 규칙대로다. 안드로이드 ChartDataTest와 같은 경우.
+/// 차트 값: 기록·리포트에서 그릴 때 계산한 값이 규칙대로다. 안드로이드 ChartDataTest와 같은 경우.
 final class ChartDataTests: XCTestCase {
     private let zone = TimeZone(identifier: "Asia/Seoul")!
     private let min: Int64 = 60_000
@@ -61,7 +61,7 @@ final class ChartDataTests: XCTestCase {
             ev(.feed, at(3, 15), at(3, 35)),
             ev(.feed, at(14, 0)),                            // 진행 중: 지금까지
             ev(.feed, at(9, 0), at(9, 20), deleted: true),   // 지운 것은 뺀다
-            ev(.diaper, at(12, 58)),
+            ev(.diaper, at(12, 58))
         ]
         let d = ChartData.day(care: care, reports: [], day: today, now: now, zone: zone, showCar: false)
         XCTAssertEqual(d.lanes.map(\.kind), [.sleep, .feed, .diaper])
@@ -184,7 +184,7 @@ final class ChartDataTests: XCTestCase {
         e.startedAt = iso(t0)
         e.plays = [
             PlayEntry(purpose: .autoFirst, method: .lullaby, songId: nil, startedAt: iso(t0 + 2000), endedAt: iso(t0 + 58_000), playS: 56),
-            PlayEntry(purpose: .request, method: .whiteNoise, songId: nil, startedAt: iso(t0 + 90_000), endedAt: iso(t0 + 100_000), playS: 10),
+            PlayEntry(purpose: .request, method: .whiteNoise, songId: nil, startedAt: iso(t0 + 90_000), endedAt: iso(t0 + 100_000), playS: 10)
         ]
         let b = ChartData.episode(e, playName: { $0.method == .lullaby ? "자장가" : "백색소음" })
         XCTAssertEqual(b.gaps.map(\.tip), ["32초"])
@@ -215,7 +215,7 @@ final class ChartDataTests: XCTestCase {
         e.result = .success
         e.plays = [
             PlayEntry(purpose: .autoFirst, method: .lullaby, songId: nil, startedAt: iso(t0 + 2000), endedAt: iso(t0 + 58_000), playS: 56),
-            PlayEntry(purpose: .autoSecond, method: .whiteNoise, songId: nil, startedAt: iso(t0 + 66_000), endedAt: iso(t0 + 122_000), playS: 56),
+            PlayEntry(purpose: .autoSecond, method: .whiteNoise, songId: nil, startedAt: iso(t0 + 66_000), endedAt: iso(t0 + 122_000), playS: 56)
         ]
         let name: (PlayEntry) -> String = { $0.method == .lullaby ? "자장가" : "백색소음" }
         let b = ChartData.episode(e, playName: name)
@@ -293,7 +293,7 @@ final class ChartDataTests: XCTestCase {
         XCTAssertEqual(CareText.oneDecimal(7.0), "7.0")
     }
 
-    /// U88: 오늘 하루 띠의 새 표시는 그 기록 종류의 줄과 그날 시작 분이다. 메모(띠 줄 없음)·다른 날은 없다.
+    /// 오늘 하루 띠의 새 표시는 그 기록 종류의 줄과 그날 시작 분이다. 메모(띠 줄 없음)·다른 날은 없다.
     func test_오늘_하루_띠_새_표시는_그날_줄과_분이다() {
         let z = TimeZone(identifier: "Asia/Seoul")!
         func ev(_ k: CareKind, _ s: String) -> CareEvent {

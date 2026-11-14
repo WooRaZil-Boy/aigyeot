@@ -1,14 +1,19 @@
 import Foundation
 
-// 돌봄 기록(계획 phone-care-plan 6장). 폰 안에만 있고 차로 가는 것은 수유 시작 시각뿐이다(R5).
-// JSON 키·값은 안드로이드와 글자까지 같다(13장). 시각은 epoch ms(UTC)다.
+// 돌봄 기록. 폰 안에만 있고 차로 가는 것은 수유 시작 시각뿐이다.
+// JSON 키·값은 안드로이드와 글자까지 같다. 시각은 epoch ms(UTC)다.
 
 enum CareKind: String, Codable { case feed = "FEED", sleep = "SLEEP", diaper = "DIAPER", note = "NOTE" }
 
 enum FeedSide: String, Codable, CaseIterable {
     case left = "LEFT", right = "RIGHT", both = "BOTH", bottle = "BOTTLE"
     var label: String {
-        switch self { case .left: "왼쪽"; case .right: "오른쪽"; case .both: "양쪽"; case .bottle: "젖병" }
+        switch self {
+        case .left: "왼쪽"
+        case .right: "오른쪽"
+        case .both: "양쪽"
+        case .bottle: "젖병"
+        }
     }
 }
 
@@ -20,27 +25,27 @@ struct CareEvent: Equatable, Identifiable {
     var id: String
     var kind: CareKind
     var startAt: Int64
-    var endAt: Int64? = nil
+    var endAt: Int64?
     /// 끝 시각을 모름(옮긴 기록, 시작만 적은 기록). 진행 중이 아니다.
     var endUnknown = false
-    /// 기록한 때의 시간대 ID. 화면은 이 시간대로 보인다(R13).
+    /// 기록한 때의 시간대 ID. 화면은 이 시간대로 보인다.
     var zone: String
-    var feedSide: FeedSide? = nil
-    var amountMl: Int? = nil
-    var diaper: DiaperKind? = nil
-    var note: String? = nil
+    var feedSide: FeedSide?
+    var amountMl: Int?
+    var diaper: DiaperKind?
+    var note: String?
     var source: CareSource = .phone
     var createdAt: Int64
     var updatedAt: Int64
-    /// 지운 시각. 표시만 하고 30일 뒤 실제로 지운다(R8).
-    var deletedAt: Int64? = nil
+    /// 지운 시각. 표시만 하고 30일 뒤 실제로 지운다.
+    var deletedAt: Int64?
 
     var hasDuration: Bool { kind == .feed || kind == .sleep }
     var inProgress: Bool { hasDuration && endAt == nil && !endUnknown && deletedAt == nil }
     var timeZone: TimeZone { TimeZone(identifier: zone) ?? .current }
 }
 
-/// 되돌리기 띠(U38·U64): 방금 지운 손 기록 하나, 또는 방금 가져온 기록들. 띠는 한 번에 하나이고 수명은 RecordCare 한 곳이 정한다.
+/// 되돌리기 띠: 방금 지운 손 기록 하나, 또는 방금 가져온 기록들. 띠는 한 번에 하나이고 수명은 RecordCare 한 곳이 정한다.
 enum CareUndo: Equatable {
     case delete(String)
     case imported([String])
@@ -49,18 +54,18 @@ enum CareUndo: Equatable {
 struct CareFile: Equatable {
     var version = 1
     var events: [CareEvent] = []
-    var childNickname: String? = nil
+    var childNickname: String?
     var sleepDiaperEnabled = false
-    /// 지금 수유 기록(`feedingLog`)을 옮겼는지(R11).
+    /// 지금 수유 기록(`feedingLog`)을 옮겼는지.
     var migratedFeedings = false
 
-    /// 이 id들을 완전히 뺀다(가져오기 되돌리기, U67).
+    /// 이 id들을 완전히 뺀다(가져오기 되돌리기).
     mutating func removeEvents(_ ids: [String]) {
         let drop = Set(ids)
         events.removeAll { drop.contains($0.id) }
     }
 
-    /// 차가 볼 기록(U67 11-09 보충, 안드로이드 `CareFile.forCar`): 가져오기 띠가 떠 있는 동안 그 줄은 아직 되돌릴 수 있으니 뺀다.
+    /// 차가 볼 기록(안드로이드 `CareFile.forCar`): 가져오기 띠가 떠 있는 동안 그 줄은 아직 되돌릴 수 있으니 뺀다.
     /// 차로 가는 계산(수유·요약 맞추기와 보낼 함의 보내기 직전 요약 재계산)은 모두 이것을 지난다(ReconcileCareSummary).
     /// 그래서 띠 안에 되돌린 수유는 어느 길로도 차에 가지 않고, 띠가 끝나거나 다른 띠로 바뀌면 다음 계기부터 보인다.
     func forCar(_ undo: CareUndo?) -> CareFile {
@@ -71,7 +76,7 @@ struct CareFile: Equatable {
     }
 }
 
-// MARK: JSON(13장: 쓸 때 null 키도 쓴다. 없는 키는 기본값, 모르는 키는 무시)
+// MARK: JSON(쓸 때 null 키도 쓴다. 없는 키는 기본값, 모르는 키는 무시)
 
 extension CareEvent: Codable {
     enum CodingKeys: String, CodingKey {
@@ -85,7 +90,7 @@ extension CareEvent: Codable {
         startAt = try c.decode(Int64.self, forKey: .startAt)
         endAt = try c.decodeIfPresent(Int64.self, forKey: .endAt)
         endUnknown = try c.decodeIfPresent(Bool.self, forKey: .endUnknown) ?? false
-        // 없는 키는 기본값으로 읽는다(6장). 하나가 빠졌다고 파일 전체를 깨진 것으로 보지 않게. 안드로이드는 source만 기본값이 있고 zone·createdAt·updatedAt은 필수다(보고함)
+        // 없는 키는 기본값으로 읽는다. 하나가 빠졌다고 파일 전체를 깨진 것으로 보지 않게. 안드로이드는 source만 기본값이 있고 zone·createdAt·updatedAt은 필수다.
         zone = try c.decodeIfPresent(String.self, forKey: .zone) ?? TimeZone.current.identifier
         feedSide = try c.decodeIfPresent(FeedSide.self, forKey: .feedSide)
         amountMl = try c.decodeIfPresent(Int.self, forKey: .amountMl)
@@ -150,14 +155,14 @@ enum CareCoding {
 
 // MARK: 규칙 결과
 
-/// 저장 검사(R3)에 걸린 까닭. 값마다 탓하는 자리가 하나다(U82: 시트는 그 줄을 펼친다, `CareDraft.field(for:)`).
+/// 저장 검사에 걸린 까닭. 값마다 탓하는 자리가 하나다(시트는 그 줄을 펼친다, `CareDraft.field(for:)`).
 /// 앞으로의 시각은 시작과 끝을 나눈다: 끝만 미래인데 시작 줄을 탓하면 시작을 고쳐도 풀리지 않았다. 둘 다 미래면 시작이 먼저 걸린다.
 enum CareProblem: Equatable {
     case futureStart, futureEnd, endBeforeStart, tooLong, amount, noteTooLong
-    /// 같은 종류의 진행 중 기록이 이미 있다(R1). 화면은 이 경우를 만들지 않는다.
+    /// 같은 종류의 진행 중 기록이 이미 있다. 화면은 이 경우를 만들지 않는다.
     case inProgressExists
 
-    /// 7장 문구(U17). 메모는 입력칸이 200자에서 더 받지 않아 문구가 없다.
+    /// 화면 문구. 메모는 입력칸이 200자에서 더 받지 않아 문구가 없다.
     func message(for kind: CareKind) -> String? {
         switch self {
         case .futureStart, .futureEnd: return "앞으로의 시각은 적을 수 없어요"
@@ -171,7 +176,7 @@ enum CareProblem: Equatable {
 
 enum CareSaveResult: Equatable {
     case saved
-    /// 같은 종류와 시간이 겹친다(R4). '그래도 저장'이면 `allowOverlap`으로 다시 부른다.
+    /// 같은 종류와 시간이 겹친다. '그래도 저장'이면 `allowOverlap`으로 다시 부른다.
     case overlap
     case problem(CareProblem)
     /// 저장하지 못했다. 문구는 위쪽 띠가 보인다.
@@ -189,8 +194,8 @@ enum CareSaveResult: Equatable {
 struct CareDayStat: Equatable {
     var day: String          // yyyy-MM-dd(기기 시간대)
     var feeds: Int
-    var sleepMs: Int64?      // 잠·기저귀가 꺼져 있으면 nil(R16)
-    /// 끝난 잠이 그날에 걸친 시간이 0보다 큰가(U27·U31 평균의 분모).
+    var sleepMs: Int64?      // 잠·기저귀가 꺼져 있으면 nil
+    /// 끝난 잠이 그날에 걸친 시간이 0보다 큰가(평균의 분모).
     var sleepRecorded = false
     var diapers: Int?
     var carEpisodes: Int
@@ -198,11 +203,11 @@ struct CareDayStat: Equatable {
 
 struct CarePattern: Equatable {
     var days: [CareDayStat]          // 오래된 날 → 오늘, 7개
-    var feedIntervalMedianMs: Int64? // 간격이 5개 미만이면 nil(R14)
-    /// 7일 동안 쌓인 수유 간격 수(U85 ③: 5개 미만이면 점 다섯 중 이만큼 채운다).
+    var feedIntervalMedianMs: Int64? // 간격이 5개 미만이면 nil
+    /// 7일 동안 쌓인 수유 간격 수(5개 미만이면 점 다섯 중 이만큼 채운다).
     var feedIntervalCount: Int = 0
 
-    // U27: 평균은 그 종류 기록이 있는 날만 나눠 센다. 그런 날이 없으면 nil("기록 없음").
+    // 평균은 그 종류 기록이 있는 날만 나눠 센다. 그런 날이 없으면 nil("기록 없음").
     var feedDays: Int { days.filter { $0.feeds > 0 }.count }
     var sleepDays: Int { days.filter(\.sleepRecorded).count }
     var diaperDays: Int { days.filter { ($0.diapers ?? 0) > 0 }.count }
@@ -212,7 +217,7 @@ struct CarePattern: Equatable {
     var carCries: Int { days.map(\.carEpisodes).reduce(0, +) }
 }
 
-/// 리포트에서 만든 읽기 전용 줄(R17). 저장하지 않는다.
+/// 리포트에서 만든 읽기 전용 줄. 저장하지 않는다.
 struct CarRow: Equatable, Identifiable {
     var id: String
     var sessionId: String
@@ -220,7 +225,7 @@ struct CarRow: Equatable, Identifiable {
     var text: String
 }
 
-/// U61: 기록에서 온 값이 하나도 없는 요약(오늘 수유 0회, 잠·기저귀 칸이 비었거나 0). 메모만·옛 기록만 있는 폰의 요약도 그렇다(안드로이드 `empty`와 같다).
+/// 기록에서 온 값이 하나도 없는 요약(오늘 수유 0회, 잠·기저귀 칸이 비었거나 0). 메모만·옛 기록만 있는 폰의 요약도 그렇다(안드로이드 `empty`와 같다).
 extension CareSummaryBody {
     var isEmpty: Bool {
         todayFeedCount == 0 && lastSleepStartAt == nil && lastSleepEndAt == nil && sleepingSince == nil && (todaySleepMin ?? 0) == 0

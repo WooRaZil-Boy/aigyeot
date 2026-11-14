@@ -5,20 +5,22 @@ private typealias DS = DesignSystem
 /// 무엇을 시트로 띄울지. 새 기록은 종류, 고치기·타이머는 기록 id.
 enum CareSheet: Identifiable {
     case quick(CareKind, day: String? = nil)   // day: 기록 탭에서 고른 오늘 아닌 날
-    /// 기록 탭 '지난 기록 적기'(목록 끝 줄·빈 날 단추): 종류를 고를 수 있는 시트(U86). day: 고른 날(오늘이면 nil)
+    /// 기록 탭 '지난 기록 적기'(목록 끝 줄·빈 날 단추): 종류를 고를 수 있는 시트. day: 고른 날(오늘이면 nil)
     case past(day: String?)
     case edit(String)
     case timer(String)
     var id: String {
         switch self {
-        case .quick(let k, let d): "q-\(k.rawValue)-\(d ?? "")"; case .past(let d): "p-\(d ?? "")"
-        case .edit(let i): "e-\(i)"; case .timer(let i): "t-\(i)"
+        case .quick(let k, let d): "q-\(k.rawValue)-\(d ?? "")"
+        case .past(let d): "p-\(d ?? "")"
+        case .edit(let i): "e-\(i)"
+        case .timer(let i): "t-\(i)"
         }
     }
 }
 
-/// 오늘(C1, 5장, 시안 S.today). 큰 제목 → (guardian) 인계 알림 → 진행 중 카드 → 마지막 수유 → 빠른 기록 → 오늘 하루 → 차 카드 → 최근 리포트.
-/// guardian은 빠른 기록도 쓴다(U26). 홈에 떠 있는 버튼은 없다(v5: 지난 기록은 빠른 기록 길게 누르기·기록 탭 끝 행).
+/// 오늘. 큰 제목 → (guardian) 인계 알림 → 진행 중 카드 → 마지막 수유 → 빠른 기록 → 오늘 하루 → 차 카드 → 최근 리포트.
+/// guardian은 빠른 기록도 쓴다. 홈에 떠 있는 버튼은 없다(지난 기록은 빠른 기록 길게 누르기·기록 탭 끝 행).
 struct TodayView: View {
     @Environment(TodayViewModel.self) private var vm
     /// 탭 옮기기(오늘 하루 '기록', 차 카드, 최근 리포트 '전체').
@@ -34,7 +36,7 @@ struct TodayView: View {
                     StatusBands(gap: 12)   // 띠가 없으면 높이 0이고 간격도 없다
                     VStack(alignment: .leading, spacing: 12) {
                         if vm.ui.guardian { GuardianAlertCards().enterRise(0) }
-                        // 경과는 분 단위라 1분마다 다시 그린다(R15: 저장하지 않고 계산). 진행 중 카드의 초는 그 카드만 1초마다.
+                        // 경과는 분 단위라 1분마다 다시 그린다(저장하지 않고 계산). 진행 중 카드의 초는 그 카드만 1초마다.
                         TimelineView(.everyMinute) { ctx in
                             let now = CareTime.ms(ctx.date)
                             VStack(alignment: .leading, spacing: 12) {
@@ -52,33 +54,33 @@ struct TodayView: View {
                                     BlockHeader(title: CareText.todayDay, link: CareText.tabLog) { goTab(CareText.tabLog) }
                                     let today = CareRules.dayKey(now, .current)
                                     let fresh = vm.fresh.flatMap { ChartData.fresh($0, day: today, zone: .current) }
-                                    DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now, zone: .current, showCar: vm.ui.isPaired),
+                                    DayBandChart(data: ChartData.day(care: vm.ui.care, reports: vm.ui.phone.reports, day: today, now: now,
+                                        zone: .current, showCar: vm.ui.isPaired),
                                                  fresh: fresh) { if let id = fresh?.id { vm.clearFresh(id) } }
                                 }
                                 .block()
                                 .enterRise(3)
                             }
-                            // 진행 중 판이 생기거나 사라질 때 아래 블록이 함께 움직인다(시안 v4-7 6 기록 순간, spring.smooth)
+                            // 진행 중 판이 생기거나 사라질 때 아래 블록이 함께 움직인다(spring.smooth)
                             .animation(reduceMotion ? nil : DS.Motion.smooth, value: CareRules.inProgress(.feed, in: vm.ui.care.events)?.id)
                             .animation(reduceMotion ? nil : DS.Motion.smooth, value: CareRules.inProgress(.sleep, in: vm.ui.care.events)?.id)
                         }
-                        // U35: guardian은 기기 목록을 받을 수 없어(계약 1.3) 차 카드를 그리지 않는다.
+                        // guardian은 기기 목록을 받을 수 없어 차 카드를 그리지 않는다.
                         if !vm.ui.guardian {
                             Group {
-                                if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) { goTab(CareText.tabCar) } }
-                                else { ConnectCarTile() }
+                                if vm.ui.isPaired { CarTile(car: vm.ui.phone.car, offline: !vm.ui.online) { goTab(CareText.tabCar) } } else { ConnectCarTile() }
                             }
                             .enterRise(4)
                         }
                         RecentReports(owner: !vm.ui.guardian) { goTab(CareText.tabCar) }.enterRise(5)
                     }
-                    // 새 리포트(첫 리포트 포함)가 들어오면 그 줄·블록이 들어오고 위 블록이 비킨다(시안 '최근 리포트' .enter). 늘 있는 이 묶음에 건다
+                    // 새 리포트(첫 리포트 포함)가 들어오면 그 줄·블록이 들어오고 위 블록이 비킨다. 늘 있는 이 묶음에 건다
                     .animation(reduceMotion ? nil : DS.Motion.smooth, value: vm.ui.phone.reports.prefix(3).map(\.id))
                 }
                 .screenPadding()
             }
             .screenBackground()
-            .navigationTitle(CareText.todayTitle(nickname: vm.ui.care.childNickname))   // U34
+            .navigationTitle(CareText.todayTitle(nickname: vm.ui.care.childNickname))
             .refreshable { await vm.retryNow() }
             .sheet(item: $sheet) { s in CareSheetView(sheet: s).modifier(ZoomDestination(id: s.timerId, ns: zoom)) }
         }
@@ -106,16 +108,17 @@ private struct ZoomDestination: ViewModifier {
     }
 }
 
-/// 마지막 수유(시안 .hero-c): 이름 → 큰 경과 → 시각 · 쪽 → 간격 막대 → (owner) 다음 수유 시간대.
-/// 없으면 "아직 수유 기록이 없어요" + '수유 시작하기'(U85 ②).
+/// 마지막 수유: 이름 → 큰 경과 → 시각 · 쪽 → 간격 막대 → (owner) 다음 수유 시간대.
+/// 없으면 "아직 수유 기록이 없어요" + '수유 시작하기'.
 private struct LastFeedCard: View {
     @Environment(TodayViewModel.self) private var vm
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let now: Int64
-    /// 새 수유가 들어오면 판 둘레로 파란 빛이 한 번 퍼진다(시안 .flash 1.2초 motion.base 곡선). 늘면 한 번 돈다.
+    /// 새 수유가 들어오면 판 둘레로 파란 빛이 한 번 퍼진다(1.2초 motion.base 곡선). 늘면 한 번 돈다.
     @State private var flashes = 0
 
     var body: some View {
+        let stilled = reduceMotion   // keyframeAnimator 클로저는 메인 액터 밖이라 값을 미리 잡는다(바뀌면 body가 다시 불려 새 값을 쓴다)
         VStack(alignment: .leading, spacing: 0) {
             Text(CareText.lastFeed).typeStyle(.meta).foregroundStyle(DS.textTertiary)
             if let last = vm.ui.lastFeedingStart {
@@ -134,7 +137,7 @@ private struct LastFeedCard: View {
                     Text(feedStatusText(r)).typeStyle(.caption)
                         .foregroundStyle(r.status == .failed || r.status == .expired ? DS.danger : DS.textTertiary).padding(.top, 8)
                 }
-                if !vm.ui.guardian, let w = vm.ui.phone.feeding.windowStartExpected {   // U35: guardian은 차 값을 받지 않는다
+                if !vm.ui.guardian, let w = vm.ui.phone.feeding.windowStartExpected {   // guardian은 차 값을 받지 않는다
                     VStack(alignment: .leading, spacing: 2) {
                         Text(CareText.nextWindow(w)).typeStyle(.chip).foregroundStyle(DS.textPrimary)
                         Text(CareText.nextWindowNote).typeStyle(.note).foregroundStyle(DS.textTertiary)
@@ -142,7 +145,7 @@ private struct LastFeedCard: View {
                     .padding(.top, 14)
                 }
             } else {
-                // U85 ②: 같은 판 자리에 젖병 고리 + 문구 + 빈 간격 트랙 + 주 단추
+                // 같은 판 자리에 젖병 고리 + 문구 + 빈 간격 트랙 + 주 단추
                 HStack(spacing: 14) {
                     IconImage(.bottle, size: 22).foregroundStyle(DS.textSecondary)
                         .frame(width: 52, height: 52).background(DS.surfaceRaised, in: Circle())
@@ -159,7 +162,7 @@ private struct LastFeedCard: View {
         .keyframeAnimator(initialValue: 1.0, trigger: flashes) { card, p in
             // p 0 → 1: 빛 두께 0 → 14, 진하기 60% → 0(box-shadow 퍼짐과 같은 꼴). 쉬는 동안은 1이라 보이지 않는다
             card.overlay {
-                if !reduceMotion {   // 도는 중에 동작 줄이기를 켜면 바로 걷는다
+                if !stilled {   // 도는 중에 동작 줄이기를 켜면 바로 걷는다
                     RoundedRectangle(cornerRadius: DS.rL + 14 * p, style: .continuous)
                         .strokeBorder(DS.accent.opacity(0.6 * (1 - p)), lineWidth: 14 * p)
                         .padding(-14 * p)
@@ -177,7 +180,7 @@ private struct LastFeedCard: View {
     }
 }
 
-/// 먹색 진행 막대 + 다음 수유 시간대 눈금(아이 신호 주황, 시안 .pmeter).
+/// 먹색 진행 막대 + 다음 수유 시간대 눈금(아이 신호 주황).
 private struct FeedMeter: View {
     let value: Double
     let tick: Double?
@@ -199,7 +202,7 @@ private struct FeedMeter: View {
     }
 }
 
-/// 진행 중 수유·잠(시안 .run-c): 살아 있는 점 + "수유 중 · 왼쪽" + "오후 2:01부터" + 경과 시계. 누르면 타이머.
+/// 진행 중 수유·잠: 살아 있는 점 + "수유 중 · 왼쪽" + "오후 2:01부터" + 경과 시계. 누르면 타이머.
 private struct RunningCard: View {
     let event: CareEvent
     let open: () -> Void
@@ -229,7 +232,7 @@ private struct RunningCard: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// 살아 있는 점(시안 live: 1.8초마다, 앞 60% 동안 둘레 빛이 0 → 12로 퍼지며 사라지고 나머지는 쉼, motion.base 곡선).
+    /// 살아 있는 점(1.8초마다, 앞 60% 동안 둘레 빛이 0 → 12로 퍼지며 사라지고 나머지는 쉼, motion.base 곡선).
     /// 동작 줄이기면 빛 없이 점만(도중에 켜도 반복이 멈춘다).
     @ViewBuilder private var dot: some View {
         let c = DS.color(event.kind)
@@ -250,20 +253,20 @@ private struct RunningCard: View {
         event.kind == .sleep ? CareText.sleepRunning : ([CareText.feedRunning] + [event.feedSide?.label].compactMap { $0 }).joined(separator: " · ")
     }
 
-    /// 읽어 주기는 7.1 today.running 문장 그대로.
+    /// 읽어 주기는 today.running 문장 그대로.
     private var a11y: String {
         let now = CareTime.ms(Date())
         return event.kind == .sleep ? CareText.sleepingNow(event, now: now) : CareText.feedingNow(event, now: now)
     }
 }
 
-/// 빠른 기록(R16, 시안 .qblock): 흰 블록 안 회색 원(56) 넷, 이름 14/600. 수유·잠은 누르면 시작하고, 진행 중이면 먹색 원 + "수유 중"·"자는 중"으로
+/// 빠른 기록: 흰 블록 안 회색 원(56) 넷, 이름 14/600. 수유·잠은 누르면 시작하고, 진행 중이면 먹색 원 + "수유 중"·"자는 중"으로
 /// 바뀌어 타이머를 연다. 길게 누르면 지난 시각으로 적는 시트(today.quick.past).
 private struct QuickBlock: View {
     @Environment(TodayViewModel.self) private var vm
     @Binding var sheet: CareSheet?
     @State private var started = 0
-    /// 누르고 있는 칸(시안 .qb:active: 원 0.94배 spring.snappy, 바탕 조금 짙게 motion.fast).
+    /// 누르고 있는 칸(원 0.94배 spring.snappy, 바탕 조금 짙게 motion.fast).
     @State private var pressed: CareKind?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -313,14 +316,14 @@ private struct QuickBlock: View {
     }
 }
 
-/// guardian 오늘 맨 위 인계 알림(시안 .alert-c): 배지 "차에서 · {경과}" + 차가 만든 문장. 누르면 상세.
+/// guardian 오늘 맨 위 인계 알림: 배지 "차에서 · {경과}" + 차가 만든 문장. 누르면 상세.
 private struct GuardianAlertCards: View {
     @Environment(TodayViewModel.self) private var vm
     @Environment(AppViewModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        // '몇 분 전'은 화면을 연 채 두어도 매분 바뀐다(9장 '{n}분 전').
+        // '몇 분 전'은 화면을 연 채 두어도 매분 바뀐다('{n}분 전').
         TimelineView(.everyMinute) { ctx in
             VStack(spacing: 12) {
                 ForEach(vm.ui.phone.alerts.prefix(5)) { a in
@@ -336,7 +339,7 @@ private struct GuardianAlertCards: View {
                     }
                     .buttonStyle(.press)
                     .simultaneousGesture(TapGesture().onEnded { app.userOpenedAlert(a.id) })   // 직접 고른 알림: 대기하던 다른 알림 열기는 버린다
-                    .transition(.cardEnter)   // 새 인계 알림 판(시안 .alert-c.enter)
+                    .transition(.cardEnter)   // 새 인계 알림 판
                 }
             }
             .animation(reduceMotion ? nil : DS.Motion.smooth, value: vm.ui.phone.alerts.prefix(5).map(\.id))
@@ -344,16 +347,16 @@ private struct GuardianAlertCards: View {
     }
 }
 
-/// 차 카드(owner, 시안 .car-tile): 3D 차(정차 실시간, 손가락으로 돌림) + "● 연결됨" + 마지막 연락. 아래 줄을 누르면 차 탭.
+/// 차 카드(owner): 3D 차(정차 실시간, 손가락으로 돌림) + "● 연결됨" + 마지막 연락. 아래 줄을 누르면 차 탭.
 struct CarTile: View {
     /// 기기 목록의 차(owner만 받는다).
     let car: DeviceInfo?
     let offline: Bool
-    var phones: Int? = nil
+    var phones: Int?
     var stageHeight: CGFloat = 150
-    var open: (() -> Void)? = nil
+    var open: (() -> Void)?
 
-    /// 차 카드 글(7.2). 마지막 연락은 U20 경과(1분 미만 '방금', 그 밖 '5분 전'·'1시간 전'·'1시간 15분 전', 연결 계약 5.6·L100).
+    /// 차 카드 글. 마지막 연락은 경과(1분 미만 '방금', 그 밖 '5분 전'·'1시간 전'·'1시간 15분 전', ).
     func text(now: Date) -> String {
         if offline { return "알 수 없음" }
         guard let car else { return "차를 기다리는 중" }
@@ -363,7 +366,7 @@ struct CarTile: View {
     }
 
     var body: some View {
-        // 시안 렌더(.p-ios): .car-tile의 padding 0보다 뒤의 .pcard(22/20)가 이겨 무대가 안쪽 22/20에 들고, 글 줄은 .car-tile .ct-b(v5 덮어쓰기, 4/20/18)로 다시 든다
+        // 무대는 안쪽 22/20에 들고, 글 줄은 4/20/18로 다시 든다
         VStack(spacing: 0) {
             CarStageCard(preset: .tile).frame(height: stageHeight)
             row
@@ -375,7 +378,7 @@ struct CarTile: View {
 
     @ViewBuilder private var row: some View {
         let content = HStack(alignment: .bottom, spacing: 10) {
-            TimelineView(.everyMinute) { ctx in   // 경과는 화면을 연 채 두어도 바뀐다(7.2)
+            TimelineView(.everyMinute) { ctx in   // 경과는 화면을 연 채 두어도 바뀐다
                 let t = text(now: ctx.date)
                 HStack(spacing: 6) {
                     if car?.online == true, !offline { Circle().fill(DS.active).frame(width: 8, height: 8) }
@@ -395,7 +398,7 @@ struct CarTile: View {
     }
 }
 
-/// 연결 안 됨의 차 카드(7장): 안내 한 줄 + '차와 연결하기'.
+/// 연결 안 됨의 차 카드: 안내 한 줄 + '차와 연결하기'.
 struct ConnectCarTile: View {
     @Environment(AppViewModel.self) private var root
 
@@ -412,7 +415,7 @@ struct ConnectCarTile: View {
     }
 }
 
-/// 최근 리포트(시안 '최근 리포트' 블록). owner는 머리 '전체' → 차 탭, guardian은 머리를 누르면 리포트 목록(안드로이드와 같다).
+/// 최근 리포트. owner는 머리 '전체' → 차 탭, guardian은 머리를 누르면 리포트 목록(안드로이드와 같다).
 private struct RecentReports: View {
     @Environment(TodayViewModel.self) private var vm
     let owner: Bool
@@ -421,7 +424,7 @@ private struct RecentReports: View {
     var body: some View {
         let reports = vm.ui.phone.reports
         if !owner && vm.ui.phone.alerts.isEmpty && reports.isEmpty {
-            FootNote("아직 받은 리포트·인계 알림이 없어요")   // 계약 7.2
+            FootNote("아직 받은 리포트·인계 알림이 없어요")
         }
         if !reports.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
@@ -441,7 +444,7 @@ private struct RecentReports: View {
                 }
                 ForEach(reports.prefix(3)) { r in   // 받을 때 시작 시각 늦은 순으로 둔다(InboxRules)
                     NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }.buttonStyle(.plain)
-                        .transition(.cardEnter)   // 새 리포트 줄(시안 '최근 리포트' .enter)
+                        .transition(.cardEnter)   // 새 리포트 줄
                 }
             }
             .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 보낼 함을 넣은 순서대로 하나씩 보낸다(계약 7.5). 보낼 함 칸은 OutboxRules로만 고치고, 보내기 일꾼은 이 하나다.
+/// 보낼 함을 넣은 순서대로 하나씩 보낸다. 보낼 함 칸은 OutboxRules로만 고치고, 보내기 일꾼은 이 하나다.
 @MainActor
 final class SendOutbox {
     private let state: PhoneStateRepository
@@ -21,7 +21,7 @@ final class SendOutbox {
     /// 지금 보내는 보낼 함 항목 id. 만료 정리가 결과를 기다리게 한다(보내는 사이 7일을 넘겨도 성공을 실패로 적지 않게, 안드로이드 `sending`).
     private(set) var sendingId: String?
     private var retryTask: Task<Void, Never>?
-    /// 메시지 429(기기당 한도, 1.4)의 기다림과 그 자격(P5, 그 연결에만 걸린다). 저장하지 못한 429 기다림도 메모리로 지킨다. 상태 요청도 이것을 본다.
+    /// 메시지 429(기기당 한도)의 기다림과 그 자격(그 연결에만 걸린다). 저장하지 못한 429 기다림도 메모리로 지킨다. 상태 요청도 이것을 본다.
     private var memHold: (c: Credentials, until: Date)?
     private var holdUntil: Date? { memHold.flatMap { state.isCurrent($0.c) ? $0.until : nil } }
 
@@ -45,7 +45,7 @@ final class SendOutbox {
         case .connectionChanged:
             retryTask?.cancel()
             flushing = false
-            sendingId = nil   // 옛 연결의 보내는 중 표시가 새 보낼 함의 '보내 봄' 판정(U57)에 남지 않게
+            sendingId = nil   // 옛 연결의 보내는 중 표시가 새 보낼 함의 '보내 봄' 판정에 남지 않게
         case .background:
             retryTask?.cancel(); retryTask = nil   // 뒤에서는 다시 시도하지 않는다. 남은 것은 앞으로 올 때 한다
         case .recordsCleared: break
@@ -76,10 +76,10 @@ final class SendOutbox {
         }
     }
 
-    /// 결과·만료·'보내 봄'을 저장하지 못했다(실패 범주 W): 항목을 두고 잠시 뒤 다시 보낸다.
+    /// 결과·만료·'보내 봄'을 저장하지 못했다: 항목을 두고 잠시 뒤 다시 보낸다.
     private func retrySaveLater() { schedule(at: now().addingTimeInterval(RetryPolicy.saveRetry)) }
 
-    /// 망 실패(응답 없음)로 생긴 보낼 함 기다림을 지금으로 당긴다(계약 7.5 '네트워크가 돌아올 때, 앱이 앞으로 올 때').
+    /// 망 실패(응답 없음)로 생긴 보낼 함 기다림을 지금으로 당긴다('네트워크가 돌아올 때, 앱이 앞으로 올 때').
     /// 중계가 준 기다림(429 Retry-After·song_quota)과 5xx 백오프는 둔다. 메시지 429 기기 기다림은 보내기가 따로 지킨다.
     func hurryNetworkWaits() {
         let t = now()
@@ -87,7 +87,7 @@ final class SendOutbox {
         state.commit(state.creds) { OutboxRules.hurryNetworkWaits(now: t, in: &$0) }
     }
 
-    /// 7일 지난 보낼 함 항목을 정리해 저장하고 버린 것을 알린다(U54). 저장하지 못하면 false.
+    /// 7일 지난 보낼 함 항목을 정리해 저장하고 버린 것을 알린다. 저장하지 못하면 false.
     private func expireNow() -> Bool {
         let cutoff = now().addingTimeInterval(-OutboxPolicy.maxAge)
         var expired: [String] = []
@@ -97,14 +97,14 @@ final class SendOutbox {
         return true
     }
 
-    /// 띠의 '닫기'(U54): 띠 두 칸을 걷고, 저장해 둔 버린 메시지 안내도 이때 지운다(안드로이드 dismissNotice와 같은 자리).
+    /// 띠의 '닫기': 띠 두 칸을 걷고, 저장해 둔 버린 메시지 안내도 이때 지운다(안드로이드 dismissNotice와 같은 자리).
     func dismissNotice() {
         notices.dismiss()
         if !state.state.unseenDrops.isEmpty { state.commitLocal { $0.unseenDrops = [] } }
     }
 
     func run() async {
-        // c: 이 보내기의 연결(P5). 결과는 이 자격이 아직 지금 연결일 때만 적용한다
+        // c: 이 보내기의 연결. 결과는 이 자격이 아직 지금 연결일 때만 적용한다
         guard let c = state.creds, !flushing else { return }
         flushing = true
         defer { if state.isCurrent(c) { flushing = false } }
@@ -114,24 +114,26 @@ final class SendOutbox {
         while let item = state.state.outbox.first {
             if let hold = holdUntil, hold > now() { schedule(at: hold); return }   // 저장하지 못한 429 기다림
             if item.nextTryAt > now() { schedule(at: item.nextTryAt); return }   // 백오프·Retry-After(노래 PUT은 한 시간도 온다)
-            // 앞 항목을 기다리는 사이 7일이 지났을 수 있다. 보내기 직전에 다시 보고 만료면 정리·저장 뒤 다음으로(계약 7.5).
+            // 앞 항목을 기다리는 사이 7일이 지났을 수 있다. 보내기 직전에 다시 보고 만료면 정리·저장 뒤 다음으로.
             if item.createdAt < now().addingTimeInterval(-OutboxPolicy.maxAge) {
                 guard expireNow() else { retrySaveLater(); return }
                 continue
             }
             if item.type == MessageType.careSummary, refreshedId != item.id {
                 // 보내기 직전에 다시 계산한다: 오래 기다린 안 보낸 요약의 as_of·'오늘' 값이 낡지 않게(복구가 자정을 넘긴 경우 등).
-                // 보내 본 요약은 그대로 같은 id로 보내고, 달라졌으면 새것을 그 뒤에 둔다(U57. 차는 날짜 경계 규칙으로 앞 요약의 '오늘'을 뺀다).
-                // 같은 날 같은 내용이면 그대로(같은 id로 다시 보내야 중계가 한 번만 처리한다). 바꿨으면 줄의 자리는 이어받는다(바뀌는 것은 안 보낸 요약뿐이다, U57).
+                // 보내 본 요약은 그대로 같은 id로 보내고, 달라졌으면 새것을 그 뒤에 둔다(차는 날짜 경계 규칙으로 앞 요약의 '오늘'을 뺀다).
+                // 같은 날 같은 내용이면 그대로(같은 id로 다시 보내야 중계가 한 번만 처리한다). 바꿨으면 줄의 자리는 이어받는다(바뀌는 것은 안 보낸 요약뿐이다).
                 switch queueSummary() {
                 case .queued: refreshedId = state.state.outbox.first?.id; continue
                 case .failed: retrySaveLater(); return   // 지운 기록이 담긴 옛 요약을 보내지 않는다
                 case .unchanged: refreshedId = item.id
                 }
             }
-            // 요약은 보내기 전에 '보내 봄'을 저장한다(U57): 응답 전에 죽거나 결과 저장이 실패해도 바꿔치우지 않는다
+            // 요약은 보내기 전에 '보내 봄'을 저장한다: 응답 전에 죽거나 결과 저장이 실패해도 바꿔치우지 않는다
             if item.type == MessageType.careSummary, !item.sentOnce {
-                guard state.commit(c, { st in if let i = st.outbox.firstIndex(where: { $0.id == item.id }) { st.outbox[i].markTried(true) } }) else { retrySaveLater(); return }
+                guard state.commit(c, { st in
+                    if let i = st.outbox.firstIndex(where: { $0.id == item.id }) { st.outbox[i].markTried(true) }
+                }) else { retrySaveLater(); return }
             }
             sendingId = item.id
             let result = await attempt(item, c: c)
@@ -147,28 +149,28 @@ final class SendOutbox {
             switch outcome {
             case .done:
                 // 결과 표시와 보낼 함 지우기를 한 번에 저장한다. 저장하지 못하면 항목을 남기고 멈춘다.
-                // 잠시 뒤 다시 보내도 같은 id라 한 번만 처리된다(계약 1.4).
+                // 잠시 뒤 다시 보내도 같은 id라 한 번만 처리된다.
                 let skew = gate.clockSkew
                 guard state.commit(c, { OutboxRules.completeSent(item, response, clockSkew: skew, now: t, in: &$0) }) else { retrySaveLater(); return }
             case .drop:
-                // 보내는 사이 보낼 함에서 빠진 항목(기록 지우기의 노래 등)의 거절은 알리지 않는다(안드로이드 wasQueued). 요약은 U57로 빠지지 않는다
+                // 보내는 사이 보낼 함에서 빠진 항목(기록 지우기의 노래 등)의 거절은 알리지 않는다(안드로이드 wasQueued). 요약은 이 길로 빠지지 않는다
                 let wasQueued = state.state.outbox.contains { $0.id == item.id }
                 guard state.commit(c, { OutboxRules.completeDropped(item, error, wasQueued: wasQueued, in: &$0) }) else { retrySaveLater(); return }
-                if wasQueued, let text = NoticeRules.dropNotice(item.type) { notices.addLine(text) }   // 떠 있는 안내를 덮지 않는다(U54)
+                if wasQueued, let text = NoticeRules.dropNotice(item.type) { notices.addLine(text) }   // 떠 있는 안내를 덮지 않는다
             case .reupload:
                 guard state.commit(c, { OutboxRules.scheduleReupload(item.id, now: t, in: &$0) }) else { retrySaveLater(); return }
             case .retry(let delay):
-                // 429는 기기당 메시지 한도다(1.4): 이 항목이 바뀌거나 지워져도 다른 메시지·상태 요청도 기다린다
+                // 429는 기기당 메시지 한도다: 이 항목이 바뀌거나 지워져도 다른 메시지·상태 요청도 기다린다
                 if error?.status == 429, posting { holdMessages(c, for: delay) }
-                // 보내는 중인 요약은 바뀌지 않는다(U57). 보내는 사이 지운 항목(기록 지우기의 노래 등)의 기다림은 남은 줄을 막지 않는다.
+                // 보내는 중인 요약은 바뀌지 않는다. 보내는 사이 지운 항목(기록 지우기의 노래 등)의 기다림은 남은 줄을 막지 않는다.
                 // 메시지 429는 위 기기 기다림이 지킨다
                 let id = item.id
                 guard state.state.outbox.contains(where: { $0.id == id }) else { continue }
-                // 429인 요약은 중계에 없다(같은 id를 한도 검사보다 먼저 본다): 보내 보지 않은 것으로 되돌려 새 요약으로 바꿀 수 있게 한다(U57, 안드로이드 untried)
+                // 429인 요약은 중계에 없다(같은 id를 한도 검사보다 먼저 본다): 보내 보지 않은 것으로 되돌려 새 요약으로 바꿀 수 있게 한다(안드로이드 untried)
                 let untry = error?.status == 429 && item.type == MessageType.careSummary
                 guard state.commit(c, { OutboxRules.scheduleRetry(id, delay: delay, network: error == .network, untry: untry, now: t, in: &$0) }) else {
-                    // 저장은 못 해도 메시지 Retry-After는 지킨다. 노래 PUT 한도는 메시지와 따로라(1.4) 기기 전체 기다림은 걸지 않는다(잠시 뒤 다시 올려 다시 받는다).
-                    // 다만 맨 앞 항목의 기다림은 넣은 순서대로 줄을 막는다(7.5)
+                    // 저장은 못 해도 메시지 Retry-After는 지킨다. 노래 PUT 한도는 메시지와 따로라 기기 전체 기다림은 걸지 않는다(잠시 뒤 다시 올려 다시 받는다).
+                    // 다만 맨 앞 항목의 기다림은 넣은 순서대로 줄을 막는다
                     if posting { holdMessages(c, for: delay) }
                     retrySaveLater(); return
                 }
@@ -183,7 +185,7 @@ final class SendOutbox {
 
     /// 연결이 바뀌었으면(세대가 다르면) nil. 이전 차로 가던 요청의 결과는 새 연결에 적용하지 않는다.
     /// 넷째 값은 결과를 낸 HTTP 요청을 시작할 때의 관찰 번호다(노래는 올리기·보내기가 따로 잡는다, 띠 판단용).
-    /// 마지막 값: 메시지 POST까지 갔는가(노래 PUT의 429는 시간당 업로드 한도라 메시지 한도와 따로다, 1.4).
+    /// 마지막 값: 메시지 POST까지 갔는가(노래 PUT의 429는 시간당 업로드 한도라 메시지 한도와 따로다).
     private func attempt(_ item: OutboxItem, c: Credentials) async -> (SendOutcome, RelayError?, SendMessageResponse?, LinkMark, Bool)? {
         var mark = gate.mark()
         var posting = false
@@ -194,7 +196,7 @@ final class SendOutbox {
             case .removedMeanwhile: return (.done, nil, nil, mark, posting)
             case .stale: return nil
             }
-            // 올리는 사이 다른 메시지가 429를 받았으면 기기 기다림을 지킨다(1.4 '다른 메시지도 기다린다', 안드로이드와 같다).
+            // 올리는 사이 다른 메시지가 429를 받았으면 기기 기다림을 지킨다('다른 메시지도 기다린다', 안드로이드와 같다).
             // 결과가 아니므로(nil) 시도 횟수를 늘리지 않고, 다음 보내기가 기다림 뒤 POST만 한다(파일은 올렸다)
             if item.songId != nil, !item.uploaded, isHeld { return nil }
             let env = Envelope(id: item.id, type: item.type, ts: item.ts, body: item.body)

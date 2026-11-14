@@ -1,7 +1,7 @@
 import Foundation
 @testable import Aigyeot
 
-// 시험 도구(안드로이드 Kit.kt와 같은 자리, arch-phone-ios 9장). 배선은 제품과 같은 AppContainer 하나다:
+// 시험 도구(안드로이드 Kit.kt와 같은 자리). 배선은 제품과 같은 AppContainer 하나다:
 // 시험은 `AppContainer(relay: FakeRelay(), store: MemoryStateStore(…), credentials: MemoryCredentialStore(…), …)`로 만들고
 // 원본·유스케이스·화면 뷰모델(공장)을 그대로 부른다. 저장소는 메모리(Memory*Store), 중계는 FakeRelay, 소켓·네트워크·Keychain·FCM은 없거나 가짜다.
 // 제품 코드에 시험용 넘김 함수를 두지 않는다. 아래 도움 함수는 화면이 하는 일(연결 시작 → 끝 기다리기)을 시험에서 기다릴 수 있게 할 뿐이다.
@@ -95,7 +95,7 @@ final class FakeSongRecorder: SongRecorder {
 }
 
 extension AppContainer {
-    /// 연결 화면(ConnectViewModel)이 연결을 시작하고 Pair.run이 끝나기를 기다린다. 도는 연결이 있으면 받지 않는다(.busy, U52).
+    /// 연결 화면(ConnectViewModel)이 연결을 시작하고 PairDevice.run이 끝나기를 기다린다. 도는 연결이 있으면 받지 않는다(.busy).
     /// 연결되면 ConnectViewModel이 넘긴 `then`이 연결 흐름(확인 시트·연결 화면)을 닫는다.
     func pairAndWait(_ code: PairCode) async -> ConnectFailure? {
         let connect = connect()
@@ -106,7 +106,7 @@ extension AppContainer {
         return nil
     }
 
-    /// 코드 넣기 화면의 직접 친 코드(G17): 지난 링크 안내를 걷고 연결한다.
+    /// 코드 넣기 화면의 직접 친 코드: 지난 링크 안내를 걷고 연결한다.
     func pairAndWait(typed code: PairCode) async -> ConnectFailure? {
         appViewModel.clearLinkError()
         return await pairAndWait(code)

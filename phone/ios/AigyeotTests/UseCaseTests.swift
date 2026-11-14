@@ -1,7 +1,7 @@
 import XCTest
 @testable import Aigyeot
 
-/// 유스케이스 시험(안드로이드 UseCaseTest와 같은 이름). 기존 AppModelTests가 같은 동작을 다른 이름으로도 본다(겹쳐도 된다).
+/// 유스케이스 시험(안드로이드 UseCaseTest와 같은 이름).
 @MainActor
 final class UseCaseTests: XCTestCase {
     func test_받은_함을_저장한_뒤에만_ack한다() async {
@@ -26,7 +26,7 @@ final class UseCaseTests: XCTestCase {
         kit.relay.inboxPages = [InboxResponse(messages: [e], more: false)]
         kit.store.failing = true
         await kit.app.keepConnected.refresh()
-        XCTAssertTrue(kit.relay.acked.isEmpty)   // 중계에 남아 다시 받는다(실패 범주 R)
+        XCTAssertTrue(kit.relay.acked.isEmpty)   // 중계에 남아 다시 받는다
         XCTAssertEqual(kit.app.status.ui.notice, NoticeRules.saveFailed)
     }
 
@@ -47,7 +47,7 @@ final class UseCaseTests: XCTestCase {
         kit.relay.pairResult = .success(Kit.newOwner)
         let failure = await kit.app.pairAndWait(.pair("123456"))
         XCTAssertNil(failure)
-        // 옛 연결로 시작한 요청의 401이 늦게 왔다(잡은 자격으로 처리, P5)
+        // 옛 연결로 시작한 요청의 401이 늦게 왔다(잡은 자격으로 처리)
         kit.app.gate.unauthorized(.http(status: 401, code: "unauthorized", retryAfter: nil), c: old)
         XCTAssertEqual(kit.app.state.creds?.deviceId, Kit.newOwner.deviceId)
         XCTAssertNotEqual(kit.app.appViewModel.ui.route, .gone)
@@ -102,7 +102,7 @@ final class UseCaseTests: XCTestCase {
         XCTAssertEqual(connect.ui.run, .failed(code: .pair("654321"), .rateLimited))
     }
 
-    /// D3: iOS는 완료 화면 대신 '연결됐어요' 띠와 탭(오늘)으로 간다. 오늘 탭으로 바꾸는 일은 MainView가 연결 여부를 보고 한다.
+    /// iOS는 완료 화면 대신 '연결됐어요' 띠와 탭(오늘)으로 간다. 오늘 탭으로 바꾸는 일은 MainView가 연결 여부를 보고 한다.
     func test_연결을_마치면_새_자격·연결됐어요_띠·오늘_탭으로() async {
         let kit = Kit(creds: nil)
         kit.relay.pairResult = .success(Kit.newOwner)

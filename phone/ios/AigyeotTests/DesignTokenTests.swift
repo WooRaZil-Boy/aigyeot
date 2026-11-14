@@ -2,7 +2,7 @@ import XCTest
 import UIKit
 @testable import Aigyeot
 
-/// 디자인 토큰 v6: Swift 표가 공용 원본 `shared/src/test/resources/design/tokens.json`의 폰 값과 같은지 본다
+/// 디자인 토큰: Swift 표가 공용 원본 `shared/src/test/resources/design/tokens.json`의 폰 값과 같은지 본다
 /// (안드로이드·차 시험도 같은 파일을 읽는다). 빠진 이름·남는 이름·다른 값 모두 실패다.
 final class DesignTokenTests: XCTestCase {
     /// 이 파일 기준 저장소 루트의 design 폴더(`phone/ios/AigyeotTests/` → 위로 셋, ProtocolFixturesTests와 같은 방식).
@@ -84,8 +84,8 @@ final class DesignTokenTests: XCTestCase {
         XCTAssertTrue(OssEntry.all.contains { $0.licenses.contains { $0.file == "ISC-Lucide" } })
     }
 
-    /// 시안 부품 움직임은 표의 곡선 이름을 읽는다(같은 이름의 움직임이 다른 곡선을 갖지 않게).
-    func test_시안_부품_움직임은_표의_곡선을_쓴다() {
+    /// 부품 움직임은 표의 곡선 이름을 읽는다(같은 이름의 움직임이 다른 곡선을 갖지 않게).
+    func test_부품_움직임은_표의_곡선을_쓴다() {
         XCTAssertEqual(DesignSystem.Motion.seconds("camera"), 1.1)
         let camera = DesignSystem.Motion.curve("camera")
         XCTAssertEqual(camera.value(at: 0.5), 0.5, accuracy: 0.001)          // cubic-bezier(.65,0,.35,1)는 가운데에서 반
@@ -93,7 +93,6 @@ final class DesignTokenTests: XCTestCase {
         XCTAssertEqual(DesignSystem.Motion.curve("press"), .linear)
         XCTAssertEqual(DesignSystem.Motion.liveSeconds * DesignSystem.Motion.liveSpreadShare, 1.08, accuracy: 0.0001)
     }
-
 
     /// 글자 역할은 값 하나에 이름 하나다(같은 크기·굵기를 두 이름이 갖지 않고, tokens 7단계와도 겹치지 않는다).
     func test_글자_역할은_값_하나에_이름_하나다() {

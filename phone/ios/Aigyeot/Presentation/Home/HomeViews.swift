@@ -2,7 +2,7 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-/// 탭(phone-care-plan 5장, 시안 nav): owner·연결 안 됨: 오늘·기록·차·설정, guardian: 오늘·기록·설정.
+/// 탭: owner·연결 안 됨: 오늘·기록·차·설정, guardian: 오늘·기록·설정.
 /// iOS 26은 시스템 글래스 탭 바(아래로 내리면 작아짐), 그 아래 판은 시스템 탭 바. 아이콘은 Lucide.
 struct MainView: View {
     @Environment(AppViewModel.self) private var app
@@ -20,12 +20,12 @@ struct MainView: View {
             }
             Scoped({ $0.settings() }) { _ in SettingsView() }.undoBar().tabItem { tabLabel(CareText.tabSettings, .settings) }.tag(CareText.tabSettings)
         }
-        .tint(DS.textPrimary)   // 탭 막대 고른 칸은 먹색(시안 .tabbar button.on). 탭 안 내용은 다시 파랑 글자(accentInk)
+        .tint(DS.textPrimary)   // 탭 막대 고른 칸은 먹색. 탭 안 내용은 다시 파랑 글자(accentInk)
         .environment(\.tabShownAt, tabShownAt)
         .modifier(MinimizeTabBar())
-        // U25: 끊기면 연결 안 됨의 오늘로. 5장: 연결 흐름이 끝나도 오늘로(링크는 확인 시트만 띄워 이 화면과 탭이 그대로 남는다. 안드로이드는 nav.reset)
+        // 끊기면 연결 안 됨의 오늘로. 연결 흐름이 끝나도 오늘로(링크는 확인 시트만 띄워 이 화면과 탭이 그대로 남는다. 안드로이드는 nav.reset)
         .onChange(of: app.ui.isPaired) { _, _ in select(CareText.tabToday) }
-        // M3: 설정 끊기가 끝나면 오늘·띠를 한 번 그렸다고 알린다(끝남 표시를 걷는다)
+        // 설정 끊기가 끝나면 오늘·띠를 한 번 그렸다고 알린다(끝남 표시를 걷는다)
         .onChange(of: tabs.ui.disconnectDone, initial: true) { _, done in
             if done { select(CareText.tabToday); tabs.disconnectShown() }
         }
@@ -46,7 +46,7 @@ struct MainView: View {
     }
 }
 
-/// iOS 26: 아래로 내리면 탭 바가 작아진다(tabBarMinimizeBehavior, 시안 '탭 바 작아짐').
+/// iOS 26: 아래로 내리면 탭 바가 작아진다(tabBarMinimizeBehavior).
 private struct MinimizeTabBar: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26, *) { content.tabBarMinimizeBehavior(.onScrollDown) } else { content }
@@ -72,7 +72,7 @@ struct AppMark: View {
     }
 }
 
-/// 앞에 있을 때 푸시(`SyncInbox.onPush`)·실시간 수신이 띄운 인계 알림 배너(5.6, 시안 .banner .ncard). 시스템 알림은 띄우지 않는다.
+/// 앞에 있을 때 푸시(`SyncInbox.onPush`)·실시간 수신이 띄운 인계 알림 배너. 시스템 알림은 띄우지 않는다.
 struct AlertBanner: View {
     @Environment(AppViewModel.self) private var vm
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -89,7 +89,8 @@ struct AlertBanner: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(CareText.introTitle + " · 지금").typeStyle(.footnote).foregroundStyle(DS.textTertiary)   // 푸시와 같은 짜임(12-2): 머리 · 제목 · 본문
                                 Text(CareText.handoffTitle).typeStyle(.bannerTitle)
-                                Text(vm.ui.bannerText ?? "").typeStyle(.eventTitle).multilineTextAlignment(.leading).lineLimit(3)   // 큰 글자에서 화면을 덮지 않게. 전체는 눌러서 본다
+                                // 큰 글자에서 화면을 덮지 않게. 전체는 눌러서 본다
+                                Text(vm.ui.bannerText ?? "").typeStyle(.eventTitle).multilineTextAlignment(.leading).lineLimit(3)
                             }
                             Spacer(minLength: 0)
                         }
@@ -98,14 +99,15 @@ struct AlertBanner: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("handoffBanner")   // 목록의 같은 문장과 구별(투어)
                     // 닫기는 열기 버튼 밖의 형제다(안에 두면 닫기 누름이 바깥 열기와 겹칠 수 있다)
-                    Button { vm.dismissBanner() } label: { IconImage(.x, size: 18).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
+                    // 터치 영역 44pt
+                    Button { vm.dismissBanner() } label: { IconImage(.x, size: 18).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                         .accessibilityLabel(CareText.bannerClose)
                         .padding(.trailing, 4).padding(.top, 4)
                 }
                 .foregroundStyle(DS.textPrimary)
                 .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                // 시안 .banner: 들어올 때 위에서 0.96배로 spring.bouncy, 나갈 때 위로 260ms motion.exit 곡선
+                // 배너: 들어올 때 위에서 0.96배로 spring.bouncy, 나갈 때 위로 260ms motion.exit 곡선
                 .transition(reduceMotion ? .opacity : .asymmetric(
                     insertion: .move(edge: .top).combined(with: .scale(scale: 0.96, anchor: .top)).combined(with: .opacity),
                     removal: .move(edge: .top).combined(with: .opacity).animation(DS.Motion.bannerOut)))
@@ -119,7 +121,7 @@ struct AlertBanner: View {
     }
 }
 
-/// 위쪽 띠: 오프라인, 시계 차이, 알림 꺼짐, 안내(7.2). 옅은 띠 위 버튼 글자는 먹색 굵게(4.5:1).
+/// 위쪽 띠: 오프라인, 시계 차이, 알림 꺼짐, 안내. 옅은 띠 위 버튼 글자는 먹색 굵게(4.5:1).
 struct StatusBands: View {
     @Environment(StatusViewModel.self) private var vm
     @State private var notificationsDenied = false
@@ -150,7 +152,7 @@ struct StatusBands: View {
         VStack(spacing: 8) {
             if vm.ui.showsOfflineBand {
                 band(.wifiOff, "오프라인이에요. 누른 것은 연결되면 차로 가요.", tone: DS.warning) {
-                    // 7.2 '그 밖: 띠에 다시 시도'. 받은 함 429 기다림 중이면 갱신이 알아서 미룬다
+                    // '그 밖: 띠에 다시 시도'. 받은 함 429 기다림 중이면 갱신이 알아서 미룬다
                     bandButton("다시 시도") { Task { await vm.retryNow() } }
                 }
             }
@@ -161,7 +163,7 @@ struct StatusBands: View {
                 }
             }
             if let n = vm.ui.notice {
-                // U48: 닫기는 글자 버튼(두 앱 같은 글자)
+                // 닫기는 글자 버튼(두 앱 같은 글자)
                 band(.info, n, tone: DS.accentInk) { bandButton(CareText.bannerClose) { vm.dismissNotice() } }
             }
         }
@@ -179,14 +181,15 @@ struct StatusBands: View {
         .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM, style: .continuous))
     }
 
-    /// 터치 영역 44pt(8장): 글자 버튼 틀을 키우고 띠의 위아래 여백은 글에만 준다.
+    /// 터치 영역 44pt: 글자 버튼 틀을 키우고 띠의 위아래 여백은 글에만 준다.
     private func bandButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(title).typeStyle(.metaStrong).foregroundStyle(DS.textPrimary).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+        Button(action: action) { Text(title).typeStyle(.metaStrong).foregroundStyle(DS.textPrimary).frame(minWidth: 44,
+            minHeight: 44).contentShape(Rectangle()) }
             .buttonStyle(.plain)
     }
 }
 
-/// 차로 보내기 상태: 보내는 중 → 보냄 08:12 → 차에 반영됨(계약 7.5, 7장 '지금 문구 그대로').
+/// 차로 보내기 상태: 보내는 중 → 보냄 08:12 → 차에 반영됨.
 func feedStatusText(_ r: FeedingRecord) -> String {
     switch r.status {
     case .sending: return "보내는 중"
@@ -197,7 +200,7 @@ func feedStatusText(_ r: FeedingRecord) -> String {
     }
 }
 
-/// 인계 알림의 '~전'. 오늘 카드와 같은 U20 형식이다("2시간 10분 전").
+/// 인계 알림의 '~전'. 오늘 카드와 같은 경과 형식이다("2시간 10분 전").
 func ago(_ rfc: String, now: Date = Date()) -> String {
     guard let d = Rfc3339.parse(rfc) else { return "" }
     return CareText.ago(CareTime.ms(now) - CareTime.ms(d))

@@ -1,9 +1,9 @@
 import Foundation
 
-/// 수유를 차로 보내는 규칙(U3·U4·R5·R6·R12). `feedingLog`·`lastSentFeedingAt`은 이 파일과 받기(InboxRules)·보낸 결과(OutboxRules)로만 고친다(P3).
+/// 수유를 차로 보내는 규칙. `feedingLog`·`lastSentFeedingAt`은 이 파일과 받기(InboxRules)·보낸 결과(OutboxRules)로만 고친다.
 enum FeedRules {
-    /// R5: 지우지 않은 수유 중 가장 늦은 시작이 `lastSentFeedingAt`보다 늦고 24시간 안이면 보낸다.
-    /// R11 이전을 마쳤고 지우다 만 기록 지우기가 없어야 한다(지우다 만 기록을 새 차로 보내지 않는다, R10). owner·연결은 부르는 쪽이 본다.
+    /// 지우지 않은 수유 중 가장 늦은 시작이 `lastSentFeedingAt`보다 늦고 24시간 안이면 보낸다.
+    /// 기록 이전을 마쳤고 지우다 만 기록 지우기가 없어야 한다(지우다 만 기록을 새 차로 보내지 않는다). owner·연결은 부르는 쪽이 본다.
     static func latestToSend(_ care: CareFile, _ s: PhoneState, now: Date) -> CareEvent? {
         guard care.migratedFeedings, s.clearingCareIds == nil, let latest = CareRules.latestFeed(care.events) else { return nil }
         guard latest.startAt > (s.lastSentFeedingAt ?? .min), latest.startAt >= CareTime.ms(now) - CareRules.sendWindowMs else { return nil }
@@ -27,15 +27,15 @@ enum FeedRules {
         s.feedingLog.first { abs(CareTime.ms($0.at) - e.startAt) < 1000 }
     }
 
-    /// 화면에 보일 수유 시작. 중계가 미래 시각을 고쳐 저장했으면 그 시각이다(계약 3.3). 기록의 누른 시각은 고치지 않는다(G33).
+    /// 화면에 보일 수유 시작. 중계가 미래 시각을 고쳐 저장했으면 그 시각이다. 기록의 누른 시각은 고치지 않는다.
     static func shownStart(_ e: CareEvent, in s: PhoneState) -> Date { record(for: e, in: s)?.fixedAt ?? CareTime.date(e.startAt) }
 
-    /// 마지막 수유 시작: 지우지 않은 수유 기록 중 가장 늦은 것과 차의 `feeding_state` 값 중 늦은 것(R12).
+    /// 마지막 수유 시작: 지우지 않은 수유 기록 중 가장 늦은 것과 차의 `feeding_state` 값 중 늦은 것.
     static func lastFeedingStart(_ s: PhoneState, _ care: CareFile) -> Date? {
         [s.feeding.lastStart, CareRules.latestFeed(care.events).map { shownStart($0, in: s) }].compactMap { $0 }.max()
     }
 
-    /// R11·U22: 옛 경로가 이미 보낼 함에 넣은 수유를 다시 보내지 않게 `lastSentFeedingAt`을 옛 기록의 가장 늦은 시각까지 올린다.
+    /// 옛 경로가 이미 보낼 함에 넣은 수유를 다시 보내지 않게 `lastSentFeedingAt`을 옛 기록의 가장 늦은 시각까지 올린다.
     static func markMigrated(in s: inout PhoneState) {
         if let latest = s.feedingLog.map({ CareTime.ms($0.at) }).max() { s.lastSentFeedingAt = max(s.lastSentFeedingAt ?? .min, latest) }
     }

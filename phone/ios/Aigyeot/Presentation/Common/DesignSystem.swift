@@ -2,17 +2,27 @@ import SwiftUI
 
 /// 토큰 값은 `Shared/DesignTokens.swift`(잠금 화면과 함께 쓴다). 여기는 앱에만 있는 종류별 색·아이콘이다.
 extension DesignSystem {
-    /// 종류의 데이터 색(점·막대만, 시안 data.js `CARE`).
+    /// 종류의 데이터 색(점·막대만).
     static func color(_ kind: CareKind) -> Color {
-        switch kind { case .feed: cFeed; case .sleep: cSleep; case .diaper: cDiaper; case .note: cNote }
+        switch kind {
+        case .feed: cFeed
+        case .sleep: cSleep
+        case .diaper: cDiaper
+        case .note: cNote
+        }
     }
 
     static func icon(_ kind: CareKind) -> Ico {
-        switch kind { case .feed: .bottle; case .sleep: .moon; case .diaper: .diaper; case .note: .notebookPen }
+        switch kind {
+        case .feed: .bottle
+        case .sleep: .moon
+        case .diaper: .diaper
+        case .note: .notebookPen
+        }
     }
 }
 
-/// 선 아이콘 한 벌(시안 v6 ⑤): Lucide(ISC, `Licenses/ISC-Lucide.txt`) + 직접 그린 젖병·기저귀·우리 노래.
+/// 선 아이콘 한 벌: Lucide(ISC, `Licenses/ISC-Lucide.txt`) + 직접 그린 젖병·기저귀·우리 노래.
 /// `Resources/Assets.xcassets`의 `ic-{이름}` SVG(벡터 보존, 템플릿)라 글자색을 따른다. 다시 만들기는 `scripts/gen_icons.py`.
 enum Ico: String, CaseIterable {
     case house, list, carFront = "car-front", settings, chevronRight = "chevron-right", x, check, plus
@@ -22,7 +32,7 @@ enum Ico: String, CaseIterable {
     case wifiOff = "wifi-off", bell, bellOff = "bell-off", share, scanLine = "scan-line", camera
     case rotate3d = "rotate-3d", clockAlert = "clock-alert"
     case userPlus = "user-plus", refresh = "refresh-cw", lock, locateFixed = "locate-fixed", shieldCheck = "shield-check"
-    // 기록 시트 v8(시안 js/sheet.js ICONS: Lucide에 없는 쪽·기저귀 종류 그림, 선 1.75) + Lucide chevron-down·minus·calendar
+    // 기록 시트(Lucide에 없는 쪽·기저귀 종류 그림, 선 1.75) + Lucide chevron-down·minus·calendar
     case sideLeft = "side-left", sideRight = "side-right", sideBoth = "side-both", droplet, poo, peePoo = "pee-poo", clean
     case chevronDown = "chevron-down", minus, calendar
 

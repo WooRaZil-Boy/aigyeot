@@ -1,6 +1,6 @@
 import Foundation
 
-// 계약(contracts-link.md 0장 '공통 표기'): 필드는 snake_case, 모르는 필드는 무시한다.
+// 공통 표기: 필드는 snake_case, 모르는 필드는 무시한다.
 // "또는 null"은 명시적 null(`@NullEncoded`), "선택"은 키 빠짐(보통 Optional)이다.
 
 enum ProtocolCoding {
@@ -17,7 +17,7 @@ enum ProtocolCoding {
     }
 }
 
-/// 값이 없으면 키를 빼지 않고 `null`로 쓰는 Optional. 계약의 "또는 null" 필드에 쓴다.
+/// 값이 없으면 키를 빼지 않고 `null`로 쓰는 Optional. 메시지 형식의 "또는 null" 필드에 쓴다.
 /// 읽을 때도 키가 있어야 한다. 키가 빠지면 decode 실패다(Kotlin은 기본값이 없고 explicitNulls = true).
 @propertyWrapper
 struct NullEncoded<T: Codable & Equatable>: Codable, Equatable {
@@ -46,12 +46,19 @@ enum JSONValue: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
-        if c.decodeNil() { self = .null }
-        else if let v = try? c.decode(Bool.self) { self = .bool(v) }
-        else if let v = try? c.decode(Double.self) { self = .number(v) }
-        else if let v = try? c.decode(String.self) { self = .string(v) }
-        else if let v = try? c.decode([JSONValue].self) { self = .array(v) }
-        else { self = .object(try c.decode([String: JSONValue].self)) }
+        if c.decodeNil() {
+            self = .null
+        } else if let v = try? c.decode(Bool.self) {
+            self = .bool(v)
+        } else if let v = try? c.decode(Double.self) {
+            self = .number(v)
+        } else if let v = try? c.decode(String.self) {
+            self = .string(v)
+        } else if let v = try? c.decode([JSONValue].self) {
+            self = .array(v)
+        } else {
+            self = .object(try c.decode([String: JSONValue].self))
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -78,7 +85,7 @@ enum JSONValue: Codable, Equatable {
 
     func data() throws -> Data { try JSONEncoder().encode(self) }
 
-    /// 타입이 있는 값 → 계약 표기(snake_case)의 JSON 조각.
+    /// 타입이 있는 값 → 메시지 형식 표기(snake_case)의 JSON 조각.
     init<T: Encodable>(encoding value: T) throws {
         self = try JSONValue.parse(ProtocolCoding.encoder.encode(value))
     }

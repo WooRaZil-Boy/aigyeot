@@ -1,12 +1,12 @@
 import Foundation
 
-// 차트에 넣는 값(디자인 v6 시안 js/charts.js의 DATA 자리). 저장하지 않고 그릴 때 기록·리포트에서 계산한다(P4).
-// 순수 함수라 XCTest로 본다(ChartDataTests). 실제 데이터에 붙이는 규칙은 안드로이드 ChartData.kt와 같다(진행 기록 '결정' 1~8).
+// 차트에 넣는 값. 저장하지 않고 그릴 때 기록·리포트에서 계산한다.
+// 순수 함수라 XCTest로 본다(ChartDataTests). 실제 데이터에 붙이는 규칙은 안드로이드 ChartData.kt와 같다.
 
 enum ChartData {
     static let minute: Int64 = 60_000
 
-    /// 차트 안 시각만 24시간제 'HH:MM'(결정 11-09, 시안 v6-9). 나머지 화면은 7.1 '오전/오후 h:mm'.
+    /// 차트 안 시각만 24시간제 'HH:MM'. 나머지 화면은 '오전/오후 h:mm'.
     static func hhmm(_ minuteOfDay: Int) -> String { String(format: "%02d:%02d", (minuteOfDay / 60) % 24, minuteOfDay % 60) }
 
     // MARK: 오늘 하루 띠(Charts.day)
@@ -29,21 +29,26 @@ enum ChartData {
         var summary: String { "오늘 하루: " + lanes.map { "\($0.name) \($0.value)" }.joined(separator: ", ") }
     }
 
-    /// U88 오늘 하루 띠의 새 표시: 막 저장한 기록이 그날 띠의 어느 줄·어느 분에 있는지. 띠에 줄이 없는 종류(메모)·다른 날이면 nil.
+    /// 오늘 하루 띠의 새 표시: 막 저장한 기록이 그날 띠의 어느 줄·어느 분에 있는지. 띠에 줄이 없는 종류(메모)·다른 날이면 nil.
     struct Fresh: Hashable { let id: String, lane: LaneKind, at: Int }
 
     static func fresh(_ e: CareEvent, day: String, zone: TimeZone) -> Fresh? {
         guard let (from, to) = CareRules.dayRange(day, zone), e.startAt >= from, e.startAt < to else { return nil }
         let lane: LaneKind
-        switch e.kind { case .feed: lane = .feed; case .sleep: lane = .sleep; case .diaper: lane = .diaper; case .note: return nil }
+        switch e.kind {
+        case .feed: lane = .feed
+        case .sleep: lane = .sleep
+        case .diaper: lane = .diaper
+        case .note: return nil
+        }
         return Fresh(id: e.id, lane: lane, at: minuteIn(e.startAt, from: from))
     }
 
     private static func minuteIn(_ ms: Int64, from: Int64) -> Int { Int(min(1440, max(0, (ms - from) / minute))) }
 
     /// 오늘 하루 띠. 잠·수유는 그날에 걸친 구간(진행 중은 지금까지, 끝 모름은 시작 점), 기저귀는 시각 점,
-    /// '차에서'는 그날 리포트의 탑승 구간(세션 시작~끝, 중간 정차 포함이라 '탑승')과 울음 경보 에피소드 시각. 잠·기저귀를 끄면 그 줄을 뺀다(R16).
-    /// 수유·기저귀 횟수는 그날 시작한 기록, 잠은 그날에 걸친 기록 수와 끝난 잠의 길이 합(U31).
+    /// '차에서'는 그날 리포트의 탑승 구간(세션 시작~끝, 중간 정차 포함이라 '탑승')과 울음 경보 에피소드 시각. 잠·기저귀를 끄면 그 줄을 뺀다.
+    /// 수유·기저귀 횟수는 그날 시작한 기록, 잠은 그날에 걸친 기록 수와 끝난 잠의 길이 합.
     static func day(care: CareFile, reports: [StoredReport], day: String, now: Int64, zone: TimeZone, showCar: Bool) -> Day {
         guard let (from, to) = CareRules.dayRange(day, zone) else { return Day(lanes: [], nowMin: nil) }
         let live = CareRules.live(care.events)
@@ -119,7 +124,7 @@ enum ChartData {
         return p.count == 3 ? "\(p[1])월 \(p[2])일" : day
     }
 
-    /// 수유 간격 7일 막대 + '평소'(앞 6일 모든 간격의 중앙값, R14와 같이 10시간 넘는 간격은 빼고 5개 이상일 때만).
+    /// 수유 간격 7일 막대 + '평소'(앞 6일 모든 간격의 중앙값, 10시간 넘는 간격은 빼고 5개 이상일 때만).
     struct IntervalWeek: Equatable { let bars: [Bar], usualMs: Int64?, todayMs: Int64? }
 
     static func intervalWeek(care: CareFile, now: Int64, zone: TimeZone) -> IntervalWeek {
@@ -155,7 +160,11 @@ enum ChartData {
         /// 날마다 끝난 잠이 그날에 걸친 길이(화면 읽기용).
         var perDayMs: [Int64] = []
         /// 화면 읽기는 칸 수가 아니라 실제 길이("지난 7일 잠 패턴: 월 3시간 10분, …").
-        var summary: String { "지난 7일 잠 패턴: " + labels.indices.map { "\(labels[$0]) " + CareFormat.length(perDayMs.indices.contains($0) ? perDayMs[$0] : 0) }.joined(separator: ", ") }
+        var summary: String {
+            "지난 7일 잠 패턴: " + labels.indices
+                .map { "\(labels[$0]) " + CareFormat.length(perDayMs.indices.contains($0) ? perDayMs[$0] : 0) }
+                .joined(separator: ", ")
+        }
     }
 
     static func sleepGrid(care: CareFile, now: Int64, zone: TimeZone) -> SleepGrid {
@@ -169,13 +178,13 @@ enum ChartData {
                 return sleeps.contains { $0.startAt < b && ($0.endAt ?? now) > a }
             }
         }
-        // U31·패턴 '하루 잠'과 같은 값: 지난 7일(오늘 포함) 중 끝난 잠이 그날에 걸친 시간이 0보다 큰 날의 평균(같은 화면에서 두 숫자가 어긋나지 않게).
+        // 패턴 '하루 잠'과 같은 값: 지난 7일(오늘 포함) 중 끝난 잠이 그날에 걸친 시간이 0보다 큰 날의 평균(같은 화면에서 두 숫자가 어긋나지 않게).
         let all = days.map { CareRules.sleepMs(onDay: $0, in: care.events, zone: zone) }
         return SleepGrid(days: days, labels: days.map { weekLabel($0, today: today) }, rows: rows,
                          avgMs: CareStats.perRecordedDay(all), sleepDays: all.filter { $0 > 0 }.count, perDayMs: all)
     }
 
-    /// '지난주보다 {n}번 많아요/적어요'(문구표 design.chart, 시안 S.pattern): 지난 7일 하루 평균 수유 − 그 앞 7일 하루 평균.
+    /// '지난주보다 {n}번 많아요/적어요'(문구 design.chart): 지난 7일 하루 평균 수유 − 그 앞 7일 하루 평균.
     /// 평균은 패턴과 같은 규칙(그날 시작한 수유 수를 수유한 날 수로 나눔, 소수 첫째 자리). 앞 7일에 수유한 날이 없거나 차이가 0.0이면 nil.
     static func feedTrend(care: CareFile, now: Int64, zone: TimeZone) -> String? {
         let days = lastWeek(now: now, zone: zone)
@@ -200,7 +209,7 @@ enum ChartData {
         /// '듣기 틈'이라 단정하지 않는다(차 리포트 soundTip과 같다).
         let name: String?
         /// 재생이면 리포트의 `play_s`(보이는 길이는 이 값, 그림의 칸은 시각으로). 재생 사이 칸은 nil(칸 길이).
-        var playS: Int? = nil
+        var playS: Int?
         var seconds: Int { playS ?? (to - from) }
         /// 툴팁·화면 읽기 글: "자장가 56초", 재생 사이 칸은 "8초".
         var tip: String { name.map { "\($0) \(seconds)초" } ?? "\(seconds)초" }
@@ -232,7 +241,7 @@ enum ChartData {
         // 다시 울음: 그 때문에 시작한 자동 2차 재생의 시작(운전자 요청 재생은 다시 울음이 아니다). 없으면 표시하지 않는다.
         if e.recried, let second = timed.first(where: { $0.0.purpose == .autoSecond }) { marks.append(EpisodeMark(at: second.1.from, label: "다시 울음")) }
         var outcomes: [String] = []
-        // 운전자에게 실제로 묻지 못한 쉼터는 제안했다고 보이지 않는다(U53, stopText와 같은 규칙).
+        // 운전자에게 실제로 묻지 못한 쉼터는 제안했다고 보이지 않는다(stopText와 같은 규칙).
         if let st = e.stop, st.mode == .restOffer, st.toldDriver != false { outcomes.append("쉼터 제안") }
         if e.result == .success || e.second?.result == .success { outcomes.append(CareText.result(.success)) }
         return Episode(totalS: end, sounds: plays, gaps: gaps, marks: marks, outcomes: outcomes)
@@ -267,7 +276,7 @@ enum ChartData {
     /// 엔진 `Params.feedingWindowStart`(다음 수유 시간대 시작 = 마지막 수유 + 간격 × 0.8).
     static let feedingWindowStart = 0.8
 
-    /// 마지막 수유 막대(시안 .pmeter): 채움 = 지난 시간 / (간격 × 1.25), 눈금 = 다음 수유 시간대 시작의 자리.
+    /// 마지막 수유 막대: 채움 = 지난 시간 / (간격 × 1.25), 눈금 = 다음 수유 시간대 시작의 자리.
     /// 간격은 차 값이 있으면 차에 정해 둔 간격((시간대 시작 − 차의 마지막 수유) ÷ 0.8), 없으면 지난 7일 '평소'(앞 6일 중앙값).
     /// 둘 다 없으면 nil(막대를 그리지 않는다). 눈금은 차 값이 있고 그 시각이 마지막 수유 뒤일 때만.
     static func feedMeter(last: Int64, now: Int64, carLast: Int64?, windowStart: Int64?, usualMs: Int64?) -> (value: Double, tick: Double?)? {

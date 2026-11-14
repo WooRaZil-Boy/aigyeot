@@ -2,13 +2,13 @@ import XCTest
 import Observation
 @testable import Aigyeot
 
-/// 2차 맞춤의 독립 검토(arch-phone-ios 9장)에서 받아들여 고친 것.
+/// 늦게 온 응답과 그사이 바뀐 연결: 옛 요청의 결과가 지금 상태를 덮지 않는지 본다.
 @MainActor
-final class ReviewFollowUpTests: XCTestCase {
+final class LateResponseTests: XCTestCase {
     private let guardian = Credentials(carId: "c_1", deviceId: "d_3", token: "at1.c_1.d_3.x", role: .guardian)
     private struct Token: PushTokens { var token: String? }
 
-    /// 검토 2: 강제 끊김 정리 표시를 걷지 못하면 GONE을 둔다(다시 켜면 또 GONE이라 고른 것과 어긋나지 않게, U3).
+    /// 강제 끊김 정리 표시를 걷지 못하면 GONE을 둔다(다시 켜면 또 GONE이라 고른 것과 어긋나지 않게).
     func test_GONE_표시를_걷지_못하면_GONE_화면을_둔다() {
         let kit = Kit()
         kit.app.lose.lost(Kit.owner)
@@ -25,7 +25,7 @@ final class ReviewFollowUpTests: XCTestCase {
         XCTAssertNil(kit.marks.get(.goneCleanupPending))
     }
 
-    /// 검토 3: 보호자 화면을 닫았다 다시 열어(새 뷰모델) 겹쳐 눌러도 앞 요청이 끝난 뒤에 보내, 늦게 온 앞 응답이 나중 설정을 덮지 않는다.
+    /// 보호자 화면을 닫았다 다시 열어(새 뷰모델) 겹쳐 눌러도 앞 요청이 끝난 뒤에 보내, 늦게 온 앞 응답이 나중 설정을 덮지 않는다.
     func test_보호자_화면을_다시_열어_겹쳐_눌러도_앞_응답이_나중_설정을_덮지_않는다() async {
         let kit = Kit(creds: guardian)
         var entered = false
@@ -48,7 +48,7 @@ final class ReviewFollowUpTests: XCTestCase {
         XCTAssertEqual(kit.app.state.state.handoffAlerts, true)   // 마지막에 누른 값
     }
 
-    /// 2회 검토 1: 차례를 기다리던 인계 알림 설정은 누른 때의 연결로만 보낸다. 그사이 다른 차에 연결했으면 새 연결의 설정을 바꾸지 않는다(P5).
+    /// 차례를 기다리던 인계 알림 설정은 누른 때의 연결로만 보낸다. 그사이 다른 차에 연결했으면 새 연결의 설정을 바꾸지 않는다.
     func test_차례를_기다리던_인계_알림_설정은_그사이_연결이_바뀌면_보내지_않는다() async {
         let kit = Kit(creds: guardian)
         var entered = false
@@ -73,12 +73,12 @@ final class ReviewFollowUpTests: XCTestCase {
         let secondApplied = await second.value
         XCTAssertEqual(kit.relay.patches.map(\.handoffAlerts), [false])   // 줄 서 있던 켜기는 새 연결로 보내지 않았다
         XCTAssertFalse(firstApplied)    // 옛 연결의 응답은 버렸다
-        XCTAssertFalse(secondApplied)   // 보내지 않은 켜기로 알림 권한을 묻지 않는다(7.3)
+        XCTAssertFalse(secondApplied)   // 보내지 않은 켜기로 알림 권한을 묻지 않는다
         XCTAssertEqual(kit.app.state.creds?.deviceId, Kit.guardian.deviceId)
-        XCTAssertEqual(kit.app.state.state.handoffAlerts, true)   // 옛 연결의 늦은 응답(끔)이 새 연결의 기본값을 덮지 않았다(G12)
+        XCTAssertEqual(kit.app.state.state.handoffAlerts, true)   // 옛 연결의 늦은 응답(끔)이 새 연결의 기본값을 덮지 않았다
     }
 
-    /// 3회 검토 3: 소켓 pong은 이미 '닿음'이면 표시를 다시 쓰지 않는다(값이 같은데 띠·차 탭·설정을 깨우지 않는다).
+    /// 소켓 pong은 이미 '닿음'이면 표시를 다시 쓰지 않는다(값이 같은데 띠·차 탭·설정을 깨우지 않는다).
     func test_이미_닿는_중에_온_pong은_연결_표시_관찰자를_깨우지_않는다() {
         let kit = Kit()
         let connection = kit.app.keepConnected
@@ -92,7 +92,7 @@ final class ReviewFollowUpTests: XCTestCase {
         XCTAssertTrue(woke.on)   // 값이 바뀌면 깨운다
     }
 
-    /// 4회 검토: 응답마다 조금씩 바뀌는 시계 차이는 보내기 판단에만 쓰고, 띠 글이 같으면 연결 표시를 읽는 화면(오늘·차·설정)을 깨우지 않는다.
+    /// 응답마다 조금씩 바뀌는 시계 차이는 보내기 판단에만 쓰고, 띠 글이 같으면 연결 표시를 읽는 화면(오늘·차·설정)을 깨우지 않는다.
     func test_시계_차이가_조금_바뀌어도_띠가_같으면_연결_표시_관찰자를_깨우지_않는다() {
         let kit = Kit()
         let connection = kit.app.keepConnected
@@ -107,7 +107,7 @@ final class ReviewFollowUpTests: XCTestCase {
         XCTAssertEqual(kit.app.status.ui.clockWarning, "휴대폰 시계가 5분 달라요. 수유 시각이 어긋날 수 있어요.")
     }
 
-    /// 6회 검토: 설정 끊기가 실패로 끝났지만 그사이 4001로 GONE이 됐으면 설정에 옛 오류를 남기지 않는다(새 차의 설정에 보이지 않게, 안드로이드와 같다).
+    /// 설정 끊기가 실패로 끝났지만 그사이 4001로 GONE이 됐으면 설정에 옛 오류를 남기지 않는다(새 차의 설정에 보이지 않게, 안드로이드와 같다).
     func test_끊기_실패_사이_강제_끊김이면_새_연결의_설정에_옛_오류가_없다() async {
         let kit = Kit()
         kit.relay.deleteError = .network   // 중계는 4001로 닫았지만 DELETE 응답을 잃었다
@@ -123,7 +123,7 @@ final class ReviewFollowUpTests: XCTestCase {
         XCTAssertNil(kit.app.settings().ui.disconnect)
     }
 
-    /// 7회 검토: 끊기가 먼저 실패로 끝나(설정을 떠난 뒤라 걷지 못함) 오류가 남은 뒤, 차에서 해제되고 새 차에 연결해도 새 설정에 옛 오류가 없다.
+    /// 끊기가 먼저 실패로 끝나(설정을 떠난 뒤라 걷지 못함) 오류가 남은 뒤, 차에서 해제되고 새 차에 연결해도 새 설정에 옛 오류가 없다.
     func test_끊기가_먼저_실패한_뒤_연결이_바뀌어도_새_연결의_설정에_옛_오류가_없다() async {
         let kit = Kit()
         kit.relay.deleteError = .network   // 중계에 닿지 않았다(자격은 남는다)
@@ -142,7 +142,7 @@ final class ReviewFollowUpTests: XCTestCase {
     /// 관찰 콜백(@Sendable)이 적는 표시. 콜백은 바꾸는 쪽(메인 액터)에서 곧바로 불린다.
     private final class Flag: @unchecked Sendable { var on = false }
 
-    /// 2회 검토 2: 앱을 열 때의 푸시 토큰 등록 응답이 늦게 와도, 그 뒤에 바꾼 인계 알림 받기를 옛 값으로 덮지 않는다.
+    /// 앱을 열 때의 푸시 토큰 등록 응답이 늦게 와도, 그 뒤에 바꾼 인계 알림 받기를 옛 값으로 덮지 않는다.
     func test_늦은_푸시_토큰_응답이_그_뒤에_바꾼_인계_알림_받기를_덮지_않는다() async {
         let kit = Kit(creds: guardian)
         kit.app.state.commit(guardian) { $0.handoffAlerts = true }
@@ -166,7 +166,7 @@ final class ReviewFollowUpTests: XCTestCase {
         XCTAssertEqual(kit.app.state.state.handoffAlerts, false)   // 화면과 중계가 같다
     }
 
-    /// 검토 6: 첫 실행 안내에서 연 확인 시트가 연결하는 동안 온 링크도 버리고 알린다(U52).
+    /// 첫 실행 안내에서 연 확인 시트가 연결하는 동안 온 링크도 버리고 알린다.
     func test_첫_실행_안내에서도_연결_중에_온_링크는_받지_않는다() async {
         let kit = Kit(creds: nil, introSeen: false)
         let vm = kit.app.appViewModel
@@ -188,7 +188,7 @@ final class ReviewFollowUpTests: XCTestCase {
         await kit.app.pair.job?.value
     }
 
-    /// 검토 7: 인계 알림 받기는 중계가 원본이다(G12). 로컬 저장에 실패했던 값도 앱을 열 때 푸시 토큰 응답으로 맞춘다.
+    /// 인계 알림 받기는 중계가 원본이다. 로컬 저장에 실패했던 값도 앱을 열 때 푸시 토큰 응답으로 맞춘다.
     func test_앱을_열_때_푸시_토큰_응답으로_인계_알림_받기를_맞춘다() async {
         let kit = Kit(creds: guardian)
         kit.app.state.commit(guardian) { $0.handoffAlerts = true }   // 끄기는 중계에 닿았지만 로컬 저장에 실패했다

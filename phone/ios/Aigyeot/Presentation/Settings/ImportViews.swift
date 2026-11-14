@@ -3,14 +3,14 @@ import UniformTypeIdentifiers
 
 private typealias DS = DesignSystem
 
-/// 가져오기 시트 글(U68). 미리 보기: 가져올 수·종류별 수·건너뛴 이유(0은 감춤)·가장 늦은 수유·zoneNote, 메모 글은 보이지 않는다.
-/// 가져올 것이 0이면 import.nothing과 '닫기'만(U68, 안드로이드와 같음). 끝내는 안내(unreadable·tooLarge·failed)도 같은 꼴: 글 + '닫기'(11-09 보충).
+/// 가져오기 시트 글. 미리 보기: 가져올 수·종류별 수·건너뛴 이유(0은 감춤)·가장 늦은 수유·zoneNote, 메모 글은 보이지 않는다.
+/// 가져올 것이 0이면 import.nothing과 '닫기'만(안드로이드와 같음). 끝내는 안내(unreadable·tooLarge·failed)도 같은 꼴: 글 + '닫기'.
 struct ImportPreview: Equatable {
     var title: String
-    var kinds: String? = nil
+    var kinds: String?
     var skips: [String] = []
-    var latestFeed: String? = nil
-    var zoneNote: String? = nil
+    var latestFeed: String?
+    var zoneNote: String?
     var buttons = [CareText.bannerClose]
 
     init(_ d: ImportDraft, now: Date) {
@@ -32,14 +32,18 @@ struct ImportPreview: Equatable {
 struct ImportFlow: ViewModifier {
     @Environment(SettingsViewModel.self) private var vm
 
-
     func body(content: Content) -> some View {
         content
             .fileImporter(isPresented: shown { if case .picking = $0 { true } else { false } }, allowedContentTypes: [.commaSeparatedText, .plainText]) {
                 vm.picked($0)
             }
             // 아이 고르기·미리 보기·끝내는 안내는 같은 시트 하나다(단계가 바뀌면 글만 바뀐다)
-            .sheet(isPresented: shown { switch $0 { case .reading, .pickChild, .preview, .failed: true; default: false } }) { ImportSheet() }
+            .sheet(isPresented: shown {
+                switch $0 {
+                case .reading, .pickChild, .preview, .failed: true
+                default: false
+                }
+            }) { ImportSheet() }
     }
 
     /// 단계가 맞으면 보이고, 시스템이 닫으면(밀어 내리기·바깥 누르기) 그 단계만 닫는다.
@@ -75,7 +79,8 @@ private struct ImportSheet: View {
                 case .pickChild: button(CareText.importCancel, prominent: false) { vm.closeImport() }
                 case .preview(let draft):
                     ForEach(ImportPreview(draft, now: Date()).buttons, id: \.self) { label in
-                        label == CareText.importConfirm ? button(label, prominent: true) { vm.confirmImport() } : button(label, prominent: false) { vm.closeImport() }
+                        label == CareText.importConfirm ? button(label, prominent: true) { vm.confirmImport() } : button(label,
+                            prominent: false) { vm.closeImport() }
                     }
                 case .failed: button(CareText.bannerClose, prominent: false) { vm.closeImport() }
                 case .reading: button(CareText.importCancel, prominent: false) { vm.closeImport() }

@@ -1,7 +1,7 @@
 import XCTest
 @testable import Aigyeot
 
-/// Domain/Rules·Repositories 시험(arch-phone-ios 9장). 화면·중계 없이 순수 함수와 저장소만 본다.
+/// Domain/Rules·Repositories 시험. 화면·중계 없이 순수 함수와 저장소만 본다.
 final class DomainRulesTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -62,7 +62,7 @@ final class DomainRulesTests: XCTestCase {
         let removal = OutboxRules.item(type: MessageType.songRemoved, body: SongRefBody(songId: "B"), now: t0)
         s.outbox = [song, tried, unsent, removal]
         OutboxRules.clearForRecordsWipe(sending: nil, in: &s)
-        XCTAssertEqual(s.outbox.map(\.id), [tried.id, removal.id])   // 보내 본 요약은 결과를 확정할 때까지 둔다(U57)
+        XCTAssertEqual(s.outbox.map(\.id), [tried.id, removal.id])   // 보내 본 요약은 결과를 확정할 때까지 둔다
     }
 
     func test_24시간_지난_수신은_상태_요청_표시가_꺼져_있을_때만_켠다() {
@@ -79,14 +79,14 @@ final class DomainRulesTests: XCTestCase {
         var care = CareFile()
         care.events = [CareEvent(id: "a", kind: .feed, startAt: now - 1000, zone: "Asia/Seoul", createdAt: now, updatedAt: now)]
         var s = PhoneState()
-        XCTAssertNil(FeedRules.latestToSend(care, s, now: t0))           // R11 이전 전
+        XCTAssertNil(FeedRules.latestToSend(care, s, now: t0))           // 이전 전
         care.migratedFeedings = true
         XCTAssertEqual(FeedRules.latestToSend(care, s, now: t0)?.id, "a")
         s.lastSentFeedingAt = now - 1000
-        XCTAssertNil(FeedRules.latestToSend(care, s, now: t0))           // 더 늦지 않다(R7)
+        XCTAssertNil(FeedRules.latestToSend(care, s, now: t0))           // 더 늦지 않다
         s.lastSentFeedingAt = nil
         s.clearingCareIds = ["z"]
-        XCTAssertNil(FeedRules.latestToSend(care, s, now: t0))           // 지우다 만 기록(R10)
+        XCTAssertNil(FeedRules.latestToSend(care, s, now: t0))           // 지우다 만 기록
         s.clearingCareIds = nil
         FeedRules.enqueue(care.events[0], now: t0, in: &s)
         XCTAssertEqual(s.outbox.map(\.type), [MessageType.feedingStarted])
@@ -99,9 +99,9 @@ final class DomainRulesTests: XCTestCase {
         care.migratedFeedings = true
         let zone = TimeZone(identifier: "Asia/Seoul")!
         var s = PhoneState()
-        XCTAssertEqual(SummaryRules.decide(care, s, nowMs: CareTime.ms(t0), zone: zone, sending: nil), .unchanged)   // U61
+        XCTAssertEqual(SummaryRules.decide(care, s, nowMs: CareTime.ms(t0), zone: zone, sending: nil), .unchanged)
         s.maxSentCareAsOf = CareTime.ms(t0) - 60_000
-        guard case .enqueue(_, _, let asOf) = SummaryRules.decide(care, s, nowMs: CareTime.ms(t0) + 123, zone: zone, sending: nil) else { return XCTFail() }
+        guard case .enqueue(_, _, let asOf) = SummaryRules.decide(care, s, nowMs: CareTime.ms(t0) + 123, zone: zone, sending: nil) else { return XCTFail("기대한 꼴이 아니다") }
         XCTAssertEqual(asOf % 1000, 0)   // as_of는 초까지
     }
 }
@@ -124,7 +124,7 @@ final class RepositoryTests: XCTestCase {
         XCTAssertFalse(repo.state.needsStateRequest)   // 지난 기록은 비웠다
         XCTAssertTrue(repo.state.introSeen)
         XCTAssertTrue(repo.isCurrent(creds))
-        XCTAssertFalse(repo.isCurrent(before))   // 옛 자격으로 시작한 결과는 버려진다(P5)
+        XCTAssertFalse(repo.isCurrent(before))   // 옛 자격으로 시작한 결과는 버려진다
         XCTAssertFalse(repo.commit(before) { $0.needsStateRequest = true })
         XCTAssertFalse(repo.state.needsStateRequest)
         XCTAssertFalse(repo.switchTo(nil, make: fresh, onlyIf: before).switched)   // 옛 자격의 늦은 끊기는 새 연결을 지우지 않는다
@@ -160,7 +160,7 @@ final class RepositoryTests: XCTestCase {
         let repo = PhoneStateRepository(store: store, creds: nil)
         XCTAssertNil(repo.state.carId)
         XCTAssertTrue(repo.state.introSeen)
-        XCTAssertEqual(repo.state.clearingCareIds, ["x"])   // 지우다 만 기록 지우기는 남긴다(R10)
+        XCTAssertEqual(repo.state.clearingCareIds, ["x"])   // 지우다 만 기록 지우기는 남긴다
         XCTAssertEqual(store.value.carId, "c_1")              // 저장은 다음 쓰기에
     }
 

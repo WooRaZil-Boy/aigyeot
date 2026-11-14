@@ -1,6 +1,6 @@
 import XCTest
 
-/// 디자인 v6 화면 캡처(시험이 아니라 캡처 도구, `SHOT_DIR`이 없으면 건너뛴다). 시안 화면과 같은 상태로 찍어 나란히 본다.
+/// 화면 캡처(시험이 아니라 캡처 도구, `SHOT_DIR`이 없으면 건너뛴다). 디자인과 같은 상태로 찍어 나란히 본다.
 /// 라이트·다크는 시뮬레이터 모습을 바꿔 두 번 돌린다(`SHOT_SUFFIX`로 이름 뒤에 붙인다).
 /// 실행: `TEST_RUNNER_SHOT_DIR=<폴더> TEST_RUNNER_SHOT_SUFFIX=-light xcodebuild test -scheme AigyeotScreens -only-testing:AigyeotUITests/DesignTour ...`
 final class DesignTour: XCTestCase {
@@ -16,7 +16,7 @@ final class DesignTour: XCTestCase {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         continueAfterFailure = true
         app = XCUIApplication()
-        // U50 시연 시드(지난 6일 + 오늘 장면). 기록 시트 v8 캡처는 빈 상태부터 찍으려고 시드 없이 연다
+        // 시연 시드(지난 6일 + 오늘 장면). 기록 시트 캡처는 빈 상태부터 찍으려고 시드 없이 연다
         app.launchArguments = name.contains("v8") ? [] : ["-demoSeed"]
         app.launch()
     }
@@ -38,11 +38,11 @@ final class DesignTour: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", s)).firstMatch
     }
 
-    /// 기록 시트 v8(2판 안 1, U80~U88)과 빈 상태 셋(U85). 시드 없이: 오늘 빈 판 → 기록 빈 날 → 지난 기록 적기(첫 기록 도움말·종류 칸)
+    /// 기록 시트와 빈 상태 셋. 시드 없이: 오늘 빈 판 → 기록 빈 날 → 지난 기록 적기(첫 기록 도움말·종류 칸)
     /// → 수유(왼쪽·젖병 양)·시작 줄 펼침 → 저장(새 줄 강조) → 잠·기저귀·메모 → 고치기(끝 줄 펼침) → 패턴 빈 상태.
     func test_v8_시트() {
         XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
-        shot("v8-00-intro", settle: 3)   // 첫 안내 안 B(U43)와 '자세히 보기' 시트
+        shot("v8-00-intro", settle: 3)   // 첫 안내 안 B와 '자세히 보기' 시트
         app.buttons["오가는 정보 자세히 보기"].tap()
         XCTAssert(app.staticTexts["오가는 정보"].waitForExistence(timeout: 5))
         shot("v8-00b-intro-sheet")
@@ -54,7 +54,7 @@ final class DesignTour: XCTestCase {
         tab("기록")
         let past = app.buttons.matching(NSPredicate(format: "label == %@", "지난 기록 적기"))
         XCTAssert(past.firstMatch.waitForExistence(timeout: 5))
-        XCTAssertEqual(past.count, 1, "빈 날에는 가운데 지난 기록 적기 하나만 보인다(U85)")
+        XCTAssertEqual(past.count, 1, "빈 날에는 가운데 지난 기록 적기 하나만 보인다")
         shot("v8-02-day-empty")
         past.firstMatch.tap()
         XCTAssert(app.staticTexts["어떻게 먹였어요?"].waitForExistence(timeout: 5))
@@ -104,10 +104,10 @@ final class DesignTour: XCTestCase {
         shot("v8-13-pattern-empty")
     }
 
-    /// U90 3D 준비 표시: 오늘 탭 아래 '차와 연결하기' 카드 자리까지 내려 둔 채 차와 연결하면, 그 자리에 차 카드가 들어와
+    /// 3D 준비 표시: 오늘 탭 아래 '차와 연결하기' 카드 자리까지 내려 둔 채 차와 연결하면, 그 자리에 차 카드가 들어와
     /// 이 프로세스에서 처음 3D 모델을 읽는다(시뮬레이터 약 3초). 고리('3D 차 준비 중')는 붙이고 0.8초 뒤에 나타나 첫 그림까지만 있다.
     /// XCUITest는 누를 때마다 앱이 쉴 때까지 기다리는데 RealityKit 준비가 그동안 주 스레드를 잡아 고리가 있는 동안 확인하기 어렵다.
-    /// 나타남은 스크립트의 화면 녹화(rec-v8c-3d.mov)로 보고, 여기서는 첫 그림 뒤 준비 표시가 남지 않고 3D 무대가 있는지를 못박는다.
+    /// 나타남은 스크립트의 화면 녹화(화면 녹화 파일)로 보고, 여기서는 첫 그림 뒤 준비 표시가 남지 않고 3D 무대가 있는지를 못박는다.
     func test_v8c_3d_준비() {
         let car = FakeCar()
         car.register()
@@ -126,7 +126,7 @@ final class DesignTour: XCTestCase {
         XCTAssert(app.descendants(matching: .any)["우리 차 3D 그림"].firstMatch.exists, "차 카드 3D 무대가 없다")
     }
 
-    /// U82(11-12 보충): 큰 글자에서 끝 줄을 바꿔(시작이 지금이라 끝이 미래·다음 날) 접고 본문 맨 위로 굴려 끝 줄이 화면 밖일 때 저장하면,
+    /// 큰 글자에서 끝 줄을 바꿔(시작이 지금이라 끝이 미래·다음 날) 접고 본문 맨 위로 굴려 끝 줄이 화면 밖일 때 저장하면,
     /// 끝 줄이 다시 펼쳐지고 그 자리로 굴러 오류 글이 보인다. 스크립트가 글자 크기를 접근성 크기로 바꾼 뒤 돌린다.
     func test_v8_시트_오류_굴림() {
         XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
@@ -164,7 +164,7 @@ final class DesignTour: XCTestCase {
         XCTAssert(err.isHittable, "오류 줄이 본문 밖에 남았다")
     }
 
-    /// 기록 시트의 저장 단추(글이 저장될 것을 말한다, U83).
+    /// 기록 시트의 저장 단추(글이 저장될 것을 말한다).
     private var save: XCUIElement { app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "저장하기")).firstMatch }
 
     /// 연결 안 됨(기록만): 첫 안내 → 오늘 → 수유 중 → 타이머 → 기록 하루·고치기 시트 → 패턴 → 설정.
@@ -193,7 +193,7 @@ final class DesignTour: XCTestCase {
         if feedRow.waitForExistence(timeout: 3) {
             feedRow.tap()
             shot("06-sheet-edit")
-            let start = app.buttons["시작"].firstMatch   // 기록 시트 v8: 줄을 펼치고 시각 알약 → 그 자리 바퀴(U82)
+            let start = app.buttons["시작"].firstMatch   // 기록 시트 v8: 줄을 펼치고 시각 알약 → 그 자리 바퀴
             if start.exists {
                 start.tap()
                 let time = label(beginsWith: "시각 고르기")
@@ -216,7 +216,7 @@ final class DesignTour: XCTestCase {
         tab("설정")
         shot("08-settings")
 
-        // 잠금 화면 Live Activity(시안 S.lock): 수유를 시작해 왼쪽을 고르고 알림 센터를 끌어내린다(시뮬레이터는 잠그기 버튼이 없다)
+        // 잠금 화면 Live Activity: 수유를 시작해 왼쪽을 고르고 알림 센터를 끌어내린다(시뮬레이터는 잠그기 버튼이 없다)
         tab("오늘")
         app.buttons["수유"].firstMatch.tap()
         label(beginsWith: "수유 중").tap()
@@ -234,7 +234,7 @@ final class DesignTour: XCTestCase {
             .press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)))
     }
 
-    /// 시안 예시와 같은 리포트: 13:10–13:52(42분), 울음 1번(감지 2.4초), 자장가 → 재생 사이 → 백색소음(자동 2차, 다시 울음), 쉼터 제안, 그쳤어요,
+    /// 예시 리포트: 13:10–13:52(42분), 울음 1번(감지 2.4초), 자장가 → 재생 사이 → 백색소음(자동 2차, 다시 울음), 쉼터 제안, 그쳤어요,
     /// 조향 0.8 → 2.1 → 0.9, 차가 한 일 4가지, 소리별 성적 넷. `minAgo`는 주행 시작이 몇 분 전인지.
     private func sendRichReport(_ car: FakeCar, minAgo: Int) {
         let s = Date().addingTimeInterval(TimeInterval(-minAgo * 60)), cry = s.addingTimeInterval(14 * 60), ep = FakeCar.ulid()
@@ -243,8 +243,10 @@ final class DesignTour: XCTestCase {
             "session_id": FakeCar.ulid(), "started_at": r(s), "ended_at": r(s.addingTimeInterval(42 * 60)), "simulated": false, "output_route": "rear_zone",
             "timeline": [["episode_id": ep, "trigger": "cry_alarm", "started_at": r(cry), "alarm_latency_s": 2.4,
                           "sound": ["method": "lullaby", "label": "자장가"], "play_s": 112,
-                          "plays": [["purpose": "auto_first", "method": "lullaby", "song_id": NSNull(), "started_at": r(cry.addingTimeInterval(2)), "ended_at": r(cry.addingTimeInterval(58)), "play_s": 56],
-                                    ["purpose": "auto_second", "method": "white_noise", "song_id": NSNull(), "started_at": r(cry.addingTimeInterval(66)), "ended_at": r(cry.addingTimeInterval(122)), "play_s": 56]],
+                          "plays": [["purpose": "auto_first", "method": "lullaby", "song_id": NSNull(), "started_at": r(cry.addingTimeInterval(2)),
+                              "ended_at": r(cry.addingTimeInterval(58)), "play_s": 56],
+                                    ["purpose": "auto_second", "method": "white_noise", "song_id": NSNull(),
+                                        "started_at": r(cry.addingTimeInterval(66)), "ended_at": r(cry.addingTimeInterval(122)), "play_s": 56]],
                           "result": "failure", "excluded_reason": NSNull(), "recried": true,
                           "second": ["action": "other_sound", "sound": ["method": "white_noise", "label": "백색소음"], "result": "success"],
                           "stop": ["handoff": true, "reason": "attempt_limit", "mode": "rest_offer", "rest_name": "○○휴게소", "waypoint_added": false, "guardian_notified": true, "told_driver": true],
@@ -256,7 +258,7 @@ final class DesignTour: XCTestCase {
                             ["action": "rear_window_lock", "count": 1, "total_s": NSNull()], ["action": "ambient_dim", "count": 1, "total_s": NSNull()]],
             "controls": [["api": "Seat.setHvacSeatTemperature", "target": "ROW_2_LEFT", "attempts": 1, "succeeded": 1, "failed": 0, "retries": 0]],
             "method_stats": [["method": "lullaby", "label": "자장가", "successes": 6, "attempts": 7], ["method": "womb", "label": "뱃속 소리", "successes": 3, "attempts": 4],
-                             ["method": "white_noise", "label": "백색소음", "successes": 2, "attempts": 6], ["method": "parent_song", "label": "우리 노래", "successes": 0, "attempts": 2]],
+                             ["method": "white_noise", "label": "백색소음", "successes": 2, "attempts": 6], ["method": "parent_song", "label": "우리 노래", "successes": 0, "attempts": 2]]
         ])
     }
 
@@ -266,7 +268,7 @@ final class DesignTour: XCTestCase {
     }
 
     /// 차와 연결한 화면: owner(오늘·차 탭·노래 녹음·리포트·기록·설정) → 설정에서 연결 끊기 → 초대 코드로 guardian(오늘 인계 알림·리포트·설정·보호자).
-    /// 차 등록은 한 번만 한다(중계는 IP당 시간당 5번, G7). 새로 깐 앱·지운 키체인에서 돌린다.
+    /// 차 등록은 한 번만 한다(중계는 IP당 시간당 5번). 새로 깐 앱·지운 키체인에서 돌린다.
     /// 중계: `TEST_RUNNER_RELAY_URL=http://127.0.0.1:8787`(앱 debug 주소와 같은 중계).
     func test_v6_연결() {
         let car = FakeCar()
@@ -327,7 +329,7 @@ final class DesignTour: XCTestCase {
         let disconnect = app.buttons["연결 끊기"].firstMatch
         for _ in 0..<3 where !(disconnect.exists && disconnect.isHittable) { app.swipeUp() }
         disconnect.tap()
-        let confirm = app.buttons["끊기"].firstMatch   // 확인 창 주 단추(B10)
+        let confirm = app.buttons["끊기"].firstMatch   // 확인 창 주 단추
         XCTAssert(confirm.waitForExistence(timeout: 3)); confirm.tap()
         XCTAssert(app.buttons["오늘"].firstMatch.waitForExistence(timeout: 10))
         sleep(2)
@@ -339,7 +341,7 @@ final class DesignTour: XCTestCase {
         shot("35-connect")
         field.tap(); field.typeText(car.inviteCode())
         app.buttons["확인"].tap()
-        allowSystemAlert()   // guardian은 연결 뒤 알림 권한을 묻는다(G13)
+        allowSystemAlert()   // guardian은 연결 뒤 알림 권한을 묻는다
         XCTAssert(app.buttons["설정"].firstMatch.waitForExistence(timeout: 10))
         sendRichReport(car, minAgo: 63)
         car.sendHandoff(minAgo: 0)

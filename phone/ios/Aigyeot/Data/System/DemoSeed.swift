@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-/// debug 빌드만: 시연 시드(phone-care-plan U50). 안드로이드 `DebugSeed.kt`와 같은 목록이다. release에는 들어가지 않는다.
+/// debug 빌드만: 시연 시드. 안드로이드 `DebugSeed.kt`와 같은 목록이다. release에는 들어가지 않는다.
 /// 넣기: `xcrun simctl launch --terminate-running-process <기기> kr.aigyeot.phone -demoSeed`
 enum DemoSeed {
     private static let minute: Int64 = 60_000
@@ -10,10 +10,10 @@ enum DemoSeed {
     /// 끝도 현지 벽시계다. 서머타임이 바뀐 날에도 다음 잠과 겹치지 않는다(안드로이드와 같다).
     private static let pastSleeps = [("00:10", "06:40"), ("07:20", "09:40"), ("10:20", "12:40"), ("16:20", "18:40")]   // 합 13시간 30분
     private static let pastDiapers: [(String, DiaperKind)] = [
-        ("06:45", .wet), ("09:45", .dirty), ("12:45", .wet), ("15:45", .wet), ("18:45", .both), ("23:35", .wet),
+        ("06:45", .wet), ("09:45", .dirty), ("12:45", .wet), ("15:45", .wet), ("18:45", .both), ("23:35", .wet)
     ]
 
-    /// 기준은 넣는 순간(분 내림). 오늘 값은 차 시연 장면 C2와 같다. 별명은 그대로 두고 잠·기저귀는 켠다.
+    /// 기준은 넣는 순간(분 내림). 오늘 값은 차 시연 장면의 오늘 값과 같다. 별명은 그대로 두고 잠·기저귀는 켠다.
     static func make(nowMs: Int64, zone: TimeZone, keep: CareFile = CareFile()) -> CareFile {
         let t = nowMs / minute * minute
         var cal = Calendar(identifier: .gregorian)
@@ -36,15 +36,18 @@ enum DemoSeed {
         for d in (1...6).reversed() {
             let day = cal.date(byAdding: .day, value: -d, to: today)!
             for (i, s) in pastFeeds.enumerated() { add(.feed, hm(day, s), end: hm(day, s) + 20 * minute, side: i % 2 == 0 ? .left : .right) }
-            // 서머타임이 바뀐 날은 밤잠(00:10~06:40)이 한 시간 짧거나 길다. 합을 13~14시간(U50)에 두려고
+            // 서머타임이 바뀐 날은 밤잠(00:10~06:40)이 한 시간 짧거나 길다. 합을 13~14시간에 두려고
             // 짧으면 낮잠 셋의 시작을 10분씩 당기고(수유 끝과 닿을 뿐 겹치지 않는다), 길면 밤잠 시작을 00:40으로 늦춘다.
             // 길면 밤잠을 끝에서 7시간 전(실제 시각)에 시작해 합 14시간. 두 시간이 바뀌는 지역도 같다.
             // 짧으면 낮잠 시작을 당기는데, 앞 수유 끝(10분 전)까지만 당길 수 있어 한 시간 짧은 날까지 13시간을 맞춘다.
             let night = hm(day, pastSleeps[0].1) - hm(day, pastSleeps[0].0)
             let pull = min(10 * minute, max(0, 390 * minute - night) / 3)
             for (i, (s, e)) in pastSleeps.enumerated() {
-                if i == 0 { add(.sleep, night > 420 * minute ? hm(day, e) - 420 * minute : hm(day, s), end: hm(day, e)) }
-                else { add(.sleep, hm(day, s) - pull, end: hm(day, e)) }
+                if i == 0 {
+                    add(.sleep, night > 420 * minute ? hm(day, e) - 420 * minute : hm(day, s), end: hm(day, e))
+                } else {
+                    add(.sleep, hm(day, s) - pull, end: hm(day, e))
+                }
             }
             for (s, k) in pastDiapers { add(.diaper, hm(day, s), diaper: k) }
         }

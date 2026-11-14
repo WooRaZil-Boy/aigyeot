@@ -1,10 +1,10 @@
 import Foundation
 import Observation
 
-// 연결 끊기(사용자 끊기 U25 b, 강제 끊김 U25 a, 둘의 공통 정리). 안드로이드 Disconnect.kt와 같은 이름·나눔.
-// 연결이 바뀌면 메모리 칸의 정리는 PhoneStateRepository가 알리는 한 곳(AppLifecycle.connectionChanged)이 한다(P6).
+// 연결 끊기(사용자 끊기, 강제 끊김, 둘의 공통 정리). 안드로이드 Disconnect.kt와 같은 이름·나눔.
+// 연결이 바뀌면 메모리 칸의 정리는 PhoneStateRepository가 알리는 한 곳(AppLifecycle.connectionChanged)이 한다.
 
-/// 연결 캐시 지우기(끊기·401 공통, 7.4). 돌봄 기록과 지우다 만 '기록 지우기'는 남긴다(R9·R10).
+/// 연결 캐시 지우기(끊기·401 공통). 돌봄 기록과 지우다 만 '기록 지우기'는 남긴다.
 @MainActor
 final class WipeLink {
     private let state: PhoneStateRepository
@@ -31,7 +31,7 @@ final class WipeLink {
     }
 }
 
-/// 어느 요청이든 401, 소켓 닫기 4001(7.1 '어디서든 → GONE'). 사용자 끊기 중이면 그 끊기에 맡긴다.
+/// 어느 요청이든 401, 소켓 닫기 4001('어디서든 → GONE'). 사용자 끊기 중이면 그 끊기에 맡긴다.
 @MainActor
 final class LoseConnection {
     private let state: PhoneStateRepository
@@ -44,17 +44,17 @@ final class LoseConnection {
         self.wipe = wipe
     }
 
-    /// 401·4001을 받은 연결(일을 시작할 때 잡은 자격). 이전 연결의 늦은 401이면 무시한다(P5).
+    /// 401·4001을 받은 연결(일을 시작할 때 잡은 자격). 이전 연결의 늦은 401이면 무시한다.
     func lost(_ c: Credentials?) {
         guard let c, state.isCurrent(c) else { return }
         if linkSwitch.absorb(c) { return }   // 사용자가 끊는 중이면 그 끊기의 결과일 수 있다. 끊기가 끝날 때 본다
-        // 정리한 뒤 GONE 화면을 고르기 전에 죽어도 다음 실행이 GONE을 보이게 먼저 적는다(D1)
+        // 정리한 뒤 GONE 화면을 고르기 전에 죽어도 다음 실행이 GONE을 보이게 먼저 적는다
         linkSwitch.goneCleanupStarted(c.deviceId)
         guard wipe(c) else { return }
         state.showGone(deviceId: c.deviceId)
     }
 
-    /// '연결이 끊겼어요' 화면에서 골랐다(기록만 계속·다시 연결하기, U25 a). 표시를 걷고 GONE을 걷는다.
+    /// '연결이 끊겼어요' 화면에서 골랐다(기록만 계속·다시 연결하기). 표시를 걷고 GONE을 걷는다.
     /// 표시를 걷지 못하면 GONE을 둔다(다시 켜면 또 GONE이 떠 고른 것과 어긋나지 않게). 걷었으면 true.
     @discardableResult
     func acknowledgeGone() -> Bool {
@@ -63,7 +63,7 @@ final class LoseConnection {
         return true
     }
 
-    /// 앞 실행이 강제 끊김 정리를 적고 마치기 전에 죽었다(D1). 지금 자격의 표시면 정리를 이어 하고 GONE을 보인다.
+    /// 앞 실행이 강제 끊김 정리를 적고 마치기 전에 죽었다. 지금 자격의 표시면 정리를 이어 하고 GONE을 보인다.
     /// 다른 기기의 옛 표시면(그 뒤 새로 연결했다) 걷는다. 자격이 없으면 PhoneStateRepository가 GONE으로 시작했다.
     func recoverAtStart() {
         guard let id = linkSwitch.goneCleanupPending, let c = state.creds else { return }
@@ -71,7 +71,7 @@ final class LoseConnection {
     }
 }
 
-/// 설정의 '연결 끊기'와 '끊고 연결하기'의 끊기(U25 b, G16). 중계의 토큰을 지워야 해서 인터넷이 필요하다(7.2).
+/// 설정의 '연결 끊기'와 '끊고 연결하기'의 끊기. 중계의 토큰을 지워야 해서 인터넷이 필요하다.
 @MainActor
 @Observable
 final class Disconnect {
@@ -83,7 +83,7 @@ final class Disconnect {
     @ObservationIgnored private let lose: LoseConnection
     @ObservationIgnored private let notices: Notices
     @ObservationIgnored private let tasks: TaskBag
-    /// 설정 끊기의 결과(M3). 화면이 받으면 걷는다.
+    /// 설정 끊기의 결과. 화면이 받으면 걷는다.
     private(set) var run: DisconnectRun?
     @ObservationIgnored private var leavingTask: Task<String?, Never>?
 
@@ -137,7 +137,7 @@ final class Disconnect {
         guard let c = state.creds else { return nil }   // 끊을 연결이 없다
         linkSwitch.leaveStarted(c)
         defer {
-            // 끊기가 실패로 끝났는데 그사이 이 연결의 401·4001이 왔다: 토큰은 이미 지워졌으니 그대로 GONE으로 간다(7.1).
+            // 끊기가 실패로 끝났는데 그사이 이 연결의 401·4001이 왔다: 토큰은 이미 지워졌으니 그대로 GONE으로 간다.
             let lost = linkSwitch.leaveEnded()
             if state.isCurrent(lost) { lose.lost(lost) }
         }
@@ -147,7 +147,7 @@ final class Disconnect {
             if !e.isUnauthorized { return "끊지 못했어요. 잠시 뒤에 다시 해 주세요." }
         } catch { return "끊지 못했어요. 잠시 뒤에 다시 해 주세요." }
         if wipe(c) {
-            notices.showCare(CareText.disconnected)   // U25 b: 탭(연결 안 됨)의 오늘로 가고 띠를 보인다(정리가 띠를 먼저 비웠다)
+            notices.showCare(CareText.disconnected)   // 탭(연결 안 됨)의 오늘로 가고 띠를 보인다(정리가 띠를 먼저 비웠다)
         }
         return nil
     }

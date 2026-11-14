@@ -11,7 +11,7 @@ final class Rfc3339Tests: XCTestCase {
         XCTAssertNil(Rfc3339.parse("가짜"))
     }
 
-    func test_보낼_시각의_소수_초는_버린다() {   // 계약 3.3·R18 '소수 초는 버린다'(안드로이드 truncatedTo(SECONDS)와 같게)
+    func test_보낼_시각의_소수_초는_버린다() {   // '소수 초는 버린다'(안드로이드 truncatedTo(SECONDS)와 같게)
         let seoul = TimeZone(identifier: "Asia/Seoul")!
         let t = Rfc3339.parse("2026-11-05T15:00:00+09:00")!
         XCTAssertEqual(Rfc3339.string(t.addingTimeInterval(0.7), timeZone: seoul), "2026-11-05T15:00:00+09:00")

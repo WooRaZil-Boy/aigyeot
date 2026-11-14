@@ -4,12 +4,12 @@ import Combine
 
 private typealias DS = DesignSystem
 
-// 폰 차 카드의 실시간 3D(시안 v6 ⑫, js/car3d.js·car-stage.js): 같은 모델(aigyeot_car.usdz), 같은 카메라 자리 표 PRESET, 같은 상태 빛.
-// RealityKit ARView(.nonAR) 한 경로로 iOS 17~27을 그린다(스파이크 tools/measure/phone_ios_v6_3d.txt, R6 결정).
+// 폰 차 카드의 실시간 3D: 같은 모델(aigyeot_car.usdz), 같은 카메라 자리 표 PRESET, 같은 상태 빛.
+// RealityKit ARView(.nonAR) 한 경로로 iOS 17~27을 그린다(측정 기록 tools/measure/phone_ios_v6_3d.txt).
 // 그리기는 필요할 때만: ARView는 멈춘 장면도 초당 60번 갱신하므로, 손가락으로 돌리거나 카메라가 옮겨 가는 동안만 창에 붙이고
 // 멈추면 그때의 정지 그림을 깔고 창에서 뗀다(대기 중 0프레임).
 
-/// 카메라 자리(차 좌표: 앞 +X, 위 +Y, 오른쪽 +Z). az는 앞에서 왼쪽(운전석)으로 도는 각. 시안 PRESET 그대로(폰은 phone·tile만 쓴다).
+/// 카메라 자리(차 좌표: 앞 +X, 위 +Y, 오른쪽 +Z). az는 앞에서 왼쪽(운전석)으로 도는 각. 디자인의 PRESET 그대로(폰은 phone·tile만 쓴다).
 struct CarPreset: Equatable {
     let az: Float, el: Float, d: Float, r: Float, fov: Float
     let target: SIMD3<Float>
@@ -18,13 +18,13 @@ struct CarPreset: Equatable {
     static let phone = CarPreset(az: 34, el: 14, d: 10.6, r: 3.0, fov: 26, target: [0.05, 0.6, 0])
     static let tile = CarPreset(az: 34, el: 13, d: 8.3, r: 2.75, fov: 26, target: [0.05, 0.58, 0])
 
-    /// 화면이 세로로 길면 차 폭(반폭 r)이 들어오게 물러난다(시안 fitD).
+    /// 화면이 세로로 길면 차 폭(반폭 r)이 들어오게 물러난다.
     func distance(aspect: Float) -> Float {
         let hf = atan(tan(fov * .pi / 360) * aspect)
         return max(d, r / tan(hf))
     }
 
-    /// 구면 좌표 → 카메라 위치(시안 applyCam).
+    /// 구면 좌표 → 카메라 위치.
     static func position(az: Float, el: Float, d: Float, target: SIMD3<Float>) -> SIMD3<Float> {
         let a = az * .pi / 180, e = el * .pi / 180
         return SIMD3(cos(e) * cos(a), sin(e), -cos(e) * sin(a)) * d + target
@@ -38,7 +38,7 @@ struct CarPreset: Equatable {
     }
 }
 
-/// 3D 준비 표시(U90, 시안 README v8c, 안드로이드 `stageMark`와 같은 규칙). 시각은 무대를 붙인 때부터 ms.
+/// 3D 준비 표시(안드로이드 `stageMark`와 같은 규칙). 시각은 무대를 붙인 때부터 ms.
 enum StageMark: Equatable {
     /// 아무것도 그리지 않는다(800ms 전, 첫 그림 뒤).
     case hidden
@@ -50,7 +50,7 @@ enum StageMark: Equatable {
     case failed
 
     static let appearMs: Int64 = 800, minShowMs: Int64 = 400
-    /// 고리는 한 바퀴 1초를 초당 15장으로 끊어 돈다(한 장 24°, 11-11 결정, 세 앱 같음). 매 장 부드럽게 돌리지 않는다.
+    /// 고리는 한 바퀴 1초를 초당 15장으로 끊어 돈다(한 장 24°, 세 앱 같음). 매 장 부드럽게 돌리지 않는다.
     static let ringFps = 15
 
     /// 붙인 뒤 `t`ms에 고리가 가리키는 각(도, 12시 기준 시계 방향). 1000/15ms마다 24°씩 건너뛴다.
@@ -74,11 +74,11 @@ enum StageMark: Equatable {
     static func hideAt(firstFrame ff: Int64) -> Int64 { max(ff, appearMs + minShowMs) }
 }
 
-/// 차 카드의 무대: 정지 그림(대기) ↔ 실시간 3D(손가락 회전·카메라 이동 중). 처음에는 '끌어서 돌려 보기' 대신 작은 회전 표시만(시안 .live3d::after).
-/// 3D 첫 그림 전 준비 표시(U90)는 무대(CarStageView) 안에서 Core Animation으로 그린다(아래 `StageMarkLayer`).
+/// 차 카드의 무대: 정지 그림(대기) ↔ 실시간 3D(손가락 회전·카메라 이동 중). 처음에는 '끌어서 돌려 보기' 대신 작은 회전 표시만.
+/// 3D 첫 그림 전 준비 표시는 무대(CarStageView) 안에서 Core Animation으로 그린다(아래 `StageMarkLayer`).
 struct CarStageCard: View {
     var preset: CarPreset = .tile
-    /// 작은 회전 표시(시안 .car-tile .live3d::after). 첫 안내 무대(.ih3d)에는 없다.
+    /// 작은 회전 표시. 첫 안내 무대에는 없다.
     var hint = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -91,7 +91,7 @@ struct CarStageCard: View {
         ZStack(alignment: .bottomTrailing) {
             CarStageRepresentable(preset: preset, dark: scheme == .dark, reduceMotion: reduceMotion,
                                   onMoved: { moved = $0 }, onFirstFrame: { phase = .ready }, onFailed: { phase = .failed })
-            if phase == .loading {   // 읽기 이름 '3D 차 준비 중'(7.1 design.stage.loading). 그림은 무대 안 StageMarkLayer, 실패면 읽지 않는다
+            if phase == .loading {   // 읽기 이름 '3D 차 준비 중'(design.stage.loading). 그림은 무대 안 StageMarkLayer, 실패면 읽지 않는다
                 Color.clear.frame(width: 28, height: 28)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityElement()
@@ -108,11 +108,11 @@ struct CarStageCard: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("우리 차 3D 그림")   // 끌어 돌리기는 화면 읽기로 쓸 수 없어 읽지 않는다(B26). 처음 모습은 '처음 자리로'
+        .accessibilityLabel("우리 차 3D 그림")   // 끌어 돌리기는 화면 읽기로 쓸 수 없어 읽지 않는다. 처음 모습은 '처음 자리로'
     }
 }
 
-/// 준비 표시(U90, 세 앱 같은 모양): 고리 지름 28·굵기 2.5, 바탕 고리 textPrimary 10%, 호 accentInk ¼바퀴·끝 둥글게, 1초에 한 바퀴.
+/// 준비 표시(세 앱 같은 모양): 고리 지름 28·굵기 2.5, 바탕 고리 textPrimary 10%, 호 accentInk ¼바퀴·끝 둥글게, 1초에 한 바퀴.
 /// 동작 줄이기·실패면 차 선 아이콘 28, textTertiary 50%. 플랫폼 기본 스피너는 쓰지 않는다.
 /// 나타남(800ms)·사라짐을 붙일 때 미리 Core Animation에 걸어 둔다: 시뮬레이터에서 RealityKit 준비가 주 스레드를 1초 넘게 막아
 /// (ARView 만들기 약 1.2초, 재질 덮어쓰기 조각 최대 0.6초, TMP 실측) 주 스레드로 돌리는 고리는 그동안 멈췄다. 이 고리는 그리기 서버가 돌린다.
@@ -261,20 +261,20 @@ final class CarStageView: UIView {
     var reduceMotion = false
     /// 돌렸는지(카드의 회전 표시를 감춘다).
     var onMoved: ((Bool) -> Void)?
-    /// ARView를 붙인 뒤 첫 `SceneEvents.Update`(U90 첫 그림, 정지 그림 길·돌리기 길 둘 다). 한 번만 부른다.
+    /// ARView를 붙인 뒤 첫 `SceneEvents.Update`(첫 그림, 정지 그림 길·돌리기 길 둘 다). 한 번만 부른다.
     var onFirstFrame: (() -> Void)?
-    /// 모델을 읽지 못했다(U90: 정지 표시만, 읽지 않음). 다음 카드에서 다시 해 본다.
+    /// 모델을 읽지 못했다(정지 표시만, 읽지 않음). 다음 카드에서 다시 해 본다.
     var onFailed: (() -> Void)?
     private var firstFrameSub: Cancellable?
     private var sawFirstFrame = false
-    /// 준비 표시(U90)와 그 기준 시각(무대를 붙인 때, 그리기 서버 시각). 차(정지 그림·ARView)는 `content` 안에 있어 고리가 사라질 때 함께 들어온다.
+    /// 준비 표시와 그 기준 시각(무대를 붙인 때, 그리기 서버 시각). 차(정지 그림·ARView)는 `content` 안에 있어 고리가 사라질 때 함께 들어온다.
     private let mark = StageMarkLayer()
     private let content = UIView()
     private var attachedAt: CFTimeInterval?
 
     private let preset: CarPreset
     private let still = UIImageView()
-    /// '처음 자리로'(돌린 뒤에만 보인다, 시안 car-stage 되돌리기 단추·안드로이드와 같다). 44pt.
+    /// '처음 자리로'(돌린 뒤에만 보인다, 안드로이드와 같다). 44pt.
     private let reset = UIButton(type: .system)
     private var flight: CADisplayLink?
     private var flightStart: CFTimeInterval = 0
@@ -336,7 +336,7 @@ final class CarStageView: UIView {
         reset.frame = CGRect(x: bounds.width - 56, y: bounds.height - 54, width: 44, height: 44)
         guard bounds.width > 0, bounds.size != lastSize else { return }
         lastSize = bounds.size
-        if attachedAt == nil {   // 무대를 붙였다: 800ms 뒤 나타날 준비 표시를 걸어 둔다(U90)
+        if attachedAt == nil {   // 무대를 붙였다: 800ms 뒤 나타날 준비 표시를 걸어 둔다
             let now = CACurrentMediaTime()
             attachedAt = now
             mark.arm(at: now + Double(StageMark.appearMs) / 1000, reduced: reduceMotion)
@@ -388,10 +388,10 @@ final class CarStageView: UIView {
         }
     }
 
-    /// 재질 이름으로 덮어쓴다(시안 v7 car3d.js materials(): 도장 + 클리어코트, 크롬, 유리, 선루프 가림막, 램프는 발광). 이름은 iOS 18+ API라
-    /// 17은 USDZ 재질 그대로(앰비언트만 엔티티 이름으로). 모든 재질은 양면으로 그린다(시안 v7 DoubleSide: 차체가 얇은 판이라 안쪽 면이 비친다).
+    /// 재질 이름으로 덮어쓴다(도장 + 클리어코트, 크롬, 유리, 선루프 가림막, 램프는 발광). 이름은 iOS 18+ API라
+    /// 17은 USDZ 재질 그대로(앰비언트만 엔티티 이름으로). 모든 재질은 양면으로 그린다(차체가 얇은 판이라 안쪽 면이 비친다).
     /// 엔티티를 하나씩 고치되 8ms마다 주 스레드를 놓는다: 한 번에 하면 주 스레드를 1초 넘게 막아(시뮬레이터 실측 1.28초)
-    /// 준비 표시(U90) 고리와 화면 안무가 멈췄다. RealityKit 엔티티는 주 스레드에서만 고칠 수 있어 나눠서 한다.
+    /// 준비 표시 고리와 화면 안무가 멈췄다. RealityKit 엔티티는 주 스레드에서만 고칠 수 있어 나눠서 한다.
     private static func restyle(_ root: Entity) async {
         var stack = [root]
         var slice = CACurrentMediaTime()
@@ -415,7 +415,7 @@ final class CarStageView: UIView {
         if #unavailable(iOS 18) { glowAmbientByEntityName(root) }
     }
 
-    /// 시안 v7 값. 옮기지 못한 것: 크롬 환경광 1.5배·유리 환경광 1.0배(재질마다 환경광 배율이 없다), 유리 투과(USDZ의 짙은 불투명 유리 그대로).
+    /// 원본 디자인 값. 옮기지 못한 것: 크롬 환경광 1.5배·유리 환경광 1.0배(재질마다 환경광 배율이 없다), 유리 투과(USDZ의 짙은 불투명 유리 그대로).
     @available(iOS 18, *)
     private static func named(_ mat: any RealityKit.Material) -> any RealityKit.Material {
         switch mat.name {
@@ -434,7 +434,7 @@ final class CarStageView: UIView {
             p.metallic = 1.0
             return p
         case "Glass_Front"?, "Glass_Rear"?, "Glass_Side"?, "Sunroof_Glass"?:
-            // 굽은 유리 모서리의 직사광 얼룩을 줄인다: 매끈하게(0.03), 정반사 세기 0.25(시안 specularIntensity 0.25, 색은 USDZ 그대로)
+            // 굽은 유리 모서리의 직사광 얼룩을 줄인다: 매끈하게(0.03), 정반사 세기 0.25(색은 USDZ 그대로)
             guard var p = mat as? PhysicallyBasedMaterial else { return mat }
             p.roughness = 0.03
             p.specular = PhysicallyBasedMaterial.Specular(floatLiteral: 0.25)
@@ -444,7 +444,7 @@ final class CarStageView: UIView {
             p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.roofShade))
             p.roughness = 0.92
             return p
-        case "Ambient"?:   // 상태 빛 '듣는 중': 실내 앰비언트 선이 곁의 응답 파랑(tokens glow)으로 빛난다(시안 applyState listen 2.2)
+        case "Ambient"?:   // 상태 빛 '듣는 중': 실내 앰비언트 선이 곁의 응답 파랑(tokens glow)으로 빛난다
             var p = PhysicallyBasedMaterial()
             p.baseColor = .init(tint: UIColor(hex: DS.CarPaint.ambientBase))
             p.emissiveColor = .init(color: UIColor(hex: DS.CarPaint.ambientGlow))
@@ -487,7 +487,7 @@ final class CarStageView: UIView {
         // 그 뒤 모델을 읽는 동안은 주 스레드가 비어 화면 안무가 멈추지 않게(모델을 다 읽은 뒤 만들면 그만큼 화면이 멈췄다)
         guard window != nil || superview != nil else { return nil }
         let v = ARView(frame: bounds, cameraMode: .nonAR, automaticallyConfigureSession: false)
-        guard let model = await Self.loadModel() else { mark.failed(); onFailed?(); return nil }   // 못 읽음: 무대에 정지 표시만(U90, 읽지 않음)
+        guard let model = await Self.loadModel() else { mark.failed(); onFailed?(); return nil }   // 못 읽음: 무대에 정지 표시만(읽지 않음)
         // 첫 그림: 이 ARView가 창에 붙어 처음 갱신될 때(실측 phone_ios_v7_3d의 '첫 그림'과 같은 사건). 한 번 부르고 구독을 끊는다
         if !sawFirstFrame {
             firstFrameSub = v.scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
@@ -502,7 +502,7 @@ final class CarStageView: UIView {
         v.renderOptions = [.disableMotionBlur, .disableDepthOfField, .disableHDR]
         let anchor = AnchorEntity(world: .zero)
         anchor.addChild(model.clone(recursive: true))
-        // 손으로 그린 바닥 그림자 대신 부드러운 원판(시안 shadow): 차 아래 옅은 검정
+        // 손으로 그린 바닥 그림자 대신 부드러운 원판: 차 아래 옅은 검정
         var shade = UnlitMaterial(color: .black)
         shade.blending = .transparent(opacity: .init(floatLiteral: 0.12))
         let shadow = ModelEntity(mesh: .generatePlane(width: 5.6, depth: 2.2, cornerRadius: 1.1), materials: [shade])
@@ -519,9 +519,9 @@ final class CarStageView: UIView {
         return v
     }
 
-    /// 시안 v7 car3d.js studio(): 다크는 방·바닥·조명 판(환경)만 0.55배다. RealityKit 기본 환경광 세기(2의 지수)에만 주고,
-    /// 직사광(주광)은 테마와 무관하게 그대로 둔다(시안 DirectionalLight 1.4, 안드로이드와 같다).
-    /// 옮기지 못한 것: 천장·벽 띠 조명의 배치(띠 모양 반사). 시안은 빛나는 판으로 환경을 만들고, 여기는 기본 환경광 + 주광 하나다.
+    /// 다크는 방·바닥·조명 판(환경)만 0.55배다. RealityKit 기본 환경광 세기(2의 지수)에만 주고,
+    /// 직사광(주광)은 테마와 무관하게 그대로 둔다(세기 1.4, 안드로이드와 같다).
+    /// 옮기지 못한 것: 천장·벽 띠 조명의 배치(띠 모양 반사). 원본은 빛나는 판으로 환경을 만들고, 여기는 기본 환경광 + 주광 하나다.
     private func applyTheme() {
         arView?.environment.background = .color(.clear)
         arView?.backgroundColor = .clear
@@ -529,7 +529,7 @@ final class CarStageView: UIView {
         keyLight.light.intensity = 2600
     }
 
-    /// 첫 그림(U90): 고리가 보이기 전(800ms 안)이면 바로 뗀다. 보였으면 800 + 400ms와 첫 그림 중 늦은 때에 220ms로 사라지고
+    /// 첫 그림: 고리가 보이기 전(800ms 안)이면 바로 뗀다. 보였으면 800 + 400ms와 첫 그림 중 늦은 때에 220ms로 사라지고
     /// 3D는 그때 360ms(`enter`)로 들어온다. 시각은 `StageMark` 규칙 한 곳이다.
     private func firstFrame() {
         guard let start = attachedAt else { return }
@@ -587,7 +587,7 @@ final class CarStageView: UIView {
         still.isHidden = true
     }
 
-    // MARK: 손가락 회전(정차만) — 시안 OrbitControls(enableDamping, dampingFactor 0.09)와 같은 방식
+    // MARK: 손가락 회전(정차만) — OrbitControls(enableDamping, dampingFactor 0.09)와 같은 방식
     // 끈 양을 쌓아 두고 프레임마다 9%씩 돌린다. 놓으면 남은 양만 마저 돈다(놓는 속도로 더 돌지 않는다, 총 회전 = 끈 양).
     // 동작 줄이기면 쌓지 않고 바로 돌린다.
 
@@ -617,7 +617,7 @@ final class CarStageView: UIView {
         decay = link
     }
 
-    /// 시안 OrbitControls와 같은 양: 카드 높이만큼 끌면 0.55바퀴(rotateSpeed 0.55), 높이 6~86°(minPolar·maxPolar).
+    /// OrbitControls와 같은 양: 카드 높이만큼 끌면 0.55바퀴(rotateSpeed 0.55), 높이 6~86°(minPolar·maxPolar).
     private func rotate(dx: Float, dy: Float) {
         let perPoint = 360 * 0.55 / Float(max(1, bounds.height))
         az = (az - dx * perPoint).truncatingRemainder(dividingBy: 360)   // 한 바퀴 안으로(안드로이드 % 360f)

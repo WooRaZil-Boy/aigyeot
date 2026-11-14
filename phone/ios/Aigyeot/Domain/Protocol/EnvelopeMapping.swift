@@ -1,6 +1,6 @@
 import Foundation
 
-/// DTO(계약 봉투) → 도메인(`Inbound`) 바꾸기. body를 type에 맞는 계약 값으로 읽는다. 읽지 못하면 `.ignored`(적용하지 않는다, G19).
+/// DTO(봉투) → 도메인(`Inbound`) 바꾸기. body를 type에 맞는 메시지 값으로 읽는다. 읽지 못하면 `.ignored`(적용하지 않는다).
 extension Envelope {
     var inbound: Inbound {
         Inbound(id: id, seq: seq ?? 0, fromCar: from?.role == .car, message: message)

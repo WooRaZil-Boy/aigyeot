@@ -1,6 +1,6 @@
 import Foundation
 
-// 노래(9장): 녹음해 넣기·올리기·고르기·지우기(안드로이드 usecase/Songs.kt와 같은 나눔). 보내기는 SendOutbox.
+// 노래: 녹음해 넣기·올리기·고르기·지우기(안드로이드 usecase/Songs.kt와 같은 나눔). 보내기는 SendOutbox.
 
 /// 녹음한 노래를 보낼 함에 넣는다. 파일 올리기는 UploadSong, 보내기는 SendOutbox.
 @MainActor
@@ -17,7 +17,7 @@ final class RecordSong {
         self.now = now
     }
 
-    /// `replacing`: '다시 녹음'으로 바꿀 거절·실패 곡(9장). 새 곡 검증·파일 준비가 끝난 뒤, 그 곡의 지움과 새 곡 추가를
+    /// `replacing`: '다시 녹음'으로 바꿀 거절·실패 곡. 새 곡 검증·파일 준비가 끝난 뒤, 그 곡의 지움과 새 곡 추가를
     /// 한 번에 저장한다(지움 메시지가 먼저 선다). 실패하면 기존 곡은 그대로 남는다. 기존 파일은 저장이 성공한 뒤 지운다.
     func callAsFunction(name: String, recording: URL, durationS: Double, replacing old: String? = nil) throws {
         let name = try SongRules.name(name)
@@ -41,7 +41,7 @@ final class RecordSong {
     }
 }
 
-/// 노래 보내기의 첫 단계: 파일 PUT(7.5 두 단계). 성공(201·409 `already_exists`)해야 `song_added`로 넘어간다.
+/// 노래 보내기의 첫 단계: 파일 PUT(두 단계). 성공(201·409 `already_exists`)해야 `song_added`로 넘어간다.
 @MainActor
 final class UploadSong {
     private let state: PhoneStateRepository

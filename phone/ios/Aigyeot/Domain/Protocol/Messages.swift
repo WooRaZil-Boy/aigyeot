@@ -1,6 +1,6 @@
 import Foundation
 
-// 봉투(3.1)와 메시지 body(3.3). 기준은 shared/ 의 Kotlin 타입과 protocol/*.json 이다.
+// 봉투와 메시지 body. 기준은 shared/ 의 Kotlin 타입과 protocol/*.json 이다.
 
 enum Role: String, Codable { case car, owner, guardian, relay }
 enum Platform: String, Codable { case pleos, android, ios }
@@ -27,7 +27,7 @@ struct Envelope: Codable, Equatable {
     func decodeBody<T: Decodable>(_ type: T.Type) throws -> T { try body.decode(type) }
 }
 
-/// 메시지 type 이름(3.2 표).
+/// 메시지 type 이름.
 enum MessageType {
     static let paired = "paired"
     static let unpaired = "unpaired"
@@ -101,7 +101,7 @@ struct FeedingStateBody: Codable, Equatable {
     @NullEncoded var windowStartExpected: String?
 }
 
-/// `care_summary`(3.3, L60). 숫자와 시각만 보낸다. `sleepDiaperEnabled`가 거짓이면 잠·기저귀 칸은 모두 null이다.
+/// `care_summary`. 숫자와 시각만 보낸다. `sleepDiaperEnabled`가 거짓이면 잠·기저귀 칸은 모두 null이다.
 struct CareSummaryBody: Codable, Equatable {
     var asOf: String
     var zone: String
@@ -129,7 +129,7 @@ enum SoundMethod: String, Codable {
     case lullaby
     case parentSong = "parent_song"
     case womb
-    case unknown   // 모르는 글자(U46: "기타"). 리포트를 버리지 않는다
+    case unknown   // 모르는 글자("기타"). 리포트를 버리지 않는다
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -180,7 +180,7 @@ enum StopReason: String, Codable {
     case noSound = "no_sound"
 }
 
-/// 인계 방식(4.3). `timeline[].stop.mode`와 `handoff_alert.kind`가 함께 쓴다.
+/// 인계 방식. `timeline[].stop.mode`와 `handoff_alert.kind`가 함께 쓴다.
 enum HandoffKind: String, Codable {
     case restOffer = "rest_offer"
     case arrivalNotice = "arrival_notice"
@@ -202,7 +202,7 @@ enum CarActionKind: String, Codable {
     case rearWindowLock = "rear_window_lock"
     case cabinCool = "cabin_cool"
     case readingLightOff = "reading_light_off"
-    /// 달래는 동안 앰비언트 조명 낮추기(기능 D, 연결 계약 4. car_actions, 명세 17장 L99).
+    /// 달래는 동안 앰비언트 조명 낮추기(car_actions).
     case ambientDim = "ambient_dim"
     case waypointAdded = "waypoint_added"
     case arrivalNotice = "arrival_notice"

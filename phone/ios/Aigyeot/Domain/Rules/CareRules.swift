@@ -1,10 +1,10 @@
 import Foundation
 
-// MARK: 규칙(6장 R1~R17)
+// MARK: 규칙
 
 enum CareRules {
     static let futureSlackMs: Int64 = 60_000
-    /// 시각 고르기의 끝(지금 + R3 여유 1분). 화면의 고르기 범위도 이 값이다.
+    /// 시각 고르기의 끝(지금 + 여유 1분). 화면의 고르기 범위도 이 값이다.
     static func latestPick(now: Date) -> Date { now.addingTimeInterval(Double(futureSlackMs) / 1000) }
     static let feedMaxMs: Int64 = 3 * 3_600_000
     static let sleepMaxMs: Int64 = 16 * 3_600_000
@@ -26,10 +26,14 @@ enum CareRules {
     }
 
     static func maxMs(_ kind: CareKind) -> Int64? {
-        switch kind { case .feed: feedMaxMs; case .sleep: sleepMaxMs; default: nil }
+        switch kind {
+        case .feed: feedMaxMs
+        case .sleep: sleepMaxMs
+        default: nil
+        }
     }
 
-    /// R3 시각 범위와 입력 범위. 문제가 없으면 nil. 처음 걸린 것 하나를 돌려준다(시작 미래 → 끝 미래 → 끝이 이름 → 너무 김 → 양 → 메모).
+    /// 시각 범위와 입력 범위. 문제가 없으면 nil. 처음 걸린 것 하나를 돌려준다(시작 미래 → 끝 미래 → 끝이 이름 → 너무 김 → 양 → 메모).
     static func problem(_ e: CareEvent, now: Int64) -> CareProblem? {
         if e.startAt > now + futureSlackMs { return .futureStart }
         if let end = e.endAt {
@@ -42,13 +46,13 @@ enum CareRules {
         return nil
     }
 
-    /// 진행 중 기록이 최대 길이를 넘었다(타이머가 끝 시각을 묻는다, 7장).
+    /// 진행 중 기록이 최대 길이를 넘었다(타이머가 끝 시각을 묻는다).
     static func isOverLimit(_ e: CareEvent, now: Int64) -> Bool {
         guard e.inProgress, let max = maxMs(e.kind) else { return false }
         return now - e.startAt > max
     }
 
-    /// R4·U16: 수유·잠만 본다. 진행 중은 [시작, 지금), 끝 모름 기록은 시작 한 점이다.
+    /// 수유·잠만 본다. 진행 중은 [시작, 지금), 끝 모름 기록은 시작 한 점이다.
     /// 구간끼리는 a.s < b.e && b.s < a.e, 점 p와 구간 [s, e)는 s ≤ p < e, 두 점은 같은 시각이면 겹친다.
     static func overlaps(_ e: CareEvent, in events: [CareEvent], now: Int64) -> Bool {
         guard e.hasDuration else { return false }
@@ -65,12 +69,12 @@ enum CareRules {
         }
     }
 
-    /// R8: 지운 지 30일이 된 기록을 실제로 지운다(안드로이드 `now - deletedAt < 30일`만 남김과 같은 경계).
+    /// 지운 지 30일이 된 기록을 실제로 지운다(안드로이드 `now - deletedAt < 30일`만 남김과 같은 경계).
     static func purged(_ events: [CareEvent], now: Int64) -> [CareEvent] {
         events.filter { e in e.deletedAt.map { now - $0 < purgeAfterMs } ?? true }
     }
 
-    /// R11: 지금 수유 기록을 FEED로 옮긴다. 같은 id는 건너뛴다.
+    /// 지금 수유 기록을 FEED로 옮긴다. 같은 id는 건너뛴다.
     static func migrated(_ file: CareFile, from log: [FeedingRecord], zone: String, now: Int64) -> CareFile {
         var f = file
         let have = Set(f.events.map(\.id))
@@ -82,7 +86,7 @@ enum CareRules {
         return f
     }
 
-    /// 메모 입력칸: 코드 포인트 200개에서 더 받지 않는다(U17·U24).
+    /// 메모 입력칸: 코드 포인트 200개에서 더 받지 않는다.
     /// 종류에 맞지 않는 칸을 비운다: 쪽은 수유만, 양은 젖병 수유만, 기저귀 종류는 기저귀만, 메모는 앞뒤 공백을 걷고 비면 없음.
     /// 기록 시트(`CareDraft.event`)와 타이머(쪽·양 고침)가 같은 규칙을 쓴다.
     static func normalized(_ e: CareEvent) -> CareEvent {
@@ -99,13 +103,13 @@ enum CareRules {
         s.unicodeScalars.count <= noteMax ? s : String(String.UnicodeScalarView(s.unicodeScalars.prefix(noteMax)))
     }
 
-    /// 빠른 버튼(R16, 7장 순서).
+    /// 빠른 버튼.
     static func quickKinds(sleepDiaper: Bool) -> [CareKind] { sleepDiaper ? [.feed, .note, .sleep, .diaper] : [.feed, .note] }
 
-    /// R15: 경과는 시작 시각으로 계산한다.
+    /// 경과는 시작 시각으로 계산한다.
     static func elapsedMs(_ e: CareEvent, now: Int64) -> Int64 { max(0, now - e.startAt) }
 
-    // MARK: 날짜(R13)
+    // MARK: 날짜
 
     static func calendar(_ zone: TimeZone) -> Calendar {
         var c = Calendar(identifier: .gregorian)
@@ -137,7 +141,7 @@ enum CareRules {
         return ["일", "월", "화", "수", "목", "금", "토"][cal.component(.weekday, from: d) - 1]
     }
 
-    /// 날짜 띠의 키: 기기 시간대의 날들에 기록이 있는 날을 더한다(기록은 자기 시간대의 날이다, R13).
+    /// 날짜 띠의 키: 기기 시간대의 날들에 기록이 있는 날을 더한다(기록은 자기 시간대의 날이다).
     /// 기기 시간대에 없는 날(날짜 변경선을 옮긴 사모아의 2011-12-30 등)의 기록도 열 수 있게.
     static func stripKeys(_ days: [String], records: Set<String>) -> [String] { Array(Set(days).union(records)).sorted() }
 
@@ -175,13 +179,13 @@ enum CareRules {
         }
     }
 
-    // MARK: 패턴(R14)
+    // MARK: 패턴
 
     static func pattern(_ events: [CareEvent], reports: [StoredReport], now: Int64, zone: TimeZone, sleepDiaper: Bool) -> CarePattern {
         let days = CareStats.lastDays(7, now: now, zone: zone)
         let windowStart = dayRange(days[0], zone)!.0   // 첫날의 0시(안드로이드 `days.first().atStartOfDay`)
         let alive = live(events)
-        let feeds = CareStats.feedStarts(alive, from: windowStart)   // 횟수는 R3의 1분 여유 수유도 센다(기저귀·안드로이드 countPerDay와 같다)
+        let feeds = CareStats.feedStarts(alive, from: windowStart)   // 횟수는 1분 여유 수유도 센다(기저귀·안드로이드 countPerDay와 같다)
         let episodes = CareStats.cryAlarms(reports).map { CareTime.ms($0.at) }
 
         let stats = days.map { day in
@@ -189,7 +193,7 @@ enum CareRules {
             return CareDayStat(day: day,
                         feeds: feeds.filter { dayKey($0, zone) == day }.count,
                         sleepMs: sleep,
-                        sleepRecorded: (sleep ?? 0) > 0,   // U31: 끝난 잠이 그날에 걸친 날만
+                        sleepRecorded: (sleep ?? 0) > 0,   // 끝난 잠이 그날에 걸친 날만
                         diapers: sleepDiaper ? alive.filter { $0.kind == .diaper && dayKey($0.startAt, zone) == day }.count : nil,
                         carEpisodes: episodes.filter { dayKey($0, zone) == day }.count)
         }
@@ -198,7 +202,7 @@ enum CareRules {
         return CarePattern(days: stats, feedIntervalMedianMs: CareStats.usualGap(gaps), feedIntervalCount: gaps.count)
     }
 
-    // MARK: 차 기록 줄(R17)
+    // MARK: 차 기록 줄
 
     static func carRows(_ reports: [StoredReport], zone: TimeZone) -> [CarRow] {
         reports.flatMap { r -> [CarRow] in
@@ -207,12 +211,13 @@ enum CareRules {
             if let start = Rfc3339.parse(b.startedAt) {
                 let end = Rfc3339.parse(b.endedAt)
                 rows.append(CarRow(id: "drive-\(b.sessionId)", sessionId: b.sessionId, at: start,
-                                   text: "탑승 · " + CareFormat.clockRange(start, end, zone)))   // 세션 구간은 중간 정차가 들어 있어 '주행'이라 하지 않는다(7장, 차·두 폰 통일)
+                                   text: "탑승 · " + CareFormat.clockRange(start, end, zone)))   // 세션 구간은 중간 정차가 들어 있어 '주행'이라 하지 않는다(차·두 폰 통일)
             }
-            for e in b.timeline where e.trigger == .cryAlarm {   // 소리 요청 에피소드는 줄을 만들지 않는다(U19)
+            for e in b.timeline where e.trigger == .cryAlarm {   // 소리 요청 에피소드는 줄을 만들지 않는다
                 guard let at = Rfc3339.parse(e.startedAt) else { continue }
-                // U37: "차에서 울음 · {시각} · {소리} · {결과}", 빈 값은 앞의 " · "와 함께 뺀다(U15).
-                let parts = ["차에서 울음", CareFormat.clock(at, zone), e.sound.map { CareText.method($0.method) }, e.result.map { CareText.result($0) }].compactMap { $0 }
+                // "차에서 울음 · {시각} · {소리} · {결과}", 빈 값은 앞의 " · "와 함께 뺀다.
+                let parts = ["차에서 울음", CareFormat.clock(at, zone), e.sound.map { CareText.method($0.method) },
+                    e.result.map { CareText.result($0) }].compactMap { $0 }
                 rows.append(CarRow(id: e.episodeId, sessionId: b.sessionId, at: at, text: parts.joined(separator: " · ")))
             }
             return rows

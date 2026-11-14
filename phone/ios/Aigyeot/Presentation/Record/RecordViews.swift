@@ -2,7 +2,7 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-/// 기록(C4·C5·C14, 시안 S.log·S.pattern): 큰 제목 → [하루] [패턴] → (하루) 날짜 띠 + 타임라인 + '지난 기록 적기' / (패턴) 차트 블록.
+/// 기록: 큰 제목 → [하루] [패턴] → (하루) 날짜 띠 + 타임라인 + '지난 기록 적기' / (패턴) 차트 블록.
 struct RecordsView: View {
     @State private var pattern = false
     @State private var sheet: CareSheet?
@@ -35,7 +35,7 @@ struct RecordsView: View {
                         PatternView(now: now)
                     } else {
                         DayView(sheet: $sheet, report: $report, day: Binding(get: { picked ?? today }, set: { picked = $0 == today ? nil : $0 }), now: now) {
-                            sheet = .past(day: picked == nil || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금), 종류 칸(U86)
+                            sheet = .past(day: picked == nil || picked == today ? nil : picked)   // 고른 날에 적는다(고르지 않았으면 지금), 종류 칸
                         }
                     }
                 }
@@ -90,7 +90,7 @@ private struct DayView: View {
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, 2)
                 .accessibilityAddTraits(.isHeader)
                 .enterRise(2)
-            if list.isEmpty { EmptyRing(icon: .calendar, text: CareText.emptyDay, action: (CareText.quickPast, add)).padding(.horizontal, 16).enterRise(3) }   // U85 ①
+            if list.isEmpty { EmptyRing(icon: .calendar, text: CareText.emptyDay, action: (CareText.quickPast, add)).padding(.horizontal, 16).enterRise(3) }
             ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
                 let bucket = hourBucket(item)
                 if i == 0 || hourBucket(list[i - 1]) != bucket { HourHead(hour: bucket).enterRise(3 + min(i, 5)) }
@@ -99,7 +99,7 @@ private struct DayView: View {
                 case .car(let r): carRow(r, order: 3 + min(i, 5))
                 }
             }
-            if !list.isEmpty {   // 빈 날에는 가운데 단추 하나만(같은 일 두 번 금지, U85 ①)
+            if !list.isEmpty {   // 빈 날에는 가운데 단추 하나만(같은 일 두 번 금지)
                 ListRow(icon: .plus, title: CareText.quickPast, add: true)
                     .padding(.horizontal, 20).padding(.vertical, 8)
                     .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
@@ -145,21 +145,21 @@ private struct DayView: View {
     }
 }
 
-/// 줄기(시안 .tl::before, x 45): 타임라인의 모든 줄이 같은 자리에 그려 이어 보인다.
+/// 줄기(x 45): 타임라인의 모든 줄이 같은 자리에 그려 이어 보인다.
 private struct Rail: ViewModifier {
     func body(content: Content) -> some View {
         content.background(alignment: .leading) { Rectangle().fill(DS.line).frame(width: 1).padding(.leading, 45) }
     }
 }
 
-/// 타임라인 한 칸(시안 .tl .ev): 왼쪽 줄기와 종류 점, 흰 카드 안 아이콘 · 제목 · 둘째 줄(· 메모).
+/// 타임라인 한 칸: 왼쪽 줄기와 종류 점, 흰 카드 안 아이콘 · 제목 · 둘째 줄(· 메모).
 private struct TimelineCard: View {
     let icon: Ico
     let dot: Color
     let title: String
     let sub: String?
     let memo: String?
-    /// U88 새 줄 강조: 시트로 막 저장한 줄은 옅은 accentSoft 바탕으로 보였다가 1.4초 뒤 `light`(900ms)로 걷힌다(동작 줄이기면 1.6초 뒤 바로).
+    /// 새 줄 강조: 시트로 막 저장한 줄은 옅은 accentSoft 바탕으로 보였다가 1.4초 뒤 `light`(900ms)로 걷힌다(동작 줄이기면 1.6초 뒤 바로).
     var fresh = false
     var freshDone: () -> Void = {}
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -220,7 +220,7 @@ private struct HourHead: View {
     }
 }
 
-/// 되돌리기 띠(U38·U64): "지웠어요" 또는 "기록 n건을 가져왔어요" + "되돌리기". 어느 탭에서 지우거나 가져와도 같은 띠다.
+/// 되돌리기 띠: "지웠어요" 또는 "기록 n건을 가져왔어요" + "되돌리기". 어느 탭에서 지우거나 가져와도 같은 띠다.
 /// 띠의 수명(5초, 다른 띠로 바뀜)은 RecordCare 한 곳이 정하고 이 화면은 떠 있는 띠를 그리기만 한다(가져오기는 띠가 끝난 뒤 차로 보낸다).
 struct UndoBar: View {
     @Environment(CareTabsViewModel.self) private var vm
@@ -230,7 +230,8 @@ struct UndoBar: View {
             HStack {
                 Text(CareText.undoText(u)).typeStyle(.bodyMedium)
                 Spacer()
-                Button { vm.undo(u) } label: { Text(CareText.undo).typeStyle(.action).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }   // 터치 영역 44pt(8장)
+                // 터치 영역 44pt
+                Button { vm.undo(u) } label: { Text(CareText.undo).typeStyle(.action).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
             }
             .foregroundStyle(DS.surface)   // 글자·바탕을 뒤집어 밝음·어둠 모두 읽힌다
             .padding(.horizontal, 18).padding(.vertical, 6)
@@ -240,7 +241,7 @@ struct UndoBar: View {
     }
 }
 
-/// 위쪽 날짜 띠(시안 .datestrip: 46×62 알약, 요일 12/500 + 날 17, 고르면 먹색 반전): 지난 30일. 기록이 있는 날이 그 밖이면 그날까지 늘린다.
+/// 위쪽 날짜 띠(46×62 알약, 요일 12/500 + 날 17, 고르면 먹색 반전): 지난 30일. 기록이 있는 날이 그 밖이면 그날까지 늘린다.
 /// 읽어 주기는 "오늘"·"어제"·"11월 5일(수)".
 private struct DayStrip: View {
     @Binding var selected: String
@@ -301,8 +302,8 @@ private struct DayStrip: View {
     }
 }
 
-/// 패턴(C5, R14·R16, 시안 S.pattern): 지난 7일 숫자 → 수유 간격 7일 막대 → (잠·기저귀 켬) 잠 패턴 히트맵 → 차에서 울음 7일 막대 → 덧붙임.
-/// 값을 붙이는 규칙은 안드로이드 PatternView·ChartData와 같다(진행 기록 '결정' 2~5).
+/// 패턴: 지난 7일 숫자 → 수유 간격 7일 막대 → (잠·기저귀 켬) 잠 패턴 히트맵 → 차에서 울음 7일 막대 → 덧붙임.
+/// 값을 붙이는 규칙은 안드로이드 PatternView·ChartData와 같다.
 private struct PatternView: View {
     @Environment(RecordsViewModel.self) private var vm
     let now: Date
@@ -310,7 +311,7 @@ private struct PatternView: View {
     var body: some View {
         let ui = vm.ui.pattern(now: CareTime.ms(now))
         let iw = ui.interval, cw = ui.carCries
-        // 블록마다 한 행(바깥 RecordsView의 List가 담는다). 행 사이 12, 옆 12(시안 `.pad`).
+        // 블록마다 한 행(바깥 RecordsView의 List가 담는다). 행 사이 12, 옆 12.
         Group {
             VStack(alignment: .leading, spacing: 0) {
                 BlockHeader(title: CareText.patternHeader)
@@ -327,7 +328,7 @@ private struct PatternView: View {
                            iw.usualMs.map { Text("평소 " + CareFormat.length($0)) }].compactMap { $0 }
                 if !sub.isEmpty { BlockSub(text: sub.dropFirst().reduce(sub[0]) { $0 + Text(" · ") + $1 }) }
                 if ui.numbers.feedIntervalMedianMs == nil {
-                    // U85 ③: 간격 5개 미만이면 가짜 막대 없이 바닥 눈금 + 문구 + 쌓인 수를 점 다섯으로
+                    // 간격 5개 미만이면 가짜 막대 없이 바닥 눈금 + 문구 + 쌓인 수를 점 다섯으로
                     IntervalStub(labels: iw.bars.map(\.label), count: ui.numbers.feedIntervalCount)
                 } else {
                     WeekBarsChart(items: iw.bars.enumerated().map { i, b in
@@ -343,7 +344,8 @@ private struct PatternView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     BlockHeader(title: CareText.sleepPattern)
                     if let avg = g.avgMs {
-                        BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).font(DS.font(.metaStrong)).foregroundColor(DS.textPrimary) + Text(" · " + CareText.basedOn(days: g.sleepDays)))
+                        BlockSub(text: Text("하루 평균 ") + Text(CareFormat.length(avg)).font(DS.font(.metaStrong)).foregroundColor(DS.textPrimary) +
+                                 Text(" · " + CareText.basedOn(days: g.sleepDays)))
                     }
                     SleepHeatChart(grid: g)
                 }
@@ -371,7 +373,7 @@ private struct PatternView: View {
         .listRowSeparator(.hidden)
     }
 
-    /// 지난 7일 숫자 칸(결정 2): 하루 수유 "평균 n번"·"{n}일 기준", 수유 간격 "{기간}"·"보통", 차에서 울음 "{n}번"·"7일 동안", 켜면 하루 잠·하루 기저귀.
+    /// 지난 7일 숫자 칸: 하루 수유 "평균 n번"·"{n}일 기준", 수유 간격 "{기간}"·"보통", 차에서 울음 "{n}번"·"7일 동안", 켜면 하루 잠·하루 기저귀.
     private func kpiItems(_ ui: PatternUi) -> [KpiRow.Item] {
         let p = ui.numbers, trend = ui.feedTrend
         func days(_ n: Int?) -> String? { n.flatMap { $0 > 0 ? CareText.basedOn(days: $0) : nil } }
@@ -380,17 +382,19 @@ private struct PatternView: View {
             KpiRow.Item(name: CareText.patternFeeds, value: p.feedsPerDay.map(CareText.avgCount) ?? CareText.noRecords, sub: days(p.feedDays), note: trend),
             KpiRow.Item(name: CareText.patternInterval, value: p.feedIntervalMedianMs.map(CareFormat.length) ?? "—",
                         sub: p.feedIntervalMedianMs == nil ? CareText.patternFewIntervals : CareText.medianWord),
-            KpiRow.Item(name: CareText.patternCarCries, value: CareText.times(p.carCries), sub: CareText.sevenDays),
+            KpiRow.Item(name: CareText.patternCarCries, value: CareText.times(p.carCries), sub: CareText.sevenDays)
         ]
         if vm.ui.care.sleepDiaperEnabled {
-            items.append(KpiRow.Item(name: CareText.patternSleep, value: p.sleepMsPerDay.map(CareText.avgDuration) ?? CareText.noRecords, sub: days(p.sleepDays)))
-            items.append(KpiRow.Item(name: CareText.patternDiapers, value: p.diapersPerDay.map(CareText.avgCount) ?? CareText.noRecords, sub: days(p.diaperDays)))
+            items.append(KpiRow.Item(name: CareText.patternSleep, value: p.sleepMsPerDay.map(CareText.avgDuration) ?? CareText.noRecords,
+                sub: days(p.sleepDays)))
+            items.append(KpiRow.Item(name: CareText.patternDiapers, value: p.diapersPerDay.map(CareText.avgCount) ?? CareText.noRecords,
+                sub: days(p.diaperDays)))
         }
         return items
     }
 }
 
-/// U85 ③ 수유 간격 빈 상태: 막대 자리는 바닥 눈금(요일)만, 가운데 '기록이 더 쌓이면 보여 드려요' + 쌓인 간격 수를 점 다섯으로.
+/// 수유 간격 빈 상태: 막대 자리는 바닥 눈금(요일)만, 가운데 '기록이 더 쌓이면 보여 드려요' + 쌓인 간격 수를 점 다섯으로.
 private struct IntervalStub: View {
     let labels: [String]
     let count: Int

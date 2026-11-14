@@ -38,7 +38,7 @@ final class FileCareStore: CareStore {
         return (try? data.write(to: url, options: .atomic)) == nil ? nil : url
     }
 
-    /// 깨진 사본을 지운다. '이 휴대폰의 기록 지우기'에서만 부른다(연결 끊기는 돌봄 기록을 남긴다, R9).
+    /// 깨진 사본을 지운다. '이 휴대폰의 기록 지우기'에서만 부른다(연결 끊기는 돌봄 기록을 남긴다).
     static func removeBrokenCopies(in dir: URL = FileStateStore.supportDirectory) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         for n in names where n.hasPrefix("care.json.broken-") {
@@ -48,7 +48,7 @@ final class FileCareStore: CareStore {
 }
 
 extension CareExport {
-    /// 공유하려고 임시 폴더에 쓴 사본(`aigyeot-care-*.csv`)을 지운다. '이 휴대폰의 기록 지우기'가 부른다(계약 7.4).
+    /// 공유하려고 임시 폴더에 쓴 사본(`aigyeot-care-*.csv`)을 지운다. '이 휴대폰의 기록 지우기'가 부른다.
     static func removeCopies(in dir: URL = FileManager.default.temporaryDirectory) {
         let fm = FileManager.default
         for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] where name.hasPrefix("aigyeot-care-") && name.hasSuffix(".csv") {
@@ -57,9 +57,9 @@ extension CareExport {
     }
 }
 
-// MARK: 고른 파일 읽기(기록 가져오기 U64)
+// MARK: 고른 파일 읽기(기록 가져오기)
 
-/// 파일 고르기 바로 뒤 한 곳(9.1): 보안 범위 접근 시작·끝, 파일 제공자와 맞춘 읽기(NSFileCoordinator), `limit` 바이트까지만.
+/// 파일 고르기 바로 뒤 한 곳: 보안 범위 접근 시작·끝, 파일 제공자와 맞춘 읽기(NSFileCoordinator), `limit` 바이트까지만.
 /// 빈 파일은 빈 데이터(읽기 실패와 구별), 열거나 읽지 못하면 nil.
 struct CoordinatedFileReader: PickedFileReader {
     func read(_ url: URL, upTo limit: Int) -> Data? {

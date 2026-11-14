@@ -2,7 +2,7 @@ import SwiftUI
 import CoreImage.CIFilterBuiltins
 import UniformTypeIdentifiers
 
-/// 정보·라이선스의 한 줄(U28·U63): 앱에 링크되는 오픈소스와 그 라이선스. 누르면 `Licenses/`의 전문을 보인다.
+/// 정보·라이선스의 한 줄: 앱에 링크되는 오픈소스와 그 라이선스. 누르면 `Licenses/`의 전문을 보인다.
 struct OssEntry: Identifiable {
     let name: String, artifact: String, licenses: [(name: String, file: String)]
     var id: String { name }
@@ -17,7 +17,7 @@ struct OssEntry: Identifiable {
         OssEntry(name: "Promises", artifact: "promises 2.4.1 (FBLPromises)", licenses: [("Apache License 2.0", "Apache-2.0")]),
         OssEntry(name: "nanopb", artifact: "nanopb 2.30910.1", licenses: [("zlib License", "Zlib-nanopb")]),
         OssEntry(name: "Pretendard", artifact: "Pretendard Variable 1.3.9 (서체)", licenses: [("SIL Open Font License 1.1", "OFL-Pretendard")]),
-        OssEntry(name: "Lucide", artifact: "lucide-static 1.70.0 (선 아이콘 SVG)", licenses: [("ISC License", "ISC-Lucide")]),
+        OssEntry(name: "Lucide", artifact: "lucide-static 1.70.0 (선 아이콘 SVG)", licenses: [("ISC License", "ISC-Lucide")])
     ]
 
     /// 전문. 앱 묶음에 없으면 nil(시험이 모든 파일이 있는지 본다).
@@ -62,7 +62,7 @@ private struct OwnerGuardians: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 12) {
-                BlockHeader(title: "다른 보호자 초대")   // B4: 머리는 명사, 설명은 줄마다 한 문장(v8b-6 ③, v8b-10 ⑧ 정보 줄)
+                BlockHeader(title: "다른 보호자 초대")   // 머리는 명사, 설명은 줄마다 한 문장
                 VStack(alignment: .leading, spacing: 14) {
                     InfoRow(icon: .bell, title: "리포트와 인계 알림을 같이 받아요")
                     InfoRow(icon: .clock, title: "코드는 24시간 동안 한 번만 쓸 수 있어요")
@@ -71,7 +71,7 @@ private struct OwnerGuardians: View {
                 if let invite = vm.ui.invite { InviteCard(invite: invite) }
                 if vm.ui.busy { HStack { ProgressView(); Text("초대 코드를 만들고 있어요").typeStyle(.body) } }
                 if let error = vm.ui.error { Text(error).typeStyle(.caption).foregroundStyle(DesignSystem.danger) }
-                // 코드를 만든 뒤에는 주 단추가 '링크로 보내기'(카드 안)이고 다시 만들기는 글자 단추(v8b-7: 파랑 '만들기'가 남아 위계가 뒤집혔다)
+                // 코드를 만든 뒤에는 주 단추가 '링크로 보내기'(카드 안)이고 다시 만들기는 글자 단추(파랑 '만들기'가 남아 위계가 뒤집혔다)
                 if vm.ui.invite == nil {
                     Button { Task { await vm.makeInvite() } } label: { Label { Text("초대 코드 만들기") } icon: { IconImage(.userPlus, size: 20) } }
                         .buttonStyle(.pill).disabled(vm.ui.busy || vm.ui.offline)
@@ -87,7 +87,8 @@ private struct OwnerGuardians: View {
                 if vm.ui.phones.isEmpty { Text("아직 없어요").typeStyle(.body).foregroundStyle(DesignSystem.textTertiary).padding(.bottom, 12) }
                 ForEach(vm.ui.phones, id: \.deviceId) { d in
                     ListRow(icon: .smartphone, title: d.role == .owner ? "함께 타는 보호자" : "다른 보호자",
-                            sub: [d.platform == .ios ? "iPhone" : "Android", d.deviceId == vm.ui.myDeviceId ? "이 휴대폰" : nil].compactMap { $0 }.joined(separator: " · ")) { EmptyView() }
+                            sub: [d.platform == .ios ? "iPhone" : "Android", d.deviceId == vm.ui.myDeviceId ? "이 휴대폰" : nil].compactMap { $0 }
+                                .joined(separator: " · ")) { EmptyView() }
                 }
             }
             .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))
@@ -96,9 +97,9 @@ private struct OwnerGuardians: View {
     }
 }
 
-/// 초대 코드, 링크로 보내기, QR(받는 사람은 연결 화면에서 QR을 찍어도 된다). QR 가운데에 앱 표지(시안: 실제 QR에 가운데 로고만 얹는다).
+/// 초대 코드, 링크로 보내기, QR(받는 사람은 연결 화면에서 QR을 찍어도 된다). QR 가운데에 앱 표지(실제 QR에 가운데 로고만 얹는다).
 private struct InviteCard: View {
-    @ScaledMetric(relativeTo: .title) private var codeSize: CGFloat = 30   // 대조할 코드도 동적 글자 크기를 따른다(8장)
+    @ScaledMetric(relativeTo: .title) private var codeSize: CGFloat = 30   // 대조할 코드도 동적 글자 크기를 따른다
     let invite: InviteResponse
 
     var body: some View {
@@ -147,11 +148,11 @@ private struct GuardianToggle: View {
                         get: { vm.ui.handoffAlerts },
                         set: { on in
                             Task {
-                                if await vm.setHandoff(on), on { await NotificationAccess.request() }   // 켤 때 다시 묻는다(7.3)
+                                if await vm.setHandoff(on), on { await NotificationAccess.request() }   // 켤 때 다시 묻는다
                             }
                         }))
                     .labelsHidden().tint(DesignSystem.accent)
-                    .disabled(vm.ui.busy)   // 요청이 겹치면 응답 순서에 따라 화면과 실제 설정이 달라진다(요청 중은 뷰모델에, S17)
+                    .disabled(vm.ui.busy)   // 요청이 겹치면 응답 순서에 따라 화면과 실제 설정이 달라진다(요청 중은 뷰모델에)
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -161,7 +162,7 @@ private struct GuardianToggle: View {
     }
 }
 
-/// 설정(5장 순서, 시안 S.settings 묶음): [보호자 · 아기 별명] [잠·기저귀도 적기] [내 기록 내보내기 · 다른 앱 기록 가져오기(U64)]
+/// 설정(묶음 순서): [보호자 · 아기 별명] [잠·기저귀도 적기] [내 기록 내보내기 · 다른 앱 기록 가져오기]
 /// [연결 끊기 · 이 휴대폰의 기록 지우기] [정보·라이선스].
 struct SettingsView: View {
     @Environment(SettingsViewModel.self) private var vm
@@ -201,19 +202,19 @@ struct SettingsView: View {
                         }
                         .enterRise(1)
                         Group26 {
-                            // C7·U29: 누를 때 CSV를 만들어 공유 시트로 넘긴다. U33: 공유 시트 제목은 비운다
+                            // 누를 때 CSV를 만들어 공유 시트로 넘긴다. 공유 시트 제목은 비운다
                             ShareLink(item: CareExportFile(export: { [vm] in vm.export() }), preview: SharePreview("")) {
                                 SettingRow(icon: .download, title: CareText.export)
                             }
                             .buttonStyle(.plain)
-                            // U64: 내보내기 바로 아래. owner·guardian 모두.
+                            // 내보내기 바로 아래. owner·guardian 모두.
                             Button { vm.startImport() } label: { SettingRow(icon: .fileUp, title: CareText.importEntry, sub: CareText.importEntrySub) }
                                 .buttonStyle(.plain)
                         }
                         .enterRise(2)
                         Group26 {
                             if vm.ui.connected {
-                                // 7.2 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서 인터넷이 필요하다). 초대 만들기와 같다
+                                // 설정 '연결 끊기 막음'(중계의 토큰을 지워야 해서 인터넷이 필요하다). 초대 만들기와 같다
                                 Button { confirmDisconnect = true } label: {
                                     SettingRow(icon: .unlink, title: CareText.disconnect,
                                                sub: busy ? "끊고 있어요" : vm.ui.offline ? "인터넷이 필요해요" : nil, irreversible: true)   // 끊으면 차 화면의 새 코드 없이는 되돌릴 수 없다
@@ -247,24 +248,24 @@ struct SettingsView: View {
                 Button(CareText.save) { vm.setNickname(nickname) }
                 Button(CareText.cancel, role: .cancel) {}
             }
-            // 확인 창(B18·U71): 제목 질문 / 본문 누르면 생기는 일 / 주 동작 + '닫기'
+            // 확인 창: 제목 질문 / 본문 누르면 생기는 일 / 주 동작 + '닫기'
             .confirmationDialog(CareText.disconnectConfirm, isPresented: $confirmDisconnect, titleVisibility: .visible) {
                 Button(CareText.disconnectAction, role: .destructive) { vm.startDisconnect() }
                 Button(CareText.closeDialog, role: .cancel) {}
             } message: {
-                Text(CareText.disconnectConfirmNote)   // R9
+                Text(CareText.disconnectConfirmNote)
             }
             .confirmationDialog(CareText.clearConfirm, isPresented: $confirmClear, titleVisibility: .visible) {
                 Button(CareText.delete, role: .destructive) { vm.clearRecords() }
                 Button(CareText.closeDialog, role: .cancel) {}
             } message: {
-                Text(CareText.clearConfirmNote)   // R10
+                Text(CareText.clearConfirmNote)
             }
         }
     }
 }
 
-/// 정보·라이선스(U28·U63): 판, 오픈소스 라이선스(링크되는 라이브러리·서체·아이콘마다 이름·라이선스, 누르면 전문. 안드로이드와 같은 구조).
+/// 정보·라이선스: 판, 오픈소스 라이선스(링크되는 라이브러리·서체·아이콘마다 이름·라이선스, 누르면 전문. 안드로이드와 같은 구조).
 private struct AboutView: View {
     let version: String
 
@@ -291,7 +292,7 @@ private struct AboutView: View {
     }
 }
 
-/// 한 라이브러리의 라이선스 전문(U28·U63, 안드로이드 LicenseScreen과 같다).
+/// 한 라이브러리의 라이선스 전문(안드로이드 LicenseScreen과 같다).
 struct LicenseView: View {
     let entry: OssEntry
 

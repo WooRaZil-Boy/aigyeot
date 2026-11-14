@@ -1,6 +1,6 @@
 import Foundation
 
-// 중계 HTTP API 요청·응답 본문(contracts-link.md 1.4). 메시지 보내기·ack·초대 만들기의 요청은 봉투다.
+// 중계 HTTP API 요청·응답 본문. 메시지 보내기·ack·초대 만들기의 요청은 봉투다.
 
 struct ErrorResponse: Codable, Equatable { var error: ErrorDetail }
 struct ErrorDetail: Codable, Equatable { var code: String; var message: String }
@@ -45,13 +45,13 @@ struct DeviceInfo: Codable, Equatable {
     var pairedAt: String
     @NullEncoded var lastSeenAt: String?
     var online: Bool
-    /// 차 행에는 없다(1.4 예시).
+    /// 차 행에는 없다.
     var handoffAlerts: Bool?
 }
 
 struct DevicesResponse: Codable, Equatable { var snapshotSeq: Int64; var devices: [DeviceInfo] }
 
-/// `PATCH /v1/devices/me`의 `push_token` 세 상태(1.4): 빠짐 = 그대로, 문자열 = 바꾸기, 명시적 null = 지우기.
+/// `PATCH /v1/devices/me`의 `push_token` 세 상태: 빠짐 = 그대로, 문자열 = 바꾸기, 명시적 null = 지우기.
 enum PushTokenPatch: Equatable {
     case keep
     case set(String)
@@ -110,7 +110,7 @@ struct InboxResponse: Codable, Equatable { var messages: [Envelope]; var more: B
 
 struct UploadSongResponse: Codable, Equatable { var songId: String; var sizeBytes: Int64 }
 
-// ---- POST /v1/llm (차만 쓴다. 계약 시험에서 형식을 맞추려고 둔다) ----
+// ---- POST /v1/llm (차만 쓴다. 프로토콜 시험에서 형식을 맞추려고 둔다) ----
 
 struct LlmCry: Codable, Equatable {
     @NullEncoded var currentMin: Int?
@@ -146,11 +146,11 @@ struct LlmState: Codable, Equatable {
     @NullEncoded var nextRest: LlmNextRest?
     var methodStats: [MethodStat]
     @NullEncoded var lastNightWakeups: Int?
-    // 계약 '선택': 없으면 키가 빠진다.
-    var sleep: LlmSleep? = nil
-    var diaper: LlmDiaper? = nil
-    var feedsToday: Int? = nil
-    var careAsOfMinAgo: Int? = nil
+    // 메시지 형식 '선택': 없으면 키가 빠진다.
+    var sleep: LlmSleep?
+    var diaper: LlmDiaper?
+    var feedsToday: Int?
+    var careAsOfMinAgo: Int?
 }
 
 struct LlmRequest: Codable, Equatable {

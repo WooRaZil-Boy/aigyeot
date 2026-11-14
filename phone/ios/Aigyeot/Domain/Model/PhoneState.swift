@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: 폰 상태(`state.json`, 계약 7.4)
+// MARK: 폰 상태(`state.json`)
 
 enum SongState: Codable, Equatable {
     case uploading                 // 올리는 중
@@ -17,7 +17,7 @@ struct SongRow: Codable, Equatable, Identifiable {
     var durationS: Double?
     var state: SongState
     var candidate = false
-    /// 이 곡에 적용한 마지막 `song_status`의 `seq`(큰 `seq`가 이긴다, G19).
+    /// 이 곡에 적용한 마지막 `song_status`의 `seq`(큰 `seq`가 이긴다).
     var lastSeq: Int64 = 0
     var addedAt: Date
     /// 지운 시각. 지움 표시를 7일 뒤에 지우는 기준이다(추가 시각이 아니다).
@@ -29,7 +29,7 @@ struct SongRow: Codable, Equatable, Identifiable {
 struct FeedingRecord: Codable, Equatable, Identifiable {
     enum Status: String, Codable { case sending, sent, reflected, expired, failed }
     var id: String          // 메시지 id
-    var at: Date            // 누른 시각(고치지 않는다, G33)
+    var at: Date            // 누른 시각(고치지 않는다)
     var fixedAt: Date?      // 중계가 고쳐 저장한 값
     var sentAt: Date?
     var status: Status = .sending
@@ -56,13 +56,13 @@ struct StoredAlert: Codable, Equatable, Identifiable {
     var body: HandoffAlertBody
 }
 
-/// 보낼 함 항목의 종류(P2: 종류마다 필요한 칸만 둔다). 노래 올리기만 파일 PUT 표시를, 돌봄 요약만 '보내 봄'을 갖는다.
+/// 보낼 함 항목의 종류(종류마다 필요한 칸만 둔다). 노래 올리기만 파일 PUT 표시를, 돌봄 요약만 '보내 봄'을 갖는다.
 enum OutboxPayload: Equatable {
     /// 한 번에 보내는 메시지(feeding_started·song_removed·song_selected 등).
     case message(type: String, body: JSONValue)
-    /// 노래 올리기(7.5 두 단계): 파일 `PUT`이 끝나면 `uploaded`가 참이 되고 그다음 `song_added`를 보낸다.
+    /// 노래 올리기(두 단계): 파일 `PUT`이 끝나면 `uploaded`가 참이 되고 그다음 `song_added`를 보낸다.
     case song(songId: String, body: JSONValue, uploaded: Bool)
-    /// 돌봄 요약. `tried`: 보내기 직전에 저장하는 '보내 봄'(U57). 보내 본 요약은 바꾸지 않는다.
+    /// 돌봄 요약. `tried`: 보내기 직전에 저장하는 '보내 봄'. 보내 본 요약은 바꾸지 않는다.
     case careSummary(body: JSONValue, tried: Bool)
 }
 
@@ -73,10 +73,10 @@ struct OutboxItem: Equatable, Identifiable {
     var createdAt: Date
     var attempts = 0
     var nextTryAt: Date
-    /// 지금 기다림이 망 실패(응답 없음)에서 왔다. 인터넷 복구·'다시 시도'·앞으로 오기 때 당긴다(7.5). 중계가 준 기다림은 거짓
+    /// 지금 기다림이 망 실패(응답 없음)에서 왔다. 인터넷 복구·'다시 시도'·앞으로 오기 때 당긴다. 중계가 준 기다림은 거짓
     var networkWait = false
 
-    /// 계약의 메시지 type·body(보낼 때 봉투에 싣는다).
+    /// 메시지 type·body(보낼 때 봉투에 싣는다).
     var type: String {
         switch payload {
         case .message(let t, _): t
@@ -85,7 +85,9 @@ struct OutboxItem: Equatable, Identifiable {
         }
     }
     var body: JSONValue {
-        switch payload { case .message(_, let b), .song(_, let b, _), .careSummary(let b, _): b }
+        switch payload {
+        case .message(_, let b), .song(_, let b, _), .careSummary(let b, _): b
+        }
     }
     /// 노래면 올릴 곡 id.
     var songId: String? { if case .song(let id, _, _) = payload { id } else { nil } }
@@ -96,18 +98,22 @@ struct OutboxItem: Equatable, Identifiable {
     mutating func markUploaded(_ v: Bool) {
         if case .song(let id, let b, _) = payload { payload = .song(songId: id, body: b, uploaded: v) }
     }
-    /// 요약의 '보내 봄'(U57). 요약이 아니면 바뀌지 않는다.
+    /// 요약의 '보내 봄'. 요약이 아니면 바뀌지 않는다.
     mutating func markTried(_ v: Bool) {
         if case .careSummary(let b, _) = payload { payload = .careSummary(body: b, tried: v) }
     }
 
-    /// 저장 파일·계약의 칸(type·body·songId·uploaded·sentOnce)에서 종류를 정한다.
+    /// 저장 파일의 칸(type·body·songId·uploaded·sentOnce)에서 종류를 정한다.
     init(id: String, type: String, body: JSONValue, ts: String, songId: String? = nil, uploaded: Bool = false,
          createdAt: Date, attempts: Int = 0, nextTryAt: Date, sentOnce: Bool = false, networkWait: Bool = false) {
         self.id = id
-        if let songId, type == MessageType.songAdded { payload = .song(songId: songId, body: body, uploaded: uploaded) }
-        else if type == MessageType.careSummary { payload = .careSummary(body: body, tried: sentOnce) }
-        else { payload = .message(type: type, body: body) }
+        if let songId, type == MessageType.songAdded {
+            payload = .song(songId: songId, body: body, uploaded: uploaded)
+        } else if type == MessageType.careSummary {
+            payload = .careSummary(body: body, tried: sentOnce)
+        } else {
+            payload = .message(type: type, body: body)
+        }
         self.ts = ts
         self.createdAt = createdAt
         self.attempts = attempts
@@ -116,7 +122,7 @@ struct OutboxItem: Equatable, Identifiable {
     }
 }
 
-/// 기기별로 마지막에 적용한 연결 변경(`paired`·`unpaired`)의 seq와 삭제 표시(계약 8.4의 `phone_link_mark`와 같은 뜻).
+/// 기기별로 마지막에 적용한 연결 변경(`paired`·`unpaired`)의 seq와 삭제 표시(`phone_link_mark`와 같은 뜻).
 /// `GET /v1/devices` 목록을 합칠 때 `snapshot_seq`보다 새로운 변경을 지키는 데 쓴다.
 struct DeviceMark: Codable, Equatable {
     var seq: Int64
@@ -144,22 +150,21 @@ struct PhoneState: Codable, Equatable {
     /// 마지막으로 적용한 `GET /v1/devices`의 `snapshot_seq`. 목록과 함께 저장한다. 이보다 작은 응답과 이 이하 seq의 연결 이벤트는 낡은 것이다.
     var devicesSnapshotSeq: Int64 = 0
     var handoffAlerts: Bool?
-    /// G39
     var lastReceivedAt: Date?
     var needsStateRequest = false
     var lastStateRequestAt: Date?
-    /// 차로 보낸 마지막 수유 시작 시각(epoch ms). 보낼 함과 같은 저장에서 올린다(phone-care-plan U3·R5).
+    /// 차로 보낸 마지막 수유 시작 시각(epoch ms). 보낼 함과 같은 저장에서 올린다.
     var lastSentFeedingAt: Int64?
-    /// 마지막으로 보낸 `care_summary` body에서 `as_of`를 뺀 것. 보낼 함과 같은 저장에서 바꾼다(phone-care-plan R19).
+    /// 마지막으로 보낸 `care_summary` body에서 `as_of`를 뺀 것. 보낼 함과 같은 저장에서 바꾼다.
     var lastSentCareSummary: JSONValue?
     /// 마지막으로 보낸 요약의 `as_of`와 지금까지 보낸 가장 늦은 `as_of`(epoch ms, 초 단위로 내림). 같은 저장에서 바꾼다.
     /// 시계가 뒤로 가 차가 무시했을 수 있는 요약을 다시 보내는 데 쓴다.
     var lastSentCareAsOf: Int64?
     var maxSentCareAsOf: Int64?
-    /// '기록 지우기'를 누른 순간의 돌봄 기록 id. 그 돌봄 기록 지우기를 아직 마치지 못했다(R10). 마칠 때까지 요약을 보내지 않는다.
+    /// '기록 지우기'를 누른 순간의 돌봄 기록 id. 그 돌봄 기록 지우기를 아직 마치지 못했다. 마칠 때까지 요약을 보내지 않는다.
     /// id로 한정해, 그 뒤 저장한 새 기록은 지우지 않는다.
     var clearingCareIds: [String]?
-    /// 버린 메시지 type 중 사용자가 아직 띠를 닫지 않은 것(U54). 보낼 함에서 뺄 때 같은 저장에 넣고 '닫기'에서 지운다.
+    /// 버린 메시지 type 중 사용자가 아직 띠를 닫지 않은 것. 보낼 함에서 뺄 때 같은 저장에 넣고 '닫기'에서 지운다.
     var unseenDrops: [String] = []
 }
 

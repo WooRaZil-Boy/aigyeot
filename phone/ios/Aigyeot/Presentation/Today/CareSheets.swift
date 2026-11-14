@@ -2,7 +2,7 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-// 타이머(C2, 시안 S.timer)와 시트 입구. 기록 시트(빠른 기록·고치기·지난 기록)는 CareEditSheet.swift(v8 2판 안 1).
+// 타이머와 시트 입구. 기록 시트(빠른 기록·고치기·지난 기록)는 CareEditSheet.swift.
 
 struct CareSheetView: View {
     let sheet: CareSheet
@@ -10,7 +10,7 @@ struct CareSheetView: View {
     var body: some View {
         switch sheet {
         case .quick(let kind, let day): Scoped({ $0.careSheet(.new(kind, day: day)) }) { vm in if let d = vm.draft { CareEditSheet(draft: d) } }
-        case .past(let day): Scoped({ $0.careSheet(.new(.feed, day: day, chooseKind: true)) }) { vm in if let d = vm.draft { CareEditSheet(draft: d) } }   // U86
+        case .past(let day): Scoped({ $0.careSheet(.new(.feed, day: day, chooseKind: true)) }) { vm in if let d = vm.draft { CareEditSheet(draft: d) } }
         case .edit(let id): Scoped({ $0.careSheet(.edit(id)) }) { vm in if let d = vm.draft { CareEditSheet(draft: d) } }
         case .timer(let id): Scoped({ $0.timer(id: id) }) { _ in TimerView() }
         }
@@ -24,7 +24,7 @@ private struct SheetToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button(action: cancel) {
-                if #available(iOS 26, *) { IconImage(.x, size: 20).foregroundStyle(DS.textPrimary) } else { Text(CareText.cancel) }   // 시안 .gbtn: 먹색 X
+                if #available(iOS 26, *) { IconImage(.x, size: 20).foregroundStyle(DS.textPrimary) } else { Text(CareText.cancel) }   // 먹색 X
             }
             .accessibilityLabel(CareText.cancel)
         }
@@ -54,7 +54,7 @@ private struct AmountRow: View {
     }
 }
 
-/// 시트 안 행 묶음(시안 .sheet .rows): 옅은 판(먹색 4%) 모서리 20, 행 50 이상, 사이 선(행마다 위 선, 첫 선은 가린다).
+/// 시트 안 행 묶음: 옅은 판(먹색 4%) 모서리 20, 행 50 이상, 사이 선(행마다 위 선, 첫 선은 가린다).
 private struct SheetRows<Content: View>: View {
     @ViewBuilder var content: () -> Content
     var body: some View {
@@ -87,8 +87,8 @@ private struct SheetRow<Value: View>: View {
 
 // MARK: 타이머
 
-/// 타이머(C2, 시안 S.timer): 링(1시간에 한 바퀴, 초침 점) + 큰 경과 + "수유 중 · 왼쪽" → 쪽 세그먼트(젖병이면 양) → 끝내기 → 시작 시각 고치기 → 이 기록 지우기.
-/// 최대 길이를 넘으면 U14의 두 버튼.
+/// 타이머: 링(1시간에 한 바퀴, 초침 점) + 큰 경과 + "수유 중 · 왼쪽" → 쪽 세그먼트(젖병이면 양) → 끝내기 → 시작 시각 고치기 → 이 기록 지우기.
+/// 최대 길이를 넘으면 두 버튼.
 struct TimerView: View {
     @Environment(TimerViewModel.self) private var vm
     @Environment(\.dismiss) private var dismiss
@@ -103,13 +103,12 @@ struct TimerView: View {
             if let e = event, e.inProgress {
                 ScrollView {
                     VStack(spacing: 22) {
-                        // 시안 S.timer 순서: 링 → 쪽(젖병이면 양) → 끝내기 → 시작 시각 고치기 → 이 기록 지우기
+                        // 순서: 링 → 쪽(젖병이면 양) → 끝내기 → 시작 시각 고치기 → 이 기록 지우기
                         TimelineView(.periodic(from: .now, by: 1)) { ctx in TimerRing(event: e, now: CareTime.ms(ctx.date)) }
                         if e.kind == .feed { feedControls(e) }
                         // 최대 길이 판정은 초마다(넘은 뒤 '끝내기'가 남아 끝 시각 모름으로 닫지 않게)
                         TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                            if CareRules.isOverLimit(e, now: CareTime.ms(ctx.date)) { VStack(spacing: 12) { overLimit(e) } }
-                            else {
+                            if CareRules.isOverLimit(e, now: CareTime.ms(ctx.date)) { VStack(spacing: 12) { overLimit(e) } } else {
                                 Button { vm.end(); dismiss() } label: {
                                     Label { Text(CareText.end) } icon: { IconImage(.square, size: 20) }
                                 }
@@ -119,7 +118,7 @@ struct TimerView: View {
                         Button { picked = CareTime.date(e.startAt); editingStart = true; pickingEnd = false } label: {
                             Label { Text(CareText.editStart) } icon: { IconImage(.clock, size: 20) }
                         }
-                        .buttonStyle(.pillTonal)   // 시안 .pbtn.ton
+                        .buttonStyle(.pillTonal)
                         if editingStart || pickingEnd { timePicker(e) }
                         if let error = vm.error { Text(error).typeStyle(.caption).foregroundStyle(DS.danger) }
                         if vm.ui.guardian { Text(CareText.guardianNote).typeStyle(.caption).foregroundStyle(DS.textTertiary) }
@@ -141,7 +140,7 @@ struct TimerView: View {
         .presentationDetents([.large])
     }
 
-    /// 최대 길이를 넘음: 안내 문장(U36) + U14 버튼 둘.
+    /// 최대 길이를 넘음: 안내 문장 + 버튼 둘.
     @ViewBuilder private func overLimit(_ e: CareEvent) -> some View {
         Text(e.kind == .sleep ? CareText.overLimitSleep : CareText.overLimitFeed).typeStyle(.headline).multilineTextAlignment(.center)
         Button(CareText.pickEnd) { picked = Date(); pickingEnd = true; editingStart = false }
@@ -162,11 +161,11 @@ struct TimerView: View {
             SheetRows {
                 SheetRow(name: editingStart ? CareText.rowStart : CareText.rowEnd) {
                     DatePicker(editingStart ? CareText.rowStart : CareText.rowEnd, selection: $picked, in: ...CareRules.latestPick(now: Date()))
-                        .labelsHidden().environment(\.timeZone, e.timeZone)   // R13: 목록처럼 그 기록의 시간대로 보인다
+                        .labelsHidden().environment(\.timeZone, e.timeZone)   // 목록처럼 그 기록의 시간대로 보인다
                 }
             }
             Button {
-                // 시각을 바꾸면 겹침을 먼저 묻는다(R4, 뷰모델이 pendingTime에 둔다)
+                // 시각을 바꾸면 겹침을 먼저 묻는다(뷰모델이 pendingTime에 둔다)
                 if vm.setTime(editingStart ? .start : .end, to: picked) { timeSaved() }
             } label: { Text(CareText.save) }
             .buttonStyle(.pillTonal)
@@ -180,7 +179,7 @@ struct TimerView: View {
     }
 }
 
-/// 타이머 링(시안 .tring 300): 회색 원 + 1시간에 한 바퀴 도는 종류 색 호 + 초마다 옮기는 점. 가운데 큰 경과와 "수유 중 · 왼쪽".
+/// 타이머 링(300): 회색 원 + 1시간에 한 바퀴 도는 종류 색 호 + 초마다 옮기는 점. 가운데 큰 경과와 "수유 중 · 왼쪽".
 private struct TimerRing: View {
     let event: CareEvent
     let now: Int64
@@ -202,7 +201,7 @@ private struct TimerRing: View {
                 .animation(reduceMotion ? nil : DS.Motion.secondHand, value: seconds)
             VStack(spacing: 12) {
                 Text(CareFormat.timer(ms)).typeStyle(.timer, monospacedDigits: true).foregroundStyle(DS.textPrimary).lineLimit(1).minimumScaleFactor(0.5)
-                    .contentTransition(.numericText())   // 1초마다 바뀐 자리만 굴러간다(시안 v4-7 4, roll)
+                    .contentTransition(.numericText())   // 1초마다 바뀐 자리만 굴러간다(roll)
                     .animation(reduceMotion ? nil : DS.Motion.roll, value: seconds)
                     .accessibilityLabel(CareFormat.duration(ms))
                 Text(title).typeStyle(.bodyMedium).foregroundStyle(DS.textTertiary)
@@ -218,7 +217,7 @@ private struct TimerRing: View {
 }
 
 extension View {
-    /// 겹침 확인 창(R4·U71, 7장 표): 제목 '그래도 저장할까요?' / 본문 겹침 글 / '저장'·'닫기'(닫으면 시트·타이머로 돌아가 고친다). 시트·타이머 한 곳.
+    /// 겹침 확인 창: 제목 '그래도 저장할까요?' / 본문 겹침 글 / '저장'·'닫기'(닫으면 시트·타이머로 돌아가 고친다). 시트·타이머 한 곳.
     func overlapConfirm(_ kind: CareKind, isPresented: Binding<Bool>, save: @escaping () -> Void, close: @escaping () -> Void) -> some View {
         alert(CareText.overlapTitle, isPresented: isPresented) {
             Button(CareText.save, action: save)

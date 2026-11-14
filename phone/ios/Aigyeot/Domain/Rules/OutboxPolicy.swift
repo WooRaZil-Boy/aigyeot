@@ -9,7 +9,7 @@ enum SendOutcome: Equatable {
     case reupload
 }
 
-/// 보낼 함 응답 처리(계약 7.5, 오류 표 1.1). 순서는 넣은 순서 그대로이고 하나씩 보낸다.
+/// 보낼 함 응답 처리. 순서는 넣은 순서 그대로이고 하나씩 보낸다.
 enum OutboxPolicy {
     static let maxAge: TimeInterval = Retention.week
 

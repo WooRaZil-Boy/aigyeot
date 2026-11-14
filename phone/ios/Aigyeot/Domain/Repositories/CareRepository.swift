@@ -1,14 +1,14 @@
 import Foundation
 import Observation
 
-/// 돌봄 기록(`care.json`)의 원본(phone-care-plan 9.1, 두 앱 같은 이름). 쓰기 입구는 `update` 하나다(P7).
+/// 돌봄 기록(`care.json`)의 원본(두 앱 같은 이름). 쓰기 입구는 `update` 하나다.
 /// 그 위의 규칙(지우다 만 '기록 지우기'의 id 빼기)은 RecordCare.save 하나가 한다.
 @MainActor
 @Observable
 final class CareRepository {
     @ObservationIgnored private let store: CareStore
     private(set) var care: CareFile
-    /// 저장 실패 공통 처리(실패 범주 U: 띠 글). 합성 루트가 `Notices.saveFailed`에 잇는다.
+    /// 저장 실패 공통 처리(띠 글). 합성 루트가 `Notices.saveFailed`에 잇는다.
     @ObservationIgnored var onWriteFailed: () -> Void = {}
 
     init(store: CareStore) {
@@ -36,13 +36,13 @@ final class CareRepository {
     /// 지운 기록의 사본(깨진 원본·내보낸 CSV)을 지운다. 기록 지우기를 마칠 때만 부른다.
     func deleteCopies() { store.removeCopies() }
 
-    /// 공유할 내보내기 파일을 쓴다(C7·U29). 지난 내보내기는 지우고 새로 쓴다. 쓰지 못하면 nil.
+    /// 공유할 내보내기 파일을 쓴다. 지난 내보내기는 지우고 새로 쓴다. 쓰지 못하면 nil.
     func export(fileName: String, render: (CareFile) -> Data) -> URL? {
         store.writeExport(name: fileName, data: render(care))
     }
 }
 
-/// 디스크에 남기는 비밀값(기기 토큰)만 갖는다(phone-care-plan 9.1). 메모리의 지금 자격·세대·GONE은 PhoneStateRepository가 갖는다.
+/// 디스크에 남기는 비밀값(기기 토큰)만 갖는다. 메모리의 지금 자격·세대·GONE은 PhoneStateRepository가 갖는다.
 /// 칸이 없는 Keychain 통로라 액터에 묶지 않는다: 소켓이 붙을 때 자기 작업에서 토큰을 읽는다(나누기 전과 같다).
 final class CredentialRepository: @unchecked Sendable {
     private let store: CredentialStore

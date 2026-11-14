@@ -1,4 +1,4 @@
-"""시안 선 아이콘(Lucide ISC + 직접 그린 4개 + 기록 시트 v8 그림 7개)을 iOS 에셋 카탈로그 SVG 이미지 세트로 만든다(벡터 보존, 템플릿).
+"""선 아이콘(Lucide ISC + 직접 그린 4개 + 기록 시트 그림 7개)을 iOS 에셋 카탈로그 SVG 이미지 세트로 만든다(벡터 보존, 템플릿).
 사용: python3 gen_ios_icons.py <vendor/lucide> <lucide-static/icons> <build.py> <출력 xcassets> 이름...
 """
 import json, re, sys, pathlib
@@ -6,7 +6,7 @@ vendor, npm, build_py, out = map(pathlib.Path, sys.argv[1:5])
 names = sys.argv[5:]
 src = build_py.read_text()
 custom = dict(re.findall(r'"(\w+)": \'(.*?)\',\n', src[src.index('CUSTOM = {'):src.index('def build_icons')]))
-# 기록 시트 v8(시안 js/sheet.js ICONS): Lucide에 없는 쪽·기저귀 종류 그림. 이 그림들과 빈 상태 달력은 선 1.75(시안 .oseg·.ring svg)
+# 기록 시트: Lucide에 없는 쪽·기저귀 종류 그림. 이 그림들과 빈 상태 달력은 선 1.75
 DROP = 'M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z'
 POO = ''.join(f'<path d="{d}"/>' for d in ['M6.3 20.5h11.4a2.75 2.75 0 0 0 0-5.5H6.3a2.75 2.75 0 0 0 0 5.5z',
     'M6.6 15a2.3 2.3 0 0 1 1.9-4.5h7a2.3 2.3 0 0 1 1.9 4.5', 'M9.2 10.5c0-2.6 1.6-4.2 4.6-5 -.4 1.3.1 2.3 1 2.9.7.5.8 1.3.5 2.1'])

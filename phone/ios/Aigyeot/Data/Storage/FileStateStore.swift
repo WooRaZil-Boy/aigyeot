@@ -39,8 +39,8 @@ final class FileStateStore: StateStore {
         }
         let songs = dir.appendingPathComponent("songs", isDirectory: true)
         if FileManager.default.fileExists(atPath: songs.path) {
-            do { try FileManager.default.moveItem(at: songs, to: dir.appendingPathComponent("songs.broken-\(stamp)")) }
-            catch { refuseWrites = true }   // 녹음 폴더를 보존하지 못하면 빈 상태를 저장하지 않는다
+            // 녹음 폴더를 보존하지 못하면 빈 상태를 저장하지 않는다
+            do { try FileManager.default.moveItem(at: songs, to: dir.appendingPathComponent("songs.broken-\(stamp)")) } catch { refuseWrites = true }
         }
         return PhoneState()
     }
@@ -58,7 +58,7 @@ struct FileSongStore: SongFileStore {
     private let root: URL
     init(root: URL = FileStateStore.supportDirectory) { self.root = root }
 
-    /// 녹음 파일 폴더(`root/songs`). 접근할 때 만든다. 곡을 지울 때 함께 지운다(7.4).
+    /// 녹음 파일 폴더(`root/songs`). 접근할 때 만든다. 곡을 지울 때 함께 지운다.
     private var directory: URL {
         let d = root.appendingPathComponent("songs", isDirectory: true)
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)

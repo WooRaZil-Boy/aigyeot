@@ -2,7 +2,7 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-/// 시각은 기기 언어와 관계없이 "오후 12:52", 구간은 "오전 3:04–3:05"(7.1 시각 형식, U20·U47).
+/// 시각은 기기 언어와 관계없이 "오후 12:52", 구간은 "오전 3:04–3:05".
 private func clock(_ rfc: String) -> String { Rfc3339.parse(rfc).map { CareFormat.clock($0) } ?? rfc }
 
 private func span(_ start: String, _ end: String) -> String {
@@ -25,7 +25,7 @@ struct ReportListView: View {
                             NavigationLink { ReportDetailView(sessionId: r.body.sessionId) } label: { ReportRow(report: r) }.buttonStyle(.press)
                         }
                     }
-                    .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))   // 시안 .list(iOS 렌더 22/20/8, 제목이 없어도 같다)
+                    .block(padding: EdgeInsets(top: 22, leading: 20, bottom: 8, trailing: 20))   // 목록(22/20/8, 제목이 없어도 같다)
                 }
                 .screenPadding()
             }
@@ -37,7 +37,7 @@ struct ReportListView: View {
     }
 }
 
-/// 리포트 한 줄(U47): 길 아이콘 원 + "{날짜} {구간}" + "울음 n번". 차 탭·전체 목록·오늘 '최근 리포트'가 모두 이 줄을 쓴다.
+/// 리포트 한 줄: 길 아이콘 원 + "{날짜} {구간}" + "울음 n번". 차 탭·전체 목록·오늘 '최근 리포트'가 모두 이 줄을 쓴다.
 struct ReportRow: View {
     let report: StoredReport
     var chevron = true
@@ -46,8 +46,7 @@ struct ReportRow: View {
         let b = report.body
         let title = Rfc3339.parse(b.startedAt).flatMap { s in Rfc3339.parse(b.endedAt).map { CareText.reportTitle(start: s, end: $0) } } ?? b.startedAt
         let sub = CareText.reportSub(cries: b.timeline.filter { $0.trigger == .cryAlarm }.count, simulated: b.simulated)
-        if chevron { ListRow(icon: .route, title: title, sub: sub) }
-        else { ListRow(icon: .route, title: title, sub: sub) { EmptyView() } }
+        if chevron { ListRow(icon: .route, title: title, sub: sub) } else { ListRow(icon: .route, title: title, sub: sub) { EmptyView() } }
     }
 }
 
@@ -62,8 +61,8 @@ struct ReportDetailView: View {
     }
 }
 
-/// 리포트 상세(시안 S.report): 머리(날짜·구간·길이 + 큰 '울음 n번' + 숫자 줄) → 에피소드(띠 + 글 줄) → 방법별 성적 → 평소 대비 조향 보정 → 울음 직전 주행 → 차가 대신 한 일 → 제어 기록.
-/// 명세서 11장의 다섯 항목을 모두 그린다. 숫자 줄 규칙은 안드로이드와 같다(진행 기록 '결정' 6).
+/// 리포트 상세: 머리(날짜·구간·길이 + 큰 '울음 n번' + 숫자 줄) → 에피소드(띠 + 글 줄) → 방법별 성적 → 평소 대비 조향 보정 → 울음 직전 주행 → 차가 대신 한 일 → 제어 기록.
+/// 다섯 항목을 모두 그린다. 숫자 줄 규칙은 안드로이드와 같다.
 private struct ReportDetailContent: View {
     let report: StoredReport
     /// `song_id`로 내 곡 목록에서 이름을 찾는다. 없으면 "우리 노래".
@@ -75,18 +74,19 @@ private struct ReportDetailContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
-                    let head = [Rfc3339.parse(b.startedAt).flatMap { s in Rfc3339.parse(b.endedAt).map { CareText.reportTitle(start: s, end: $0) } } ?? b.startedAt,
+                    let head = [Rfc3339.parse(b.startedAt).flatMap { s in Rfc3339.parse(b.endedAt).map { CareText.reportTitle(start: s,
+                        end: $0) } } ?? b.startedAt,
                                 ChartData.reportMinutes(b).map { "\($0)분" }].compactMap { $0 }.joined(separator: " · ")
                     Text(head).typeStyle(.meta).foregroundStyle(DS.textTertiary)
                     Text(CareText.reportSub(cries: b.timeline.filter { $0.trigger == .cryAlarm }.count, simulated: false))
                         .typeStyle(.hero).foregroundStyle(DS.textPrimary).padding(.top, 6)
                     if b.simulated { Badge(text: "연습 장면").padding(.top, 6) }
-                    // 시안 '그칠 때까지'는 그친 시각이 리포트에 없어 쓰지 않고 '울음 시간'(totalCryS 합)을 쓴다(거짓 시간 방지, 안드로이드와 같다).
+                    // '그칠 때까지'는 그친 시각이 리포트에 없어 쓰지 않고 '울음 시간'(totalCryS 합)을 쓴다(거짓 시간 방지, 안드로이드와 같다).
                     VStack(alignment: .leading, spacing: 16) {
                         KpiRow(items: [
                             .init(name: "감지까지", value: k.detectS.map(ChartData.seconds) ?? "—"),
                             .init(name: "울음 시간", value: minSec(k.cryS)),
-                            .init(name: "차가 한 일", value: "\(k.actionKinds)가지"),
+                            .init(name: "차가 한 일", value: "\(k.actionKinds)가지")
                         ])
                         KpiRow(items: [.init(name: "정차 안내", value: "\(k.stopNotices)번")])
                     }
@@ -132,7 +132,7 @@ private struct ReportDetailContent: View {
                             KeyValues(rows: [
                                 ("속도", "평균 \(Int(c.speedKmhAvg.rounded())) · 최고 \(Int(c.speedKmhMax.rounded()))km/h"),
                                 ("브레이크", "\(c.brakePresses)번"),
-                                ("큰 조향", "\(c.steeringReversals)번"),
+                                ("큰 조향", "\(c.steeringReversals)번")
                             ] + (c.cabinTempC.map { [("실내", String(format: "%.1f℃", $0))] } ?? []))
                             Text("기어 \(c.gear.rawValue)" + (c.turnSignalUsed ? ", 방향지시등 씀" : "") + (c.playing ? ", 소리 재생 중" : "")
                                  + (c.windowOpen == true ? ", 창 열림" : ""))
@@ -144,8 +144,11 @@ private struct ReportDetailContent: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     BlockHeader(title: "차가 대신 한 일")
-                    if b.carActions.isEmpty { Text("없어요").typeStyle(.body).foregroundStyle(DS.textTertiary) }
-                    else { KeyValues(rows: b.carActions.map { (actionText($0.action), "\($0.count)번" + ($0.totalS.map { " · \(minSec($0))" } ?? "")) }) }
+                    if b.carActions.isEmpty {
+                        Text("없어요").typeStyle(.body).foregroundStyle(DS.textTertiary)
+                    } else {
+                        KeyValues(rows: b.carActions.map { (actionText($0.action), "\($0.count)번" + ($0.totalS.map { " · \(minSec($0))" } ?? "")) })
+                    }
                 }
                 .block()
 
@@ -172,7 +175,7 @@ private struct ReportDetailContent: View {
     private func note(_ s: String) -> some View { Text(s).typeStyle(.caption).foregroundStyle(DS.textTertiary).padding(.top, 10) }
 }
 
-/// 이름 · 값 줄(시안 .kv): 이름 흐림, 값 굵게 오른쪽.
+/// 이름 · 값 줄: 이름 흐림, 값 굵게 오른쪽.
 private struct KeyValues: View {
     let rows: [(String, String)]
     var body: some View {
@@ -232,7 +235,7 @@ private struct EpisodeView: View {
     }
 }
 
-/// 평소 대비 조향 보정(시안 Charts.steer): 평소·울음 중·대응 뒤 세 막대, '울음 중'만 주황. 비교할 수 없으면 이유 한 줄.
+/// 평소 대비 조향 보정: 평소·울음 중·대응 뒤 세 막대, '울음 중'만 주황. 비교할 수 없으면 이유 한 줄.
 private struct SteeringView: View {
     let s: Steering
     var body: some View {
@@ -251,7 +254,7 @@ private struct SteeringView: View {
 
 // MARK: 문구
 
-/// 소리 표시 이름(CareText.method 한 곳). 우리 노래는 곡 이름을 덧붙인다(D6 값 보충 괄호).
+/// 소리 표시 이름(CareText.method 한 곳). 우리 노래는 곡 이름을 괄호로 덧붙인다.
 private func methodName(_ m: SoundMethod, _ song: String?) -> String {
     let base = CareText.method(m)
     return m == .parentSong ? song.map { "\(base)(\($0))" } ?? base : base
@@ -259,19 +262,24 @@ private func methodName(_ m: SoundMethod, _ song: String?) -> String {
 
 /// 소리별 성적 점 행렬 줄(순서 규칙은 `CareStats.methodOrder` 한 곳, 안드로이드와 같다).
 func methodDotRows(_ stats: [MethodStat]) -> [MethodDots.Row] {
-    CareStats.methodOrder(stats).map { MethodDots.Row(id: $0.index, name: soundLabel($0.stat.method, $0.stat.label), ok: $0.stat.successes, n: $0.stat.attempts) }
+    CareStats.methodOrder(stats)
+        .map { MethodDots.Row(id: $0.index, name: soundLabel($0.stat.method, $0.stat.label), ok: $0.stat.successes, n: $0.stat.attempts) }
 }
 
-/// 차가 보낸 label을 보이되, 모르는 method(U46)는 label 대신 "기타".
+/// 차가 보낸 label을 보이되, 모르는 method는 label 대신 "기타".
 func soundLabel(_ method: SoundMethod, _ label: String) -> String {
     method == .unknown ? methodName(method, nil) : label
 }
 
-private func purposeText(_ p: PlayPurpose) -> String {
-    switch p { case .autoFirst: return "자동 1차"; case .autoSecond: return "자동 2차"; case .request: return "운전자 요청" }
+func purposeText(_ p: PlayPurpose) -> String {
+    switch p {
+    case .autoFirst: return "자동 1차"
+    case .autoSecond: return "자동 2차"
+    case .request: return "운전자 요청"
+    }
 }
 
-/// 울음 한 건의 앞 줄(U73, 안드로이드 `episodeSoundLines`와 같은 규칙): '감지까지'(울음 경보만) · '소리'(틀지 않았으면 '재생 없음') ·
+/// 울음 한 건의 앞 줄(안드로이드 `episodeSoundLines`와 같은 규칙): '감지까지'(울음 경보만) · '소리'(틀지 않았으면 '재생 없음') ·
 /// '재생'(틀었을 때만: 틀지 않았으면 '소리 · 재생 없음'이 이미 말한다). 재생마다의 줄은 그 뒤에 화면이 그린다.
 func episodeSoundLines(_ e: TimelineEpisode) -> [(String, String)] {
     var out: [(String, String)] = []
@@ -281,7 +289,7 @@ func episodeSoundLines(_ e: TimelineEpisode) -> [(String, String)] {
     return out
 }
 
-private func secondText(_ s: SecondAttempt) -> String {
+func secondText(_ s: SecondAttempt) -> String {
     let what: String
     switch s.action {
     case .comfortCool: what = "더운 실내로 판단했어요"
@@ -292,7 +300,7 @@ private func secondText(_ s: SecondAttempt) -> String {
     return what + (s.result.map { " · " + CareText.result($0) } ?? "")
 }
 
-/// U53: 차가 운전자에게 말하지 못한 인계(toldDriver == false)는 제안했다고 보이지 않는다.
+/// 차가 운전자에게 말하지 못한 인계(toldDriver == false)는 제안했다고 보이지 않는다.
 func stopHandoffText(_ s: StopInfo) -> String {
     if s.toldDriver == false {
         switch s.mode {
@@ -306,7 +314,7 @@ func stopHandoffText(_ s: StopInfo) -> String {
     case .restOffer: return s.restName.map { "\($0)에 들르자고 제안했어요" } ?? "쉼터에 들르자고 제안했어요"
     case .arrivalNotice: return "도착 안내를 했어요"
     case .noRest: return "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요"
-    case .parked: return s.reason == .noSound ? "차가 선 채로 소리를 틀지 못했어요" : "차가 선 채로 달래기를 멈췄어요"   // U59
+    case .parked: return s.reason == .noSound ? "차가 선 채로 소리를 틀지 못했어요" : "차가 선 채로 달래기를 멈췄어요"
     }
 }
 
@@ -324,14 +332,14 @@ func stopText(_ s: StopInfo) -> String {
     return why + " · " + t
 }
 
-/// 차가 대신 한 일(car_actions) 이름. 문구표 7.1 report.actions, 안드로이드 `actionText`와 같은 글자.
+/// 차가 대신 한 일(car_actions) 이름. 문구 report.actions, 안드로이드 `actionText`와 같은 글자.
 func actionText(_ a: CarActionKind) -> String {
     switch a {
     case .rearPlayback: return "뒷좌석 재생"
     case .defaultZonePlayback: return "앞에서도 들리게 재생"
     case .seatHeaterOff: return "뒷좌석 열선 끔"   // 아이 자리(2열)만 끈다
     case .rearWindowLock: return "뒷창 잠금"
-    case .cabinCool: return "실내 온도 낮춤"   // 성공한 공조 줄만 센다(C355)
+    case .cabinCool: return "실내 온도 낮춤"   // 성공한 공조 줄만 센다
     case .readingLightOff: return "독서등 끔"
     case .ambientDim: return "조명 낮춤"
     case .waypointAdded: return "경유지 추가"

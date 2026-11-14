@@ -2,7 +2,7 @@ import SwiftUI
 import VisionKit
 import AVFoundation
 
-/// QR 찍기. VisionKit `DataScannerViewController`를 SwiftUI에 감싼다(구현 계획 4장).
+/// QR 찍기. VisionKit `DataScannerViewController`를 SwiftUI에 감싼다.
 /// 카메라를 못 쓰는 기기(시뮬레이터 등)는 `isAvailable`이 거짓이라 코드 입력으로 안내한다.
 struct QRScanner: UIViewControllerRepresentable {
     /// 올바른 연결 코드로 받아들였으면 true. false면 계속 찍는다.

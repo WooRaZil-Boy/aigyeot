@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// 디자인 토큰 v6(11-09 확정 시안 `tokens.json` 폰 값). 안드로이드 `ui/Theme`과 같은 이름·같은 값이다.
+/// 디자인 토큰(`tokens.json` 폰 값). 안드로이드 `ui/Theme`과 같은 이름·같은 값이다.
 /// 앱과 잠금 화면(Live Activity)이 함께 쓴다. 값의 한 출처는 아래 표이고, 시험이 `shared/src/test/resources/design/tokens.json`과 대조한다.
 enum DesignSystem {
     // MARK: 색 — tokens.json `color` 그대로([라이트, 다크], #RRGGBB 또는 #RRGGBBAA)
@@ -33,7 +33,7 @@ enum DesignSystem {
         "cSleep": ["#9B87F5", "#9580EE"],
         "cDiaper": ["#8B95A1", "#6B7684"],
         "cNote": ["#8B95A1", "#6B7684"],
-        "cCar": ["#EB6834", "#D95926"],
+        "cCar": ["#EB6834", "#D95926"]
     ]
 
     /// 바탕은 회색, 블록은 흰 면(한국 앱 결). 숫자·진행은 먹색(textPrimary), 브랜드 파랑은 행동(버튼·선택·스위치)에만.
@@ -95,11 +95,11 @@ enum DesignSystem {
         "headline": TypeStyle(size: 17, line: 24, weight: 600, relativeTo: .headline),
         "body": TypeStyle(size: 16, line: 24, weight: 400, relativeTo: .body),
         "caption": TypeStyle(size: 13, line: 18, weight: 500, relativeTo: .footnote),
-        "timer": TypeStyle(size: 64, line: 72, weight: 650, relativeTo: .largeTitle),
+        "timer": TypeStyle(size: 64, line: 72, weight: 650, relativeTo: .largeTitle)
     ]
 
-    /// 글자 역할 표(두 앱 같은 표, 진행 기록 '단위 10 결정'). tokens.json 7단계(hero·display·title·headline·body·caption·timer)와 같은 값은 그 단계를 쓰고,
-    /// 시안 phone.css가 단계 사이 크기를 쓰는 자리만 역할 이름을 둔다. 값은 시안 CSS 그대로(크기·굵기·줄 높이), 동적 글자 크기는 본문 곡선.
+    /// 글자 역할 표(두 앱 같은 표). tokens.json 7단계(hero·display·title·headline·body·caption·timer)와 같은 값은 그 단계를 쓰고,
+    /// 디자인 CSS가 단계 사이 크기를 쓰는 자리만 역할 이름을 둔다. 값은 디자인 CSS 그대로(크기·굵기·줄 높이), 동적 글자 크기는 본문 곡선.
     enum TextRole: CaseIterable {
         /// 11·600 타임라인 시간 머리(.tl .hr span) — caption 계열
         case hourMark
@@ -141,15 +141,15 @@ enum DesignSystem {
         case rowTitle
         /// 17·500 날짜 띠 날(.datestrip b) — headline 계열
         case dateNumber
-        /// 17·700 버튼 글자(.pbtn, v5 덮어쓰기 433행)·방법별 성적 숫자(.dm b) — headline 계열
+        /// 17·700 버튼 글자(.pbtn)·방법별 성적 숫자(.dm b) — headline 계열
         case strong
         /// 18·700 큰 버튼 글자(.pbtn.big, 434행) — headline 계열
         case strongLarge
-        /// 24·700 기록 시트 질문 제목(.q, v8) — display 계열
+        /// 24·700 기록 시트 질문 제목(.q) — display 계열
         case sheetQuestion
         /// 28·700 진행 중 판 시계(.run-c .tm) — display 계열
         case runningTimer
-        /// 34·700 시트 젖병 양 숫자(.amt .n, v8) — display 계열
+        /// 34·700 시트 젖병 양 숫자(.amt .n) — display 계열
         case amountNumber
         /// 44·600 녹음 시간(.rec .rt) — timer 계열
         case recordTimer
@@ -201,7 +201,7 @@ enum DesignSystem {
     }
 
     /// 잠금 화면 위젯용 글자: 이름 붙은 인스턴스(Light·Regular·Medium·SemiBold·Bold)로 고른다. 위젯은 화면을 글자 속성째 묶어 보내는데,
-    /// 가변 축 사전(wght)이 든 서체를 줄여 그리면(minimumScaleFactor) 묶는 중에 확장이 멈췄다(실측 11-10, KEY_TYPE_OF_DICTIONARY 충돌).
+    /// 가변 축 사전(wght)이 든 서체를 줄여 그리면(minimumScaleFactor) 묶는 중에 확장이 멈췄다(실측, KEY_TYPE_OF_DICTIONARY 충돌).
     static func namedFont(_ size: CGFloat, _ weight: CGFloat, relativeTo: Font.TextStyle = .body) -> Font {
         let name: String
         switch weight {
@@ -224,10 +224,11 @@ enum DesignSystem {
     }
 
     /// 동적 글자 크기로 키운 UIFont. 서체가 없으면(시험 번들 등) 같은 굵기의 시스템 서체.
-    static func uiFont(_ size: CGFloat, _ weight: CGFloat, relativeTo: UIFont.TextStyle = .body, monospacedDigits: Bool = false, scaled: Bool = true) -> UIFont {
+    static func uiFont(_ size: CGFloat, _ weight: CGFloat, relativeTo: UIFont.TextStyle = .body,
+                       monospacedDigits: Bool = false, scaled: Bool = true) -> UIFont {
         var attrs: [UIFontDescriptor.AttributeName: Any] = [
             .name: pretendard,
-            kCTFontVariationAttribute as UIFontDescriptor.AttributeName: [wghtAxis: weight],
+            kCTFontVariationAttribute as UIFontDescriptor.AttributeName: [wghtAxis: weight]
         ]
         if monospacedDigits {
             attrs[.featureSettings] = [[UIFontDescriptor.FeatureKey.type: kNumberSpacingType,
@@ -278,7 +279,7 @@ enum DesignSystem {
     static let radius: [String: CGFloat] = ["rS": 8, "rM": 12, "rL": 20, "rXL": 28]
     static let rM = radius["rM"]!, rL = radius["rL"]!
 
-    // MARK: 시안 부품 색 — tokens.json에 이름이 없고 시안 CSS·JS에만 있는 값(이름 하나에 값 하나)
+    // MARK: 부품 색 — tokens.json에 이름이 없고 디자인 CSS·JS에만 있는 값(이름 하나에 값 하나)
 
     /// 세그먼트 엄지(.segp .sthumb): 라이트 흰색, 다크 #3A3F46.
     static let segmentThumb = Color(lightHex: "#FFFFFF", darkHex: "#3A3F46")
@@ -289,7 +290,7 @@ enum DesignSystem {
     /// 잠금 화면 진행 중 판(.live-act 바탕 rgba(20,22,26)). 흰 잠금 화면에서도 흰 글자 대비가 나게 92% 불투명.
     static let liveActivityPanel = Color(lightHex: "#14161AEB", darkHex: "#14161AEB")
     /// 3D 차 재질(car3d.js): 차체 도장, 실내 앰비언트 선 바탕, 전조등, 미등. 앰비언트 빛은 tokens `glow`.
-    /// 차 재질 색(시안 js/car3d.js materials(), v7): 도장·크롬·선루프 가림막·앰비언트 바탕·램프.
+    /// 차 재질 색: 도장·크롬·선루프 가림막·앰비언트 바탕·램프.
     enum CarPaint {
         static let body = "#E4E7EA", chrome = "#E2E6EA", roofShade = "#0E1013"
         static let ambientBase = "#1D2023", headLamp = "#F2F7FF", tailLamp = "#FF3326"
@@ -307,19 +308,19 @@ enum DesignSystem {
         "exit": (180, "cubic-bezier(0.4, 0, 1, 1)"),
         "camera": (1100, "cubic-bezier(0.65, 0, 0.35, 1)"),
         "light": (900, "cubic-bezier(0.4, 0, 0.2, 1)"),
-        "ripple": (2400, "cubic-bezier(0.2, 0.6, 0.35, 1)"),
+        "ripple": (2400, "cubic-bezier(0.2, 0.6, 0.35, 1)")
     ]
 
     /// tokens.json `spring` 그대로: 이름 → (감쇠, 강성, SwiftUI 글자). SwiftUI 값은 글자를 읽어 만든다.
     static let springs: [String: (damping: Double, stiffness: Double, swiftui: String)] = [
         "snappy": (0.86, 600, ".smooth(duration: 0.2)"),
         "smooth": (1.0, 385, ".smooth(duration: 0.32)"),
-        "bouncy": (0.78, 420, ".smooth(duration: 0.35, extraBounce: 0.12)"),
+        "bouncy": (0.78, 420, ".smooth(duration: 0.35, extraBounce: 0.12)")
     ]
 
     /// 동작 줄이기면 화면이 nil 애니메이션을 쓴다.
     enum Motion {
-        /// 표 그대로 쓰는 것만 이름을 둔다. base·exit·camera 곡선은 시안 부품 값(아래)이 `animation(_:seconds:)`·`curve(_:)`로 읽는다.
+        /// 표 그대로 쓰는 것만 이름을 둔다. base·exit·camera 곡선은 부품 값(아래)이 `animation(_:seconds:)`·`curve(_:)`로 읽는다.
         static let press = animation("press"), fast = animation("fast"), enter = animation("enter")
         /// spring.snappy: 세그먼트 엄지·버튼 모양.
         static let snappy = spring("snappy")
@@ -327,10 +328,10 @@ enum DesignSystem {
         static let smooth = spring("smooth")
         /// spring.bouncy: 탭 렌즈·알림 배너만 조금.
         static let bouncy = spring("bouncy")
-        /// roll(README 4.7 표, tokens.json에는 없음): 숫자 굴림 spring 감쇠 .85·강성 632 → 응답 2π/√632초.
+        /// roll(tokens.json에는 없음): 숫자 굴림 spring 감쇠 .85·강성 632 → 응답 2π/√632초.
         static let roll = Animation.spring(response: 2 * .pi / 632.0.squareRoot(), dampingFraction: 0.85)
 
-        // 시안 부품 움직임(tokens.json에 이름이 없고 시안 JS·CSS에만 있는 값). 곡선은 위 motion 표의 이름에서 가져온다.
+        // 부품 움직임(tokens.json에 이름이 없고 디자인 JS·CSS에만 있는 값). 곡선은 위 motion 표의 이름에서 가져온다.
         /// 띠·히트맵·에피소드가 왼쪽부터 그려짐(charts.js grow: 0.9초, camera 곡선).
         static let chartReveal = animation("camera", seconds: 0.9)
         /// 막대 하나가 바닥에서 자람(charts.js: 0.6초, enter 곡선). 막대마다 `chartBarStagger`초 늦게.
@@ -351,7 +352,7 @@ enum DesignSystem {
         /// 화면 교체 때 한 줄씩 올라옴(core.js UI.enter: 0.06초 뒤 0.05초 간격, motion.enter).
         static let riseDelay = 0.06, riseStagger = 0.05
 
-        /// 표의 곡선을 다른 길이로(시안이 같은 곡선을 다른 시간에 쓰는 자리).
+        /// 표의 곡선을 다른 길이로(디자인이 같은 곡선을 다른 시간에 쓰는 자리).
         static func animation(_ name: String, seconds: Double) -> Animation {
             let p = numbers(motion[name]!.curve)
             return p.count == 4 ? .timingCurve(p[0], p[1], p[2], p[3], duration: seconds) : .linear(duration: seconds)

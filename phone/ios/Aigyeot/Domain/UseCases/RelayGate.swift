@@ -3,7 +3,7 @@ import Foundation
 /// HTTP 요청을 시작할 때 잡는 관찰 번호: 그때의 소켓·경로 관찰 번호와 요청 순번(규칙은 KeepConnected).
 struct LinkMark: Equatable { let link: Int; let ticket: Int }
 
-/// 중계 HTTP의 결과를 연결 표시(KeepConnected.status, 9장)에 알리고 401(계약 7.1 GONE)을 LoseConnection에 넘기는 길.
+/// 중계 HTTP의 결과를 연결 표시(KeepConnected.status)에 알리고 401(GONE)을 LoseConnection에 넘기는 길.
 /// 안드로이드는 중계 클라이언트의 `onObserved`·`onUnauthorized` 콜백이 이 일을 한다. iOS는 이 작은 길을 여러 유스케이스가 생성자로 받고,
 /// 합성 루트가 KeepConnected에 잇는다(KeepConnected가 받기·보내기를 불러 서로 도는 길이라 클로저로).
 @MainActor
@@ -43,7 +43,7 @@ final class RelayGate {
         }
     }
 
-    /// 401을 받은 같은 연결(시작할 때 잡은 자격)의 요청: GONE. 다른 연결의 늦은 401은 버린다(P5).
+    /// 401을 받은 같은 연결(시작할 때 잡은 자격)의 요청: GONE. 다른 연결의 늦은 401은 버린다.
     func unauthorized(_ e: RelayError, c: Credentials?) {
         if e.isUnauthorized { lose.lost(c) }
     }

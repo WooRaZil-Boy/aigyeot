@@ -1,6 +1,6 @@
 import Foundation
 
-// 로컬 저장(계약 7.4)의 저장소 protocol. 구현은 Data/Storage에 있다: 기기 토큰은 Keychain, 나머지는 앱 전용 폴더의 JSON 파일이다.
+// 로컬 저장의 저장소 protocol. 구현은 Data/Storage에 있다: 기기 토큰은 Keychain, 나머지는 앱 전용 폴더의 JSON 파일이다.
 
 protocol CredentialStore {
     func load() -> Credentials?
@@ -31,7 +31,7 @@ protocol CareStore {
     func writeExport(name: String, data: Data) -> URL?
 }
 
-/// 녹음 파일(Application Support/songs)과 녹음 임시 파일(두 앱 같은 이름 SongFileStore, phone-care-plan 9.1). 구현은 Data/Storage/FileSongStore.
+/// 녹음 파일(Application Support/songs)과 녹음 임시 파일(두 앱 같은 이름 SongFileStore). 구현은 Data/Storage/FileSongStore.
 protocol SongFileStore {
     func url(for songId: String) -> URL
     func exists(_ songId: String) -> Bool
@@ -51,7 +51,7 @@ protocol SongFileStore {
 
 struct StoreError: Error {}
 
-/// FCM 등록 토큰(5.4). 앱의 `PushToken`이 `messaging(_:didReceiveRegistrationToken:)`에서 채우고, 연결 요청·앱 열기·토큰 바뀜 때 `PATCH /v1/devices/me`로 올린다.
+/// FCM 등록 토큰. 앱의 `PushToken`이 `messaging(_:didReceiveRegistrationToken:)`에서 채우고, 연결 요청·앱 열기·토큰 바뀜 때 `PATCH /v1/devices/me`로 올린다.
 /// `GoogleService-Info.plist`가 없으면(시험) 늘 nil이다.
 protocol PushTokens {
     var token: String? { get set }
@@ -65,7 +65,7 @@ protocol NetworkWatcher: AnyObject {
     func unwatch()
 }
 
-/// 노래 녹음·재생 장치(R10, 두 앱 같은 이름). 구현은 Data/Audio(AVAudioRecorder·AVAudioPlayer). 녹음 시트·곡 목록 뷰모델이 init으로 받는다.
+/// 노래 녹음·재생 장치(두 앱 같은 이름). 구현은 Data/Audio(AVAudioRecorder·AVAudioPlayer). 녹음 시트·곡 목록 뷰모델이 init으로 받는다.
 @MainActor
 protocol SongRecorder: AnyObject {
     var permissionUndetermined: Bool { get }
@@ -88,13 +88,13 @@ protocol SongRecorder: AnyObject {
     func discard(_ url: URL?)
 }
 
-/// 사용자가 고른 파일 읽기(기록 가져오기 U64, 두 앱 같은 이름). 구현은 Data/Storage(보안 범위 접근 + NSFileCoordinator).
+/// 사용자가 고른 파일 읽기(기록 가져오기, 두 앱 같은 이름). 구현은 Data/Storage(보안 범위 접근 + NSFileCoordinator).
 /// `limit` 바이트까지만 읽는다(크기를 몰라도 상한을 넘겨 올리지 않게). 열거나 읽지 못하면 nil. 메인 밖에서 부른다.
 protocol PickedFileReader: Sendable {
     func read(_ url: URL, upTo limit: Int) -> Data?
 }
 
-/// 작은 표시 키(R11, D1). 값의 뜻과 쓰는 곳은 LinkSwitch가 정한다(화면은 이 표시를 보지 않는다).
+/// 작은 표시 키. 값의 뜻과 쓰는 곳은 LinkSwitch가 정한다(화면은 이 표시를 보지 않는다).
 enum Mark: String {
     /// 강제 끊김(401·4001) 정리·확인이 남은 기기 id(안드로이드 prefs `gone_device`와 같은 키).
     case goneCleanupPending = "gone_device"
@@ -109,7 +109,7 @@ protocol LinkMarks: AnyObject {
     func put(_ mark: Mark, _ value: String?) -> Bool
 }
 
-/// 잠금 화면 진행 중 표시(C6, 두 앱 같은 이름). 구현은 Live Activity(Data/System/LiveActivities). 돌봄 기록이 바뀌면 다시 그린다.
+/// 잠금 화면 진행 중 표시(두 앱 같은 이름). 구현은 Live Activity(Data/System/LiveActivities). 돌봄 기록이 바뀌면 다시 그린다.
 @MainActor
 protocol OngoingNotice {
     func show(_ care: CareFile)

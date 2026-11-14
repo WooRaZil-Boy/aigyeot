@@ -2,7 +2,7 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-/// 차(5장, 시안 S.car): 차 카드(3D) → 우리 노래(owner) → 리포트. 연결 안 됨이면 '차와 연결하기'만.
+/// 차: 차 카드(3D) → 우리 노래(owner) → 리포트. 연결 안 됨이면 '차와 연결하기'만.
 struct CarView: View {
     var body: some View {
         // 우리 노래(SongsViewModel)와 다시 듣기(SongPlayer)는 차 탭이 있는 동안 산다
@@ -38,7 +38,7 @@ private struct CarContent: View {
                 }
                 if vm.ui.owner { songs }
                 if vm.ui.isPaired {
-                    Section {   // 7.1 car.section.reports(U39)
+                    Section {   // car.section.reports
                         BlockHeader(title: "리포트").listRowInsets(Self.headInsets).enterRise(3)
                         if vm.ui.reports.isEmpty {
                             Text("주행이 끝나면 여기에 리포트가 와요").typeStyle(.valueKey).foregroundStyle(DS.textTertiary)
@@ -72,7 +72,8 @@ private struct CarContent: View {
     /// 우리 노래(owner만): 1~3곡 녹음·다시 듣기·지우기, 실험에 쓸 한 곡 고르기, 차로 보낸 상태.
     private var songs: some View {
         Section {
-            BlockHeader(title: "우리 노래", link: songsVM.ui.slotsUsed < SongRules.maxSongs ? "녹음하기" : nil) { player.stop(); replacing = nil; recording = true }   // 7.1 car.section.songs(U39)
+            // car.section.songs
+            BlockHeader(title: "우리 노래", link: songsVM.ui.slotsUsed < SongRules.maxSongs ? "녹음하기" : nil) { player.stop(); replacing = nil; recording = true }
                 .listRowInsets(Self.headInsets)
                 .enterRise(1)
             if songsVM.ui.songs.isEmpty {
@@ -99,17 +100,17 @@ private struct CarContent: View {
     }
 }
 
-/// 노래 한 줄(시안 songs()): 회색 원 + 이름 + "0:48 · 상태", 오른쪽 다시 듣기(실험에 쓰는 곡은 파랑 체크). 거절·실패면 '다시 녹음하기', 받은 곡은 '실험에 쓰기'.
+/// 노래 한 줄: 회색 원 + 이름 + "0:48 · 상태", 오른쪽 다시 듣기(실험에 쓰는 곡은 파랑 체크). 거절·실패면 '다시 녹음하기', 받은 곡은 '실험에 쓰기'.
 struct SongRowView: View {
     @Environment(SongsViewModel.self) private var vm
     let row: SongRow
     let player: SongPlayer
-    /// 거절·실패한 곡의 '다시 녹음'(9장 '노래 거절').
-    var rerecord: (() -> Void)? = nil
+    /// 거절·실패한 곡의 '다시 녹음'('노래 거절').
+    var rerecord: (() -> Void)?
     /// 이 곡을 듣기 전에 멈출 다른 소리(녹음 화면의 녹음본 듣기). 소리는 한 번에 하나만 난다.
-    var beforePlay: (() -> Void)? = nil
+    var beforePlay: (() -> Void)?
     /// 지우기(차 탭). 녹음 화면 아래 목록은 지우지 않는다(nil).
-    var remove: (() -> Void)? = nil
+    var remove: (() -> Void)?
 
     private var statusText: String {
         switch row.state {
@@ -124,14 +125,14 @@ struct SongRowView: View {
 
     var body: some View {
         let playing = player.playingId == row.id
-        // 누르면 메뉴(시안·안드로이드 결정 14): 듣기·실험에 쓰기·다시 녹음·지우기. 오른쪽은 실험에 쓰는 곡이면 파랑 체크, 아니면 듣기 표시.
+        // 누르면 메뉴(안드로이드와 같다): 듣기·실험에 쓰기·다시 녹음·지우기. 오른쪽은 실험에 쓰는 곡이면 파랑 체크, 아니면 듣기 표시.
         HStack(spacing: 4) {
             Menu {
                 if row.hasFile {
                     Button { if !playing { beforePlay?() }; player.toggle(row.id) } label: { Text(playing ? "멈추기" : "듣기") }
                 }
                 if row.state == .accepted, !row.candidate { Button("실험에 쓰기") { vm.select(row.id) } }
-                if isProblem, let rerecord { Button("다시 녹음하기") { rerecord() } }   // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다(9장 '노래 거절')
+                if isProblem, let rerecord { Button("다시 녹음하기") { rerecord() } }   // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다('노래 거절')
                 if let remove { Button("지우기", role: .destructive) { remove() } }
             } label: {
                 HStack(spacing: 12) {
@@ -164,13 +165,16 @@ struct SongRowView: View {
     }
 
     private var isProblem: Bool {
-        switch row.state { case .rejected, .failed: return true; default: return false }
+        switch row.state {
+        case .rejected, .failed: return true
+        default: return false
+        }
     }
 
     static func duration(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 }
 
-/// 거절 이유 문구(3.3 표).
+/// 거절 이유 문구.
 func rejectText(_ r: SongRejectReason) -> String {
     switch r {
     case .peakLimit: return "조금 더 크게 다시 녹음해 주세요"
@@ -183,14 +187,14 @@ func rejectText(_ r: SongRejectReason) -> String {
     }
 }
 
-/// 노래 녹음(시안 S.song): 파형, 경과 시간과 최대 시간, 큰 녹음·멈춤 버튼(빨강 원 ↔ 둥근 네모). 멈춘 뒤 이름·다시 듣기·다시 녹음·보내기.
+/// 노래 녹음: 파형, 경과 시간과 최대 시간, 큰 녹음·멈춤 버튼(빨강 원 ↔ 둥근 네모). 멈춘 뒤 이름·다시 듣기·다시 녹음·보내기.
 struct RecordSheet: View {
     @Environment(SongsViewModel.self) private var vm
     /// 이 시트가 든 녹음기(시트가 닫히면 버린다).
     let rec: RecorderViewModel
     /// 아래 노래 목록의 다시 듣기(차 탭과 같은 재생기). 녹음하는 동안은 목록을 만지지 않는다.
     let player: SongPlayer
-    var replacing: String? = nil
+    var replacing: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -198,7 +202,7 @@ struct RecordSheet: View {
     @State private var sendError: String?
 
     var body: some View {
-        // 가장 큰 글자에서는 멈춘 뒤의 이름·듣기·보내기·오류가 반 높이 시트를 넘는다. 굴리고 끝까지 펼칠 수 있게 한다(8장 동적 글자 크기).
+        // 가장 큰 글자에서는 멈춘 뒤의 이름·듣기·보내기·오류가 반 높이 시트를 넘는다. 굴리고 끝까지 펼칠 수 있게 한다(동적 글자 크기).
         NavigationStack {
             ScrollView { content }
                 .screenBackground()
@@ -208,17 +212,19 @@ struct RecordSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button { dismiss() } label: { if #available(iOS 26, *) { IconImage(.x, size: 20).foregroundStyle(DS.textPrimary) } else { Text(CareText.cancel) } }   // 시안 .gbtn: 먹색 X(기록 시트와 같음)
+                        // 먹색 X(기록 시트와 같음)
+                        Button { dismiss() } label: { if #available(iOS 26, *) { IconImage(.x,
+                            size: 20).foregroundStyle(DS.textPrimary) } else { Text(CareText.cancel) } }
                             .accessibilityLabel(CareText.cancel)
                     }
                 }
         }
         .presentationDetents([.medium, .large])
-        .task { await rec.askPermissionIfNeeded() }   // 시트를 처음 열 때 묻는다(7.3). 녹음 버튼은 정해진 권한으로 시작한다
+        .task { await rec.askPermissionIfNeeded() }   // 시트를 처음 열 때 묻는다. 녹음 버튼은 정해진 권한으로 시작한다
         .onChange(of: scenePhase) { _, p in
-            if p == .active { rec.refreshPermission() }   // 설정에서 돌아오면 다시 확인(7.3)
+            if p == .active { rec.refreshPermission() }   // 설정에서 돌아오면 다시 확인
             else if p == .background {
-                if rec.phase == .recording { rec.stop() }   // 녹음은 앱 화면에서만(명세서 12장). 완성된 녹음은 남긴다
+                if rec.phase == .recording { rec.stop() }   // 녹음은 앱 화면에서만. 완성된 녹음은 남긴다
                 if rec.isPlaying { rec.togglePlay() }       // 미리듣기도 멈추고 오디오 세션을 푼다(안드로이드 ON_STOP)
                 rec.cancelPendingStart()                    // 권한 창을 기다리던 시작이 뒤에서 녹음을 열지 않게
             }
@@ -251,7 +257,8 @@ struct RecordSheet: View {
                         .padding(.horizontal, 14).frame(minHeight: 50)
                         .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rM, style: .continuous))
                         .submitLabel(.done)   // 키보드의 '완료'로 닫는다
-                        .onChange(of: name) { _, v in sendError = nil; let l = SongRules.nameInput(v); if l != v { name = l } }   // 고치면 옛 오류를 지운다. 30에서 더 받지 않는다(3.3)
+                        // 고치면 옛 오류를 지운다. 30에서 더 받지 않는다
+                        .onChange(of: name) { _, v in sendError = nil; let l = SongRules.nameInput(v); if l != v { name = l } }
                     HStack(spacing: 12) {
                         Button { if !rec.isPlaying { player.stop() }; rec.togglePlay() } label: {
                             Label { Text(rec.isPlaying ? "멈추기" : "다시 듣기") } icon: { IconImage(rec.isPlaying ? .square : .play, size: 18) }
@@ -264,7 +271,7 @@ struct RecordSheet: View {
                 }
             }
             if let e = sendError ?? rec.error { Text(e).typeStyle(.caption).foregroundStyle(DS.danger) }
-            // 시안 S.song: 머리 없는 곡 목록(.pcard.list, iOS 렌더 22/20/8) + 덧붙임. 곡이 없으면 덧붙임만(안드로이드와 같다)
+            // 머리 없는 곡 목록(22/20/8) + 덧붙임. 곡이 없으면 덧붙임만(안드로이드와 같다)
             if !vm.ui.songs.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(vm.ui.songs) { SongRowView(row: $0, player: player, beforePlay: { if rec.isPlaying { rec.togglePlay() } }) }
@@ -298,8 +305,7 @@ struct RecordSheet: View {
             try vm.add(name: name, recording: url, durationS: rec.elapsed, replacing: replacing)   // '다시 녹음'이면 그 곡과 바꾼다
             rec.sent()   // 닫히는 사이 또 눌러도 같은 녹음을 다시 보내지 않는다
             dismiss()
-        } catch let e as SongError { sendError = e.message }
-        catch { sendError = "녹음을 저장하지 못했어요. 다시 보내 주세요." }
+        } catch let e as SongError { sendError = e.message } catch { sendError = "녹음을 저장하지 못했어요. 다시 보내 주세요." }
     }
 }
 
@@ -307,12 +313,12 @@ struct Waveform: View {
     let levels: [Float]
     var body: some View {
         GeometryReader { g in
-            // U13 ①: 폭에 들어가는 만큼만 최근 막대를 그린다(60개 × 7pt가 시트 폭을 넘었다).
+            // 폭에 들어가는 만큼만 최근 막대를 그린다(60개 × 7pt가 시트 폭을 넘었다).
             HStack(alignment: .center, spacing: 3) {
                 ForEach(Array(levels.suffix(Self.barCount(fitting: g.size.width)).enumerated()), id: \.offset) { _, l in
                     Capsule().fill(DS.accentInk).frame(width: 4, height: max(4, CGFloat(l) * g.size.height))
                 }
-                if levels.isEmpty {   // 녹음 전: 시안 .wave 모양을 옅게 멈춰 둔다(녹음하면 실제 소리 크기로 바뀐다)
+                if levels.isEmpty {   // 녹음 전: 파형 모양을 옅게 멈춰 둔다(녹음하면 실제 소리 크기로 바뀐다)
                     ForEach(0..<min(44, Self.barCount(fitting: g.size.width)), id: \.self) { i in
                         Capsule().fill(DS.accentInk.opacity(0.3)).frame(width: 4, height: (0.2 + abs(sin(Double(i) * 0.7)) * 0.7) * g.size.height)
                     }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// RelaySocket 구현: 그 주소로 URLSessionRelaySocket을 열어 붙기 시작한다. 토큰은 연 자격의 것을 다시 붙을 때도 쓴다(P5).
+/// RelaySocket 구현: 그 주소로 URLSessionRelaySocket을 열어 붙기 시작한다. 토큰은 연 자격의 것을 다시 붙을 때도 쓴다.
 struct URLSessionRelaySockets: RelaySocket {
     let baseURL: URL
     func open(token: String, onEvent: @escaping @MainActor (RelaySocketEvent) -> Void) -> SocketHandle {
@@ -10,7 +10,7 @@ struct URLSessionRelaySockets: RelaySocket {
     }
 }
 
-/// 중계 WebSocket(계약 2장). 폰은 앱이 앞에 있을 때만 붙는다.
+/// 중계 WebSocket. 폰은 앱이 앞에 있을 때만 붙는다.
 /// - 인증은 업그레이드 요청의 `Authorization: Bearer`.
 /// - 25초마다 글자 `ping`, 10초 안에 `pong`이 없으면 끊고 다시 붙는다(`sendPing`은 쓰지 않는다).
 /// - 다시 붙기 1·2·4·8·16·32·60초. 열리면 1초로 되돌린다. 4001은 토큰 지워짐, 4002는 새 연결로 바뀜, 4008은 60초 뒤.
@@ -28,7 +28,7 @@ final class URLSessionRelaySocket: SocketHandle {
         self.onEvent = onEvent
     }
 
-    /// `http`를 `ws`로, `https`를 `wss`로 바꾸고 `/v1/ws`를 붙인다(0장).
+    /// `http`를 `ws`로, `https`를 `wss`로 바꾸고 `/v1/ws`를 붙인다.
     static func socketURL(from base: URL) -> URL? {
         var c = URLComponents(url: base.appendingPathComponent("v1/ws"), resolvingAgainstBaseURL: false)
         c?.scheme = base.scheme == "https" ? "wss" : "ws"
@@ -64,7 +64,7 @@ final class URLSessionRelaySocket: SocketHandle {
             case .tooOften:
                 delay = RetryPolicy.socketTooOften
             case .rateLimited(let wait):
-                delay = UInt64(max(1, wait.rounded(.up)))   // 429의 Retry-After(1.1)
+                delay = UInt64(max(1, wait.rounded(.up)))   // 429의 Retry-After
             case .unreachable:
                 // 그사이 앱이 뒤로 가 멈췄으면 알리지 않는다. stop()은 메인에서 부르므로 메인에서 취소를 본다.
                 await MainActor.run { [onEvent] in if !Task.isCancelled { onEvent(.unreachable) } }
@@ -107,10 +107,10 @@ final class URLSessionRelaySocket: SocketHandle {
                         if await pong.claimAnnounce() { opened(); await onEvent(.connected(true)) } else { await onEvent(.alive) }
                         continue
                     }
-                    // 모르는 프레임은 무시한다(계약 2장). 봉투만 올린다.
+                    // 모르는 프레임은 무시한다. 봉투만 올린다.
                     if let env = try? ProtocolCoding.decoder.decode(Envelope.self, from: Data(text.utf8)) {
                         // 다시 붙자마자 중계는 밀린 것을 첫 pong보다 먼저 보낸다. 봉투가 왔으면 열린 것이니 '붙음'을 먼저 알려
-                        // 모델이 버퍼링을 켠 뒤 봉투를 받게 한다(받은 함을 먼저 처리, 8.3).
+                        // 모델이 버퍼링을 켠 뒤 봉투를 받게 한다(받은 함을 먼저 처리).
                         if await pong.claimAnnounce() { opened(); await onEvent(.connected(true)) }
                         await onEvent(.envelope(env))
                     }
@@ -119,7 +119,7 @@ final class URLSessionRelaySocket: SocketHandle {
             g.addTask {
                 while !Task.isCancelled {
                     await pong.reset()
-                    do { try await task.send(.string("ping")) } catch { await pong.ioFail(); return }   // 받기보다 먼저 끝나도 '닿지 않음'(9장 띠)
+                    do { try await task.send(.string("ping")) } catch { await pong.ioFail(); return }   // 받기보다 먼저 끝나도 '닿지 않음'(띠)
                     // 10초 안에 pong이 없으면 끊는다.
                     var ok = false
                     for _ in 0..<100 where !Task.isCancelled {
@@ -128,7 +128,7 @@ final class URLSessionRelaySocket: SocketHandle {
                         try? await Task.sleep(nanoseconds: 100_000_000)
                     }
                     let closed = await pong.closed
-                    if !ok && !Task.isCancelled && !closed { await pong.timeOut() }   // 열렸는데 pong이 없다: 중계에 닿지 않는다(9장)
+                    if !ok && !Task.isCancelled && !closed { await pong.timeOut() }   // 열렸는데 pong이 없다: 중계에 닿지 않는다
                     if !ok || Task.isCancelled { return }
                     try? await Task.sleep(nanoseconds: 25_000_000_000)
                     if Task.isCancelled { return }
@@ -144,9 +144,9 @@ final class URLSessionRelaySocket: SocketHandle {
         } onCancel: {
             task.cancel(with: .goingAway, reason: nil)
         }
-        // 앱이 뒤로 가 멈추는 순간 이미 받은 401·4001은 잃지 않는다(7.1 GONE). 그 밖에는 멈춤이다.
+        // 앱이 뒤로 가 멈추는 순간 이미 받은 401·4001은 잃지 않는다(GONE). 그 밖에는 멈춤이다.
         if Task.isCancelled { return (response as? HTTPURLResponse)?.statusCode == 401 || closeCode.rawValue == 4001 ? .unauthorized : .dropped }
-        // 중계가 보낸 닫기 코드는 확인된 사실이라 먼저 본다(응답 객체나 pong 시간 초과와 겹쳐도 4001이면 GONE, 2장 닫기 코드)
+        // 중계가 보낸 닫기 코드는 확인된 사실이라 먼저 본다(응답 객체나 pong 시간 초과와 겹쳐도 4001이면 GONE, 닫기 코드)
         switch closeCode.rawValue {
         case 4001: return .unauthorized
         case 4002: return .replaced
@@ -154,7 +154,8 @@ final class URLSessionRelaySocket: SocketHandle {
         default: break
         }
         if await pong.timedOut { return .unreachable }
-        if await pong.ioFailed, closeCode == .invalid, (response as? HTTPURLResponse)?.statusCode == 101 { return .unreachable }   // 열렸다가 망이 끊겼다(9장 띠)   // 101 뒤 10초 안에 pong이 없었다(2장 '끊고 다시 붙는다', 띠는 켠다)
+        // 열렸다가 망이 끊겼다(띠)   // 101 뒤 10초 안에 pong이 없었다('끊고 다시 붙는다', 띠는 켠다)
+        if await pong.ioFailed, closeCode == .invalid, (response as? HTTPURLResponse)?.statusCode == 101 { return .unreachable }
         if let http = response as? HTTPURLResponse {
             if http.statusCode == 401 { return .unauthorized }
             if http.statusCode == 429 { return .rateLimited(HTTPRelayClient.retryAfter(http) ?? RetryPolicy.rateLimitDefault) }

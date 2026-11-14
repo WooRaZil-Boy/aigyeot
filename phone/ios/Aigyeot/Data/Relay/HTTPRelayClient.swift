@@ -1,12 +1,12 @@
 import Foundation
 
-/// 도메인과 같은 메인 액터에서 돈다. 토큰은 요청마다 부른 쪽이 잡아 둔 자격의 것을 받는다(P5, 안드로이드와 같다):
+/// 도메인과 같은 메인 액터에서 돈다. 토큰은 요청마다 부른 쪽이 잡아 둔 자격의 것을 받는다(안드로이드와 같다):
 /// Keychain을 읽지 않으니 그사이 새 연결이 끝나도 이전 연결의 요청에 새 토큰이 붙지 않는다.
 @MainActor
 final class HTTPRelayClient: RelayClient {
     let baseURL: URL
     private let session: URLSession
-    /// 응답의 `Date` 헤더(시계 차이 확인용, 계약 9장).
+    /// 응답의 `Date` 헤더(시계 차이 확인용).
     var onServerDate: ((Date) -> Void)?
 
     private let installId: String
@@ -40,7 +40,7 @@ final class HTTPRelayClient: RelayClient {
         req.timeoutInterval = 20
         req.setValue(clientHeader, forHTTPHeaderField: "X-Client")
         if let token {
-            // 토큰은 헤더로만 보낸다. 경로·쿼리에는 넣지 않는다(1.1).
+            // 토큰은 헤더로만 보낸다. 경로·쿼리에는 넣지 않는다.
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         } else {
             req.setValue(installId, forHTTPHeaderField: "X-Install-Id")
@@ -55,13 +55,13 @@ final class HTTPRelayClient: RelayClient {
         return req
     }
 
-    /// 응답 전 실패. 취소(화면을 떠남·뒤로 감)는 망 실패와 가른다.
-    /// `Retry-After`(초, 1.1). 유한한 0 이상만 받고 하루로 자른다: 잘못된 헤더(inf·아주 큰 수)가 정수 변환에서 앱을 죽이지 않게.
+    /// `Retry-After`(초). 유한한 0 이상만 받고 하루로 자른다: 잘못된 헤더(inf·아주 큰 수)가 정수 변환에서 앱을 죽이지 않게.
     nonisolated static func retryAfter(_ http: HTTPURLResponse) -> TimeInterval? {
         guard let v = http.value(forHTTPHeaderField: "Retry-After").flatMap({ TimeInterval($0) }), v.isFinite, v >= 0 else { return nil }
         return min(v, 86_400)
     }
 
+    /// 응답 전 실패. 취소(화면을 떠남·뒤로 감)는 망 실패와 가른다.
     nonisolated static func transportError(_ e: Error) -> RelayError {
         if e is CancellationError || (e as? URLError)?.code == .cancelled { return .cancelled }
         return .network
@@ -71,8 +71,11 @@ final class HTTPRelayClient: RelayClient {
         let data: Data
         let response: URLResponse
         do {
-            if let upload { (data, response) = try await session.upload(for: req, fromFile: upload) }
-            else { (data, response) = try await session.data(for: req) }
+            if let upload {
+                (data, response) = try await session.upload(for: req, fromFile: upload)
+            } else {
+                (data, response) = try await session.data(for: req)
+            }
         } catch {
             throw Self.transportError(error)
         }
@@ -86,7 +89,7 @@ final class HTTPRelayClient: RelayClient {
     }
 
     /// 받은 함 한 쪽을 봉투마다 읽는다. 읽지 못한 봉투는 쪽 전체를 막지 않게 id·seq만 남긴 판 0 봉투로 바꾼다:
-    /// 모델은 모르는 판을 ack만 하고 넘어가고, 다음 `after_seq`도 그 seq를 넘는다(8.3 4번). id도 없으면 ack할 수 없어 뺀다.
+    /// 모델은 모르는 판을 ack만 하고 넘어가고, 다음 `after_seq`도 그 seq를 넘는다. id도 없으면 ack할 수 없어 뺀다.
     nonisolated static func lenientInbox(_ data: Data, car: String?) throws -> InboxResponse {
         struct Item: Decodable {
             let env: Envelope?, id: String?, seq: Int64?
@@ -109,8 +112,7 @@ final class HTTPRelayClient: RelayClient {
     }
 
     private func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
-        do { return try ProtocolCoding.decoder.decode(type, from: data) }
-        catch { throw RelayError.invalidResponse }
+        do { return try ProtocolCoding.decoder.decode(type, from: data) } catch { throw RelayError.invalidResponse }
     }
 
     private static let httpDate: DateFormatter = {
@@ -121,10 +123,10 @@ final class HTTPRelayClient: RelayClient {
         return f
     }()
 
-    // MARK: 엔드포인트(1.4)
+    // MARK: 엔드포인트
 
     func pair(code: String, pushToken: String?) async throws -> PairResponse {
-        // 연결 코드는 URL이 아니라 본문으로 보낸다(1.1).
+        // 연결 코드는 URL이 아니라 본문으로 보낸다.
         let body = PairRequest(code: code, platform: .ios, pushToken: pushToken, appVersion: Self.appVersion)
         return try decode(PairResponse.self, try await perform(jsonRequest("POST", "v1/pair", body: body, token: nil)))
     }
@@ -154,7 +156,7 @@ final class HTTPRelayClient: RelayClient {
         var q = [URLQueryItem(name: "limit", value: "100")]
         if let afterSeq { q.append(URLQueryItem(name: "after_seq", value: String(afterSeq))) }
         let data = try await perform(request("GET", "v1/inbox", query: q, token: token))
-        // 한 쪽에 64KB 봉투가 100개까지 온다(1.4·3.3). 해석은 메인 밖에서 한다.
+        // 한 쪽에 64KB 봉투가 100개까지 온다. 해석은 메인 밖에서 한다.
         return try await Self.parseInbox(data, car: car)
     }
 
@@ -176,7 +178,6 @@ final class HTTPRelayClient: RelayClient {
     /// `PUT /v1/songs/{song_id}`. 같은 id 파일이 이미 있으면(409 `already_exists`) 성공으로 본다.
     func putSong(token: String, id: String, file: URL) async throws {
         let req = request("PUT", "v1/songs/\(id)", token: token, contentType: "audio/mp4")
-        do { _ = try await perform(req, upload: file) }
-        catch let e as RelayError where e.status == 409 && e.code == "already_exists" { return }
+        do { _ = try await perform(req, upload: file) } catch let e as RelayError where e.status == 409 && e.code == "already_exists" { return }
     }
 }

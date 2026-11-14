@@ -1,13 +1,13 @@
 import Foundation
 
-/// 우리 노래 규칙(9장, 7.4·L48). `songs`는 이 파일과 받기(InboxRules)·보낼 함 규칙(OutboxRules)으로만 고친다(P3).
+/// 우리 노래 규칙. `songs`는 이 파일과 받기(InboxRules)·보낼 함 규칙(OutboxRules)으로만 고친다.
 enum SongRules {
     static let maxSongs = 3
     static let maxDurationS: Double = 180
     static let maxBytes = 2_000_000
     static let maxNameLength = 30
 
-    /// 이름은 앞뒤 공백을 빼고 1~30자(3.3).
+    /// 이름은 앞뒤 공백을 빼고 1~30자.
     static func name(_ raw: String) throws -> String {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (1...maxNameLength).contains(name.count) else { throw SongError.badName }
@@ -44,7 +44,7 @@ extension PhoneState {
     /// 지운 곡(순번 비교용 표시)은 숨긴다.
     var visibleSongs: [SongRow] { songs.filter { $0.state != .removed }.sorted { $0.addedAt < $1.addedAt } }
 
-    /// 3곡 한도에 드는 곡 수. 거절된 곡은 줄은 보이지만(9장 거절 문구·'다시 녹음') 자동 지움을 보내므로 자리는 차지하지 않는다(7.4, G40).
+    /// 3곡 한도에 드는 곡 수. 거절된 곡은 줄은 보이지만(거절 문구·'다시 녹음') 자동 지움을 보내므로 자리는 차지하지 않는다.
     func songSlots(excluding id: String?) -> Int {
         visibleSongs.filter { s in
             if s.id == id { return false }

@@ -3,11 +3,11 @@ import Observation
 
 // MARK: 설정
 
-/// 설정 탭(5장 순서). 보호자 화면은 GuardiansViewModel.
+/// 설정 탭. 보호자 화면은 GuardiansViewModel.
 struct SettingsUiState {
     var care: CareFile
     var connection: Connection
-    /// 설정 끊기의 결과(M3): 도는 중이면 버튼을 막고, 실패면 문구.
+    /// 설정 끊기의 결과: 도는 중이면 버튼을 막고, 실패면 문구.
     var disconnect: DisconnectRun?
     var online: Bool
     /// 정보·라이선스의 판 글자.
@@ -19,13 +19,13 @@ struct SettingsUiState {
     var offline: Bool { !online }
 }
 
-/// 기록 가져오기의 단계(U64). 저장은 한 번의 동기 저장이라 '저장 중'은 화면에 남지 않는다.
+/// 기록 가져오기의 단계. 저장은 한 번의 동기 저장이라 '저장 중'은 화면에 남지 않는다.
 enum ImportStep: Equatable {
     case idle
     case picking
     /// 고른 파일을 읽거나 Nara 아이의 줄을 다시 읽는 중(메인 밖). 닫으면 그 작업을 버린다.
     case reading
-    /// Nara 파일에 아이가 둘 이상(U66). 읽은 글자는 메모리에만 둔다.
+    /// Nara 파일에 아이가 둘 이상. 읽은 글자는 메모리에만 둔다.
     case pickChild(text: String, profiles: [String])
     case preview(ImportDraft)
     /// import.unreadable·tooLarge·failed
@@ -67,20 +67,20 @@ final class SettingsViewModel {
     func setNickname(_ name: String) { recordCare.setNickname(name) }
     func setSleepDiaper(_ on: Bool) { recordCare.setSleepDiaper(on) }
 
-    /// 내 기록 내보내기(C7, U29): 임시 폴더에 `aigyeot-care-{YYYYMMDD}.csv`를 쓰고 그 파일을 돌려준다. 실패하면 nil.
+    /// 내 기록 내보내기: 임시 폴더에 `aigyeot-care-{YYYYMMDD}.csv`를 쓰고 그 파일을 돌려준다. 실패하면 nil.
     func export() -> URL? { careRepo.export(fileName: CareText.exportFileName(now())) { CareExport.csv($0.events) } }
 
-    // MARK: 기록 가져오기(U64~U68)
+    // MARK: 기록 가져오기
 
     /// 가져오기 한 번의 단계. 화면은 이것만 그린다.
     private(set) var importStep: ImportStep = .idle
-    /// 읽기 작업은 하나다: 다시 고르기·아이 고르기·닫기가 앞 작업을 취소하고, 결과는 그 작업이 취소되지 않았을 때만 적용한다(P5).
+    /// 읽기 작업은 하나다: 다시 고르기·아이 고르기·닫기가 앞 작업을 취소하고, 결과는 그 작업이 취소되지 않았을 때만 적용한다.
     /// 화면이 아니라 이 뷰모델이 쥐므로 화면이 잠깐 사라져도 이어진다. 시험은 `importJob?.value`를 기다린다.
     @ObservationIgnored private(set) var importJob: Task<Void, Never>?
 
     func startImport() { importStep = .picking }
 
-    /// 파일 고르기 결과(취소는 시스템이 고르기 창을 닫아 `closeImport`로 온다). 파일은 메모리로만 읽고 앱 폴더에 저장하지 않는다(U64).
+    /// 파일 고르기 결과(취소는 시스템이 고르기 창을 닫아 `closeImport`로 온다). 파일은 메모리로만 읽고 앱 폴더에 저장하지 않는다.
     /// 읽기·형식 판별은 메인 밖에서 한다(iCloud Drive 같은 파일 제공자는 내려받는 동안 멈출 수 있다).
     func picked(_ result: Result<URL, Error>) {
         let url = try? result.get()
@@ -103,14 +103,14 @@ final class SettingsViewModel {
         }
     }
 
-    /// 읽은 결과 → 다음 단계. nil은 파일을 열거나 읽지 못한 IO 실패(import.failed), UTF-8이 아니면 import.unreadable(11-09 보충).
+    /// 읽은 결과 → 다음 단계. nil은 파일을 열거나 읽지 못한 IO 실패(import.failed), UTF-8이 아니면 import.unreadable.
     func loaded(_ read: CsvRead?) async -> ImportStep {
         switch read {
         case nil: return .failed(CareText.importFailed)
         case .tooLarge: return .failed(CareText.importTooLarge)
         case .unreadable: return .failed(CareText.importUnreadable)
         case .text(let text):
-            recordCare.finishClear()   // R10: 지우다 만 기록을 먼저 빼야 그 id가 '이미 있는 기록'으로 세지지 않는다(못 마치면 가져오기가 import.failed)
+            recordCare.finishClear()   // 지우다 만 기록을 먼저 빼야 그 id가 '이미 있는 기록'으로 세지지 않는다(못 마치면 가져오기가 import.failed)
             return await preview(text, profile: nil)
         }
     }
@@ -143,7 +143,7 @@ final class SettingsViewModel {
     }
 
     func clearRecords() { clearing() }
-    /// 설정의 '연결 끊기': 앱 범위에서 끝까지 하고 결과는 `ui.disconnect`(M3). 끊기면 탭이 오늘로 간다(CareTabsViewModel).
+    /// 설정의 '연결 끊기': 앱 범위에서 끝까지 하고 결과는 `ui.disconnect`. 끊기면 탭이 오늘로 간다(CareTabsViewModel).
     func startDisconnect() { disconnect.start() }
     /// 설정을 떠나면 지난 끊기 실패 글을 걷는다.
     func dismissDisconnectError() { disconnect.dismissError() }
@@ -151,7 +151,7 @@ final class SettingsViewModel {
 
 // MARK: 보호자
 
-/// 보호자: owner는 초대·목록, guardian은 인계 알림 받기(7.1).
+/// 보호자: owner는 초대·목록, guardian은 인계 알림 받기.
 struct GuardiansUiState: Equatable {
     var role: PhoneRole?
     var handoffAlerts: Bool
@@ -166,14 +166,14 @@ struct GuardiansUiState: Equatable {
     var offline: Bool { !online }
 }
 
-/// 차를 뺀 연결된 폰. 인계 알림 받기는 중계 값(아직 없으면 켜짐으로 보인다, G12 guardian 기본값).
+/// 차를 뺀 연결된 폰. 인계 알림 받기는 중계 값(아직 없으면 켜짐으로 보인다, guardian 기본값).
 func guardiansUi(_ s: PhoneState, creds: Credentials?, online: Bool, busy: Bool, error: String?, invite: InviteResponse?) -> GuardiansUiState {
     GuardiansUiState(role: creds?.role, handoffAlerts: s.handoffAlerts ?? true,
                      phones: s.devices.filter { $0.role == .owner || $0.role == .guardian }, myDeviceId: creds?.deviceId,
                      online: online, busy: busy, error: error, invite: invite)
 }
 
-/// 보호자 화면. 요청 중·오류·만든 초대 코드는 이 뷰모델이 들고(S17), 요청도 이 뷰모델의 작업으로 끝까지 반영한다
+/// 보호자 화면. 요청 중·오류·만든 초대 코드는 이 뷰모델이 들고, 요청도 이 뷰모델의 작업으로 끝까지 반영한다
 /// (화면이 다시 그려지거나 잠깐 가려져도 만든 초대 코드와 '인계 알림 받기' 결과를 버리지 않게).
 @MainActor
 @Observable
@@ -185,7 +185,7 @@ final class GuardiansViewModel {
     /// 요청 중. 요청이 겹치면 늦게 온 앞 응답이 나중 설정을 덮으니 한 번에 하나만 보낸다.
     private var busy = false
     private var error: String?
-    /// 만든 초대와 그때의 연결. 초대는 그 차의 것이라(끊으면 중계가 폐기, G38) 연결이 바뀌면 보이지 않는다(P5·P6).
+    /// 만든 초대와 그때의 연결. 초대는 그 차의 것이라(끊으면 중계가 폐기) 연결이 바뀌면 보이지 않는다.
     private var made: (invite: InviteResponse, creds: Credentials?)?
 
     init(state: PhoneStateRepository, connection: KeepConnected, invite: Invite, setHandoffAlerts: SetHandoffAlerts) {
@@ -213,8 +213,8 @@ final class GuardiansViewModel {
         }
     }
 
-    /// '인계 알림 받기'를 바꾼다. 바꿨으면 true(켤 때 알림 권한을 다시 묻는다, 7.3).
-    /// 차례를 기다리거나 응답을 받는 사이 연결이 바뀌었으면(끊기·다른 차) 보내지 않았거나 버렸으니 false(묻지 않는다, P5).
+    /// '인계 알림 받기'를 바꾼다. 바꿨으면 true(켤 때 알림 권한을 다시 묻는다).
+    /// 차례를 기다리거나 응답을 받는 사이 연결이 바뀌었으면(끊기·다른 차) 보내지 않았거나 버렸으니 false(묻지 않는다).
     func setHandoff(_ on: Bool) async -> Bool {
         guard !busy else { return false }
         busy = true

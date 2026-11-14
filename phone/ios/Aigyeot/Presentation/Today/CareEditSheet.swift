@@ -2,12 +2,12 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-// 기록 시트(빠른 기록·고치기·지난 기록 적기, 디자인 v8 2판 안 1 · phone-care-plan U80~U89, 시안 sheet.html?v=1&pl=ios).
+// 기록 시트(빠른 기록·고치기·지난 기록 적기).
 // 위 → 아래: 머리(X · 고치기면 휴지통) → (지난 기록만) 종류 칸 → (고치기) '고치는 중' → 질문 → (첫 기록) 도움말 → 고를 것 하나를 크게
 // → 접힌 줄(한 번에 하나만 펼침) → 아래 고정: 보호자 안내·저장 실패 + 저장될 것을 말하는 단추 하나.
 // 화면은 `CareDraft`를 그리고 바꾸기만 한다. 글·줄 값·단추 글은 CareDraft(두 앱 같은 이름), 저장 단계는 CareSheetViewModel.
 
-/// 펼친 줄과 그 안의 시각 바퀴(화면 상태, 뷰모델에 두지 않는다 — 안드로이드 rememberSaveable와 같다). 한 번에 한 줄만 펼친다(U82).
+/// 펼친 줄과 그 안의 시각 바퀴(화면 상태, 뷰모델에 두지 않는다 — 안드로이드 rememberSaveable와 같다). 한 번에 한 줄만 펼친다.
 struct SheetFolds: Equatable {
     enum Wheel: Equatable { case start, end }
     private(set) var open: SheetField?
@@ -19,7 +19,7 @@ struct SheetFolds: Equatable {
         wheel = nil
     }
 
-    /// 저장 검사에 걸린 줄을 펼친다(U82 끝).
+    /// 저장 검사에 걸린 줄을 펼친다.
     mutating func reveal(_ f: SheetField) {
         if open != f { wheel = nil }
         open = f
@@ -38,13 +38,13 @@ struct CareEditSheet: View {
 
     @State private var folds = SheetFolds()
     @State private var heroWheel = false
-    /// 단추의 확인 표시(실제로 저장되어 닫히는 중, U88)와 성공 햅틱 계기. 둘 다 VM 닫힘 단계 `closed(saved:)`로만 정한다.
+    /// 단추의 확인 표시(실제로 저장되어 닫히는 중)와 성공 햅틱 계기. 둘 다 VM 닫힘 단계 `closed(saved:)`로만 정한다.
     @State private var saved = false
     @State private var successTick = 0
     /// 흔들림 계기(탓이 된 칸, 동작 줄이기면 올리지 않음)와 오류 햅틱 계기(동작 줄이기와 상관없이 실패마다)는 따로다.
     @State private var shakes = 0
     @State private var errorTick = 0
-    /// 저장 검사에 걸린 줄로 굴리기(U82 11-12 보충). 실패 한 번(attempt)마다 새 값이라 같은 오류가 다시 나도 굴린다.
+    /// 저장 검사에 걸린 줄로 굴리기. 실패 한 번(attempt)마다 새 값이라 같은 오류가 다시 나도 굴린다.
     @State private var scrollRequest: ScrollRequest?
     private struct ScrollRequest: Equatable { let field: SheetField; let attempt: Int }
     @State private var bodyHeight: CGFloat = 0
@@ -59,7 +59,7 @@ struct CareEditSheet: View {
     private var problemText: String? {
         if case .failed(let m, _?, _) = vm.phase { m } else { nil }
     }
-    /// 저장 실패(저장 공간)는 줄이 아니라 단추 바로 위(U82).
+    /// 저장 실패(저장 공간)는 줄이 아니라 단추 바로 위.
     private var footError: String? {
         if case .failed(let m?, nil, _) = vm.phase { m } else { nil }
     }
@@ -80,14 +80,20 @@ struct CareEditSheet: View {
                 // 줄 아래 끝(오류 한 줄)을 본문 아래 끝에 맞춘다: 큰 글자에서는 펼친 줄이 본문보다 커 가운데 맞춤이면 오류 글이 잘렸다
                 .onChange(of: scrollRequest) { _, r in
                     guard let r else { return }
-                    if reduceMotion { proxy.scrollTo(r.field, anchor: .bottom) } else { withAnimation(DS.Motion.smooth) { proxy.scrollTo(r.field, anchor: .bottom) } }
+                    if reduceMotion {
+                        proxy.scrollTo(r.field, anchor: .bottom)
+                    } else {
+                        withAnimation(DS.Motion.smooth) {
+                            proxy.scrollTo(r.field, anchor: .bottom)
+                        }
+                    }
                 }
             }
             footer
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footHeight = $0 }
         }
         .background(DS.surface)
-        // 시트 높이는 내용을 따라간다(줄을 펼치면 커진다, U88 시트 높이 spring.smooth). 넘치면 화면 높이에서 멈추고 본문이 굴러간다.
+        // 시트 높이는 내용을 따라간다(줄을 펼치면 커진다, 높이는 spring.smooth). 넘치면 화면 높이에서 멈추고 본문이 굴러간다.
         .presentationDetents(bodyHeight > 0 ? [.height(headerHeight + bodyHeight + footHeight)] : [.medium])
         .presentationDragIndicator(.hidden)
         .animation(smooth, value: bodyHeight)
@@ -100,7 +106,7 @@ struct CareEditSheet: View {
 
     private let headerHeight: CGFloat = 56
 
-    // MARK: 머리 — X(읽기 '취소', U71) · 고치기면 휴지통(읽기 '지우기')
+    // MARK: 머리 — X(읽기 '취소') · 고치기면 휴지통(읽기 '지우기')
 
     private var header: some View {
         HStack {
@@ -141,7 +147,7 @@ struct CareEditSheet: View {
         .padding(.horizontal, 4).padding(.top, 4)
     }
 
-    // MARK: 고를 것 하나를 크게(U80 ⑥)
+    // MARK: 고를 것 하나를 크게
 
     @ViewBuilder private var hero: some View {
         switch draft.kind {
@@ -174,7 +180,7 @@ struct CareEditSheet: View {
         }
     }
 
-    /// 잠: 큰 시작 시각 칸 + 몇 분 전 줄(U82). 날짜·시각 알약은 '직접'이거나 칩이 없는 시트에서만.
+    /// 잠: 큰 시작 시각 칸 + 몇 분 전 줄. 날짜·시각 알약은 '직접'이거나 칩이 없는 시트에서만.
     private var sleepStart: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
@@ -197,7 +203,7 @@ struct CareEditSheet: View {
         .animation(smooth, value: draft.showsPills)
     }
 
-    // MARK: 접힌 줄(U82)
+    // MARK: 접힌 줄
 
     private var rows: some View {
         VStack(spacing: 0) {
@@ -245,7 +251,7 @@ struct CareEditSheet: View {
         }
     }
 
-    /// 읽기 값: 줄 값 + 펼침 상태(B26).
+    /// 읽기 값: 줄 값 + 펼침 상태.
     private func rowA11yValue(_ f: SheetField, open: Bool) -> String {
         ([rowValue(f)].compactMap { $0 } + [open ? "펼침" : "접힘"]).joined(separator: ", ")
     }
@@ -255,7 +261,7 @@ struct CareEditSheet: View {
         let value = rowValue(f)
         let dim = f == .end && draft.endUnknown
         return Group {
-            if big {   // 큰 글자: 값을 이름 아래로(U89)
+            if big {   // 큰 글자: 값을 이름 아래로
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(rowName(f)).typeStyle(add ? .chip : .bodyMedium).foregroundStyle(add ? DS.accentInk : DS.textSecondary)
@@ -326,7 +332,7 @@ struct CareEditSheet: View {
         }
     }
 
-    /// 시작(또는 잠 큰 칸)의 날짜·시각 알약. 날짜는 달력 작은 창, 시각은 그 자리 바퀴(U82).
+    /// 시작(또는 잠 큰 칸)의 날짜·시각 알약. 날짜는 달력 작은 창, 시각은 그 자리 바퀴.
     private func startPills(wheelOpen: Bool, toggleWheel: @escaping () -> Void) -> some View {
         let dayText = CareText.dayTitle(CareRules.dayKey(CareTime.ms(draft.start), zone), now: Date(), zone: zone)
         let time = CareFormat.clock(draft.start, zone)
@@ -349,7 +355,7 @@ struct CareEditSheet: View {
         .accessibilityAddTraits(.updatesFrequently)
     }
 
-    // MARK: 아래 고정(U80 ⑨)
+    // MARK: 아래 고정
 
     private var footer: some View {
         VStack(spacing: 10) {
@@ -378,7 +384,7 @@ struct CareEditSheet: View {
                 dismiss()
             }
         case .failed(let m, let problem?, let attempt):
-            // 실패 한 번에 한 묶음(U82): 펼침 → 펼친 뒤 그 자리로 굴림 → 흔들림·오류 햅틱·읽기 알림.
+            // 실패 한 번에 한 묶음: 펼침 → 펼친 뒤 그 자리로 굴림 → 흔들림·오류 햅틱·읽기 알림.
             // 굴림은 펼침(spring.smooth 약 0.36초)이 끝난 배치로 한다: 펼치는 중에 굴리면 접힌 줄 높이로 맞춰 펼친 아래(오류 글)가 본문 밖에 남았다
             let f = CareDraft.field(for: problem)
             if let f {
@@ -405,23 +411,42 @@ struct CareEditSheet: View {
     // MARK: 그림
 
     private func sideIcon(_ s: FeedSide) -> Ico {
-        switch s { case .left: .sideLeft; case .right: .sideRight; case .both: .sideBoth; case .bottle: .bottle }
+        switch s {
+        case .left: .sideLeft
+        case .right: .sideRight
+        case .both: .sideBoth
+        case .bottle: .bottle
+        }
     }
 
     private func diaperIcon(_ d: DiaperKind) -> Ico {
-        switch d { case .wet: .droplet; case .dirty: .poo; case .both: .peePoo; case .dry: .clean }
+        switch d {
+        case .wet: .droplet
+        case .dirty: .poo
+        case .both: .peePoo
+        case .dry: .clean
+        }
     }
 
     private func kindIcon(_ k: CareKind) -> Ico {
-        switch k { case .feed: .bottle; case .sleep: .moon; case .diaper: .diaper; case .note: .notebookPen }
+        switch k {
+        case .feed: .bottle
+        case .sleep: .moon
+        case .diaper: .diaper
+        case .note: .notebookPen
+        }
     }
 
     private func kindTint(_ k: CareKind) -> Color {
-        switch k { case .feed: DS.cFeed; case .sleep: DS.cSleep; case .diaper, .note: DS.textPrimary }
+        switch k {
+        case .feed: DS.cFeed
+        case .sleep: DS.cSleep
+        case .diaper, .note: DS.textPrimary
+        }
     }
 }
 
-// MARK: 부품(시안 sheet.css: .ib · .oseg · .agos · .pill8 · .amt · .memo · .cta)
+// MARK: 부품
 
 /// 머리 원 단추(44pt, 먹색 6%).
 private struct SheetIconButton: View {
@@ -457,7 +482,7 @@ private struct OptionTiles<T: Hashable>: View {
     @ScaledMetric private var bigMin: CGFloat = 92
 
     var body: some View {
-        let cols = typeSize.isAccessibilitySize ? 2 : options.count   // 큰 글자: 2×2(U89)
+        let cols = typeSize.isAccessibilitySize ? 2 : options.count   // 큰 글자: 2×2
         // 칸은 넷뿐이라 게으른 격자를 쓰지 않는다(화면 밖 칸도 만들어 두어야 화면 읽기·굴림이 모든 칸을 찾는다)
         let rows = stride(from: 0, to: options.count, by: cols).map { Array(options[$0..<min($0 + cols, options.count)]) }
         VStack(spacing: 0) {
@@ -601,7 +626,7 @@ private struct Wheel: View {
     }
 }
 
-/// 잠의 큰 시작 시각: 작은 '오후' + 큰 '1:13'(시안 .tile .tt).
+/// 잠의 큰 시작 시각: 작은 '오후' + 큰 '1:13'.
 private struct BigClock: View {
     let date: Date
     let zone: TimeZone
@@ -619,7 +644,7 @@ private struct BigClock: View {
     }
 }
 
-/// 젖병 양(.amt): 작은 '양' + 큰 숫자 + 'ml' + 둥근 −/＋(44pt, ±10ml, U39). 화면 읽기는 한 요소로 묶어 위아래 쓸기로 조절한다.
+/// 젖병 양: 작은 '양' + 큰 숫자 + 'ml' + 둥근 −/＋(44pt, ±10ml). 화면 읽기는 한 요소로 묶어 위아래 쓸기로 조절한다.
 private struct AmountBlock: View {
     let amount: Int?
     let bad: Bool
@@ -652,7 +677,11 @@ private struct AmountBlock: View {
         .accessibilityLabel(CareText.rowAmount)
         .accessibilityValue(amount.map(CareText.ml) ?? "")
         .accessibilityAdjustableAction { d in
-            switch d { case .increment: up(); case .decrement: down(); @unknown default: break }
+            switch d {
+            case .increment: up()
+            case .decrement: down()
+            @unknown default: break
+            }
         }
     }
 
@@ -668,7 +697,7 @@ private struct AmountBlock: View {
     }
 }
 
-/// 메모 글칸: 자리 글 '예: 트림 잘 함', 150자부터 '{n}/200'(U17). 메모 종류는 큰 칸.
+/// 메모 글칸: 자리 글 '예: 트림 잘 함', 150자부터 '{n}/200'. 메모 종류는 큰 칸.
 private struct MemoField: View {
     let text: String
     let big: Bool
@@ -693,7 +722,7 @@ private struct MemoField: View {
     }
 }
 
-/// 저장 단추 하나(.cta: 56·모서리 16·700/17). 글은 저장될 것(U83), 저장되면 확인 표시.
+/// 저장 단추 하나(.cta: 56·모서리 16·700/17). 글은 저장될 것, 저장되면 확인 표시.
 private struct SaveButton: View {
     let label: String
     let enabled: Bool
@@ -724,7 +753,7 @@ private struct SaveButton: View {
     }
 }
 
-/// 오류 흔들림(360ms, 0 → −6 → 6 → −4 → 4 → −2 → 0, U88). trigger가 바뀔 때 한 번.
+/// 오류 흔들림(360ms, 0 → −6 → 6 → −4 → 4 → −2 → 0). trigger가 바뀔 때 한 번.
 private struct Shake: ViewModifier {
     let trigger: Int
     /// 탓이 된 칸만 흔든다.

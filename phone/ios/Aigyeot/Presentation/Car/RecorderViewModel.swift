@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-/// 녹음 시트의 화면 상태(구현 계획 4장, 최대 3분). 장치는 init으로 받은 SongRecorder다(R10).
+/// 녹음 시트의 화면 상태(최대 3분). 장치는 init으로 받은 SongRecorder다.
 /// 녹음 단계는 연관값 enum이라 '녹음 파일 없는 녹음 중', '녹음 전 재생 중' 같은 조합을 만들 수 없다.
-/// 시트가 녹음기 수명을 갖는다(시트가 닫히면 버린다). 안드로이드는 SongsViewModel 하나에 둔다(관용 차이, arch-phone-ios).
+/// 시트가 녹음기 수명을 갖는다(시트가 닫히면 버린다). 안드로이드는 SongsViewModel 하나에 둔다(관용 차이).
 @MainActor
 @Observable
 final class RecorderViewModel {
@@ -35,17 +35,28 @@ final class RecorderViewModel {
     }
 
     var phase: Phase {
-        switch state { case .idle: .idle; case .recording: .recording; case .recorded, .sent: .recorded }
+        switch state {
+        case .idle: .idle
+        case .recording: .recording
+        case .recorded, .sent: .recorded
+        }
     }
     var elapsed: TimeInterval {
-        switch state { case .idle: 0; case .recording(_, let t): t; case .recorded(_, let d, _), .sent(let d): d }
+        switch state {
+        case .idle: 0
+        case .recording(_, let t): t
+        case .recorded(_, let d, _), .sent(let d): d
+        }
     }
     var fileURL: URL? {
-        switch state { case .idle, .sent: nil; case .recording(let u, _), .recorded(let u, _, _): u }
+        switch state {
+        case .idle, .sent: nil
+        case .recording(let u, _), .recorded(let u, _, _): u
+        }
     }
     var isPlaying: Bool { if case .recorded(_, _, true) = state { true } else { false } }
 
-    /// 녹음 시트를 열 때 한 번 묻는다(계약 7.3 마이크 '녹음 시트를 처음 열 때', 안드로이드와 같다). 이미 정했으면 상태만 읽는다.
+    /// 녹음 시트를 열 때 한 번 묻는다(마이크 '녹음 시트를 처음 열 때', 안드로이드와 같다). 이미 정했으면 상태만 읽는다.
     func askPermissionIfNeeded() async {
         guard recorder.permissionUndetermined else { refreshPermission(); return }
         permissionDenied = !(await requestPermission())

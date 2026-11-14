@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// 리포트·인계 알림 화면(안드로이드 ReportViewModels.kt). 리포트·알림은 state.json이 원본이고 읽기만 한다(저장소를 바로 읽는다, 11-08 구조 원칙).
+// 리포트·인계 알림 화면(안드로이드 ReportViewModels.kt). 리포트·알림은 state.json이 원본이고 읽기만 한다(저장소를 바로 읽는다).
 
 /// 리포트 목록(guardian 오늘 '최근 리포트'에서 연다). 시작 시각이 늦은 것이 위.
 @MainActor
@@ -18,7 +18,7 @@ final class ReportsViewModel {
     /// 받을 때 시작 시각 늦은 순으로 저장한다(InboxRules). 안드로이드는 맵이라 화면에서 정렬한다.
     var reports: [StoredReport] { stateRepo.state.reports }
 
-    /// 당겨서 새로고침(7.2).
+    /// 당겨서 새로고침.
     func retryNow() async { await connection.retryNow() }
 }
 

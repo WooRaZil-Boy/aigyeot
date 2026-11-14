@@ -2,28 +2,28 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-// 디자인 v6 부품(시안 css/phone.css v5 '한국 앱 결'): 흰 블록·블록 머리·64 목록 행·설정 묶음·세그먼트·버튼·배지·숫자 줄·글래스.
+// 디자인 부품('한국 앱 결'): 흰 블록·블록 머리·64 목록 행·설정 묶음·세그먼트·버튼·배지·숫자 줄·글래스.
 // 화면은 이 부품으로 상태를 그리기만 한다.
 
 // MARK: 블록
 
 extension View {
-    /// 흰 블록: 회색 바탕 위 모서리 20, 안쪽 여백 22·20(시안 `.pcard`).
+    /// 흰 블록: 회색 바탕 위 모서리 20, 안쪽 여백 22·20.
     func block(padding: EdgeInsets = EdgeInsets(top: 22, leading: 20, bottom: 22, trailing: 20)) -> some View {
         self.padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(DS.surface, in: RoundedRectangle(cornerRadius: DS.rL, style: .continuous))
     }
 
-    /// 화면 안쪽 여백 12, 블록 사이 12(시안 `.pad`).
+    /// 화면 안쪽 여백 12, 블록 사이 12.
     func screenPadding() -> some View { padding(.horizontal, 12).padding(.bottom, 24) }
 }
 
 /// 블록 머리: 제목 20/700 + 오른쪽 작은 링크(14/500 흐림 + ›).
 struct BlockHeader: View {
     let title: String
-    var link: String? = nil
-    var action: (() -> Void)? = nil
+    var link: String?
+    var action: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .center) {
@@ -36,7 +36,7 @@ struct BlockHeader: View {
                         IconImage(.chevronRight, size: 16)
                     }
                     .foregroundStyle(DS.textTertiary)
-                    .frame(minHeight: 44).contentShape(Rectangle())   // 터치 영역 44pt(8장)
+                    .frame(minHeight: 44).contentShape(Rectangle())   // 터치 영역 44pt
                 }
                 .buttonStyle(.plain)
             }
@@ -59,7 +59,7 @@ struct BlockNote: View {
     var body: some View { Text(text).typeStyle(.note).lineSpacing(6).foregroundStyle(DS.textTertiary).padding(.top, 14) }
 }
 
-/// 블록 밖 작은 글(12.5/500 흐림, 시안 `.foot-note`).
+/// 블록 밖 작은 글(12.5/500 흐림).
 struct FootNote: View {
     let text: String
     init(_ text: String) { self.text = text }
@@ -93,12 +93,12 @@ struct Chevron: View {
 
 // MARK: 목록 행
 
-/// 64 목록 행: 회색 원(40) 아이콘 + 제목 16/600 + 부제 14/400 흐림 + 꼬리(시안 `.lrow-p`).
-/// `add`면 원이 옅은 파랑, 제목이 파랑 글자(시안 `.is-add`).
+/// 64 목록 행: 회색 원(40) 아이콘 + 제목 16/600 + 부제 14/400 흐림 + 꼬리.
+/// `add`면 원이 옅은 파랑, 제목이 파랑 글자.
 struct ListRow<Tail: View>: View {
     let icon: Ico
     let title: String
-    var sub: String? = nil
+    var sub: String?
     var add = false
     var titleColor: Color = DS.textPrimary
     @ViewBuilder var tail: () -> Tail
@@ -128,7 +128,7 @@ extension ListRow where Tail == Chevron {
     }
 }
 
-/// 설정 묶음(시안 `.grp`): 흰 면 모서리 26, 안쪽 좌우 16.
+/// 설정 묶음: 흰 면 모서리 26, 안쪽 좌우 16.
 struct Group26<Content: View>: View {
     @ViewBuilder var content: () -> Content
     var body: some View {
@@ -138,19 +138,19 @@ struct Group26<Content: View>: View {
     }
 }
 
-/// 아이콘을 `rowTitle` 제목 첫 줄 가운데에 맞춘다(v8b ② '아이콘 칸 높이 = 제목 줄 높이, 위 맞춤'). `HStack(alignment: .firstTextBaseline)` 안에서 쓴다.
+/// 아이콘을 `rowTitle` 제목 첫 줄 가운데에 맞춘다('아이콘 칸 높이 = 제목 줄 높이, 위 맞춤'). `HStack(alignment: .firstTextBaseline)` 안에서 쓴다.
 /// 기준선에서 첫 줄 가운데까지 = (올림 0.952 − 줄 가운데 0.597) × 16pt(Pretendard). 글자와 같이 커진다.
 private struct TitleLineCenter: ViewModifier {
     @ScaledMetric(relativeTo: .body) private var lift: CGFloat = 5.7
     func body(content: Content) -> some View { content.alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + lift } }
 }
 
-/// 정보 줄(첫 안내·보호자 초대, v8b ②): 선 아이콘 22(칸 폭 24, 바탕 없음) + 16 + 제목 `rowTitle` / 부제 `rowSub`. 아이콘은 제목 첫 줄에 맞추고,
+/// 정보 줄(첫 안내·보호자 초대): 선 아이콘 22(칸 폭 24, 바탕 없음) + 16 + 제목 `rowTitle` / 부제 `rowSub`. 아이콘은 제목 첫 줄에 맞추고,
 /// 접근성 크기면 아이콘을 제목 위로 쌓는다(HIG '쌓기'). 줄 하나가 읽기 요소 하나, 아이콘은 읽지 않는다.
 struct InfoRow: View {
     let icon: Ico
     let title: String
-    var sub: String? = nil
+    var sub: String?
     var tone: Color = DS.textSecondary
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -175,12 +175,12 @@ struct InfoRow: View {
 }
 
 /// 설정 행: 32 아이콘(바탕 없음, 흐림) + 제목 16/600 + 부제 14 흐림, 높이 56 이상.
-/// 아이콘은 제목 첫 줄에 맞추고(부제가 두 줄이어도 제목 옆), 꼬리(스위치·›)는 행 가운데 그대로(v8b-7 공용 설정 행).
+/// 아이콘은 제목 첫 줄에 맞추고(부제가 두 줄이어도 제목 옆), 꼬리(스위치·›)는 행 가운데 그대로.
 struct SettingRow<Tail: View>: View {
     let icon: Ico
     let title: String
-    var sub: String? = nil
-    /// 되돌릴 수 없는 줄('이 휴대폰의 기록 지우기'·'연결 끊기'): 아이콘을 danger로(11-11 지시, 세 앱 같은 규칙). 그 밖의 줄 아이콘은 흐린 색.
+    var sub: String?
+    /// 되돌릴 수 없는 줄('이 휴대폰의 기록 지우기'·'연결 끊기'): 아이콘을 danger로(세 앱 같은 규칙). 그 밖의 줄 아이콘은 흐린 색.
     /// 글자 색은 줄마다 그대로다(`tone`: 기록 지우기만 원래 빨강).
     var irreversible = false
     var tone: Color = DS.textPrimary
@@ -212,8 +212,8 @@ extension SettingRow where Tail == Chevron {
 
 // MARK: 세그먼트
 
-/// 회색 판 + 흰 칸 세그먼트(두 플랫폼 같음, 시안 `.segp`). 엄지는 spring.snappy로 옮긴다.
-/// 가장 큰 글자에서는 칸이 좁아 글자가 잘리므로 세로 글자 버튼으로 바꾼다(8장 동적 글자 크기).
+/// 회색 판 + 흰 칸 세그먼트(두 플랫폼 같음). 엄지는 spring.snappy로 옮긴다.
+/// 가장 큰 글자에서는 칸이 좁아 글자가 잘리므로 세로 글자 버튼으로 바꾼다(동적 글자 크기).
 struct Segmented<T: Hashable>: View {
     let title: String
     let options: [T]
@@ -222,7 +222,6 @@ struct Segmented<T: Hashable>: View {
     @Namespace private var ns
     @Environment(\.dynamicTypeSize) private var size
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
 
     var body: some View {
         Group {
@@ -265,7 +264,7 @@ struct Segmented<T: Hashable>: View {
 
 /// 토스 결 버튼: 높이 56(큰 것 58), 모서리 16, 17/700. 누르면 0.97배(press 90ms, Pleos·quietly).
 struct PillButtonStyle: ButtonStyle {
-    /// `text`: 글자 단추(높이 48, 600/16 textSecondary, 바탕 없음) — 두 단추 중 약한 쪽(첫 안내 '먼저 기록만 쓸게요' 등, v8b-3).
+    /// `text`: 글자 단추(높이 48, 600/16 textSecondary, 바탕 없음) — 두 단추 중 약한 쪽(첫 안내 '먼저 기록만 쓸게요' 등).
     enum Kind { case accent, tonal, danger, text }
     var kind: Kind = .accent
     var big = false
@@ -295,10 +294,19 @@ struct PillButtonStyle: ButtonStyle {
         }
 
         private var fg: Color {
-            switch kind { case .accent: DS.onAccent; case .tonal: DS.textPrimary; case .danger: DS.danger; case .text: DS.textSecondary }
+            switch kind {
+            case .accent: DS.onAccent
+            case .tonal: DS.textPrimary
+            case .danger: DS.danger
+            case .text: DS.textSecondary
+            }
         }
         private var bg: Color {
-            switch kind { case .accent: DS.accent; case .tonal: DS.tonal; case .danger, .text: .clear }
+            switch kind {
+            case .accent: DS.accent
+            case .tonal: DS.tonal
+            case .danger, .text: .clear
+            }
         }
     }
 }
@@ -337,13 +345,13 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 탭을 바꿔 화면이 나타날 때 블록이 한 줄씩 올라온다(시안 v4-7 5, core.js UI.enter: 아래 16 → 0, 블러 6 → 0, motion.enter,
+    /// 탭을 바꿔 화면이 나타날 때 블록이 한 줄씩 올라온다(아래 16 → 0, 블러 6 → 0, motion.enter,
     /// 0.06초 뒤 `order`마다 0.05초). 탭을 고른 직후에 나타난 것만이고, 뒤로 가기·목록을 굴려 새로 보이는 줄은 바로 보인다. 동작 줄이기면 없음.
     func enterRise(_ order: Int) -> some View { modifier(EnterRise(order: order)) }
 }
 
 extension AnyTransition {
-    /// 새 판이 생길 때(시안 .enter phEnter: 위 10 · 0.98배 · 투명에서, spring.smooth로). 나갈 때는 흐려지기만.
+    /// 새 판이 생길 때(위 10 · 0.98배 · 투명에서, spring.smooth로). 나갈 때는 흐려지기만.
     static var cardEnter: AnyTransition {
         .asymmetric(insertion: .opacity.combined(with: .offset(y: -10)).combined(with: .scale(scale: 0.98)), removal: .opacity)
     }
@@ -376,7 +384,7 @@ private struct EnterRise: ViewModifier {
 /// 배지(뜻 하나에 색 하나). `child`면 아이 신호 주황.
 struct Badge: View {
     let text: String
-    var icon: Ico? = nil
+    var icon: Ico?
     var child = false
     var body: some View {
         HStack(spacing: 4) {
@@ -389,9 +397,9 @@ struct Badge: View {
     }
 }
 
-/// 숫자 타일 줄(시안 `.kpi`): 이름 13/500 흐림, 값 20/700, 아래 12/500 흐림.
+/// 숫자 타일 줄: 이름 13/500 흐림, 값 20/700, 아래 12/500 흐림.
 struct KpiRow: View {
-    struct Item: Hashable { let name: String; let value: String; var sub: String? = nil; var note: String? = nil }
+    struct Item: Hashable { let name: String; let value: String; var sub: String?; var note: String? }
     let items: [Item]
     @Environment(\.dynamicTypeSize) private var size
 
@@ -421,14 +429,13 @@ extension View {
     }
 }
 
+// MARK: 섞어 만든 색(토큰 둘을 섞은 값)
 
-// MARK: 시안에서 섞어 만든 색(토큰 둘을 섞은 값)
-
-/// 빈 상태(U85, 시안 .empty8): 아이콘 고리 + 문구(+ 단추 하나). 고리 아이콘은 읽지 않는다. 등장은 고리 spring.bouncy 0.92 → 1.
+/// 빈 상태: 아이콘 고리 + 문구(+ 단추 하나). 고리 아이콘은 읽지 않는다. 등장은 고리 spring.bouncy 0.92 → 1.
 struct EmptyRing: View {
     let icon: Ico
     let text: String
-    var action: (String, () -> Void)? = nil
+    var action: (String, () -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 

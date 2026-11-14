@@ -83,7 +83,7 @@ final class FakeCar {
                          "during_cry_z": NSNull(), "unavailable_reason": "no_comparable_window"],
             "car_actions": [["action": "rear_playback", "count": 1, "total_s": 56]],
             "controls": [["api": "Seat.setHvacSeatTemperature", "target": "ROW_2_LEFT", "attempts": 1, "succeeded": 1, "failed": 0, "retries": 0]],
-            "method_stats": [["method": method, "label": label, "successes": 6, "attempts": 7]],
+            "method_stats": [["method": method, "label": label, "successes": 6, "attempts": 7]]
         ])
     }
 
@@ -172,7 +172,7 @@ final class ScreenTour: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", s)).firstMatch
     }
 
-    /// 기록 시트의 저장 단추(글이 저장될 것을 말한다, U83: '오후 1:58 왼쪽 수유 저장하기').
+    /// 기록 시트의 저장 단추(글이 저장될 것을 말한다: '오후 1:58 왼쪽 수유 저장하기').
     private var saveButton: XCUIElement { app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "저장하기")).firstMatch }
 
     /// 429 잠금이 Retry-After 끝에 풀리는지(대장 'iOS 429 잠금이 17~45초 늦게 풀림', ios_429_1105d).
@@ -192,7 +192,7 @@ final class ScreenTour: XCTestCase {
         let locked = app.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", "뒤에 다시 해 주세요")).firstMatch
         XCTAssert(locked.waitForExistence(timeout: 10))
         let shownAt = Date()
-        // "10분 뒤에 다시 해 주세요"(60초 넘으면 분 올림, 계약 7.2) 또는 "45초 뒤에 …". 분이면 올림이라 끝 예상이 최대 60초 늦게 잡힌다
+        // "10분 뒤에 다시 해 주세요"(60초 넘으면 분 올림) 또는 "45초 뒤에 …". 분이면 올림이라 끝 예상이 최대 60초 늦게 잡힌다
         let n = try XCTUnwrap(Double(locked.label.filter(\.isNumber)))
         let secs = locked.label.contains("분") ? n * 60 : n
         shot("429-locked")
@@ -209,9 +209,9 @@ final class ScreenTour: XCTestCase {
         XCTAssertGreaterThan(late, -3, line)   // 너무 일찍 풀려도 틀리다   // 문구는 응답 뒤에 보이고 남은 초는 올림이라 0~1초 안팎이 정상
     }
 
-    /// 새 화면(phone-care-plan 5장): 연결 안 됨 → owner → 앱에서 끊기 → guardian → 차 쪽 끊김.
-    /// 5장: 연결 흐름이 끝나면 오늘 탭으로 간다. 기록 탭에서 링크를 열지만 앱이 다시 떠서 콜드 스타트 링크만 본다.
-    /// shortcut: app.open(URL)은 앱을 다시 띄운다(33회차 확인: 시트를 닫으면 기록 탭이 아니었다). 그래서 이 시험은 콜드 스타트 링크만 보고,
+    /// 새 화면: 연결 안 됨 → owner → 앱에서 끊기 → guardian → 차 쪽 끊김.
+    /// 연결 흐름이 끝나면 오늘 탭으로 간다. 기록 탭에서 링크를 열지만 앱이 다시 떠서 콜드 스타트 링크만 본다.
+    /// shortcut: app.open(URL)은 앱을 다시 띄운다(확인: 시트를 닫으면 기록 탭이 아니었다). 그래서 이 시험은 콜드 스타트 링크만 보고,
     /// 같은 프로세스에서 기록 탭 위로 링크가 오는 길(HomeViews의 onChange)은 거치지 않는다. 실기기에서 메시지 앱 링크로 확인할 일이다
     func test_링크로_다시_뜬_앱은_연결_뒤_오늘_탭이다() {
         let car = FakeCar()
@@ -228,7 +228,7 @@ final class ScreenTour: XCTestCase {
         XCTAssertFalse(app.buttons["하루"].exists)
     }
 
-    /// 기록 가져오기(U64~U68): 설정 → 파일 고르기 → 아이 고르기(Nara 둘) → 미리 보기 → 띠·되돌리기, 읽을 수 없는 파일의 안내.
+    /// 기록 가져오기: 설정 → 파일 고르기 → 아이 고르기(Nara 둘) → 미리 보기 → 띠·되돌리기, 읽을 수 없는 파일의 안내.
     /// 파일은 미리 시뮬레이터 '나의 iPhone'에 둔다(EXAMPLE-nara.csv·EXAMPLE-unknown.csv). `SHOT_SUFFIX`를 캡처 이름 끝에 붙인다(밝음·어둠).
     /// 띠에서 되돌리므로 같은 기기에서 다시 돌려도 같은 미리 보기가 나온다.
     func test_기록_가져오기() {
@@ -277,7 +277,7 @@ final class ScreenTour: XCTestCase {
         car.register()
         XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
         shot("01-intro")
-        // U43 안 B: '자세히 보기' 시트에 원문 넷(7.1 intro.* 글자 그대로), '닫기'로 돌아온다
+        // '자세히 보기' 시트에 원문 넷(intro.* 글자 그대로), '닫기'로 돌아온다
         let more = app.buttons["오가는 정보 자세히 보기"]
         XCTAssert(more.waitForExistence(timeout: 5))
         more.tap()
@@ -305,7 +305,7 @@ final class ScreenTour: XCTestCase {
         XCTAssert(app.buttons["수유"].waitForExistence(timeout: 5))
         sleep(1)
         app.buttons["수유"].press(forDuration: 1.0)
-        XCTAssert(app.buttons["시작"].waitForExistence(timeout: 5))   // 기록 시트 v8: 줄은 접혀 있다(U82)
+        XCTAssert(app.buttons["시작"].waitForExistence(timeout: 5))   // 기록 시트 v8: 줄은 접혀 있다
         app.buttons["시작"].tap()
         XCTAssert(app.buttons["1시간 전"].waitForExistence(timeout: 5))
         app.buttons["1시간 전"].tap()
@@ -353,7 +353,7 @@ final class ScreenTour: XCTestCase {
         // 띠가 없으면 띠 자리는 0이다(제목 바로 아래 하루·패턴 전환). 늘 200pt를 차지하던 회귀를 막는다.
         let gap = app.buttons["하루"].firstMatch.frame.minY - app.navigationBars.firstMatch.frame.maxY   // 가장 큰 글자에서는 나눈 선택 대신 글자 버튼
         XCTAssertLessThan(gap, 40, "띠가 없는데 위쪽 빈칸 \(gap)pt")
-        XCTAssertGreaterThanOrEqual(app.buttons["하루"].firstMatch.frame.height.rounded(), 44, "하루·패턴 전환의 누르는 높이")   // 43.999… 같은 점 소수 오차는 반올림   // 나눈 선택도 44pt(8장)
+        XCTAssertGreaterThanOrEqual(app.buttons["하루"].firstMatch.frame.height.rounded(), 44, "하루·패턴 전환의 누르는 높이")   // 43.999… 같은 점 소수 오차는 반올림   // 나눈 선택도 44pt
         let row = app.cells.containing(NSPredicate(format: "label BEGINSWITH '수유 · '")).firstMatch   // 가장 큰 글자에서는 첫 줄이 전환·날짜 띠다
         row.swipeLeft()
         XCTAssert(app.buttons["지우기"].waitForExistence(timeout: 5), "밀어도 지우기가 없다")
@@ -382,7 +382,7 @@ final class ScreenTour: XCTestCase {
         car.sendReport(minAgo: 90, method: "white_noise", label: "백색소음", result: "failure")
         sleep(3)
         shot("16-owner-today")
-        // 차가 받는 돌봄 요약(계약 6.4 care_summary): 연결 직후 owner가 보낸다. 여기서는 칸·꼴·잠 켜짐만 본다. 값 계산은 단위 시험(R18 표준 예제)이 본다.
+        // 차가 받는 돌봄 요약(care_summary): 연결 직후 owner가 보낸다. 여기서는 칸·꼴·잠 켜짐만 본다. 값 계산은 단위 시험(표준 예제)이 본다.
         let summary = car.inbox().last { $0["type"] as? String == "care_summary" }
         XCTAssertEqual((summary?["from"] as? [String: Any])?["role"] as? String, "owner", "차 받은 함에 돌봄 요약이 없다")
         let body = summary?["body"] as? [String: Any] ?? [:]
@@ -392,10 +392,10 @@ final class ScreenTour: XCTestCase {
         XCTAssertGreaterThanOrEqual(body["today_feed_count"] as? Int ?? 0, 1)   // 자정 직후에 돌리면 '1시간 전' 수유는 어제다
         let secondsWithOffset = NSPredicate(format: "SELF MATCHES %@", #"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d"#)
         for k in ["as_of", "sleeping_since"] {
-            XCTAssert(secondsWithOffset.evaluate(with: body[k] as? String ?? ""), "\(k) 꼴이 계약과 다르다: \(body[k] ?? "없음")")
+            XCTAssert(secondsWithOffset.evaluate(with: body[k] as? String ?? ""), "\(k) 꼴이 메시지 형식과 다르다: \(body[k] ?? "없음")")
         }
 
-        // 연결된 폰에 새 연결 링크: 확인 화면이 끊을지 묻고, '닫기'면 지금 연결을 그대로 둔다(G16)
+        // 연결된 폰에 새 연결 링크: 확인 화면이 끊을지 묻고, '닫기'면 지금 연결을 그대로 둔다
         app.open(URL(string: "aigyeot://pair?code=\(car.pairCode())")!)
         XCTAssert(app.buttons["끊고 연결하기"].waitForExistence(timeout: 5))
         XCTAssert(app.staticTexts["지금 연결된 차를 끊고 새 차에 연결할까요?"].exists)
@@ -408,11 +408,11 @@ final class ScreenTour: XCTestCase {
         shot("18-owner-records")
         tab("차")
         shot("19-owner-car")
-        // 녹음 시트: 파형이 시트 폭 안에 든다(U13 ①). 7초면 막대가 60개 넘게 쌓인다.
+        // 녹음 시트: 파형이 시트 폭 안에 든다. 7초면 막대가 60개 넘게 쌓인다.
         let rec = app.buttons["녹음하기"]
         for _ in 0..<4 where !(rec.exists && rec.isHittable) { app.swipeUp() }   // 큰 글자에서는 화면 밖에 있다(목록은 보이는 줄만 만든다)
         rec.tap()
-        allowSystemAlert()   // 마이크 권한은 시트를 열 때 묻는다(7.3)
+        allowSystemAlert()   // 마이크 권한은 시트를 열 때 묻는다
         let recTimer = app.staticTexts["0:00 / 3:00"]
         XCTAssert(recTimer.waitForExistence(timeout: 5))
         let f = recTimer.frame
@@ -423,7 +423,7 @@ final class ScreenTour: XCTestCase {
         recordButton.tap()
         XCTAssert(app.buttons["차로 보내기"].waitForExistence(timeout: 5))
         shot("19c-owner-recorded")   // 멈춘 뒤: 이름·다시 듣기·보내기(가장 큰 글자에서는 시트 안에서 굴린다)
-        // 이름을 넣어 보내고, 차가 받아들이면 목록에 '다시 듣기'·'실험에 쓰기'가 생긴다(둘 다 44pt 이상, 8장)
+        // 이름을 넣어 보내고, 차가 받아들이면 목록에 '다시 듣기'·'실험에 쓰기'가 생긴다(둘 다 44pt 이상)
         let songName = app.textFields["노래 이름(30자까지)"]
         songName.tap(); songName.typeText("song1\n")   // 키보드의 '완료'로 닫는다(키보드 추천 막대가 '보내기'를 덮는다)
         let send = app.buttons["차로 보내기"]
@@ -433,7 +433,7 @@ final class ScreenTour: XCTestCase {
         var accepted = false
         for _ in 0..<10 where !accepted { sleep(1); accepted = car.acceptSong() }   // 올리기와 song_added가 끝나기를 기다린다
         XCTAssert(accepted, "차 받은 함에 song_added가 없다")
-        // 받아들인 노래 줄(상태 '다음 주행부터 써요')은 누르면 메뉴(듣기·실험에 쓰기·지우기)이고, 오른쪽 듣기는 바로 누르는 단추다(결정 14)
+        // 받아들인 노래 줄(상태 '다음 주행부터 써요')은 누르면 메뉴(듣기·실험에 쓰기·지우기)이고, 오른쪽 듣기는 바로 누르는 단추다
         let songRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'song1' AND label CONTAINS '다음 주행부터 써요'")).firstMatch
         XCTAssert(songRow.waitForExistence(timeout: 15), "받아들인 노래 줄이 없다")
         let replay = app.buttons["듣기"].firstMatch
@@ -457,7 +457,7 @@ final class ScreenTour: XCTestCase {
         for _ in 0..<6 where !(invite.exists && invite.isHittable) { app.swipeUp() }
         invite.tap()
         XCTAssert(app.staticTexts.matching(NSPredicate(format: "label MATCHES '[0-9A-Z]{5}-[0-9A-Z]{5}'")).firstMatch.waitForExistence(timeout: 10), "초대 코드가 뜨지 않았다")
-        // 코드를 만든 뒤: 주 단추는 '링크로 보내기', 다시 만들기는 글자 단추(v8b-10 ⑨)
+        // 코드를 만든 뒤: 주 단추는 '링크로 보내기', 다시 만들기는 글자 단추
         XCTAssert(app.buttons["새 코드 만들기"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["초대 코드 만들기"].exists)
         XCTAssert(label(beginsWith: "링크로 보내기").exists)
@@ -467,8 +467,8 @@ final class ScreenTour: XCTestCase {
         for _ in 0..<6 where !(disconnect.exists && disconnect.isHittable) { app.swipeUp() }   // 큰 글자에서는 화면 밖에 있다
         disconnect.tap()
         shot("23-disconnect-dialog")
-        app.buttons["끊기"].firstMatch.tap()   // 확인 창 주 단추(B10)
-        // U25 b: 탭을 누르지 않아도 오늘로 간다.
+        app.buttons["끊기"].firstMatch.tap()   // 확인 창 주 단추
+        // 탭을 누르지 않아도 오늘로 간다.
         expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: app.buttons["오늘"].firstMatch)
         waitForExpectations(timeout: 10)
         shot("24-after-disconnect")
@@ -482,9 +482,9 @@ final class ScreenTour: XCTestCase {
         app.buttons["확인"].tap()
         allowSystemAlert()
         XCTAssert(app.buttons["기록"].firstMatch.waitForExistence(timeout: 10))
-        // 인계 알림(2시간 10분 전, U20)과 리포트 넷(오늘에는 3개, 5장)
+        // 인계 알림(2시간 10분 전)과 리포트 넷(오늘에는 3개)
         car.sendHandoff(minAgo: 130)
-        car.sendHandoff(minAgo: 0)   // 지금 온 인계 알림은 위에 배너로 뜬다(5.6)
+        car.sendHandoff(minAgo: 0)   // 지금 온 인계 알림은 위에 배너로 뜬다
         let banner = app.buttons["handoffBanner"]   // 목록 줄이 아니라 배너 자체
         XCTAssert(banner.waitForExistence(timeout: 10), "인계 배너가 뜨지 않았다")
         shot("24b-guardian-banner")
@@ -524,7 +524,7 @@ final class ScreenTour: XCTestCase {
         shot("30-after-gone")
     }
 
-    /// 띠 묶음(8장 동적 글자 크기): guardian에서 알림 꺼짐·시계 차이·오프라인 띠를 함께 띄운다.
+    /// 띠 묶음(동적 글자 크기): guardian에서 알림 꺼짐·시계 차이·오프라인 띠를 함께 띄운다.
     /// 앱은 응답 `Date`를 옮기고 연결을 끊을 수 있는 프록시를 거쳐 중계에 붙는다(`PROXY_CTRL`이 그 조종 주소). 차는 중계에 바로 붙는다.
     func test_띠_묶음() throws {
         guard let ctrl = ProcessInfo.processInfo.environment["PROXY_CTRL"] else { throw XCTSkip("PROXY_CTRL 없음") }
@@ -548,16 +548,16 @@ final class ScreenTour: XCTestCase {
         deny.first { $0.exists }?.tap()
         XCTAssert(app.buttons["기록"].firstMatch.waitForExistence(timeout: 10))
         XCTAssert(label(beginsWith: "휴대폰 시계가").waitForExistence(timeout: 10))
-        // 앱이 앞에 있는 채로 중계가 끊긴다: 소켓이 다시 붙지 못하면 띠가 켜진다(계약 9장 '중계 불통').
+        // 앱이 앞에 있는 채로 중계가 끊긴다: 소켓이 다시 붙지 못하면 띠가 켜진다.
         proxy("/down")
         XCTAssert(label(beginsWith: "오프라인이에요").waitForExistence(timeout: 10))
         XCTAssert(label(beginsWith: "알림이 꺼져 있어").exists)
-        XCTAssert(app.buttons["다시 시도"].exists)   // 7.2 '그 밖: 띠에 다시 시도'
+        XCTAssert(app.buttons["다시 시도"].exists)   // '그 밖: 띠에 다시 시도'
         shot("B1-bands-today")
         app.swipeUp(); shot("B1b-bands-today-2")
         tab("기록")
         shot("B2-bands-records")
-        // 띠는 화면 스크롤 맨 위에 있다(안드로이드와 같다). 큰 글자여도 화면을 굴려 맨 아래 띠의 '설정 열기'에 닿아야 한다(8장).
+        // 띠는 화면 스크롤 맨 위에 있다(안드로이드와 같다). 큰 글자여도 화면을 굴려 맨 아래 띠의 '설정 열기'에 닿아야 한다.
         let openSettings = app.buttons["설정 열기"]
         XCTAssert(openSettings.exists)
         for _ in 0..<4 where !openSettings.isHittable { app.swipeUp() }
@@ -570,7 +570,7 @@ final class ScreenTour: XCTestCase {
         XCTAssert(label(beginsWith: "오프라인이에요").waitForNonExistence(timeout: 70))
     }
 
-    /// 잠금 화면 진행 표시(C6): 수유·잠 시작 → 잠그기 → 잠금 화면 '끝내기' → 앱에서 닫혔는지.
+    /// 잠금 화면 진행 표시: 수유·잠 시작 → 잠그기 → 잠금 화면 '끝내기' → 앱에서 닫혔는지.
     /// 경과가 1시간을 넘을 때(1:0x:xx) 잠금 화면 카드와 Dynamic Island가 잘리지 않는지 본다(가장 큰 글자 확인용).
     /// 2시간 전에 시작한 진행 중 수유를 debug 실행 인자(-longFeed)로 넣는다. 시각 바퀴를 돌리지 않아 하루 중 언제 돌려도 같다.
     func test_긴_경과_잠금_화면() throws {
@@ -598,13 +598,12 @@ final class ScreenTour: XCTestCase {
         for label in ["허용", "Allow"] where springboard.buttons[label].exists && springboard.buttons[label].isHittable { springboard.buttons[label].tap(); sleep(2); break }
         shot("L8-lock-long")
         XCTAssert(springboard.buttons["끝내기"].waitForExistence(timeout: 5), "잠금 화면에 끝내기가 없다")
-        // 잠금 화면 카드도 한 시간 넘은 경과를 시:분:초로 보인다(7.1 '1:02:34'). 접근성 글은 형식만 본다. 잘림은 L8 캡처로 본다(가장 큰 글자는 두 줄로 접힌다)
+        // 잠금 화면 카드도 한 시간 넘은 경과를 시:분:초로 보인다('1:02:34'). 접근성 글은 형식만 본다. 잘림은 큰 글자 캡처로 본다(가장 큰 글자는 두 줄로 접힌다)
         print("잠금 화면 줄: \(springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS '수유 중'")).allElementsBoundByIndex.map(\.label))")
         let lockLong = springboard.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES '수유 중 · [12]:[0-5][0-9]:[0-5][0-9].*'")).firstMatch
         XCTAssert(lockLong.waitForExistence(timeout: 5), "잠금 화면 경과가 한 시간 넘은 시:분:초가 아니다")
         springboard.swipeUp()
     }
-
 
     func test_잠금_화면() {
         XCTAssert(app.buttons["먼저 기록만 쓸게요"].waitForExistence(timeout: 10))
@@ -634,7 +633,7 @@ final class ScreenTour: XCTestCase {
         let top = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.0))
         top.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.7)))
         sleep(3)
-        // 처음 한 번 시스템이 실시간 현황을 허용할지 묻는다(시스템 글자, U33).
+        // 처음 한 번 시스템이 실시간 현황을 허용할지 묻는다(시스템 글자).
         for label in ["허용", "Allow"] where springboard.buttons[label].exists && springboard.buttons[label].isHittable { springboard.buttons[label].tap(); sleep(2); break }   // 알림의 숨은 밀기 버튼도 '허용'이다
         shot("L2-lock-screen")
         // 활동이 둘이면 카드가 겹쳐 있어 처음 누르면 펼쳐진다.
@@ -656,7 +655,7 @@ final class ScreenTour: XCTestCase {
         sleep(2)
         shot("L5-app-after-end")
         // 시스템 화면 자동 조작은 회차마다 겹침·펼침이 달라 몇 개를 눌렀는지 정하지 못한다. 적어도 하나는 닫혀야 한다.
-        // 닫기 규칙 자체는 단위 시험(R2·U14의 endNow)과 'care' 로그("끝내기 인텐트: 앱에서 실행")로 본다.
+        // 닫기 규칙 자체는 단위 시험(endNow)과 'care' 로그("끝내기 인텐트: 앱에서 실행")로 본다.
         let feedRunning = label(beginsWith: "수유 중 ·").exists, sleepRunning = label(beginsWith: "자는 중 ·").exists
         XCTAssertFalse(feedRunning && sleepRunning, "잠금 화면 끝내기로 하나도 닫히지 않았다")
     }

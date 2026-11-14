@@ -1,6 +1,6 @@
 import Foundation
 
-/// LinkMarks 구현(R11): 앱 UserDefaults의 작은 표시. 키 이름은 Mark의 값(안드로이드 prefs 키와 같다).
+/// LinkMarks 구현: 앱 UserDefaults의 작은 표시. 키 이름은 Mark의 값(안드로이드 prefs 키와 같다).
 @MainActor
 final class UserDefaultsLinkMarks: LinkMarks {
     private let defaults: UserDefaults

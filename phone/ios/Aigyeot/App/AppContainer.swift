@@ -50,7 +50,7 @@ final class AppContainer {
     private(set) lazy var recordCare: RecordCare = {
         let r = RecordCare(care: care, state: state, notices: notices, summary: reconcileCareSummary, outbox: sendOutbox, songFiles: songFiles,
                            ongoing: ongoing, now: now)
-        r.screenReader = { UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning }   // U87 화면 읽기 켜짐
+        r.screenReader = { UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning }   // 화면 읽기 켜짐
         return r
     }()
     private(set) lazy var clearRecords: ClearRecords = ClearRecords(
@@ -61,7 +61,7 @@ final class AppContainer {
     private(set) lazy var lifecycle: AppLifecycle = AppLifecycle(
         state: state, songFiles: songFiles, notices: notices, visibility: visibility,
         outbox: sendOutbox, inbox: syncInbox, connection: keepConnected, recordCare: recordCare, lose: lose, now: now)
-    private(set) lazy var pair: Pair = Pair(state: state, secrets: secrets, songFiles: songFiles, relay: relay, gate: gate,
+    private(set) lazy var pair: PairDevice = PairDevice(state: state, secrets: secrets, songFiles: songFiles, relay: relay, gate: gate,
                                             linkSwitch: linkSwitch, disconnect: disconnect, notices: notices, visibility: visibility,
                                             lifecycle: lifecycle, recordCare: recordCare, pushToken: registerPush, tasks: tasks, now: now)
     private(set) lazy var invite: Invite = Invite(state: state, relay: relay, gate: gate)
@@ -70,7 +70,7 @@ final class AppContainer {
     private(set) lazy var removeSong: RemoveSong = RemoveSong(state: state, songFiles: songFiles, outbox: sendOutbox, now: now)
     private(set) lazy var selectSong: SelectSong = SelectSong(state: state, outbox: sendOutbox, now: now)
 
-    // MARK: 앱 범위 뷰모델(나머지는 아래 공장이 화면마다 만든다, 1.7)
+    // MARK: 앱 범위 뷰모델(나머지는 아래 공장이 화면마다 만든다)
     private(set) lazy var appViewModel: AppViewModel = AppViewModel(state: state, pair: pair, notices: notices, lose: lose,
                                                                     connection: keepConnected)
     private(set) lazy var status: StatusViewModel = StatusViewModel(state: state, connection: keepConnected, notices: notices,
@@ -99,20 +99,20 @@ final class AppContainer {
         let marks = marks ?? MemoryLinkMarks()   // 시험·미리보기는 메모리 표시
         linkSwitch = LinkSwitch(marks: marks)
         secrets = CredentialRepository(store: credentials)
-        // 강제 끊김 정리가 남은 기기면(자격 없음) GONE 화면으로 시작한다(D1)
+        // 강제 끊김 정리가 남은 기기면(자격 없음) GONE 화면으로 시작한다
         state = PhoneStateRepository(store: stateStore, creds: credentials.load(), goneDevice: marks.get(.goneCleanupPending))
         care = CareRepository(store: careStore)
         self.songFiles = songFiles
         // 소켓 어댑터는 사건을 메인에서 알린다(도메인과 같은 실행기).
         sockets = baseURL.map { URLSessionRelaySockets(baseURL: $0) }
         tasks.owner = self   // 띄운 작업이 도는 동안 합성 루트를 붙든다(유스케이스끼리 잇는 클로저가 약하게 본다)
-        // 저장 실패 공통 처리(arch-phone-ios 실패 범주): 띠에 한 번. 범주마다 다른 뒷일은 부른 쪽(받기·보내기)이 한다
+        // 저장 실패 공통 처리: 띠에 한 번. 범주마다 다른 뒷일은 부른 쪽(받기·보내기)이 한다
         let saveFailed: () -> Void = { [weak notices] in notices?.saveFailed() }
         state.onWriteFailed = saveFailed
         care.onWriteFailed = saveFailed
-        // 자격이 바뀌면 옛 연결의 소켓·메모리 칸을 버리는 한 곳(P6)
+        // 자격이 바뀌면 옛 연결의 소켓·메모리 칸을 버리는 한 곳
         state.onConnectionChange = { [weak self] in self?.lifecycle.connectionChanged() }
-        // 화면 상태(열려던 알림)도 수명 표의 같은 사건을 받는다(L10)
+        // 화면 상태(열려던 알림)도 수명 표의 같은 사건을 받는다
         lifecycle.onEvent = { [weak self] e in self?.appViewModel.forget(e) }
         lifecycle.start()
     }
@@ -123,22 +123,23 @@ final class AppContainer {
         let base = URL(string: raw) ?? URL(string: "http://localhost:8787")!
         let creds = KeychainCredentialStore()
         let client = HTTPRelayClient(baseURL: base)
-        // 잠금 화면 '끝내기'로 앱이 뒤에서 떠도 진행 중 표시가 돌봄 저장마다 다시 그려진다(R9 OngoingNotice)
+        // 잠금 화면 '끝내기'로 앱이 뒤에서 떠도 진행 중 표시가 돌봄 저장마다 다시 그려진다
         let app = AppContainer(relay: client, store: FileStateStore(), credentials: creds, careStore: FileCareStore(), baseURL: base,
                                network: PathNetworkWatcher(), ongoing: LiveActivityNotice(), marks: UserDefaultsLinkMarks(),
                                songFiles: FileSongStore())
-        app.registerPush.source = PushToken.shared   // FCM 토큰(5.4). 연결 요청과 앱 열기의 PATCH가 이 값을 보낸다
+        app.registerPush.source = PushToken.shared   // FCM 토큰. 연결 요청과 앱 열기의 PATCH가 이 값을 보낸다
         // HTTPRelayClient는 도메인과 같은 메인 액터에서 돈다. 응답을 돌려주기 전에 시계 차이를 반영해, 같은 응답의 처리(요약 보낸 값 판단)가 새 값을 본다.
         client.onServerDate = { [weak app] d in app?.keepConnected.noteServerDate(d) }
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-demoSeed") {   // U50 시연 시드
+        if ProcessInfo.processInfo.arguments.contains("-demoSeed") {   // 시연 시드
             app.recordCare.replaceForDebug { DemoSeed.make(nowMs: CareTime.ms(Date()), zone: .current, keep: $0) }
         }
         if ProcessInfo.processInfo.arguments.contains("-longFeed") {   // 투어: 2시간 전에 시작한 진행 중 수유(긴 경과 표시를 시각과 상관없이 본다)
             let t = CareTime.ms(Date()) - 2 * 3_600_000
             app.recordCare.replaceForDebug { f in
                 var f = f
-                f.events.append(CareEvent(id: ULID.generate(date: CareTime.date(t)), kind: .feed, startAt: t, zone: TimeZone.current.identifier, createdAt: t, updatedAt: t))
+                f.events.append(CareEvent(id: ULID.generate(date: CareTime.date(t)), kind: .feed, startAt: t, zone: TimeZone.current.identifier,
+                    createdAt: t, updatedAt: t))
                 return f
             }
         }
@@ -151,7 +152,7 @@ final class AppContainer {
     func syncLiveActivities() { ongoing?.show(care.care) }
 }
 
-/// 화면 범위 뷰모델 공장(1.7). 화면이 나타날 때 부르고 그 화면의 `@State`가 든다.
+/// 화면 범위 뷰모델 공장. 화면이 나타날 때 부르고 그 화면의 `@State`가 든다.
 extension AppContainer: ViewModelFactory {
     func connect() -> ConnectViewModel {
         ConnectViewModel(state: state, pair: pair) { [weak self] r in self?.appViewModel.pairFinished(r) }
@@ -168,7 +169,7 @@ extension AppContainer: ViewModelFactory {
     func songs() -> SongsViewModel {
         SongsViewModel(state: state, connection: keepConnected, recordSong: recordSong, removeSong: removeSong, selectSong: selectSong)
     }
-    /// 녹음 시트마다 녹음기 하나(R10).
+    /// 녹음 시트마다 녹음기 하나.
     func recorder() -> RecorderViewModel { RecorderViewModel(recorder: AudioSongRecorder()) }
     func songPlayer() -> SongPlayer { SongPlayer(files: songFiles, recorder: AudioSongRecorder()) }
     func reports() -> ReportsViewModel { ReportsViewModel(state: state, connection: keepConnected) }

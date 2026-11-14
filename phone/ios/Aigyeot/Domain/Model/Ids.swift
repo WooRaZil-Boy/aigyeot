@@ -20,7 +20,7 @@ enum ULID {
     }
 }
 
-/// RFC 3339 시각. 계약은 시차를 붙인 문자열이고 밀리초는 있어도 된다.
+/// RFC 3339 시각. 메시지 형식은 시차를 붙인 문자열이고 밀리초는 있어도 된다.
 enum Rfc3339 {
     // 포매터는 만들기가 비싸 한 번만 만든다. ISO8601DateFormatter는 읽기 전용으로 쓰면 스레드 안전하다(옵션을 바꾸지 않는다).
     nonisolated(unsafe) private static let withFraction: ISO8601DateFormatter = {
@@ -59,14 +59,16 @@ enum Rfc3339 {
     private static let lock = NSLock()
 }
 
-/// 연결 코드(6자리 숫자)와 초대 코드(10자 Crockford base32). QR·링크·입력 셋 다 같은 처리다(명세서 12장).
+/// 연결 코드(6자리 숫자)와 초대 코드(10자 Crockford base32). QR·링크·입력 셋 다 같은 처리다.
 enum PairCode: Equatable, Identifiable {
     var id: String { value }
     case pair(String)
     case invite(String)
 
     var value: String {
-        switch self { case .pair(let c), .invite(let c): return c }
+        switch self {
+        case .pair(let c), .invite(let c): return c
+        }
     }
 
     /// 사람이 읽기 쉬운 표기. 초대 코드는 5자씩 끊는다(`7K3QM-2XW9D`).
@@ -77,7 +79,7 @@ enum PairCode: Equatable, Identifiable {
         }
     }
 
-    /// 확인 화면 제목. 초대 코드에 "차 화면에…"라고 묻지 않는다(G17).
+    /// 확인 화면 제목. 초대 코드에 "차 화면에…"라고 묻지 않는다.
     var confirmTitle: String {
         switch self {
         case .pair: return "차 화면에 이 코드가 보이나요?"
@@ -92,13 +94,17 @@ enum PairCode: Equatable, Identifiable {
         let s = raw.uppercased().filter { !$0.isWhitespace && $0 != "-" }
         if s.count == 6, s.allSatisfy({ $0 >= "0" && $0 <= "9" }) { return .pair(s) }
         let mapped = String(s.map { c -> Character in
-            switch c { case "O": return "0"; case "I", "L": return "1"; default: return c }
+            switch c {
+            case "O": return "0"
+            case "I", "L": return "1"
+            default: return c
+            }
         })
         if mapped.count == 10, mapped.allSatisfy({ crockford.contains($0) }) { return .invite(mapped) }
         return nil
     }
 
-    /// `aigyeot://pair?code=…` 링크. 다른 앱도 같은 scheme을 등록할 수 있으므로 형식 검사를 거친다(6.4).
+    /// `aigyeot://pair?code=…` 링크. 다른 앱도 같은 scheme을 등록할 수 있으므로 형식 검사를 거친다.
     static func parse(link url: URL) -> PairCode? {
         guard url.scheme == "aigyeot", url.host == "pair",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,

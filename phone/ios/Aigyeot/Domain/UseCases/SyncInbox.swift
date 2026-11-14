@@ -1,6 +1,6 @@
 import Foundation
 
-/// 받은 함(GET /v1/inbox)·소켓 봉투를 저장한 뒤 ack한다(계약 2장·8.3, 안드로이드 SyncInbox와 같은 자리).
+/// 받은 함(GET /v1/inbox)·소켓 봉투를 저장한 뒤 ack한다(안드로이드 SyncInbox와 같은 자리).
 /// 언제 받을지(소켓·갱신 순서·다시 하기)는 KeepConnected가 정한다. 여기는 받은 것을 저장하는 일과 '상태 요청 필요' 표시만 한다.
 @MainActor
 final class SyncInbox {
@@ -11,7 +11,7 @@ final class SyncInbox {
     private let outbox: SendOutbox
     private let notices: Notices
     private let now: () -> Date
-    /// 상태 파일 복구 표시를 저장하지 못했다. 저장될 때까지 메시지 적용을 미룬다(7.4).
+    /// 상태 파일 복구 표시를 저장하지 못했다. 저장될 때까지 메시지 적용을 미룬다.
     private var pendingRecovery = false
     /// 차의 실시간 봉투를 적용한 횟수와 그 시각. 늦게 온 기기 목록이 이 관찰을 덮지 않게 한다(KeepConnected.refreshDevices가 본다).
     private(set) var carLiveSeen = 0
@@ -33,7 +33,7 @@ final class SyncInbox {
         if e == .connectionChanged { pendingRecovery = false }
     }
 
-    /// 앞에 있을 때 온 푸시(`willPresent`)의 입구(D4 a): 띄운 적 없는 id면 띄운 것을 적고 배너를 띄운다. 글은 배너가 그릴 때 정한다.
+    /// 앞에 있을 때 온 푸시(`willPresent`)의 입구: 띄운 적 없는 id면 띄운 것을 적고 배너를 띄운다. 글은 배너가 그릴 때 정한다.
     /// 끊은 뒤 늦게 온 이전 연결의 푸시는 띄우지 않는다.
     func onPush(_ messageId: String) {
         guard let c = state.creds, state.state.shown[messageId] == nil else { return }
@@ -42,7 +42,7 @@ final class SyncInbox {
     }
 
     /// 저장 파일이 깨져 빈 상태로 복구했는데 자격은 남아 있으면, 이미 ack한 수유·곡 상태가 받은 함에 없다.
-    /// 요청 필요 표시를 켜 두면 기기 목록 조회가 성공한 뒤 state_request로 다시 받는다(계약 7.4, G39).
+    /// 요청 필요 표시를 켜 두면 기기 목록 조회가 성공한 뒤 state_request로 다시 받는다.
     /// 저장이 거부된 실행은 건드리지 않는다. 원본이 그대로라 다음 정상 실행이 그것을 읽는다.
     /// 이 표시의 저장이 실패하면 기억해 두고, 저장될 때까지 메시지 적용을 미룬다(markStaleIfNeeded가 다시 한다).
     /// 자격만 남고 상태에 차가 없는 경우(앱 재설치 뒤 Keychain만 남음, 자격 저장 직후 상태 저장 전에 종료)도 같다.
@@ -96,10 +96,10 @@ final class SyncInbox {
     }
 
     /// 받은 메시지를 `seq` 오름차순으로 하나씩 처리한다. 본문과 '처리한 id'를 한 번에 저장하고, 저장이 성공한 것만 ack한다.
-    /// 저장하지 못하면 그 메시지부터 ack하지 않는다(중계가 다시 준다, 실패 범주 R).
+    /// 저장하지 못하면 그 메시지부터 ack하지 않는다(중계가 다시 준다).
     /// `live`는 처음 받은 함을 처리한 뒤 WebSocket으로 받은 것이다. 받은 함에서 꺼낸 것은 배너 없이 목록에만 넣는다.
     /// 모두 저장했거나 저장할 것이 없으면 true, 저장에 실패해 멈췄으면 false(호출한 쪽이 다시 받게 한다).
-    /// `onSaveFailed`: 저장에 실패한 바로 그때(ack를 기다리기 전) 부른다. 실시간이면 앞 것의 ack를 기다리는 사이 새 실시간 메시지가 먼저 적용되지 않게 막는다(8.3 4번).
+    /// `onSaveFailed`: 저장에 실패한 바로 그때(ack를 기다리기 전) 부른다. 실시간이면 앞 것의 ack를 기다리는 사이 새 실시간 메시지가 먼저 적용되지 않게 막는다.
     @discardableResult
     func store(_ c: Credentials?, _ envelopes: [Envelope], live: Bool, onSaveFailed: (() -> Void)? = nil) async -> Bool {
         guard let creds = c, state.isCurrent(creds) else { return true }
@@ -107,14 +107,14 @@ final class SyncInbox {
         var ackIds: [String] = []
         var allSaved = true
         for env in envelopes.sorted(by: { ($0.seq ?? 0) < ($1.seq ?? 0) }) {
-            // 다른 차(이전 연결)의 메시지는 적용도 ack도 하지 않는다. seq는 같은 차 안에서만 비교한다(3.1).
+            // 다른 차(이전 연결)의 메시지는 적용도 ack도 하지 않는다. seq는 같은 차 안에서만 비교한다.
             guard env.car == creds.carId else { continue }
             if state.state.processed[env.id] != nil || env.v != 1 {
                 ackIds.append(env.id)   // 이미 처리한 id, 모르는 판은 ack만 해서 받은 함이 막히지 않게 한다
                 continue
             }
             var effects = InboxRules.Effects()
-            let inbound = env.inbound   // 계약 봉투 → 받은 메시지(EnvelopeMapping, D7)
+            let inbound = env.inbound   // 봉투 → 받은 메시지(EnvelopeMapping)
             let t = now()
             let saved = state.commit(creds) { effects = InboxRules.receive(inbound, live: live, myDevice: creds.deviceId, now: t, in: &$0) }
             guard saved else { allSaved = false; break }
@@ -126,9 +126,12 @@ final class SyncInbox {
         }
         if !allSaved { onSaveFailed?() }
         guard !ackIds.isEmpty else { return allSaved }
-        do { try await gate.observed { try await relay.ack(token: creds.token, ids: ackIds) } }
-        catch let e as RelayError { gate.unauthorized(e, c: creds) }   // 못 보내도 다시 받으면 중복으로 ack만 한다
-        catch {}
+        // 못 보내도 다시 받으면 중복으로 ack만 한다
+        do {
+            try await gate.observed { try await relay.ack(token: creds.token, ids: ackIds) }
+        } catch let e as RelayError {
+            gate.unauthorized(e, c: creds)
+        } catch {}
         return allSaved || !state.isCurrent(creds)   // ack를 기다리는 동안 연결이 바뀌었으면 이 연결이 다시 받을 것이 없다
     }
 }

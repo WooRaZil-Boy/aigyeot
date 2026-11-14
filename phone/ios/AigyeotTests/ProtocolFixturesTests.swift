@@ -1,7 +1,7 @@
 import XCTest
 @testable import Aigyeot
 
-/// 계약 시험: `shared/src/test/resources/protocol/` 의 모든 JSON을 해당 타입으로 decode → encode 해
+/// 메시지 형식 시험:`shared/src/test/resources/protocol/` 의 모든 JSON을 해당 타입으로 decode → encode 해
 /// 원래 JSON과 트리로 같은지 본다. 표에 없는 파일, 파일 없는 표 항목은 실패한다.
 /// 소수 값은 트리에서 숫자로 비교한다(Swift의 JSONEncoder는 71.0을 `71`로 쓴다. 받는 쪽은 같은 숫자로 읽는다).
 final class ProtocolFixturesTests: XCTestCase {
@@ -20,7 +20,7 @@ final class ProtocolFixturesTests: XCTestCase {
         }
     }
 
-    /// 메시지 type → body 왕복(3.2 표의 type 전부).
+    /// 메시지 type → body 왕복(type 전부).
     static let bodies: [String: RoundTrip] = [
         MessageType.paired: rt(PairedBody.self),
         MessageType.unpaired: rt(UnpairedBody.self),
@@ -35,7 +35,7 @@ final class ProtocolFixturesTests: XCTestCase {
         MessageType.reportSummary: rt(ReportSummaryBody.self),
         MessageType.handoffAlert: rt(HandoffAlertBody.self),
         MessageType.careSummary: rt(CareSummaryBody.self),
-        MessageType.ack: rt(AckBody.self),
+        MessageType.ack: rt(AckBody.self)
     ]
 
     enum Target {
@@ -89,7 +89,7 @@ final class ProtocolFixturesTests: XCTestCase {
         "api_llm_request_minimal": .api(rt(LlmRequest.self)),
         "api_llm_response": .api(rt(LlmResponse.self)),
         "api_llm_response_tool": .api(rt(LlmResponse.self)),
-        "api_llm_response_answer": .api(rt(LlmResponse.self)),
+        "api_llm_response_answer": .api(rt(LlmResponse.self))
     ]
 
     func test_모든_예제가_왕복해도_같다() throws {
@@ -120,7 +120,7 @@ final class ProtocolFixturesTests: XCTestCase {
         }
     }
 
-    /// 기능 D(L99): car_actions의 ambient_dim을 읽고 '조명 낮춤'으로 보인다(안드로이드와 같은 글자).
+    /// 조명 낮춤: car_actions의 ambient_dim을 읽고 '조명 낮춤'으로 보인다(안드로이드와 같은 글자).
     func test_리포트_차_동작에_조명_낮춤이_있다() throws {
         let env = try ProtocolCoding.decoder.decode(Envelope.self, from: Data(contentsOf: Self.dir.appendingPathComponent("report_summary.json")))
         let body = try env.decodeBody(ReportSummaryBody.self)
@@ -138,14 +138,14 @@ final class ProtocolFixturesTests: XCTestCase {
         XCTAssertEqual(body.timeline.first?.sound?.method, .unknown)
     }
 
-    /// 보낼 때 "빠짐"과 "null"이 계약대로 나가는지(왕복이 같아도 놓칠 수 있는 한 줄 확인).
+    /// 보낼 때 "빠짐"과 "null"이 메시지 형식대로 나가는지(왕복이 같아도 놓칠 수 있는 한 줄 확인).
     func test_push_token_세_상태() throws {
         func json(_ r: PatchDeviceRequest) throws -> String {
             String(decoding: try ProtocolCoding.encoder.encode(r), as: UTF8.self)
         }
         XCTAssertEqual(try json(PatchDeviceRequest()), "{}")
         XCTAssertEqual(try json(PatchDeviceRequest(pushToken: .clear)), "{\"push_token\":null}")
-        // 키 순서는 계약이 정하지 않는다. 트리로 본다.
+        // 키 순서는 메시지 형식이 정하지 않는다. 트리로 본다.
         XCTAssertEqual(try JSONValue.parse(Data(json(PatchDeviceRequest(pushToken: .set("t"), handoffAlerts: false)).utf8)),
                        .object(["push_token": .string("t"), "handoff_alerts": .bool(false)]))
     }

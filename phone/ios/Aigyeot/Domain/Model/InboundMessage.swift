@@ -1,7 +1,7 @@
 import Foundation
 
-/// 받은 봉투를 도메인이 판단에 쓰는 꼴로 바꾼 것(계약 3.3). Data/Protocol/EnvelopeMapping이 만든다.
-/// 본문은 차와 글자까지 같은 계약 값이라 그대로 담는다(표시 전용, 복사 타입을 만들지 않는다).
+/// 받은 봉투를 도메인이 판단에 쓰는 꼴로 바꾼 것. Domain/Protocol/EnvelopeMapping이 만든다.
+/// 본문은 차와 글자까지 같은 메시지 값이라 그대로 담는다(표시 전용, 복사 타입을 만들지 않는다).
 enum InboundMessage: Equatable {
     case paired(PairedBody)
     case unpaired(UnpairedBody)

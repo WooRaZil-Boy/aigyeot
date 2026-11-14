@@ -7,12 +7,16 @@ enum AudioSessionRelease {
     private static let log = Logger(subsystem: "kr.aigyeot.phone", category: "audio")
 
     static func deactivate() {
-        do { try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
-        catch { log.error("오디오 세션 비활성화 실패: \(error.localizedDescription)") }   // 로그만 남긴다
+        // 로그만 남긴다
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            log.error("오디오 세션 비활성화 실패: \(error.localizedDescription)")
+        }
     }
 }
 
-/// 녹음 하드웨어(구현 계획 4장): `AVAudioRecorder`, AAC, 44.1kHz 모노 64kbps. 화면 상태는 Presentation의 RecorderViewModel이 갖는다.
+/// 녹음 하드웨어: `AVAudioRecorder`, AAC, 44.1kHz 모노 64kbps. 화면 상태는 Presentation의 RecorderViewModel이 갖는다.
 @MainActor
 final class AudioRecorder {
     /// 실제로 멈추는 길이. AAC 프레임 때문에 파일이 조금 길어질 수 있어 1초 여유를 둔다(차는 180초 초과를 거절한다).
@@ -22,7 +26,7 @@ final class AudioRecorder {
         AVFormatIDKey: kAudioFormatMPEG4AAC,
         AVSampleRateKey: 44100,
         AVNumberOfChannelsKey: 1,
-        AVEncoderBitRateKey: 64000,
+        AVEncoderBitRateKey: 64000
     ]
 
     private var recorder: AVAudioRecorder?
@@ -98,7 +102,6 @@ final class AudioPlayback: NSObject, AVAudioPlayerDelegate {
     /// 지금 플레이어가 끝까지 재생했다(세션은 이미 풀었다).
     var onEnded: (() -> Void)?
 
-
     /// 재생을 시작하지 못했어도 세션을 풀어 준다. 시작했으면 true.
     func play(_ url: URL) -> Bool {
         try? AVAudioSession.sharedInstance().setCategory(.playback)
@@ -131,7 +134,7 @@ final class AudioPlayback: NSObject, AVAudioPlayerDelegate {
     }
 }
 
-/// SongRecorder 구현(R10): 녹음기 하나와 플레이어 하나. 녹음 시트와 곡 목록이 하나씩 받는다(합성 루트가 만든다).
+/// SongRecorder 구현: 녹음기 하나와 플레이어 하나. 녹음 시트와 곡 목록이 하나씩 받는다(합성 루트가 만든다).
 @MainActor
 final class AudioSongRecorder: SongRecorder {
     private let recorder = AudioRecorder()

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 화면 범위 뷰모델을 만드는 공장(1.7). 합성 루트(AppContainer)가 채운다. 앱 범위 뷰모델(App·Status·CareTabs)은 합성 루트가 들고
+/// 화면 범위 뷰모델을 만드는 공장. 합성 루트(AppContainer)가 채운다. 앱 범위 뷰모델(App·Status·CareTabs)은 합성 루트가 들고
 /// `.environment`로 넘기고, 나머지는 화면이 나타날 때 이 공장으로 만들어 그 화면의 `@State`가 든다(안드로이드 내비게이션 항목 범위).
 @MainActor
 protocol ViewModelFactory: AnyObject {
@@ -21,7 +21,7 @@ protocol ViewModelFactory: AnyObject {
 }
 
 extension EnvironmentValues {
-    @Entry var viewModels: (any ViewModelFactory)? = nil
+    @Entry var viewModels: (any ViewModelFactory)?
 }
 
 /// 화면이 처음 나타날 때 공장으로 뷰모델을 하나 만들어 들고(`@State`), 안쪽 화면에 `.environment`로 넘긴다.

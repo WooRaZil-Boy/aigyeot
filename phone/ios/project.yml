@@ -12,7 +12,7 @@ settings:
     # 서명은 비워 둔다. 기기 설치·TestFlight 때 Xcode에서 팀을 고른다.
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
-# 인계 알림 원격 푸시(계약 5.3·5.4: iOS도 FCM 토큰을 중계에 보낸다). 설정 파일 GoogleService-Info.plist는 공개하지 않는다(.gitignore).
+# 인계 알림 원격 푸시(iOS도 FCM 토큰을 중계에 보낸다). 설정 파일 GoogleService-Info.plist는 공개하지 않는다(.gitignore).
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
@@ -23,13 +23,13 @@ targets:
     platform: iOS
     sources: [Aigyeot, Shared]
     dependencies:
-      - target: AigyeotWidgets   # 잠금 화면 진행 표시(C6). 앱 안에 넣는다
+      - target: AigyeotWidgets   # 잠금 화면 진행 표시. 앱 안에 넣는다
       - package: Firebase
         product: FirebaseMessaging
     entitlements:
       path: Aigyeot/Aigyeot.entitlements
       properties:
-        aps-environment: development   # 원격 푸시(5.3). 배포 서명 때 Xcode가 production으로 바꾼다
+        aps-environment: development   # 원격 푸시. 배포 서명 때 Xcode가 production으로 바꾼다
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: kr.aigyeot.phone
@@ -38,7 +38,7 @@ targets:
         # 앱 아이콘: iOS 26+는 Icon Composer 파일(Resources/AppIcon.icon, 바탕 + 앞 층 둘), 그 아래 판은 같은 이름의 1024 PNG(Assets.xcassets)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
-        # 중계 주소. 시뮬레이터의 로컬 중계는 localhost:8787(계약 0장). release는 배포한 중계(연결 계약 L98, 차·안드로이드와 같은 글자).
+        # 중계 주소. 시뮬레이터의 로컬 중계는 localhost:8787. release는 배포한 중계(차·안드로이드와 같은 글자).
         Debug:
           RELAY_BASE_URL: "http://localhost:8787"
           # Debug만 로컬 평문 HTTP를 허용한다(아래 스크립트가 ATS 항목을 더한 사본을 만든다). Release는 HTTPS·WSS만.
@@ -48,7 +48,8 @@ targets:
           RELAY_BASE_URL: "https://aigyeot-relay.byuncorry.workers.dev"
     preBuildScripts:
       - name: Debug용 Info.plist(로컬 평문 허용)
-        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/Aigyeot/Info.plist
         outputFiles:
           - $(DERIVED_FILE_DIR)/Info-Debug.plist
         script: |

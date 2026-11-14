@@ -2,7 +2,7 @@ import SwiftUI
 
 private typealias DS = DesignSystem
 
-// 차트(시안 js/charts.js·css/charts.css): 오늘 하루 띠·7일 막대·잠 패턴 히트맵·에피소드 띠·방법별 점 행렬·조향 비교.
+// 차트: 오늘 하루 띠·7일 막대·잠 패턴 히트맵·에피소드 띠·방법별 점 행렬·조향 비교.
 // 값은 ChartData가 계산하고 여기는 그리기만 한다. 안드로이드와 같은 Canvas 그림이라 두 앱 모양이 같다.
 // 툴팁: 표시를 누르면 값 말풍선(먹색 바탕). 처음 보일 때 한 번: 막대가 자라고 띠는 왼쪽에서 그려진다(동작 줄이기면 없음).
 // 화면 읽기는 차트마다 한 줄 요약(값은 차트 머리·숫자 줄에도 있다).
@@ -50,7 +50,7 @@ private struct TipOverlay: ViewModifier {
                             .background(DS.textPrimary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .fixedSize()
                     }
-                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 4)))   // 시안 .ch-tip: 아래 4에서 120ms linear(동작 줄이기면 바로)
+                    .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: 4)))   // 툴팁: 아래 4에서 120ms linear(동작 줄이기면 바로)
                     .allowsHitTesting(false)
                 }
             }
@@ -89,7 +89,7 @@ private struct Appear: ViewModifier {
     }
 }
 
-/// 띠·히트맵·에피소드: 0.9초 cubic(.65,0,.35,1)로 왼쪽에서 그려진다(시안 charts.js grow).
+/// 띠·히트맵·에피소드: 0.9초 cubic(.65,0,.35,1)로 왼쪽에서 그려진다.
 private let revealCurve = DS.Motion.chartReveal
 /// 막대: 막대마다 0.6초 cubic(.2,.8,.2,1)로 바닥에서 자라고, 0.04초씩 늦게 시작한다(8개마다 다시). t는 전체 시간에 걸쳐 고르게 흐르고
 /// 막대마다 곡선은 `barGrow`가 건다.
@@ -144,7 +144,7 @@ private extension GraphicsContext {
 /// 줄마다 위에 '이름 · 합계', 그 아래 0~24시 회색 트랙에 표시. 지금 뒤는 흐리게, 지금 선은 모든 줄을 가로지른다.
 private struct DayBandChartBody: View {
     let data: ChartData.Day
-    var fresh: ChartData.Fresh? = nil
+    var fresh: ChartData.Fresh?
     var freshDone: () -> Void = {}
     @ScaledMetric(relativeTo: .footnote) private var fs: CGFloat = 13
     @State private var t: Double = 0
@@ -170,7 +170,7 @@ private struct DayBandChartBody: View {
         .mask(alignment: .leading) { GeometryReader { g in Rectangle().frame(width: g.size.width * t) } }
         .modifier(Appear(animation: revealCurve, t: $t))
         .overlay {
-            // U88: 시트로 막 저장한 기록의 표시가 '톡' 하고 고리가 1.2초 퍼진다(띠 줄이 없으면 그리지 않고 걷지도 않는다)
+            // 시트로 막 저장한 기록의 표시가 '톡' 하고 고리가 1.2초 퍼진다(띠 줄이 없으면 그리지 않고 걷지도 않는다)
             if let f = fresh, let i = data.lanes.firstIndex(where: { $0.kind == f.lane }) {
                 GeometryReader { g in
                     FreshPulse(color: color(f.lane), dot: th * 0.6, done: freshDone)
@@ -186,7 +186,12 @@ private struct DayBandChartBody: View {
     private func x(_ m: Int, _ w: CGFloat) -> CGFloat { w * CGFloat(m) / 1440 }
 
     private func color(_ kind: ChartData.LaneKind) -> Color {
-        switch kind { case .sleep: DS.cSleep; case .feed: DS.cFeed; case .diaper: DS.cDiaper; case .car: DS.cCar }
+        switch kind {
+        case .sleep: DS.cSleep
+        case .feed: DS.cFeed
+        case .diaper: DS.cDiaper
+        case .car: DS.cCar
+        }
     }
 
     private func spanRect(_ s: ChartData.Span, lane i: Int, w: CGFloat) -> CGRect {
@@ -220,7 +225,11 @@ private struct DayBandChartBody: View {
                 if l.kind == .car {   // 차에서 울음: 바탕색 테를 두른 마름모
                     let q = th * 0.42
                     var p = Path()
-                    p.move(to: CGPoint(x: cx, y: cy - q)); p.addLine(to: CGPoint(x: cx + q, y: cy)); p.addLine(to: CGPoint(x: cx, y: cy + q)); p.addLine(to: CGPoint(x: cx - q, y: cy)); p.closeSubpath()
+                    p.move(to: CGPoint(x: cx, y: cy - q))
+                    p.addLine(to: CGPoint(x: cx + q, y: cy))
+                    p.addLine(to: CGPoint(x: cx, y: cy + q))
+                    p.addLine(to: CGPoint(x: cx - q, y: cy))
+                    p.closeSubpath()
                     ctx.stroke(p, with: .color(DS.surface), lineWidth: 2)
                     ctx.fill(p, with: .color(c))
                 } else {
@@ -256,7 +265,8 @@ private struct DayBandChartBody: View {
             ctx.label(l.name, at: CGPoint(x: dot * 2 + 6 * k, y: base), anchor: .leading, size: fs, weight: 600, color: DS.textPrimary, halo: DS.surface)
             let vs = ctx.label(l.value, at: CGPoint(x: w, y: base), anchor: .trailing, size: fs + 2 * k, weight: 700, color: DS.textPrimary, halo: DS.surface)
             if let sub = l.sub {
-                ctx.label(sub, at: CGPoint(x: w - vs.width - 6 * k, y: base), anchor: .trailing, size: fs, weight: 500, color: DS.textTertiary, halo: DS.surface)
+                ctx.label(sub, at: CGPoint(x: w - vs.width - 6 * k, y: base), anchor: .trailing, size: fs, weight: 500, color: DS.textTertiary,
+                    halo: DS.surface)
             }
         }
     }
@@ -267,10 +277,10 @@ private struct DayBandChartBody: View {
 
 /// 막대 24 이하·위 4 둥근 끝·바닥 각짐. 오늘(마지막)만 데이터 색, 나머지 회색. 기준선(평소)과 오늘 값 라벨.
 struct WeekBarsChartBody: View {
-    struct Item: Equatable { let label: String; let value: Double?; let tip: String?; var hot = false; var valueLabel: String? = nil; var dim = false }
+    struct Item: Equatable { let label: String; let value: Double?; let tip: String?; var hot = false; var valueLabel: String?; var dim = false }
     let items: [Item]
     let hot: Color
-    var target: (value: Double, label: String)? = nil
+    var target: (value: Double, label: String)?
     var height: CGFloat = 150
     let summary: String
     @ScaledMetric(relativeTo: .caption) private var fs: CGFloat = 11
@@ -299,7 +309,8 @@ struct WeekBarsChartBody: View {
         return items.enumerated().map { i, it in
             let cx = 4 + slot * CGFloat(i) + slot / 2
             let h = CGFloat((it.value ?? 0) / maxValue) * (base - top)
-            return Placed(item: it, bar: CGRect(x: cx - bw / 2, y: base - h, width: bw, height: h), slot: CGRect(x: cx - slot / 2, y: top - 10, width: slot, height: base - top + 10))
+            return Placed(item: it, bar: CGRect(x: cx - bw / 2, y: base - h, width: bw, height: h), slot: CGRect(x: cx - slot / 2, y: top - 10,
+                width: slot, height: base - top + 10))
         }
     }
 
@@ -371,7 +382,8 @@ private struct SleepHeatChartBody: View {
         for (r, row) in grid.rows.enumerated() {
             let y = CGFloat(r) * (ch + 2)
             let today = r == grid.rows.count - 1
-            ctx.label(grid.labels[r], at: CGPoint(x: 0, y: y + ch / 2), anchor: .leading, size: fs, weight: today ? 700 : 500, color: today ? DS.textPrimary : DS.textTertiary)
+            ctx.label(grid.labels[r], at: CGPoint(x: 0, y: y + ch / 2), anchor: .leading, size: fs, weight: today ? 700 : 500,
+                color: today ? DS.textPrimary : DS.textTertiary)
             for (c, on) in row.enumerated() {
                 let rect = CGRect(x: lead + CGFloat(c) * cw, y: y, width: max(0.5, cw - 1.2), height: ch)
                 ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(on ? DS.cSleep : DS.surfaceRaised))
@@ -432,14 +444,15 @@ private struct EpisodeBandChartBody: View {
             ctx.stroke(p, with: .color(DS.textPrimary.opacity(0.18)), lineWidth: 1)
             ctx.fill(Path(ellipseIn: CGRect(x: mx - 4, y: lh, width: 8, height: 8)), with: .color(DS.textPrimary))
             let anchor: UnitPoint = i == 0 ? .bottomLeading : i == band.marks.count - 1 ? .bottomTrailing : .bottom
-            ctx.label(m.label, at: CGPoint(x: mx, y: lh + 10 + fs + 4 + CGFloat(i % 2) * (fs + 6)), anchor: anchor, size: fs, weight: 600, color: DS.textSecondary)
+            ctx.label(m.label, at: CGPoint(x: mx, y: lh + 10 + fs + 4 + CGFloat(i % 2) * (fs + 6)), anchor: anchor, size: fs, weight: 600,
+                color: DS.textSecondary)
         }
     }
 }
 
 // MARK: 방법별 성적 점 행렬
 
-/// 튼 횟수만큼 점, 그친 만큼 먹색 채움. 3번 미만은 '아직 모름'(시안 Charts.methods).
+/// 튼 횟수만큼 점, 그친 만큼 먹색 채움. 3번 미만은 '아직 모름'.
 struct MethodDots: View {
     struct Row: Identifiable {
         let id: Int, name: String, ok: Int, n: Int
@@ -517,7 +530,7 @@ struct MethodDots: View {
         }
     }
 
-    /// 찬 점은 처음 보일 때 0 → 1로 튄다(시안 charts.js: spring 강성 600·감쇠 30, 점마다 0.02초 늦게). 동작 줄이기면 바로.
+    /// 찬 점은 처음 보일 때 0 → 1로 튄다(spring 강성 600·감쇠 30, 점마다 0.02초 늦게). 동작 줄이기면 바로.
     private func dots(_ m: Row, known: Bool, base: Int) -> some View {
         // 점이 많으면 줄을 넘긴다(한 줄 10개)
         let cols = Array(repeating: GridItem(.fixed(12), spacing: 5), count: min(10, max(1, m.n)))
@@ -541,13 +554,13 @@ struct MethodDots: View {
 
 struct DayBandChart: View {
     let data: ChartData.Day
-    /// 시트로 막 저장한 기록의 자리(U88 새 표시)와 표시를 마친 뒤 걷기.
-    var fresh: ChartData.Fresh? = nil
+    /// 시트로 막 저장한 기록의 자리(새 표시)와 표시를 마친 뒤 걷기.
+    var fresh: ChartData.Fresh?
     var freshDone: () -> Void = {}
     var body: some View { DayBandChartBody(data: data, fresh: fresh, freshDone: freshDone).dynamicTypeSize(...DynamicTypeSize.xxLarge) }
 }
 
-/// U88 새 표시: 시트가 닫힌 뒤(320ms) 표시 점이 톡(1 → 1.5 → 1, spring.bouncy) 하고 같은 색 고리가 1.2초 동안 퍼지며 사라진다.
+/// 새 표시: 시트가 닫힌 뒤(320ms) 표시 점이 톡(1 → 1.5 → 1, spring.bouncy) 하고 같은 색 고리가 1.2초 동안 퍼지며 사라진다.
 /// 동작 줄이기면 움직이지 않고 바로 걷는다(고리 퍼짐 없음).
 private struct FreshPulse: View {
     let color: Color
@@ -585,7 +598,7 @@ struct WeekBarsChart: View {
     typealias Item = WeekBarsChartBody.Item
     let items: [Item]
     let hot: Color
-    var target: (value: Double, label: String)? = nil
+    var target: (value: Double, label: String)?
     var height: CGFloat = 150
     let summary: String
     var body: some View {

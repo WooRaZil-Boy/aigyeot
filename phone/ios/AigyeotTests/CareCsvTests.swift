@@ -1,15 +1,15 @@
 import XCTest
 @testable import Aigyeot
 
-/// 기록 가져오기(phone-care-plan U64~U69). 시험 이름은 13장 그대로다.
-/// 예제는 복사하지 않고 공용 `shared/src/test/resources/care/import/`를 읽는다(안드로이드와 같은 파일·같은 결과, U69).
+/// 기록 가져오기.
+/// 예제는 복사하지 않고 공용 `shared/src/test/resources/care/import/`를 읽는다(안드로이드와 같은 파일·같은 결과).
 @MainActor
 final class CareCsvTests: XCTestCase {
     static let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("shared/src/test/resources/care/import")
-    /// U69 `now` = 2026-11-06T15:00:00+09:00
+    /// `now` = 2026-11-06T15:00:00+09:00
     static let now: Int64 = 1_793_944_800_000
 
     func text(_ name: String) throws -> String {
@@ -25,10 +25,10 @@ final class CareCsvTests: XCTestCase {
         CareCsv.parse(try text(name), existing: try events ?? existing().events, now: Self.now, profile: profile)
     }
 
-    /// 기대 JSON(U69)과 글자까지 견준다. 행은 createdAt·updatedAt을 뺀 칸 전부.
+    /// 기대 JSON과 글자까지 견준다. 행은 createdAt·updatedAt을 뺀 칸 전부.
     func assertExpected(_ name: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let expected = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: Self.dir.appendingPathComponent(name + ".expected.json"))) as? [String: Any])
-        let draft = try parse(name, profile: expected["profile"] as? String)   // profile은 입력값(U69 11-09)
+        let draft = try parse(name, profile: expected["profile"] as? String)   // profile은 입력값
         XCTAssertEqual(draft.format.rawValue, expected["format"] as? String, name, file: file, line: line)
         XCTAssertEqual(draft.profiles, expected["profiles"] as? [String], name, file: file, line: line)
         let rows = try draft.rows.map { e -> NSDictionary in
@@ -45,7 +45,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertTrue(draft.rows.allSatisfy { $0.createdAt == Self.now && $0.updatedAt == Self.now && $0.source == .imported }, name, file: file, line: line)
     }
 
-    /// 예제의 기록을 담은 앱(owner, 연결됨). 시계는 U69 now.
+    /// 예제의 기록을 담은 앱(owner, 연결됨). 시계는 위 now.
     func kit(creds: Credentials? = Kit.owner) throws -> Kit {
         let k = Kit(creds: creds)
         k.careStore.value = try existing()
@@ -56,7 +56,7 @@ final class CareCsvTests: XCTestCase {
 
     var queued: (Kit) -> [OutboxItem] = { $0.app.state.state.outbox.filter { $0.type == MessageType.feedingStarted } }
 
-    // MARK: U65
+    // MARK: 파일 읽기 한도
 
     func test_헤더로_형식을_정하고_모르는_헤더는_거부한다() async throws {
         XCTAssertEqual(try parse("aigyeot").format, .aigyeot)
@@ -83,12 +83,12 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(notUtf8, .failed(CareText.importUnreadable))
     }
 
-    /// U65 11-09 보충: 따옴표가 닫히지 않은 채 파일이 끝나면 뒤 기록이 메모 한 칸에 삼켜지므로 파일째 읽지 않는다(import.unreadable).
+    /// 따옴표가 닫히지 않은 채 파일이 끝나면 뒤 기록이 메모 한 칸에 삼켜지므로 파일째 읽지 않는다(import.unreadable).
     func test_닫히지_않은_따옴표가_있는_파일은_읽지_않는다() async throws {
         let broken = CareText.csvHeader + "\n" + [
             "FEED,2026-11-06T12:00:00+09:00,,true,LEFT,,,\"EXAMPLE 닫히지 않은 메모",
             "FEED,2026-11-06T13:00:00+09:00,,true,LEFT,,,EXAMPLE 뒤 기록",
-            "DIAPER,2026-11-06T14:00:00+09:00,,false,,,WET,EXAMPLE 뒤 기록",
+            "DIAPER,2026-11-06T14:00:00+09:00,,false,,,WET,EXAMPLE 뒤 기록"
         ].joined(separator: "\n") + "\n"
         XCTAssertEqual(CareCsv.parse(broken, existing: [], now: Self.now), ImportDraft(format: .unknown))
         let step = await (try kit()).app.settings().loaded(.text(broken))
@@ -99,7 +99,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(closed.rows.map(\.note), ["EXAMPLE \"첫\"\n둘째"])
     }
 
-    /// U65 11-09 보충: 한 레코드는 256칸까지. 헤더든 데이터 줄이든 넘으면 파일째 읽지 않는다(import.unreadable).
+    /// 한 레코드는 256칸까지. 헤더든 데이터 줄이든 넘으면 파일째 읽지 않는다(import.unreadable).
     func test_칸이_256개를_넘는_줄이_있으면_읽지_않는다() async throws {
         let row = "NOTE,2026-11-06T12:00:00+09:00,,false,,,,EXAMPLE"
         let wide256 = CareText.csvHeader + "\n" + row + String(repeating: ",", count: 256 - 8) + "\n"   // 256칸은 읽는다
@@ -134,7 +134,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(vm.importStep, .idle)
     }
 
-    // MARK: U66
+    // MARK: 값 읽기 규칙
 
     func test_세_형식_예제를_기대_기록으로_바꾼다() async throws {
         try assertExpected("aigyeot")
@@ -143,7 +143,7 @@ final class CareCsvTests: XCTestCase {
         try assertExpected("unknown")
     }
 
-    /// U66 11-09 보충: 끝이 지금 + 1분보다 늦으면 끝 모름, 시각은 세 형식 공통으로 엄격하게, 글자 대소문자 규칙.
+    /// 끝이 지금 + 1분보다 늦으면 끝 모름, 시각은 세 형식 공통으로 엄격하게, 글자 대소문자 규칙.
     func test_세_형식의_보충_규칙() async throws {
         // 시각: 오프셋 있는 ISO는 그대로(소수 초는 ms까지), 오프셋 없는 'YYYY-MM-DD HH:MM[:SS]'는 서울 벽시계.
         XCTAssertEqual(CareCsv.time("2026-11-06T15:00:00+09:00"), Self.now)
@@ -153,14 +153,15 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(CareCsv.time("2026-11-06 15:00:07"), Self.now + 7000)
         XCTAssertEqual(CareCsv.time("2026-11-06T00:00:00-18:00"), Self.now + 12 * 3_600_000)   // 오프셋은 Java ZoneOffset 범위(±18:00)까지
         XCTAssertEqual(CareCsv.time("2026-11-06T15:00:00+18:00"), Self.now - 9 * 3_600_000)
-        for bad in ["2026-11-06T14:30:00+09:60", "2026-11-06T14:30:00+24:00", "2026-11-06T14:30:00+18:01", "2026-11-06T15:00:00", "2026-11-06 15:00:00+09:00", "2026-11-06T15:00", "2026-02-30 10:00", "2026-11-06 24:00",
+        for bad in ["2026-11-06T14:30:00+09:60", "2026-11-06T14:30:00+24:00", "2026-11-06T14:30:00+18:01", "2026-11-06T15:00:00",
+            "2026-11-06 15:00:00+09:00", "2026-11-06T15:00", "2026-02-30 10:00", "2026-11-06 24:00",
                     "2026/11/06 15:00", "2026-11-06 15:00:00.5", " 2026-11-06 15:00x", "EXAMPLE"] {
             XCTAssertNil(CareCsv.time(bad), bad)
         }
         // 끝이 지금 + 1분보다 늦은 수유·잠은 끝 모름으로 살린다. 지금 + 1분까지는 그대로.
         let ends = CareCsv.parse(CareText.csvHeader + "\n" + [
             "SLEEP,2026-11-06T14:30:00+09:00,2026-11-06T15:01:01+09:00,false,,,,EXAMPLE 끝이 미래",
-            "FEED,2026-11-06T14:40:00+09:00,2026-11-06T15:01:00+09:00,false,LEFT,,,EXAMPLE 끝이 지금 + 1분",
+            "FEED,2026-11-06T14:40:00+09:00,2026-11-06T15:01:00+09:00,false,LEFT,,,EXAMPLE 끝이 지금 + 1분"
         ].joined(separator: "\n"), existing: [], now: Self.now).rows
         XCTAssertEqual(ends.map(\.endAt), [nil, Self.now + 60_000])
         XCTAssertEqual(ends.map(\.endUnknown), [true, false])
@@ -177,16 +178,16 @@ final class CareCsvTests: XCTestCase {
             "NOTE,2026-11-06T11:00:00+09:00,,false,,abc,,EXAMPLE",
             "SLEEP,2026-11-06T12:00:00+09:00,2026-11-06T12:30:00+09:00,false,,500,,EXAMPLE",
             "SLEEP,2026-11-06T13:00:00+09:00,2026-11-06T13:30:00+09:00,false,,,,EXAMPLE 빈 칸은 통과",
-            "DIAPER,2026-11-06T13:10:00+09:00,,false,,,WET,EXAMPLE 빈 칸은 통과",
+            "DIAPER,2026-11-06T13:10:00+09:00,,false,,,WET,EXAMPLE 빈 칸은 통과"
         ].joined(separator: "\n"), existing: [], now: Self.now)
         XCTAssertEqual(amounts.skipped.unreadable, 4)
         XCTAssertEqual(amounts.rows.map(\.kind), [.sleep, .diaper])
         XCTAssertEqual(amounts.rows.map(\.amountMl), [nil, nil])
-        // 값은 종류에 맞는 칸에만(U66 11-09 보충): feedSide·amountMl은 FEED만, diaper는 DIAPER만. 그 밖은 값이 있어도 nil이고 id 해시에도 nil이다.
+        // 값은 종류에 맞는 칸에만: feedSide·amountMl은 FEED만, diaper는 DIAPER만. 그 밖은 값이 있어도 nil이고 id 해시에도 nil이다.
         let fields = CareCsv.parse(CareText.csvHeader + "\n" + [
             "SLEEP,2026-11-06T09:00:00+09:00,2026-11-06T09:30:00+09:00,false,LEFT,120,WET,EXAMPLE",
             "FEED,2026-11-06T10:00:00+09:00,2026-11-06T10:10:00+09:00,false,RIGHT,,WET,EXAMPLE",
-            "DIAPER,2026-11-06T11:00:00+09:00,,false,LEFT,120,DRY,EXAMPLE",
+            "DIAPER,2026-11-06T11:00:00+09:00,,false,LEFT,120,DRY,EXAMPLE"
         ].joined(separator: "\n"), existing: [], now: Self.now).rows
         XCTAssertEqual(fields.map(\.feedSide), [nil, .right, nil])
         XCTAssertEqual(fields.map(\.amountMl), [nil, nil, nil])
@@ -200,7 +201,7 @@ final class CareCsvTests: XCTestCase {
             "Feed,2026-11-06 11:00,2026-11-06 11:10,0:05L 120 ML,,,,EXAMPLE 띄운 단위",
             "Feed,2026-11-06 12:00,2026-11-06 12:10,120mlx,,,,EXAMPLE 단위 뒤에 붙은 글자",
             "Feed,2026-11-06 13:00,2026-11-06 13:10,-0.4ml 0:10R,,,,EXAMPLE 음수 부피는 범위 밖",
-            "Feed,2026-11-06 14:00,2026-11-06 14:10,+120ml,,,,EXAMPLE 더하기 부호",
+            "Feed,2026-11-06 14:00,2026-11-06 14:10,+120ml,,,,EXAMPLE 더하기 부호"
         ].joined(separator: "\n"), existing: [], now: Self.now)
         XCTAssertEqual(huck.rows.map(\.feedSide), [nil, .left, .bottle, nil, .bottle])
         XCTAssertEqual(huck.rows.map(\.amountMl), [nil, nil, 120, nil, 120])
@@ -212,17 +213,17 @@ final class CareCsvTests: XCTestCase {
             "Breastfeed,EXAMPLE-A,2026-11-06 12:00:00,-60,600.0",
             "Breastfeed,EXAMPLE-A,2026-11-06 13:00:00,600.5,0.5",
             "Breastfeed,EXAMPLE-A,2026-11-06 14:00:00,10000000000000000,",   // 최대 길이를 크게 넘는 초: 크래시 없이 끝 모름
-            "Breastfeed,EXAMPLE-A,2026-11-06 14:30:00,1e308,1e308",
+            "Breastfeed,EXAMPLE-A,2026-11-06 14:30:00,1e308,1e308"
         ].joined(separator: "\n"), existing: [], now: Self.now)
         let t10 = Self.now - 5 * 3_600_000
         XCTAssertEqual(nara.rows.map(\.feedSide), [.left, .left, .right, .both, .left, .both])
         XCTAssertEqual(nara.rows.map(\.endAt), [t10 + 60_000, t10 + 3_600_000 + 600_000, t10 + 7_200_000 + 600_000, t10 + 10_800_000 + 601_000, nil, nil])
         XCTAssertEqual(nara.rows.map(\.endUnknown), [false, false, false, false, true, true])
-        // Nara 젖병: 부피·단위가 비어도 읽을 수 없는 줄(U66: 단위가 없으면 읽을 수 없음).
+        // Nara 젖병: 부피·단위가 비어도 읽을 수 없는 줄(단위가 없으면 읽을 수 없음).
         let bottle = CareCsv.parse("Type,Profile Name,Start Date/time,[Bottle Feed] Volume,[Bottle Feed] Volume Unit\n" + [
             "Bottle Feed,EXAMPLE-A,2026-11-06 09:30:00,,",
             "Bottle Feed,EXAMPLE-A,2026-11-06 09:40:00,,ml",
-            "Bottle Feed,EXAMPLE-A,2026-11-06 09:50:00,120,ml",
+            "Bottle Feed,EXAMPLE-A,2026-11-06 09:50:00,120,ml"
         ].joined(separator: "\n"), existing: [], now: Self.now)
         XCTAssertEqual(bottle.skipped.unreadable, 2)
         XCTAssertEqual(bottle.rows.map(\.amountMl), [120])
@@ -250,7 +251,7 @@ final class CareCsvTests: XCTestCase {
     }
 
     func test_Nara_아이를_고르면_그_아이_줄만_본다() async throws {
-        // 고르기 전: 이름은 파일에 처음 나온 순서, 기록·건너뜀은 없다(U69).
+        // 고르기 전: 이름은 파일에 처음 나온 순서, 기록·건너뜀은 없다.
         let none = try parse("nara")
         XCTAssertEqual(none.profiles, ["EXAMPLE-B", "EXAMPLE-A"])
         XCTAssertEqual(none.rows, [])
@@ -308,7 +309,7 @@ final class CareCsvTests: XCTestCase {
     }
 
     func test_같은_줄은_두_앱에서_같은_id다() async throws {
-        // id = "imp-" + SHA-256("kind|startAt|endAt|feedSide|amountMl", null은 빈 글자) 16진수 앞 16글자(U66).
+        // id = "imp-" + SHA-256("kind|startAt|endAt|feedSide|amountMl", null은 빈 글자) 16진수 앞 16글자.
         func id(_ p: CareCsv.Picked) -> String { CareCsv.event(p, now: Self.now).id }
         XCTAssertEqual(id(.init(kind: .feed, startAt: 1_792_735_200_000, endAt: 1_792_735_920_000, feedSide: .right)), "imp-47fd89f213c9a86d")
         XCTAssertEqual(id(.init(kind: .feed, startAt: 1_793_599_200_000, feedSide: .bottle, amountMl: 100)), "imp-9b86e21badf24cd0")
@@ -324,7 +325,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(try parse("huckleberry").rows.map(\.id), try parse("huckleberry").rows.map(\.id))
     }
 
-    // MARK: U67
+    // MARK: 가져오기 저장과 되돌리기
 
     func test_건너뛴_이유를_정해진_순서로_센다() async throws {
         let hand = CareEvent(id: "01JDEXAMPLE0000000000000001", kind: .feed, startAt: Self.now - 3_600_000, zone: "Asia/Seoul",
@@ -342,13 +343,13 @@ final class CareCsvTests: XCTestCase {
             "FEED,2026-11-06T15:00:30+09:00,,true,LEFT,,,EXAMPLE 건너뛴 미래 줄과는 견주지 않아 가져옴",
             "SLEEP,2026-11-06T14:00:00+09:00,2026-11-06T14:30:00+09:00,false,,,,EXAMPLE 다른 종류는 60초 안이어도 가져옴",
             "",                  // 빈 줄과
-            " , ,,,,,,",         // 칸이 모두 비었거나 공백뿐인 줄은 줄로 치지 않는다
+            " , ,,,,,,"         // 칸이 모두 비었거나 공백뿐인 줄은 줄로 치지 않는다
         ].joined(separator: "\r\n") + "\r\n,,,,,,,\r\n"
         let d = CareCsv.parse(csv, existing: [hand], now: Self.now)
         XCTAssertEqual(d.skipped, ImportSkipped(unsupported: 1, unreadable: 1, future: 1, old: 2, duplicate: 3))
         XCTAssertEqual(d.rows.map(\.note), ["EXAMPLE 가져옴", "EXAMPLE 다른 종류는 60초 안이어도 가져옴",
                                             "EXAMPLE 건너뛴 미래 줄과는 견주지 않아 가져옴"])   // startAt 오름차순
-        // 화면 줄은 0인 이유를 감춘다(U68).
+        // 화면 줄은 0인 이유를 감춘다.
         XCTAssertEqual(CareText.importSkips(d.skipped),
                        ["이미 있는 기록 3건", "14일보다 오래된 기록 2건", "앞으로의 시각 1건", "읽을 수 없는 줄 1건", "가져오지 않는 종류 1건"])
         XCTAssertEqual(CareText.importSkips(ImportSkipped(duplicate: 3)), ["이미 있는 기록 3건"])
@@ -368,7 +369,7 @@ final class CareCsvTests: XCTestCase {
         vm2.startImport()
         vm2.closeImport()   // 고르기 취소(시스템이 고르기 창을 닫는다)
         XCTAssertEqual(vm2.importStep, .idle)
-        // 파일을 열거나 읽지 못한 IO 실패는 import.failed(11-09 보충).
+        // 파일을 열거나 읽지 못한 IO 실패는 import.failed.
         vm2.picked(.success(FileManager.default.temporaryDirectory.appendingPathComponent("EXAMPLE-없는-파일.csv")))
         await vm2.importJob?.value
         XCTAssertEqual(vm2.importStep, .failed(CareText.importFailed))
@@ -427,7 +428,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(k.careStore.value.events.count, before.events.count + 20)
     }
 
-    /// 11-09 보충: 지우다 만 '기록 지우기'(R10)가 남았으면 저장 전에 마치고 가져온다. 띠 {n}은 실제로 들어간 수, 마치지 못하면 import.failed.
+    /// 지우다 만 '기록 지우기'가 남았으면 저장 전에 마치고 가져온다. 띠 {n}은 실제로 들어간 수, 마치지 못하면 import.failed.
     func test_지우다_만_기록이_남아도_같은_파일을_가져온다() async throws {
         let k = try kit()
         let rows = try parse("aigyeot").rows
@@ -466,7 +467,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertNotNil(k.store.value.clearingCareIds)
     }
 
-    /// U68 보충 ④: 중복은 미리 보기와 저장하는 순간 둘 다 같은 판정(CareCsv.Seen)으로 본다. 띠 {n}은 실제로 들어간 수.
+    /// 중복은 미리 보기와 저장하는 순간 둘 다 같은 판정(CareCsv.Seen)으로 본다. 띠 {n}은 실제로 들어간 수.
     func test_미리_보기_뒤_손으로_넣은_기록과_겹치는_줄은_저장_때_뺀다() async throws {
         let k = try kit()
         let vm = k.app.settings()
@@ -498,7 +499,7 @@ final class CareCsvTests: XCTestCase {
         let rows = try parse("huckleberry").rows
         XCTAssertEqual(k.app.recordCare.importRows(rows), rows.map(\.id))
         let gone = rows[3].id
-        k.app.recordCare.delete(gone)   // R8: deletedAt 표시
+        k.app.recordCare.delete(gone)   // deletedAt 표시
         XCTAssertNotNil(k.app.care.care.events.first { $0.id == gone }?.deletedAt)
         let again = CareCsv.parse(try text("huckleberry"), existing: k.app.care.care.events, now: Self.now)
         XCTAssertEqual(again.rows, [])
@@ -529,7 +530,7 @@ final class CareCsvTests: XCTestCase {
         queued(k).compactMap { e -> Date? in if case .string(let s)? = e.body.objectValue?["at"] { Rfc3339.parse(s) } else { nil } }
     }
 
-    /// U67 11-09 보충(결정): 가져오기의 차 보내기 계기(R5·R19)는 되돌리기 띠가 끝난 뒤 한 번 낸다. 띠 수명은 RecordCare 한 곳이다.
+    /// 가져오기의 차 보내기 계기는 되돌리기 띠가 끝난 뒤 한 번 낸다. 띠 수명은 RecordCare 한 곳이다.
     func test_가져온_더_늦은_수유는_owner일_때_차로_보낸다() async throws {
         // owner·연결됨: 가져온 가장 늦은 수유(2026-11-06 12:00)가 24시간 안이고 더 늦다. 저장 직후에는 보내지 않는다.
         let k = try kit()
@@ -556,7 +557,7 @@ final class CareCsvTests: XCTestCase {
         }
     }
 
-    /// U87·U67: 화면 읽기가 켜져 띠가 길어져도 가져온 줄은 그 띠가 끝난 뒤에 차로 간다(띠 수명은 RecordCare 한 곳).
+    /// 화면 읽기가 켜져 띠가 길어져도 가져온 줄은 그 띠가 끝난 뒤에 차로 간다(띠 수명은 RecordCare 한 곳).
     func test_띠_시간이_길어져도_가져온_줄은_띠가_끝난_뒤에_차로_간다() async throws {
         let k = try kit()
         k.app.recordCare.screenReader = { true }
@@ -572,7 +573,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(queuedAt(k), [CareTime.date(1_793_934_000_000)])
     }
 
-    /// 요약(R19)까지 보는 앱. 이 연결에서 요약을 넣은 적이 있다(U61, 값 없는 요약도 간다).
+    /// 요약까지 보는 앱. 이 연결에서 요약을 넣은 적이 있다(값 없는 요약도 간다).
     func summaryKit() throws -> Kit {
         let k = try kit()
         k.app.reconcileCareSummary.sendsCareSummary = true
@@ -589,7 +590,7 @@ final class CareCsvTests: XCTestCase {
     /// 차로 간 요약의 '오늘 수유 수'.
     func summaryFeeds(_ k: Kit) -> [Double?] { summaries(k).map { if case .number(let n)? = $0["today_feed_count"] { n } else { nil } } }
 
-    /// U67 11-09 보충(규칙 한 곳): 차로 가는 계산 세 곳(수유·요약 맞추기, 보낼 함의 보내기 직전 요약 재계산)은 가져오기 띠의 줄을 뺀 기록(forCar)으로 한다.
+    /// 규칙 한 곳: 차로 가는 계산 세 곳(수유·요약 맞추기, 보낼 함의 보내기 직전 요약 재계산)은 가져오기 띠의 줄을 뺀 기록(forCar)으로 한다.
     func test_보낼_함에서_기다리던_요약을_띠_안에_다시_계산해도_가져온_줄은_빼고_되돌리면_끝까지_차로_가지_않는다() async throws {
         let k = try summaryKit()
         let app = k.app!
@@ -678,7 +679,7 @@ final class CareCsvTests: XCTestCase {
         XCTAssertEqual(queuedAt(p), [CareTime.date(1_793_934_000_000)])
     }
 
-    // MARK: U68
+    // MARK: 미리 보기·중복
 
     func test_가져올_것이_없으면_닫기만_보인다() async throws {
         let k = try kit()

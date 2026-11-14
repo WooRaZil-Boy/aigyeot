@@ -9,14 +9,14 @@ struct AigyeotWidgets: WidgetBundle {
     var body: some Widget { CareLiveActivity() }
 }
 
-/// 잠금 화면·Dynamic Island의 진행 중 수유·잠(C6, 시안 S.lock .live-act): 점 + "수유 중"·"왼쪽" + 경과(가벼운 큰 숫자) + "끝내기".
-/// 경과는 시스템 시계가 그린다(앱이 매초 깨지 않는다, R15). 잠금 화면은 어두운 글래스 판에 흰 글자(시안과 같음).
+/// 잠금 화면·Dynamic Island의 진행 중 수유·잠: 점 + "수유 중"·"왼쪽" + 경과(가벼운 큰 숫자) + "끝내기".
+/// 경과는 시스템 시계가 그린다(앱이 매초 깨지 않는다). 잠금 화면은 어두운 글래스 판에 흰 글자(디자인과 같음).
 struct CareLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CareActivityAttributes.self) { context in
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
-                    Circle().fill(DesignSystem.liveActivityDot).frame(width: 10, height: 10).padding(.leading, 6)   // 시안 .live-act .ri
+                    Circle().fill(DesignSystem.liveActivityDot).frame(width: 10, height: 10).padding(.leading, 6)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(title(context.attributes)).font(DesignSystem.namedFont(16, 700))
                         if let side = context.state.side { Text(side).font(DesignSystem.namedFont(13, 500)).opacity(0.8) }
@@ -32,7 +32,7 @@ struct CareLiveActivity: Widget {
             }
             .foregroundStyle(.white)
             .padding(16)
-            // 시안은 어두운 글래스(42%)지만 흰 잠금 화면 위에서 흰 글자가 4.5:1을 밑돈다. 거의 불투명한 어두운 판으로 둔다
+            // 디자인은 어두운 글래스(42%)지만 흰 잠금 화면 위에서 흰 글자가 4.5:1을 밑돈다. 거의 불투명한 어두운 판으로 둔다
             .activityBackgroundTint(DesignSystem.liveActivityPanel)
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -47,7 +47,7 @@ struct CareLiveActivity: Widget {
             } compactLeading: {
                 icon(context.attributes).resizable().scaledToFit().frame(width: 18, height: 18).foregroundStyle(tint(context.attributes))
             } compactTrailing: {
-                // 결정(11-07): 압축 섬은 아이콘만. 좁은 섬(iPhone Care 약 30pt)에서 1시간 넘는 경과가 '1:00…'으로 잘렸다. 경과는 펼친 섬·잠금 화면에 시:분:초로 보인다
+                // 결정: 압축 섬은 아이콘만. 좁은 섬(iPhone Care 약 30pt)에서 1시간 넘는 경과가 '1:00…'으로 잘렸다. 경과는 펼친 섬·잠금 화면에 시:분:초로 보인다
                 EmptyView()
             } minimal: {
                 icon(context.attributes).resizable().scaledToFit().frame(width: 18, height: 18).foregroundStyle(tint(context.attributes))
@@ -72,13 +72,13 @@ struct CareLiveActivity: Widget {
     private func endButton(_ c: ActivityViewContext<CareActivityAttributes>) -> some View {
         Button(intent: EndCareIntent(eventId: c.attributes.eventId)) {
             Text(CareActivityText.end).font(DesignSystem.namedFont(15, 700)).foregroundStyle(.white)
-                .frame(maxWidth: .infinity, minHeight: 44)   // 터치 영역 44pt(8장)
+                .frame(maxWidth: .infinity, minHeight: 44)   // 터치 영역 44pt
                 .background(.white.opacity(0.18), in: Capsule())
         }
         .buttonStyle(.plain)
     }
 
-    /// 압축·최소 섬은 아이콘만 보여 이름을 단다(7.1 notify.title).
+    /// 압축·최소 섬은 아이콘만 보여 이름을 단다(notify.title).
     private func icon(_ a: CareActivityAttributes) -> Image {
         Image(a.sleep ? "ic-moon" : "ic-bottle", label: Text(a.sleep ? CareActivityText.sleeping : CareActivityText.feeding))
     }

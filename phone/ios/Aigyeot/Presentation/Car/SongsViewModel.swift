@@ -3,7 +3,7 @@ import Observation
 
 // MARK: 차 탭
 
-/// 차 탭(5장): 연결 상태 → 우리 노래(owner) → 리포트.
+/// 차 탭: 연결 상태 → 우리 노래(owner) → 리포트.
 struct CarUiState {
     var phone: PhoneState
     var connection: Connection
@@ -29,7 +29,7 @@ final class CarViewModel {
 
     var ui: CarUiState { CarUiState(phone: stateRepo.state, connection: stateRepo.connection, online: connection.status.online) }
 
-    /// 당겨서 새로고침(7.2).
+    /// 당겨서 새로고침.
     func retryNow() async { await connection.retryNow() }
 }
 
@@ -70,7 +70,7 @@ final class SongsViewModel {
 
     func remove(_ id: String) { removeSong(id) }
     func select(_ id: String) { selectSong(id) }
-    /// '다시 녹음'이면 그 곡과 바꾼다(9장). 문구는 `SongError.message`.
+    /// '다시 녹음'이면 그 곡과 바꾼다. 문구는 `SongError.message`.
     func add(name: String, recording: URL, durationS: Double, replacing: String?) throws {
         try recordSong(name: name, recording: recording, durationS: durationS, replacing: replacing)
     }

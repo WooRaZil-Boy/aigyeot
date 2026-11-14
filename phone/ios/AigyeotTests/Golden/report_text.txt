@@ -1,0 +1,33 @@
+report_summary:timeline[0].trigger: 울음 감지
+report_summary:timeline[0].line.감지까지: 2.4초
+report_summary:timeline[0].line.소리: 자장가
+report_summary:timeline[0].line.재생: 56초
+report_summary:timeline[0].plays[0].purpose: 자동 1차
+report_summary:timeline[0].plays[0].method: 자장가
+report_summary:timeline[0].result: 그침
+report_summary:car_actions[0].action: 뒷좌석 재생
+report_summary:car_actions[1].action: 뒷좌석 열선 끔
+report_summary:car_actions[2].action: 조명 낮춤
+report_summary_handoff:timeline[0].trigger: 울음 감지
+report_summary_handoff:timeline[0].line.감지까지: 3.1초
+report_summary_handoff:timeline[0].line.소리: 자장가
+report_summary_handoff:timeline[0].line.재생: 1분 52초
+report_summary_handoff:timeline[0].plays[0].purpose: 자동 1차
+report_summary_handoff:timeline[0].plays[0].method: 자장가
+report_summary_handoff:timeline[0].plays[1].purpose: 자동 2차
+report_summary_handoff:timeline[0].plays[1].method: 백색소음
+report_summary_handoff:timeline[0].result: 계속 울음
+report_summary_handoff:timeline[0].second: 다른 소리로 바꿨어요 · 백색소음 · 계속 울음
+report_summary_handoff:timeline[0].stop: 두 번 시도 뒤 · 도착 안내는 하지 못했어요 · 다른 보호자에게 알림
+report_summary_handoff:car_actions[0].action: 앞에서도 들리게 재생
+report_summary_handoff:car_actions[1].action: 도착 안내
+report_summary_handoff:car_actions[2].action: 다른 보호자 알림
+report_summary_womb:timeline[0].trigger: 울음 감지
+report_summary_womb:timeline[0].line.감지까지: 2.4초
+report_summary_womb:timeline[0].line.소리: 뱃속 소리
+report_summary_womb:timeline[0].line.재생: 56초
+report_summary_womb:timeline[0].plays[0].purpose: 자동 1차
+report_summary_womb:timeline[0].plays[0].method: 뱃속 소리
+report_summary_womb:timeline[0].result: 그침
+report_summary_womb:car_actions[0].action: 뒷좌석 재생
+report_summary_womb:car_actions[1].action: 뒷좌석 열선 끔

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 받은 메시지를 상태에 적용하는 규칙(계약 3.3·8.4, G19). 기기 목록·수유 상태·곡 상태·리포트·인계 알림 칸은 이 파일의 함수로만 고친다(P3).
+/// 받은 메시지를 상태에 적용하는 규칙. 기기 목록·수유 상태·곡 상태·리포트·인계 알림 칸은 이 파일의 함수로만 고친다.
 enum InboxRules {
     /// 저장한 뒤 할 일. 적용과 같은 저장 안에서 정하고, 저장이 성공한 뒤에만 한다.
     struct Effects {
@@ -9,7 +9,7 @@ enum InboxRules {
         var removeFiles: [String] = []
     }
 
-    /// 봉투 하나를 적용하고 '처리한 id'·마지막 수신 시각을 같은 저장 안에서 남긴다(5.6·G39).
+    /// 봉투 하나를 적용하고 '처리한 id'·마지막 수신 시각을 같은 저장 안에서 남긴다.
     /// 받은 함에서 꺼낸 지난 봉투(`live` 거짓)는 차 타일을 바꾸지 않는다.
     static func receive(_ m: Inbound, live: Bool, myDevice: String, now: Date, in s: inout PhoneState) -> Effects {
         let before = s.outbox.count
@@ -41,7 +41,7 @@ enum InboxRules {
             s.deviceMarks[b.deviceId] = DeviceMark(seq: seq, removed: true, updatedAt: now)
             s.devices.removeAll { $0.deviceId == b.deviceId }
         case .feedingState(let b):
-            // 필수 필드가 빠진 body는 읽기(매핑)에서 무시된다(수유 값을 지우지 않는다). 큰 seq가 이긴다(G19).
+            // 필수 필드가 빠진 body는 읽기(매핑)에서 무시된다(수유 값을 지우지 않는다). 큰 seq가 이긴다.
             guard seq > s.feeding.seq else { break }
             let last = b.lastFeedingStart.flatMap(Rfc3339.parse)
             s.feeding = FeedingState(lastStart: last, windowStartExpected: b.windowStartExpected.flatMap(Rfc3339.parse), seq: seq)
@@ -61,7 +61,7 @@ enum InboxRules {
             s.reports.append(StoredReport(messageId: m.id, seq: seq, receivedAt: now, body: b))
             s.reports = Rfc3339.sortedDescending(s.reports) { $0.body.startedAt }
         case .handoffAlert(let b):
-            // 본문은 늘 저장한다. 배너는 한 번만, 그리고 방금 생긴 알림에만 띄운다(5.6).
+            // 본문은 늘 저장한다. 배너는 한 번만, 그리고 방금 생긴 알림에만 띄운다.
             if !s.alerts.contains(where: { $0.id == m.id }) {
                 s.alerts.append(StoredAlert(id: m.id, seq: seq, receivedAt: now, body: b))
                 s.alerts = Rfc3339.sortedDescending(s.alerts) { $0.body.occurredAt }
@@ -100,7 +100,7 @@ enum InboxRules {
                 files.append(b.songId)
             }
         } else {
-            // 다른 owner 폰이 올린 곡도 목록에 보인다(3.3 `song_status.name`). 지움이면 순번 비교용 표시만 남긴다.
+            // 다른 owner 폰이 올린 곡도 목록에 보인다(`song_status.name`). 지움이면 순번 비교용 표시만 남긴다.
             var row = SongRow(id: b.songId, name: b.name ?? "지운 노래", durationS: b.durationS,
                               state: .removed, candidate: b.candidate, lastSeq: seq, addedAt: now, removedAt: now)
             switch b.status {
@@ -110,7 +110,7 @@ enum InboxRules {
             }
             s.songs.append(row)
         }
-        // 거절된 곡은 목록에 잠깐 보이고 같은 id로 song_removed를 자동으로 보낸다(7.4, L48). 같은 저장 안에서 보낼 함에 넣는다.
+        // 거절된 곡은 목록에 잠깐 보이고 같은 id로 song_removed를 자동으로 보낸다. 같은 저장 안에서 보낼 함에 넣는다.
         if b.status == .rejected, let row = s.songs.first(where: { $0.id == b.songId }), case .rejected = row.state {
             OutboxRules.enqueueRejectedRemoval(b.songId, now: now, in: &s)
         }
@@ -125,7 +125,7 @@ enum InboxRules {
         }
     }
 
-    /// 기기 목록을 합친다. 목록을 읽은 뒤(`snapshot_seq`보다 새로) 소켓으로 받은 연결 변경은 목록이 덮지 않는다(계약 3.3·8.4).
+    /// 기기 목록을 합친다. 목록을 읽은 뒤(`snapshot_seq`보다 새로) 소켓으로 받은 연결 변경은 목록이 덮지 않는다.
     static func mergeDevices(local: [DeviceInfo], snapshot r: DevicesResponse, marks: [String: DeviceMark]) -> [DeviceInfo] {
         var result: [DeviceInfo] = []
         for d in r.devices {
@@ -141,7 +141,7 @@ enum InboxRules {
         return result
     }
 
-    /// 목록과 `snapshot_seq`를 한 번에 저장한다. 목록을 기다리는 사이 차의 실시간 봉투를 받았으면(`carSeenAt`) 차 행의 연결 상태는 그쪽이 새것이다(7.2).
+    /// 목록과 `snapshot_seq`를 한 번에 저장한다. 목록을 기다리는 사이 차의 실시간 봉투를 받았으면(`carSeenAt`) 차 행의 연결 상태는 그쪽이 새것이다.
     static func applyDevices(_ r: DevicesResponse, carSeenAt: Date?, in s: inout PhoneState) {
         var merged = mergeDevices(local: s.devices, snapshot: r, marks: s.deviceMarks)
         if let seen = carSeenAt {
@@ -152,7 +152,7 @@ enum InboxRules {
         s.devicesSnapshotSeq = r.snapshotSeq
     }
 
-    /// 7일 지난 id·보낼 함, 90일 지난 기록, 지운 지 7일 지난 곡 표시를 지운다(7.4, G34). 보낼 함에서 버린 type을 돌려준다.
+    /// 7일 지난 id·보낼 함, 90일 지난 기록, 지운 지 7일 지난 곡 표시를 지운다. 보낼 함에서 버린 type을 돌려준다.
     static func purgeExpired(now t: Date, sending: String?, in s: inout PhoneState) -> [String] {
         let week = t.addingTimeInterval(-Retention.week), quarter = t.addingTimeInterval(-Retention.records)
         s.processed = s.processed.filter { $0.value > week }
@@ -165,7 +165,7 @@ enum InboxRules {
         return expired
     }
 
-    /// 마지막으로 차의 메시지를 받은 지 24시간이 넘었고 표시가 꺼져 있으면 켜야 한다(G39). 표시는 201로만 끈다.
+    /// 마지막으로 차의 메시지를 받은 지 24시간이 넘었고 표시가 꺼져 있으면 켜야 한다. 표시는 201로만 끈다.
     static func needsStaleMark(_ s: PhoneState, now: Date) -> Bool {
         guard let last = s.lastReceivedAt else { return false }
         return now.timeIntervalSince(last) > Retention.stale && !s.needsStateRequest

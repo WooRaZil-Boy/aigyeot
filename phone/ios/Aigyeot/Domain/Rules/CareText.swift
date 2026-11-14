@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: 형식(7장: 기기 언어와 관계없이 한국어)
+// MARK: 형식(기기 언어와 관계없이 한국어)
 
 enum CareFormat {
     private static let ko = Locale(identifier: "ko_KR")
@@ -29,7 +29,7 @@ enum CareFormat {
     /// "11월 5일(수) 오후 12:52"(인계 알림 상세 시각, 기기 언어와 무관)
     static func dateTime(_ d: Date, _ zone: TimeZone = .current) -> String { day(d, zone) + " " + clock(d, zone) }
 
-    /// "오후 1:10–1:52". 끝이 같은 오전·오후면 끝의 오전·오후를 뺀다(7장 예). 같은 분(epoch 분)에 끝났으면 시각 하나(U41).
+    /// "오후 1:10–1:52". 끝이 같은 오전·오후면 끝의 오전·오후를 뺀다. 같은 분(epoch 분)에 끝났으면 시각 하나.
     static func clockRange(_ start: Date, _ end: Date?, _ zone: TimeZone) -> String {
         guard let end, floor(end.timeIntervalSince1970 / 60) != floor(start.timeIntervalSince1970 / 60) else { return clock(start, zone) }
         let samePeriod = formatter("a", zone).string(from: start) == formatter("a", zone).string(from: end)
@@ -39,13 +39,13 @@ enum CareFormat {
     /// "11월 5일(수)"
     static func day(_ d: Date, _ zone: TimeZone = .current) -> String { formatter("M월 d일(E)", zone).string(from: d) }
 
-    /// U27: 길이·평균. 0 "0분", 1분 미만 "1분 미만", 그 위는 U20.
+    /// 길이·평균. 0 "0분", 1분 미만 "1분 미만", 그 위는 시·분 꼴.
     static func length(_ ms: Int64) -> String {
         if ms <= 0 { return "0분" }
         return ms < 60_000 ? "1분 미만" : duration(ms)
     }
 
-    /// U20: '~전'과 진행 중 경과. 1분 미만 "방금", 1~59분 "12분", 60분 이상 "2시간"·"2시간 10분".
+    /// '~전'과 진행 중 경과. 1분 미만 "방금", 1~59분 "12분", 60분 이상 "2시간"·"2시간 10분".
     static func duration(_ ms: Int64) -> String {
         let m = max(0, ms) / 60_000
         if m < 1 { return "방금" }
@@ -61,9 +61,8 @@ enum CareFormat {
     }
 }
 
-/// 화면 글자. 계획 7장 표와 7.1 전체 문구표(ID를 주석으로 단다)에 있는 것만 쓴다(U26). 두 앱이 글자까지 같다.
+/// 화면 글자. 정해 둔 문구(ID를 주석으로 단다)에 있는 것만 쓴다. 두 앱이 글자까지 같다.
 enum CareText {
-    // 7장
     static let connectCar = "차와 연결하기"
     static let recordOnly = "먼저 기록만 쓸게요"
     static let noFeedYet = "아직 수유 기록이 없어요"
@@ -71,7 +70,7 @@ enum CareText {
     static let carTileUnpaired = "차와 연결하면 수유 기록이 차에도 가요"
     static let nextWindowNote = "차에 정해 둔 간격 기준"
     static let overLimitFeed = "수유가 3시간째예요. 끝내는 걸 잊으셨나요?"
-    static let overLimitSleep = "잠이 16시간째예요. 끝내는 걸 잊으셨나요?"   // U36
+    static let overLimitSleep = "잠이 16시간째예요. 끝내는 걸 잊으셨나요?"
     static let previousFeedEnded = "앞 수유를 끝냈어요"
     static let previousFeedEndedUnknown = "앞 수유를 끝냈어요 · 끝 시각 모름"
     static let previousSleepEnded = "앞 잠을 끝냈어요"
@@ -79,19 +78,19 @@ enum CareText {
     static let guardianNote = "보호자 기록은 이 휴대폰에만 남아요"
     static let reconnect = "다시 연결하기", keepRecording = "기록만 계속 쓸게요"
     static let disconnected = "연결을 끊었어요. 돌봄 기록은 이 휴대폰에 남아 있어요."
-    /// 보낼 함이 버린 요약(7.5 '버리고 화면에 알린다', 7.1 `outbox.dropped`).
+    /// 보낼 함이 버린 요약(`outbox.dropped`).
     static let careSummaryDropped = "돌봄 기록 요약을 차로 보내지 못했어요"
     static let pickEnd = "끝 시각 고르기", closeEndUnknown = "끝 시각 모름으로 닫기"
     static let chipNow = "지금", chipCustom = "직접"
     static let chipMinutes = [5, 15, 30, 60]
-    static let overlapTitle = "그래도 저장할까요?", closeDialog = "닫기"   // 겹침 확인 창(R4, 7장 표·U71): 주 단추 sheet.save "저장", 보조 "닫기"
+    static let overlapTitle = "그래도 저장할까요?", closeDialog = "닫기"   // 겹침 확인 창: 주 단추 sheet.save "저장", 보조 "닫기"
     static let emptyDay = "이 날 기록이 없어요"
     static let deleted = "지웠어요", undo = "되돌리기"
     static let patternFewIntervals = "기록이 더 쌓이면 보여 드려요"
     static let patternFootnote = "직접 적은 기록만 세어요. 빠진 기록이 있으면 실제와 다를 수 있어요."
     static let sleepDiaperToggleNote = "다른 앱에 적고 있다면 꺼도 돼요"
-    static let clearConfirm = "이 휴대폰의 리포트·알림·노래·돌봄 기록을 지울까요?", clearConfirmNote = "차와 다른 보호자에게 있는 기록은 그대로예요"   // R10, 제목·본문(B18)
-    static let disconnectConfirm = "연결을 끊을까요?"   // R9
+    static let clearConfirm = "이 휴대폰의 리포트·알림·노래·돌봄 기록을 지울까요?", clearConfirmNote = "차와 다른 보호자에게 있는 기록은 그대로예요"   // 확인 창 제목·본문
+    static let disconnectConfirm = "연결을 끊을까요?"
     static let disconnectConfirmNote = "다시 연결하려면 차 화면의 새 코드가 필요해요. 돌봄 기록은 이 휴대폰에 남아요."
     static let disconnectAction = "끊기"
     static let songsNote = "차에서는 다음 주행부터 써요"   // car.songs.note(차 탭·녹음 시트)
@@ -116,10 +115,10 @@ enum CareText {
     static let save = "저장", cancel = "취소", delete = "지우기"                           // sheet.save·cancel·delete
     static let segmentDay = "하루", segmentPattern = "패턴"                               // log.segment
     static let today = "오늘", yesterday = "어제"                                         // log.date.*
-    // 11-09 디자인 확정 새 라벨(7.1 design.*)
+    // 디자인 새 라벨(design.*)
     static let todayDay = "오늘 하루", all = "전체", sleepPattern = "잠 패턴"              // design.chart.*
     static let fromCar = "차에서"                                                         // design.label "차에서 · 방금"·design.day.* 줄 이름
-    static let medianWord = "보통", sevenDays = "7일 동안"                              // 패턴 숫자 칸 아래(안드로이드 결정 2)
+    static let medianWord = "보통", sevenDays = "7일 동안"                              // 패턴 숫자 칸 아래(안드로이드와 같다)
     static let patternHeader = "지난 7일"                                                // pattern.header
     static let patternFeeds = "하루 수유", patternInterval = "수유 간격", patternSleep = "하루 잠"   // pattern.*
     static let patternDiapers = "하루 기저귀", patternCarCries = "차에서 울음"
@@ -127,7 +126,7 @@ enum CareText {
     static let export = "내 기록 내보내기", clear = "이 휴대폰의 기록 지우기", disconnect = "연결 끊기", about = "정보·라이선스"
     static let nicknamePlaceholder = "예: 콩이"                                           // settings.nickname.placeholder
     static let csvHeader = "kind,start,end,end_unknown,side,amount_ml,diaper,note"       // export.csvHeader
-    // 첫 안내 안 B(U43, 7.1 intro.*): 머리 이름 → 두 줄 제목 → 짧은 줄 넷(제목 / 부제) → '자세히 보기' → 시트에 원문 넷
+    // 첫 안내(intro.*): 머리 이름 → 두 줄 제목 → 짧은 줄 넷(제목 / 부제) → '자세히 보기' → 시트에 원문 넷
     static let introTitle = "아이곁"                                                     // intro.title(머리 이름, 인계 띠 머리도 같은 글)
     static let introLead = "차의 아이곁과\n이 휴대폰을 연결해요"                           // intro.lead(줄바꿈 자리 고정, 마침표 없음)
     /// intro.short.sends·notSent·relay·ai(제목, 부제). 순서도 이대로다.
@@ -135,54 +134,69 @@ enum CareText {
         ("차와 주고받아요", "수유 시작 시각, 우리 노래, 수유·잠·기저귀 요약, 주행 리포트, 인계 알림이에요"),
         ("울음소리와 차 위치는 보내지 않아요", "차 안 마이크 소리도 보내지 않아요"),
         ("아이곁 중계 서버를 거쳐요", "인계 알림은 Google·Apple 알림 서버도 거쳐요"),
-        ("차에서 물으면 AI 서버를 써요", "답을 만들려고 수유·잠·기저귀 숫자를 보내요"),
+        ("차에서 물으면 AI 서버를 써요", "답을 만들려고 수유·잠·기저귀 숫자를 보내요")
     ]
-    static let stageLoading = "3D 차 준비 중"                                           // design.stage.loading(U90, 읽기 이름만)
+    static let stageLoading = "3D 차 준비 중"                                           // design.stage.loading(읽기 이름만)
     static let introMore = "자세히 보기", introMoreA11y = "오가는 정보 자세히 보기"           // intro.more(+ 읽기 이름)
     static let introSheetTitle = "오가는 정보", introSheetClose = "닫기"                    // intro.sheet.title·close
-    /// intro.sheet.*(라벨) + 원문 intro.sends·notSent·relay·ai. sends·notSent는 원문의 '라벨: '을 떼어 라벨로 쓴다(U43, 원문은 글자 그대로).
+    /// intro.sheet.*(라벨) + 원문 intro.sends·notSent·relay·ai. sends·notSent는 원문의 '라벨: '을 떼어 라벨로 쓴다(원문은 글자 그대로).
     static let introSheet: [(label: String, text: String)] = [
         ("주고받는 것", "수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장"),
         ("보내지 않는 것", "아기 울음 소리, 차 안 마이크 소리, 차의 위치"),
         ("거치는 서버", "모두 아이곁 중계 서버를 거쳐 오가요. 인계 알림은 Google·Apple 알림 서버도 거쳐요."),
-        ("AI 서버", "차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요."),
+        ("AI 서버", "차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요.")
     ]
-    static let pairConfirm = "연결하기", pairConfirmSwitch = "끊고 연결하기"                // pair.confirm·confirmSwitch(U49)
-    static let pairBusy = "연결하는 중이에요. 끝난 뒤 링크를 다시 열어 주세요."           // pair.busy(U52)
-    static let bannerClose = "닫기"                                                      // banner.close(U48)
+    static let pairConfirm = "연결하기", pairConfirmSwitch = "끊고 연결하기"                // pair.confirm·confirmSwitch
+    static let pairBusy = "연결하는 중이에요. 끝난 뒤 링크를 다시 열어 주세요."           // pair.busy
+    static let bannerClose = "닫기"                                                      // banner.close
 
-    /// report.row.title "11월 6일(금) 오전 2:54–3:44"(U47). 상세 제목(report.detail.title)은 날짜만, 첫 줄은 구간이다.
+    /// report.row.title "11월 6일(금) 오전 2:54–3:44". 상세 제목(report.detail.title)은 날짜만, 첫 줄은 구간이다.
     static func reportTitle(start: Date, end: Date, zone: TimeZone = .current) -> String {
         CareFormat.day(start, zone) + " " + CareFormat.clockRange(start, end, zone)
     }
 
-    /// report.row.sub "울음 3번"(0번 "울음 기록 없음"), 시뮬레이션이면 " · 시뮬레이션"(U47).
+    /// report.row.sub "울음 3번"(0번 "울음 기록 없음"), 시뮬레이션이면 " · 시뮬레이션".
     static func reportSub(cries n: Int, simulated: Bool) -> String {
         (n == 0 ? "울음 기록 없음" : "울음 \(n)번") + (simulated ? " · 연습 장면" : "")
     }
 
-    /// 오늘 탭 머리(U34): "{별명}의 오늘", 별명이 없으면 "오늘".
+    /// 오늘 탭 머리: "{별명}의 오늘", 별명이 없으면 "오늘".
     static func todayTitle(nickname: String?) -> String { nickname.map { "\($0)의 오늘" } ?? tabToday }
 
     static func quickLabel(_ k: CareKind) -> String {   // today.quick.*, timer.title.*
-        switch k { case .feed: "수유"; case .note: "메모"; case .sleep: "잠"; case .diaper: "기저귀" }
+        switch k {
+        case .feed: "수유"
+        case .note: "메모"
+        case .sleep: "잠"
+        case .diaper: "기저귀"
+        }
     }
 
-    /// sheet.q.*(U81): 기록 시트 질문 제목(새 기록·고치기·지난 기록 같음). 시트의 읽기 이름도 이 글이다.
+    /// sheet.q.*: 기록 시트 질문 제목(새 기록·고치기·지난 기록 같음). 시트의 읽기 이름도 이 글이다.
     static func sheetQuestion(_ k: CareKind) -> String {
-        switch k { case .feed: "어떻게 먹였어요?"; case .sleep: "언제 잤어요?"; case .diaper: "어떤 기저귀였어요?"; case .note: "무엇을 적을까요?" }
+        switch k {
+        case .feed: "어떻게 먹였어요?"
+        case .sleep: "언제 잤어요?"
+        case .diaper: "어떤 기저귀였어요?"
+        case .note: "무엇을 적을까요?"
+        }
     }
     static let sheetEditing = "고치는 중", sheetHintFirst = "필요한 것만 고르고 저장하면 돼요", sheetLast = "지난번"   // sheet.editing·hint.first·last
     static let sheetEndUnknownValue = "모름", sheetMemoAdd = "메모 더하기"                                       // sheet.end.unknownValue·memo.add
-    static let saveSuffix = "저장하기", saveLabelMax = 22                                                         // sheet.save.label(U83)
+    static let saveSuffix = "저장하기", saveLabelMax = 22                                                         // sheet.save.label
     static let sheetA11yAgo = "시작 시각 빠르게 고르기", sheetA11yEndTime = "끝 시각 고르기"                     // sheet.a11y.ago·endTime
     static func sheetA11yDate(_ d: String) -> String { "날짜, \(d)" }                                            // sheet.a11y.date
     static func sheetA11yTime(_ t: String) -> String { "시각 고르기, \(t)" }                                     // sheet.a11y.time
-    /// pattern.intervalProgress(U85 ③, 읽기 이름)
+    /// pattern.intervalProgress(읽기 이름)
     static func intervalProgress(_ n: Int) -> String { "수유 간격 5개 중 \(n)개 쌓임" }
 
     static func diaperLabel(_ d: DiaperKind) -> String {   // diaper.kind
-        switch d { case .wet: "소변"; case .dirty: "대변"; case .both: "둘 다"; case .dry: "깨끗함" }
+        switch d {
+        case .wet: "소변"
+        case .dirty: "대변"
+        case .both: "둘 다"
+        case .dry: "깨끗함"
+        }
     }
 
     /// timer.amount 값 "{n}ml"
@@ -221,7 +235,7 @@ enum CareText {
         return "\(p[1])월 \(p[2])일(\(CareRules.weekdayName(day)))"
     }
 
-    /// 기록·하루 카드: 7.1 `log.row.*` 문구를 " · "로 나눠 앞 두 조각(종류·시각/구간)은 제목, 나머지는 둘째 줄(시안 ev(a, b), 안드로이드와 같다).
+    /// 기록·하루 카드: `log.row.*` 문구를 " · "로 나눠 앞 두 조각(종류·시각/구간)은 제목, 나머지는 둘째 줄(안드로이드와 같다).
     static func splitRow(_ text: String) -> (title: String, sub: String?) {
         let parts = text.components(separatedBy: " · ")
         guard parts.count > 2 else { return (text, nil) }
@@ -239,7 +253,7 @@ enum CareText {
         case .feed:
             if e.inProgress { return "\(feedRunning) · \(time)부터" }
             let side = e.feedSide == .bottle ? e.amountMl.map { "젖병 \($0)ml" } ?? FeedSide.bottle.label : e.feedSide?.label
-            parts = e.endUnknown ? [quickLabel(.feed), time, side, endUnknown] : [quickLabel(.feed), span ?? time, side]   // U37
+            parts = e.endUnknown ? [quickLabel(.feed), time, side, endUnknown] : [quickLabel(.feed), span ?? time, side]
         case .sleep:
             if e.inProgress { return "\(sleepRunning) · \(time)부터" }
             if e.endUnknown { return "\(quickLabel(.sleep)) · \(time) · \(endUnknown)" }
@@ -265,19 +279,19 @@ enum CareText {
     }
     static func avgDuration(_ ms: Int64) -> String { "평균 " + CareFormat.length(ms) }
     static func times(_ n: Int) -> String { "\(n)번" }
-    static let noRecords = "기록 없음"                                                   // pattern.value(U27)
+    static let noRecords = "기록 없음"                                                   // pattern.value
     static func basedOn(days n: Int) -> String { "\(n)일 기준" }                          // pattern.days
 
-    // about.*(U28)
+    // about.*
     static func version(_ v: String) -> String { "버전 \(v)" }
-    static let oss = "오픈소스 라이선스"   // 목록은 OssEntry.all(U63)
+    static let oss = "오픈소스 라이선스"   // 목록은 OssEntry.all
 
     /// export.fileName "aigyeot-care-{YYYYMMDD}.csv"
     static func exportFileName(_ d: Date, zone: TimeZone = .current) -> String {
         "aigyeot-care-" + CareRules.dayKey(CareTime.ms(d), zone).replacingOccurrences(of: "-", with: "") + ".csv"
     }
 
-    // 기록 가져오기(U64~U68, 7.1 settings.import·import.*)
+    // 기록 가져오기(settings.import·import.*)
     static let importEntry = "다른 앱 기록 가져오기", importEntrySub = "아이곁·Huckleberry·Nara에서 내보낸 CSV를 읽어요"   // settings.import(.sub)
     static let importPickChild = "어느 아기의 기록인가요?"                                  // import.pickChild
     static let importSkipTitle = "가져오지 않는 것"                                         // import.skip.title
@@ -289,13 +303,16 @@ enum CareText {
     static func importTitle(_ n: Int) -> String { "기록 \(n)건을 가져올게요" }                // import.title
     static func importDone(_ n: Int) -> String { "기록 \(n)건을 가져왔어요" }                 // import.done
 
-    /// 되돌리기 띠 글: '지웠어요'(U38) / import.done
+    /// 되돌리기 띠 글: '지웠어요' / import.done
     static func undoText(_ u: CareUndo) -> String {
-        switch u { case .delete: deleted; case .imported(let ids): importDone(ids.count) }
+        switch u {
+        case .delete: deleted
+        case .imported(let ids): importDone(ids.count)
+        }
     }
     static func importLatestFeed(_ at: String) -> String { "가장 늦은 수유 \(at)" }           // import.latestFeed
 
-    /// import.latestFeed {시각}(U68 11-09 보충): 오늘이면 "오전 11:00", 어제면 "어제 오전 11:00", 그 전이면 "11월 3일 오전 11:00". 날은 `zone` 기준.
+    /// import.latestFeed {시각}: 오늘이면 "오전 11:00", 어제면 "어제 오전 11:00", 그 전이면 "11월 3일 오전 11:00". 날은 `zone` 기준.
     static func dayClock(_ ms: Int64, now: Date, zone: TimeZone) -> String {
         let clock = CareFormat.clock(CareTime.date(ms), zone)
         let day = CareRules.dayKey(ms, zone), todayKey = CareRules.dayKey(CareTime.ms(now), zone)
@@ -313,28 +330,39 @@ enum CareText {
         }.joined(separator: " · ")
     }
 
-    /// import.skip.*: 0인 이유는 감춘다(U68). 순서는 7.1 표 그대로.
+    /// import.skip.*: 0인 이유는 감춘다. 순서는 정한 순서 그대로.
     static func importSkips(_ s: ImportSkipped) -> [String] {
         [(s.duplicate, "이미 있는 기록"), (s.old, "14일보다 오래된 기록"), (s.future, "앞으로의 시각"),
          (s.unreadable, "읽을 수 없는 줄"), (s.unsupported, "가져오지 않는 종류")]
             .filter { $0.0 > 0 }.map { "\($0.1) \($0.0)건" }
     }
 
-    /// U15: 차 기록 줄의 소리는 방법 이름만 쓴다(곡 이름은 리포트 상세에서 본다).
+    /// 차 기록 줄의 소리는 방법 이름만 쓴다(곡 이름은 리포트 상세에서 본다).
     static func method(_ m: SoundMethod) -> String {
-        switch m { case .whiteNoise: "백색소음"; case .lullaby: "자장가"; case .parentSong: "우리 노래"; case .womb: "뱃속 소리"; case .unknown: "기타" }
+        switch m {
+        case .whiteNoise: "백색소음"
+        case .lullaby: "자장가"
+        case .parentSong: "우리 노래"
+        case .womb: "뱃속 소리"
+        case .unknown: "기타"
+        }
     }
 
-    /// U73·U15: 울음 결과 낱말(리포트 상세·차 기록 줄·띠 표시가 모두 이 글, 차 앱과 같은 글자). nil = 1차 시도 없음.
+    /// 울음 결과 낱말(리포트 상세·차 기록 줄·띠 표시가 모두 이 글, 차 앱과 같은 글자). nil = 1차 시도 없음.
     static func result(_ r: EpisodeResult?) -> String {
-        switch r { case .success?: "그침"; case .failure?: "계속 울음"; case .undetermined?: "판정하지 못함"; case nil: "1차 시도 없음" }
+        switch r {
+        case .success?: "그침"
+        case .failure?: "계속 울음"
+        case .undetermined?: "판정하지 못함"
+        case nil: "1차 시도 없음"
+        }
     }
 
     /// 에피소드를 연 사건의 낱말(차 앱 `episodeHead`·`SWITCH_SOUND_NAME`과 같은 글자). 울음 경보가 아니면 '울음'이라 하지 않는다.
     static let switchSoundName = "소리 바꾸기 요청"
     /// 에피소드 머리(띠 읽기 이름 등): 울음 경보 '울음', 소리 바꾸기 요청 '소리 바꾸기 요청'.
     static func episodeHead(_ t: EpisodeTrigger) -> String { t == .cryAlarm ? "울음" : switchSoundName }
-    /// 리포트 상세 에피소드 블록 머리(copy-audit 14-1 11-12 보충): 모두 울음 경보(또는 없음)면 '울음', 모두 운전자 요청이면
+    /// 리포트 상세 에피소드 블록 머리: 모두 울음 경보(또는 없음)면 '울음', 모두 운전자 요청이면
     /// '소리 바꾸기 요청', 섞이면 '울음과 소리 바꾸기 요청'. 낱말은 `episodeHead`와 같다.
     static func episodeSectionHead(_ triggers: [EpisodeTrigger]) -> String {
         let cry = triggers.isEmpty || triggers.contains(.cryAlarm)
@@ -348,7 +376,7 @@ enum CareText {
     /// 에피소드를 연 사건(리포트 부제 '{시각} … 부터'·띠 시작 표시): '울음 감지' / '소리 바꾸기 요청'.
     static func episodeStart(_ t: EpisodeTrigger) -> String { t == .cryAlarm ? "울음 감지" : switchSoundName }
 
-    /// U73: 성적에서 뺀 이유(리포트 상세 '성적에서 뺌' 줄, 차 앱과 같은 글자).
+    /// 성적에서 뺀 이유(리포트 상세 '성적에서 뺌' 줄, 차 앱과 같은 글자).
     static func excluded(_ x: ExcludedReason) -> String {
         switch x {
         case .driverStop: "운전자가 멈춤"
