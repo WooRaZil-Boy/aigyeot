@@ -5,12 +5,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 계약 5.4 2차 시도(4.2).
-class S54SecondTest {
+// 2차 시도.
+class SecondAttemptTest {
     /** 1차 실패 뒤 ATTEMPT(2) 시작 대기. */
     private fun Sim.wait2() = attempt1().toGap().recry()
 
-    @Test fun r42a_hot_lowersHvacReplaysFirstNoS04Yet() {
+    @Test fun hot_lowersHvacReplaysFirstNoS04Yet() {
         val sim = session().ev(CabinTemp(T0, 27.6)).wait2()
         assertEquals(WN, sim.step<StartPlayback>().single().method)     // 1차 음원을 다시
         sim.started()
@@ -18,7 +18,7 @@ class S54SecondTest {
         assertTrue(sim.ses.comfortDone)
         val hv = sim.step<LowerHvac>().single()
         assertEquals(listOf(Area.ROW_1_LEFT), hv.areas); assertEquals(-2.0, hv.deltaC)
-        assertTrue(Sid.S04 !in sim.sids())                              // 결과가 오기 전에는 말하지 않는다(C102)
+        assertTrue(Sid.S04 !in sim.sids())                              // 결과가 오기 전에는 말하지 않는다
         sim.flush()
         assertTrue(Sid.S04 !in sim.sids())
         assertEquals(ComfortPending(hv.cmdId, 28.0, sim.play().id), sim.ses.comfortPending)
@@ -29,17 +29,17 @@ class S54SecondTest {
         return sim.ev(ControlResult(sim.t, id, ControlKind.HVAC_TEMP, Area.ROW_1_LEFT, ok, before, after))
     }
 
-    @Test fun r42g_hvacLowered_saysS04ActualDelta() {
+    @Test fun hvacLowered_saysS04ActualDelta() {
         val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
         hvac(sim, true, 22.0, 20.5)
         assertNull(sim.ses.comfortPending)
-        assertEquals(sim.play().id, sim.s.speech.queue.single { it.sid == Sid.S04 }.playId)   // C15: 그 재생
+        assertEquals(sim.play().id, sim.s.speech.queue.single { it.sid == Sid.S04 }.playId)   // 그 재생
         sim.flush()
         val s04 = sim.all<Speak>().single { it.sid == Sid.S04 }
         assertEquals(mapOf("tempC" to "28", "loweredC" to "1.5"), s04.vars)   // before − after
     }
 
-    @Test fun r42h_hvacFailedOrPlayEnded_noS04() {
+    @Test fun hvacFailedOrPlayEnded_noS04() {
         val fail = session().ev(CabinTemp(T0, 27.6)).wait2().started()
         hvac(fail, false, 16.0, 16.0)
         assertNull(fail.ses.comfortPending)
@@ -54,7 +54,7 @@ class S54SecondTest {
         assertTrue(Sid.S04 !in ended.sids())
     }
 
-    @Test fun r42h_hvacNotLowered_noS04() {
+    @Test fun hvacNotLowered_noS04() {
         for ((b, a) in listOf(22.0 to 22.0, 20.0 to 22.0, null to 20.0, 22.0 to null)) {
             val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
             hvac(sim, true, b, a)
@@ -64,7 +64,7 @@ class S54SecondTest {
         }
     }
 
-    @Test fun r14g_bootClearsComfortPending() {
+    @Test fun bootClearsComfortPending() {
         val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
         assertTrue(sim.ses.comfortPending != null)
         sim.ev(Resume(sim.t + 1_000))
@@ -74,7 +74,7 @@ class S54SecondTest {
         assertTrue(sim.ses.comfortDone)                          // comfortDone은 그대로
     }
 
-    @Test fun r42b_feeding_otherBestS03S06Offer() {
+    @Test fun feeding_otherBestS03S06Offer() {
         // 1차 때는 시간대 밖, 2차 때 시간대 안
         val sim = session(prof = profile(interval = 180), feedingStart = T0 - 144 * MIN + 30_000)
             .route(rest("a", 9.0)).wait2()
@@ -91,7 +91,7 @@ class S54SecondTest {
         assertEquals(1, b.sids().count { it == Sid.S03 }); assertTrue(Sid.S06 !in b.sids())
     }
 
-    @Test fun r42c_else_otherBestSaysS03() {
+    @Test fun else_otherBestSaysS03() {
         val sim = session().wait2()
         assertEquals(LL, sim.step<StartPlayback>().single().method)
         sim.started()
@@ -101,7 +101,7 @@ class S54SecondTest {
         assertEquals(mapOf("method" to "자장가"), sim.all<Speak>().first { it.sid == Sid.S03 }.vars)
     }
 
-    @Test fun r42d_focusDeniedAtAttempt2_waitNoActions() {
+    @Test fun focusDeniedAtAttempt2_waitNoActions() {
         val sim = session().ev(CabinTemp(T0, 30.0)).wait2()
         sim.ev(PlaybackRejected(sim.t, sim.play().id, RejectReason.FOCUS_DENIED))
         assertEquals(Phase.WAIT, sim.ses.phase)
@@ -112,7 +112,7 @@ class S54SecondTest {
         assertTrue(Sid.S03 !in sim.sids() && Sid.S04 !in sim.sids())
     }
 
-    @Test fun r42f_startErrorAtAttempt2_waitNoActions() {
+    @Test fun startErrorAtAttempt2_waitNoActions() {
         val sim = session().wait2()
         val id = sim.play().id
         sim.ev(PlaybackRejected(sim.t, id, RejectReason.ERROR))
@@ -123,7 +123,7 @@ class S54SecondTest {
         assertEquals(TryResult.FAIL, sim.ep.first!!.result)
     }
 
-    @Test fun r42e_secondTry_notInExperiment() {
+    @Test fun secondTry_notInExperiment() {
         val sim = session().attempt2().toConfirm().closeQuiet()
         assertEquals(TryResult.SUCCESS, sim.step<SaveEpisode>().single().record.secondResult)
         assertEquals(listOf(WN to false), sim.s.history.map { it.method to it.success })

@@ -3,9 +3,9 @@ package kr.aigyeot.engine
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// 세션 단계(설계 3.2, D5). 단계에만 의미 있는 값은 그 단계 안에만 있어 단계와 맞지 않는 칸 조합을 표현할 수 없다:
+// 세션 단계. 단계에만 의미 있는 값은 그 단계 안에만 있어 단계와 맞지 않는 칸 조합을 표현할 수 없다:
 // 판정 창은 GAP·CONFIRM, 재생은 ATTEMPT·WAIT, 조용함 누적은 WAIT·HANDOFF, 경보 대기는 ATTEMPT에만 있다.
-// 단계 칸(SessionState.stage)을 쓰는 곳은 Tx.enter 하나다(V23).
+// 단계 칸(SessionState.stage)을 쓰는 곳은 Tx.enter 하나다.
 
 @Serializable
 sealed interface Stage {
@@ -15,15 +15,15 @@ sealed interface Stage {
     val n: Int
     /** 재생(ATTEMPT 자동 시도, WAIT 요청 재생). */
     val play: Play? get() = null
-    /** 판정 창(GAP·CONFIRM). null이면 판정 멈춤(입력 끊김 21a·복원 14t). */
+    /** 판정 창(GAP·CONFIRM). null이면 판정 멈춤(입력 끊김·복원). */
     val window: JudgeWindow? get() = null
-    /** 조용함 누적(WAIT·HANDOFF, 11a). */
+    /** 조용함 누적(WAIT·HANDOFF). */
     val quietMs: Long get() = 0
 
     @Serializable @SerialName("LISTENING")
     data object Listening : Stage { override val phase get() = Phase.LISTENING; override val n get() = 0 }
 
-    /** 자동 시도 재생(시작 대기 포함). [alarm] = 1차 시작 전 경보 시각(C36). PlaybackStarted가 에피소드로 옮긴다. */
+    /** 자동 시도 재생(시작 대기 포함). [alarm] = 1차 시작 전 경보 시각. PlaybackStarted가 에피소드로 옮긴다. */
     @Serializable @SerialName("ATTEMPT")
     data class Attempt(override val n: Int, override val play: Play, val alarm: PendingAlarm? = null) : Stage { override val phase get() = Phase.ATTEMPT }
 
@@ -41,10 +41,10 @@ sealed interface Stage {
     data class Handoff(override val n: Int, override val quietMs: Long = 0) : Stage { override val phase get() = Phase.HANDOFF }
 }
 
-/** 판정 구간: start ≥ from([sees]), end ≤ end(G1·G2). */
+/** 판정 구간: start ≥ from([sees]), end ≤ end. */
 @Serializable data class JudgeWindow(val from: Long, val end: Long)
 
-/** 단계 칸을 쓰는 유일한 함수(V23). LISTENING이면 에피소드를 비운다(LISTENING에는 에피소드가 없다). */
+/** 단계 칸을 쓰는 유일한 함수. LISTENING이면 에피소드를 비운다(LISTENING에는 에피소드가 없다). */
 internal fun Tx.enter(next: Stage) = ses { copy(stage = next, episode = if (next == Stage.Listening) null else episode) }
 
 /**

@@ -3,13 +3,13 @@ package kr.aigyeot.engine
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-// 기록(설계 3.4 Record): 기록 할 일(SaveEpisode·SaveSession·LogAlarm·CaptureContext, recordsCleared 문 rec 하나), 기록 지우기, 조향 창(VehicleSample), 휴식 기록 줄.
-// 주인 칸(설계 3.3, D7): steer, session.restLog·recordsCleared. 다른 리듀서는 아래 함수(logRest·setLog·steerCry·dropSteerWindow·clearRecords)를 부른다.
+// 기록: 기록 할 일(SaveEpisode·SaveSession·LogAlarm·CaptureContext, recordsCleared 문 rec 하나), 기록 지우기, 조향 창(VehicleSample), 휴식 기록 줄.
+// 주인 칸: steer, session.restLog·recordsCleared. 다른 리듀서는 아래 함수(logRest·setLog·steerCry·dropSteerWindow·clearRecords)를 부른다.
 
-/** 기록 지움(5.9) 뒤 이 세션의 기록 할 일은 내지 않는다. */
+/** 기록 지움 뒤 이 세션의 기록 할 일은 내지 않는다. */
 internal fun Tx.rec(c: Command) { if (ses?.recordsCleared != true) out += c }
 
-/** C40a·C40b: 기록 지우기의 기록 몫. 이 세션은 더 기록하지 않고 Room·중계 기록을 지운 뒤 스냅숏을 남긴다. */
+/** 기록 지우기의 기록 몫. 이 세션은 더 기록하지 않고 Room·중계 기록을 지운 뒤 스냅숏을 남긴다. */
 internal fun Tx.clearRecords() {
     ses { copy(recordsCleared = true) }
     out += DeleteRecords; out += DeleteRelayRecords; snapshot = true
@@ -39,7 +39,7 @@ internal fun Tx.saveSession(endedAt: Long? = null, reportPending: Boolean = fals
     val x = ses ?: return
     rec(SaveSession(SessionRecord(
         x.id, x.openedAt, endedAt, x.trigger, x.micPath,
-        x.output,   // C85
+        x.output,
         x.driveFrom?.let { ((now - it) / 60_000).toInt() } ?: 0,
         x.playedMs, x.capReached(p), Json.encodeToString(x.restLog), x.windowLockBefore?.let { Json.encodeToString(it) },
         null, reportPending, null, s.ign.driverUserId,
@@ -51,28 +51,28 @@ internal fun Tx.setLog(i: Int?, f: RestLogEntry.() -> RestLogEntry) = ses {
     if (i == null || i !in restLog.indices) this else copy(restLog = restLog.toMutableList().also { it[i] = it[i].f() })
 }
 
-/** 휴식 기록 줄을 더하고 그 위치를 돌려준다(제안 문장을 낼 때·④ 경유지 요청). 답·결과는 이 위치에만 붙인다(P5). 세션이 없으면 null. */
+/** 휴식 기록 줄을 더하고 그 위치를 돌려준다(제안 문장을 낼 때·질문 답의 경유지 요청). 답·결과는 이 위치에만 붙인다. 세션이 없으면 null. */
 internal fun Tx.logRest(sid: Sid, restId: String?): Int? {
     val i = ses?.restLog?.size ?: return null
     ses { copy(restLog = restLog + RestLogEntry(now, sid, restId)) }
     return i
 }
 
-internal fun Tx.vehicle(e: VehicleSample) {                                                                // V1·V2
+internal fun Tx.vehicle(e: VehicleSample) {
     val x = ses ?: return
-    val o = steer(s.steer, e, false, x.play?.startedAt != null, x.id, p, observed = s.hears())   // C312: 창의 observed는 sees/hears 하나로(cry()에서도 같은 기준)
-    // S4(C107): 바쁨 시각. steer 안에 두어 스냅숏 저장 판단(C78 (b) 묶어 저장)에는 영향이 없다 — 저장 횟수를 늘리지 않는다
+    val o = steer(s.steer, e, false, x.play?.startedAt != null, x.id, p, observed = s.hears())   // 창의 observed는 sees/hears 하나로(cry()에서도 같은 기준)
+    // 바쁨 시각. steer 안에 두어 스냅숏 저장 판단(묶어 저장)에는 영향이 없다 — 저장 횟수를 늘리지 않는다
     val busy = e.brake || e.turnSignal != TurnSignal.NONE || kotlin.math.abs(e.steeringDeg) >= p.steerHoldDeg
     s = s.copy(steer = if (busy) o.state.copy(driveBusyAt = e.at) else o.state)
     o.closed?.let { rec(SaveSteerWindow(it)) }
 }
 
-/** 울음 구간이 닿은 조향 창(Soothe.cry). C312: 보지 못한 구간이 닿은 창은 '울음 없음'이 아니다. 본 울음이면 cry_present. */
+/** 울음 구간이 닿은 조향 창(Soothe.cry). 보지 못한 구간이 닿은 창은 '울음 없음'이 아니다. 본 울음이면 cry_present. */
 internal fun Tx.steerCry(seen: Boolean, loud: Boolean) {
     val w = s.steer.window ?: return
     if (!seen) s = s.copy(steer = s.steer.copy(window = w.copy(observed = false)))
     else if (loud) s = s.copy(steer = s.steer.copy(window = w.copy(cryPresent = true)))
 }
 
-/** 수명 표 SteerWindow 행의 DROP(13a C50·복원 ③ C78). */
+/** 수명 표 SteerWindow 행의 DROP(세션 닫힘·복원 ③). */
 internal fun Tx.dropSteerWindow() { s = s.copy(steer = s.steer.copy(window = null)) }

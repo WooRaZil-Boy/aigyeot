@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// C245: LlmCry.unavailable은 거짓이면 보내지 않고 참이면 "unavailable":true로 쓴다.
+// LlmCry.unavailable은 거짓이면 보내지 않고 참이면 "unavailable":true로 쓴다.
 class LlmCryTest {
     private fun enc(c: LlmCry) = ProtocolJson.encodeToString(LlmCry.serializer(), c)
 

@@ -4,21 +4,21 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// 메시지 body(contracts-link.md 3.3). 시각은 모두 RFC 3339 문자열이다.
-// 기본값이 없는 null 가능 필드는 계약의 "또는 null"(null을 명시), 기본값 `= null`은 계약의 "선택"(빠짐)이다.
+// 메시지 body. 시각은 모두 RFC 3339 문자열이다.
+// 기본값이 없는 null 가능 필드는 "또는 null"(null을 명시), 기본값 `= null`은 "선택"(빠짐)이다.
 
 /** `{}`인 body·요청 본문(`invite_created`, `state_request`, `POST /v1/pair-codes`). */
 @Serializable
 class Empty
 
-/** `paired`·`unpaired` body의 폰 역할(3.3: owner | guardian). */
+/** `paired`·`unpaired` body의 폰 역할(owner | guardian). */
 @Serializable
 enum class PhoneRole {
     @SerialName("owner") OWNER,
     @SerialName("guardian") GUARDIAN,
 }
 
-/** `paired` body의 폰 플랫폼(3.3: android | ios). */
+/** `paired` body의 폰 플랫폼(android | ios). */
 @Serializable
 enum class PhonePlatform {
     @SerialName("android") ANDROID,
@@ -104,10 +104,11 @@ enum class SoundMethod(val wire: String) {
     UNKNOWN("unknown"),
 }
 
-/** 모르는 method 글자 하나가 리포트 전체를 버리지 않게 UNKNOWN으로 읽는다(3.3 report_summary method). */
+/** 모르는 method 글자 하나가 리포트 전체를 버리지 않게 UNKNOWN으로 읽는다(report_summary의 method). */
 object SoundMethodSerializer : KSerializer<SoundMethod> {
     override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor("SoundMethod", kotlinx.serialization.descriptors.PrimitiveKind.STRING)
-    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder) = decoder.decodeString().let { w -> SoundMethod.entries.firstOrNull { it.wire == w } ?: SoundMethod.UNKNOWN }
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder) =
+        decoder.decodeString().let { w -> SoundMethod.entries.firstOrNull { it.wire == w } ?: SoundMethod.UNKNOWN }
     override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: SoundMethod) = encoder.encodeString(value.wire)
 }
 
@@ -156,7 +157,7 @@ enum class SecondAction {
     @SerialName("focus_denied") FOCUS_DENIED,
 }
 
-/** 정차 이유(3.3 `stop.reason`). */
+/** 정차 이유(`stop.reason`). */
 @Serializable
 enum class StopReason {
     @SerialName("attempt_limit") ATTEMPT_LIMIT,
@@ -165,7 +166,7 @@ enum class StopReason {
     @SerialName("no_sound") NO_SOUND,
 }
 
-/** 인계 방식(4.3). `report_summary.timeline[].stop.mode`와 `handoff_alert.kind`가 함께 쓴다. */
+/** 인계 방식. `report_summary.timeline[].stop.mode`와 `handoff_alert.kind`가 함께 쓴다. */
 @Serializable
 enum class HandoffKind {
     @SerialName("rest_offer") REST_OFFER,
@@ -196,7 +197,7 @@ enum class CarActionKind {
     @SerialName("rear_window_lock") REAR_WINDOW_LOCK,
     @SerialName("cabin_cool") CABIN_COOL,
     @SerialName("reading_light_off") READING_LIGHT_OFF,
-    @SerialName("ambient_dim") AMBIENT_DIM,   // 기능 D(5.10, C361): 달래는 동안 실내 앰비언트 조명 낮춤. 폰 두 앱의 enum도 같은 단계에서 더한다(iOS는 모르는 값에서 디코딩이 깨진다)
+    @SerialName("ambient_dim") AMBIENT_DIM,   // 달래는 동안 실내 앰비언트 조명 낮춤. 폰 두 앱의 enum에도 있어야 한다(iOS는 모르는 값에서 디코딩이 깨진다)
     @SerialName("waypoint_added") WAYPOINT_ADDED,
     @SerialName("arrival_notice") ARRIVAL_NOTICE,
     @SerialName("guardian_alert") GUARDIAN_ALERT,
@@ -227,10 +228,10 @@ data class StopInfo(
     val restName: String?,
     val waypointAdded: Boolean,
     val guardianNotified: Boolean,
-    @SerialName("told_driver") val toldDriver: Boolean? = null,   // C130: 인계 문장을 운전자에게 냈는가(없으면 참으로 읽는다)
+    @SerialName("told_driver") val toldDriver: Boolean? = null,   // 인계 문장을 운전자에게 냈는가(없으면 참으로 읽는다)
 )
 
-/** 필드 순서는 계약 표의 순서(인코더도 이 순서로 쓴다). */
+/** 필드 순서는 메시지 형식 표의 순서(인코더도 이 순서로 쓴다). */
 @Serializable
 data class TimelineEpisode(
     val episodeId: String,
@@ -317,7 +318,7 @@ data class HandoffAlertBody(
     val episodeId: String,
 )
 
-/** `care_summary` body(3.3, L60). null 가능 칸은 모두 "또는 null"이라 기본값이 없다(명시적 null). */
+/** `care_summary` body. null 가능 칸은 모두 "또는 null"이라 기본값이 없다(명시적 null). */
 @Serializable
 data class CareSummaryBody(
     val asOf: String,
@@ -336,7 +337,7 @@ data class CareSummaryBody(
 @Serializable
 data class AckBody(val ids: List<String>)
 
-/** 메시지 type → body 직렬화기(3.2 표의 type 전부). 모르는 type은 `null`. */
+/** 메시지 type → body 직렬화기(모든 type). 모르는 type은 `null`. */
 val bodySerializers: Map<String, KSerializer<*>> = mapOf(
     "paired" to PairedBody.serializer(),
     "unpaired" to UnpairedBody.serializer(),

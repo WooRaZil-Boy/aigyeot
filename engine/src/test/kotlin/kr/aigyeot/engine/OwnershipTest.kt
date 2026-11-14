@@ -4,16 +4,15 @@ import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /**
- * P3(계약 2.0, 설계 3.3, D7): 상태 칸마다 그 칸을 바꾸는 코드가 주인 리듀서 파일에만 있다.
+ * 상태 칸마다 그 칸을 바꾸는 코드가 주인 리듀서 파일에만 있다.
  * 방법: 엔진 소스를 읽어(주석·문자열은 지운다) `copy(` 호출의 이름 있는 인자(`칸 =`)를 모두 모으고, 아래 표의 칸이면 그 파일이 주인 파일인지 본다.
  * 상태는 불변 data class라 칸을 바꾸는 길은 copy 하나다. 생성자(새 세션의 처음 값 등)는 바꾸기가 아니라 보지 않는다.
  * 이름이 겹쳐 가를 수 없는 안쪽 값(에피소드·질문 창·장부·줄의 칸)은 그 바깥 칸(episode·qa·handoffs·queue)과 주인 파일의 private 쓰기 함수(ep·setQa·…)가 막는다.
  */
 class OwnershipTest {
-    /** 리듀서 → 파일(설계 3.1). Soothe의 단계 칸은 Stage.kt의 enter가 쓴다. */
+    /** 리듀서 → 파일. Soothe의 단계 칸은 Stage.kt의 enter가 쓴다. */
     private val files = mapOf(
         "Tx" to setOf("Tx.kt"),
         "Facts" to setOf("Router.kt"),
@@ -29,7 +28,7 @@ class OwnershipTest {
 
     private fun own(reducer: String, vararg fields: String) = fields.map { it to reducer }
 
-    /** 칸 → 주인 리듀서(설계 3.3). 바깥 묶음 칸(ign·speech)은 주인이 셋·둘이라 잎 칸으로 본다. */
+    /** 칸 → 주인 리듀서. 바깥 묶음 칸(ign·speech)은 주인이 셋·둘이라 잎 칸으로 본다. */
     private val owners: Map<String, String> = listOf(
         own("Tx", "now", "seq", "rng"),
         own("Facts", "profile", "methodsNext", "otherGuardians", "care", "careSeq", "careRoom", "history"),
@@ -70,26 +69,6 @@ class OwnershipTest {
         // 세션 정체(id·openedAt·trigger·methods)는 만들 때만 정하고, ign·speech는 주인이 여럿인 묶음이라 잎 칸으로 본다
         val declared = types.flatMap { t -> ctorFields(state, t) }.toSet() - setOf("id", "openedAt", "trigger", "methods", "ign", "speech")
         assertEquals(declared, owners.keys, "상태 칸과 소유 표가 다르다")
-    }
-
-    /** 칸 → 주인 표가 설계 3.3과 같다. 설계 문서가 없으면 건너뛴다. */
-    @Test fun ownership_tableMatchesDesign() {
-        val doc = File("../docs/architecture-car.md")
-        assumeTrue(doc.exists(), "설계 문서 없음")
-        val lines = doc.readLines()
-        val start = lines.indexOfFirst { it.startsWith("### 3.3") }
-        val rows = lines.drop(start + 1).dropWhile { !it.startsWith("|") }.takeWhile { it.startsWith("|") }.drop(2)
-        val docOwners = mutableMapOf<String, String>()
-        val docFiles = mutableMapOf<String, Set<String>>()
-        val tick = Regex("`([^`]+)`")
-        for (r in rows) {
-            val c = r.split("|").map { it.trim() }
-            val reducer = c[1].trim('*')
-            docFiles[reducer] = tick.findAll(c[2]).map { it.groupValues[1] }.toSet()
-            tick.findAll(c[3]).forEach { docOwners[it.groupValues[1].substringAfterLast('.')] = reducer }
-        }
-        assertEquals(files, docFiles, "리듀서 → 파일이 설계 3.3과 다르다")
-        assertEquals(owners, docOwners, "칸 → 주인이 설계 3.3과 다르다")
     }
 
     /** 검사기 자체: 주석·문자열을 지우고 copy의 바깥 이름 인자만 모은다. */

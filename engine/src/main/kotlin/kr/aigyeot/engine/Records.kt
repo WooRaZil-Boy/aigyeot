@@ -2,7 +2,7 @@ package kr.aigyeot.engine
 
 import kotlinx.serialization.Serializable
 
-// 계약 6.1 Room 테이블의 칼럼을 camelCase로 옮긴 기록(store가 저장한다). 시각은 epoch ms.
+// Room 테이블의 칼럼을 camelCase로 옮긴 기록(store가 저장한다). 시각은 epoch ms.
 
 /** `session` 행. */
 @Serializable
@@ -15,7 +15,7 @@ data class SessionRecord(
     val driveMin: Int,
     val playedMs: Long,
     val capReached: Boolean,
-    val restLog: String,              // 휴식 기록 JSON(내용 형식은 계약에 없음)
+    val restLog: String,              // 휴식 기록 JSON(내용 형식은 호스트가 정한다)
     val restore: String?,             // 바꾼 차 상태 JSON
     val reportMessageId: String?,
     val reportPending: Boolean,
@@ -23,7 +23,7 @@ data class SessionRecord(
     val driverUserId: Int,
 )
 
-/** `episode` 행. 인계 확정 칸(handoff_told_driver·handoff_rest_name)은 [SettleHandoff]가, guardian_notified는 link가 쓴다(결정 ③). 여기 없다. */
+/** `episode` 행. 인계 확정 칸(handoff_told_driver·handoff_rest_name)은 [SettleHandoff]가, guardian_notified는 link가 쓴다. 여기 없다. */
 @Serializable
 data class EpisodeRecord(
     val id: String,
@@ -67,5 +67,5 @@ data class SteerWindowRecord(
     val cryPresent: Boolean,
     val playing: Boolean,
     val reversals: Int,
-    val observed: Boolean = true,   // C312
+    val observed: Boolean = true,
 )

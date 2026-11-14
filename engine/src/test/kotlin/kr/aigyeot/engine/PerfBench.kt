@@ -143,7 +143,7 @@ class PerfBench {
         sb.appendLine("크기 ${json.length} 바이트, 직렬화 중앙값 %.0f µs / p99 %.0f µs, 복원 중앙값 %.0f µs".format(enc[1000] / 1000.0, enc[1980] / 1000.0, dec[250] / 1000.0))
 
         sb.appendLine()
-        sb.appendLine("== 2시간 동안 SaveSnapshot이 나올 횟수(계약 2.4: 상태가 바뀐 Step마다, 시간 값 now·quietMs만 바뀐 Step 제외) ==")
+        sb.appendLine("== 2시간 동안 SaveSnapshot이 나올 횟수(상태가 바뀐 Step마다, 시간 값 now·quietMs만 바뀐 Step 제외) ==")
         sb.appendLine("(가) 문자 그대로(조향 필터값 steer도 상태이므로 VehicleSample마다 바뀜): ${r.snapsAny}번 → 시간당 ${r.snapsAny / 2}번")
         sb.appendLine("(나) steer 필터 값(filtered·lastSampleAt·extremumDeg·window·dir)만 바뀐 Step도 제외: ${r.snapsNoSteer}번 → 시간당 ${r.snapsNoSteer / 2}번")
         sb.appendLine("(나)의 사건별: ${r.by}")

@@ -4,14 +4,165 @@ import kotlinx.serialization.json.JsonNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 17장 C150~C153.
-class C150ToC153Test {
-    private val nurse = rest("n", 9.0, nursing = true)
-    private fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }
-    private fun Sim.busyNow() = ev(VehicleSample(t, 60.0, true, 0.0, TurnSignal.NONE))
+// 다른 세션이 넣은 줄이 끝나거나 복원에서 버려져도 지금 세션 상태는 바뀌지 않는다.
+class OtherSessionLineTest {
+    /** 세션 A가 말하는 중(u1, 큐 맨 앞)인 줄을 두고 P에서 뒷문을 열어 닫은 뒤 D로 세션 B를 연다. */
+    private fun bOpened(line: Line, keepNull: Boolean = false): Pair<Sim, String> {
+        val sim = session()
+        val a = sim.ses.id
+        val l = if (keepNull) line else line.copy(sessionId = a)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(l)))
+        sim.gear(Gear.P).ev(RearDoor(sim.t, Side.LEFT, true)).ev(RearDoor(sim.t, Side.LEFT, false)).gear(Gear.D)
+        assertNotEquals(a, sim.ses.id)
+        assertEquals("u1", sim.s.speech.speaking, "말하는 맨 앞 줄은 남는다")
+        return sim to a
+    }
+    private val s10 = Line(Sid.S10, emptyMap(), null, longDrive = true)
+
+    @Test fun dropSpeaking_otherSessionLine_keepsLongDriveOffered() {
+        val (sim, _) = bOpened(s10)
+        val st = Engine().dropSpeaking(sim.s, sim.t + 1_000)
+        assertFalse(st.session!!.longDriveOffered)
+        assertTrue(st.session!!.spokenAt.isEmpty())
+    }
+
+    @Test fun lateSpeechDone_otherSessionLine_keepsLongDriveOffered() {
+        val (sim, _) = bOpened(s10)
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
+        assertFalse(sim.ses.longDriveOffered)
+        assertTrue(sim.ses.spokenAt.isEmpty())
+    }
+
+    /** 세션 B에서 에피소드를 실제로 연 상태(A의 S06이 u1로 말하는 중). */
+    private fun bEpisode(): Sim {
+        val (sim, _) = bOpened(Line(Sid.S06, emptyMap(), null))
+        sim.alarm().started()
+        assertNotNull(sim.ses.episode)
+        return sim
+    }
+
+    @Test fun dropSpeaking_otherSessionS06_keepsS06Said() {
+        val sim = bEpisode()
+        val st = Engine().dropSpeaking(sim.s, sim.t + 1_000)
+        assertNotNull(st.session!!.episode)
+        assertFalse(st.session!!.episode!!.s06Said)
+    }
+
+    @Test fun lateSpeechDone_otherSessionS06_keepsS06Said() {
+        val sim = bEpisode()
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
+        assertNotNull(sim.ses.episode)
+        assertFalse(sim.ep.s06Said)
+    }
+
+    @Test fun sameSession_speechDoneLongDriveOfferedStands_dropSpeakingNot() {   // 복원이 버리면 말하지 않은 것
+        //  dropSpeaking은 같은 세션 줄도 말한 것으로 치지 않는다
+        val sim = session()
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(s10.copy(sessionId = sim.ses.id))))
+        assertFalse(Engine().dropSpeaking(sim.s, sim.t + 1_000).session!!.longDriveOffered)
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
+        assertTrue(sim.ses.longDriveOffered)
+    }
+
+    @Test fun oldSnapshotNullSessionId_lateSpeechDoneAppliesAsBefore() {   // dropSpeaking은 말한 것으로 치지 않는다
+        val (sim, _) = bOpened(s10, keepNull = true)
+        assertFalse(Engine().dropSpeaking(sim.s, sim.t + 1_000).session!!.longDriveOffered)
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
+        assertTrue(sim.ses.longDriveOffered)
+    }
+
+    @Test fun say_stampsCurrentSessionId() {
+        val sim = session().attempt1()
+        val lines = sim.s.speech.queue
+        assertTrue(lines.isNotEmpty() && lines.all { it.sessionId == sim.ses.id })
+    }
+}
+
+// 복원 뒤 경로를 기다리는 동안의 판단, 다른 세션 줄, 기록 지우기와 질문 창.
+class RestoreRouteWaitTest {
+    // ---- 복원 뒤 목적지 있는 경로를 기다린다 ----
+    private fun restored(): Sim {
+        val sim = session()
+        sim.s = sim.s.copy(bootAt = T0 + 120 * MIN + 30_000, car = sim.s.car.copy(route = null))
+        return sim
+    }
+
+    @Test fun restoreNoDestinationRouteKeepsWaiting() {
+        val sim = restored()
+        sim.ev(Tick(T0 + 121 * MIN))
+        sim.ev(RouteState(T0 + 121 * MIN + 1_000, false, null, emptyList()))   // TBT만 먼저: 목적지 없음·쉼터 없음
+        assertTrue(sim.sids().isEmpty(), "목적지 없는 경로는 기다림을 풀지 않는다")
+        sim.ev(RouteState(T0 + 121 * MIN + 5_000, true, 3600, listOf(rest("a", 10.0, nursing = true)), 50.0))
+        assertTrue(sim.sids().isNotEmpty() && Sid.S10 !in sim.sids(), "목적지·쉼터 경로로 제안: ${sim.sids()}")
+    }
+
+    @Test fun restoreWaitEndsAfter60s() {
+        val sim = restored()
+        sim.ev(RouteState(T0 + 121 * MIN, false, null, emptyList()))
+        assertTrue(sim.sids().isEmpty())
+        sim.ev(Tick(T0 + 120 * MIN + 90_000))
+        assertTrue(Sid.S10 in sim.sids(), "60초 뒤에는 지금처럼 그때 경로로")
+    }
+
+    @Test fun wakeAtCoversRouteWaitEnd() {
+        val sim = restored()
+        sim.ev(RouteState(T0 + 121 * MIN, false, null, emptyList()))
+        assertEquals(T0 + 120 * MIN + 90_000, sim.last.wakeAt)
+    }
+
+    // ---- offer는 같은 세션 줄만 돌려준다 ----
+    @Test fun otherSessionSpeakingLineNotBound() {
+        val sim = session().route(rest("n", 14.0, nursing = true))
+        val a = sim.ses.id
+        val old = Line(Sid.S07, mapOf("restName" to "n 휴게소", "distanceKm" to "14"), "n", queuedAt = sim.t, sessionId = a)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(old)))
+        sim.gear(Gear.P).ev(RearDoor(sim.t, Side.LEFT, true)).ev(RearDoor(sim.t, Side.LEFT, false)).gear(Gear.D)
+        assertNotEquals(a, sim.ses.id)
+        sim.attempt2().toGap().recry()
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        val pa = sim.ledger
+        assertTrue(pa == null || pa.utteranceId != "u1", "A의 줄에 묶이지 않는다")
+        assertNotEquals(true, sim.told())
+        sim.ev(SpeechDone(sim.t + 1_000, "u1", true))   // A 줄의 SpeechDone은 B의 기록을 바꾸지 않는다
+        assertNotEquals(true, sim.told())
+        assertTrue(sim.all<SendToPhone>().none { it.type == "handoff_alert" && it.body["rest_name"]?.toString() == "\"n 휴게소\"" })
+    }
+
+    // ---- 기록 지우기는 질문 창을 닫는다 ----
+    private fun Sim.asking(): Sim {
+        ev(AskButton(t))
+        return ev(Heard(t, s.speech.qa!!.listenId, "왜 울어?"))
+    }
+
+    @Test fun clearRecords_closesQaWindow() {
+        val sim = session().handoff().flush().gear(Gear.P, MIN).asking()
+        val lid = sim.s.speech.qa!!.listenId
+        sim.ev(ClearRecords(sim.t))
+        assertNull(sim.s.speech.qa)
+        sim.ev(QaReply(sim.t, lid, "지우기 전 요약 답"))
+        assertTrue(sim.s.speech.queue.none { it.sid == Sid.QA } && sim.cmds.none { it is Speak })
+        sim.ev(SwitchSound(sim.t, LL, lid))   // 도구 사건도 기다리던 질문이 아니면 무시
+        assertTrue(sim.cmds.isEmpty())
+    }
+
+    @Test fun clearRecords_dropsQueuedQaAnswer_keepsSpeakingOne() {
+        val sim = session()
+        val qa = Line(Sid.QA, mapOf("text" to "답"), null, qaAnswer = true)
+        val other = Line(Sid.S06, emptyMap(), null)
+        sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(qa, other, qa.copy(vars = mapOf("text" to "대기")))))
+        sim.ev(ClearRecords(sim.t))
+        assertEquals(listOf(Sid.QA, Sid.S06), sim.s.speech.queue.map { it.sid })
+        assertEquals("답", sim.s.speech.queue.first().vars["text"])   // 말하는 줄은 남는다
+    }
+}
+
+// 복원과 닫힌 세션의 인계 장부, 리포트 순서.
+class RestoreAndClosedSessionTest {
 
     private fun restored(): Sim {
         val sim = session()
@@ -19,7 +170,7 @@ class C150ToC153Test {
         return sim
     }
 
-    // ---- C150: 복원 뒤 경로 기다림 동안 쉼터 질문을 버리지 않는다 ----
+    // ---- 복원 뒤 경로 기다림 동안 쉼터 질문을 버리지 않는다 ----
     private fun restoredWithS07(vararg extra: Line): Sim {
         val sim = session().route(rest("n", 14.0, nursing = true))
         val q = Line(Sid.S07, mapOf("restName" to "n 휴게소", "distanceKm" to "14"), "n", queuedAt = sim.t, sessionId = sim.ses.id)
@@ -27,7 +178,7 @@ class C150ToC153Test {
         return sim
     }
 
-    @Test fun c150_restoreGearBeforeRoute_keepsQueuedAsk() {
+    @Test fun restoreGearBeforeRoute_keepsQueuedAsk() {
         val sim = restoredWithS07()
         sim.ev(Tick(sim.t + 1_000))
         assertEquals(listOf(Sid.S07), sim.s.speech.queue.map { it.sid }, "경로 기다림 동안 큐에 둔다")
@@ -36,22 +187,22 @@ class C150ToC153Test {
         assertEquals(Sid.S07, sim.all<Ask>().single().sid, "쉼터 경로가 오면 그 질문을 낸다")
     }
 
-    @Test fun c150_waitExpiresWithoutRoute_dropsAsBefore() {
+    @Test fun waitExpiresWithoutRoute_dropsAsBefore() {
         val sim = restoredWithS07()
         sim.ev(Tick(sim.t + P.routeWaitMs + 1_000))
         assertTrue(sim.s.speech.queue.none { it.sid == Sid.S07 })
         assertTrue(sim.all<Ask>().isEmpty())
     }
 
-    @Test fun c150_waitingKeepsAsk_butOtherLinesGoOut() {
+    @Test fun waitingKeepsAsk_butOtherLinesGoOut() {
         val sim = restoredWithS07(Line(Sid.S12, emptyMap(), null))
         sim.ev(Tick(sim.t + 1_000))
         assertEquals(Sid.S12, sim.all<Speak>().single().sid)
         assertTrue(sim.s.speech.queue.any { it.sid == Sid.S07 })
     }
 
-    // ---- C151: 복원은 말하던 줄을 '말하지 않음'으로 버린다 ----
-    @Test fun c151_restoreSpeakingLongDrive_notMarkedOffered_reoffersAfterWait() {
+    // ---- 복원은 말하던 줄을 '말하지 않음'으로 버린다 ----
+    @Test fun restoreSpeakingLongDrive_notMarkedOffered_reoffersAfterWait() {
         val sim = session()
         val s10 = Line(Sid.S10, emptyMap(), null, longDrive = true, sessionId = sim.ses.id, queuedAt = sim.t)
         sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(s10)))
@@ -61,7 +212,7 @@ class C150ToC153Test {
         assertTrue(Sid.S10 in sim.sids(), "휴식 안내가 다시 나온다: ${sim.sids()}")
     }
 
-    @Test fun c151_restoreSpeakingS06_notMarkedSaid() {
+    @Test fun restoreSpeakingS06_notMarkedSaid() {
         val sim = session().alarm().started()
         sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(Line(Sid.S06, emptyMap(), null, sessionId = sim.ses.id))))
         val st = Engine().dropSpeaking(sim.s, sim.t + 1_000)
@@ -69,7 +220,7 @@ class C150ToC153Test {
         assertNull(st.speech.speaking)
     }
 
-    /** 말하던 인계 줄 [head]와 다음 줄. Room에는 그 에피소드의 확정([told])이 이미 있다(C136). C303 A3~A7: 복원 ②는 판단 코어 restoreFromRoom이 한다. */
+    /** 말하던 인계 줄 [head]와 다음 줄. Room에는 그 에피소드의 확정([told])이 이미 있다. Room과 맞추는 복원 단계는 판단 코어 restoreFromRoom이 한다. */
     private fun roomSettledHead(head: Line, told: Boolean): Pair<Sim, EngineState> {
         val sim = session()
         val h = head.copy(sessionId = sim.ses.id, handoff = true)
@@ -79,25 +230,25 @@ class C150ToC153Test {
         return sim to Engine().restoreFromRoom(sim.s, facts(rows = listOf(roomRow("e1", sim.ses.id)), told = mapOf("e1" to told)), sim.t)
     }
 
-    @Test fun c151_roomFalseHeadLine_markDropped_nextLineKept() {
+    @Test fun roomFalseHeadLine_markDropped_nextLineKept() {
         val (sim, st) = roomSettledHead(Line(Sid.S07, emptyMap(), "n", queuedAt = T0), told = false)
         assertTrue(st.session!!.spokenAt.isEmpty(),"말하지 않은 줄로 버린다(10분 금지 없음)")
         assertNull(st.speech.speaking); assertNull(st.openLedger())
         assertEquals(listOf(Sid.S12), Engine().dropSpeaking(st, sim.t + 1_000).speech.queue.map { it.sid }, "다음 줄을 버리지 않는다")
     }
 
-    @Test fun c151_roomTrueHeadLine_markSpoken_nextLineKept() {
+    @Test fun roomTrueHeadLine_markSpoken_nextLineKept() {
         val (sim, st) = roomSettledHead(Line(Sid.S10, emptyMap(), null, longDrive = true), told = true)
         assertTrue(st.session!!.longDriveOffered, "말한 줄로 처리한다")
-        assertEquals(sim.t, st.speech.lastDoneAt, "말하기 간격을 이어 간다(C161)")
+        assertEquals(sim.t, st.speech.lastDoneAt, "말하기 간격을 이어 간다")
         assertEquals(listOf(Sid.S12), Engine().dropSpeaking(st, sim.t + 1_000).speech.queue.map { it.sid })
     }
 
-    // ---- C152: 세션이 닫혀도 말하는 인계 줄은 끝까지 따라간다 ----
+    // ---- 세션이 닫혀도 말하는 인계 줄은 끝까지 따라간다 ----
     /** 쉼터 질문 S07을 말하는 중(u1)에 인계가 묶이고, 그 상태로 P·뒷문 열림으로 세션이 닫힌다. */
     private fun closedWhileSpeaking(prof: Profile = profile()): Sim {
         val sim = session(prof = prof).route(rest("n", 14.0, nursing = true))
-        sim.attempt2().dimSkipped().toGap().busyNow()   // 앰비언트 결과를 닫아 둔다(AM12는 AmbientTest)
+        sim.attempt2().dimSkipped().toGap().busyNow()   // 앰비언트 결과를 닫아 둔다(이 결과는 AmbientTest가 본다)
         val old = Line(Sid.S07, mapOf("restName" to "n 휴게소", "distanceKm" to "14"), "n", queuedAt = sim.t)
         sim.s = sim.s.copy(speech = sim.s.speech.copy(speaking = "u1", queue = listOf(old) + sim.s.speech.queue))
         sim.recry()
@@ -109,7 +260,7 @@ class C150ToC153Test {
         return sim
     }
 
-    @Test fun c152_closedWhileSpeaking_spokenUpdatesClosedRowTrue() {
+    @Test fun closedWhileSpeaking_spokenUpdatesClosedRowTrue() {
         val sim = closedWhileSpeaking()
         sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
         assertEquals("n 휴게소", sim.alerts().single().body["rest_name"]!!.toString().trim('"'))
@@ -118,7 +269,7 @@ class C150ToC153Test {
         assertTrue(sim.s.closedLedgers().isEmpty())
     }
 
-    @Test fun c152_closedWhileSpeaking_ttsFailPlainFalse() {
+    @Test fun closedWhileSpeaking_ttsFailPlainFalse() {
         val sim = closedWhileSpeaking()
         sim.ev(SpeechDone(sim.t + 1_000, "u1", false))
         assertEquals(JsonNull, sim.alerts().single().body["rest_name"])
@@ -127,7 +278,7 @@ class C150ToC153Test {
         assertTrue(sim.s.closedLedgers().isEmpty())
     }
 
-    @Test fun c152_restoreFlushesClosedHandoffPlain() {
+    @Test fun restoreFlushesClosedHandoffPlain() {
         val sim = closedWhileSpeaking()
         sim.s = Engine().dropSpeaking(sim.s, sim.t + 1_000)
         assertTrue(sim.alerts().isEmpty())
@@ -137,7 +288,7 @@ class C150ToC153Test {
         assertTrue(sim.s.closedLedgers().isEmpty())
     }
 
-    @Test fun c152_newSessionHandoffNotMixed() {
+    @Test fun newSessionHandoffNotMixed() {
         val sim = closedWhileSpeaking()
         val closedEp = sim.s.closedLedgers().single().episodeId
         sim.gear(Gear.P).doorCycle().gear(Gear.D)   // 새 세션 B
@@ -149,19 +300,19 @@ class C150ToC153Test {
         assertEquals(true, sim.all<SettleHandoff>().last().toldDriver)
     }
 
-    // C319 V19(옛 c152_clearRecordsDropsClosedHandoff): 기록 지우기는 닫힌 세션 장부도 버리지 않는다. 알림은 기록이 아니라 지금 우는 아기에 대한 통지다.
-    // 말한 뒤 알림이 나가고, 그 세션 행 확정(SettleHandoff)·미룬 리포트(CloseSession)는 store 입구가 부모 행이 없어 버린다(C262)
-    @Test fun c319_clearRecordsKeepsClosedHandoff_alertAfterSpoken() {
+    // 기록 지우기는 닫힌 세션 장부도 버리지 않는다. 알림은 기록이 아니라 지금 우는 아기에 대한 통지다.
+    // 말한 뒤 알림이 나가고, 그 세션 행 확정(SettleHandoff)·미룬 리포트(CloseSession)는 store 입구가 부모 행이 없어 버린다
+    @Test fun clearRecordsKeepsClosedHandoff_alertAfterSpoken() {
         val sim = closedWhileSpeaking()
         val saves = sim.all<SettleHandoff>().size
         sim.ev(ClearRecords(sim.t + 500))
         assertEquals("u1", sim.s.closedLedgers().single().utteranceId)
         sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
         assertTrue(sim.s.closedLedgers().isEmpty())
-        assertEquals(1, sim.alerts().size); assertEquals(saves + 1, sim.all<SettleHandoff>().size, "닫힌 세션의 recordsCleared는 판단 코어가 모른다(store C262가 버린다)")
+        assertEquals(1, sim.alerts().size); assertEquals(saves + 1, sim.all<SettleHandoff>().size, "닫힌 세션의 recordsCleared는 판단 코어가 모른다(store가 버린다)")
     }
 
-    @Test fun c152_reportWaitsForClosedHandoff_ttsFail() {
+    @Test fun reportWaitsForClosedHandoff_ttsFail() {
         val sim = closedWhileSpeaking()
         assertTrue(sim.all<CloseSession>().isEmpty(), "닫힌 인계 줄이 남은 동안 리포트 명령을 내지 않는다")
         sim.ev(SpeechDone(sim.t + 1_000, "u1", false))
@@ -170,7 +321,7 @@ class C150ToC153Test {
         assertEquals(false, (sim.log[i] as SettleHandoff).toldDriver)
     }
 
-    @Test fun c152_reportAfterRestoreFlush() {
+    @Test fun reportAfterRestoreFlush() {
         val sim = closedWhileSpeaking()
         sim.s = Engine().dropSpeaking(sim.s, sim.t + 1_000)
         assertTrue(sim.all<CloseSession>().isEmpty())
@@ -182,8 +333,8 @@ class C150ToC153Test {
     private fun lockRes(sim: Sim, cmd: SetWindowLock, area: Area, ok: Boolean = true) =
         sim.ev(ControlResult(sim.t, cmd.cmdId, ControlKind.WINDOW_LOCK, area, ok, 0.0, 0.0))
 
-    // C335: 인계 장부와 잠금 대기가 둘 다 있으면 마지막 것이 끝날 때 한 번
-    @Test fun c335_report_ledgerEndsLast() {
+    // 인계 장부와 잠금 대기가 둘 다 있으면 마지막 것이 끝날 때 한 번
+    @Test fun report_ledgerEndsLast() {
         val sim = closedWhileSpeaking(profile(sibling = true))
         val id = sim.s.closedLedgers().single().sessionId
         val lock = sim.all<SetWindowLock>().first()
@@ -195,7 +346,7 @@ class C150ToC153Test {
         assertEquals(listOf(CloseSession(id)), sim.all<CloseSession>())
     }
 
-    @Test fun c335_report_lockEndsLast() {
+    @Test fun report_lockEndsLast() {
         val sim = closedWhileSpeaking(profile(sibling = true))
         val id = sim.s.closedLedgers().single().sessionId
         val lock = sim.all<SetWindowLock>().first()
@@ -208,7 +359,7 @@ class C150ToC153Test {
         assertEquals(listOf(CloseSession(id)), sim.all<CloseSession>())
     }
 
-    @Test fun c145_destinationBeforeRests_keepsWaiting() {
+    @Test fun destinationBeforeRests_keepsWaiting() {
         val sim = restored()
         sim.ev(RouteState(T0 + 121 * MIN, true, 3600, emptyList(), 50.0))   // 목적지 신호만 먼저
         assertTrue(sim.sids().isEmpty(), "쉼터 목록 전에는 S10을 말하지 않는다")
@@ -217,18 +368,18 @@ class C150ToC153Test {
         assertTrue(Sid.S11 in sim.sids(), "쉼터 목록이 오면 S11: ${sim.sids()}")
     }
 
-    @Test fun c145_noRestsRoute_S10After60s() {
+    @Test fun noRestsRoute_S10After60s() {
         val sim = restored()
         sim.ev(RouteState(T0 + 121 * MIN, true, 3600, emptyList(), 50.0))
         sim.ev(Tick(T0 + 120 * MIN + 90_000))
         assertTrue(Sid.S10 in sim.sids())
     }
 
-    // ---- C153: 통화 중 출발 제안 기회를 쓰지 않는다 ----
+    // ---- 통화 중 출발 제안 기회를 쓰지 않는다 ----
     private fun departSession() = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
     private fun Sim.depRoute() = route(nurse, dest = true, remainingSec = 9000, remainingKm = 150.0)
 
-    @Test fun c153_inCallDepart_notChecked_offersAfterCallEnds() {
+    @Test fun inCallDepart_notChecked_offersAfterCallEnds() {
         val sim = departSession()
         sim.ev(CallMode(sim.t, true)).depRoute()
         assertFalse(sim.ses.departChecked); assertTrue(sim.all<Ask>().isEmpty())
@@ -237,14 +388,14 @@ class C150ToC153Test {
         assertEquals(Sid.S07_DEPART, sim.step<Ask>().single().sid)
     }
 
-    @Test fun c153_suspended_notChecked() {
+    @Test fun suspended_notChecked() {
         val sim = departSession()
         sim.ev(Suspend(sim.t)).depRoute()
         assertFalse(sim.ses.departChecked); assertTrue(sim.all<Ask>().isEmpty())
     }
 
-    // ---- C162: 두 번째 세션이 닫혀도 앞 세션의 말하는 인계 줄은 끝까지 따라간다 ----
-    @Test fun c162_secondSessionCloseKeepsEarlierSpeakingHandoff() {
+    // ---- 두 번째 세션이 닫혀도 앞 세션의 말하는 인계 줄은 끝까지 따라간다 ----
+    @Test fun secondSessionCloseKeepsEarlierSpeakingHandoff() {
         val sim = closedWhileSpeaking()
         sim.gear(Gear.P).doorCycle().gear(Gear.D)   // 새 세션 B
         sim.gear(Gear.P).ev(RearDoor(sim.t, Side.LEFT, true))   // B가 같은 발화가 끝나기 전에 닫힘
@@ -257,7 +408,7 @@ class C150ToC153Test {
         assertTrue(sim.s.closedLedgers().isEmpty())
     }
 
-    @Test fun c162_closedHandoffLineGone_flushedAtSecondClose() {
+    @Test fun closedHandoffLineGone_flushedAtSecondClose() {
         val sim = closedWhileSpeaking()
         sim.s = Engine().dropSpeaking(sim.s, sim.t + 500).copy(session = null)   // 말하던 줄이 사라졌다(복원 등)
         sim.gear(Gear.P).doorCycle().gear(Gear.D)
@@ -266,8 +417,8 @@ class C150ToC153Test {
         assertEquals(false, sim.all<SettleHandoff>().last().toldDriver)
     }
 
-    // ---- C163: Suspend가 풀린 뒤 출발 제안을 다시 본다 ----
-    @Test fun c163_resumeReevaluatesDepartOffer() {
+    // ---- Suspend가 풀린 뒤 출발 제안을 다시 본다 ----
+    @Test fun resumeReevaluatesDepartOffer() {
         val sim = departSession()
         sim.ev(Suspend(sim.t)).depRoute()
         assertFalse(sim.ses.departChecked)
@@ -276,8 +427,8 @@ class C150ToC153Test {
         assertEquals(Sid.S07_DEPART, sim.all<Ask>().single().sid)
     }
 
-    // ---- C233: 기어를 모를 때 출발 제안 줄은 버리지 않고 보류한다 ----
-    @Test fun c233_unknownGearKeepsDepartOffer() {
+    // ---- 기어를 모를 때 출발 제안 줄은 버리지 않고 보류한다 ----
+    @Test fun unknownGearKeepsDepartOffer() {
         val sim = departSession()
         sim.ev(CallMode(sim.t, true)).depRoute()
         val l = Line(Sid.S07_DEPART, emptyMap(), nurse.id, queuedAt = sim.t, sessionId = sim.ses.id)

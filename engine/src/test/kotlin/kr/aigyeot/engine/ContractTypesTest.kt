@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-// 계약 타입이 JSON으로 썼다 다시 읽어도 같은지만 본다(전이 시험은 따로 있다).
+// 판단 코어 타입이 JSON으로 썼다 다시 읽어도 같은지만 본다(전이 시험은 따로 있다).
 class ContractTypesTest {
     private val json = Json
 
@@ -41,7 +41,7 @@ class ContractTypesTest {
         assertEquals(s, json.decodeFromString<EngineState>(json.encodeToString(s)))
     }
 
-    /** D5: 단계(sealed Stage)가 종류마다 JSON으로 썼다 다시 읽어도 같다. 읽기 투영(phase 등)은 직렬화되지 않는다. */
+    /** 단계(sealed Stage)가 종류마다 JSON으로 썼다 다시 읽어도 같다. 읽기 투영(phase 등)은 직렬화되지 않는다. */
     @Test fun stageRoundTrip() {
         val pl = Play("s-1-1", PlayPurpose.AUTO_FIRST, Method(MethodKind.WHITE_NOISE), null, 56_000, PlayMode.NORMAL)
         val stages = listOf(
@@ -49,9 +49,9 @@ class ContractTypesTest {
             Stage.Confirm(2, JudgeWindow(2L, 30_002L)), Stage.Wait(2, 3L, pl.copy(purpose = PlayPurpose.REQUEST)), Stage.Handoff(2, 4L),
         )
         stages.forEach { st -> assertEquals(st, json.decodeFromString<Stage>(json.encodeToString(st))) }
-        // 재생 종류는 목적에서 계산한다(저장하지 않음): 요청 목적이면 REQUEST, 자동 1·2차면 AUTO. 옛 스냅숏의 kind 칸은 읽을 때 버린다(ignoreUnknownKeys)
+        // 재생 종류는 목적에서 계산한다(저장하지 않음): 요청 목적이면 REQUEST, 자동 1·2차면 AUTO. 저장된 스냅숏에 kind 칸이 있어도 읽을 때 버린다(ignoreUnknownKeys)
         assertEquals(PlayKind.AUTO, pl.kind); assertEquals(PlayKind.REQUEST, pl.copy(purpose = PlayPurpose.REQUEST).kind)
-        // 시도 결과는 한 칸(C380): 미판정 이유는 미판정에만. JSON으로 썼다 읽어도 같다
+        // 시도 결과는 한 칸: 미판정 이유는 미판정에만. JSON으로 썼다 읽어도 같다
         val tries = listOf(TryRecord(pl.method, null), TryRecord(pl.method, null, TryOutcome.Success), TryRecord(pl.method, null, TryOutcome.NotJudged(Unjudged.FOCUS_LOSS)))
         tries.forEach { assertEquals(it, json.decodeFromString<TryRecord>(json.encodeToString(it))) }
         assertEquals(listOf(null, TryResult.SUCCESS, TryResult.UNJUDGED), tries.map { it.result }); assertEquals(listOf(null, null, Unjudged.FOCUS_LOSS), tries.map { it.unjudged })
@@ -64,7 +64,7 @@ class ContractTypesTest {
         val sim = session().ev(CabinTemp(T0, 27.6)).attempt2()
         val withPending = sim.s
         assertEquals(withPending, json.decodeFromString<EngineState>(json.encodeToString(withPending)))
-        // 필드가 없던 옛 스냅숏은 comfortPending = null로 읽힌다
+        // 필드가 없는 스냅숏은 comfortPending = null로 읽힌다
         val old = json.encodeToString(withPending).replace(Regex(",?\"comfortPending\":\\{[^}]*\\}"), "")
         assertEquals(null, json.decodeFromString<EngineState>(old).session!!.comfortPending)
     }

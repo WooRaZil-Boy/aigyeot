@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 계약 2.3 순수 함수와 명세서 15장 '톰슨 샘플링(고정 시드 재현)'.
+// 순수 함수와 톰슨 샘플링(고정 시드 재현).
 class CalcTest {
     @Test fun methodStats_windowBoundary28Days() {
         val now = 100 * DAY_MS
@@ -56,7 +56,7 @@ class CalcTest {
         assertEquals(WN, pickFirst(listOf(SONG, LL, WN), emptyList(), 1).method)
         val h = listOf(FirstTry(1, WN, true), FirstTry(2, WN, false), FirstTry(3, LL, true))
         assertEquals(LL, pickFirst(listOf(WN, LL), h, 1).method)
-        assertEquals(SONG, pickFirst(listOf(WN, LL, SONG), h, 1).method)   // 가장 적은 것(G27)
+        assertEquals(SONG, pickFirst(listOf(WN, LL, SONG), h, 1).method)   // 가장 적은 것
         // 새 곡(다른 songId)은 0부터 센다
         assertEquals(SONG, pickFirst(listOf(WN, LL, SONG), h + FirstTry(4, LL, true) + List(2) { FirstTry(5, Method(MethodKind.SONG, "old"), true) }, 1).method)
     }
@@ -68,21 +68,21 @@ class CalcTest {
         assertEquals(WN, best(listOf(WN, LL), h, except = LL))
     }
 
-    @Test fun c118_pickFirst_roundRobinFourMethods() {
+    @Test fun pickFirst_roundRobinFourMethods() {
         val ms = listOf(SONG, LL, WB, WN)   // 받은 순서와 무관하게 처음 순서로
         var h = emptyList<FirstTry>()
         val order = List(8) { i -> pickFirst(ms, h, 1).method.also { h = h + FirstTry(i.toLong(), it, true) } }
         assertEquals(listOf(WN, WB, LL, SONG, WN, WB, LL, SONG), order)
     }
 
-    @Test fun c118_pickFirst_threeMethodsWithoutSong() {
+    @Test fun pickFirst_threeMethodsWithoutSong() {
         val ms = listOf(LL, WB, WN)
         var h = emptyList<FirstTry>()
         val order = List(6) { i -> pickFirst(ms, h, 1).method.also { h = h + FirstTry(i.toLong(), it, true) } }
         assertEquals(listOf(WN, WB, LL, WN, WB, LL), order)
     }
 
-    @Test fun c118_best_tieOrderIncludesWomb() {
+    @Test fun best_tieOrderIncludesWomb() {
         val ms = listOf(LL, WB, WN, SONG)
         assertEquals(WN, best(ms, emptyList()))
         assertEquals(WB, best(ms, emptyList(), except = WN))                     // 2차 '다른 음원'이 뱃속 소리를 고른다
@@ -106,11 +106,11 @@ class CalcTest {
         assertEquals(Sid.S08, offerRest(false, Gear.D, r, 0, null)!!.sid)
         assertEquals(Sid.S11, offerRest(true, Gear.D, r, 0, null)!!.sid)
         assertEquals(Sid.S10, offerRest(false, Gear.D, null, 0, null)!!.sid)
-        assertTrue(offerBanned(mapOf(Sid.S08 to 0L), emptyList(), "s", Sid.S08, 9 * MIN))   // S3: 10분 금지는 offerBanned(결정 ②)
+        assertTrue(offerBanned(mapOf(Sid.S08 to 0L), emptyList(), "s", Sid.S08, 9 * MIN))   // 10분 금지는 offerBanned
         assertNull(offerRest(false, Gear.D, RouteView(0, true, 600, r.rests), 0, null))
     }
 
-    @Test fun c304_departOffer_skipsUnaddable() {
+    @Test fun departOffer_skipsUnaddable() {
         val now = 0L
         val iv = 180
         // 수유 시작 = now - 70분 → 배고플 시각 h = now + 110분. 남은 7200초(120분)·120km: eta(분) = km
@@ -122,7 +122,7 @@ class CalcTest {
         assertEquals("덕평", pickDepartRest(RouteView(now, true, 7200, rests, 120.0), start, iv, now, 20)?.id)
     }
 
-    @Test fun c304_offerRest_skipsUnaddable() {
+    @Test fun offerRest_skipsUnaddable() {
         fun r(vararg l: RestCandidate) = RouteView(0, false, null, l.toList())
         val bad = rest("bad", 5.0).copy(addable = false)
         assertEquals("ok", offerRest(false, Gear.D, r(bad, rest("ok", 10.0)), 0, null)!!.askRestId)
@@ -130,7 +130,7 @@ class CalcTest {
         assertEquals("ok", pickRest(r(bad, rest("ok", 10.0)))!!.id)
     }
 
-    @Test fun s3a_s07WaitsAfterDepartOffer() {
+    @Test fun s07WaitsAfterDepartOffer() {
         val r = RouteView(0, false, null, listOf(rest("n", 10.0, true)))
         assertEquals(Sid.S07, offerRest(false, Gear.D, r, 0, null)!!.sid)
         fun banned(spoken: Map<Sid, Long>, now: Long) = offerBanned(spoken, emptyList(), "s", Sid.S07, now)

@@ -3,20 +3,20 @@ package kr.aigyeot.shared
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
-// 중계 HTTP API 요청·응답 본문(contracts-link.md 1.4). 메시지 보내기·ack·초대 만들기의 요청은 봉투([Envelope])다.
+// 중계 HTTP API 요청·응답 본문. 메시지 보내기·ack·초대 만들기의 요청은 봉투([Envelope])다.
 
-/** 오류 본문(1.1). 화면 문구는 앱이 `code`로 정한다. */
+/** 오류 본문. 화면 문구는 앱이 `code`로 정한다. */
 @Serializable
 data class ErrorResponse(val error: ErrorDetail)
 
@@ -58,14 +58,14 @@ data class DeviceInfo(
     val pairedAt: String,
     val lastSeenAt: String?,
     val online: Boolean,
-    /** 차 행에는 없다(1.4 예시). */
+    /** 차 행에는 없다. */
     val handoffAlerts: Boolean? = null,
 )
 
 @Serializable
 data class DevicesResponse(val snapshotSeq: Long, val devices: List<DeviceInfo>)
 
-/** `PATCH /v1/devices/me`의 `push_token` 세 상태(1.4): 빠짐 = 그대로, 문자열 = 바꾸기, 명시적 `null` = 지우기. */
+/** `PATCH /v1/devices/me`의 `push_token` 세 상태: 빠짐 = 그대로, 문자열 = 바꾸기, 명시적 `null` = 지우기. */
 @Serializable(with = PushTokenPatchSerializer::class)
 sealed interface PushTokenPatch {
     data object Keep : PushTokenPatch
@@ -124,7 +124,8 @@ data class UploadSongResponse(val songId: String, val sizeBytes: Long)
 // ---- POST /v1/llm ----
 
 @Serializable
-data class LlmCry(val currentMin: Int?, val countThisDrive: Int, val confirming: Boolean = false, val unavailable: Boolean = false)   // confirming: 그침 확인 중(GAP·CONFIRM, C231). unavailable: 마이크 꺼짐·입력 끊김이라 울음을 확인할 수 없음(C245). false는 보내지 않는다
+// confirming: 그침 확인 중(GAP·CONFIRM). unavailable: 마이크 꺼짐·입력 끊김이라 울음을 확인할 수 없음. false는 보내지 않는다
+data class LlmCry(val currentMin: Int?, val countThisDrive: Int, val confirming: Boolean = false, val unavailable: Boolean = false)
 
 @Serializable
 data class LlmFeeding(val elapsedMin: Int, val intervalMin: Int)
@@ -142,12 +143,12 @@ data class LlmDiaper(val minAgo: Int?, val todayCount: Int?)
 data class LlmState(
     val cry: LlmCry,
     val feeding: LlmFeeding?,
-    val carseatMin: Int?,   // 세션이 없으면 null(C234)
+    val carseatMin: Int?,   // 세션이 없으면 null
     val cabinTemp: Double?,
     val nextRest: LlmNextRest?,
     val methodStats: List<MethodStat>,
     val lastNightWakeups: Int?,
-    // 계약 '선택'(L61): 없으면 빠진다.
+    // "선택" 필드: 없으면 빠진다.
     val sleep: LlmSleep? = null,
     val diaper: LlmDiaper? = null,
     val feedsToday: Int? = null,

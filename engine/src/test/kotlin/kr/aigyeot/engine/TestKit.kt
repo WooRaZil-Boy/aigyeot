@@ -1,5 +1,7 @@
 package kr.aigyeot.engine
 
+import kotlinx.serialization.json.jsonPrimitive
+
 // 시험 도구: 가짜 시계(사건의 at)로 상태를 만들고 step을 차례로 넣는다.
 
 const val T0 = 1_800_000_000_000L
@@ -15,6 +17,23 @@ fun profile(seat: CarSeat = CarSeat.LEFT, interval: Int? = null, sibling: Boolea
 
 fun rest(id: String, km: Double, nursing: Boolean = false) =
     RestCandidate(id, "$id 휴게소", RestKind.REST_AREA, km, nursing)
+
+/** 수유실이 있는 휴게소(여러 시험이 같은 후보를 쓴다). */
+val nurse = rest("n", 9.0, nursing = true)
+
+/** 복원 ② 시험용 Room 행. */
+internal fun roomRow(
+    id: String, sessionId: String, endedAt: Long? = null, kind: HandoffKind? = null, firstResult: TryResult? = null,
+) = EpisodeRecord(
+    id, sessionId, T0, endedAt, EpisodeTrigger.ALARM, null, null, null, null, firstResult, null, null, null, null, null,
+    null, kind, false, 0, false, 0, emptyList(),
+)
+
+/** [told]: Room에서 이미 확정된 인계(에피소드 id → handoff_told_driver). */
+internal fun facts(
+    ended: Boolean = false, played: Long = 0, alarms: Int = 0, epPlayed: Long = 0, rows: List<EpisodeRecord> = emptyList(),
+    history: List<FirstTry> = emptyList(), told: Map<String, Boolean> = emptyMap(),
+) = RoomFacts(ended, played, alarms, epPlayed, rows.associateBy { it.id }, history, told)
 
 class Sim(var s: EngineState, private val eng: Engine = Engine()) {
     var t = s.now
@@ -47,7 +66,7 @@ class Sim(var s: EngineState, private val eng: Engine = Engine()) {
 }
 
 /**
- * D5 시험 조립(옛 `copy(phase = …, attemptNo = …, play = …, judgeFrom = …)`): 단계만 바꾼 세션. 시도 번호는 지금 값.
+ * 시험 조립: 단계만 바꾼 세션. 시도 번호는 지금 값.
  * ATTEMPT는 지금 재생(없으면 시험용 자동 재생), GAP·CONFIRM은 판정 멈춤(창 없음), WAIT·HANDOFF는 조용함 0. LISTENING이면 enter처럼 에피소드를 비운다.
  */
 fun SessionState.withStage(phase: Phase): SessionState = copy(
@@ -62,17 +81,25 @@ fun SessionState.withStage(phase: Phase): SessionState = copy(
     episode = if (phase == Phase.LISTENING) null else episode,
 )
 
-/** D7 시험 조립(옛 `copy(lastOffer = …, pendingAsk = …, driveFrom = …)`): 제안 상태(OfferState)만 바꾼 세션. */
+/** 시험 조립: 제안 상태(OfferState)만 바꾼 세션. */
 fun SessionState.withOffers(f: OfferState.() -> OfferState): SessionState = copy(offers = offers.f())
 
-/** 지금 세션의 인계 장부(V6: 장부 하나 `handoffs`에서 세션 id로 고른다). */
+/** 지금 세션의 인계 장부(장부 하나 `handoffs`에서 세션 id로 고른다). */
 fun EngineState.openLedger(): HandoffLedger? = session?.let { x -> handoffs.firstOrNull { it.sessionId == x.id } }
-/** 닫힌 세션의 인계 장부(옛 closedHandoffs). */
+/** 닫힌 세션의 인계 장부. */
 fun EngineState.closedLedgers(): List<HandoffLedger> = handoffs.filter { it.sessionId != session?.id }
 val Sim.ledger: HandoffLedger? get() = s.openLedger()
+/** 지금까지 낸 보호자 인계 알림(handoff_alert) 명령. */
+fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }
+/** 위 알림의 body만. */
+fun Sim.alertBodies() = alerts().map { it.body }
+/** 알림 body의 문장. */
+fun text(c: SendToPhone) = c.body["text"]!!.jsonPrimitive.content
+/** 지금 시각에서 dt 뒤에 바쁜 조향 표본을 넣는다. */
+fun Sim.busyNow(dt: Long = 0) = ev(VehicleSample(t + dt, 60.0, true, 0.0, TurnSignal.NONE))
 /** 그 에피소드의 마지막 인계 확정(SettleHandoff, 지금까지 낸 할 일에서). 없으면 아직 확정 전. */
 fun Sim.settled(id: String = ep.id): SettleHandoff? = log.filterIsInstance<SettleHandoff>().lastOrNull { it.episodeId == id }
-/** 인계 문장을 말했나(옛 ep.handoff.toldDriver). 확정 전·H1이면 null. */
+/** 인계 문장을 말했나. 확정 전·PARKED면 null. */
 fun Sim.told(id: String = ep.id): Boolean? = settled(id)?.toldDriver
 
 fun idle(
@@ -122,7 +149,7 @@ fun Sim.flush(): Sim {
     return this
 }
 
-/** 기능 D(5.10): 낮춤 결과 둘을 '바꾼 것 없음'(스위치 꺼짐 등)으로 닫는다. 닫힌 세션의 리포트를 앰비언트 결과 대기가 붙잡는 시험(AM12)이 아닐 때 쓰는 도구. */
+/** 앰비언트: 낮춤 결과 둘을 '바꾼 것 없음'(스위치 꺼짐 등)으로 닫는다. 닫힌 세션의 리포트를 앰비언트 결과 대기가 붙잡는 시험이 아닐 때 쓰는 도구. */
 fun Sim.dimSkipped(): Sim {
     val c = log.filterIsInstance<DimAmbient>().lastOrNull()?.cmdId ?: return this
     ev(ControlResult(t, c, ControlKind.AMBIENT_BRIGHTNESS, null, false, null, null))

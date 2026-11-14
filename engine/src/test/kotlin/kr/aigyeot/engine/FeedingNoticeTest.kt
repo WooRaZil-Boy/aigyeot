@@ -4,10 +4,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// C323: 큐에 든 S06은 꺼낼 때 다시 계산한다 / 뒷문은 바뀔 때만 동작한다.
-class C323Test {
+// 큐에 든 S06은 꺼낼 때 다시 계산한다 / 뒷문은 바뀔 때만 동작한다.
+class QueuedFeedingLineTest {
     /** 수유 시간대에서 울음 → S02 말하는 중, S06이 큐에서 8초 간격을 기다린다. */
     private fun waitingS06(): Sim {
         val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN).attempt1().done()
@@ -31,7 +33,7 @@ class C323Test {
         assertFalse(sim.spokeS06())
     }
 
-    @Test fun s06_feedingStartMovedOutOfWindow_droppedAtPop() {   // 수유 확인(F6)이 feedingStart를 옮긴 것과 같은 상태 변화
+    @Test fun s06_feedingStartMovedOutOfWindow_droppedAtPop() {   // 수유 확인이 feedingStart를 옮긴 것과 같은 상태 변화
         val sim = waitingS06()
         sim.s = sim.s.copy(feedingStart = sim.t - MIN)
         sim.tickToSpeak()
@@ -82,5 +84,52 @@ class C323Test {
         sim.ev(RearDoor(sim.t, Side.LEFT, true))      // 이미 열림: 사실 맞추기뿐
         assertTrue(sim.s.session != null)
         assertTrue(sim.cmds.none { it is CloseSession })
+    }
+}
+
+// 수유 확인 알림 = 그때 쓰는 상태의 확인 투영. 장면 시작은 실제 알림만 내리고(상태 유지), 장면 끝은 장면 확인을 버리고, Boot는 남은 확인을 다시 띄운다.
+class FeedingConfirmNoticeTest {
+    private val hide = HideNotice(Notice.FEEDING_CONFIRM)
+
+    private fun parked(): Sim {
+        val sim = session().route(nurse).ev(DriverAddWaypoint(T0, "n"))
+        sim.ev(WaypointResult(sim.t + 500, sim.step<AddWaypoint>().single().cmdId, "n", true))
+        return sim.gear(Gear.P, MIN)
+    }
+    private fun confirmed(): Sim = parked().tick(15 * MIN).also { assertTrue(it.s.ign.nursingStop!!.confirmShown) }
+
+    @Test fun sceneStart_hidesRealConfirmButKeepsState() {
+        val sim = confirmed()
+        val step = Engine().sceneStart(sim.s, sim.s, sim.t + 100).realStep
+        assertTrue(hide in step.commands)
+        assertTrue(step.state.ign.nursingStop!!.confirmShown)
+    }
+
+    @Test fun sceneStart_noConfirm_noHide() {
+        val sim = parked()
+        assertNotNull(sim.s.ign.nursingStop!!.firstPAt); assertTrue(!sim.s.ign.nursingStop!!.confirmShown)
+        val step = Engine().sceneStart(sim.s, sim.s, sim.t + 100).realStep
+        assertTrue(step.commands.none { it is HideNotice })
+        assertEquals(sim.s.ign.nursingStop, step.state.ign.nursingStop)
+    }
+
+    @Test fun sceneEnd_dropsSceneConfirmAndHides() {
+        val sim = confirmed()
+        assertTrue(hide in Engine().sceneEnd(sim.s).commands)
+    }
+
+    @Test fun boot_reshowsConfirm() {
+        val sim = confirmed()
+        sim.ev(Boot(sim.t + 1, Gear.P, 10, stopEnded = false))
+        assertTrue(sim.s.ign.nursingStop!!.confirmShown)
+        assertEquals(Notice.FEEDING_CONFIRM, sim.step<ShowNotice>().single().kind)
+    }
+
+    @Test fun boot_stopEnded_hidesNotReshows() {
+        val sim = confirmed()
+        sim.ev(Boot(sim.t + 1, Gear.P, 10, stopEnded = true))
+        assertNull(sim.s.ign.nursingStop)
+        assertTrue(hide in sim.cmds)
+        assertTrue(sim.step<ShowNotice>().isEmpty())
     }
 }
