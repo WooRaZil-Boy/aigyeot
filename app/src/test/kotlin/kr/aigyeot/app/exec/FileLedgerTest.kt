@@ -2,6 +2,7 @@ package kr.aigyeot.app.exec
 
 import kr.aigyeot.engine.AmbientValue
 import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,7 +10,7 @@ import kotlin.test.assertNull
 
 // 낮춤 장부 파일(ambient_ledger): 프로세스가 죽어도 남고, 임시 파일을 남기지 않으며, 깨진 파일은 빈 장부다
 class FileLedgerTest {
-    private val dir = java.nio.file.Files.createTempDirectory("ledger").toFile().also { it.deleteOnExit() }
+    private val dir = Files.createTempDirectory("ledger").toFile().also { it.deleteOnExit() }
     private val file = File(dir, "ambient_ledger.json")
 
     @Test fun `쓴 값은 새 인스턴스(프로세스 재시작)가 읽고 지우면 파일이 없어진다`() {

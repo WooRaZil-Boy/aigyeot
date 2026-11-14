@@ -1,7 +1,12 @@
 package kr.aigyeot.app.link
 
+import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -10,6 +15,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kr.aigyeot.app.common.instantOf
+import kr.aigyeot.app.common.rfc3339
+import kr.aigyeot.app.common.ulid
 import kr.aigyeot.app.exec.LoudnessResult
 import kr.aigyeot.app.store.db.AppDatabase
 import kr.aigyeot.engine.Event
@@ -23,10 +31,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * 실제 로컬 중계(wrangler dev)에 붙는 종단 시험. 평소에는 건너뛴다.
@@ -52,7 +56,7 @@ class LinkRelayLiveTest {
 
     @Test fun pairFeedingStateRequestQa_overRealRelay() {
         assumeTrue("AIGYEOT_RELAY가 없어 건너뜀", base != null)
-        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
         val db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).build()
         db.openHelper.writableDatabase.execSQL(   // 첫 설정을 마친 차(아기 프로필 있음)
             "INSERT INTO child_profile VALUES ('p', '지우', '2026-03', 'LEFT', 180, NULL, '[]', 0, 0, 0, 1)",
@@ -75,7 +79,7 @@ class LinkRelayLiveTest {
             val phone = pj.getValue("device_id").jsonPrimitive.content
             waitFor("차 PhoneLink") { link.status.value.phones.any { it.deviceId == phone } }
             val pairMs = System.currentTimeMillis() - tPair
-            waitFor("새 연결 코드(G41)") { link.status.value.pairCode != null && link.status.value.pairCode != code }
+            waitFor("새 연결 코드") { link.status.value.pairCode != null && link.status.value.pairCode != code }
 
             val at = rfc3339(System.currentTimeMillis() - 5_000)
             val tTap = System.currentTimeMillis()
@@ -98,7 +102,7 @@ class LinkRelayLiveTest {
             waitFor("state_request 답") { inbox().size > before }
             val stateMs = System.currentTimeMillis() - tReq
 
-            // ④ 질문 셋(사실·도구·왜): 모델이 고른 주제(topics, 빈 글이면 문장은 판단 코어가 짠다)·도구 사건(tools, 오프라인 길은 도구를 내지 않는다)·글과 지연을 찍는다
+            // 질문 셋(사실·도구·왜): 모델이 고른 주제(topics, 빈 글이면 문장은 판단 코어가 짠다)·도구 사건(tools, 오프라인 길은 도구를 내지 않는다)·글과 지연을 찍는다
             var qaMs = 0L
             for ((i, q) in listOf("다음 수유실 어디야?", "백색소음으로 바꿔 줘", "아기가 왜 자꾸 울까?").withIndex()) {
                 val tQa = System.currentTimeMillis()
@@ -106,7 +110,8 @@ class LinkRelayLiveTest {
                 waitFor("QaReply $i") { events.any { (it.second as? QaReply)?.listenId == "live$i" } }
                 val (at, r) = events.first { (it.second as? QaReply)?.listenId == "live$i" }
                 qaMs = at - tQa
-                println("LIVE qa q=\"$q\" ms=$qaMs llm=${(r as QaReply).llm} care=${r.careUsed} topics=${r.factTopics + r.fallbackTopics} tools=${events.filter { it.first >= tQa && it.second !is QaReply }.map { it.second::class.simpleName }} text=\"${r.text}\"")
+                println("LIVE qa q=\"$q\" ms=$qaMs llm=${(r as QaReply).llm} care=${r.careUsed} topics=${r.factTopics + r.fallbackTopics} " +
+                    "tools=${events.filter { it.first >= tQa && it.second !is QaReply }.map { it.second::class.simpleName }} text=\"${r.text}\"")
             }
 
             link.disconnect(phone)

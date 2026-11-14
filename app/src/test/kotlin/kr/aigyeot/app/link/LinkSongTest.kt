@@ -1,5 +1,6 @@
 package kr.aigyeot.app.link
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kr.aigyeot.app.common.CarPaths
 import kr.aigyeot.app.exec.LoudnessResult
@@ -12,7 +13,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-// contracts-link 8.4 '노래 받기 작업'.
+// '노래 받기 작업'.
 @RunWith(RobolectricTestRunner::class)
 class LinkSongTest : LinkKit() {
     private fun add(id: String = SA, seq: Long = 10) =
@@ -92,7 +93,7 @@ class LinkSongTest : LinkKit() {
     }
 
     @Test fun newestAccepted_movesCandidate_statusForOldOneToo() {
-        song(SB, ACTIVE, 5)   // 지금 ③
+        song(SB, ACTIVE, 5)   // 지금 후보
         add(SA, 10); run()
         val byId = statuses().associateBy { it.str("song_id") }
         assertEquals("true", byId.getValue(SA).str("candidate"))
@@ -100,9 +101,9 @@ class LinkSongTest : LinkKit() {
     }
 
     @Test fun copyCancelled_rethrown_notRejected_downloadKept() {
-        copyResult = { _, _ -> throw kotlinx.coroutines.CancellationException("취소") }
+        copyResult = { _, _ -> throw CancellationException("취소") }
         add()
-        assertFailsWith<kotlinx.coroutines.CancellationException> { run() }
+        assertFailsWith<CancellationException> { run() }
         assertEquals(PENDING, dao.song(SA)!!.status)          // bad_format으로 거절하지 않는다
         assertEquals(1, dao.downloads().size)                 // 다음에 다시 받는다
         assertTrue(statuses().isEmpty())

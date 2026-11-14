@@ -3,13 +3,19 @@ package kr.aigyeot.app.exec
 import ai.pleos.playground.navi.constants.TurnType
 import ai.pleos.playground.navi.data.TBTInfo
 import ai.pleos.playground.vehicle.constant.area.TurnSignalValue
+import kr.aigyeot.engine.Area
+import kr.aigyeot.engine.CabinTemp
+import kr.aigyeot.engine.CallMode
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.Gear
 import kr.aigyeot.engine.GearChanged
 import kr.aigyeot.engine.Params
+import kr.aigyeot.engine.RearDoor
 import kr.aigyeot.engine.RestCandidate
 import kr.aigyeot.engine.RestKind
 import kr.aigyeot.engine.RouteState
+import kr.aigyeot.engine.SeatHeat
+import kr.aigyeot.engine.Side
 import kr.aigyeot.engine.TurnSignal
 import kr.aigyeot.engine.VehicleSample
 import kotlin.test.Test
@@ -18,7 +24,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 계약 3.3 차량 사건(GearChanged·RearDoor·SeatHeat·VehicleSample·RouteState)과 3.4 CallMode로 바꾸는 규칙
+// 차량 사건(GearChanged·RearDoor·SeatHeat·VehicleSample·RouteState)과 CallMode로 바꾸는 규칙
 class FeedsTest {
     private val t = FakeTime()
     private val events = mutableListOf<Event>()
@@ -49,32 +55,32 @@ class FeedsTest {
             TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 9_000.0, " "),
         )
         assertEquals(listOf(
-            RestCandidate("tbt:rest:안성휴게소", "안성휴게소", RestKind.REST_AREA, 7.7, false, addable = false),   // C304: 안성은 양방향 두 줄
+            RestCandidate("tbt:rest:안성휴게소", "안성휴게소", RestKind.REST_AREA, 7.7, false, addable = false),   // 안성은 양방향 두 줄
             RestCandidate("tbt:shelter:망향졸음쉼터", "망향 졸음쉼터", RestKind.DROWSY_SHELTER, 19.7, false, addable = false),   // 자료에 없으면 넣을 수 없다
         ), restsOf(tbt) { false })
         assertTrue(restsOf(tbt) { it == "안성휴게소" }.first().hasNursingRoom, "수유실 표가 있으면 그 값")
         assertFalse(restsOf(tbt) { true }.last().hasNursingRoom, "졸음쉼터에는 수유실이 없다")
     }
 
-    // C353: 경유지(TURN_WAY) 앞 쉼터는 넣을 수 없다. 이름은 둘 다 한 줄로 정해져(placeable) 순서만 갈린다
+    // 경유지(TURN_WAY) 앞 쉼터는 넣을 수 없다. 이름은 둘 다 한 줄로 정해져(placeable) 순서만 갈린다
     private fun rest(name: String) = TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, name)
     private fun way() = TBTInfo(TurnType.TURN_WAY, 2_000.0, "경유지")
 
-    @Test fun c353_restBeforeWay_notAddable_afterWay_addable() {
+    @Test fun restBeforeWay_notAddable_afterWay_addable() {
         val got = restsOf(listOf(rest("덕평휴게소"), way(), rest("안성휴게소(부산방향)"))) { false }
         assertEquals(listOf(false, true), got.map { it.addable })
     }
 
-    @Test fun c353_twoWays_onlyAfterLastAddable() {
+    @Test fun twoWays_onlyAfterLastAddable() {
         val got = restsOf(listOf(rest("덕평휴게소"), way(), rest("안성휴게소(부산방향)"), way(), rest("안성휴게소(서울방향)"))) { false }
         assertEquals(listOf(false, false, true), got.map { it.addable })
     }
 
-    @Test fun c353_noWay_unchanged() {
+    @Test fun noWay_unchanged() {
         assertEquals(listOf(true, true), restsOf(listOf(rest("덕평휴게소"), rest("안성휴게소(부산방향)"))) { false }.map { it.addable })
     }
 
-    @Test fun c353_wayDistanceStillAccumulates() {
+    @Test fun wayDistanceStillAccumulates() {
         val withWay = restsOf(listOf(way(), rest("덕평휴게소"))) { false }.single().distanceKm
         assertEquals(3.0, withWay, 1e-9, "TURN_WAY 2km + 1km")
         assertEquals(1.0, restsOf(listOf(rest("덕평휴게소"))) { false }.single().distanceKm, 1e-9)
@@ -92,7 +98,7 @@ class FeedsTest {
 
     @Test fun `쉼터 거리는 앞 항목 거리를 모두 더한 값이고 하이패스센터는 후보가 아니되 거리는 더한다`() {
         val got = restsOf(busan) { false }.associate { it.name to it.distanceKm }
-        assertEquals(listOf("용인졸음쉼터", "용인휴게소", "덕평휴게소", "이천졸음쉼터", "여주휴게소"), got.keys.toList(), "C115: 하이패스센터 제외")
+        assertEquals(listOf("용인졸음쉼터", "용인휴게소", "덕평휴게소", "이천졸음쉼터", "여주휴게소"), got.keys.toList(), "하이패스센터 제외")
         assertEquals(18.1, got.getValue("용인졸음쉼터"), 0.05, "하이패스센터 2.6km는 누적에 들어 있다")
         assertEquals(28.5, got.getValue("용인휴게소"), 0.05)
         assertEquals(41.2, got.getValue("덕평휴게소"), 0.05)
@@ -120,14 +126,14 @@ class FeedsTest {
 
     private val restA = listOf(RestCandidate("tbt:rest:A휴게소", "A휴게소", RestKind.REST_AREA, 30.0, false))
 
-    // ---- C264: 안내 중이 아니던 상태에서 안내 중으로 바뀔 때 옛 TBT를 버리고 다시 요청 ----
+    // ---- 안내 중이 아니던 상태에서 안내 중으로 바뀔 때 옛 TBT를 버리고 다시 요청 ----
     private val restB = listOf(RestCandidate("tbt:rest:B휴게소", "B휴게소", RestKind.REST_AREA, 40.0, true))
 
-    @Test fun c264_endedRouteTbtDropped_requestedOnce_newListFills() {
+    @Test fun endedRouteTbtDropped_requestedOnce_newListFills() {
         var asked = 0
         val f = RouteFeed({ t.now }, { events += it }, { asked++ })
         f.routing(true); f.driving(600, 100000); f.rests(restA); f.routing(false)   // A가 끝남
-        f.rests(restA)                                                           // 내비가 끝난 경로 TBT를 다시 줌(C116)
+        f.rests(restA)                                                           // 내비가 끝난 경로 TBT를 다시 줌
         asked = 0; events.clear()
         f.routing(true); f.driving(9000, 150000)
         assertEquals(1, asked, "안내 중으로 바뀔 때 한 번만 다시 요청")
@@ -138,7 +144,7 @@ class FeedsTest {
         f.rests(restA); assertEquals(restA, (events.last() as RouteState).rests, "안내 중 TBT 갱신은 그대로 바꾼다")
     }
 
-    @Test fun c264_driving_orInitial_fromNull_isTheSameTransition() {
+    @Test fun driving_orInitial_fromNull_isTheSameTransition() {
         var asked = 0
         val a = RouteFeed({ t.now }, { events += it }, { asked++ })
         a.rests(restA); a.driving(600); assertEquals(1, asked); assertTrue((events.last() as RouteState).rests.isEmpty())
@@ -146,7 +152,7 @@ class FeedsTest {
         b.rests(restA); b.initial(600); assertEquals(2, asked); assertTrue((events.last() as RouteState).rests.isEmpty())
     }
 
-    @Test fun c264_restartOrder_tbtThenStatus_refilledByRequest() {
+    @Test fun restartOrder_tbtThenStatus_refilledByRequest() {
         var asked = 0
         val f = RouteFeed({ t.now }, { events += it }, { asked++ })
         f.routing(true); f.rests(restA)
@@ -159,8 +165,8 @@ class FeedsTest {
         f.reemit(); assertEquals(restB, (events.last() as RouteState).rests, "reemit은 지금 목록")
     }
 
-    // ---- C278: 경로 전환 때 옛 경로 값이 새 경로에 섞이지 않음 ----
-    @Test fun c278_lateDrivingOfEndedRoute_clearedAtNewRouteStart() {
+    // ---- 경로 전환 때 옛 경로 값이 새 경로에 섞이지 않음 ----
+    @Test fun lateDrivingOfEndedRoute_clearedAtNewRouteStart() {
         val f = RouteFeed({ t.now }, { events += it })
         f.routing(true); f.driving(100, 5000); f.routing(false)
         f.driving(600, 10_000)                       // A의 늦은 DrivingInfo
@@ -170,7 +176,7 @@ class FeedsTest {
         assertEquals(9000, (events.last() as RouteState).remainingSec)
     }
 
-    @Test fun c278_lateListOfOldRoute_discarded_newListAccepted() {
+    @Test fun lateListOfOldRoute_discarded_newListAccepted() {
         val log = mutableListOf<String>()
         val f = RouteFeed({ t.now }, { events += it }, {}, { log += it })
         f.routing(true); f.driving(600, 100_000); f.routing(false)
@@ -185,7 +191,7 @@ class FeedsTest {
         assertEquals(restA, (events.last() as RouteState).rests)
     }
 
-    @Test fun c278_tbtBeforeDriving_heldAsCandidate_comparedWhenDistanceArrives() {
+    @Test fun tbtBeforeDriving_heldAsCandidate_comparedWhenDistanceArrives() {
         val f = RouteFeed({ t.now }, { events += it })
         f.routing(true)
         f.rests(restB, 150.0)                        // 거리보다 TBT가 먼저
@@ -199,7 +205,7 @@ class FeedsTest {
         assertEquals(restB, (events.last() as RouteState).rests)
     }
 
-    @Test fun c278_restartInitial_sameFilter_andForgetDropsCandidate() {
+    @Test fun restartInitial_sameFilter_andForgetDropsCandidate() {
         val f = RouteFeed({ t.now }, { events += it })
         f.forget(); f.routing(true); f.initial(9000, 150_000)
         f.rests(restA, 60.0); assertTrue((events.last() as RouteState).restsPending)
@@ -209,8 +215,8 @@ class FeedsTest {
         assertTrue((events.last() as RouteState).restsPending, "forget 전 후보가 새 회차에 남지 않는다")
     }
 
-    // ---- C269: 다시 요청한 TBT를 받을 때까지 restsPending(빈 목록 ≠ 쉼터 없음) ----
-    @Test fun c269_restsPending_fromFreshRouteUntilTbt_clearedByEndOrForget() {
+    // ---- 다시 요청한 TBT를 받을 때까지 restsPending(빈 목록 ≠ 쉼터 없음) ----
+    @Test fun restsPending_fromFreshRouteUntilTbt_clearedByEndOrForget() {
         val f = RouteFeed({ t.now }, { events += it })
         f.routing(true)
         assertTrue((events.last() as RouteState).restsPending, "안내 시작 직후는 목록을 기다린다")
@@ -261,7 +267,7 @@ class FeedsTest {
         val f = RouteFeed({ t.now }, { events += it })
         f.driving(16_200)                      // DrivingInfo. isRouting·끝 알림은 PleosNavi가 넘기지 않는다
         f.routing(true)                        // onNavigationStatus(ROUTE_DRIVE)
-        assertEquals(RouteState(t.now, true, 16_200, emptyList(), restsPending = true), events.last())   // C269: 다시 요청한 TBT를 기다린다
+        assertEquals(RouteState(t.now, true, 16_200, emptyList(), restsPending = true), events.last())   // 다시 요청한 TBT를 기다린다
     }
 
     @Test fun `앱을 다시 띄워 상태 알림 없이 TBT나 목적지만 오면 안내 중으로 본다`() {
@@ -287,7 +293,7 @@ class FeedsTest {
         f.routing(false); f.driving(900)
         assertEquals(RouteState(t.now, false, null, emptyList()), events.single(), "경로 안내가 아니면 남은 시간 없음")
         f.routing(true)
-        assertEquals(RouteState(t.now, true, null, emptyList(), restsPending = true), events.last(), "C278: 거짓 동안 온 옛 시간은 안내 시작 때 버린다")
+        assertEquals(RouteState(t.now, true, null, emptyList(), restsPending = true), events.last(), "거짓 동안 온 옛 시간은 안내 시작 때 버린다")
         f.driving(900)
         assertEquals(RouteState(t.now, true, 900, emptyList(), restsPending = true), events.last())
         t.advance(1_000); f.driving(900)
@@ -298,7 +304,7 @@ class FeedsTest {
         assertNull((events.last() as RouteState).remainingSec, "안내가 끝나면 옛 남은 시간을 버린다")
     }
 
-    @Test fun `안내가 끝나거나 취소되면 받아 둔 쉼터를 비우고 그 뒤 온 TBT는 안내 중이 되면 버리고 다시 요청한다(C264)`() {
+    @Test fun `안내가 끝나거나 취소되면 받아 둔 쉼터를 비우고 그 뒤 온 TBT는 안내 중이 되면 버리고 다시 요청한다`() {
         val rest = RestCandidate("tbt:안성", "안성", RestKind.REST_AREA, 7.0, true)
         val f = RouteFeed({ t.now }, { events += it })
         f.routing(true)
@@ -312,10 +318,10 @@ class FeedsTest {
         f.rests(listOf(rest))                  // 경유지: FREE_DRIVE -> 새 TBT -> ROUTE_DRIVE
         assertTrue((events.last() as RouteState).rests.isEmpty(), "거짓 동안에는 내지 않는다")
         f.routing(true)
-        assertTrue((events.last() as RouteState).rests.isEmpty(), "C264: 거짓 뒤에 온 TBT는 끝난 경로의 것일 수 있어 버린다(다시 요청한 응답이 채운다)")
+        assertTrue((events.last() as RouteState).rests.isEmpty(), "거짓 뒤에 온 TBT는 끝난 경로의 것일 수 있어 버린다(다시 요청한 응답이 채운다)")
     }
 
-    @Test fun `상태를 받은 적 없을 때 온 TBT는 driving이나 initial로 참이 되면 버린다(C264)`() {
+    @Test fun `상태를 받은 적 없을 때 온 TBT는 driving이나 initial로 참이 되면 버린다`() {
         val rest = RestCandidate("tbt:안성", "안성", RestKind.REST_AREA, 7.0, true)
         val a = RouteFeed({ t.now }, { events += it })
         a.rests(listOf(rest)); a.driving(900)
@@ -355,7 +361,7 @@ class FeedsTest {
         assertEquals(RouteState(t.now, true, 900, emptyList(), restsPending = true), events.last())
     }
 
-    @Test fun c176_routingBeforeInitial_fillsRemaining() {
+    @Test fun routingBeforeInitial_fillsRemaining() {
         val f = RouteFeed({ t.now }, { events += it })
         val rest = RestCandidate("tbt:안성", "안성", RestKind.REST_AREA, 7.0, true)
         f.routing(true)                        // 재구독 뒤 상태가 initial보다 먼저 온다
@@ -366,7 +372,7 @@ class FeedsTest {
         }
     }
 
-    @Test fun c203_emptyDrivingDoesNotBlockInitial() {
+    @Test fun emptyDrivingDoesNotBlockInitial() {
         val f = RouteFeed({ t.now }, { events += it })
         val rest = RestCandidate("tbt:안성", "안성", RestKind.REST_AREA, 7.0, true)
         f.forget(); f.driving(null, null); f.routing(true)   // 재구독 직후 빈 DrivingInfo
@@ -375,7 +381,7 @@ class FeedsTest {
         (events.last() as RouteState).let { assertEquals(3600, it.remainingSec); assertEquals(60.0, it.remainingKm) }
     }
 
-    @Test fun c184_lateInitialAfterRouteEnd_ignored() {
+    @Test fun lateInitialAfterRouteEnd_ignored() {
         val f = RouteFeed({ t.now }, { events += it })
         f.forget()                             // 재구독: 목적지 조회 A를 보낸다
         f.routing(false)                       // 조회 응답 전에 경로가 끝났다
@@ -389,7 +395,7 @@ class FeedsTest {
         assertEquals(900, (events.last() as RouteState).remainingSec)
     }
 
-    @Test fun c176_initialAfterDriving_ignored() {
+    @Test fun initialAfterDriving_ignored() {
         val f = RouteFeed({ t.now }, { events += it })
         f.routing(true); f.driving(600, 10_000)
         f.initial(9000, 150_000)
@@ -421,7 +427,7 @@ class FeedsTest {
         f.routing(false)
         assertNull((events.last() as RouteState).remainingKm)
         val g = RouteFeed({ t.now }, { events += it })
-        g.initial(900, 24_000)                 // C116 복원 경로도 같은 값
+        g.initial(900, 24_000)                 // 복원 경로도 같은 값
         assertEquals(24.0, (events.last() as RouteState).remainingKm)
         g.routing(false); g.initial(900, 24_000)
         assertNull((events.last() as RouteState).remainingKm)
@@ -454,26 +460,26 @@ class FeedsTest {
         assertEquals(listOf(Gear.P, Gear.D), events.map { (it as GearChanged).gear })
     }
 
-    // C322 V12: 장면 끝에 실행기가 받은 차 값을 중복 억제 없이 지금 시각으로 다시 낸다
+    // 장면 끝에 실행기가 받은 차 값을 중복 억제 없이 지금 시각으로 다시 낸다
     @Test fun `reemit은 신호마다 마지막 값을 지금 시각으로 다시 내고 받은 적 없는 신호는 내지 않는다`() {
         val c = Changed()
         c.reemit { events += it }; assertTrue(events.isEmpty(), "받은 적이 없으면 내지 않는다")
         c.emit("gear", Gear.P, { GearChanged(t.now, Gear.P) }) { events += it }
         c.emit("gear", Gear.D, { GearChanged(t.now, Gear.D) }) { events += it }
-        c.emit("cabin", 21.0, { kr.aigyeot.engine.CabinTemp(t.now, 21.0) }) { events += it }
+        c.emit("cabin", 21.0, { CabinTemp(t.now, 21.0) }) { events += it }
         events.clear(); t.advance(5_000)
         c.reemit { events += it }
-        assertEquals(setOf<Event>(GearChanged(t.now, Gear.D), kr.aigyeot.engine.CabinTemp(t.now, 21.0)), events.toSet(), "같은 값이어도 신호마다 마지막 값 하나")
+        assertEquals(setOf<Event>(GearChanged(t.now, Gear.D), CabinTemp(t.now, 21.0)), events.toSet(), "같은 값이어도 신호마다 마지막 값 하나")
         c.reemit { events += it }; assertEquals(4, events.size, "다시 불러도 억제하지 않는다")
         c.emit("gear", Gear.D, { GearChanged(t.now, Gear.D) }) { events += it }; assertEquals(4, events.size, "다시 낸 뒤에도 보통 사건은 중복 억제")
     }
 
     @Test fun `reemit 순서는 키 낸 순서와 상관없이 기어 통화 뒷문 열선 온도`() {
         val c = Changed()
-        c.emit("cabin", 21.0, { kr.aigyeot.engine.CabinTemp(t.now, 21.0) }) { }
-        c.emit("seatROW_2_LEFT", 1, { kr.aigyeot.engine.SeatHeat(t.now, kr.aigyeot.engine.Area.ROW_2_LEFT, 1) }) { }
-        c.emit("doorLEFT", true, { kr.aigyeot.engine.RearDoor(t.now, kr.aigyeot.engine.Side.LEFT, true) }) { }
-        c.emit("call", true, { kr.aigyeot.engine.CallMode(t.now, true) }) { }
+        c.emit("cabin", 21.0, { CabinTemp(t.now, 21.0) }) { }
+        c.emit("seatROW_2_LEFT", 1, { SeatHeat(t.now, Area.ROW_2_LEFT, 1) }) { }
+        c.emit("doorLEFT", true, { RearDoor(t.now, Side.LEFT, true) }) { }
+        c.emit("call", true, { CallMode(t.now, true) }) { }
         c.emit("gear", Gear.P, { GearChanged(t.now, Gear.P) }) { }
         c.reemit { events += it }
         assertEquals(listOf("GearChanged", "CallMode", "RearDoor", "SeatHeat", "CabinTemp"), events.map { it::class.simpleName })

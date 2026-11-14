@@ -3,23 +3,34 @@ package kr.aigyeot.app.link
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.test.AfterTest
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kr.aigyeot.app.common.rfc3339
+import kr.aigyeot.app.common.ulid
 import kr.aigyeot.app.exec.LoudnessResult
 import kr.aigyeot.app.link.db.OutboxEntity
+import kr.aigyeot.app.store.db.AI_NOTICE_VERSION
 import kr.aigyeot.app.store.db.AppDatabase
 import kr.aigyeot.app.store.db.PhoneLinkEntity
 import kr.aigyeot.app.store.db.SongEntity
 import kr.aigyeot.engine.EngineState
-import kr.aigyeot.engine.fresh
-import kotlinx.coroutines.flow.first
 import kr.aigyeot.engine.Event
+import kr.aigyeot.engine.fresh
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.InboxResponse
@@ -30,9 +41,6 @@ import kr.aigyeot.shared.RegisterCarResponse
 import kr.aigyeot.shared.Role
 import kr.aigyeot.shared.SendMessageResponse
 import kr.aigyeot.shared.Sender
-import java.io.File
-import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.test.AfterTest
 
 // link 시험 도구: Robolectric + Room in-memory(AppDatabase), 가짜 중계, 가짜 토큰 감싸기, 가짜 시계.
 
@@ -119,14 +127,14 @@ abstract class LinkKit {
     var now = T0
     val events = CopyOnWriteArrayList<Event>()
     val relay = FakeRelay()
-    private val stateFlow = kotlinx.coroutines.flow.MutableStateFlow<EngineState?>(EngineState.fresh(1, null, emptyList(), emptyList(), null, 0))
-    var engineState: EngineState? get() = stateFlow.value; set(v) { stateFlow.value = v }   // 호스트 복원 뒤의 상태(C132). 복원 전은 null로 둔다
+    private val stateFlow = MutableStateFlow<EngineState?>(EngineState.fresh(1, null, emptyList(), emptyList(), null, 0))
+    var engineState: EngineState? get() = stateFlow.value; set(v) { stateFlow.value = v }   // 호스트 복원 뒤의 상태. 복원 전은 null로 둔다
     var probeResult: SongProbe? = SongProbe(94.5, true)
     var copyResult: suspend (File, File) -> LoudnessResult = { i, o -> i.copyTo(o, overwrite = true); LoudnessResult(true) }
-    /** 켜면 새로 보내는 작업을 붙잡아 두었다가 [release]에서 돌린다(시작 전 취소 시험 L90). */
-    class HoldDispatcher : kotlinx.coroutines.CoroutineDispatcher() {
+    /** 켜면 새로 보내는 작업을 붙잡아 두었다가 [release]에서 돌린다(시작 전 취소 시험). */
+    class HoldDispatcher : CoroutineDispatcher() {
         @Volatile var holding = false
-        val held = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        val held = ConcurrentLinkedQueue<Runnable>()
         override fun dispatch(context: kotlin.coroutines.CoroutineContext, block: Runnable) { if (holding) held.add(block) else Dispatchers.IO.dispatch(context, block) }
         fun release() { holding = false; while (true) Dispatchers.IO.dispatch(kotlin.coroutines.EmptyCoroutineContext, held.poll() ?: break) }
     }
@@ -135,7 +143,8 @@ abstract class LinkKit {
     open val qaWaitMs = 3_000L
     var onPost: (Event) -> Unit = {}   // 사건이 나간 직후(받기 잠금 안)에 시험이 끼어든다
     val link by lazy {
-        Link(ctx, db, { now }, { events += it; onPost(it) }, { engineState }, relay, FakeCipher, { probeResult }, { i, o -> copyResult(i, o) }, scope, qaWaitMs, stateReady = { stateFlow.first { it != null } })
+        Link(ctx, db, { now }, { events += it; onPost(it) }, { engineState },
+            relay, FakeCipher, { probeResult }, { i, o -> copyResult(i, o) }, scope, qaWaitMs, stateReady = { stateFlow.first { it != null } })
     }
 
     @AfterTest fun closeKit() { scope.cancel(); db.close() }
@@ -145,7 +154,7 @@ abstract class LinkKit {
 
     fun relayEnv(type: String, seq: Long, body: String) = env(type, seq, body, Sender(Role.RELAY, null))
 
-    fun profile(lastFeeding: Long? = null, interval: Int? = 180, nickname: String = "지우", noticeVersion: Int = kr.aigyeot.app.store.db.AI_NOTICE_VERSION) = db.openHelper.writableDatabase.execSQL(
+    fun profile(lastFeeding: Long? = null, interval: Int? = 180, nickname: String = "지우", noticeVersion: Int = AI_NOTICE_VERSION) = db.openHelper.writableDatabase.execSQL(
         "INSERT INTO child_profile (id, nickname, birth_ym, carseat, feeding_interval_min, last_feeding_start, methods, has_sibling, " +
             "front_fallback_allowed, consent_at, ai_notice_version) VALUES ('p', ?, '2026-03', 'LEFT', ?, ?, '[]', 0, 0, 0, ?)",
         arrayOf<Any?>(nickname, interval, lastFeeding, noticeVersion),
@@ -162,5 +171,5 @@ abstract class LinkKit {
     fun outbox(): List<OutboxEntity> = dao.outbox()
     fun outbox(type: String) = outbox().filter { it.type == type }
     fun OutboxEntity.body(): JsonObject = Json.parseToJsonElement(bodyJson).jsonObject
-    fun JsonObject.str(k: String) = this[k]?.let { if (it is kotlinx.serialization.json.JsonNull) null else (it as kotlinx.serialization.json.JsonPrimitive).content }
+    fun JsonObject.str(k: String) = this[k]?.let { if (it is JsonNull) null else (it as JsonPrimitive).content }
 }

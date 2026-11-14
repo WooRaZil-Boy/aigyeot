@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-// 계약 4.2 ① 준비 = 차가 실제로 답한 때(성공 또는 ERROR_NOT_SUPPORTED_PROPERTY 실패). 그 밖의 실패·예외·응답 없음은 준비 전
+// 준비 = 차가 실제로 답한 때(성공 또는 ERROR_NOT_SUPPORTED_PROPERTY 실패). 그 밖의 실패·예외·응답 없음은 준비 전
 class ReadyProbeTest {
     private val t = FakeTime(0)
 
@@ -63,7 +63,7 @@ class ReadyProbeTest {
         assertTrue(probe.ready); assertEquals(1, readies)
     }
 
-    // 장부(C363): 낮춘 채 프로세스가 죽었다 다시 뜨면 차가 준비된 뒤 첫 일로 장부를 되돌리고, 판단 코어 Boot 되돌림과 겹쳐도 한 번만 쓴다
+    // 장부: 낮춘 채 프로세스가 죽었다 다시 뜨면 차가 준비된 뒤 첫 일로 장부를 되돌리고, 판단 코어 Boot 되돌림과 겹쳐도 한 번만 쓴다
     @Test fun `Exec 판단 코어가 RestoreAmbientLedger를 내지 않으면 시작 때 장부를 건드리지 않는다`() {
         val r = Rec(); val amb = AmbientsFakeForGate(t); amb.brightness = 20
         val store = object : LedgerStore {

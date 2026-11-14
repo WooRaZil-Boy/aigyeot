@@ -6,10 +6,8 @@ import kr.aigyeot.app.link.db.SongSelectionEntity
 import kr.aigyeot.app.store.db.SessionEntity
 import kr.aigyeot.app.store.db.SongEntity
 import kr.aigyeot.engine.AskButton
-import kr.aigyeot.engine.DAY_MS
 import kr.aigyeot.engine.Engine
 import kr.aigyeot.engine.EngineState
-import kr.aigyeot.engine.FirstTry
 import kr.aigyeot.engine.Gear
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
@@ -25,12 +23,12 @@ import kotlin.test.assertTrue
 
 private const val T0 = 1_800_000_000_000L
 
-// 화면이 하던 계산을 옮긴 순수 매핑 함수(U1). 기대값은 옮기기 전과 같다.
+// 화면이 하던 계산을 옮긴 순수 매핑 함수. 기대값은 옮기기 전과 같다.
 class UiStateMappingTest {
     private fun fresh() = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
 
-    /** C303 ⑤(B7): 홈 화면 물어보기 버튼은 판단 코어가 AskButton을 받는 조건(canAsk) 그대로. 말하는 중·통화 중에는 켜지 않는다(눌러도 버려지지 않게). */
-    @Test fun c303_b7_askEnabledFromEngine() {
+    /** 홈 화면 물어보기 버튼은 판단 코어가 AskButton을 받는 조건(canAsk) 그대로. 말하는 중·통화 중에는 켜지 않는다(눌러도 버려지지 않게). */
+    @Test fun askEnabledFromEngine() {
         val f = fresh()
         val parked = f.copy(car = f.car.copy(gear = Gear.P, micRunning = true))
         assertTrue(askEnabled(parked))
@@ -50,7 +48,7 @@ class UiStateMappingTest {
         assertEquals(listOf(false, false), songRows(listOf(song("a", "x", null), song("b", "y", null)), null, emptyList()).map { it.selected })
     }
 
-    @Test fun reportRows_openSessionDisabled_simulationMarked() {   // 디자인 v6: 한 줄 글자가 제목(날짜·구간)과 부가(U47)로 나뉘었다. 자세한 문구는 ReportViewTest
+    @Test fun reportRows_openSessionDisabled_simulationMarked() {   // 한 줄 글자가 제목(날짜·구간)과 부가로 나뉘었다. 자세한 문구는 ReportViewTest
         fun s(id: String, end: Long?, scene: String?) = SessionEntity(id, T0, end, "T", null, null, 0, 0, false, "[]", null, null, false, scene, 10)
         val rows = reportRows(listOf(s("a", null, null), s("b", T0 + 60_000, "sc")))
         assertEquals(listOf(false, true), rows.map { it.enabled })
@@ -69,8 +67,8 @@ class UiStateMappingTest {
         assertTrue(phoneLines(LinkedPhone("d", "guardian", T0)).second!!.startsWith("마지막 연락 "))
     }
 
-    /** C356: HANDOFF 홈 상태는 안내 여부를 말하지 않는다(쉼터 안내 없이도 들어간다). */
-    @Test fun c356_handoffStatusText_doesNotClaimGuidance() {
+    /** HANDOFF 홈 상태는 안내 여부를 말하지 않는다(쉼터 안내 없이도 들어간다). */
+    @Test fun handoffStatusText_doesNotClaimGuidance() {
         val f = fresh()
         val ses = SessionState(
             id = "S1", openedAt = T0, trigger = OpenTrigger.DOOR_THEN_D, methods = emptyList(), stage = Stage.Handoff(1),
@@ -91,7 +89,7 @@ class UiStateMappingTest {
         assertEquals(emptySet(), keysToDrop(setOf(home, setup), Route.Songs), "설정 → 노래: 설정 입력은 남아 돌아오면 이어 쓴다")
         assertEquals(setOf(songs), keysToDrop(setOf(home, setup, songs), Route.Setup), "노래 → 설정: 노래 화면 상태만 버린다")
         assertEquals(setOf(setup, demo), keysToDrop(setOf(home, setup, demo), Route.Home), "시연에서 홈으로: 위 화면(설정) 입력까지 버린다")
-        // 주행 중 화면 전환은 route를 바꾸지 않는다(C365): 지금 화면으로 '옮기면' 아무것도 버리지 않는다
+        // 주행 중 화면 전환은 route를 바꾸지 않는다: 지금 화면으로 '옮기면' 아무것도 버리지 않는다
         assertEquals(emptySet(), keysToDrop(setOf(home, setup), Route.Setup))
     }
 

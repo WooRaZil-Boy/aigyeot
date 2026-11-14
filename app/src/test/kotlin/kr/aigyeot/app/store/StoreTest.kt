@@ -1,38 +1,89 @@
 package kr.aigyeot.app.store
 
+import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kr.aigyeot.app.host.T0
+import kr.aigyeot.app.link.SENT_ID_KEEP_MS
+import kr.aigyeot.app.store.db.AI_NOTICE_VERSION
 import kr.aigyeot.app.store.db.AlarmLogEntity
 import kr.aigyeot.app.store.db.AppDatabase
-import kr.aigyeot.app.store.db.consentChecked
-import kr.aigyeot.app.store.db.needsSetup
+import kr.aigyeot.app.store.db.ChildProfileEntity
 import kr.aigyeot.app.store.db.ContextSampleEntity
+import kr.aigyeot.app.store.db.ControlAct
+import kr.aigyeot.app.store.db.ControlApi
 import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.app.store.db.EpisodeEntity
+import kr.aigyeot.app.store.db.MIGRATION_1_2
 import kr.aigyeot.app.store.db.PlayLogEntity
-import kr.aigyeot.app.store.db.SessionEntity
 import kr.aigyeot.app.store.db.SteerWindowEntity
-import kr.aigyeot.engine.*
+import kr.aigyeot.app.store.db.consentChecked
+import kr.aigyeot.app.store.db.needsSetup
+import kr.aigyeot.engine.AlarmOnly
+import kr.aigyeot.engine.CaptureContext
+import kr.aigyeot.engine.CloseSession
+import kr.aigyeot.engine.ControlState
+import kr.aigyeot.engine.CrySegment
+import kr.aigyeot.engine.DAY_MS
+import kr.aigyeot.engine.EngineState
+import kr.aigyeot.engine.EpisodeRecord
+import kr.aigyeot.engine.EpisodeTrigger
+import kr.aigyeot.engine.Gear
+import kr.aigyeot.engine.HandoffCause
+import kr.aigyeot.engine.HandoffKind
+import kr.aigyeot.engine.HandoffLedger
+import kr.aigyeot.engine.LogAlarm
+import kr.aigyeot.engine.Method
+import kr.aigyeot.engine.MethodKind
+import kr.aigyeot.engine.MicPath
+import kr.aigyeot.engine.OfferState
+import kr.aigyeot.engine.OpenTrigger
+import kr.aigyeot.engine.OutputRoute
+import kr.aigyeot.engine.Params
+import kr.aigyeot.engine.Play
+import kr.aigyeot.engine.PlayEndReason
+import kr.aigyeot.engine.PlayMode
+import kr.aigyeot.engine.PlayPurpose
+import kr.aigyeot.engine.PlayRecord
+import kr.aigyeot.engine.SaveEpisode
+import kr.aigyeot.engine.SaveFeedingStart
+import kr.aigyeot.engine.SavePlay
+import kr.aigyeot.engine.SaveSession
+import kr.aigyeot.engine.SaveSteerWindow
+import kr.aigyeot.engine.SessionRecord
+import kr.aigyeot.engine.SessionState
+import kr.aigyeot.engine.SettleHandoff
+import kr.aigyeot.engine.Stage
+import kr.aigyeot.engine.SteerWindowRecord
+import kr.aigyeot.engine.Tick
+import kr.aigyeot.engine.TurnSignal
+import kr.aigyeot.engine.VehicleSample
+import kr.aigyeot.engine.fresh
+import kr.aigyeot.engine.told
+import kr.aigyeot.shared.CarActionKind
+import kr.aigyeot.shared.Steering
 import kr.aigyeot.shared.SteeringUnavailableReason
-import kotlinx.coroutines.launch
 import org.junit.After
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kr.aigyeot.engine.fresh
-
-private const val T0 = 1_800_000_000_000L
 
 @RunWith(RobolectricTestRunner::class)
 class StoreTest {
@@ -41,11 +92,11 @@ class StoreTest {
     private var now = T0
     private val store = Store(db, { now })
 
-    @Test fun c185_reportChanges_emitsOnSessionUpdate_andPendingReadable() {
+    @Test fun reportChanges_emitsOnSessionUpdate_andPendingReadable() {
         session()
         assertEquals(true, dao.reportPending("S1"))
-        val seen = java.util.concurrent.atomic.AtomicInteger()
-        val job = kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) { dao.reportChanges("S1").collect { seen.incrementAndGet() } }
+        val seen = AtomicInteger()
+        val job = GlobalScope.launch(Dispatchers.IO) { dao.reportChanges("S1").collect { seen.incrementAndGet() } }
         val end = System.currentTimeMillis() + 5000
         while (seen.get() < 1 && System.currentTimeMillis() < end) Thread.sleep(20)
         session(pending = false)        // 리포트가 만들어지면 다시 내서 화면이 바뀐다
@@ -55,12 +106,13 @@ class StoreTest {
         assertEquals(false, dao.reportPending("S1"))
     }
 
-    // ---- C262: 부모 세션이 없는 자식 쓰기는 입구에서 버린다 ----
-    private fun rec(id: String = "E9", sid: String = "GONE") = EpisodeRecord(id, sid, T0, null, EpisodeTrigger.ALARM, T0, 2_400, null, null, null, null, null, null, null, null, null, null, false, cryMs = 0, recried = false, playedMs = 0, excludeReasons = emptyList())
+    // ---- 부모 세션이 없는 자식 쓰기는 입구에서 버린다 ----
+    private fun rec(id: String = "E9", sid: String = "GONE") = EpisodeRecord(id, sid, T0, null, EpisodeTrigger.ALARM, T0, 2_400, null, null, null, null, null, null, null, null, null, null, false,
+        cryMs = 0, recried = false, playedMs = 0, excludeReasons = emptyList())
 
-    @Test fun c262_childWritesWithoutParentSession_dropped() {
+    @Test fun childWritesWithoutParentSession_dropped() {
         phone()
-        store.applyAllTx(listOf(   // 묶음 트랜잭션: 버리지 않으면 외래키 오류가 던져진다(C173이면 프로세스 종료)
+        store.applyAllTx(listOf(   // 묶음 트랜잭션: 버리지 않으면 외래키 오류가 던져진다(호스트는 프로세스를 끝낸다)
             SaveEpisode(rec()),
             SavePlay(PlayRecord("P9", "GONE", "E9", PlayPurpose.AUTO_FIRST, MethodKind.LULLABY, null, T0, T0 + 1, 1, PlayEndReason.DEADLINE)),
             LogAlarm("GONE", T0, AlarmOnly.WAITING), CaptureContext("E9", T0),
@@ -69,20 +121,20 @@ class StoreTest {
         listOf("session", "episode", "play_log", "alarm_log", "context_sample", "steer_window", "control_log").forEach { assertEquals(0, count("SELECT COUNT(*) FROM $it"), it) }
     }
 
-    @Test fun c262_closeSessionOfGoneSession_noReportNoRow() {
+    @Test fun closeSessionOfGoneSession_noReportNoRow() {
         phone()
         store.handle(CloseSession("GONE"))
         assertEquals(0, count("SELECT COUNT(*) FROM outbox")); assertEquals(0, count("SELECT COUNT(*) FROM session"))
     }
 
-    @Test fun c262_newSessionFirstWriteInSameTransaction_saved() {
+    @Test fun newSessionFirstWriteInSameTransaction_saved() {
         store.applyAllTx(listOf(
             SaveSession(SessionRecord("N1", T0, null, OpenTrigger.DOOR_THEN_D, MicPath.HOME_BUTTON, null, 0, 0, false, "[]", null, null, false, null, 10)),
             SaveEpisode(rec("EN", "N1")), LogAlarm("N1", T0, AlarmOnly.WAITING)))
         assertEquals(1, count("SELECT COUNT(*) FROM episode")); assertEquals(1, count("SELECT COUNT(*) FROM alarm_log"))
     }
 
-    @Test fun c262_contextRowsOfGoneEpisode_droppedAtEntry_otherEpisodeKept() {
+    @Test fun contextRowsOfGoneEpisode_droppedAtEntry_otherEpisodeKept() {
         session(); store.handle(SaveEpisode(rec("E1", "S1"))); store.handle(SaveEpisode(rec("E2", "S1")))
         val s = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0).let { it.copy(car = it.car.copy(gear = Gear.D)) }
         var t = T0
@@ -94,7 +146,7 @@ class StoreTest {
         assertTrue(count("SELECT COUNT(*) FROM context_sample WHERE episode_id = 'E2' AND at > ${T0 + 5_500}") >= 3, "다른 에피소드 줄은 잃지 않는다")
     }
 
-    @Test fun c274_observeParentLookupFailure_isSwallowed() {
+    @Test fun observeParentLookupFailure_isSwallowed() {
         session(); store.handle(SaveEpisode(rec("E1", "S1")))
         val s = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0).let { it.copy(car = it.car.copy(gear = Gear.D)) }
         var t = T0
@@ -121,7 +173,8 @@ class StoreTest {
         dao.upsertPlay(PlayLogEntity("P1", "S1", "E1", "AUTO_FIRST", "LULLABY", null, T0 + 63_000, T0 + 119_000, 56_000, "DEADLINE"))
         dao.insertContext((0..60).map { i -> ContextSampleEntity("E1", T0 + 30_000 + i * 1_000L, 50.0 + i % 3, i == 5, if (i % 10 < 5) 0.0 else 5.0, "NONE", "D", 24.5, null, null, null) })
         dao.upsertSteer(SteerWindowEntity("S1", T0, 2, false, true, false, 4))
-        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 10_000, api = kr.aigyeot.app.store.db.ControlApi.SEAT_HEAT, target = "ROW_2_LEFT", goal = "0", actual = "0", ackMs = 120, appliedMs = 300, ok = true, retries = 0))
+        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 10_000, api = ControlApi.SEAT_HEAT, target = "ROW_2_LEFT", goal = "0", actual = "0",
+            ackMs = 120, appliedMs = 300, ok = true, retries = 0))
     }
 
     @Test fun reportFields_matchContractAndSharedExample() {
@@ -134,7 +187,7 @@ class StoreTest {
         assertTrue(ours["started_at"].toString().endsWith("+09:00\""))
     }
 
-    @Test fun c118_reportSound_womb_mapsToWombNotParentSong() {
+    @Test fun reportSound_womb_mapsToWombNotParentSong() {
         session()
         dao.upsertEpisode(EpisodeEntity("E1", "S1", T0 + 60_000, T0 + 200_000, "ALARM", T0 + 60_000, 2_400, "WOMB", null, "SUCCESS", null,
             null, null, null, null, null, null, false, false, 61_000, false, 56_000, emptyList()))
@@ -145,61 +198,62 @@ class StoreTest {
         assertTrue("parent_song" !in body, body)
     }
 
-    @Test fun c118_oldProfileWithoutWomb_stillUsesWomb() {
+    @Test fun oldProfileWithoutWomb_stillUsesWomb() {
         val fixed = listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY))
-        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
-        sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('a', 'a', $T0, 'AAC', 60.0, -30.0, NULL, 'ACTIVE', NULL, 1, 1)")
+        dao.upsertProfile(ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, AI_NOTICE_VERSION))
+        sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) " +
+            "VALUES ('a', 'a', $T0, 'AAC', 60.0, -30.0, NULL, 'ACTIVE', NULL, 1, 1)")
         assertEquals(fixed + Method(MethodKind.SONG, "a"), store.methods(), "옛 프로필(SONG 켬): 뱃속 소리가 둘째")
-        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
-        assertEquals(fixed, store.methods(), "옛 프로필(SONG 끔): 곡이 있어도 ③ 없음")
+        dao.upsertProfile(ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)), false, false, T0, AI_NOTICE_VERSION))
+        assertEquals(fixed, store.methods(), "옛 프로필(SONG 끔): 곡이 있어도 부모 노래 후보 없음")
     }
 
-    // C122: AI 전송 안내 판
-    @Test fun c122_needsSetup_andConsentInitial() {
+    // AI 전송 안내 판
+    @Test fun needsSetup_andConsentInitial() {
         val cur = profile(null)
         val old = cur.copy(aiNoticeVersion = 0)
         assertTrue(null.needsSetup() && old.needsSetup() && !cur.needsSetup(), "없음·판 0은 설정 화면, 지금 판은 홈")
         assertTrue(!null.consentChecked() && !old.consentChecked() && cur.consentChecked(), "동의 체크 초기값은 지금 판만 참")
     }
 
-    @Test fun c122_migration1to2_keepsRows_versionZero() {
-        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
-        fun helper(version: Int, cb: androidx.sqlite.db.SupportSQLiteOpenHelper.Callback) = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory()
-            .create(androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(ctx).name("mig.db").callback(cb).build())
-        val v1 = helper(1, object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
-            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+    @Test fun migration1to2_keepsRows_versionZero() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        fun helper(version: Int, cb: SupportSQLiteOpenHelper.Callback) = FrameworkSQLiteOpenHelperFactory()
+            .create(SupportSQLiteOpenHelper.Configuration.builder(ctx).name("mig.db").callback(cb).build())
+        val v1 = helper(1, object : SupportSQLiteOpenHelper.Callback(1) {
+            override fun onCreate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE child_profile (id TEXT NOT NULL PRIMARY KEY, nickname TEXT NOT NULL, consent_at INTEGER NOT NULL)")
                 db.execSQL("INSERT INTO child_profile VALUES ('c', '콩이', 5)")
-                db.execSQL("CREATE TABLE session (id TEXT NOT NULL PRIMARY KEY, scenario_id TEXT, ended_at INTEGER)")   // C248·C306: 이전이 session·handoff_kind를 읽는다
+                db.execSQL("CREATE TABLE session (id TEXT NOT NULL PRIMARY KEY, scenario_id TEXT, ended_at INTEGER)")   // 이전이 session·handoff_kind를 읽는다
                 db.execSQL("CREATE TABLE episode (id TEXT NOT NULL PRIMARY KEY, session_id TEXT, handoff_kind TEXT)")
-                db.execSQL("CREATE TABLE steer_window (session_id TEXT NOT NULL, start_at INTEGER NOT NULL, PRIMARY KEY(session_id, start_at))")   // C312: 이전이 observed 칸을 더한다
+                db.execSQL("CREATE TABLE steer_window (session_id TEXT NOT NULL, start_at INTEGER NOT NULL, PRIMARY KEY(session_id, start_at))")   // 이전이 observed 칸을 더한다
                 db.execSQL("INSERT INTO episode (id) VALUES ('E1')")
             }
-            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, o: Int, n: Int) {}
+            override fun onUpgrade(db: SupportSQLiteDatabase, o: Int, n: Int) {}
         })
         v1.writableDatabase; v1.close()
-        val v2 = helper(2, object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(2) {
-            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {}
-            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, o: Int, n: Int) = kr.aigyeot.app.store.db.MIGRATION_1_2.migrate(db)
+        val v2 = helper(2, object : SupportSQLiteOpenHelper.Callback(2) {
+            override fun onCreate(db: SupportSQLiteDatabase) {}
+            override fun onUpgrade(db: SupportSQLiteDatabase, o: Int, n: Int) = MIGRATION_1_2.migrate(db)
         })
         v2.writableDatabase.query("SELECT nickname, ai_notice_version FROM child_profile").use {
             assertTrue(it.moveToFirst()); assertEquals("콩이", it.getString(0)); assertEquals(0, it.getInt(1))
         }
-        // C130: episode 행이 남고 새 두 칸은 null
+        // episode 행이 남고 새 두 칸은 null
         v2.writableDatabase.query("SELECT id, handoff_rest_name, handoff_told_driver FROM episode").use {
             assertTrue(it.moveToFirst()); assertEquals("E1", it.getString(0)); assertTrue(it.isNull(1) && it.isNull(2))
         }
         v2.close()
     }
 
-    @Test fun h11_handoffColumns_storedAndReportedInStop() {
+    @Test fun handoffColumns_storedAndReportedInStop() {
         session()
-        val rec = kr.aigyeot.engine.EpisodeRecord("E1", "S1", T0 + 60_000, T0 + 200_000, kr.aigyeot.engine.EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
-            null, null, null, null, null, null, null, null, kr.aigyeot.engine.HandoffCause.TWO_ATTEMPTS, kr.aigyeot.engine.HandoffKind.WAYPOINT_OFFER,
+        val rec = EpisodeRecord("E1", "S1", T0 + 60_000, T0 + 200_000, EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
+            null, null, null, null, null, null, null, null, HandoffCause.TWO_ATTEMPTS, HandoffKind.WAYPOINT_OFFER,
             false, 61_000, false, 56_000, emptyList())
-        store.handle(kr.aigyeot.engine.SaveEpisode(rec)); store.handle(SettleHandoff("E1", HandoffKind.WAYPOINT_OFFER, true, "n 휴게소"))
+        store.handle(SaveEpisode(rec)); store.handle(SettleHandoff("E1", HandoffKind.WAYPOINT_OFFER, true, "n 휴게소"))
         assertEquals("n 휴게소", dao.episode("E1")!!.handoffRestName); assertEquals(true, dao.episode("E1")!!.handoffToldDriver)
         var body = encodeReport(buildReport(dao, "S1", now)!!)
         assertTrue("\"rest_name\":\"n 휴게소\"" in body && "\"told_driver\":true" in body, body)
@@ -208,94 +262,95 @@ class StoreTest {
         assertTrue("\"told_driver\":false" in body && "\"rest_name\":\"n 휴게소\"" !in body, body)
     }
 
-    @Test fun c132_arrivalNoticeCount_excludesToldDriverFalse() {
-        session(pending = false)   // C305: null이 있으면 확정 전이라 finalizing으로 센다(null은 참으로 봄)
+    @Test fun arrivalNoticeCount_excludesToldDriverFalse() {
+        session(pending = false)   // null이 있으면 확정 전이라 finalizing으로 센다(null은 참으로 봄)
         fun ep(id: String, told: Boolean?) {
-            store.handle(kr.aigyeot.engine.SaveEpisode(kr.aigyeot.engine.EpisodeRecord(id, "S1", T0 + 60_000, T0 + 200_000, kr.aigyeot.engine.EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
-                null, null, null, null, null, null, null, null, kr.aigyeot.engine.HandoffCause.TWO_ATTEMPTS, kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE,
+            store.handle(SaveEpisode(EpisodeRecord(id, "S1", T0 + 60_000, T0 + 200_000, EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
+                null, null, null, null, null, null, null, null, HandoffCause.TWO_ATTEMPTS, HandoffKind.ARRIVAL_NOTICE,
                 false, 61_000, false, 56_000, emptyList())))
             if (told != null) store.handle(SettleHandoff(id, HandoffKind.ARRIVAL_NOTICE, told, null))
         }
         ep("E1", false); ep("E2", true); ep("E3", null)
-        val n = buildReport(dao, "S1", now, finalizing = true)!!.carActions.first { it.action == kr.aigyeot.shared.CarActionKind.ARRIVAL_NOTICE }.count
+        val n = buildReport(dao, "S1", now, finalizing = true)!!.carActions.first { it.action == CarActionKind.ARRIVAL_NOTICE }.count
         assertEquals(2, n, "false는 세지 않고 true·null만 센다")
     }
 
-    // C189 ①: 리포트 확정 전(report_pending)에는 toldDriver가 true인 도착 안내만 센다
-    @Test fun c189_pendingArrivalNotCounted() {
+    // 리포트 확정 전(report_pending)에는 toldDriver가 true인 도착 안내만 센다
+    @Test fun pendingArrivalNotCounted() {
         session()
-        store.handle(kr.aigyeot.engine.SaveEpisode(kr.aigyeot.engine.EpisodeRecord("E1", "S1", T0 + 60_000, T0 + 200_000, kr.aigyeot.engine.EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
-            null, null, null, null, null, null, null, null, kr.aigyeot.engine.HandoffCause.TWO_ATTEMPTS, kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE,
+        store.handle(SaveEpisode(EpisodeRecord("E1", "S1", T0 + 60_000, T0 + 200_000, EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
+            null, null, null, null, null, null, null, null, HandoffCause.TWO_ATTEMPTS, HandoffKind.ARRIVAL_NOTICE,
             false, 61_000, false, 56_000, emptyList())))
-        fun n() = buildReport(dao, "S1", now)!!.carActions.firstOrNull { it.action == kr.aigyeot.shared.CarActionKind.ARRIVAL_NOTICE }?.count ?: 0
+        fun n() = buildReport(dao, "S1", now)!!.carActions.firstOrNull { it.action == CarActionKind.ARRIVAL_NOTICE }?.count ?: 0
         assertEquals(0, n(), "toldDriver null이면 세지 않는다(S15 발화 중)")
-        assertEquals(1, buildReport(dao, "S1", now, finalizing = true)!!.carActions.first { it.action == kr.aigyeot.shared.CarActionKind.ARRIVAL_NOTICE }.count, "C305: 리포트를 만들 때(finalizing)는 null을 참으로 본다")
+        assertEquals(1, buildReport(dao, "S1", now, finalizing = true)!!.carActions.first { it.action == CarActionKind.ARRIVAL_NOTICE }.count, "리포트를 만들 때(finalizing)는 null을 참으로 본다")
     }
 
-    // C305: 인계 확정은 에피소드 행에서만 정한다(report_pending 아님)
-    private fun handoffEp(id: String, kind: kr.aigyeot.engine.HandoffKind, told: Boolean?) {
-        store.handle(kr.aigyeot.engine.SaveEpisode(kr.aigyeot.engine.EpisodeRecord(id, "S1", T0 + 60_000, T0 + 200_000, kr.aigyeot.engine.EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
-            null, null, null, null, null, null, null, null, kr.aigyeot.engine.HandoffCause.TWO_ATTEMPTS, kind,
+    // 인계 확정은 에피소드 행에서만 정한다(report_pending 아님)
+    private fun handoffEp(id: String, kind: HandoffKind, told: Boolean?) {
+        store.handle(SaveEpisode(EpisodeRecord(id, "S1", T0 + 60_000, T0 + 200_000, EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
+            null, null, null, null, null, null, null, null, HandoffCause.TWO_ATTEMPTS, kind,
             false, 61_000, false, 56_000, emptyList())))
-        db.linkDao().markGuardianNotified(id)   // 결정 ③: 알림을 보낼 함에 넣은 행(link만 쓴다)
+        db.linkDao().markGuardianNotified(id)   // 알림을 보낼 함에 넣은 행(link만 쓴다)
         if (told != null) store.handle(SettleHandoff(id, kind, told, null))
     }
-    private fun arrivalCount(finalizing: Boolean = false) = buildReport(dao, "S1", now, finalizing = finalizing)!!.carActions.firstOrNull { it.action == kr.aigyeot.shared.CarActionKind.ARRIVAL_NOTICE }?.count ?: 0
+    private fun arrivalCount(finalizing: Boolean = false) = buildReport(dao, "S1", now, finalizing = finalizing)!!
+        .carActions.firstOrNull { it.action == CarActionKind.ARRIVAL_NOTICE }?.count ?: 0
 
-    @Test fun c305_sceneSession_unspokenHandoff_showsSettling() {
+    @Test fun sceneSession_unspokenHandoff_showsSettling() {
         session(pending = false)   // 장면 세션은 report_pending이 늘 거짓
-        handoffEp("E1", kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE, null)
+        handoffEp("E1", HandoffKind.ARRIVAL_NOTICE, null)
         assertTrue(readReport(db, "S1") { buildReport(it, "S1", now) }.second, "말하지 못한 인계가 있으면 정리 중")
         assertEquals(0, arrivalCount(), "도착 안내를 세지 않는다")
-        assertEquals(0, buildReport(dao, "S1", now)!!.carActions.count { it.action == kr.aigyeot.shared.CarActionKind.GUARDIAN_ALERT && it.count > 0 }, "알림도 세지 않는다")
+        assertEquals(0, buildReport(dao, "S1", now)!!.carActions.count { it.action == CarActionKind.GUARDIAN_ALERT && it.count > 0 }, "알림도 세지 않는다")
     }
 
-    @Test fun c305_realSession_reportOutboxFailed_settledRowsShowFinal() {
+    @Test fun realSession_reportOutboxFailed_settledRowsShowFinal() {
         session(pending = true)   // 리포트 보낼 함 저장 실패로 report_pending이 남음
-        handoffEp("E1", kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE, true)
+        handoffEp("E1", HandoffKind.ARRIVAL_NOTICE, true)
         assertEquals(false, readReport(db, "S1") { buildReport(it, "S1", now) }.second, "인계가 확정이면 정리 중이 아니다")
         assertEquals(1, arrivalCount(), "값이 그대로 그려진다")
     }
 
-    @Test fun c305_parkedHandoff_nullToldIsSettled() {
+    @Test fun parkedHandoff_nullToldIsSettled() {
         session(pending = false)
-        handoffEp("E1", kr.aigyeot.engine.HandoffKind.PARKED, null)
+        handoffEp("E1", HandoffKind.PARKED, null)
         assertEquals(false, readReport(db, "S1") { buildReport(it, "S1", now) }.second)
     }
 
-    // C220: 확정 전(report_pending)에는 보호자 알림 횟수에 세지 않는다
-    @Test fun c220_pendingSessionNotCountedInCarActions() {
+    // 확정 전(report_pending)에는 보호자 알림 횟수에 세지 않는다
+    @Test fun pendingSessionNotCountedInCarActions() {
         session()
-        store.handle(kr.aigyeot.engine.SaveEpisode(kr.aigyeot.engine.EpisodeRecord("E1", "S1", T0 + 60_000, T0 + 200_000, kr.aigyeot.engine.EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
-            null, null, null, null, null, null, null, null, kr.aigyeot.engine.HandoffCause.TWO_ATTEMPTS, kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE,
+        store.handle(SaveEpisode(EpisodeRecord("E1", "S1", T0 + 60_000, T0 + 200_000, EpisodeTrigger.ALARM, T0 + 60_000, 2_400,
+            null, null, null, null, null, null, null, null, HandoffCause.TWO_ATTEMPTS, HandoffKind.ARRIVAL_NOTICE,
             false, 61_000, false, 56_000, emptyList())))
-        db.linkDao().markGuardianNotified("E1")   // 결정 ③: 보낼 함에 넣은 알림
-        fun n(fin: Boolean = false) = buildReport(dao, "S1", now, finalizing = fin)!!.carActions.firstOrNull { it.action == kr.aigyeot.shared.CarActionKind.GUARDIAN_ALERT }?.count ?: 0
+        db.linkDao().markGuardianNotified("E1")   // 보낼 함에 넣은 알림
+        fun n(fin: Boolean = false) = buildReport(dao, "S1", now, finalizing = fin)!!.carActions.firstOrNull { it.action == CarActionKind.GUARDIAN_ALERT }?.count ?: 0
         assertEquals(0, n(), "확정 전이면 알림이 나갔는지 모른다")
         assertEquals(1, n(true), "확정되면 센다")
     }
 
-    // C189 ②: 본문과 report_pending을 한 트랜잭션 안에서 함께 읽는다
-    @Test fun c189_bodyAndPendingReadTogether() {
+    // 본문과 report_pending을 한 트랜잭션 안에서 함께 읽는다
+    @Test fun bodyAndPendingReadTogether() {
         session()
-        handoffEp("E1", kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE, null)   // C305: 확정 전 인계 행이 있으면 정리 중
+        handoffEp("E1", HandoffKind.ARRIVAL_NOTICE, null)   // 확정 전 인계 행이 있으면 정리 중
         var inTx = false
         val (b, pending) = readReport(db, "S1") { inTx = db.inTransaction(); buildReport(it, "S1", now) }
         assertTrue(inTx, "build가 트랜잭션 안에서 돈다")
         assertTrue(b != null && pending)
-        handoffEp("E1", kr.aigyeot.engine.HandoffKind.ARRIVAL_NOTICE, true)
+        handoffEp("E1", HandoffKind.ARRIVAL_NOTICE, true)
         assertEquals(false, readReport(db, "S1") { buildReport(it, "S1", now) }.second)
     }
 
-    @Test fun c122_saveWritesCurrentVersion_dbDefaultIsCurrent() {
+    @Test fun saveWritesCurrentVersion_dbDefaultIsCurrent() {
         dao.upsertProfile(profile(null).copy(aiNoticeVersion = 0))
         assertEquals(0, dao.profile()!!.aiNoticeVersion)
         dao.upsertProfile(profile(null))
-        assertEquals(kr.aigyeot.app.store.db.AI_NOTICE_VERSION, dao.profile()!!.aiNoticeVersion)
+        assertEquals(AI_NOTICE_VERSION, dao.profile()!!.aiNoticeVersion)
     }
 
-    @Test fun c118_methods_defaultWithoutProfileHasWombSecond() {
-        assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), store.methods(), "프로필 없음 + ③ 없음")
+    @Test fun methods_defaultWithoutProfileHasWombSecond() {
+        assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), store.methods(), "프로필 없음 + 부모 노래 후보 없음")
     }
 
     /** 예제에 있는 키가 같은 순서로 모두 있는지(배열은 첫 원소끼리). 값의 null 여부는 보지 않는다. */
@@ -313,16 +368,17 @@ class StoreTest {
 
     private fun JsonObject.str(arr: String, key: String) = (this[arr] as JsonArray)[0].jsonObject[key].toString().trim('"')
 
-    @Test fun r13_noPlayback_outputRouteNull() {
+    @Test fun noPlayback_outputRouteNull() {
         session(route = null)
         val body = encodeReport(buildReport(dao, "S1", now)!!)
         assertTrue("\"output_route\":\"no_playback\"" in body)
     }
 
-    // C335: 리포트는 되돌림 결과(control_log) 뒤에 만든다. 실패한 되돌림 줄도 controls 합계에 들어간다
-    @Test fun c335_closeSession_reportIncludesFailedRestoreRow() {
+    // 리포트는 되돌림 결과(control_log) 뒤에 만든다. 실패한 되돌림 줄도 controls 합계에 들어간다
+    @Test fun closeSession_reportIncludesFailedRestoreRow() {
         phone(); fullSession()
-        store.logControl(ControlLogEntity(sessionId = "S1", at = T0 + 20_000, api = "setWindowLock", target = "ROW_2_LEFT", goal = "0", actual = "1", ackMs = null, appliedMs = null, ok = false, retries = 1))
+        store.logControl(ControlLogEntity(sessionId = "S1", at = T0 + 20_000, api = "setWindowLock", target = "ROW_2_LEFT", goal = "0", actual = "1",
+            ackMs = null, appliedMs = null, ok = false, retries = 1))
         store.handle(CloseSession("S1"))
         val body = db.linkDao().outbox().single { it.type == "report_summary" }.bodyJson
         assertTrue("\"failed\":1" in body.replace(" ", ""), "실패한 되돌림이 controls에 남는다: $body")
@@ -338,7 +394,7 @@ class StoreTest {
         assertEquals(1, count("SELECT COUNT(*) FROM outbox"))
     }
 
-    /** L82: 지우기 drop_ids는 늦게 닿을 수 있는 것(시도한 적 있는 것·맨 앞)만. 보낼 함 상한은 없다. */
+    /** 지우기 drop_ids는 늦게 닿을 수 있는 것(시도한 적 있는 것·맨 앞)만. 보낼 함 상한은 없다. */
     private fun fillReports(n: Int) {
         for (i in 0 until n) sql("INSERT INTO outbox (id, type, to_device, body_json, created_at, attempts, next_try_at) VALUES ('R${"%04d".format(i)}', 'report_summary', NULL, '{}', $T0, 0, 0)")
     }
@@ -365,12 +421,12 @@ class StoreTest {
 
     private fun sentId(id: String, at: Long) = sql("INSERT INTO sent_id (id, sent_at) VALUES ('$id', $at)")
 
-    // L84: 보내는 중에 7일 만료가 보낼 함에서 지운 리포트도, 10분 안에 보낸 것이면 drop_ids에 든다. 10분 지난 것은 안 든다
-    @Test fun l84_expiredInFlightReport_stillInDropIds() {
-        fillReports(2)                                        // R0000은 맨 앞(L82), R0001은 안 보냄
+    // 보내는 중에 7일 만료가 보낼 함에서 지운 리포트도, 10분 안에 보낸 것이면 drop_ids에 든다. 10분 지난 것은 안 든다
+    @Test fun expiredInFlightReport_stillInDropIds() {
+        fillReports(2)                                        // R0000은 맨 앞, R0001은 안 보냄
         sentId("GONE", now - 60_000)                          // 보낸 뒤 보낼 함에서 지워짐
         sentId("R0000", now - 30_000)                         // 보낼 함에도 있다: 중복 없음
-        sentId("OLD", now - kr.aigyeot.app.link.SENT_ID_KEEP_MS - 1)
+        sentId("OLD", now - SENT_ID_KEEP_MS - 1)
         clear()
         assertEquals(listOf("R0000", "GONE"), dropIds().sortedByDescending { it == "R0000" })
         assertEquals(2, dropIds().size)
@@ -401,8 +457,8 @@ class StoreTest {
         sc.handle(SaveSession(SessionRecord(id, T0, ended, OpenTrigger.DOOR_THEN_D, null, null, 0, 0, false, "[]", null, null, false, null, 10)))
     }
 
-    // C242 (a): 장면 세션의 확정 안 된 인계는 닫기 뒤 거짓이고 리포트 stop.told_driver도 거짓(열린 세션·이미 닫힌 세션 모두)
-    @Test fun c242_closeScenarioSessions_settlesUnknownHandoffToFalse() {
+    // 장면 세션의 확정 안 된 인계는 닫기 뒤 거짓이고 리포트 stop.told_driver도 거짓(열린 세션·이미 닫힌 세션 모두)
+    @Test fun closeScenarioSessions_settlesUnknownHandoffToFalse() {
         scenarioSession("SC1", null); scenarioSession("SC2", T0 + 5_000)
         dao.upsertEpisode(ep("E1", "SC1", "WAYPOINT_OFFER", null)); dao.upsertEpisode(ep("E2", "SC2", "ARRIVAL_NOTICE", null))
         store.closeScenarioSessions(T0 + 9_000)
@@ -411,8 +467,8 @@ class StoreTest {
         assertEquals(false, buildReport(dao, "SC1", now)!!.timeline.single().stop!!.toldDriver)
     }
 
-    // C242 (b): PARKED·이미 참/거짓·인계 없음·실제 세션 행은 그대로
-    @Test fun c242_closeScenarioSessions_leavesOtherRows() {
+    // PARKED·이미 참/거짓·인계 없음·실제 세션 행은 그대로
+    @Test fun closeScenarioSessions_leavesOtherRows() {
         scenarioSession("SC1", null); session("S1")
         dao.upsertEpisode(ep("P", "SC1", "PARKED", null)); dao.upsertEpisode(ep("T", "SC1", "NO_REST", true))
         dao.upsertEpisode(ep("F", "SC1", "NO_REST", false)); dao.upsertEpisode(ep("N", "SC1", null, null))
@@ -422,7 +478,7 @@ class StoreTest {
         assertEquals(listOf(null, true, false, null, null), listOf("P", "T", "F", "N", "R").map(::told))
     }
 
-    // C292: 첫 시도만 실패하게 한다(트리거는 재시도 사이에 dbPause가 지운다, C302)
+    // 첫 시도만 실패하게 한다(트리거는 재시도 사이에 dbPause가 지운다)
     private fun failOnce(table: String, act: () -> Unit) {
         sql("CREATE TRIGGER fail_once_u BEFORE UPDATE ON $table BEGIN SELECT RAISE(ABORT, 'x'); END")
         sql("CREATE TRIGGER fail_once_i BEFORE INSERT ON $table BEGIN SELECT RAISE(ABORT, 'x'); END")
@@ -433,39 +489,39 @@ class StoreTest {
         assertEquals(1, pauses, "재시도가 한 번 일어났다")
     }
 
-    @Test fun c292_settleSceneHandoffs_retriesAfterOneFailure() {
+    @Test fun settleSceneHandoffs_retriesAfterOneFailure() {
         scenarioSession("SC1", null)
         dao.upsertEpisode(ep("A", "SC1", "ARRIVAL_NOTICE", null).copy(guardianNotified = true))
         val a = HandoffLedger("SC1", "A", T0, HandoffCause.TWO_ATTEMPTS, HandoffKind.ARRIVAL_NOTICE, null, alert = true)
         failOnce("episode") { store.settleSceneHandoffs(listOf(a)) }
         val e = dao.episodes("SC1").single()
-        assertEquals(true, e.guardianNotified, "결정 ③: 확정은 guardian_notified를 쓰지 않는다(link만)"); assertEquals(false, e.handoffToldDriver)
+        assertEquals(true, e.guardianNotified, "확정은 guardian_notified를 쓰지 않는다(link만)"); assertEquals(false, e.handoffToldDriver)
     }
 
     /**
-     * C303 A9: 장면 끝 인계 확정은 판단 코어 버림 확정과 같은 함수라 장부의 종류를 행에 쓴다. 장면에서 S08(WAYPOINT_OFFER)을 기다리는 동안 경로가 바뀌어
+     * 장면 끝 인계 확정은 판단 코어 버림 확정과 같은 함수라 장부의 종류를 행에 쓴다. 장면에서 S08(WAYPOINT_OFFER)을 기다리는 동안 경로가 바뀌어
      * 다시 고르기가 S10(NO_REST)으로 바꿨는데(rebind: 장부만 바뀐다) 말하기 전에 장면이 끝났다 → 행도 NO_REST·말하지 못함(차 리포트 "안전한 곳에 세우도록 안내하지 못했어요").
      */
-    @Test fun c303_a9_sceneEndSettleWritesKind() {
+    @Test fun sceneEndSettleWritesKind() {
         scenarioSession("SC1", null)
         dao.upsertEpisode(ep("A", "SC1", "WAYPOINT_OFFER", null).copy(guardianNotified = true))
         val a = HandoffLedger("SC1", "A", T0, HandoffCause.TWO_ATTEMPTS, HandoffKind.NO_REST, null, alert = true)
         store.settleSceneHandoffs(listOf(a))
         val e = dao.episodes("SC1").single()
         assertEquals("NO_REST", e.handoffKind, "다시 고른 장부의 종류")
-        assertEquals(false, e.handoffToldDriver); assertEquals(true, e.guardianNotified, "결정 ③: 확정은 guardian_notified를 쓰지 않는다(link만)")
+        assertEquals(false, e.handoffToldDriver); assertEquals(true, e.guardianNotified, "확정은 guardian_notified를 쓰지 않는다(link만)")
         store.closeScenarioSessions(T0 + 9_000)   // 뒤따르는 쿼리 짐작이 덮지 않는다
         assertEquals("NO_REST", dao.episodes("SC1").single().handoffKind)
     }
 
-    @Test fun c292_closeScenarioSessions_retriesAfterOneFailure() {
+    @Test fun closeScenarioSessions_retriesAfterOneFailure() {
         scenarioSession("SC1", null)
         failOnce("session") { store.closeScenarioSessions(T0 + 9_000) }
         assertEquals(T0 + 9_000, dao.session("SC1")!!.endedAt)
     }
 
-    // C259: 끝나지 못한 장면 세션의 열린 에피소드는 닫기와 같은 시각에 닫힌다. 이미 닫힌 에피소드·실제 세션 행은 그대로
-    @Test fun c259_closeScenarioSessions_closesOpenEpisodes() {
+    // 끝나지 못한 장면 세션의 열린 에피소드는 닫기와 같은 시각에 닫힌다. 이미 닫힌 에피소드·실제 세션 행은 그대로
+    @Test fun closeScenarioSessions_closesOpenEpisodes() {
         scenarioSession("SC1", null); session("S1")
         dao.upsertEpisode(ep("O", "SC1", null, null).copy(endedAt = null)); dao.upsertEpisode(ep("C", "SC1", null, null))
         dao.upsertEpisode(ep("R", "S1", null, null).copy(endedAt = null))
@@ -487,7 +543,7 @@ class StoreTest {
         assertEquals(false, dao.session("S1")!!.reportPending)
     }
 
-    @Test fun logAlarm_joinsContinuousAlarms_g3() {
+    @Test fun logAlarm_joinsContinuousAlarms() {
         session(ended = null)
         store.handle(LogAlarm("S1", T0 + 1_000, AlarmOnly.IN_CALL))
         store.handle(LogAlarm("S1", T0 + 2_000, AlarmOnly.IN_CALL))
@@ -507,7 +563,8 @@ class StoreTest {
         assertEquals(2, count("SELECT COUNT(*) FROM alarm_log"), "세 걸음(2,925ms) 간격은 끊긴 경보라 새 줄")
     }
 
-    private fun profile(feeding: Long?) = kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, feeding, emptyList(), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION)
+    private fun profile(feeding: Long?) = ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, feeding,
+        emptyList(), false, false, T0, AI_NOTICE_VERSION)
 
     @Test fun saveProfile_keepsLaterFeedingStart() {
         dao.upsertProfile(profile(T0 + 10))
@@ -540,7 +597,7 @@ class StoreTest {
     }
 
     @Test fun saveFeedingStart_onlyLater() {
-        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, T0, emptyList(), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
+        dao.upsertProfile(ChildProfileEntity("c", "콩이", "2026-03", "LEFT", 180, T0, emptyList(), false, false, T0, AI_NOTICE_VERSION))
         store.handle(SaveFeedingStart(T0 - 1))
         assertEquals(T0, store.feedingStart())
         store.handle(SaveFeedingStart(T0 + 1))
@@ -548,10 +605,13 @@ class StoreTest {
     }
 
     @Test fun methods_thirdCandidate_selectedElseNewest() {
-        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
-        assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), store.methods(), "쓸 곡이 없으면 ③ 없음")
-        fun song(id: String, seq: Long, status: String = "ACTIVE") = sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, $seq, $seq)")
+        dao.upsertProfile(ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, AI_NOTICE_VERSION))
+        assertEquals(listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), store.methods(), "쓸 곡이 없으면 부모 노래 후보 없음")
+        fun song(id: String, seq: Long, status: String = "ACTIVE") = sql(
+            "INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) " +
+                "VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, $seq, $seq)",
+        )
         song("a", 1); song("b", 2)
         assertEquals(Method(MethodKind.SONG, "b"), store.methods().last(), "고른 적 없으면 added_seq가 가장 큰 곡")
         sql("INSERT INTO song_selection (song_id, seq) VALUES ('a', 5)")
@@ -561,9 +621,12 @@ class StoreTest {
     }
 
     @Test fun methods_thirdCandidate_sameRuleAsLink() {
-        dao.upsertProfile(kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION))
-        fun song(id: String, seq: Long?, status: String = "ACTIVE") = sql("INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, ${seq ?: "NULL"}, ${seq ?: 0})")
+        dao.upsertProfile(ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), Method(MethodKind.SONG)), false, false, T0, AI_NOTICE_VERSION))
+        fun song(id: String, seq: Long?, status: String = "ACTIVE") = sql(
+            "INSERT OR REPLACE INTO song (id, name, received_at, format, duration_s, lufs, normalized_path, status, reject_reason, added_seq, last_seq) " +
+                "VALUES ('$id', '$id', $T0, 'AAC', 60.0, -30.0, NULL, '$status', NULL, ${seq ?: "NULL"}, ${seq ?: 0})",
+        )
         val link = db.linkDao()
         fun third() = store.methods().firstOrNull { it.kind == MethodKind.SONG }?.songId
         fun rule() = kr.aigyeot.app.link.candidateSong(link.profile(), link.songs(), link.selection())
@@ -577,26 +640,29 @@ class StoreTest {
 
     @Test fun report_carActions_countOnlySucceededControls() {
         fullSession()   // 열선 성공 한 줄
-        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 11_000, api = kr.aigyeot.app.store.db.ControlApi.SEAT_HEAT, target = "ROW_2_RIGHT", goal = "0", actual = "3", ackMs = 120, appliedMs = null, ok = false, retries = 1))
-        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 12_000, api = "setWindowLock", target = "ROW_2_LEFT", goal = "1", actual = "0", ackMs = 120, appliedMs = null, ok = false, retries = 1))
+        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 11_000, api = ControlApi.SEAT_HEAT, target = "ROW_2_RIGHT", goal = "0", actual = "3",
+            ackMs = 120, appliedMs = null, ok = false, retries = 1))
+        dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + 12_000, api = "setWindowLock", target = "ROW_2_LEFT", goal = "1", actual = "0",
+            ackMs = 120, appliedMs = null, ok = false, retries = 1))
         val r = buildReport(dao, "S1", now)!!
         val acts = r.carActions.associate { it.action to it.count }
-        assertEquals(1, acts[kr.aigyeot.shared.CarActionKind.SEAT_HEATER_OFF], "car_actions는 차가 대신 한 일: 실패 줄은 세지 않는다")
-        assertEquals(0, acts[kr.aigyeot.shared.CarActionKind.REAR_WINDOW_LOCK] ?: 0, "실패한 잠금만 있으면 항목 없음")
+        assertEquals(1, acts[CarActionKind.SEAT_HEATER_OFF], "car_actions는 차가 대신 한 일: 실패 줄은 세지 않는다")
+        assertEquals(0, acts[CarActionKind.REAR_WINDOW_LOCK] ?: 0, "실패한 잠금만 있으면 항목 없음")
         assertEquals(1, r.controls.single { it.target == "ROW_2_RIGHT" }.failed, "실패는 controls에 남는다")
     }
 
-    // 기능 D(C361): ambient_dim = 낮춤에 성공한 DimAmbient 수. 한 명령의 밝기·색 두 줄은 cmd_id로 한 번, 되돌림(restore:)·실패 줄은 세지 않는다
+    // 조명 낮춤: ambient_dim = 낮춤에 성공한 DimAmbient 수. 한 명령의 밝기·색 두 줄은 cmd_id로 한 번, 되돌림(restore:)·실패 줄은 세지 않는다
     @Test fun report_ambientDim_countsDistinctSucceededDimCommands() {
         fullSession()
-        fun amb(api: String, goal: String, cmd: String?, ok: Boolean = true, at: Long) = dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + at, api = api, target = "ROW_1_LEFT+ROW_2_RIGHT", goal = goal, actual = goal, ackMs = 1, appliedMs = 1, ok = ok, retries = 0, cmdId = cmd))
+        fun amb(api: String, goal: String, cmd: String?, ok: Boolean = true, at: Long) = dao.insertControl(
+            ControlLogEntity(sessionId = "S1", at = T0 + at, api = api, target = "ROW_1_LEFT+ROW_2_RIGHT", goal = goal, actual = goal, ackMs = 1, appliedMs = 1, ok = ok, retries = 0, cmdId = cmd))
         amb("setAmbientLightBrightness", "dim:20", "S1-5", at = 20_000); amb("setAmbientLightBrightnessColor", "dim:#3050A0", "S1-5", at = 20_001)   // 한 명령
         amb("setAmbientLightBrightness", "restore:70", "S1-9", at = 30_000); amb("setAmbientLightBrightnessColor", "restore:#FFFFFF", "S1-9", at = 30_001)   // 되돌림
         amb("setAmbientLightBrightness", "dim:20", "S1-12", at = 40_000); amb("setAmbientLightBrightnessColor", "dim:#3050A0", "S1-12", ok = false, at = 40_001)   // 두 번째 낮춤: 밝기만 성공
         amb("setAmbientLightBrightness", "dim:20", "S1-15", ok = false, at = 50_000)   // 실패
         val r = buildReport(dao, "S1", now)!!
-        assertEquals(2, r.carActions.single { it.action == kr.aigyeot.shared.CarActionKind.AMBIENT_DIM }.count)
-        assertEquals(null, r.carActions.single { it.action == kr.aigyeot.shared.CarActionKind.AMBIENT_DIM }.totalS)
+        assertEquals(2, r.carActions.single { it.action == CarActionKind.AMBIENT_DIM }.count)
+        assertEquals(null, r.carActions.single { it.action == CarActionKind.AMBIENT_DIM }.totalS)
         assertTrue(r.controls.any { it.api == "setAmbientLightBrightness" && it.failed == 1 }, "실패·되돌림은 controls 요약에 든다")
     }
 
@@ -604,28 +670,28 @@ class StoreTest {
         dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + at, api = "setWindowLock", target = target, goal = goal, actual = goal, ackMs = 120, appliedMs = 300, ok = true, retries = 0))
     private fun rearWindowLocks(): Int {
         val r = buildReport(dao, "S1", now)!!
-        return r.carActions.firstOrNull { it.action == kr.aigyeot.shared.CarActionKind.REAR_WINDOW_LOCK }?.count ?: 0
+        return r.carActions.firstOrNull { it.action == CarActionKind.REAR_WINDOW_LOCK }?.count ?: 0
     }
 
-    // C337: 리포트 rear_window_lock = 잠금에 성공한 뒷창 수. 같은 창의 두 번째 '목표 참' 줄(되돌림·다시 잠금)은 세지 않는다
-    @Test fun c337_rearWindowLock_sameWindowLockThenRestoreLock_countsOnce() {
+    // 리포트 rear_window_lock = 잠금에 성공한 뒷창 수. 같은 창의 두 번째 '목표 참' 줄(되돌림·다시 잠금)은 세지 않는다
+    @Test fun rearWindowLock_sameWindowLockThenRestoreLock_countsOnce() {
         fullSession(); lockLine("ROW_2_LEFT", "1", 12_000); lockLine("ROW_2_LEFT", "1", 13_000)
         assertEquals(1, rearWindowLocks())
         assertEquals(2, buildReport(dao, "S1", now)!!.controls.single { it.api == "setWindowLock" }.attempts, "되돌림 줄도 제어 기록 요약에는 든다")
     }
 
-    @Test fun c337_rearWindowLock_twoWindowsEachLockedAndRestored_countsTwo() {
+    @Test fun rearWindowLock_twoWindowsEachLockedAndRestored_countsTwo() {
         fullSession()
         lockLine("ROW_2_LEFT", "1", 12_000); lockLine("ROW_2_RIGHT", "1", 12_500); lockLine("ROW_2_LEFT", "1", 13_000); lockLine("ROW_2_RIGHT", "1", 13_500)
         assertEquals(2, rearWindowLocks())
     }
 
-    @Test fun c337_rearWindowLock_relockAfterBoot_countsOnce() {
+    @Test fun rearWindowLock_relockAfterBoot_countsOnce() {
         fullSession(); lockLine("ROW_2_LEFT", "true", 12_000); lockLine("ROW_2_LEFT", "true", 20_000)
         assertEquals(1, rearWindowLocks())
     }
 
-    @Test fun c337_rearWindowLock_lockThenRestoreUnlock_countsOnce() {
+    @Test fun rearWindowLock_lockThenRestoreUnlock_countsOnce() {
         fullSession(); lockLine("ROW_2_LEFT", "1", 12_000); lockLine("ROW_2_LEFT", "0", 13_000)
         assertEquals(1, rearWindowLocks())
     }
@@ -645,8 +711,8 @@ class StoreTest {
         assertTrue(rows.zipWithNext().all { (a, b) -> b.at - a.at == 1_000L })
     }
 
-    // C319 F-A: 장면 경계(resetContext)는 기다리는 캡처를 버리지 않고 작성 중인 칸까지 마감해 쓴다. 그 뒤 칸은 장면 표본이라 쓰지 않는다
-    @Test fun c319_resetContext_settlesOpenSecondOfWaitingCapture() {
+    // 장면 경계(resetContext)는 기다리는 캡처를 버리지 않고 작성 중인 칸까지 마감해 쓴다. 그 뒤 칸은 장면 표본이라 쓰지 않는다
+    @Test fun resetContext_settlesOpenSecondOfWaitingCapture() {
         session(ended = null)
         dao.upsertEpisode(EpisodeEntity("E1", "S1", T0, null, "ALARM", T0 + 40_000, 1_000, null, null, null, null, null, null, null, null, null, null, false, false, 0, false, 0, emptyList()))
         val s = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0).let { it.copy(car = it.car.copy(gear = Gear.D)) }
@@ -706,7 +772,7 @@ class StoreTest {
         session("old", ended = T0 + 1)
         session("open", ended = null)
         dao.upsertPlay(PlayLogEntity("P", "old", null, "REQUEST", "LULLABY", null, T0, T0 + 1, 1, "DEADLINE"))
-        now = T0 + 91 * kr.aigyeot.engine.DAY_MS
+        now = T0 + 91 * DAY_MS
         session("new", ended = now - 1)
         store.purgeOld()
         assertNull(dao.session("old")); assertEquals(0, count("SELECT COUNT(*) FROM play_log"), "자식 행도 함께")
@@ -729,21 +795,21 @@ class StoreTest {
         assertEquals(8.0, s.afterResponsePerMin, "울음 창 뒤, 같은 속도대 창만 센다")
     }
 
-    @Test fun steering_reasonNoCry_onlyWhenSessionHasNoCryWindow() {                  // C112
+    @Test fun steering_reasonNoCry_onlyWhenSessionHasNoCryWindow() {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
         val noCry = SteerWindowRecord("S1", T0, 2, false, false, false, 4)
         val excludedCry = SteerWindowRecord("S1", T0, 2, true, true, false, 6)
         assertEquals(SteeringUnavailableReason.NO_CRY, steering(listOf(noCry), base, null).unavailableReason)
-        // C330: 관측한 창이 없으면(창 0개·모두 observed=false) 울음이 없었다고 말할 수 없다
+        // 관측한 창이 없으면(창 0개·모두 observed=false) 울음이 없었다고 말할 수 없다
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(emptyList(), base, null).unavailableReason)
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(noCry.copy(observed = false)), base, null).unavailableReason)
-        assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(noCry.copy(observed = false), noCry), base, null).unavailableReason, "C338: 관측+미관측 섞임")
+        assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(noCry.copy(observed = false), noCry), base, null).unavailableReason, "관측+미관측 섞임")
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(excludedCry), base, null).unavailableReason, "울음 창이 있었지만 모두 제외")
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(excludedCry, noCry), base, null).unavailableReason)
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(excludedCry.copy(excluded = false, speedBand = 4)), base, null).unavailableReason, "기존: 평소 창 없는 속도대")
     }
 
-    @Test fun steering_cryWindowUnobserved_plusQuietObserved_isNoComparableWindow() {   // C331: 울음 중 재생이 시작된 창(cryPresent·미관측)이 있으면 울음이 없었다고 말할 수 없다. C341: 그 창이 울음 창이라 비교로 간다(NO_CRY 아님)
+    @Test fun steering_cryWindowUnobserved_plusQuietObserved_isNoComparableWindow() {   // 울음 중 재생이 시작된 창(cryPresent·미관측)이 있으면 울음이 없었다고 말할 수 없다. 그 창이 울음 창이라 비교로 간다(NO_CRY 아님)
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
         val cryUnobserved = SteerWindowRecord("S1", T0, 2, false, true, false, 6).copy(observed = false)
         val quiet = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 4)
@@ -752,7 +818,7 @@ class StoreTest {
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, steering(listOf(cryUnobserved.copy(excluded = true), quiet), base, null).unavailableReason)
     }
 
-    @Test fun c338_steering_micOnLater_unobservedThenQuietObserved_isNoComparableWindow() {
+    @Test fun steering_micOnLater_unobservedThenQuietObserved_isNoComparableWindow() {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
         val off = (0 until 3).map { SteerWindowRecord("S1", T0 + it * 60_000L, 2, false, false, false, 4, observed = false) }
         val on = (3 until 6).map { SteerWindowRecord("S1", T0 + it * 60_000L, 2, false, false, false, 4) }
@@ -761,7 +827,7 @@ class StoreTest {
         assertEquals(SteeringUnavailableReason.NO_COMPARABLE_WINDOW, s.unavailableReason)
     }
 
-    @Test fun c338_steering_allObservedQuiet_withExcluded_isNoCry() {
+    @Test fun steering_allObservedQuiet_withExcluded_isNoCry() {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, it) }
         val quiet = SteerWindowRecord("S1", T0, 2, false, false, false, 4)
         val s = steering(listOf(quiet, quiet.copy(startAt = T0 + 60_000, excluded = true), quiet.copy(startAt = T0 + 120_000)), base, null)
@@ -769,17 +835,17 @@ class StoreTest {
         assertEquals(SteeringUnavailableReason.NO_CRY, s.unavailableReason)
     }
 
-    @Test fun round1_halfUp_toOneDecimal() {                                          // C112
+    @Test fun round1_halfUp_toOneDecimal() {
         assertEquals(80.0, round1(80.00000381469727))
         assertEquals(58.3, round1(58.25))
         assertEquals(58.2, round1(58.24))
         assertEquals(0.1, round1(0.05))
     }
 
-    @Test fun preCry_speedRoundedToOneDecimal() {                                      // C112
+    @Test fun preCry_speedRoundedToOneDecimal() {
         val alarm = T0 + 5_000
         val ep = EpisodeEntity("E1", "S1", T0, null, "ALARM", alarm, 1_000, null, null, null, null, null, null, null, null, null, null, false, false, 0, false, 0, emptyList())
-        fun row(at: Long, v: Double) = ContextSample("E1", at, v, false, 0.0, TurnSignal.NONE, kr.aigyeot.engine.Gear.D, 24.0, null, null)
+        fun row(at: Long, v: Double) = ContextSample("E1", at, v, false, 0.0, TurnSignal.NONE, Gear.D, 24.0, null, null)
         val c = preCry(ep.id, alarm, listOf(row(alarm - 1_000, 80.00000381469727), row(alarm, 58.25)))!!
         assertEquals(80.0, c.speedKmhMax)
         assertEquals(69.1, c.speedKmhAvg)      // (80.0000038 + 58.25) / 2 = 69.125
@@ -794,11 +860,12 @@ class StoreTest {
         assertEquals(false, steering(emptyList(), base, null).available)
     }
 
-    // ---- 회귀 시험 C6~C8 ----
+    // ---- 리포트 크기 한도, 기준 창, 조향 비교 ----
 
     @Test fun report_hugeControls_stillUnderLimit() {
         session()
-        for (i in 0 until 5_000) dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + i, api = "Api$i", target = "T$i", goal = "0", actual = "0", ackMs = 1, appliedMs = 1, ok = true, retries = 0))
+        for (i in 0 until 5_000) dao.insertControl(ControlLogEntity(sessionId = "S1", at = T0 + i, api = "Api$i", target = "T$i", goal = "0", actual = "0",
+            ackMs = 1, appliedMs = 1, ok = true, retries = 0))
         val r = buildReport(dao, "S1", now)!!
         val size = encodeReport(r).toByteArray().size
         assertTrue(dao.controls("S1").size == 5_000, "제어 기록이 많다(전제)")
@@ -814,7 +881,7 @@ class StoreTest {
         assertEquals(listOf("S1"), dao.baselineWindows(10).map { it.sessionId }, "장면 세션 창은 평소 기준선에 섞이지 않는다")
     }
 
-    // C325 ①: 마이크 꺼진 창(observed=0)은 평소 기준선에 섞이지 않는다
+    // 마이크 꺼진 창(observed=0)은 평소 기준선에 섞이지 않는다
     @Test fun baselineWindows_excludesUnobservedWindows() {
         session()
         dao.upsertSteer(SteerWindowEntity("S1", T0, 2, false, false, false, 3))
@@ -832,25 +899,25 @@ class StoreTest {
         assertTrue(r.duringCryZ == null || r.duringCryZ == 0.0, "mad가 0이면 null, 아니면 0")
     }
 
-    // C354: 속도대가 섞인 기준선(중앙값 2·10 → 6)에서 대응 뒤 값은 공식대로 가되 0 아래로 내려가지 않는다
-    private fun multiBand(afterReversals: Int): kr.aigyeot.shared.Steering {
+    // 속도대가 섞인 기준선(중앙값 2·10 → 6)에서 대응 뒤 값은 공식대로 가되 0 아래로 내려가지 않는다
+    private fun multiBand(afterReversals: Int): Steering {
         fun w(at: Int, band: Int, r: Int, cry: Boolean = false, play: Boolean = false) = SteerWindowRecord("S1", T0 + at * 60_000L, band, false, cry, play, r)
         val base = (1..5).map { w(-it, 2, 2) } + (6..10).map { w(-it, 4, 10) }
         val s = listOf(w(0, 2, 2, cry = true), w(1, 4, 10, cry = true), w(2, 4, afterReversals))
         return steering(s, base, responseAt = T0 + 2 * 60_000L)
     }
 
-    @Test fun c354_afterResponse_multiBand_neverNegative() {
+    @Test fun afterResponse_multiBand_neverNegative() {
         val r = multiBand(0)
         assertEquals(6.0, r.baselinePerMin)
         assertEquals(0.0, r.afterResponsePerMin, "6 + (0 - 10) = -4 는 0으로")
     }
 
-    @Test fun c354_afterResponse_multiBand_positiveKeepsFormula() {
+    @Test fun afterResponse_multiBand_positiveKeepsFormula() {
         assertEquals(5.0, multiBand(9).afterResponsePerMin, "6 + (9 - 10)")
     }
 
-    // C341: 자동 달래기 주행. 울음 창은 재생이 시작돼 관측이 일부뿐이고, 재생이 끝난 뒤 조용한 창이 대응 뒤다
+    // 자동 달래기 주행. 울음 창은 재생이 시작돼 관측이 일부뿐이고, 재생이 끝난 뒤 조용한 창이 대응 뒤다
     private fun autoSoothe(): Pair<List<SteerWindowRecord>, List<SteerWindowRecord>> {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
         val w1 = SteerWindowRecord("S1", T0, 2, false, true, true, 6, observed = false)
@@ -859,19 +926,19 @@ class StoreTest {
         return listOf(w1, w2, w3) to base
     }
 
-    @Test fun c341_autoSoothe_cryWindowPartlyUnobserved_countsAsCry() {
+    @Test fun autoSoothe_cryWindowPartlyUnobserved_countsAsCry() {
         val (s, base) = autoSoothe()
         val r = steering(s, base, null)
         assertTrue(r.available)
         assertEquals(6.0, r.duringCryPerMin)
     }
 
-    @Test fun c341_autoSoothe_quietAfterPlaybackEnded_isAfterResponse() {
+    @Test fun autoSoothe_quietAfterPlaybackEnded_isAfterResponse() {
         val (s, base) = autoSoothe()
         assertEquals(4.0, steering(s, base, responseAt = s[1].startAt).afterResponsePerMin)
     }
 
-    @Test fun c341_quietWindowBeforeFirstPlayback_notAfterResponse() {
+    @Test fun quietWindowBeforeFirstPlayback_notAfterResponse() {
         val (s, base) = autoSoothe()
         val (w1, w2, w3) = s
         val cry = w1.copy(playing = false)                           // 울음 창에서는 아직 재생 전, 다음 창에서 재생 시작
@@ -880,8 +947,8 @@ class StoreTest {
         assertEquals(null, steering(listOf(w1.copy(playing = false), w3), base, null).afterResponsePerMin, "대응이 없으면 대응 뒤 없음")
     }
 
-    // C343(C344로 입력이 바뀜): 울음 뒤 시작한 대응이 없으면(responseAt = null) 조용한 창이 있어도 대응 뒤 없음. 이전엔 창의 playing 표시로 이르던 것을 play_log 시각으로 받는다
-    @Test fun c343_playbackBeforeCryOnly_notAfterResponse() {
+    // 울음 뒤 시작한 대응이 없으면(responseAt = null) 조용한 창이 있어도 대응 뒤 없음. 이전엔 창의 playing 표시로 이르던 것을 play_log 시각으로 받는다
+    @Test fun playbackBeforeCryOnly_notAfterResponse() {
         val (s, base) = autoSoothe()
         val (w1, _, w3) = s
         val earlyPlay = SteerWindowRecord("S1", T0 - 60_000, 2, false, false, true, 3)
@@ -889,14 +956,14 @@ class StoreTest {
         assertEquals(null, steering(listOf(earlyPlay, w1.copy(playing = false)) + quiet, base, null).afterResponsePerMin)
     }
 
-    @Test fun c344_requestEndedThenCrySameWindow_noResponse_afterNull() {
+    @Test fun requestEndedThenCrySameWindow_noResponse_afterNull() {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
         val cry = SteerWindowRecord("S1", T0, 2, false, true, true, 6)           // 운전자가 튼 재생이 끝난 뒤 같은 창에서 울음 (playing·cryPresent 둘 다 참)
         val quiet = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 4)
         assertEquals(null, steering(listOf(cry, quiet), base, null).afterResponsePerMin)
     }
 
-    @Test fun c344_responseStartsAfterCry_quietWindowsAfterResponseCount() {
+    @Test fun responseStartsAfterCry_quietWindowsAfterResponseCount() {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
         val cry = SteerWindowRecord("S1", T0, 2, false, true, false, 6)
         val early = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 50)
@@ -905,8 +972,8 @@ class StoreTest {
         assertEquals(27.0, steering(listOf(cry, early, late), base, responseAt = T0 + 30_000).afterResponsePerMin, "responseAt이 앞이면 둘 다 든다")
     }
 
-    // C347: 첫 울음 창이 기준선 없는 속도대여도 '대응 뒤'의 앞 경계다
-    @Test fun c347_firstCryInBandWithoutBaseline_stillAnchorsAfter() {
+    // 첫 울음 창이 기준선 없는 속도대여도 '대응 뒤'의 앞 경계다
+    @Test fun firstCryInBandWithoutBaseline_stillAnchorsAfter() {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
         val firstCry = SteerWindowRecord("S1", T0, 3, false, true, false, 9)            // 기준선 없는 속도대
         val quiet = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, false, 4)      // 대응 뒤 조용한 창
@@ -914,7 +981,7 @@ class StoreTest {
         assertEquals(4.0, steering(listOf(firstCry, quiet, laterCry), base, responseAt = T0 + 30_000).afterResponsePerMin)
     }
 
-    // C344: buildReport가 play_log·에피소드로 대응 시작을 계산해 쓴다
+    // buildReport가 play_log·에피소드로 대응 시작을 계산해 쓴다
     private fun responseReport(playStart: Long?, trigger: String = "ALARM", alarmAt: Long? = T0 + 60_000): Double? {
         session()
         dao.upsertEpisode(EpisodeEntity("E1", "S1", T0 + 60_000, T0 + 200_000, trigger, alarmAt, 2_400, "LULLABY", null, "SUCCESS", null,
@@ -926,18 +993,18 @@ class StoreTest {
         return buildReport(dao, "S1", now)!!.steering.afterResponsePerMin
     }
 
-    @Test fun c344_buildReport_noPlayLog_afterNull() = assertEquals(null, responseReport(null))
+    @Test fun buildReport_noPlayLog_afterNull() = assertEquals(null, responseReport(null))
 
-    @Test fun c345_buildReport_playBeforeAlarm_notResponse() = assertEquals(null, responseReport(T0 + 30_000))
+    @Test fun buildReport_playBeforeAlarm_notResponse() = assertEquals(null, responseReport(T0 + 30_000))
 
-    @Test fun c345_buildReport_playAfterAlarm_afterFromQuietWindow() = assertEquals(4.0, responseReport(T0 + 63_000))
+    @Test fun buildReport_playAfterAlarm_afterFromQuietWindow() = assertEquals(4.0, responseReport(T0 + 63_000))
 
-    // C345: 운전자가 LISTENING에서 튼 소리(경보 없는 소리 바꾸기 에피소드)의 재생은 대응이 아니다
-    @Test fun c345_buildReport_requestPlayInSwitchSoundEpisode_noAlarm_afterNull() =
+    // 운전자가 LISTENING에서 튼 소리(경보 없는 소리 바꾸기 에피소드)의 재생은 대응이 아니다
+    @Test fun buildReport_requestPlayInSwitchSoundEpisode_noAlarm_afterNull() =
         assertEquals(null, responseReport(T0 + 63_000, trigger = "SWITCH_SOUND", alarmAt = null))
 
-    // C346: 경보가 alarm_log에만 있어도(대기 중 울음) 그 뒤에 시작한 재생은 대응이다. 울음 전 재생(30초)은 대응이 아니라 그 앞 조용한 창(T0+40초)은 빠진다
-    @Test fun c346_buildReport_alarmOnlyInLog_playAfter_afterFromQuietWindow() {
+    // 경보가 alarm_log에만 있어도(대기 중 울음) 그 뒤에 시작한 재생은 대응이다. 울음 전 재생(30초)은 대응이 아니라 그 앞 조용한 창(T0+40초)은 빠진다
+    @Test fun buildReport_alarmOnlyInLog_playAfter_afterFromQuietWindow() {
         session()
         dao.insertAlarm(AlarmLogEntity(sessionId = "S1", firstAt = T0 + 60_000, lastAt = T0 + 60_000, reason = "WAITING"))
         dao.upsertEpisode(EpisodeEntity("E1", "S1", T0 + 10_000, T0 + 200_000, "SWITCH_SOUND", null, 2_400, "LULLABY", null, "SUCCESS", null,
@@ -951,9 +1018,9 @@ class StoreTest {
         assertEquals(4.0, buildReport(dao, "S1", now)!!.steering.afterResponsePerMin)
     }
 
-    // C381(U47): 울음 횟수는 울음 경보로 연 에피소드 수 하나. 첫 경보 뒤 '그만'으로 멈추고 대기 중 다시 운 경보(기록만, alarm_log)·
+    // 울음 횟수는 울음 경보로 연 에피소드 수 하나. 첫 경보 뒤 '그만'으로 멈추고 대기 중 다시 운 경보(기록만, alarm_log)·
     // 판정 창에서 다시 운 것·소리 바꾸기 요청은 세지 않는다. 홈 '오늘 하루'와 리포트 timeline(폰이 세는 값)이 같은 수
-    @Test fun c381_cryAlarms_sameCountAsReportTimeline_loggedOnlyAlarmNotCounted() {
+    @Test fun cryAlarms_sameCountAsReportTimeline_loggedOnlyAlarmNotCounted() {
         session()
         dao.upsertEpisode(EpisodeEntity("E1", "S1", T0 + 60_000, T0 + 300_000, "ALARM", T0 + 60_000, 2_400, "LULLABY", null, "SUCCESS", null,
             "OTHER_SOUND", "WHITE_NOISE", null, "SUCCESS", null, null, false, false, 61_000, true, 112_000, emptyList()))
@@ -965,7 +1032,7 @@ class StoreTest {
         assertEquals(store.cryAlarms("S1").size, buildReport(dao, "S1", now)!!.timeline.count { it.trigger == kr.aigyeot.shared.EpisodeTrigger.CRY_ALARM })
     }
 
-    // C381: 리포트 목록 '울음 n번'은 홈과 같은 Store.cryAlarms로 센다. 본문이 64KB를 넘어 앞 에피소드를 버려도 줄지 않고, 기록만 한 경보는 세지 않는다
+    // 리포트 목록 '울음 n번'은 홈과 같은 Store.cryAlarms로 센다. 본문이 64KB를 넘어 앞 에피소드를 버려도 줄지 않고, 기록만 한 경보는 세지 않는다
     @Test fun reportList_cryCount_sameAsHomeCryAlarms_evenWhenReportTruncated() {
         session()
         val n = 3_000
@@ -982,15 +1049,18 @@ class StoreTest {
 
     // 제어 기록의 뜻은 한 함수(홈 3D 칩과 리포트 car_actions가 같이 쓴다)
     @Test fun controlAct_classifiesEachApiAndGoal() {
-        val a = kr.aigyeot.app.store.db.ControlApi
+        val a = ControlApi
         fun act(api: String, goal: String) = kr.aigyeot.app.store.db.controlAct(api, goal)
-        assertEquals(kr.aigyeot.app.store.db.ControlAct.SEAT_HEAT_OFF, act(a.SEAT_HEAT, "0")); assertEquals(kr.aigyeot.app.store.db.ControlAct.CABIN_COOL, act(a.HVAC_TEMP, "20.0")); assertEquals(kr.aigyeot.app.store.db.ControlAct.READING_LIGHT_OFF, act(a.READING_LIGHT, "OFF"))
-        assertEquals(kr.aigyeot.app.store.db.ControlAct.WINDOW_LOCK, act(a.WINDOW_LOCK, "true")); assertEquals(kr.aigyeot.app.store.db.ControlAct.WINDOW_RESTORE, act(a.WINDOW_LOCK, "false"))
-        assertEquals(kr.aigyeot.app.store.db.ControlAct.AMBIENT_DIM, act(a.AMBIENT_BRIGHTNESS, a.DIM + "20")); assertEquals(kr.aigyeot.app.store.db.ControlAct.AMBIENT_RESTORE, act(a.AMBIENT_COLOR, a.RESTORE + "#FFFFFF"))
-        assertEquals(kr.aigyeot.app.store.db.ControlAct.OTHER, act("addWaypoint", "added"))
+        assertEquals(ControlAct.SEAT_HEAT_OFF, act(a.SEAT_HEAT, "0"))
+        assertEquals(ControlAct.CABIN_COOL, act(a.HVAC_TEMP, "20.0"))
+        assertEquals(ControlAct.READING_LIGHT_OFF, act(a.READING_LIGHT, "OFF"))
+        assertEquals(ControlAct.WINDOW_LOCK, act(a.WINDOW_LOCK, "true")); assertEquals(ControlAct.WINDOW_RESTORE, act(a.WINDOW_LOCK, "false"))
+        assertEquals(ControlAct.AMBIENT_DIM, act(a.AMBIENT_BRIGHTNESS, a.DIM + "20"))
+        assertEquals(ControlAct.AMBIENT_RESTORE, act(a.AMBIENT_COLOR, a.RESTORE + "#FFFFFF"))
+        assertEquals(ControlAct.OTHER, act("addWaypoint", "added"))
     }
 
-    @Test fun c312_unobservedWindowsExcludedFromAfterResponse() {
+    @Test fun unobservedWindowsExcludedFromAfterResponse() {
         val base = (1..5).map { SteerWindowRecord("S0", T0 - it * 60_000, 2, false, false, false, 2) }
         val cry = SteerWindowRecord("S1", T0, 2, false, true, false, 2)
         val seen = SteerWindowRecord("S1", T0 + 60_000, 2, false, false, true, 4)

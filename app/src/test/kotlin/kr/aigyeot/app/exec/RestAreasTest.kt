@@ -9,7 +9,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 4.3 '수유실 여부는 공공데이터로'·17장 C21 이름 맞추기, 경유지 좌표 고르기(반대쪽 휴게소에 넣지 않기)
+// 수유실 여부는 공공데이터로 정하는 규칙과 이름 맞추기, 경유지 좌표 고르기(반대쪽 휴게소에 넣지 않기)
 class RestAreasTest {
     @Test fun `넣은 공공데이터는 215곳이고 수유실은 212곳이다`() {
         assertEquals(215, RestAreas.all.size)
@@ -25,25 +25,25 @@ class RestAreasTest {
         assertTrue(RestAreas.match("휴게소").isEmpty(), "이름이 비면 아무것도 맞추지 않는다")
     }
 
-    @Test fun c304_placeable_twoRowsNoDirection_false() {
+    @Test fun placeable_twoRowsNoDirection_false() {
         assertFalse(RestAreas.placeable("여주휴게소"), "양방향 두 줄(좌표 차 10m 초과)은 이름만으로 못 넣는다")
         assertFalse(RestAreas.placeable("없는휴게소"))
     }
 
-    // C310: PleosNavi.addWaypoint(NaviHelper SDK 필요, 단위 시험 불가)의 입구 판단이 쓰는 함수. 점이 있으면 위치 없이 보내고 null이고 줄이 있으면 위치를 받는다.
-    @Test fun c310_tiedRows_addWaypointWithoutLocation() {
+    // PleosNavi.addWaypoint(NaviHelper SDK 필요, 단위 시험 불가)의 입구 판단이 쓰는 함수. 점이 있으면 위치 없이 보내고 null이고 줄이 있으면 위치를 받는다.
+    @Test fun tiedRows_addWaypointWithoutLocation() {
         assertTrue(RestAreas.match("보성녹차휴게소").size > 1)
         assertTrue(RestAreas.pointOf("보성녹차휴게소") != null, "같은 좌표 두 줄은 위치 요청 없이 send")
         assertTrue(RestAreas.pointOf("여주휴게소") == null && RestAreas.match("여주휴게소").size > 1, "다른 점 두 줄은 위치 요청")
         assertTrue(RestAreas.match("없는휴게소").isEmpty(), "맞춘 줄이 없으면 no_coords")
     }
 
-    @Test fun c304_placeable_singleRow_true() {
+    @Test fun placeable_singleRow_true() {
         assertTrue(RestAreas.placeable("덕평휴게소"))
         assertTrue(RestAreas.placeable("안성휴게소(부산방향)"), "방향이 붙으면 한 줄")
     }
 
-    @Test fun c304_feedsAddable_sameAsPlaceable() {
+    @Test fun feedsAddable_sameAsPlaceable() {
         val got = restsOf(listOf(
             TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "여주휴게소"),
             TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "덕평휴게소"),
@@ -54,7 +54,7 @@ class RestAreasTest {
     @Test fun `수유실은 맞춘 줄이 모두 있을 때만 있다`() {
         assertTrue(RestAreas.nursing("강릉휴게소"))
         assertFalse(RestAreas.nursing("옥천만남휴게소"), "데이터에 N")
-        assertFalse(RestAreas.nursing("없는휴게소"), "못 맞추면 없음(G21)")
+        assertFalse(RestAreas.nursing("없는휴게소"), "못 맞추면 없음")
         val mixed = RestAreas.parse("휴게소명,도로노선명,도로노선방향,위도,경도,수유실유무\n다라(서울),다라선,상행,37.0,127.0,Y\n다라(부산),다라선,하행,37.0,127.0,N")
         assertFalse(RestAreas.nursing("다라휴게소", mixed), "한쪽이 N이면 없음")
         assertTrue(RestAreas.nursing("다라휴게소(서울방향)", mixed), "방향이 맞으면 그 줄")
@@ -164,7 +164,7 @@ class RestAreasTest {
         assertTrue(waypointPresent(listOf(s.lat to s.lon), s, rows), "쉼터 자료로 대조")
     }
 
-    @Test fun c309_tiedRows_waypointListedByName() {
+    @Test fun tiedRows_waypointListedByName() {
         val sun = RestAreas.all.first { it.name == "보성녹차(순천)" }
         val yeong = RestAreas.all.first { it.name == "보성녹차(영암)" }
         for (t in listOf(sun, yeong)) assertTrue(waypointListed(listOf(Triple("보성녹차휴게소", 0.0, 0.0)), t), "같은 점 두 줄은 이름만으로 한 점")
@@ -172,7 +172,7 @@ class RestAreasTest {
         assertFalse(waypointListed(listOf(Triple("여주휴게소", 0.0, 0.0)), yeoju), "다른 점 두 줄은 이름만으로는 실패")
     }
 
-    // C110: 실제 내비는 목록 좌표를 0.0, 0.0으로 주고 이름만 맞게 준다
+    // 실제 내비는 목록 좌표를 0.0, 0.0으로 주고 이름만 맞게 준다
     @Test fun `좌표가 0·0인 경유지는 이름을 자료 줄로 바꿔 보낸 줄과 같을 때만 성공이다`() {
         val an = RestAreas.all.first { it.name == "안성(부산)" }
         fun list(name: String, la: Double = 0.0, lo: Double = 0.0) = listOf(Triple(name, la, lo))

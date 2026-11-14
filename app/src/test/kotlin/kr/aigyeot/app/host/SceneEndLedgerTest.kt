@@ -1,7 +1,13 @@
 package kr.aigyeot.app.host
 
-import kr.aigyeot.engine.*
 import kotlinx.coroutines.cancel
+import kr.aigyeot.engine.Ambient
+import kr.aigyeot.engine.CarSeat
+import kr.aigyeot.engine.DimAmbient
+import kr.aigyeot.engine.Method
+import kr.aigyeot.engine.MethodKind
+import kr.aigyeot.engine.Profile
+import kr.aigyeot.engine.RestoreAmbientLedger
 import org.junit.After
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -9,14 +15,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// C366 2회차: 장면 끝에 장면 상태가 Dimming(낮춤 결과 전)이면 판단 코어가 RestoreAmbientLedger를 내고, 호스트가 그것을 실행기로 보낸다(sendLoose → EXEC)
+// 장면 끝에 장면 상태가 Dimming(낮춤 결과 전)이면 판단 코어가 RestoreAmbientLedger를 내고, 호스트가 그것을 실행기로 보낸다(sendLoose → EXEC)
 @RunWith(RobolectricTestRunner::class)
-class C366SceneEndLedgerTest {
+class SceneEndLedgerTest {
     private val k = Kit()
     @After fun close() { k.host.close(); k.db.close(); k.linkScope.cancel() }
 
-    // C367: 장면 시작에 실제 상태가 Dimming이면 realStep의 RestoreAmbientLedger가 실행기로 가고, 장면의 낮춤보다 먼저 간다(SceneController.start가 realStep을 먼저 dispatch)
-    @Test fun c367_sceneStartWhileRealDimming_ledgerCommandGoesToExecFirst() {
+    // 장면 시작에 실제 상태가 Dimming이면 realStep의 RestoreAmbientLedger가 실행기로 가고, 장면의 낮춤보다 먼저 간다(SceneController.start가 realStep을 먼저 dispatch)
+    @Test fun sceneStartWhileRealDimming_ledgerCommandGoesToExecFirst() {
         k.profile(); k.phone(); k.boot()
         k.open(); k.alarm()   // 실제 자동 시도가 시작되어 DimAmbient가 나가고 결과는 아직 없다
         assertTrue(k.state().ign.ambient is Ambient.Dimming, "실제 상태가 Dimming")
@@ -31,7 +37,7 @@ class C366SceneEndLedgerTest {
         assertTrue(k.exec.withIndex().none { (i, c) -> c is DimAmbient && i < ledger }, "장면 낮춤보다 먼저")
     }
 
-    @Test fun c366_sceneEndWhileSceneDimming_ledgerCommandGoesToExec() {
+    @Test fun sceneEndWhileSceneDimming_ledgerCommandGoesToExec() {
         k.profile(); k.phone(); k.boot()
         k.host.startScenario(ScenarioSetup(
             "A", 7, Profile("2026-03", CarSeat.LEFT, null, false), listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)),

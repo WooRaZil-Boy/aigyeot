@@ -6,8 +6,8 @@ import kr.aigyeot.shared.CarAction
 import kr.aigyeot.shared.CarActionKind
 import kr.aigyeot.shared.ControlRecord
 import kr.aigyeot.shared.EpisodeResult
-import kr.aigyeot.shared.ExcludedReason
 import kr.aigyeot.shared.EpisodeTrigger
+import kr.aigyeot.shared.ExcludedReason
 import kr.aigyeot.shared.Gear
 import kr.aigyeot.shared.HandoffKind
 import kr.aigyeot.shared.MethodStat
@@ -102,8 +102,8 @@ class ReportViewTest {
     @Test fun episodeChart_restOfferOnlyWhenTold() {
         fun stop(told: Boolean?) = StopInfo(true, StopReason.ATTEMPT_LIMIT, HandoffKind.REST_OFFER, "n 휴게소", false, false, told)
         assertTrue("쉼터 제안" in episodeChart(ep(listOf(first), stop = stop(true)))!!.outcomes)
-        assertTrue("쉼터 제안" !in episodeChart(ep(listOf(first), stop = stop(false)))!!.outcomes, "묻지 못했으면 표시하지 않는다(C130)")
-        assertTrue("쉼터 제안" !in episodeChart(ep(listOf(first), stop = stop(null)), settling = true)!!.outcomes, "확정 전(C185)")
+        assertTrue("쉼터 제안" !in episodeChart(ep(listOf(first), stop = stop(false)))!!.outcomes, "묻지 못했으면 표시하지 않는다")
+        assertTrue("쉼터 제안" !in episodeChart(ep(listOf(first), stop = stop(null)), settling = true)!!.outcomes, "확정 전")
         assertTrue(episodeChart(ep(listOf(first), stop = stop(true)))!!.marks.none { it.label == "쉼터 제안" }, "결과는 축 위에 찍지 않는다")
     }
 
@@ -146,11 +146,11 @@ class ReportViewTest {
             "정차 · 두 번 시도 뒤 · 안전한 곳에 세우도록 안내하지 못했어요 · 다른 보호자에게 알림", "울음 시간 30초",
             "평균 62.0km/h · 최고 70.5km/h · 브레이크 1번", "Seat.setHvacSeatTemperature ROW_2_LEFT · 성공 1 · 실패 0 · 다시 0",
         )) assertTrue(want in lines, "자세히에 '$want'가 있어야 한다: $lines")
-        assertTrue(lines.none { ": " in it }, "자세히 줄은 '이름 · 값'(콜론 없음, C385. 시각 '1:24'는 그대로): $lines")
+        assertTrue(lines.none { ": " in it }, "자세히 줄은 '이름 · 값'(콜론 없음. 시각 '1:24'는 그대로): $lines")
         assertTrue(lines.none { "방향지시등" in it }, "방향지시등은 썼을 때만 적는다(폰과 같게): $lines")
     }
 
-    /** U73·C385: 결과·뺀 이유·정차 이유는 차·두 폰 같은 낱말이다(열거 이름이 보이지 않는다). */
+    /** 결과·뺀 이유·정차 이유는 차·두 폰 같은 낱말이다(열거 이름이 보이지 않는다). */
     @Test fun `리포트 결과와 뺀 이유는 정해진 낱말로 보인다`() {
         assertEquals(listOf("그침", "계속 울음", "판정하지 못함", "1차 시도 없음"), listOf(EpisodeResult.SUCCESS, EpisodeResult.FAILURE, EpisodeResult.UNDETERMINED, null).map(::resultText))
         assertEquals(mapOf(
@@ -183,7 +183,7 @@ class ReportViewTest {
         assertEquals(58f + 66f, big.height); assertEquals(46f, big.nameBase); assertEquals(58f + 52f, big.rightBase, "값은 이름 아래 줄")
     }
 
-    // 세 앱 같은 글자(phone-care-plan 7.1 report.actions)
+    // 세 앱 같은 글자(report.actions)
     @Test fun actionNames_matchPhoneTable() {
         assertEquals(listOf("뒷좌석 재생", "앞에서도 들리게 재생", "뒷좌석 열선 끔", "뒷창 잠금", "실내 온도 낮춤", "독서등 끔", "조명 낮춤", "경유지 추가", "도착 안내", "다른 보호자 알림"),
             kr.aigyeot.shared.CarActionKind.entries.map(::actionName))

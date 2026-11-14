@@ -1,0 +1,80 @@
+[출발 전, 듣기 꺼짐]
+상태: 출발 전이에요
+눈썹: Eyebrow(text=듣기 꺼짐, tone=MUTED, live=false)
+부가: null
+카드: null
+단추: Cta(board=true, askHero=false)
+큰 기호: DriveSay(symbol=EAR, ask=false)
+무대: Stage3d(view=CABIN, light=BASE, ripple=false, listen=false, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[출발 전, 듣기 켜짐]
+상태: 출발 전이에요
+눈썹: Eyebrow(text=듣기 켜짐, tone=ACCENT, live=true)
+부가: null
+카드: null
+단추: Cta(board=true, askHero=true)
+큰 기호: DriveSay(symbol=EAR, ask=false)
+무대: Stage3d(view=CABIN, light=LISTEN, ripple=false, listen=false, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[주행 중, 세션 없음]
+상태: 아직 듣지 못하고 있어요
+눈썹: Eyebrow(text=듣기 꺼짐, tone=MUTED, live=false)
+부가: null
+카드: null
+단추: Cta(board=true, askHero=false)
+큰 기호: DriveSay(symbol=EAR, ask=false)
+무대: Stage3d(view=CABIN, light=BASE, ripple=false, listen=false, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[울음 감지, 재생 전]
+상태: 소리를 준비하고 있어요
+눈썹: Eyebrow(text=울음 감지 · 2.4초, tone=CHILD, live=false)
+부가: null
+카드: Track(marks=[NOW, NONE, NONE, NONE], subs=[자장가, 8초, , ], from=null, totalMs=null)
+단추: Cta(board=false, askHero=false)
+큰 기호: DriveSay(symbol=BABY, ask=false)
+무대: Stage3d(view=REAR, light=ALERT, ripple=false, listen=false, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[1차 재생 중]
+상태: 뒷자리에서 소리를 틀고 있어요
+눈썹: Eyebrow(text=1차 · 자장가, tone=METHOD, live=false)
+부가: null
+카드: Track(marks=[NOW, NONE, NONE, NONE], subs=[자장가, 8초, , ], from=1800000000000, totalMs=56000)
+단추: Cta(board=false, askHero=false)
+큰 기호: DriveSay(symbol=LULLABY, ask=false)
+무대: Stage3d(view=REAR, light=SOOTHE, ripple=true, listen=false, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[듣기 틈]
+상태: 그쳤는지 보고 있어요
+눈썹: Eyebrow(text=듣기 틈 · 8초, tone=ACCENT, live=true)
+부가: null
+카드: Track(marks=[DONE, NOW, NONE, NONE], subs=[자장가, 8초, , ], from=1800000000000, totalMs=8000)
+단추: Cta(board=false, askHero=false)
+큰 기호: DriveSay(symbol=EAR, ask=false)
+무대: Stage3d(view=REAR, light=BASE, ripple=false, listen=true, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[2차 재생 중]
+상태: 뒷자리에서 소리를 틀고 있어요
+눈썹: Eyebrow(text=2차 · 백색소음, tone=METHOD, live=false)
+부가: null
+카드: Track(marks=[FAIL, FAIL, NOW, NONE], subs=[자장가, 8초, 백색소음, ], from=1800000000000, totalMs=56000)
+단추: Cta(board=false, askHero=false)
+큰 기호: DriveSay(symbol=NOISE, ask=false)
+무대: Stage3d(view=REAR, light=SOOTHE, ripple=true, listen=false, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[확인 중]
+상태: 그쳤는지 보고 있어요
+눈썹: Eyebrow(text=듣기 틈 · 8초, tone=ACCENT, live=true)
+부가: null
+카드: Track(marks=[FAIL, FAIL, DONE, NONE], subs=[자장가, 8초, 백색소음, ], from=1800000000000, totalMs=8000)
+단추: Cta(board=false, askHero=false)
+큰 기호: DriveSay(symbol=EAR, ask=false)
+무대: Stage3d(view=REAR, light=BASE, ripple=false, listen=true, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)
+
+[사람에게 넘김]
+상태: 자동 달래기를 멈췄어요
+눈썹: Eyebrow(text=사람에게 넘김, tone=CHILD, live=false)
+부가: null
+카드: Track(marks=[FAIL, FAIL, FAIL, NONE], subs=[자장가, 8초, 백색소음, ], from=null, totalMs=null)
+단추: Cta(board=false, askHero=false)
+큰 기호: DriveSay(symbol=PIN, ask=false)
+무대: Stage3d(view=REAR, light=BASE, ripple=false, listen=false, callouts=[], seat=RR, sides={}, drive=false, reducedMotion=false)

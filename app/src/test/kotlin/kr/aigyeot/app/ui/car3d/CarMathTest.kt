@@ -6,12 +6,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** 3D 무대의 순수 계산(시안 car3d.js fitD·fly·pulse와 같은 값). */
+/** 3D 무대의 순수 계산(fitD·fly·pulse). */
 class CarMathTest {
     private val MS = 1_000_000L
 
     @Test fun fitD_widensForTallViews_andKeepsPresetOnWide() {
-        assertEquals(9.4f, CarMath.fitD(View3d.HERO.preset, 2.0f), "넓으면 시안 거리 그대로")
+        assertEquals(9.4f, CarMath.fitD(View3d.HERO.preset, 2.0f), "넓으면 기본 거리 그대로")
         val tall = CarMath.fitD(View3d.REAR.preset, 1070f / 1098f)
         assertEquals(9.38f, tall, 0.02f, "세로로 긴 무대(홈 1070×1098)는 반폭 2.45가 들어오게 물러난다")
     }
@@ -66,7 +66,7 @@ class CarMathTest {
         assertFalse(Stage3d(View3d.REAR, callouts = hvac).flowing(0.2f), "껍데기가 아직 불투명하면(이동 시작) 흐르지 않는다")
     }
 
-    // 시작 연출 소진(계약 stage(3D)): 주행 중 무대가 먼저 보였으면 소진하지 않고 처음 정차 홈에서 한다. 정차 홈은 동작 줄이기여도 소진(연출 없이 cabin으로 끝)
+    // 시작 연출 소진: 주행 중 무대가 먼저 보였으면 소진하지 않고 처음 정차 홈에서 한다. 정차 홈은 동작 줄이기여도 소진(연출 없이 cabin으로 끝)
     @Test fun intro_driveFirstView_notConsumed_parkConsumes() {
         assertFalse(consumeIntro(Stage3d(drive = true)), "주행 중 첫 보기는 소진하지 않는다")
         assertFalse(consumeIntro(Stage3d(drive = true, reducedMotion = true)), "주행 중이면 동작 줄이기여도 소진하지 않는다")

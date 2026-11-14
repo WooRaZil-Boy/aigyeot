@@ -1,16 +1,19 @@
 package kr.aigyeot.app.store.db
 
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-// store·link가 함께 쓰는 AppDatabase가 Robolectric + Room in-memory로 열리고, 계약 표가 모두 있는지
+// store·link가 함께 쓰는 AppDatabase가 Robolectric + Room in-memory로 열리고, 표가 모두 있는지
 @RunWith(RobolectricTestRunner::class)
 class AppDatabaseTest {
-    @Test fun `in-memory로 열면 계약 6장과 link 8장 표가 모두 있다`() {
+    @Test fun `in-memory로 열면 store·link 표가 모두 있다`() {
         val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), AppDatabase::class.java).build()
         val tables = db.openHelper.writableDatabase.query("SELECT name FROM sqlite_master WHERE type = 'table'").use { c ->
             buildSet { while (c.moveToNext()) add(c.getString(0)) }
@@ -19,15 +22,15 @@ class AppDatabaseTest {
         assertEquals(
             setOf(
                 "child_profile", "session", "episode", "play_log", "alarm_log", "context_sample", "control_log",
-                "steer_window", "phone_link", "song", "engine_snapshot", // contracts-car 6.1
-                "relay_credential", "outbox", "processed_message", "song_download", "song_selection", "phone_link_mark", "care_applied", "sent_id", // contracts-link 8.2·C144, L84
+                "steer_window", "phone_link", "song", "engine_snapshot",
+                "relay_credential", "outbox", "processed_message", "song_download", "song_selection", "phone_link_mark", "care_applied", "sent_id",
             ),
             tables,
         )
     }
 
-    // C248: 1→2 이전 직후 옛 장면 기록의 말했는지(null)를 참으로 채워 C242가 거짓으로 바꾸지 못하게 한다. 실제 세션·PARKED는 null 그대로
-    @Test fun `c248 이전은 장면 옛 행만 참으로 채우고 이후 장면 닫기에도 참이다`() {
+    // 1→2 이전 직후 옛 장면 기록의 말했는지(null)를 참으로 채워 거짓으로 바뀌지 않게 한다. 실제 세션·PARKED는 null 그대로
+    @Test fun `BACKFILL_ENDED_TOLD는 장면 옛 행만 참으로 채우고 이후 장면 닫기에도 참이다`() {
         val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), AppDatabase::class.java).allowMainThreadQueries().build()
         val dao = db.storeDao()
         fun session(id: String, scenario: String?, ended: Long?) = SessionEntity(id, 1_000, ended, "DOOR_THEN_D", null, null, 0, 0, false, "[]", null, null, false, scenario, 10)
@@ -49,26 +52,26 @@ class AppDatabaseTest {
         db.close()
     }
 
-    // C248: 이전 함수 자체: v1 모양(칸 없음) DB에서 MIGRATION_1_2를 돌려 장면 행만 참이 된다
-    @Test fun c306_migrationBackfillsEndedRealSessionHandoffs() {
-        val h = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory().create(
-            androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(ApplicationProvider.getApplicationContext()).name(null)
-                .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
-                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+    // 이전 함수 자체: v1 모양(칸 없음) DB에서 MIGRATION_1_2를 돌려 장면 행만 참이 된다
+    @Test fun migrationBackfillsEndedRealSessionHandoffs() {
+        val h = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(ApplicationProvider.getApplicationContext()).name(null)
+                .callback(object : SupportSQLiteOpenHelper.Callback(1) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
                         db.execSQL("CREATE TABLE child_profile (id INTEGER PRIMARY KEY)")
                         db.execSQL("CREATE TABLE session (id TEXT PRIMARY KEY, scenario_id TEXT, ended_at INTEGER)")
                         db.execSQL("CREATE TABLE episode (id TEXT PRIMARY KEY, session_id TEXT, handoff_kind TEXT)")
-                        db.execSQL("CREATE TABLE steer_window (session_id TEXT NOT NULL, start_at INTEGER NOT NULL, PRIMARY KEY(session_id, start_at))")   // C312: 이전이 observed 칸을 더한다
+                        db.execSQL("CREATE TABLE steer_window (session_id TEXT NOT NULL, start_at INTEGER NOT NULL, PRIMARY KEY(session_id, start_at))")   // 이전이 observed 칸을 더한다
                         // SC: 끝난 장면, RL: 끝난 실주행, OP: 열린 실주행
                         db.execSQL("INSERT INTO session VALUES ('SC','A',3000),('RL',NULL,3000),('OP',NULL,NULL)")
                         db.execSQL("INSERT INTO episode VALUES ('scene','SC','SESSION_CAP'),('park','SC','PARKED'),('real','RL','ARRIVAL_NOTICE'),('none','SC',NULL),('open','OP','ARRIVAL_NOTICE')")
                     }
-                    override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, o: Int, n: Int) = Unit
+                    override fun onUpgrade(db: SupportSQLiteDatabase, o: Int, n: Int) = Unit
                 }).build())
         val raw = h.writableDatabase
         MIGRATION_1_2.migrate(raw)
         fun told(id: String) = raw.query("SELECT handoff_told_driver FROM episode WHERE id = '$id'").use { it.moveToFirst(); if (it.isNull(0)) null else it.getInt(0) }
-        // c306: 끝난 실주행·장면은 1, PARKED·종류 없음·열린 세션은 null 그대로
+        // 끝난 실주행·장면은 1, PARKED·종류 없음·열린 세션은 null 그대로
         assertEquals(1, told("scene")); assertEquals(null, told("park")); assertEquals(1, told("real")); assertEquals(null, told("none")); assertEquals(null, told("open"))
         h.close()
     }

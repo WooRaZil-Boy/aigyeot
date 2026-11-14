@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import kotlin.test.assertTrue
 
-/** C349·C396: 상태대로 다시 띄우는 알림(장면 끝·프로세스 시작·1k·1l·첫 P)은 이미 떠 있으면 소리를 다시 내지 않는다. */
+/** 상태대로 다시 띄우는 알림(장면 끝·프로세스 시작·첫 P)은 이미 떠 있으면 소리를 다시 내지 않는다. */
 @RunWith(RobolectricTestRunner::class)
 class NoticesTest {
     @Test fun stateNotices_reshowAlertsOnce() {

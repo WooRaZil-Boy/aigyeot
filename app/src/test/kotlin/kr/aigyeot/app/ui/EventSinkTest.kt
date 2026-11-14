@@ -26,7 +26,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-// C322 V3(P7): 화면·알림 ViewModel은 사건을 EventSink 하나로 보낸다(조립하는 곳 Host.uiSink = 실제 입구). 차 화면 수유는 link가 Room에 먼저 쓴다
+// 화면·알림 ViewModel은 사건을 EventSink 하나로 보낸다(조립하는 곳 Host.uiSink = 실제 입구). 차 화면 수유는 link가 Room에 먼저 쓴다
 @RunWith(RobolectricTestRunner::class)
 class EventSinkTest {
     private val k = Kit()
@@ -39,7 +39,7 @@ class EventSinkTest {
     private fun link(post: (Event) -> Unit) =
         Link(ctx, k.db, k.clock, post, { null }, FakeRelay(), FakeCipher, { null }, { _, _ -> LoudnessResult(true) }, k.linkScope)
 
-    @Test fun c322_v3_viewModels_postThroughSink() {
+    @Test fun viewModels_postThroughSink() {
         k.profile(); k.boot()
         val l = link { }
         HomeViewModel(MutableStateFlow<Step?>(null), sink, l, k.clock, MutableStateFlow(null), MutableStateFlow(null), k.store).ask()
@@ -50,7 +50,7 @@ class EventSinkTest {
         assertEquals(listOf(AskButton(0), BabyAboard(0, BabyAboardFrom.NOTICE), FeedingConfirmed(0, true), ClearRecords(0)), sent.toList())
     }
 
-    @Test fun c322_v3_feedingNow_roomFirst_thenRealEventFromLink() {
+    @Test fun feedingNow_roomFirst_thenRealEventFromLink() {
         k.profile(); k.phone(); k.boot()
         val fromLink = CopyOnWriteArrayList<Event>()
         val l = link { fromLink += it }

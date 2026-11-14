@@ -5,15 +5,15 @@ import kr.aigyeot.app.exec.Said
 import kr.aigyeot.app.link.LinkConn
 import kr.aigyeot.app.link.LinkStatus
 import kr.aigyeot.app.link.LinkedPhone
-import kr.aigyeot.app.ui.car3d.Callout3d
 import kr.aigyeot.app.store.db.OkControl
+import kr.aigyeot.app.ui.car3d.Callout3d
 import kr.aigyeot.app.ui.car3d.Light3d
 import kr.aigyeot.app.ui.car3d.Seat3d
 import kr.aigyeot.app.ui.car3d.View3d
 import kr.aigyeot.engine.Ambient
-import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.AmbientBack
 import kr.aigyeot.engine.AmbientValue
+import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.ControlState
 import kr.aigyeot.engine.EngineState
@@ -29,7 +29,6 @@ import kr.aigyeot.engine.OutputRoute
 import kr.aigyeot.engine.PauseReason
 import kr.aigyeot.engine.PendingAsk
 import kr.aigyeot.engine.Play
-import kr.aigyeot.engine.PlayKind
 import kr.aigyeot.engine.PlayMode
 import kr.aigyeot.engine.PlayPurpose
 import kr.aigyeot.engine.QaStep
@@ -40,10 +39,9 @@ import kr.aigyeot.engine.RouteView
 import kr.aigyeot.engine.SessionState
 import kr.aigyeot.engine.Sid
 import kr.aigyeot.engine.Stage
-import kr.aigyeot.engine.Unjudged
 import kr.aigyeot.engine.TryOutcome
 import kr.aigyeot.engine.TryRecord
-import kr.aigyeot.engine.TryResult
+import kr.aigyeot.engine.Unjudged
 import kr.aigyeot.engine.WaypointPending
 import kr.aigyeot.engine.fresh
 import java.time.ZoneId
@@ -55,7 +53,7 @@ import kotlin.test.assertTrue
 
 private const val T0 = 1_800_000_000_000L   // 2027-01-15 08:00 UTC = 17:00 서울
 
-/** 홈 투영(계약 차 2.5, C378): 단계마다 눈썹·카드·3D·주행 중 기호가 판단 코어 상태에서 바로 나온다. */
+/** 홈 투영: 단계마다 눈썹·카드·3D·주행 중 기호가 판단 코어 상태에서 바로 나온다. */
 class HomeUiTest {
     private val seoul = ZoneId.of("Asia/Seoul")
     private fun fresh() = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
@@ -153,7 +151,7 @@ class HomeUiTest {
         }
     }
 
-    // C382: 재생 시작 전(포커스를 받기 전)에는 튼다고 쓰지 않는다. 시작 뒤·일시 정지는 그대로
+    // 재생 시작 전(포커스를 받기 전)에는 튼다고 쓰지 않는다. 시작 뒤·일시 정지는 그대로
     @Test fun attempt_beforePlaybackStarts_statusSaysPreparing() {
         assertEquals("소리를 준비하고 있어요", ui(driving(ses(Stage.Attempt(1, play(1, null)), ep()))).status)
         assertEquals("소리를 준비하고 있어요", ui(driving(ses(Stage.Attempt(1, play(1, null)), ep()).copy(output = OutputRoute.DEFAULT_FALLBACK))).status, "자리 없이")
@@ -206,7 +204,7 @@ class HomeUiTest {
     }
 
     @Test fun micOff_session_neverSaysListening() {
-        // 프로필은 있는데 마이크 권한을 거부한 채 뒷문 → D: 세션은 열리지만 마이크가 돌지 않는다(계약 차 5장 1e, S17)
+        // 프로필은 있는데 마이크 권한을 거부한 채 뒷문 → D: 세션은 열리지만 마이크가 돌지 않는다
         val off = driving(ses(Stage.Listening)).let { it.copy(car = it.car.copy(micRunning = false)) }
         val u = ui(off)
         assertEquals(MIC_OFF, u.status); assertEquals(Eyebrow("듣기 꺼짐", Tone.MUTED), u.eyebrow)
@@ -215,7 +213,7 @@ class HomeUiTest {
         assertEquals(MIC_OFF, statusText(gap)); assertFalse(stage(gap).listen); assertFalse(eyebrow(gap).live)
         val on = ui(driving(ses(Stage.Listening)))
         assertEquals("아기 소리를 듣고 있어요", on.status); assertEquals(Light3d.LISTEN, on.stage.light)
-        // 입력이 끊겨 판정을 멈춘 동안(마이크는 켜짐)도 듣는다고 쓰지 않는다(5.3)
+        // 입력이 끊겨 판정을 멈춘 동안(마이크는 켜짐)도 듣는다고 쓰지 않는다
         val cut = driving(ses(Stage.Listening)).let { it.copy(car = it.car.copy(pauses = setOf(PauseReason.SILENCED))) }
         val c = ui(cut)
         assertEquals(MIC_OFF, c.status); assertTrue(c.pausesWarning); assertEquals(Light3d.BASE, c.stage.light); assertFalse(c.eyebrow.live)
@@ -237,7 +235,7 @@ class HomeUiTest {
         assertNull(z.pick(base, HeardText("L1", "몇 번 울었어?", T0 + 2_000), T0 + 7_000, clearedAt = T0 + 5_000), "지운 전에 들은 글로 다시 고르지 않는다")
         val b = AskPick(); b.pressed(T0); b.pick(open, null, T0)
         assertNull(b.pick(base.copy(careRoom = "R2"), null, T0 + 1_000), "방이 바뀌면 내린다")
-        // 안내 뒤 자동 듣기(Q1)에서 실제로 질문하면 그 창의 질문·답도 카드로
+        // 안내 뒤 자동 듣기에서 실제로 질문하면 그 창의 질문·답도 카드로
         val c = AskPick()
         val auto = base.copy(speech = base.speech.copy(qa = QaWindow("L9", QaStep.HEARING, T0 + 8_000, false)))
         assertNull(c.pick(auto, null, T0))
@@ -257,8 +255,8 @@ class HomeUiTest {
         val answer = Said(Sid.QA, "오후 12시 52분에 먹였어요.", T0 + 3_000)
         val answered = ui(parked, said = answer, heard = HeardText("L1", "언제 먹였지?", T0), lastQa = "L1")
         assertEquals(HomeCard.Ask(false, "언제 먹였지?", "오후 12시 52분에 먹였어요."), answered.card)
-        assertNull(answered.said, "④ 답은 말한 문장 줄에 두 번 보이지 않는다")
-        // 다시 물어보기: 새 창(L2)이 열리면 옛 질문·답을 붙이지 않고, 새 창이 말 없이 닫혀도 옛 답이 돌아오지 않는다
+        assertNull(answered.said, "질문 답은 말한 문장 줄에 두 번 보이지 않는다")
+        // 다시 물어보기: 새 창이 열리면 옛 질문·답을 붙이지 않고, 새 창이 말 없이 닫혀도 옛 답이 돌아오지 않는다
         val again = ui(parked.copy(speech = parked.speech.copy(qa = QaWindow("L2", QaStep.HEARING, T0 + 20_000, false))), said = answer, heard = HeardText("L1", "언제 먹였지?", T0), lastQa = "L2")
         assertEquals(HomeCard.Ask(listening = true, question = null, answer = null), again.card)
         assertEquals(null, ui(parked, said = answer, heard = HeardText("L1", "언제 먹였지?", T0), lastQa = "L2").card)

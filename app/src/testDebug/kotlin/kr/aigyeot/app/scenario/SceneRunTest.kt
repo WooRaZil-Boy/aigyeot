@@ -5,33 +5,41 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.engine.AdjustPlayback
 import kr.aigyeot.engine.Answer
+import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.BabyAboard
+import kr.aigyeot.engine.CabinTemp
+import kr.aigyeot.engine.CareSummary
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
-import kr.aigyeot.engine.CabinTemp
+import kr.aigyeot.engine.MicService
 import kr.aigyeot.engine.PendingAsk
 import kr.aigyeot.engine.Play
-import kr.aigyeot.engine.PlayPurpose
-import kr.aigyeot.engine.StartPlayback
 import kr.aigyeot.engine.PlayKind
-import kr.aigyeot.engine.Step
-import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.engine.PlayMode
+import kr.aigyeot.engine.PlayPurpose
 import kr.aigyeot.engine.SendToPhone
+import kr.aigyeot.engine.SessionState
+import kr.aigyeot.engine.SetSeatHeat
 import kr.aigyeot.engine.Sid
 import kr.aigyeot.engine.Speak
+import kr.aigyeot.engine.SpeechDone
 import kr.aigyeot.engine.Stage
+import kr.aigyeot.engine.StartPlayback
+import kr.aigyeot.engine.Step
 import kr.aigyeot.engine.YesNo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.test.assertFailsWith
+import java.io.File
+import java.nio.file.Files
 import java.time.Instant
 import java.time.OffsetDateTime
+import kotlin.test.assertFailsWith
 
 class SceneRunTest {
     private fun scene(steps: String, override: String = "\"RearDoor\",\"CabinTemp\"", sibling: Boolean = false) = parseScene("""
@@ -105,12 +113,12 @@ class SceneRunTest {
     }
 
     @Test fun `say YES는 듣기가 열린 뒤에만 답하고 쉼터 응은 운전자 조작이 아니다`() {
-        val c = parseScene(java.io.File("src/debug/assets/scenario/C.json").readText())
+        val c = parseScene(File("src/debug/assets/scenario/C.json").readText())
         val w = FakeWorld(mapOf("cry/stop_50s.pcm" to 20.0))
         val r = w.play(c)
         assertTrue(r.failures.toString(), r.completed)
         val ans = w.events.filterIsInstance<Answer>().first { it.answer == YesNo.YES }
-        val askDone = w.events.filterIsInstance<kr.aigyeot.engine.SpeechDone>().first { it.utteranceId == ans.askId }
+        val askDone = w.events.filterIsInstance<SpeechDone>().first { it.utteranceId == ans.askId }
         assertTrue("말을 마친 뒤 답", ans.at >= askDone.at)
         assertEquals(0, r.driverOps)
     }
@@ -125,7 +133,7 @@ class SceneRunTest {
         val w = FakeWorld()
         w.play(scene("""{"t":6,"tap":"BABY_ABOARD"},{"t":6,"expectNone":{"command":"CancelSpeech","for":1}}"""))   // 마이크는 0.3초 뒤에 켜진다
         assertTrue(w.events.any { it is BabyAboard })
-        assertTrue(w.events.any { it is kr.aigyeot.engine.MicService && it.running })
+        assertTrue(w.events.any { it is MicService && it.running })
     }
 
     @Test fun `phone은 atOffsetSec를 그 단계 기준 시각으로 바꾼 봉투를 보낸다`() {
@@ -170,7 +178,7 @@ class SceneRunTest {
         assertEquals(0, gainViolations(listOf(g(0, 0.5), g(10, 0.8, "q")), emptyList()))                              // 다른 재생은 따로 본다
     }
 
-    @Test fun `CSV는 계약 7_4 칼럼 그대로이고 요약 줄을 붙인다`() {
+    @Test fun `CSV는 정해진 칼럼 그대로이고 요약 줄을 붙인다`() {
         val a = RunRow(1, 1, true, null, 2_400, 300, "bus100_audio_zone_1", false, 1, 56_000, 56_000, 0, null, 0, 0, null, 1.0, emptyList())
         val b = a.copy(run = 2, seed = 2, completed = false, failedStep = 366.0, alarmLatencyMs = 3_100, maxAttempts = 2, controlOkRate = 0.5)
         val lines = csv(listOf(a, b)).trim().lines()
@@ -188,10 +196,10 @@ class SceneRunTest {
         w.play(scene("""{"t":6,"tap":"BABY_ABOARD"},{"t":10,"vc":"PUT /vehicle/gear?gear=Drive"},{"t":10,"expect":{"state":"LISTENING","by":1}}"""))
         return w.steps.value!!.also { assertTrue(it.state.session != null) }
     }
-    private fun Step.withSession(f: (kr.aigyeot.engine.SessionState) -> kr.aigyeot.engine.SessionState) = copy(state = state.copy(session = f(state.session!!)))
+    private fun Step.withSession(f: (SessionState) -> SessionState) = copy(state = state.copy(session = f(state.session!!)))
     private fun control(api: String, actual: String?, ok: Boolean = true, target: String = "t") = ControlLogEntity(0, null, 0, api, target, "g", actual, 50, 100, ok, 0)
 
-    @Test fun `F1 장면 시작 전에 열린 세션의 Step은 측정에 섞이지 않는다`() {
+    @Test fun `장면 시작 전에 열린 세션의 Step은 측정에 섞이지 않는다`() {
         val base = openStep()
         val w = FakeWorld()
         val t0 = 1_000_000L
@@ -202,14 +210,14 @@ class SceneRunTest {
         assertEquals(2, r.row().maxAttempts)
     }
 
-    @Test fun `F2 vc 입력이 실패하면 그 단계 t로 실패하고 completed는 false`() {
+    @Test fun `vc 입력이 실패하면 그 단계 t로 실패하고 completed는 false`() {
         val r = FakeWorld(vcFails = true).play(scene("""{"t":6,"tap":"BABY_ABOARD"}"""))
         assertFalse(r.completed)
         assertEquals(0.0, r.failedStep!!, 0.0)   // 첫 vc는 t=0
         assertTrue(r.failures.toString(), r.failures.first().contains("vc"))
     }
 
-    @Test fun `F2 vc가 끝나지 않으면 done이 아니고 finish가 실패로 닫는다`() {
+    @Test fun `vc가 끝나지 않으면 done이 아니고 finish가 실패로 닫는다`() {
         val w = FakeWorld()
         val never = object : ScenePorts by w { override fun vc(method: String, path: String, done: (Boolean, String) -> Unit) {} }
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, never, w.now)
@@ -220,7 +228,7 @@ class SceneRunTest {
         assertEquals(0.0, r.firstFail()!!, 0.0)
     }
 
-    @Test fun `L1 phone 수신이 끝나지 않으면 done이 아니고 finish가 실패로 닫는다, 실패면 그 단계 t`() {
+    @Test fun `phone 수신이 끝나지 않으면 done이 아니고 finish가 실패로 닫는다, 실패면 그 단계 t`() {
         val w = FakeWorld()
         var cb: ((Boolean, String) -> Unit)? = null
         val slow = object : ScenePorts by w { override fun phone(envelopeJson: String, done: (Boolean, String) -> Unit) { cb = done } }
@@ -238,15 +246,15 @@ class SceneRunTest {
         assertEquals(8.0, r2.firstFail()!!, 0.0)
     }
 
-    @Test fun `M1 차 제어 결과 줄을 기다리고, 17초 안에 안 오면 실패로 센다`() {
+    @Test fun `차 제어 결과 줄을 기다리고, 17초 안에 안 오면 실패로 센다`() {
         val base = openStep()
-        val areas = listOf(kr.aigyeot.engine.Area.ROW_1_LEFT, kr.aigyeot.engine.Area.ROW_1_RIGHT)
+        val areas = listOf(Area.ROW_1_LEFT, Area.ROW_1_RIGHT)
         fun run(): SceneRun {
             val w = FakeWorld()
             val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
             r.advance(w.now + 6_000)
             w.now += 6_000
-            r.onStep(base.copy(commands = listOf(kr.aigyeot.engine.SetSeatHeat("c", areas, 1))))
+            r.onStep(base.copy(commands = listOf(SetSeatHeat("c", areas, 1))))
             r.onControl(control("SEAT_HEAT", "1", target = "ROW_1_LEFT"))
             return r
         }
@@ -265,18 +273,18 @@ class SceneRunTest {
         assertTrue(b.row().completed)
     }
 
-    @Test fun `F3 같은 분에 다시 돌리면 이름 뒤에 번호를 붙인다`() {
-        val dir = java.nio.file.Files.createTempDirectory("res").toFile()
+    @Test fun `같은 분에 다시 돌리면 이름 뒤에 번호를 붙인다`() {
+        val dir = Files.createTempDirectory("res").toFile()
         val a = freeResultFile(dir, "A", "20261105-0900")
         assertEquals("A-20261105-0900.csv", a.name)
         a.writeText("x")
         val b = freeResultFile(dir, "A", "20261105-0900")
         assertEquals("A-20261105-0900-2.csv", b.name)
-        java.io.File(dir, "A-20261105-0900-2.txt").writeText("x")   // csv는 없고 txt만 있어도 건너뛴다
+        File(dir, "A-20261105-0900-2.txt").writeText("x")   // csv는 없고 txt만 있어도 건너뛴다
         assertEquals("A-20261105-0900-3.csv", freeResultFile(dir, "A", "20261105-0900").name)
     }
 
-    @Test fun `F4 gain - 복귀가 끝난 뒤의 상승은 위반`() {
+    @Test fun `gain - 복귀가 끝난 뒤의 상승은 위반`() {
         fun g(at: Long, v: Double) = GainPoint(at, "p", v)
         fun adj(at: Long, m: PlayMode) = at to AdjustPlayback("p", m)
         val a = listOf(adj(10, PlayMode.DUCK), adj(20, PlayMode.NORMAL))
@@ -284,7 +292,7 @@ class SceneRunTest {
         assertEquals(1, gainViolations(listOf(g(0, 1.0), g(11, 0.2), g(21, 1.0), g(30, 0.5), g(40, 1.0)), a))   // 그 뒤 다시 올림
     }
 
-    @Test fun `F4 gain - DUCK 뒤 PAUSE 뒤 NORMAL은 처음 감쇄 직전 이득까지 복귀`() {
+    @Test fun `gain - DUCK 뒤 PAUSE 뒤 NORMAL은 처음 감쇄 직전 이득까지 복귀`() {
         fun g(at: Long, v: Double) = GainPoint(at, "p", v)
         fun adj(at: Long, m: PlayMode) = at to AdjustPlayback("p", m)
         val a = listOf(adj(10, PlayMode.DUCK), adj(15, PlayMode.PAUSE), adj(20, PlayMode.NORMAL))
@@ -292,7 +300,7 @@ class SceneRunTest {
         assertEquals(1, gainViolations(listOf(g(0, 0.8), g(11, 0.2), g(16, 0.0), g(21, 0.9)), a))
     }
 
-    @Test fun `F4 gain - 페이드 구간에서 풀리면 페이드 값까지만 허용`() {
+    @Test fun `gain - 페이드 구간에서 풀리면 페이드 값까지만 허용`() {
         fun g(at: Long, v: Double) = GainPoint(at, "p", v)
         fun adj(at: Long, m: PlayMode) = at to AdjustPlayback("p", m)
         val start = StartPlayback("p", PlayKind.AUTO, Method(MethodKind.WHITE_NOISE, null), 10_000, 2_000)
@@ -304,14 +312,14 @@ class SceneRunTest {
         assertEquals(0, gainViolations(listOf(g(0, 1.0), g(8_001, 0.2), g(9_100, 1.0)), a))           // 시작 정보가 없으면 ref까지
     }
 
-    @Test fun `K1 복귀가 시작된 뒤 내려가면 허용이 닫히고 단계 복귀는 허용`() {
+    @Test fun `복귀가 시작된 뒤 내려가면 허용이 닫히고 단계 복귀는 허용`() {
         fun g(at: Long, v: Double) = GainPoint(at, "p", v)
         val a = listOf(10L to AdjustPlayback("p", PlayMode.DUCK), 20L to AdjustPlayback("p", PlayMode.NORMAL))
         assertEquals(1, gainViolations(listOf(g(0, 1.0), g(11, 0.2), g(21, 0.8), g(22, 0.3), g(23, 0.8)), a))
         assertEquals(0, gainViolations(listOf(g(0, 1.0), g(11, 0.2), g(21, 0.5), g(22, 0.8), g(23, 1.0)), a))
     }
 
-    @Test fun `F5 routed_device는 getRoutedDevice의 actual이다`() {
+    @Test fun `routed_device는 getRoutedDevice의 actual이다`() {
         val w = FakeWorld()
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
         r.onControl(control("setPreferredDevice", "rear"))
@@ -320,7 +328,7 @@ class SceneRunTest {
         assertEquals("front", r.row().routedDevice)
     }
 
-    @Test fun `F6 볼륨 호출도 system_volume_changes로 세고 control_ok_rate에서는 뺀다`() {
+    @Test fun `볼륨 호출도 system_volume_changes로 세고 control_ok_rate에서는 뺀다`() {
         val w = FakeWorld()
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
         r.onControl(control("setStreamVolume", "5"))
@@ -333,7 +341,7 @@ class SceneRunTest {
         assertEquals(1.0, row.controlOkRate!!, 0.0)   // 차 제어(SEAT_HEAT)만
     }
 
-    @Test fun `J2 control_ok_rate는 영역 target인 차 제어 줄만 센다`() {
+    @Test fun `control_ok_rate는 영역 target인 차 제어 줄만 센다`() {
         val w = FakeWorld()
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
         r.onControl(control("requestAudioFocus", "1"))   // 오디오 줄은 분모에 없다
@@ -343,7 +351,7 @@ class SceneRunTest {
         assertEquals(0.0, r.row().controlOkRate!!, 0.0)
     }
 
-    @Test fun `L1 lufs_violations는 쓴 음원 중 −30 ±1 LUFS 밖을 센다`() {
+    @Test fun `lufs_violations는 쓴 음원 중 −30 ±1 LUFS 밖을 센다`() {
         val wn = Method(MethodKind.WHITE_NOISE, null); val lu = Method(MethodKind.LULLABY, null); val song = Method(MethodKind.SONG, "s1")
         assertEquals(0, lufsViolations(emptySet()) { null })                                         // 튼 음원이 없다
         assertEquals(1, lufsViolations(setOf(wn, lu)) { if (it == lu) -32.0 else -30.4 })
@@ -352,7 +360,7 @@ class SceneRunTest {
         assertNull(lufsViolations(setOf(wn, song)) { if (it == song) null else -30.0 })             // 못 잰 음원이 있으면 미측정
     }
 
-    @Test fun `L2 row의 lufs_violations는 그 장면 StartPlayback 음원을 포트로 잰다`() {
+    @Test fun `row의 lufs_violations는 그 장면 StartPlayback 음원을 포트로 잰다`() {
         val base = openStep()
         val asked = ArrayList<Method>()
         val ports = object : ScenePorts by FakeWorld() {
@@ -367,10 +375,10 @@ class SceneRunTest {
         assertEquals(setOf(Method(MethodKind.WHITE_NOISE, null), Method(MethodKind.LULLABY, null)), asked.toSet())
     }
 
-    @Test fun `L3 control_ok_rate는 exec가 남기는 줄 중 차 제어 넷만 센다(C96)`() {
+    @Test fun `control_ok_rate는 exec가 남기는 줄 중 차 제어 넷만 센다`() {
         val w = FakeWorld()
         val r = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
-        // exec가 실제로 남기는 재생·경유지·오류 줄(report-exec 3장): target이 영역 이름이 아니다
+        // exec가 실제로 남기는 재생·경유지·오류 줄: target이 영역 이름이 아니다
         listOf("getDevices" to "bus100_audio_zone_1", "requestAudioFocus" to "p1", ROUTE_API to "p1", GAIN_API to "p1", "stopPlayback" to "p1",
             "playback" to "p1", "addWaypoint" to "tbt:rest:안성(부산)", "handle" to "StartPlayback", "start" to "exec")
             .forEach { (api, t) -> r.onControl(control(api, "x", ok = false, target = t)) }
@@ -382,7 +390,7 @@ class SceneRunTest {
         assertEquals(0.75, r.row().controlOkRate!!, 0.0)
     }
 
-    @Test fun `L4 CSV 요약의 lufs_violations는 반복 하나라도 미측정이면 빈 칸`() {
+    @Test fun `CSV 요약의 lufs_violations는 반복 하나라도 미측정이면 빈 칸`() {
         val a = RunRow(1, 1, true, null, 2_400, 300, "z", false, 1, 56_000, 56_000, 0, 0, 0, 0, null, 1.0, emptyList())
         fun summaryLufs(vararg v: Int?) = csv(v.mapIndexed { i, x -> a.copy(run = i + 1, lufsViolations = x) }).trim().lines().last().split(",")[12]
         assertEquals("2", summaryLufs(0, 2))
@@ -390,7 +398,7 @@ class SceneRunTest {
         assertEquals("", summaryLufs(null, 3))
     }
 
-    @Test fun `S1 stepLog 유실이 반복 중에 늘면 그 반복은 completed=false, 사유 stepLog 유실`() {
+    @Test fun `stepLog 유실이 반복 중에 늘면 그 반복은 completed=false, 사유 stepLog 유실`() {
         val w = FakeWorld()
         val ok = SceneRun(scene("""{"t":6,"tap":"BABY_ABOARD"}"""), 0, w, w, w.now)
         ok.checkStepLog()
@@ -403,7 +411,7 @@ class SceneRunTest {
         assertTrue(row.failures.toString(), row.failures.any { it.contains("stepLog 유실 3") })
     }
 
-    @Test fun `G1 SceneGate는 장면 첫 Step(시드 rng, 할 일 없음)부터 넘긴다`() {
+    @Test fun `SceneGate는 장면 첫 Step(시드 rng, 할 일 없음)부터 넘긴다`() {
         val base = openStep()
         val gate = SceneGate(13)
         assertFalse(gate.accept(base))                                                           // 실제 세션 Step
@@ -413,7 +421,7 @@ class SceneRunTest {
         assertTrue(gate.accept(base))                                                            // 그 뒤는 모두
     }
 
-    @Test fun `F8 SendToPhone body의 occurred_at 숫자(epoch ms)는 기대 RFC 3339와 2초까지 맞다`() {
+    @Test fun `SendToPhone body의 occurred_at 숫자(epoch ms)는 기대 RFC 3339와 2초까지 맞다`() {
         val at = Instant.parse("2026-11-05T00:00:00Z").toEpochMilli()
         fun c(ms: Long) = SendToPhone("handoff_alert", JsonObject(mapOf("occurred_at" to JsonPrimitive(ms))))
         val want = JsonObject(mapOf("occurred_at" to JsonPrimitive("2026-11-05T00:00:00Z")))
@@ -421,7 +429,7 @@ class SceneRunTest {
         assertFalse(cmdMatches(c(at + 3_000), "SendToPhone", null, null, null, want, 0))
     }
 
-    @Test fun `F10 마지막 단계가 녹음이면 녹음 길이만큼 끝나지 않는다`() {
+    @Test fun `마지막 단계가 녹음이면 녹음 길이만큼 끝나지 않는다`() {
         val w = FakeWorld()
         val r = SceneRun(scene("""{"t":0,"audio":{"file":"x.pcm","durSec":40}}"""), 0, w, w, w.now)
         r.advance(w.now + 5_000)   // 녹음은 첫 advance(5초)에서 시작한다
@@ -431,7 +439,7 @@ class SceneRunTest {
         assertEquals(w.now + 40_000, r.endAt)
     }
 
-    @Test fun `F15 앱 화면이 없어 마이크를 못 켜면 그 단계가 실패이고 BabyAboard는 그대로 넣는다`() {
+    @Test fun `앱 화면이 없어 마이크를 못 켜면 그 단계가 실패이고 BabyAboard는 그대로 넣는다`() {
         val w = FakeWorld(micAvailable = false)
         val r = w.play(scene("""{"t":6,"tap":"BABY_ABOARD"}"""))
         assertFalse(r.completed)
@@ -439,7 +447,7 @@ class SceneRunTest {
         assertTrue(w.events.any { it is BabyAboard })
     }
 
-    @Test fun `F17 say YES는 이미 닫힌 질문에 답하지 않고 창이 끝나면 실패한다`() {
+    @Test fun `say YES는 이미 닫힌 질문에 답하지 않고 창이 끝나면 실패한다`() {
         val base = openStep()
         val ask = PendingAsk("a1", Sid.S07, "r1", null, false)
         val w = FakeWorld()
@@ -463,7 +471,7 @@ class SceneRunTest {
 
     // ---- 2회차 수정 시험 ----
 
-    @Test fun `G1 녹음만 진행 중일 때 멈추면 completed는 false`() {
+    @Test fun `녹음만 진행 중일 때 멈추면 completed는 false`() {
         val w = FakeWorld()
         val r = SceneRun(scene("""{"t":0,"audio":{"file":"x.pcm","durSec":40}}"""), 0, w, w, w.now)
         r.advance(w.now + 5_000)
@@ -474,7 +482,7 @@ class SceneRunTest {
         assertTrue(row.failures.toString(), row.failures.single().contains("멈춤"))
     }
 
-    @Test fun `G2 진행 중 재생분은 마지막으로 본 시각까지 센다`() {
+    @Test fun `진행 중 재생분은 마지막으로 본 시각까지 센다`() {
         val base = openStep()
         val w = FakeWorld()
         val t0 = w.now
@@ -487,18 +495,18 @@ class SceneRunTest {
         assertTrue("session_play_ms ${r.row().sessionPlayMs}", r.row().sessionPlayMs >= 5_000)
     }
 
-    @Test fun `G3 처음 이득 점과 DUCK이 같은 ms여도 감쇄 직전 이득이 기준`() {
+    @Test fun `처음 이득 점과 DUCK이 같은 ms여도 감쇄 직전 이득이 기준`() {
         fun g(at: Long, v: Double) = GainPoint(at, "p", v)
         fun adj(at: Long, m: PlayMode) = at to AdjustPlayback("p", m)
         assertEquals(1, gainViolations(listOf(g(0, 0.3), g(1, 0.06), g(21, 0.8)), listOf(adj(0, PlayMode.DUCK), adj(20, PlayMode.NORMAL))))
     }
 
-    @Test fun `G4 같은 advance의 뒤 단계는 앞 단계 사건이 반영된 상태를 본다`() {
+    @Test fun `같은 advance의 뒤 단계는 앞 단계 사건이 반영된 상태를 본다`() {
         val r = FakeWorld().play(scene("""{"t":1,"inject":{"event":"GearChanged","gear":"D"}},{"t":1,"tap":"FEEDING_NOW"}""", "\"RearDoor\",\"GearChanged\""))
         assertEquals(1, r.driverOps)
     }
 
-    @Test fun `G6 by가 지난 뒤 처음 열린 질문에는 답하지 않고 실패한다`() {
+    @Test fun `by가 지난 뒤 처음 열린 질문에는 답하지 않고 실패한다`() {
         val base = openStep()
         val w = FakeWorld()
         val t0 = w.now
@@ -511,7 +519,7 @@ class SceneRunTest {
         assertEquals(0.0, r.firstFail()!!, 0.0)
     }
 
-    @Test fun `G7 페이드로 줄어든 이득에서 풀릴 때 페이드 비율을 다시 곱하지 않는다`() {
+    @Test fun `페이드로 줄어든 이득에서 풀릴 때 페이드 비율을 다시 곱하지 않는다`() {
         fun g(at: Long, v: Double) = GainPoint(at, "p", v)
         val starts = mapOf("p" to StartPlayback("p", PlayKind.AUTO, Method(MethodKind.WHITE_NOISE, null), 10_000, 2_000))
         val a = listOf(9_001L to AdjustPlayback("p", PlayMode.DUCK), 9_150L to AdjustPlayback("p", PlayMode.NORMAL))
@@ -519,7 +527,7 @@ class SceneRunTest {
         assertEquals(1, gainViolations(listOf(g(0, 1.0), g(9_000, 0.5), g(9_100, 0.1), g(9_200, 0.6)), a, starts))   // 감쇄 직전 0.5 초과
     }
 
-    @Test fun `H1 처음 이득 점과 DUCK이 같은 ms면 base도 그 점이다`() {
+    @Test fun `처음 이득 점과 DUCK이 같은 ms면 base도 그 점이다`() {
         fun g(at: Long, v: Double) = GainPoint(at, "p", v)
         val starts = mapOf("p" to StartPlayback("p", PlayKind.AUTO, Method(MethodKind.WHITE_NOISE, null), 10_000, 2_000))
         val a = listOf(0L to AdjustPlayback("p", PlayMode.DUCK), 9_150L to AdjustPlayback("p", PlayMode.NORMAL))
@@ -528,7 +536,7 @@ class SceneRunTest {
         assertEquals(0, gainViolations(listOf(g(0, 0.3), g(1, 0.06), g(9_200, 0.15)), a, starts))
     }
 
-    @Test fun `H3 녹음 시작이 늦으면 audioEnd도 그만큼 늦다`() {
+    @Test fun `녹음 시작이 늦으면 audioEnd도 그만큼 늦다`() {
         val w = FakeWorld(audioDelayMs = 2_000)
         val r = SceneRun(scene("""{"t":0,"audio":{"file":"x.pcm","durSec":40}}"""), 0, w, w, w.now)
         r.advance(w.now + 5_000)
@@ -536,8 +544,9 @@ class SceneRunTest {
         assertTrue(r.done(w.now + 47_000))
     }
 
-    // ---- C119 setup.care·inject CareSummary ----
-    private val careFields = """"asOfSec":-60,"sleepDiaperEnabled":true,"lastSleepStartSec":-9000,"lastSleepEndSec":-6000,"sleepingSinceSec":null,"todaySleepMin":120,"nightWakeups":1,"lastDiaperSec":-3600,"todayDiaperCount":2,"todayFeedCount":2"""
+    // ---- setup.care·inject CareSummary ----
+    private val careFields = """"asOfSec":-60,"sleepDiaperEnabled":true,"lastSleepStartSec":-9000,"lastSleepEndSec":-6000,""" +
+        """"sleepingSinceSec":null,"todaySleepMin":120,"nightWakeups":1,"lastDiaperSec":-3600,"todayDiaperCount":2,"todayFeedCount":2"""
 
     @Test fun `setup care는 시작 기준 시각으로 바뀐다`() {
         val s = parseScene("""{"format":1,"id":"T","title":"","repeat":1,"setup":{"seed":1,"override":["CareSummary"],"care":{$careFields}},"steps":[]}""")
@@ -556,7 +565,7 @@ class SceneRunTest {
     @Test fun `inject CareSummary의 시각 칸은 그 단계 t 기준 초`() {
         val w = FakeWorld()
         w.play(scene("""{"t":7,"inject":{"event":"CareSummary",$careFields}}""", override = "\"RearDoor\",\"CabinTemp\",\"CareSummary\""))
-        val c = w.events.filterIsInstance<kr.aigyeot.engine.CareSummary>().single().summary
+        val c = w.events.filterIsInstance<CareSummary>().single().summary
         assertEquals(FakeWorld.T0 + 7_000 - 60_000, c.asOf)
         assertEquals(FakeWorld.T0 + 7_000 - 3_600_000, c.lastDiaperAt)
         assertEquals(c, w.steps.value!!.state.care)

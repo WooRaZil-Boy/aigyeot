@@ -7,8 +7,12 @@ import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kr.aigyeot.engine.Ask
+import kr.aigyeot.engine.CareSummary
 import kr.aigyeot.engine.PlaybackEnded
 import kr.aigyeot.engine.SaveSession
+import kr.aigyeot.engine.Sid
+import kr.aigyeot.engine.Speak
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,7 +22,7 @@ import java.io.File
 class ScenesTest {
     private val dir = File("src/debug/assets/scenario")
     private fun scene(id: String) = parseScene(File(dir, "$id.json").readText())
-    /** 계약 7.5 뼈대의 녹음: 'stop'은 울음이 시작 20초 뒤 그침(rt_outcome.py 정답 '그침' 5~25초), 나머지는 녹음 내내 운다. */
+    /** 녹음: 'stop'은 울음이 시작 20초 뒤 그침(rt_outcome.py 정답 '그침' 5~25초), 나머지는 녹음 내내 운다. */
     private val cryLen = mapOf("cry/stop_40s.pcm" to 20.0, "cry/stop_50s.pcm" to 20.0)
 
     private fun runAll(id: String): List<RunRow> {
@@ -27,7 +31,7 @@ class ScenesTest {
             .also { File("build/scenario-jvm").apply { mkdirs() }.resolve("$id.csv").writeText(csv(it)) }   // 측정표(가짜 세상)
     }
 
-    /** 15장 시나리오 기준: 끝까지 처리, 경보 지연 3초 이하, 시도 2회·에피소드 112초·세션 20분 이하, 운전자 조작 0, 이득 위반 0. */
+    /** 시나리오 기준: 끝까지 처리, 경보 지연 3초 이하, 시도 2회·에피소드 112초·세션 20분 이하, 운전자 조작 0, 이득 위반 0. */
     private fun assertMeetsLimits(id: String, rows: List<RunRow>, alarm: Boolean = true) {
         rows.forEach { r ->
             assertTrue("$id run ${r.run}: ${r.failures}", r.completed)
@@ -52,9 +56,9 @@ class ScenesTest {
         val rows = runAll("B")
         assertMeetsLimits("B", rows)
         rows.forEach { assertEquals(2, it.maxAttempts); assertEquals(1.0, it.controlOkRate!!, 0.0) }
-        // S04는 실제로 낮춘 값(22℃ → 20℃)을 말한다(C102)
+        // S04는 실제로 낮춘 값(22℃ → 20℃)을 말한다
         val w = FakeWorld(cryLen); w.play(scene("B"))
-        assertEquals("2", w.commands.map { it.second }.filterIsInstance<kr.aigyeot.engine.Speak>().first { it.sid == kr.aigyeot.engine.Sid.S04 }.vars["loweredC"])
+        assertEquals("2", w.commands.map { it.second }.filterIsInstance<Speak>().first { it.sid == Sid.S04 }.vars["loweredC"])
     }
 
     @Test fun `장면 C 수유 시간대 - 쉼터 응 뒤 경유지`() {
@@ -66,13 +70,13 @@ class ScenesTest {
         val rows = runAll("C2")
         assertMeetsLimits("C2", rows, alarm = false)
         val w = FakeWorld(cryLen); w.play(scene("C2"))
-        val ask = w.commands.map { it.second }.filterIsInstance<kr.aigyeot.engine.Ask>().single { it.sid == kr.aigyeot.engine.Sid.S07_DEPART }
+        val ask = w.commands.map { it.second }.filterIsInstance<Ask>().single { it.sid == Sid.S07_DEPART }
         assertEquals("안성휴게소(부산방향)", ask.vars["restName"]); assertEquals("30", ask.vars["distanceKm"])
     }
 
-    @Test fun `장면 C2의 setup care는 장면 상태 care에 들어간다(C119)`() {
+    @Test fun `장면 C2의 setup care는 장면 상태 care에 들어간다`() {
         val w = FakeWorld(cryLen); w.play(scene("C2"))
-        val care = w.events.filterIsInstance<kr.aigyeot.engine.CareSummary>().single().summary
+        val care = w.events.filterIsInstance<CareSummary>().single().summary
         assertEquals(FakeWorld.T0 - 60_000, care.asOf)
         assertEquals(FakeWorld.T0 - 12_600_000, care.lastSleepStartAt); assertEquals(FakeWorld.T0 - 3_600_000, care.lastDiaperAt)
         assertEquals(2, care.todayFeedCount); assertEquals(null, care.sleepingSince)
@@ -89,7 +93,7 @@ class ScenesTest {
 
     @Test fun `장면 E 도착 - 뒷창 되돌리고 리포트`() = assertMeetsLimits("E", runAll("E"), alarm = false)
 
-    @Test fun `F14 자동 시작·종료 각본 20개 - 95퍼센트 이상`() {
+    @Test fun `자동 시작·종료 각본 20개 - 95퍼센트 이상`() {
         val ids = dir.listFiles()!!.map { it.nameWithoutExtension }.filter { it.startsWith("F14-") }.sorted()
         assertEquals(20, ids.size)
         val rows = ids.associateWith { FakeWorld().play(scene(it)) }
@@ -99,7 +103,7 @@ class ScenesTest {
         rows.forEach { (id, r) -> assertEquals("$id 운전자 조작", 0, r.driverOps) }
     }
 
-    @Test fun `F7 재생 도중 끝난 장면도 진행 중 재생 시간을 센다`() {
+    @Test fun `재생 도중 끝난 장면도 진행 중 재생 시간을 센다`() {
         // A를 경보 뒤 재생 중(t=330)까지만 담는다: 재생은 끝나지 않았다
         val o = Json.parseToJsonElement(File(dir, "A.json").readText()).jsonObject
         val cut = JsonObject(o + ("steps" to JsonArray(o["steps"]!!.jsonArray.filter { it.jsonObject["t"]!!.jsonPrimitive.double <= 330.0 })))
@@ -111,7 +115,7 @@ class ScenesTest {
         assertTrue("session_play_ms ${r.sessionPlayMs}", r.sessionPlayMs >= 15_000)
     }
 
-    @Test fun `F19 F14-04·10은 세션이 하나, F14-11은 둘`() {
+    @Test fun `F14-04·10은 세션이 하나, F14-11은 둘`() {
         fun sessions(id: String) = FakeWorld().also { assertTrue(id, it.play(scene(id)).completed) }
             .commands.mapNotNull { (it.second as? SaveSession)?.record?.id }.toSet().size
         assertEquals(1, sessions("F14-04"))
@@ -119,7 +123,7 @@ class ScenesTest {
         assertEquals(2, sessions("F14-11"))
     }
 
-    @Test fun `H3 녹음 시작이 2초 늦어도 경보 지연은 실제 시작부터 잰다`() {
+    @Test fun `녹음 시작이 2초 늦어도 경보 지연은 실제 시작부터 잰다`() {
         val a = scene("A")
         val base = FakeWorld(cryLen).play(a).alarmLatencyMs!!
         val late = FakeWorld(cryLen, audioDelayMs = 2_000).play(a).alarmLatencyMs!!

@@ -8,6 +8,7 @@ import kr.aigyeot.engine.PauseReason.DETECTOR_TIMEOUT
 import kr.aigyeot.engine.PauseReason.MIC_ERROR
 import kr.aigyeot.engine.PauseReason.SILENCED
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -287,8 +288,8 @@ class CryDetectorTest {
     }
 
     private class BlockingSource : PcmSource {
-        val gate = java.util.concurrent.CountDownLatch(1)
-        val reading = java.util.concurrent.CountDownLatch(1)
+        val gate = CountDownLatch(1)
+        val reading = CountDownLatch(1)
         @Volatile var closed = false
         override fun start() {}
         override fun read(out: ShortArray): Int { reading.countDown(); gate.await(); return PcmSource.ERROR }

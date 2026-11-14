@@ -9,7 +9,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// contracts-link 8.6 정차 화면 표시·8.7 "연결됐어요"
+// 정차 화면 연결 표시와 "연결됐어요"
 class LinkTextTest {
     @Test fun connLine_fourStates() {
         assertNull(connText(LinkConn.NONE, false))   // 연결된 폰이 없으면 표시 안 함
@@ -18,7 +18,7 @@ class LinkTextTest {
         assertEquals("휴대폰과 다시 연결하는 중", connText(LinkConn.BACKOFF, false))
     }
 
-    // 명세서 17장 C106: 중계 소켓만 붙었고 폰이 없으면 "연결됨"이라 쓰지 않는다
+    // 중계 소켓만 붙었고 폰이 없으면 "연결됨"이라 쓰지 않는다
     @Test fun connLine_connectedWithoutPhone_saysNoPhone() {
         assertEquals("연결된 휴대폰 없음", connText(LinkConn.CONNECTED, false))
         assertEquals(listOf("연결된 휴대폰 없음"), linkLines(LinkStatus(conn = LinkConn.CONNECTED), paired = false).map { it.text })
@@ -45,7 +45,7 @@ class LinkTextTest {
     }
 }
 
-// C130 ⑦·C132 ④: 인계 문장을 못 말했으면(told_driver=false) 정차 문구에서 "했다"고 쓰지 않는다
+// 인계 문장을 못 말했으면(told_driver=false) 정차 문구에서 "했다"고 쓰지 않는다
 class StopTextToldDriverTest {
     private fun st(mode: kr.aigyeot.shared.HandoffKind, told: Boolean?, rest: String? = null) =
         kr.aigyeot.shared.StopInfo(true, kr.aigyeot.shared.StopReason.ATTEMPT_LIMIT, mode, rest, false, false, told)
@@ -58,7 +58,7 @@ class StopTextToldDriverTest {
         assertEquals("차가 선 채로 달래기를 멈췄어요", tail(st(kr.aigyeot.shared.HandoffKind.PARKED, null)))
     }
 
-    @Test fun stopText_parkedNoSound_saysCouldNotPlay() {   // U59
+    @Test fun stopText_parkedNoSound_saysCouldNotPlay() {
         val s = kr.aigyeot.shared.StopInfo(true, kr.aigyeot.shared.StopReason.NO_SOUND, kr.aigyeot.shared.HandoffKind.PARKED, null, false, false, null)
         assertEquals("뒷좌석 출력 없음 · 차가 선 채로 소리를 틀지 못했어요", stopText(s))
     }
@@ -75,7 +75,7 @@ class StopTextToldDriverTest {
         assertEquals("n 휴게소에 들르자고 제안했어요", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, true, "n 휴게소")))
     }
 
-    @Test fun c185_pendingSessionShowsSettling_thenUpdates() {
+    @Test fun pendingSessionShowsSettling_thenUpdates() {
         val pendingLine = stopText(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, null), settling = true)   // 인계 TTS 도중: toldDriver 아직 null
         assertEquals("정리하는 중이에요", pendingLine.substringAfter(" · "))
         assertEquals("쉼터는 묻지 못했어요", tail(st(kr.aigyeot.shared.HandoffKind.REST_OFFER, false)))     // TTS 실패로 확정되면 바뀐다

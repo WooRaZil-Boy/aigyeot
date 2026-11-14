@@ -1,10 +1,12 @@
 package kr.aigyeot.app.scenario
 
+import kr.aigyeot.app.exec.android.AndroidAudio
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.io.File
 
 class SourceLoudnessTest {
     @Test fun `백색소음은 exec 생성기와 BS·1770 측정으로 −30 LUFS`() {
@@ -12,8 +14,8 @@ class SourceLoudnessTest {
     }
 
     @Test fun `뱃속 소리 에셋이 assets에 실제로 있다(exec와 장면 측정이 같은 경로)`() {
-        assertEquals("sound/womb.m4a", kr.aigyeot.app.exec.android.AndroidAudio.WOMB_ASSET)
-        val f = java.io.File("src/main/assets/${kr.aigyeot.app.exec.android.AndroidAudio.WOMB_ASSET}")
+        assertEquals("sound/womb.m4a", AndroidAudio.WOMB_ASSET)
+        val f = File("src/main/assets/${AndroidAudio.WOMB_ASSET}")
         org.junit.Assert.assertTrue(f.path, f.isFile && f.length() > 100_000)
     }
 

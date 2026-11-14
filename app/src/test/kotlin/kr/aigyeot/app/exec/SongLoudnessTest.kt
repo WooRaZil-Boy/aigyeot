@@ -10,7 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-// 명세서 14장 '−30 LUFS ±1 이내로 맞춤': 이득을 곱한 결과를 다시 재어 확인한다
+// '−30 LUFS ±1 이내로 맞춤': 이득을 곱한 결과를 다시 재어 확인한다
 class SongLoudnessTest {
     private val p = Params()
 

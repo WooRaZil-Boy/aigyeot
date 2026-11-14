@@ -1,0 +1,10 @@
+completed=true attempts=0
++5000ms ShowNotice BABY_ABOARD
++5000ms Speak S16 {}
++6300ms HideNotice BABY_ABOARD
++6300ms HideNotice MIC_STOPPED
++10100ms HideNotice BABY_ABOARD
++10100ms HideNotice MIC_STOPPED
++16000ms Ask S07_DEPART {distanceKm=30, hungryAt=1793840400000, restName=안성휴게소(부산방향)} listenMs=6000
++19000ms AddWaypoint tbt:rest:안성휴게소(부산방향)
++27000ms Speak S09 {restName=안성휴게소(부산방향)}

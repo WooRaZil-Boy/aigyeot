@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-// 계약 4장 AddWaypoint '보내기 전에 경유지 목록을 한 번 읽는다'(C110), Params.waypointPrecheckMs
+// AddWaypoint '보내기 전에 경유지 목록을 한 번 읽는다', Params.waypointPrecheckMs
 class WaypointPrecheckTest {
     private val t = FakeTime()
     private val p = WaypointPrecheck(t, Params().waypointPrecheckMs)

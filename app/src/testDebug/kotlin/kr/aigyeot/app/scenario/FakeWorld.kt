@@ -7,10 +7,10 @@ import kr.aigyeot.app.host.HostApi
 import kr.aigyeot.app.host.ScenarioSetup
 import kr.aigyeot.app.store.db.ControlLogEntity
 import kr.aigyeot.engine.AddWaypoint
-import kr.aigyeot.engine.CareSummary
 import kr.aigyeot.engine.Answer
 import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.Ask
+import kr.aigyeot.engine.CareSummary
 import kr.aigyeot.engine.Command
 import kr.aigyeot.engine.ControlKind
 import kr.aigyeot.engine.ControlResult
@@ -93,7 +93,7 @@ class FakeWorld(
     override fun startScenario(setup: ScenarioSetup) {
         this.setup = setup
         state = EngineState.fresh(setup.seed, setup.profile, setup.methods, setup.history, setup.feedingStart, setup.otherGuardians)
-        setup.care?.let { post(CareSummary(now, it)) }   // C119: 호스트와 같게 첫 Step 뒤 요약 흉내
+        setup.care?.let { post(CareSummary(now, it)) }   // 호스트와 같게 첫 Step 뒤 요약 흉내
     }
     override fun endScenario() { ended = true }
 
@@ -128,7 +128,7 @@ class FakeWorld(
     override fun phone(envelopeJson: String, done: (Boolean, String) -> Unit) { done(true, "") }
     override fun simulated(what: String) { simulated++ }
 
-    /** 가짜 감지기: 0.975초마다 3창(2.925초) 구간. 울음이 구간의 절반 이상이면 p = 0.95, 경보는 이 구간과 앞 구간이 모두 큼(G3). */
+    /** 가짜 감지기: 0.975초마다 3창(2.925초) 구간. 울음이 구간의 절반 이상이면 p = 0.95, 경보는 이 구간과 앞 구간이 모두 큼. */
     private fun detect(t: Long): Unit = at(t) {
         if (!mic) return@at
         val start = now - 3 * WINDOW
@@ -139,7 +139,7 @@ class FakeWorld(
         detect(t + WINDOW)
     }
 
-    // ---- 가짜 실행기: 할 일 → 결과 사건(계약 4장 '돌아오는 사건') ----
+    // ---- 가짜 실행기: 할 일 → 결과 사건 ----
     private fun exec(c: Command) {
         when (c) {
             is StartPlayback -> {

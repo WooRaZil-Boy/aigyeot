@@ -2,6 +2,7 @@ package kr.aigyeot.app.detect
 
 import java.io.Closeable
 import java.io.File
+import java.io.FileNotFoundException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -29,7 +30,7 @@ class PrepareDetectTest {
     }
 
     @Test fun `assets를 못 열어도 null`() {
-        assertNull(prepareDetect({ throw java.io.FileNotFoundException() }, { FakeSource() }, { FakeScorer() }))
+        assertNull(prepareDetect({ throw FileNotFoundException() }, { FakeSource() }, { FakeScorer() }))
     }
 
     @Test fun `모델 준비가 실패하면 입력원을 닫고 null`() {

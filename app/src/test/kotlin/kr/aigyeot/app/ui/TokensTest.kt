@@ -66,7 +66,7 @@ class TokensTest {
         s.forEach { (k, v) -> assertEquals(k, v.jsonObject.getValue("damping").jsonPrimitive.float to v.jsonObject.getValue("stiffness").jsonPrimitive.float, Tokens.spring.getValue(k)) }
     }
 
-    /** 시안 4.3 대비표의 글자 짝(build.py PAIRS)이 라이트·다크 모두 4.5:1 이상. 투명 색은 그 바탕에 합성. */
+    /** 대비표의 글자 짝이 라이트·다크 모두 4.5:1 이상. 투명 색은 그 바탕에 합성. */
     @Test fun textPairsContrastAtLeast45() {
         val pairs = listOf(
             "textPrimary" to "bg", "textPrimary" to "surface", "textPrimary" to "surfaceRaised", "textSecondary" to "bg", "textSecondary" to "surface",

@@ -12,7 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.tan
 
-/** 3D 준비 표시(v8c-7 ⑦, 안드로이드 폰 StageTest와 같은 줄)와 홈 무대 첫 장 전 정지 그림. 시각은 3D 칸을 붙인 때부터 ms. */
+/** 3D 준비 표시(안드로이드 폰 StageTest와 같은 줄)와 홈 무대 첫 장 전 정지 그림. 시각은 3D 칸을 붙인 때부터 ms. */
 class StageMarkTest {
     private fun marks(firstFrame: Long?, failed: Long? = null, still: Boolean = false, until: Long = 5_000) =
         (0..until step 10).associateWith { stageMark(it, firstFrame, failed, still) }
@@ -62,7 +62,7 @@ class StageMarkTest {
 
     @Test
     fun `고리는 초당 15장, 한 장 24도로 끊어 돈다`() {
-        assertEquals(15, RING_FPS)   // 11-11 결정, 세 앱 같음
+        assertEquals(15, RING_FPS)   // 세 앱 같음
         assertEquals(24f, 360f / RING_FPS, 0f)
     }
 

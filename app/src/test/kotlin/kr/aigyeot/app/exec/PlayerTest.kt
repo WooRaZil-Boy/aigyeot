@@ -16,12 +16,13 @@ import kr.aigyeot.engine.PlaybackStarted
 import kr.aigyeot.engine.RejectReason
 import kr.aigyeot.engine.StartPlayback
 import kr.aigyeot.engine.StopPlayback
+import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-// 계약 4.1 '실행기가 지킬 재생 규칙'(존·폴백 D12·이득·끝 시각·C74·포커스·ReleaseAudio)과 명세서 14장 볼륨 상한 ①
+// 실행기가 지킬 재생 규칙(존·폴백·이득·끝 시각·포커스·ReleaseAudio)과 볼륨 상한
 class PlayerTest {
     private val t = FakeTime()
     private val r = Rec()
@@ -113,7 +114,7 @@ class PlayerTest {
         assertTrue(track.released && !audio.focusHeld)
     }
 
-    // 11-04 에뮬레이터 장면 C: 설치 직후 부하에서 MediaPlayer는 start() 1초 뒤에도 경로가 없었다(디코더 준비만 +0.55초). 1초 확인이면 첫 자장가가 ERROR → WAIT
+    // 에뮬레이터 장면 C: 설치 직후 부하에서 MediaPlayer는 start() 1초 뒤에도 경로가 없었다(디코더 준비만 +0.55초). 1초 확인이면 첫 자장가가 ERROR → WAIT
     @Test fun `경로가 1_5초 늦게 와도 끝내지 않고 그때 처음 1_0`() {
         audio.routed = null
         start()
@@ -244,8 +245,8 @@ class PlayerTest {
         assertEquals(PlaybackEnded(t.now, "s1-1", EndReason.DEADLINE), r.events.last())
         assertTrue(track.released && !audio.focusHeld, "포커스 반납")
         assertEquals(0, t.pending(), "끝난 뒤 남은 타이머 없음")
-        assertTrue(r.rows.none { it.goal.startsWith("fade") }, "'fade 2000ms' 줄은 없다(C96)")
-        assertEquals(track.gains.map { "%.3f".format(java.util.Locale.ROOT, it) }, volumeRows(), "트랙에 준 이득 기록 = AudioTrack.setVolume 줄의 goal")
+        assertTrue(r.rows.none { it.goal.startsWith("fade") }, "'fade 2000ms' 줄은 없다")
+        assertEquals(track.gains.map { "%.3f".format(Locale.ROOT, it) }, volumeRows(), "트랙에 준 이득 기록 = AudioTrack.setVolume 줄의 goal")
         assertTrue(track.gains.size > 10, "페이드 단계도 줄로 남는다: ${track.gains.size}")
     }
 
@@ -377,7 +378,7 @@ class PlayerTest {
         assertTrue(audio.focusHeld && t.pending() > 0, "놓기 전 조건")
         pl.release()
         assertTrue(track.released && !audio.focusHeld)
-        assertTrue(r.of<PlaybackEnded>().isEmpty(), "계약 4.1: 돌아오는 사건 없음")
+        assertTrue(r.of<PlaybackEnded>().isEmpty(), "돌아오는 사건 없음")
         assertEquals(before, r.events.size)
         assertEquals(0, t.pending(), "남은 타이머 0")
         assertTrue(r.rows.any { it.api == "stopPlayback" })

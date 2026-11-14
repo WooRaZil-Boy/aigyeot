@@ -1,0 +1,78 @@
+[report_summary]
+제목: 11월 5일(목) 오전 8:00–8:42 · 42분
+숫자: Stat(label=울음, value=1번, sub=오전 8:05)
+숫자: Stat(label=감지까지, value=2.4초, sub=null)
+숫자: Stat(label=울음 시간, value=1분 1초, sub=null)
+숫자: Stat(label=차가 한 일, value=3가지, sub=null)
+울음 카드: 울음 · 오전 8:05부터 / EpisodeChartData(totalS=59, sounds=[SoundSeg(from=3, to=59, name=자장가, secs=56)], marks=[ChartMark(at=0, label=감지 2.4초)], outcomes=[울음 61초, 그침], head=울음)
+자세히:   소리 나간 곳 · 뒷좌석
+자세히: # 오전 8:05 울음 감지 · 감지까지 2.4초
+자세히:   자장가 · 56초
+자세히:   · 자동 1차 자장가 오전 8:05–8:06 56초
+자세히:   결과 · 그침
+자세히:   울음 시간 61초
+자세히: # 울음 직전 주행
+자세히:   평균 58.2km/h · 최고 71.0km/h · 브레이크 2번
+자세히:   큰 조향 1번 · 기어 D · 실내 24.5℃
+자세히: # 제어 기록
+자세히:   Seat.setHvacSeatTemperature ROW_2_LEFT · 성공 1 · 실패 0 · 다시 0
+차가 한 일: ActionItem(kind=REAR_PLAYBACK, name=뒷좌석 재생, extra=1번 · 56초)
+차가 한 일: ActionItem(kind=SEAT_HEATER_OFF, name=뒷좌석 열선 끔, extra=1번)
+차가 한 일: ActionItem(kind=AMBIENT_DIM, name=조명 낮춤, extra=1번)
+3D 칩: [DIM, HEAT]
+조향: null / 비교할 구간이 없어요
+방법별: MethodDots(name=자장가, ok=6, n=7, known=true)
+
+[report_summary_handoff]
+제목: 11월 5일(목) 오후 3:00–3:49 · 49분
+숫자: Stat(label=울음, value=1번, sub=오후 3:10)
+숫자: Stat(label=감지까지, value=3.1초, sub=null)
+숫자: Stat(label=울음 시간, value=3분 30초, sub=null)
+숫자: Stat(label=차가 한 일, value=3가지, sub=null)
+울음 카드: 울음 · 오후 3:10부터 / EpisodeChartData(totalS=206, sounds=[SoundSeg(from=3, to=59, name=자장가, secs=56), SoundSeg(from=59, to=150, name=null, secs=91), SoundSeg(from=150, to=206, name=백색소음, secs=56)], marks=[ChartMark(at=0, label=감지 3.1초), ChartMark(at=150, label=다시 울음)], outcomes=[울음 210초], head=울음)
+자세히:   연습 장면으로 만든 기록이에요
+자세히:   소리 나간 곳 · 앞에서도 들림
+자세히:   기록이 많아 일부를 줄였어요
+자세히: # 오후 3:10 울음 감지 · 감지까지 3.1초
+자세히:   자장가 · 112초 · 재생 2번
+자세히:   · 자동 1차 자장가 오후 3:10–3:10 56초
+자세히:   · 자동 2차 백색소음 오후 3:12–3:13 56초
+자세히:   결과 · 계속 울음
+자세히:   다시 울음
+자세히:   2차 · 다른 소리로 바꿨어요 · 백색소음 · 계속 울음
+자세히:   정차 · 두 번 시도 뒤 · 도착 안내는 하지 못했어요 · 다른 보호자에게 알림
+자세히:   울음 시간 210초
+자세히: # 울음 직전 주행
+자세히:   평균 72.5km/h · 최고 80.0km/h · 브레이크 0번
+자세히:   큰 조향 0번 · 기어 D
+자세히: # 제어 기록
+자세히:   없어요
+차가 한 일: ActionItem(kind=DEFAULT_ZONE_PLAYBACK, name=앞에서도 들리게 재생, extra=2번 · 112초)
+차가 한 일: ActionItem(kind=ARRIVAL_NOTICE, name=도착 안내, extra=1번)
+차가 한 일: ActionItem(kind=GUARDIAN_ALERT, name=다른 보호자 알림, extra=1번)
+3D 칩: []
+조향: [SteerBar(label=평소, perMin=0.5, hot=false), SteerBar(label=울음 중, perMin=2.0, hot=true), SteerBar(label=달랜 뒤, perMin=0.8, hot=false)] / null
+
+[report_summary_womb]
+제목: 11월 5일(목) 오전 8:00–8:42 · 42분
+숫자: Stat(label=울음, value=1번, sub=오전 8:05)
+숫자: Stat(label=감지까지, value=2.4초, sub=null)
+숫자: Stat(label=울음 시간, value=1분 1초, sub=null)
+숫자: Stat(label=차가 한 일, value=2가지, sub=null)
+울음 카드: 울음 · 오전 8:05부터 / EpisodeChartData(totalS=59, sounds=[SoundSeg(from=3, to=59, name=뱃속 소리, secs=56)], marks=[ChartMark(at=0, label=감지 2.4초)], outcomes=[울음 61초, 그침], head=울음)
+자세히:   소리 나간 곳 · 뒷좌석
+자세히: # 오전 8:05 울음 감지 · 감지까지 2.4초
+자세히:   뱃속 소리 · 56초
+자세히:   · 자동 1차 뱃속 소리 오전 8:05–8:06 56초
+자세히:   결과 · 그침
+자세히:   울음 시간 61초
+자세히: # 울음 직전 주행
+자세히:   평균 58.2km/h · 최고 71.0km/h · 브레이크 2번
+자세히:   큰 조향 1번 · 기어 D · 실내 24.5℃
+자세히: # 제어 기록
+자세히:   Seat.setHvacSeatTemperature ROW_2_LEFT · 성공 1 · 실패 0 · 다시 0
+차가 한 일: ActionItem(kind=REAR_PLAYBACK, name=뒷좌석 재생, extra=1번 · 56초)
+차가 한 일: ActionItem(kind=SEAT_HEATER_OFF, name=뒷좌석 열선 끔, extra=1번)
+3D 칩: [HEAT]
+조향: null / 비교할 구간이 없어요
+방법별: MethodDots(name=자장가, ok=6, n=7, known=true)

@@ -1,17 +1,20 @@
 package kr.aigyeot.app.exec
 
-import kr.aigyeot.engine.RestCandidate
 import kr.aigyeot.engine.AddWaypoint
 import kr.aigyeot.engine.Area.ROW_1_LEFT
 import kr.aigyeot.engine.Area.ROW_2_LEFT
 import kr.aigyeot.engine.Area.ROW_2_RIGHT
+import kr.aigyeot.engine.ControlKind
 import kr.aigyeot.engine.ControlKind.HVAC_TEMP
 import kr.aigyeot.engine.ControlKind.READING_LIGHT
 import kr.aigyeot.engine.ControlKind.SEAT_HEAT
 import kr.aigyeot.engine.ControlKind.WINDOW_LOCK
 import kr.aigyeot.engine.ControlResult
+import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.LowerHvac
 import kr.aigyeot.engine.Params
+import kr.aigyeot.engine.RestCandidate
+import kr.aigyeot.engine.RestKind
 import kr.aigyeot.engine.SetReadingLight
 import kr.aigyeot.engine.SetSeatHeat
 import kr.aigyeot.engine.SetWindowLock
@@ -21,7 +24,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 계약 4.2 차 제어·내비와 F19(명세서 7장·14장 반영 확인: 0.1초부터 0.15초 간격, 5초, 재시도 1회), 3.5 ControlResult·WaypointResult
+// 차 제어·내비(0.1초부터 0.15초 간격, 5초, 재시도 1회)와 ControlResult·WaypointResult
 class ControlsTest {
     private class FakeNavi : NaviPort {
         val asked = mutableListOf<String>(); var rests = mutableListOf<RestCandidate?>(); var done: ((Boolean, String) -> Unit)? = null
@@ -35,7 +38,7 @@ class ControlsTest {
     private val r = Rec()
     private val car = FakeControl(t)
     private val navi = FakeNavi()
-    private val anseong = RestCandidate("tbt:안성", "안성휴게소", kr.aigyeot.engine.RestKind.REST_AREA, 7.0, true)
+    private val anseong = RestCandidate("tbt:안성", "안성휴게소", RestKind.REST_AREA, 7.0, true)
     private val c = Controls(car, navi, t, { t.now }, { r.events += it }, logger(t, r), Params()) { id -> anseong.takeIf { it.id == id } }
 
     @Test fun `열선 끄기는 0_1초부터 0_15초 간격으로 다시 읽어 목표가 되면 ok`() {
@@ -87,7 +90,7 @@ class ControlsTest {
         c.readingLight(SetReadingLight("s1-9", listOf(ROW_2_LEFT), false))
         t.advance(200)
         assertEquals(0.0, car.values[READING_LIGHT to ROW_2_LEFT], "값은 목표와 같아졌다(우연히)")
-        assertTrue(r.events.isEmpty(), "거절만으로 끝내지 않고 5초를 기다린다(계약 4.2)")
+        assertTrue(r.events.isEmpty(), "거절만으로 끝내지 않고 5초를 기다린다")
         assertEquals(1, car.writes.size, "거절 즉시 다시 보내지 않는다")
         t.advance(4_799)
         assertEquals(1, car.writes.size)
@@ -190,7 +193,7 @@ class ControlsTest {
         c.waypoint(AddWaypoint("s1-12", "tbt:안성"))
         assertEquals(listOf("tbt:안성"), navi.asked)
         assertEquals(listOf<RestCandidate?>(anseong), navi.rests, "경로 상태의 쉼터(이름·거리)를 함께 넘긴다")
-        assertTrue(r.events.isEmpty(), "호출만으로는 성공이 아니다(C75)")
+        assertTrue(r.events.isEmpty(), "호출만으로는 성공이 아니다")
         t.advance(1_200); navi.done!!(true, "added")
         assertEquals(WaypointResult(t.now, "s1-12", "tbt:안성", true), r.events.single())
         assertEquals(listOf("addWaypoint", "tbt:안성", "added"), r.rows.single().let { listOf(it.api, it.target, it.actual) })
@@ -237,7 +240,7 @@ class ControlsTest {
         t.advance(2_000)
         assertTrue(r.events.isEmpty() && car.writes.size == 1 && navi.cancels == 0, "조건: 둘 다 진행 중")
         c.closeAll("stop")
-        assertEquals(listOf<kr.aigyeot.engine.Event>(ControlResult(t.now, "s1-8", WINDOW_LOCK, ROW_2_LEFT, false, 1.0, 1.0), WaypointResult(t.now, "s1-12", "tbt:안성", false)), r.events)
+        assertEquals(listOf<Event>(ControlResult(t.now, "s1-8", WINDOW_LOCK, ROW_2_LEFT, false, 1.0, 1.0), WaypointResult(t.now, "s1-12", "tbt:안성", false)), r.events)
         assertEquals(1, navi.cancels)
         assertEquals(0, t.pending(), "타이머 취소")
         t.advance(30_000)
@@ -257,18 +260,18 @@ class ControlsTest {
         assertEquals(WaypointResult(t.now, "s1-13", "tbt:망향", true), r.events.last())
     }
 
-    // C320 V13(P5): 지금 세션이 없어도(세션 닫힘 뒤 늦은 결과) 제어 기록은 명령을 낸 세션 id로 남는다
+    // 지금 세션이 없어도(세션 닫힘 뒤 늦은 결과) 제어 기록은 명령을 낸 세션 id로 남는다
     private val closed = Controls(car, navi, t, { t.now }, { r.events += it }, ControlLogger({ t.now }, { null }, { r.rows += it }), Params()) { id -> anseong.takeIf { it.id == id } }
 
     @Test fun `열선·창문 잠금·독서등·공조 기록은 지금 세션이 없어도 명령 세션 id`() {
         car.values[SEAT_HEAT to ROW_2_LEFT] = 2.0
         car.values[WINDOW_LOCK to ROW_2_LEFT] = 1.0
         car.values[READING_LIGHT to ROW_2_LEFT] = 1.0
-        car.values[kr.aigyeot.engine.ControlKind.HVAC_TEMP to ROW_2_LEFT] = 24.0
+        car.values[ControlKind.HVAC_TEMP to ROW_2_LEFT] = 24.0
         closed.seatHeat(SetSeatHeat("S9-1", listOf(ROW_2_LEFT), 0))
         closed.windowLock(SetWindowLock("S9-2", mapOf(ROW_2_LEFT to false)))
         closed.readingLight(SetReadingLight("S9-3", listOf(ROW_2_LEFT), false))
-        closed.lowerHvac(kr.aigyeot.engine.LowerHvac("S9-4", listOf(ROW_2_LEFT), -2.0))
+        closed.lowerHvac(LowerHvac("S9-4", listOf(ROW_2_LEFT), -2.0))
         t.advance(1_000)
         assertEquals(4, r.rows.size)
         assertTrue(r.rows.all { it.sessionId == "S9" }, r.rows.map { it.sessionId }.toString())

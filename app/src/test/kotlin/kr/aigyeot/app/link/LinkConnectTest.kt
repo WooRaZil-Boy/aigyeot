@@ -1,7 +1,13 @@
 package kr.aigyeot.app.link
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import kr.aigyeot.app.common.instantOf
 import kr.aigyeot.app.link.db.PhoneLinkMarkEntity
 import kr.aigyeot.app.link.db.ProcessedMessageEntity
 import kr.aigyeot.app.link.db.RelayCredentialEntity
@@ -19,13 +25,8 @@ import kr.aigyeot.shared.Platform
 import kr.aigyeot.shared.Role
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
-// contracts-link 8.2 자격, 8.4 기기 목록 대조(G37), 8.6 차 토큰 무효·재등록 순번, 8.7 연결 화면, 8.3 복원 뒤 대조.
+// 자격, 기기 목록 대조, 차 토큰 무효·재등록 순번, 연결 화면, 복원 뒤 대조.
 @RunWith(RobolectricTestRunner::class)
 class LinkConnectTest : LinkKit() {
     private val SECOND = "d_2ND0000000000000000000000C"
@@ -45,7 +46,7 @@ class LinkConnectTest : LinkKit() {
         val c = runBlocking { link.credential() }
         assertEquals("c_TESTCAR", c!!.carId)
         assertEquals(1, relay.registers)
-        assertTrue(dao.phoneLinks().isEmpty())   // 옛 방의 연결은 쓸 수 없다(8.6)
+        assertTrue(dao.phoneLinks().isEmpty())   // 옛 방의 연결은 쓸 수 없다
     }
 
     @Test fun invalidate_dropsOldRoomSeqs_movesActiveSongsBelowOne() {
@@ -82,7 +83,7 @@ class LinkConnectTest : LinkKit() {
         assertTrue(dao.mark("d_OLD0000000000000000000000A")!!.unpaired)
         assertEquals(530L, dao.mark(PHONE)!!.lastSeq)
         assertEquals(instantOf("2026-11-05T08:20:00Z"), dao.phoneLink(PHONE)!!.lastSeenAt)
-        assertEquals(1, outbox("feeding_state").size)                 // 새 owner: G23
+        assertEquals(1, outbox("feeding_state").size)                 // 새 owner에게 보낸다
         assertEquals(LinkChanged(T0, 0), events.single())
         assertNull(link.status.value.justPaired)                       // 대조로는 "연결됐어요"를 띄우지 않는다
         // 스냅숏 이하의 paired는 나중에 와도 무시된다(4단계)
@@ -114,11 +115,11 @@ class LinkConnectTest : LinkKit() {
         link.openPairing()
         eventually { link.status.value.pairCode == "042917" }
         assertEquals("aigyeot://pair?code=042917", link.status.value.pairUri)
-        // G41: 연결 코드로 owner가 붙으면 화면이 열린 동안 바로 새 코드
+        // 연결 코드로 owner가 붙으면 화면이 열린 동안 바로 새 코드
         relay.pairCodeRes = Res.Ok(201, PairCodeResponse("551234", "2026-11-05T08:22:30Z", "aigyeot://pair?code=551234"))
         runBlocking { link.receive(relayEnv("paired", 410, """{"device_id":"$PHONE","role":"owner","platform":"android","paired_at":"2026-11-05T08:13:02Z","handoff_alerts":false}""")) }
         eventually { link.status.value.pairCode == "551234" }
-        // L55: 기기 목록 대조가 실시간 paired보다 먼저 새 owner를 만들어도 새 코드
+        // 기기 목록 대조가 실시간 paired보다 먼저 새 owner를 만들어도 새 코드
         relay.pairCodeRes = Res.Ok(201, PairCodeResponse("660000", "2026-11-05T08:27:30Z", "aigyeot://pair?code=660000"))
         relay.devicesRes = Res.Ok(200, DevicesResponse(900, listOf(dev(PHONE, Role.OWNER, false), dev(SECOND, Role.OWNER, false))))
         link.refreshPhones()

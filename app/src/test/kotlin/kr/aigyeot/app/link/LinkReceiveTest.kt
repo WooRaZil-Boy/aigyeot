@@ -1,29 +1,46 @@
 package kr.aigyeot.app.link
 
-import kotlinx.coroutines.runBlocking
-import kr.aigyeot.engine.CareSummary
-import kr.aigyeot.engine.CareView
-import kr.aigyeot.engine.FeedingFrom
-import kr.aigyeot.engine.fresh
-import kr.aigyeot.engine.FeedingStarted
-import kr.aigyeot.engine.LinkChanged
-import kr.aigyeot.shared.InboxResponse
-import kr.aigyeot.shared.ProtocolJson
-import kr.aigyeot.shared.Role
-import kr.aigyeot.shared.Sender
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.SerializationException
+import kr.aigyeot.app.common.instantOf
+import kr.aigyeot.app.common.ulid
+import kr.aigyeot.app.link.db.CareAppliedEntity
+import kr.aigyeot.app.link.db.OutboxEntity
+import kr.aigyeot.app.store.SnapshotJson
+import kr.aigyeot.app.store.Store
+import kr.aigyeot.app.store.db.AI_NOTICE_VERSION
+import kr.aigyeot.app.store.db.ChildProfileEntity
+import kr.aigyeot.engine.CareCleared
+import kr.aigyeot.engine.CareSummary
+import kr.aigyeot.engine.CareView
+import kr.aigyeot.engine.DEFAULT_METHODS
+import kr.aigyeot.engine.EngineState
+import kr.aigyeot.engine.FeedingFrom
+import kr.aigyeot.engine.FeedingStarted
+import kr.aigyeot.engine.LinkChanged
+import kr.aigyeot.engine.Method
+import kr.aigyeot.engine.MethodKind
+import kr.aigyeot.engine.fresh
+import kr.aigyeot.shared.DevicesResponse
+import kr.aigyeot.shared.Envelope
+import kr.aigyeot.shared.InboxResponse
+import kr.aigyeot.shared.ProtocolJson
+import kr.aigyeot.shared.Role
+import kr.aigyeot.shared.Sender
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
-// contracts-link 8.3 받기 순서와 8.4 seq 규칙 표의 행마다.
+// 받기 순서와 seq 규칙의 행마다.
 @RunWith(RobolectricTestRunner::class)
 class LinkReceiveTest : LinkKit() {
-    private fun rx(e: kr.aigyeot.shared.Envelope) = runBlocking { link.receive(e) } == Link.Rx.ACK
+    private fun rx(e: Envelope) = runBlocking { link.receive(e) } == Link.Rx.ACK
     private fun sync() = runBlocking { link.credential(); link.syncInbox() }
     private val at1 = "2026-11-05T08:12:21+09:00"
     private val at1Ms = instantOf(at1)!!
@@ -50,14 +67,14 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(events.none { it is FeedingStarted })
     }
 
-    // C322 V3: 차 화면 수유도 폰 feeding_started와 같은 수유 함수(Room 먼저 → feeding_state → 사건)
-    @Test fun c322_carFeeding_sameInputFunction_roomFirstThenFeedingStateThenEvent() {
+    // 차 화면 수유도 폰 feeding_started와 같은 수유 함수(Room 먼저 → feeding_state → 사건)
+    @Test fun carFeeding_sameInputFunction_roomFirstThenFeedingStateThenEvent() {
         profile(lastFeeding = at1Ms - 60_000); phone()
         runBlocking { link.feedingFromCar(at1Ms).join() }
         assertEquals(at1Ms, lastFeeding())
         assertEquals(FeedingStarted(T0, at1Ms, FeedingFrom.CAR_SCREEN, null), events.single())
         assertEquals(at1Ms, instantOf(outbox("feeding_state").single().body().str("last_feeding_start")))
-        runBlocking { link.feedingFromCar(at1Ms - 1_000).join() }   // 같거나 이르면 무시(C303 A14)
+        runBlocking { link.feedingFromCar(at1Ms - 1_000).join() }   // 같거나 이르면 무시
         assertEquals(at1Ms, lastFeeding()); assertEquals(1, events.size); assertEquals(1, outbox("feeding_state").size)
     }
 
@@ -71,33 +88,40 @@ class LinkReceiveTest : LinkKit() {
     }
 
     @Test fun feedingStarted_noPhoneLink_eventButNoOutbox() {
-        profile()   // 8.5 '만들지 않는 때': PhoneLink가 하나도 없으면 feeding_state를 만들지 않는다
+        profile()   // '만들지 않는 때': PhoneLink가 하나도 없으면 feeding_state를 만들지 않는다
         rx(env("feeding_started", 412, """{"at":"$at1"}"""))
         assertEquals(1, events.filterIsInstance<FeedingStarted>().size)
         assertTrue(outbox().isEmpty())
     }
 
-    // ---------------------------------------------------------------- care_summary(L60, 8.3·8.4)
+    // ---------------------------------------------------------------- care_summary
 
-    private fun care(asOf: String = "2026-11-06T15:00:00+09:00", enabled: Boolean = true, sleepMin: String = "430", feeds: String = "3", sleepStart: String = "\"2026-11-06T12:20:00+09:00\"", seq: Long = 430) =
-        env("care_summary", seq, """{"as_of":"$asOf","zone":"Asia/Seoul","sleep_diaper_enabled":$enabled,"last_sleep_start_at":$sleepStart,"last_sleep_end_at":null,"sleeping_since":null,"today_sleep_min":$sleepMin,"night_wakeups":null,"last_diaper_at":null,"today_diaper_count":null,"today_feed_count":$feeds}""")
+    private fun care(
+        asOf: String = "2026-11-06T15:00:00+09:00", enabled: Boolean = true, sleepMin: String = "430", feeds: String = "3",
+        sleepStart: String = "\"2026-11-06T12:20:00+09:00\"", seq: Long = 430,
+    ) =
+        env("care_summary", seq, """{"as_of":"$asOf","zone":"Asia/Seoul","sleep_diaper_enabled":$enabled,
+                "last_sleep_start_at":$sleepStart,"last_sleep_end_at":null,"sleeping_since":null,
+                "today_sleep_min":$sleepMin,"night_wakeups":null,"last_diaper_at":null,"today_diaper_count":null,"today_feed_count":$feeds}""")
     private val careAt = instantOf("2026-11-06T15:00:00+09:00")!!
 
-    @Test fun l60_newerSummary_postsCareSummaryEvent_notInRoom() {
-        now = careAt                                                         // as_of가 미래면 버리므로(3.3) 시험 시계를 as_of에 맞춘다
+    @Test fun newerSummary_postsCareSummaryEvent_notInRoom() {
+        now = careAt                                                         // as_of가 미래면 버리므로 시험 시계를 as_of에 맞춘다
         val e = care()
         assertTrue(rx(e))
-        assertEquals(CareSummary(careAt, CareView(careAt, true, instantOf("2026-11-06T12:20:00+09:00"), null, null, 430, null, null, null, 3, "Asia/Seoul"), seq = 430, room = "c_TESTCAR"), events.single())   // C126: 중계 seq와 요약 시간대를 싣는다
+        // 중계 seq와 요약 시간대를 싣는다
+        assertEquals(CareSummary(careAt, CareView(careAt, true, instantOf("2026-11-06T12:20:00+09:00"), null, null, 430, null, null, null, 3, "Asia/Seoul"), seq = 430, room = "c_TESTCAR"),
+            events.single())
         assertTrue(dao.processed(e.id))
         assertTrue(outbox().isEmpty())
     }
 
-    @Test fun l60_fixtures_apply_offAllNull() {
+    @Test fun fixtures_apply_offAllNull() {
         now = careAt
         for (f in listOf("care_summary.json", "care_summary_off.json")) {
             events.clear(); dao.clearCareApplied()
-            runBlocking { link.restoreEvents(kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0), now) }   // 두 예제는 같은 as_of·seq라 따로 받는다
-            assertTrue(rx(ProtocolJson.decodeFromString(kr.aigyeot.shared.Envelope.serializer(), java.io.File("../shared/src/test/resources/protocol/$f").readText())), f)
+            runBlocking { link.restoreEvents(EngineState.fresh(1, null, emptyList(), emptyList(), null, 0), now) }   // 두 예제는 같은 as_of·seq라 따로 받는다
+            assertTrue(rx(ProtocolJson.decodeFromString(Envelope.serializer(), File("../shared/src/test/resources/protocol/$f").readText())), f)
             assertEquals(1, events.size, f)
         }
         val off = events.single() as CareSummary
@@ -105,16 +129,16 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(3, off.summary.todayFeedCount); assertNull(off.summary.todaySleepMin)
     }
 
-    @Test fun l60_olderOrSameAsOf_ackedNoEvent() {
+    @Test fun olderOrSameAsOf_ackedNoEvent() {
         now = careAt
-        putRow(CareView(careAt, true, null, null, null, null, null, null, null, 9), 430)   // 판정 기준은 Room 행(L69)
+        putRow(CareView(careAt, true, null, null, null, null, null, null, null, 9), 430)   // 판정 기준은 Room 행
         val e = care()                                                       // 같은 as_of, 같은 seq
         assertTrue(rx(e)); assertTrue(events.isEmpty()); assertTrue(dao.processed(e.id))
-        assertTrue(rx(care(asOf = "2026-11-06T15:00:01+09:00"))); assertTrue(events.isEmpty())   // 같은 방 같은 seq는 as_of가 늦어도 버린다(L77)
+        assertTrue(rx(care(asOf = "2026-11-06T15:00:01+09:00"))); assertTrue(events.isEmpty())   // 같은 방 같은 seq는 as_of가 늦어도 버린다
         assertTrue(rx(care(asOf = "2026-11-06T14:59:59+09:00", seq = 431))); assertEquals(1, events.size)   // 더 큰 seq는 as_of가 이르러도 낸다
     }
 
-    @Test fun c126_sameSecond_largerRelaySeqReplaces() {
+    @Test fun sameSecond_largerRelaySeqReplaces() {
         now = careAt
         assertTrue(rx(care(feeds = "3", seq = 430))); assertTrue(rx(care(feeds = "4", seq = 431)))   // 같은 as_of, 더 큰 seq
         assertEquals(listOf(430L, 431L), events.map { (it as CareSummary).seq })
@@ -122,9 +146,9 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(rx(care(feeds = "5", seq = 429))); assertEquals(2, events.size)               // 작은 seq는 낸 것이 없다
     }
 
-    @Test fun c126_sceneValueInState_doesNotBlockRealSummary() {
+    @Test fun sceneValueInState_doesNotBlockRealSummary() {
         now = careAt
-        val fresh = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
+        val fresh = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
         val real = CareView(careAt - 60_000, true, null, null, null, null, null, null, null, 1)
         runBlocking { link.restoreEvents(fresh.copy(care = real), now) }        // 장면 전 실제 값
         engineState = fresh.copy(care = CareView(careAt + 60_000, true, null, null, null, null, null, null, null, 9))   // 장면이 넣은 더 늦은 값
@@ -132,18 +156,18 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(1, events.size)
     }
 
-    @Test fun c128_noRealSummary_notComparedToSceneValue() {
+    @Test fun noRealSummary_notComparedToSceneValue() {
         now = careAt
-        val fresh = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
+        val fresh = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
         runBlocking { link.restoreEvents(fresh, now) }             // 실제 요약 없이 복원
         engineState = fresh.copy(care = CareView(careAt + 60_000, true, null, null, null, null, null, null, null, 9))   // 장면 값
         assertTrue(rx(care())); assertEquals(1, events.size, "장면 값이 아니라 실제 요약 없음(null)과 견준다")
     }
 
-    // ---- C130 (연결 계약 8.4 care_summary 줄)
-    private fun freshState() = kr.aigyeot.engine.EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
+    // ---- care_summary 줄
+    private fun freshState() = EngineState.fresh(1, null, emptyList(), emptyList(), null, 0)
 
-    @Test fun c132_stateUnknownBeforeRestore_linkDoesNotStartReceiving() {   // 복원 전에는 받지 않고, 복원 뒤에 받는다
+    @Test fun stateUnknownBeforeRestore_linkDoesNotStartReceiving() {   // 복원 전에는 받지 않고, 복원 뒤에 받는다
         now = careAt
         profile(); phone()
         engineState = null
@@ -159,7 +183,7 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(1, events.count { it is CareSummary }, "복원 뒤에 받는다")
     }
 
-    @Test fun c130_newRoom_sameAsOf_smallerSeq_applies_sameRoom_stillComparesSeq() {
+    @Test fun newRoom_sameAsOf_smallerSeq_applies_sameRoom_stillComparesSeq() {
         now = careAt
         assertTrue(rx(care(feeds = "3", seq = 9000))); events.clear()     // 옛 방(c_TESTCAR)
         assertTrue(rx(care(feeds = "4", seq = 2).copy(car = "c_NEWROOM")))   // 지우지 않고 방 재등록, 같은 asOf·내용이 바뀐 요약
@@ -168,7 +192,7 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(rx(care(feeds = "5", seq = 1).copy(car = "c_NEWROOM"))); assertTrue(events.isEmpty(), "같은 방은 seq로 견준다")
     }
 
-    @Test fun c130_snapshotRestore_keepsCareRoom_forRealComparison() {
+    @Test fun snapshotRestore_keepsCareRoom_forRealComparison() {
         now = careAt
         val c = CareView(careAt, true, null, null, null, null, null, null, null, 3)
         putRow(c, 9000)
@@ -177,20 +201,20 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(rx(care(feeds = "4", seq = 2).copy(car = "c_B"))); assertEquals(1, events.size, "다른 방이면 나중에 받은 것")
     }
 
-    // 같은 방이고 seq가 있으면 보낸 기기와 관계없이 seq로 견준다(L77)
+    // 같은 방이고 seq가 있으면 보낸 기기와 관계없이 seq로 견준다
     private fun putRow(c: CareView, seq: Long, room: String? = "c_TESTCAR", sender: String? = other) =
-        dao.putCareApplied(kr.aigyeot.app.link.db.CareAppliedEntity(1, room, seq, kr.aigyeot.app.store.SnapshotJson.encodeToString(CareView.serializer(), c), sender))
+        dao.putCareApplied(CareAppliedEntity(1, room, seq, SnapshotJson.encodeToString(CareView.serializer(), c), sender))
 
     private fun careView(at: Long) = CareView(at, true, null, null, null, null, null, null, null, 1)
 
-    private fun clearRow() = kr.aigyeot.app.link.db.OutboxEntity(ulid(now), "records_clear", null, "", now, 0, now).also { dao.insertOutbox(it) }
+    private fun clearRow() = OutboxEntity(ulid(now), "records_clear", null, "", now, 0, now).also { dao.insertOutbox(it) }
 
-    private fun frameText(e: kr.aigyeot.shared.Envelope) = ProtocolJson.encodeToString(kr.aigyeot.shared.Envelope.serializer(), e)
+    private fun frameText(e: Envelope) = ProtocolJson.encodeToString(Envelope.serializer(), e)
 
     private fun wakingUntil(cond: () -> Boolean) = eventually { link.wake(); cond() }
 
-    // ---- C157: '모든 기록 지우기'는 돌봄 요약을 지우지 않는다. 지우기 전후·중계 삭제 대기 중·완료 뒤 받은 요약이 모두 보통대로 적용·ack
-    @Test fun c157_clearDoesNotTouchCareSummary() {
+    // ---- '모든 기록 지우기'는 돌봄 요약을 지우지 않는다. 지우기 전후·중계 삭제 대기 중·완료 뒤 받은 요약이 모두 보통대로 적용·ack
+    @Test fun clearDoesNotTouchCareSummary() {
         now = careAt
         assertTrue(rx(care(feeds = "3", seq = 430))); events.clear()
         val row = clearRow()                                                   // 지우기 직후: 중계 삭제는 보낼 함에서 기다린다
@@ -208,15 +232,15 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(432L, got.filterIsInstance<CareSummary>().single().seq)
     }
 
-    @Test fun c144_processedAndCareRowSameTransaction() {   // 행 쓰기가 실패하면 처리 완료도 남지 않는다
+    @Test fun processedAndCareRowSameTransaction() {   // 행 쓰기가 실패하면 처리 완료도 남지 않는다
         now = careAt
         val e = care(seq = 430)
         db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_care BEFORE INSERT ON care_applied BEGIN SELECT RAISE(ABORT, 'test'); END")
         assertFalse(rx(e)); assertFalse(dao.processed(e.id)); assertTrue(events.isEmpty())
     }
 
-    // ---- C144: 적용한 요약은 처리 완료와 같은 트랜잭션으로 Room 한 행에 둔다
-    @Test fun c144_receiveWritesCareRowWithProcessed() {
+    // ---- 적용한 요약은 처리 완료와 같은 트랜잭션으로 Room 한 행에 둔다
+    @Test fun receiveWritesCareRowWithProcessed() {
         now = careAt
         val e = care(seq = 430)
         assertTrue(rx(e))
@@ -228,7 +252,7 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(rx(bad)); assertEquals(430L, dao.careApplied()!!.seq)
     }
 
-    @Test fun c144_restoreRoomCareNewerThanSnapshot_reapplied() {   // 처리 완료 뒤 스냅숏 전에 죽었다
+    @Test fun restoreRoomCareNewerThanSnapshot_reapplied() {   // 처리 완료 뒤 스냅숏 전에 죽었다
         now = careAt
         assertTrue(rx(care(feeds = "3", seq = 430))); events.clear()
         val got = runBlocking { link.restoreEvents(freshState(), now) }       // 스냅숏에는 요약이 없다
@@ -237,36 +261,37 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(rx(care(feeds = "9", seq = 429))); assertTrue(events.isEmpty(), "복원한 요약이 실제 기준이다")
     }
 
-    @Test fun c144_restoreSnapshotSameOrNewer_noEvent() {
+    @Test fun restoreSnapshotSameOrNewer_noEvent() {
         now = careAt
         assertTrue(rx(care(seq = 430)))
-        val snap = freshState().copy(care = (dao.careApplied()!!.let { kr.aigyeot.app.store.SnapshotJson.decodeFromString(CareView.serializer(), it.summaryJson) }), careSeq = 430, careRoom = "c_TESTCAR")
+        val snap = freshState().copy(care = (dao.careApplied()!!.let { SnapshotJson.decodeFromString(CareView.serializer(), it.summaryJson) }),
+            careSeq = 430, careRoom = "c_TESTCAR")
         assertTrue(runBlocking { link.restoreEvents(snap, now) }.none { it is CareSummary })
-        // 스냅숏 값이 행보다 늦어도(seq 없음) 행이 정답이라 비우고 행으로 바꾼다(C169)
+        // 스냅숏 값이 행보다 늦어도(seq 없음) 행이 정답이라 비우고 행으로 바꾼다
         val got = runBlocking { link.restoreEvents(freshState().copy(care = snap.care!!.copy(asOf = careAt + 1_000)), now) }
-        assertEquals(listOf("CareCleared", "CareSummary"), got.filter { it is CareSummary || it is kr.aigyeot.engine.CareCleared }.map { it::class.simpleName })
+        assertEquals(listOf("CareCleared", "CareSummary"), got.filter { it is CareSummary || it is CareCleared }.map { it::class.simpleName })
     }
 
-    @Test fun c169_restoreRowEqualsSnapshot_noEvent() {
+    @Test fun restoreRowEqualsSnapshot_noEvent() {
         now = careAt
         assertTrue(rx(care(seq = 430)))
-        val rowCare = kr.aigyeot.app.store.SnapshotJson.decodeFromString(CareView.serializer(), dao.careApplied()!!.summaryJson)
+        val rowCare = SnapshotJson.decodeFromString(CareView.serializer(), dao.careApplied()!!.summaryJson)
         val got = runBlocking { link.restoreEvents(freshState().copy(care = rowCare, careSeq = 430, careRoom = "c_TESTCAR"), now) }
-        assertTrue(got.none { it is CareSummary || it is kr.aigyeot.engine.CareCleared })
+        assertTrue(got.none { it is CareSummary || it is CareCleared })
     }
 
-    @Test fun c169_restoreRoomOlderRowAfterUnpair_replacesSnapshot() {   // A 15:00 스냅숏 -> A 해제로 행 삭제 -> B 14:59 행 -> 죽음
+    @Test fun restoreRoomOlderRowAfterUnpair_replacesSnapshot() {   // A 15:00 스냅숏 -> A 해제로 행 삭제 -> B 14:59 행 -> 죽음
         now = careAt
         dao.clearCareApplied()
         assertTrue(rx(care(asOf = "2026-11-06T14:59:00+09:00", feeds = "1", seq = 431))); events.clear()
         val snap = freshState().copy(care = careView(careAt), careSeq = 430, careRoom = "c_TESTCAR")
-        val got = runBlocking { link.restoreEvents(snap, now) }.filter { it is CareSummary || it is kr.aigyeot.engine.CareCleared }
+        val got = runBlocking { link.restoreEvents(snap, now) }.filter { it is CareSummary || it is CareCleared }
         assertEquals(listOf("CareCleared", "CareSummary"), got.map { it::class.simpleName })
         assertEquals(431L, (got[1] as CareSummary).seq); assertEquals(1, (got[1] as CareSummary).summary.todayFeedCount)
     }
 
-    // ---- L69: 판정 기준은 Room 행. 복원(restoreEvents) 전에 늦게 온 옛 요약이 행을 덮지 않는다
-    @Test fun l69_lateOlderSummaryBeforeRestore_doesNotOverwriteRoomRow() {
+    // ---- 판정 기준은 Room 행. 복원(restoreEvents) 전에 늦게 온 옛 요약이 행을 덮지 않는다
+    @Test fun lateOlderSummaryBeforeRestore_doesNotOverwriteRoomRow() {
         now = careAt
         val a = care(feeds = "7", seq = 430)                                    // 15:00 요약 A: Room 행과 처리 완료까지 가고 스냅숏 전에 죽었다
         assertTrue(rx(a)); events.clear()
@@ -278,21 +303,21 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(7, cs.summary.todayFeedCount, "복원은 A를 살린다")
     }
 
-    @Test fun l69_roomRow_sameRoomComparesSeqOnly_otherRoomLaterReceivedWins() {
+    @Test fun roomRow_sameRoomComparesSeqOnly_otherRoomLaterReceivedWins() {
         now = careAt
         putRow(careView(careAt), 430)
-        assertTrue(rx(care(asOf = "2026-11-06T15:00:01+09:00", seq = 400))); assertTrue(events.isEmpty(), "같은 방은 as_of가 늦어도 seq가 작으면 버린다(L77)")
+        assertTrue(rx(care(asOf = "2026-11-06T15:00:01+09:00", seq = 400))); assertTrue(events.isEmpty(), "같은 방은 as_of가 늦어도 seq가 작으면 버린다")
         assertTrue(rx(care(asOf = "2026-11-06T14:59:00+09:00", seq = 431, feeds = "8"))); assertEquals(1, events.size, "같은 방 큰 seq는 as_of가 이르러도 적용")
         assertEquals(431L, dao.careApplied()!!.seq)
         assertTrue(rx(care(asOf = "2026-11-06T14:59:00+09:00", seq = 431, feeds = "9"))); assertEquals(1, events.size)
         assertTrue(rx(care(asOf = "2026-11-06T15:00:01+09:00", seq = 399, feeds = "9").copy(car = "c_B"))); assertEquals(2, events.size, "다른 방은 늦은 as_of일 때(나중에 받은 것)")
     }
 
-    // ---- C158: 요약을 보낸 owner가 연결에서 빠지면 요약을 지운다
+    // ---- 요약을 보낸 owner가 연결에서 빠지면 요약을 지운다
     private val other = "d_OTHER"
     private fun unpaired(device: String, seq: Long) = env("unpaired", seq, """{"device_id":"$device","role":"${if (device == PHONE) "owner" else "guardian"}","by":"self"}""", Sender(Role.RELAY, null))
 
-    @Test fun l75_sameSenderHigherSeqReplacesEvenIfEarlierAsOf() {
+    @Test fun sameSenderHigherSeqReplacesEvenIfEarlierAsOf() {
         now = careAt; phone()
         assertTrue(rx(care(asOf = "2026-11-06T15:04:00+09:00", seq = 430, feeds = "3"))); events.clear()
         assertTrue(rx(care(asOf = "2026-11-06T15:01:00+09:00", seq = 431, feeds = "9")))
@@ -303,7 +328,7 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(events.isEmpty(), "같은 기기 작은 seq는 as_of가 늦어도 버린다")
     }
 
-    @Test fun l77_differentSenderHigherSeqReplaces_regardlessOfAsOf() {
+    @Test fun differentSenderHigherSeqReplaces_regardlessOfAsOf() {
         now = careAt; phone(); phone(other)
         assertTrue(rx(care(asOf = "2026-11-06T15:04:00+09:00", seq = 430, feeds = "3"))); events.clear()
         assertTrue(rx(care(asOf = "2026-11-06T15:01:00+09:00", seq = 431, feeds = "9").copy(from = Sender(Role.OWNER, other))))
@@ -314,7 +339,7 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(events.isEmpty(), "작은 seq는 보낸 기기가 달라도 버린다")
     }
 
-    @Test fun c223_expiredSummaryAckedNotApplied() {
+    @Test fun expiredSummaryAckedNotApplied() {
         now = careAt
         assertTrue(rx(care(seq = 10)))
         events.clear()
@@ -327,61 +352,61 @@ class LinkReceiveTest : LinkKit() {
 
     private fun careSet(): Boolean { now = careAt; phone(); return rx(care(seq = 430)).also { events.clear() } }
 
-    @Test fun c158_ownerUnpaired_clearsCareSummary() {
+    @Test fun ownerUnpaired_clearsCareSummary() {
         assertTrue(careSet()); assertEquals(PHONE, dao.careApplied()!!.senderDevice)
         assertTrue(rx(unpaired(PHONE, 431)))
-        assertNull(dao.careApplied()); assertTrue(events.any { it is kr.aigyeot.engine.CareCleared })
+        assertNull(dao.careApplied()); assertTrue(events.any { it is CareCleared })
         assertTrue(runBlocking { link.restoreEvents(freshState(), now) }.none { it is CareSummary }, "재시작해도 없다")
         assertTrue(rx(care(feeds = "9", seq = 440))); assertTrue(events.none { it is CareSummary }, "끊긴 기기의 늦은 요약은 받지 않는다")
     }
 
-    @Test fun c158_disconnectHere_clearsCareSummary() {   // 차 화면에서 끊기
+    @Test fun disconnectHere_clearsCareSummary() {   // 차 화면에서 끊기
         assertTrue(careSet())
-        val out = kr.aigyeot.app.link.Applied()
+        val out = Applied()
         LinkRoom(db).tx { LinkRoom(db).unpair(PHONE, 0, now, out) }
         assertNull(dao.careApplied()); assertTrue(out.careCleared)
     }
 
-    @Test fun c158_ownerMissingInDeviceList_clears() {
+    @Test fun ownerMissingInDeviceList_clears() {
         assertTrue(careSet())
-        val out = kr.aigyeot.app.link.Applied()
-        LinkRoom(db).reconcile(kr.aigyeot.shared.DevicesResponse(500, emptyList()), now, out)
+        val out = Applied()
+        LinkRoom(db).reconcile(DevicesResponse(500, emptyList()), now, out)
         assertNull(dao.careApplied()); assertTrue(out.careCleared)
     }
 
-    @Test fun c158_newRoom_clears() {
+    @Test fun newRoom_clears() {
         assertTrue(careSet())
-        val out = kr.aigyeot.app.link.Applied()
+        val out = Applied()
         LinkRoom(db).resetForNewRoom(now, out)
         assertNull(dao.careApplied()); assertTrue(out.careCleared)
     }
 
-    @Test fun c158_guardianUnpaired_keepsCare() {
+    @Test fun guardianUnpaired_keepsCare() {
         assertTrue(careSet()); phone(other, "guardian")
         assertTrue(rx(unpaired(other, 431)))
-        assertEquals(430L, dao.careApplied()!!.seq); assertTrue(events.none { it is kr.aigyeot.engine.CareCleared })
+        assertEquals(430L, dao.careApplied()!!.seq); assertTrue(events.none { it is CareCleared })
     }
 
-    @Test fun c158_restoreAfterRowClearedBeforeSnapshot_clears() {   // 행을 지운 뒤 스냅숏 전에 죽었다
+    @Test fun restoreAfterRowClearedBeforeSnapshot_clears() {   // 행을 지운 뒤 스냅숏 전에 죽었다
         assertTrue(careSet())
         dao.clearCareApplied()
         val snap = freshState().copy(care = careView(careAt), careSeq = 430, careRoom = "c_TESTCAR")
-        assertTrue(runBlocking { link.restoreEvents(snap, now) }.any { it is kr.aigyeot.engine.CareCleared })
+        assertTrue(runBlocking { link.restoreEvents(snap, now) }.any { it is CareCleared })
         assertTrue(rx(care(asOf = "2026-11-06T14:00:00+09:00", seq = 431))); assertEquals(1, events.count { it is CareSummary }, "실제 기준은 비었다")
     }
 
-    private fun assertDropped(e: kr.aigyeot.shared.Envelope) {
+    private fun assertDropped(e: Envelope) {
         now = careAt
         assertTrue(rx(e)); assertTrue(events.isEmpty(), e.toString()); assertTrue(dao.processed(e.id))
     }
-    @Test fun l60_unreadableTime_droppedAndAcked() = assertDropped(care(asOf = "어제 3시"))
-    @Test fun l60_negativeInt_droppedAndAcked() = assertDropped(care(feeds = "-1"))
-    @Test fun l60_disabledButSleepValue_droppedAndAcked() = assertDropped(care(enabled = false))
-    @Test fun l60_unreadableSleepTime_droppedAndAcked() = assertDropped(care(sleepStart = "\"abc\""))
-    @Test fun l60_invalidCalendarDate_droppedAndAcked() = assertDropped(care(asOf = "2026-02-30T15:00:00+09:00"))
-    @Test fun l60_intOverflow_droppedAndAcked() = assertDropped(care(feeds = "2147483648"))
+    @Test fun unreadableTime_droppedAndAcked() = assertDropped(care(asOf = "어제 3시"))
+    @Test fun negativeInt_droppedAndAcked() = assertDropped(care(feeds = "-1"))
+    @Test fun disabledButSleepValue_droppedAndAcked() = assertDropped(care(enabled = false))
+    @Test fun unreadableSleepTime_droppedAndAcked() = assertDropped(care(sleepStart = "\"abc\""))
+    @Test fun invalidCalendarDate_droppedAndAcked() = assertDropped(care(asOf = "2026-02-30T15:00:00+09:00"))
+    @Test fun intOverflow_droppedAndAcked() = assertDropped(care(feeds = "2147483648"))
 
-    @Test fun l60_futureAsOf_droppedAndAcked() {
+    @Test fun futureAsOf_droppedAndAcked() {
         now = careAt - 6 * 60_000                                            // as_of가 6분 미래: 폰 시계가 앞섰다
         val e = care(); assertTrue(rx(e)); assertTrue(events.isEmpty()); assertTrue(dao.processed(e.id))
         now = careAt - 4 * 60_000                                            // 4분은 오차로 받는다
@@ -421,7 +446,7 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(dao.songs().isEmpty())
     }
 
-    // ---------------------------------------------------------------- 노래(8.4, 3곡 G40)
+    // ---------------------------------------------------------------- 노래(3곡)
 
     @Test fun songAdded_new_pendingAndDownloadQueued() {
         rx(env("song_added", 10, """{"song_id":"$SA","name":"나비야","duration_s":94.5}"""))
@@ -463,7 +488,7 @@ class LinkReceiveTest : LinkKit() {
 
     @Test fun songRemoved_candidateMoves_statusForBothSongs() {
         phone()
-        song(SA, ACTIVE, 10); song(SB, ACTIVE, 11)   // ③ = B(추가 순번이 가장 큼)
+        song(SA, ACTIVE, 10); song(SB, ACTIVE, 11)   // 부모 노래 후보 = B(추가 순번이 가장 큼)
         rx(env("song_removed", 12, """{"song_id":"$SB"}"""))
         val bodies = outbox("song_status").map { it.body() }
         assertEquals(setOf(SB, SA), bodies.map { it.str("song_id") }.toSet())
@@ -482,8 +507,8 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(SA, dao.selection()!!.songId)
     }
 
-    // 장면 'phone' 봉투는 seq가 비어 온다(계약 7.3, C96). seq 검사 없이 적용하고 실제 seq 기록과 섞지 않는다.
-    private fun scenarioRx(e: kr.aigyeot.shared.Envelope) = runBlocking { link.receiveForScenario(ProtocolJson.encodeToString(kr.aigyeot.shared.Envelope.serializer(), e)) }
+    // 장면 'phone' 봉투는 seq가 비어 온다. seq 검사 없이 적용하고 실제 seq 기록과 섞지 않는다.
+    private fun scenarioRx(e: Envelope) = runBlocking { link.receiveForScenario(ProtocolJson.encodeToString(Envelope.serializer(), e)) }
 
     @Test fun scenarioFeedingStarted_postsOneEvent_roomUntouched() {
         profile(lastFeeding = at1Ms - 60_000); phone()
@@ -511,17 +536,17 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(SB, dao.selection()!!.songId)
     }
 
-    /** C303 ⑥(B9): 폰에 보이는 후보 ③은 store와 같은 함수(프로필의 부모 노래 끔 포함). 차 설정에서 켬·끔을 바꾸면 같은 트랜잭션에서 song_status를 넣는다. */
-    @Test fun c303_b9_candidateRespectsParentSongOff() {
+    /** 폰에 보이는 부모 노래 후보는 store와 같은 함수(프로필의 부모 노래 끔 포함). 차 설정에서 켬·끔을 바꾸면 같은 트랜잭션에서 song_status를 넣는다. */
+    @Test fun candidateRespectsParentSongOff() {
         phone(); song(SA, ACTIVE, 10)
-        val store = kr.aigyeot.app.store.Store(db, { now })
-        fun prof(song: Boolean) = kr.aigyeot.app.store.db.ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
-            kr.aigyeot.engine.DEFAULT_METHODS + listOfNotNull(kr.aigyeot.engine.Method(kr.aigyeot.engine.MethodKind.SONG).takeIf { song }), false, false, T0, kr.aigyeot.app.store.db.AI_NOTICE_VERSION)
+        val store = Store(db, { now })
+        fun prof(song: Boolean) = ChildProfileEntity("c", "콩이", "2026-03", "LEFT", null, null,
+            DEFAULT_METHODS + listOfNotNull(Method(MethodKind.SONG).takeIf { song }), false, false, T0, AI_NOTICE_VERSION)
         store.saveProfile(prof(song = true))
-        assertTrue(outbox("song_status").isEmpty(), "프로필이 없을 때도 켬이라 ③은 그대로")
+        assertTrue(outbox("song_status").isEmpty(), "프로필이 없을 때도 켬이라 부모 노래 후보는 그대로")
         store.saveProfile(prof(song = false))
         assertEquals("false", outbox("song_status").single { it.body().str("song_id") == SA }.body().str("candidate"), "끄면 바로 후보가 아님을 알린다")
-        assertNull(store.methods().firstOrNull { it.kind == kr.aigyeot.engine.MethodKind.SONG }, "store도 같은 함수")
+        assertNull(store.methods().firstOrNull { it.kind == MethodKind.SONG }, "store도 같은 함수")
         dao.outbox().forEach { dao.deleteOutbox(it.id) }
         rx(env("state_request", 11, "{}"))
         assertEquals("false", outbox("song_status").single().body().str("candidate"), "부모 노래를 끄면 폰 전체 상태에서도 후보가 아니다")
@@ -538,7 +563,7 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(SB, candidateSong(dao.profile(), dao.songs(), dao.selection()))
     }
 
-    // ---------------------------------------------------------------- paired·unpaired(8.4)
+    // ---------------------------------------------------------------- paired·unpaired
 
     @Test fun paired_newOwner_createsLinkSendsFullStateAndLinkChanged() {
         profile(lastFeeding = at1Ms)
@@ -549,7 +574,7 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(410L, dao.mark(PHONE)!!.lastSeq)
         assertEquals(LinkChanged(T0, 0), events.single())
         assertEquals(1, outbox("feeding_state").size)
-        assertEquals(setOf(SA, SC), outbox("song_status").map { it.body().str("song_id") }.toSet())   // PENDING 제외(G23, L50)
+        assertEquals(setOf(SA, SC), outbox("song_status").map { it.body().str("song_id") }.toSet())   // PENDING 제외
         assertTrue(outbox().all { it.toDevice == null })
         assertEquals(PHONE, link.status.value.justPaired)
     }
@@ -563,7 +588,7 @@ class LinkReceiveTest : LinkKit() {
         rx(relayEnv("paired", 501, body(false)))
         assertFalse(dao.phoneLink(GUARD)!!.handoffAlerts)
         assertEquals(LinkChanged(T0, 0), events.last())
-        assertTrue(outbox().isEmpty())   // guardian은 G23 대상이 아니다
+        assertTrue(outbox().isEmpty())   // guardian에게는 상태를 보내지 않는다
     }
 
     @Test fun unpaired_deletesLinkAndBlocksLatePaired() {
@@ -576,7 +601,7 @@ class LinkReceiveTest : LinkKit() {
         assertNull(dao.phoneLink(GUARD))   // 기기 id는 다시 쓰지 않는다: 끊긴 기기의 paired는 모두 낡은 것
     }
 
-    // ---------------------------------------------------------------- state_request(8.4, G39)
+    // ---------------------------------------------------------------- state_request
 
     @Test fun stateRequest_owner_answersOnlyThatPhoneWithoutPending() {
         profile(lastFeeding = at1Ms)
@@ -594,7 +619,7 @@ class LinkReceiveTest : LinkKit() {
         assertTrue(outbox().isEmpty())
     }
 
-    // ---------------------------------------------------------------- 받은 함: seq 순서, 커밋 뒤 ack, 저장 실패면 ack 없음(8.3)
+    // ---------------------------------------------------------------- 받은 함: seq 순서, 커밋 뒤 ack, 저장 실패면 ack 없음
 
     @Test fun inbox_processesInSeqOrder_soThreeSongRuleIsDeterministic() {
         song(SA, ACTIVE, 10); song(SB, ACTIVE, 11); song(SC, ACTIVE, 12)
@@ -622,8 +647,8 @@ class LinkReceiveTest : LinkKit() {
         assertFalse(dao.processed(bad.id))
     }
 
-    // C302 A: ack 뒤 만료 정리가 다 실패해도 받기는 DONE이다(던져서 열린 소켓·연결 반복을 끊지 않는다)
-    @Test fun c302_expireFailureAfterAck_stillDone() {
+    // ack 뒤 만료 정리가 다 실패해도 받기는 DONE이다(던져서 열린 소켓·연결 반복을 끊지 않는다)
+    @Test fun expireFailureAfterAck_stillDone() {
         profile(); phone()
         val w = db.openHelper.writableDatabase
         w.execSQL("INSERT INTO processed_message (id, seq, processed_at) VALUES ('old', 1, 0)")   // 만료 정리가 지울 옛 행
@@ -654,7 +679,7 @@ class LinkReceiveTest : LinkKit() {
     }
 
     @Test fun parseInbox_brokenElementsReplacedOrDropped() {
-        val good = ProtocolJson.encodeToString(kr.aigyeot.shared.Envelope.serializer(), env("feeding_started", 413, """{"at":"$at1"}"""))
+        val good = ProtocolJson.encodeToString(Envelope.serializer(), env("feeding_started", 413, """{"at":"$at1"}"""))
         val json = """{"messages":[$good,{"v":"x","id":"01JC8Y2K6N3T5Q9W0ZB4H7X2D9","seq":412},{"v":1,"seq":5},7,{"x":1}],"more":true}"""
         val r = parseInbox(json)
         assertEquals(3, r.messages.size)                         // 객체가 아닌 것은 버린다. id만 없는 것은 seq를 위해 남긴다
@@ -663,12 +688,12 @@ class LinkReceiveTest : LinkKit() {
         val u = r.messages[1]
         assertEquals(0, u.v); assertEquals("unreadable", u.type); assertEquals("01JC8Y2K6N3T5Q9W0ZB4H7X2D9", u.id); assertEquals(412L, u.seq)
         assertTrue(r.more)
-        assertFailsWith<kotlinx.serialization.SerializationException> { parseInbox("not json") }   // OkRelay.exec가 bad_response로 바꾼다
-        assertFailsWith<kotlinx.serialization.SerializationException> { parseInbox("[]") }
+        assertFailsWith<SerializationException> { parseInbox("not json") }   // OkRelay.exec가 bad_response로 바꾼다
+        assertFailsWith<SerializationException> { parseInbox("[]") }
     }
 
     @Test fun inbox_idlessUnreadable_advancesCursor_notAcked() {
-        val a = ProtocolJson.encodeToString(kr.aigyeot.shared.Envelope.serializer(), env("feeding_started", 3, """{"at":"$at1"}""", id = "01JC8Y2K6N3T5Q9W0ZB4H7X2D1"))
+        val a = ProtocolJson.encodeToString(Envelope.serializer(), env("feeding_started", 3, """{"at":"$at1"}""", id = "01JC8Y2K6N3T5Q9W0ZB4H7X2D1"))
         relay.inboxPages += Res.Ok(200, parseInbox("""{"messages":[$a,{"v":1,"seq":900}],"more":true}"""))
         relay.inboxPages += Res.Ok(200, InboxResponse(emptyList(), false))
         sync()

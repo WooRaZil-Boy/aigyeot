@@ -1,0 +1,14 @@
+completed=true attempts=1
++5000ms ShowNotice BABY_ABOARD
++5000ms Speak S16 {}
++6300ms HideNotice BABY_ABOARD
++6300ms HideNotice MIC_STOPPED
++10100ms HideNotice BABY_ABOARD
++10100ms HideNotice MIC_STOPPED
++312450ms StartPlayback AUTO Method(kind=LULLABY, songId=null) endAtMs=368450 fadeMs=2000
++312650ms Speak S02 {method=자장가}
++312650ms DimAmbient level=0.2 color=-13610848
++315650ms Listen ms=5000
++1212100ms Speak S12 {}
++1215100ms Listen ms=5000
++1230000ms SendToPhone feeding_state

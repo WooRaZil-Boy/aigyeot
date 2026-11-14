@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// 명세서 14장 음원 크기 −30 LUFS ±1, 볼륨 상한 ②(사전 측정). BS.1770-4 측정기와 백색소음 크기
+// 음원 크기 −30 LUFS ±1, 볼륨 상한(사전 측정). BS.1770-4 측정기와 백색소음 크기
 class LoudnessTest {
     @Test fun `48kHz K 가중 계수가 BS_1770 표와 같다`() {
         val (s1, s2) = Loudness.kWeights(48_000)

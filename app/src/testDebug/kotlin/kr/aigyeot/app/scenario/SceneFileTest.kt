@@ -1,6 +1,8 @@
 package kr.aigyeot.app.scenario
 
+import kr.aigyeot.app.exec.RestAreas
 import kr.aigyeot.engine.CabinTemp
+import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.engine.RouteState
 import kr.aigyeot.engine.Sid
@@ -21,8 +23,8 @@ class SceneFileTest {
     private fun bad(steps: String, override: String = "\"CabinTemp\"", extra: String = "") =
         assertFailsWith<SceneError> { parseScene(scene(steps, override, extra)) }.message!!
 
-    @Test fun `c118 setup methods의 WOMB는 뱃속 소리로 읽고 되돌린다`() {
-        assertEquals(kr.aigyeot.engine.Method(MethodKind.WOMB), parseMethod("WOMB"))
+    @Test fun `setup methods의 WOMB는 뱃속 소리로 읽고 되돌린다`() {
+        assertEquals(Method(MethodKind.WOMB), parseMethod("WOMB"))
         assertEquals("WOMB", methodText(parseMethod("WOMB")))
         assertFailsWith<SceneError> { parseMethod("WOMB2") }
     }
@@ -40,7 +42,7 @@ class SceneFileTest {
             parseScene(f.readText()).steps.mapNotNull { (it.action as? Inject)?.takeIf { a -> a.event == "RouteState" } }.forEach { a ->
                 (injectEvent("RouteState", a.fields, 0) as RouteState).rests.forEach { r ->
                     n++
-                    assertTrue("${f.name} 쉼터 '${r.name}'은 휴게소 자료에서 한 점으로 찾아져야 한다", kr.aigyeot.app.exec.RestAreas.let { it.placeable(r.name, it.rowsOf(r.kind)) })
+                    assertTrue("${f.name} 쉼터 '${r.name}'은 휴게소 자료에서 한 점으로 찾아져야 한다", RestAreas.let { it.placeable(r.name, it.rowsOf(r.kind)) })
                 }
             }
         }
@@ -76,7 +78,7 @@ class SceneFileTest {
             {"id":"r1","name":"휴게소","kind":"REST_AREA","distanceKm":7,"hasNursingRoom":true}]}}""", "\"RouteState\""))
         val e = injectEvent("RouteState", (s.steps[0].action as Inject).fields, 9) as RouteState
         assertEquals(7.0, e.rests.single().distanceKm, 0.0)
-        assertEquals("C269: 키가 없으면 쉼터 목록을 기다리지 않는다", false, e.restsPending)
+        assertEquals("키가 없으면 쉼터 목록을 기다리지 않는다", false, e.restsPending)
         val p = parseScene(scene("""{"t":1,"inject":{"event":"RouteState","hasDestination":true,"remainingSec":360,"rests":[],"restsPending":true}}""", "\"RouteState\""))
         assertEquals("장면도 기다림을 흉내 낼 수 있다", true, (injectEvent("RouteState", (p.steps[0].action as Inject).fields, 9) as RouteState).restsPending)
     }
@@ -87,7 +89,7 @@ class SceneFileTest {
         assertTrue(bad("""{"t":1,"inject":{"event":"RearDoor","side":"LEFT","open":true}}""").contains("override"))   // override에 없는 사건
         assertTrue(bad("""{"t":1,"inject":{"event":"CabinTemp","celsius":"따뜻"}}""").contains("CabinTemp"))
         assertTrue(bad("""{"t":1,"inject":{"event":"CabinTemp","celsius":20,"humid":1}}""").contains("CabinTemp"))
-        assertTrue(bad("""{"t":1,"vc":"PUT /vehicle/controls?speed=50&brake=0"}""").contains("네 값"))       // 네 값을 늘 함께(7.3)
+        assertTrue(bad("""{"t":1,"vc":"PUT /vehicle/controls?speed=50&brake=0"}""").contains("네 값"))       // 네 값을 늘 함께
         assertTrue(bad("""{"t":1,"vc":"PUT /vehicle/controls?speed=5.5&accelerator=0&brake=0&steering=0"}""").contains("정수"))
         assertTrue(bad("""{"t":1,"vc":"DELETE /vehicle/gear"}""").contains("vc"))
         assertTrue(bad("""{"t":1,"tap":"HONK"}""").contains("tap"))
@@ -109,14 +111,14 @@ class SceneFileTest {
         assertFailsWith<SceneError> { parseScene(scene("").replace("\"SUCCESS\"", "\"x\"").replace("\"FAIL\"", "\"UNJUDGED\"")) }
     }
 
-    @Test fun `P1 장면 phone은 feeding_started만 받는다(곡·선택·연결 메시지는 실제 Room을 바꾸므로 거절)`() {
+    @Test fun `장면 phone은 feeding_started만 받는다(곡·선택·연결 메시지는 실제 Room을 바꾸므로 거절)`() {
         parseScene(scene("""{"t":1,"phone":{"type":"feeding_started","body":{"atOffsetSec":-9}}}"""))
         listOf("song_selected", "song_added", "song_removed", "paired", "unpaired", "state_request").forEach {
             assertTrue(it, bad("""{"t":1,"phone":{"type":"$it","body":{}}}""").contains("feeding_started"))
         }
     }
 
-    @Test fun `F9 타입이 틀린 값은 조용히 넘기지 않고 거절한다`() {
+    @Test fun `타입이 틀린 값은 조용히 넘기지 않고 거절한다`() {
         assertTrue(bad("""{"t":1,"expect":{"command":"Speak","sid":123,"by":3}}""").contains("sid"))
         assertTrue(bad("""{"t":1,"expect":{"state":1,"by":3}}""").contains("state"))
         val m = assertFailsWith<SceneError> { parseScene(scene("").replace("[\"WHITE_NOISE\",\"SONG:s1\"]", "\"WHITE_NOISE\"")) }.message!!

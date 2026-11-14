@@ -1,15 +1,17 @@
 package kr.aigyeot.app.exec
 
-import kr.aigyeot.engine.RestCandidate
+import ai.pleos.playground.navi.constants.TurnType
+import ai.pleos.playground.navi.data.TBTInfo
 import kr.aigyeot.engine.AddWaypoint
 import kr.aigyeot.engine.Answer
 import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.Ask
 import kr.aigyeot.engine.CancelSpeech
 import kr.aigyeot.engine.CarSeat
+import kr.aigyeot.engine.ControlKind
 import kr.aigyeot.engine.ControlResult
-import kr.aigyeot.engine.EngineState
 import kr.aigyeot.engine.EndReason
+import kr.aigyeot.engine.EngineState
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.Heard
 import kr.aigyeot.engine.Listen
@@ -21,9 +23,8 @@ import kr.aigyeot.engine.PlaybackRejected
 import kr.aigyeot.engine.PlaybackStarted
 import kr.aigyeot.engine.Profile
 import kr.aigyeot.engine.Qa
-import ai.pleos.playground.navi.constants.TurnType
-import ai.pleos.playground.navi.data.TBTInfo
 import kr.aigyeot.engine.RejectReason
+import kr.aigyeot.engine.RestCandidate
 import kr.aigyeot.engine.RouteView
 import kr.aigyeot.engine.SetSeatHeat
 import kr.aigyeot.engine.SetWindowLock
@@ -38,7 +39,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// Exec 공개 모양(handle)의 분배와 state() 읽기(D12 앞 틀기 허락, 마이크 서비스), SDK가 던질 때의 실패 결과
+// Exec 공개 모양(handle)의 분배와 state() 읽기(앞 틀기 허락, 마이크 서비스), SDK가 던질 때의 실패 결과
 class ExecTest {
     private val t = FakeTime()
     private val r = Rec()
@@ -69,11 +70,12 @@ class ExecTest {
     private val navi = object : NaviPort { override fun addWaypoint(restId: String, rest: RestCandidate?, done: (Boolean, String) -> Unit) { askedRests += rest; done(false, "no_coords") }
         override fun cancelWaypoint() {}
     }
-    private val exec = Exec({ t.now }, { r.events += it }, { if (logThrows) error("로그 저장 실패"); r.rows += it }, { st }, ExecIo(Any(), t, audio, tts, stt, tap, car, navi, start = { starts++ }, stop = { stops++ }, reemit = { reemits++; if (reemits > 1) error("SDK 실패") }))
+    private val exec = Exec({ t.now }, { r.events += it }, { if (logThrows) error("로그 저장 실패"); r.rows += it }, { st },
+        ExecIo(Any(), t, audio, tts, stt, tap, car, navi, start = { starts++ }, stop = { stops++ }, reemit = { reemits++; if (reemits > 1) error("SDK 실패") }))
 
     private val start = StartPlayback("s1-1", PlayKind.AUTO, Method(MethodKind.WHITE_NOISE), 1_056_000, 2_000)
 
-    // C322 V12: 장면 끝 호스트가 부르는 다시 내기는 실제 연결 하나(차량 신호·경로)로 가고, 연결이 던져도 호스트로 새지 않는다
+    // 장면 끝 호스트가 부르는 다시 내기는 실제 연결 하나(차량 신호·경로)로 가고, 연결이 던져도 호스트로 새지 않는다
     @Test fun `reemitAll은 실제 연결의 다시 내기를 부르고 예외를 삼킨다`() {
         exec.reemitAll(); assertEquals(1, reemits)
         exec.reemitAll(); assertEquals(2, reemits, "던져도 호스트 스레드로 새지 않는다")
@@ -84,7 +86,7 @@ class ExecTest {
         assertTrue(r.events.single() is PlaybackStarted)
         exec.handle(Speak("s1-2", Sid.S12, emptyMap()))
         assertEquals("도착했어요. 자고 있어도 카시트에서 꺼내 눕혀 주세요.", spoken.single())
-        car.values[kr.aigyeot.engine.ControlKind.SEAT_HEAT to Area.ROW_2_LEFT] = 1.0
+        car.values[ControlKind.SEAT_HEAT to Area.ROW_2_LEFT] = 1.0
         exec.handle(SetSeatHeat("s1-3", listOf(Area.ROW_2_LEFT)))
         t.advance(1_000)
         assertTrue(r.of<ControlResult>().single().ok)
@@ -137,7 +139,7 @@ class ExecTest {
         t.advance(56_000)
         assertEquals(EndReason.DEADLINE, r.of<PlaybackEnded>().single().reason)
         assertTrue(track.released && !audio.focusHeld)
-        car.values[kr.aigyeot.engine.ControlKind.SEAT_HEAT to Area.ROW_2_LEFT] = 1.0
+        car.values[ControlKind.SEAT_HEAT to Area.ROW_2_LEFT] = 1.0
         exec.handle(SetSeatHeat("s1-3", listOf(Area.ROW_2_LEFT)))
         t.advance(30_000)
         assertEquals(1, r.of<ControlResult>().size)
@@ -184,7 +186,7 @@ class ExecTest {
     }
 
     @Test fun `stop 뒤 옛 제어 작업의 재시도가 차량에 다시 쓰지 않는다`() {
-        val key = kr.aigyeot.engine.ControlKind.WINDOW_LOCK to Area.ROW_2_LEFT
+        val key = ControlKind.WINDOW_LOCK to Area.ROW_2_LEFT
         exec.start()
         car.values[key] = 1.0; car.applyAfterMs = null
         exec.handle(SetWindowLock("s1-3", mapOf(Area.ROW_2_LEFT to false)))
@@ -192,7 +194,7 @@ class ExecTest {
         assertEquals(listOf(0.0), car.writes.map { it.third })
         assertTrue(r.of<ControlResult>().isEmpty(), "조건: 옛 작업이 진행 중이다")
         exec.stop(); exec.start()
-        assertEquals(ControlResult(t.now, "s1-3", kr.aigyeot.engine.ControlKind.WINDOW_LOCK, Area.ROW_2_LEFT, false, 1.0, 1.0), r.of<ControlResult>().single(), "stop 때 옛 작업을 ok=false로 닫는다")
+        assertEquals(ControlResult(t.now, "s1-3", ControlKind.WINDOW_LOCK, Area.ROW_2_LEFT, false, 1.0, 1.0), r.of<ControlResult>().single(), "stop 때 옛 작업을 ok=false로 닫는다")
         car.applyAfterMs = 300
         exec.handle(SetWindowLock("s1-4", mapOf(Area.ROW_2_LEFT to true)))
         t.advance(30_000)

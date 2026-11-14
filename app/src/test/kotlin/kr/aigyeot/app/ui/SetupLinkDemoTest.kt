@@ -12,13 +12,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 import java.time.ZoneId
 
-// 디자인 v6 설정·연결·시연 화면이 계산하는 값(시안 setup()·connect()·demo())
+// 설정·연결·시연 화면이 계산하는 값
 class SetupLinkDemoTest {
     @Test fun seats_orderLabelsAnd3dAnchors() {
-        assertEquals(listOf("뒷좌석 왼쪽", "뒷좌석 가운데", "뒷좌석 오른쪽"), SEATS.map { it.second })   // 명세서 11장·시안 순서
+        assertEquals(listOf("뒷좌석 왼쪽", "뒷좌석 가운데", "뒷좌석 오른쪽"), SEATS.map { it.second })   // 왼쪽부터 순서
         assertEquals(listOf(Seat3d.RL, Seat3d.RC, Seat3d.RR), SEATS.map { seat3d(it.first) })    // 자리 단추가 붙는 3D 좌석
         assertEquals(CarSeat.CENTER, carSeatOf("CENTER"))
         assertEquals(CarSeat.RIGHT, carSeatOf(null))   // 첫 설정 기본값
@@ -67,7 +66,7 @@ class SetupLinkDemoTest {
         } finally { TimeText.zone = z }
     }
 
-    // 설정 양식 규칙(SetupForm.kt): 오늘은 주입받은 시계로. 바퀴 값·글은 디자인 v8d-10 ⑩·명세 C387
+    // 설정 양식 규칙(SetupForm.kt): 오늘은 주입받은 시계로. 바퀴 값과 글
     private val nov10 = java.time.ZonedDateTime.of(2026, 11, 10, 9, 0, 0, 0, ZoneId.of("Asia/Seoul")).toInstant().toEpochMilli()
     private fun ym(y: Int, m: Int) = java.time.YearMonth.of(y, m)
 
@@ -133,10 +132,8 @@ class SetupLinkDemoTest {
         assertEquals("아기의 보호자(법정대리인)로서 아이곁 사용에 동의해요", CONSENT_TITLE)
         assertEquals("질문하면 질문 글과 상태 숫자가 AI 서버로 가요. 울음소리와 차 위치 좌표는 보내지 않아요.", CONSENT_SUMMARY)
         assertEquals("AI 서버로 가는 정보", CONSENT_DETAIL_TITLE)
-        // 창 본문 = 명세 C120 ③ 원문 글자 그대로(로컬에 명세가 있으면 거기서도 찾는다)
+        // 창 본문 = 동의 원문 글자 그대로
         val original = "질문하면 질문 글과 지금 상태 숫자(울음·수유·잠·기저귀 기록 요약, 카시트 시간, 실내 온도, 소리별 성적, 다음 쉼터 이름·거리)가 아이곁 중계 서버를 거쳐 AI 서버로 가요. 울음 소리와 차 위치 좌표는 보내지 않아요."
         assertEquals(original, CONSENT_DETAIL)
-        val spec = listOf(File("../docs/eyes-forward-spec.md"), File("docs/eyes-forward-spec.md")).firstOrNull { it.exists() }
-        if (spec != null) assertTrue("명세 C120 ③에 같은 글이 있다", spec.readText().contains("\"$CONSENT_DETAIL\""))
     }
 }

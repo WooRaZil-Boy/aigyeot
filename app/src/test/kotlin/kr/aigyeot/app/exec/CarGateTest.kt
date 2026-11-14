@@ -1,7 +1,7 @@
 package kr.aigyeot.app.exec
 
-import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.AmbientValue
+import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.CarSeat
 import kr.aigyeot.engine.ControlKind
 import kr.aigyeot.engine.ControlResult
@@ -16,7 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 계약 4.2 '차 준비 전 명령과 재시도' ①: 차 연결 전 차 제어 명령은 미뤘다가 준비되면 순서대로, 끝내 안 되면 ok = false
+// 차 준비 전 명령과 재시도: 차 연결 전 차 제어 명령은 미뤘다가 준비되면 순서대로, 끝내 안 되면 ok = false
 class CarGateTest {
     private val t = FakeTime()
 

@@ -1,18 +1,22 @@
 package kr.aigyeot.app.host
 
-import kr.aigyeot.engine.*
+import kr.aigyeot.engine.Gear
+import kr.aigyeot.engine.PauseReason
+import kr.aigyeot.engine.Side
+import kr.aigyeot.engine.Stage
+import kr.aigyeot.engine.steer
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
-/** V14: '바로 저장' 열쇠는 손 목록이 아니라 잦게 바뀌는 칸만 뺀 상태 전체다. 옛 목록에 없던 칸도 바뀌면 바로 저장된다. */
+/** '바로 저장' 열쇠는 손 목록이 아니라 잦게 바뀌는 칸만 뺀 상태 전체다. 옛 목록에 없던 칸도 바뀌면 바로 저장된다. */
 @RunWith(RobolectricTestRunner::class)
 class SnapshotKeyTest {
     private val k = Kit()
 
-    @Test fun v14_highRateFieldsOnly_leaveKeyUnchanged() {
+    @Test fun highRateFieldsOnly_leaveKeyUnchanged() {
         k.profile(); k.boot(); k.open()
         val s = k.state()
         val x = s.session!!
@@ -26,7 +30,7 @@ class SnapshotKeyTest {
         )), "조향·차량 표본·뒷문·조용함 누적·now는 묶어 저장")
     }
 
-    @Test fun v14_fieldsMissingFromOldList_changeKey() {
+    @Test fun fieldsMissingFromOldList_changeKey() {
         k.profile(); k.boot(); k.open()
         val s = k.state()
         val x = s.session!!

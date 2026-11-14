@@ -47,7 +47,16 @@ internal class FakeTrack(val method: Method, val rear: Boolean, var routed: Stri
     override fun release() { released = true }
 }
 
-internal class FakeAudio(var throwRear: Boolean = false, var throwOpen: Boolean = false, var throwFocus: Boolean = false, var throwGain: Boolean = false, var rear: Boolean = true, var focusOk: Boolean = true, var openOk: Boolean = true, var routed: String? = REAR_ZONE) : AudioPort {
+internal class FakeAudio(
+    var throwRear: Boolean = false,
+    var throwOpen: Boolean = false,
+    var throwFocus: Boolean = false,
+    var throwGain: Boolean = false,
+    var rear: Boolean = true,
+    var focusOk: Boolean = true,
+    var openOk: Boolean = true,
+    var routed: String? = REAR_ZONE,
+) : AudioPort {
     var focusHeld = false; var focusRequests = 0
     var onFocus: ((FocusChange) -> Unit)? = null
     var onRouted: ((String?) -> Unit)? = null

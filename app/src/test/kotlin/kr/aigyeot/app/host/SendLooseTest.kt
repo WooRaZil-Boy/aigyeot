@@ -1,7 +1,24 @@
 package kr.aigyeot.app.host
 
-import kr.aigyeot.engine.*
 import kotlinx.coroutines.cancel
+import kr.aigyeot.engine.AddWaypoint
+import kr.aigyeot.engine.CancelSpeech
+import kr.aigyeot.engine.CarSeat
+import kr.aigyeot.engine.DriverAddWaypoint
+import kr.aigyeot.engine.Gear
+import kr.aigyeot.engine.GearChanged
+import kr.aigyeot.engine.HideNotice
+import kr.aigyeot.engine.Method
+import kr.aigyeot.engine.MethodKind
+import kr.aigyeot.engine.Notice
+import kr.aigyeot.engine.Params
+import kr.aigyeot.engine.Profile
+import kr.aigyeot.engine.RestCandidate
+import kr.aigyeot.engine.RestKind
+import kr.aigyeot.engine.RouteState
+import kr.aigyeot.engine.StopPlayback
+import kr.aigyeot.engine.Tick
+import kr.aigyeot.engine.WaypointResult
 import org.junit.After
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -9,13 +26,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// C349: Step 밖 할 일(장면 끝 SceneEnd.commands)도 route()대로 실행기·ui에 나눈다. HideNotice가 실행기로 새면 알림이 안 내려간다.
+// Step 밖 할 일(장면 끝 SceneEnd.commands)도 route()대로 실행기·ui에 나눈다. HideNotice가 실행기로 새면 알림이 안 내려간다.
 @RunWith(RobolectricTestRunner::class)
-class C349SendLooseTest {
+class SendLooseTest {
     private val k = Kit()
     @After fun close() { k.host.close(); k.db.close(); k.linkScope.cancel() }
 
-    @Test fun c349_sendLoose_routesHideNoticeToUi() {
+    @Test fun sendLoose_routesHideNoticeToUi() {
         k.profile(); k.phone(); k.boot()
         val router = CommandRouter(k.store, k.clock, Params(), { k.host.targets }, { false }, { throw it })
         k.exec.clear(); k.hiddenNotices.clear()
@@ -25,7 +42,7 @@ class C349SendLooseTest {
         assertTrue(k.exec.none { it is HideNotice }, "HideNotice는 실행기로 가지 않는다")
     }
 
-    @Test fun c349_sceneEnd_hideNoticeGoesToUi() {
+    @Test fun sceneEnd_hideNoticeGoesToUi() {
         k.profile(); k.phone(); k.boot()
         k.host.startScenario(ScenarioSetup(
             "A", 7, Profile("2026-03", CarSeat.LEFT, null, false), listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY)),

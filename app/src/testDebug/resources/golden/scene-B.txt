@@ -1,0 +1,15 @@
+completed=true attempts=2
++5000ms ShowNotice BABY_ABOARD
++5000ms Speak S16 {}
++6300ms HideNotice BABY_ABOARD
++6300ms HideNotice MIC_STOPPED
++10100ms HideNotice BABY_ABOARD
++10100ms HideNotice MIC_STOPPED
++302700ms StartPlayback AUTO Method(kind=LULLABY, songId=null) endAtMs=358700 fadeMs=2000
++302900ms Speak S02 {method=자장가}
++302900ms DimAmbient level=0.2 color=-13610848
++305900ms Listen ms=5000
++362175ms StartPlayback AUTO Method(kind=LULLABY, songId=null) endAtMs=418175 fadeMs=2000
++362375ms LowerHvac [ROW_1_LEFT] deltaC=-2.0
++362675ms Speak S04 {loweredC=2, tempC=27}
++365675ms Listen ms=5000

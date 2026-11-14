@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.InputStream
 import kotlin.math.abs
 
 class MixSourceTest {
@@ -13,7 +14,7 @@ class MixSourceTest {
     private val mix = MixSource({ now }, { slept += it; now += it })
     private val w = ShortArray(Detect.WINDOW_SAMPLES)
 
-    @Test fun `녹음이 없으면 0이 아닌 아주 작은 바닥 소리(C68 무음 처리 방지)`() {
+    @Test fun `녹음이 없으면 0이 아닌 아주 작은 바닥 소리`() {
         mix.start()
         repeat(5) {
             assertEquals(Detect.WINDOW_SAMPLES, mix.read(w))
@@ -56,9 +57,9 @@ class MixSourceTest {
         assertTrue(w[100] in 9_992..10_008)
     }
 
-    @Test fun `K2 load는 요청한 길이만 읽는다`() {
+    @Test fun `load는 요청한 길이만 읽는다`() {
         var read = 0L
-        val src = object : java.io.InputStream() {
+        val src = object : InputStream() {
             val inner = ByteArrayInputStream(ByteArray(60 * 32_000))
             override fun read() = inner.read().also { if (it >= 0) read++ }
             override fun read(b: ByteArray, off: Int, len: Int) = inner.read(b, off, len).also { if (it > 0) read += it }
@@ -68,7 +69,7 @@ class MixSourceTest {
         assertTrue("읽은 바이트 $read", read <= 32_000)
     }
 
-    @Test fun `K2 짧은 파일에 긴 durSec를 요청하면 있는 만큼만 돌려준다`() {
+    @Test fun `짧은 파일에 긴 durSec를 요청하면 있는 만큼만 돌려준다`() {
         assertEquals(16_000, MixSource.load(ByteArrayInputStream(ByteArray(32_000)), 0.0, 240.0).size)
     }
 
