@@ -29,6 +29,8 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v4
+      - name: Kotlin 린트(ktlint)
+        run: ./gradlew --console=plain ktlintCheck
       - name: 단위 시험
         run: ./gradlew --console=plain :engine:test :shared:test :app:testDebugUnitTest :phone:testDebugUnitTest
       - name: 판단 코어 커버리지 하한(줄 95%)

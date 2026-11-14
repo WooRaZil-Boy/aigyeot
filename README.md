@@ -69,7 +69,7 @@ SERIAL=emulator-5554 tools/demo/drive.sh
 ```bash
 ./gradlew :app:assembleDebug     # 차 앱 debug → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:assembleRelease   # 차 앱 release(서명 키 설정이 없으면 서명 없이 만듦)
-tools/check.sh                   # 시험 전부: engine·shared·app·phone(JVM), 시연 스크립트, relay, iOS
+tools/check.sh                   # 린트와 시험 전부: ktlint, engine·shared·app·phone(JVM), 시연 스크립트, relay, iOS 시험·SwiftLint
 ```
 
 단위 시험은 2,500개가 넘고, 판단 코어의 줄 커버리지는 약 98%입니다(CI가 95% 하한을 강제). 모듈별 수치와 시험 방식은 [ARCHITECTURE.md](ARCHITECTURE.md#6-시험)에 있습니다.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 시험을 한 번에 돌린다(engine·shared·app·phone JVM, 시연 스크립트, relay, iOS 시험·린트). 저장소 루트에서 ./tools/check.sh
+# Kotlin 린트(ktlint)와 시험을 한 번에 돌린다(engine·shared·app·phone JVM, 시연 스크립트, relay, iOS 시험·린트). 저장소 루트에서 ./tools/check.sh
 # iOS 시뮬레이터: IOS_SIM=<시뮬레이터 id> ./tools/check.sh. 없으면 켜진 iPhone, 그다음 available 목록의 마지막 iPhone을 쓴다.
 # 건너뛰기: npm이 없으면 중계 서버, Xcode(xcodebuild·simctl)를 쓸 수 없으면 iOS를 건너뛰고 마지막 줄에 적는다.
 # 실패로 멈춤: 시험 실패, IOS_SIM을 지정했는데 Xcode를 쓸 수 없을 때, 쓸 iPhone 시뮬레이터가 없을 때.
@@ -10,6 +10,7 @@ export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Con
 export TZ=Asia/Seoul TEST_RUNNER_TZ=Asia/Seoul
 
 skipped=()
+./gradlew --console=plain ktlintCheck   # Kotlin 린트
 ./gradlew --console=plain :engine:test :shared:test :app:testDebugUnitTest :phone:testDebugUnitTest
 python3 tools/demo/selftest.py   # 시연 스크립트가 끝나는 길마다(가짜 adb·curl, 기기 없이)
 if ! command -v npm >/dev/null; then

@@ -1,0 +1,74 @@
+# 기본 설정 위에 얹는다(buildUponDefaultConfig). 여기에는 기본값과 다른 것만 적는다.
+# 문체 규칙은 ktlint·편집기 설정이 맡고, 이 파일은 잠재 버그 규칙을 남긴다.
+
+style:
+  ExplicitItLambdaMultipleParameters:
+    active: false   # 짧은 람다에서 it을 인덱스 옆에 겹쳐 쓰는 문체다
+  MagicNumber:
+    active: false   # 설계값은 Params에 모았고, 화면 치수는 쓰는 자리에 둔다
+  ReturnCount:
+    active: false   # 일찍 돌아가기(guard)를 권장하는 코드 스타일이다
+  UseOrEmpty:
+    active: false   # 선택 문제다
+  NewLineAtEndOfFile:
+    active: false   # ktlint가 본다
+  ThrowsCount:
+    active: false   # 검증 함수는 던질 곳이 여럿이다
+  LoopWithTooManyJumpStatements:
+    active: false   # 재시도 루프의 break·continue
+  MaxLineLength:
+    maxLineLength: 160   # .editorconfig와 같게
+
+naming:
+  NoNameShadowing:
+    active: false   # 짧은 중첩 람다에서 it을 겹쳐 쓰는 문체다
+  MemberNameEqualsClassName:
+    active: false   # 녹음기 클래스의 recorder 필드처럼 이름이 곧 뜻이다
+  MatchingDeclarationName:
+    active: false   # 관련 타입을 한 파일에 둔다(책임 단위로 나눈다)
+  FunctionNaming:
+    ignoreAnnotated: ['Composable']   # Compose 함수는 대문자로 시작한다
+
+complexity:
+  TooManyFunctions:
+    active: false   # 파일 하나에 같은 책임의 함수를 모은다
+  ComplexCondition:
+    active: false   # 상태 불변식 조건이 길다
+  NestedBlockDepth:
+    active: false   # 상태 전이 함수의 중첩
+  CyclomaticComplexMethod:
+    allowedComplexity: 65   # 지금 코드의 최댓값 62 바로 위
+  LargeClass:
+    allowedLines: 700   # 3D 차 그리기 엔진 한 클래스(CarEngine)가 한 책임이라 나누지 않는다. 지금 값 바로 위
+  LongMethod:
+    allowedLines: 195   # 지금 코드의 최댓값 192 바로 위
+  LongParameterList:
+    allowedFunctionParameters: 12   # 지금 코드의 최댓값
+    allowedConstructorParameters: 17   # 지금 코드의 최댓값
+    ignoreDefaultParameters: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false   # SDK·네트워크 예외를 크래시 대신 결과 값으로 바꾼다
+  SwallowedException:
+    active: false   # 위와 같은 설계(false·null·Offline 결과)
+
+performance:
+  SpreadOperator:
+    active: false   # 가변 인자 전개는 호출 한 번뿐이라 복사 비용이 문제 되지 않는다
+
+coroutines:
+  InjectDispatcher:
+    active: false   # 앱 하나에서 Dispatchers.IO를 직접 쓴다
+
+potential-bugs:
+  ImplicitDefaultLocale:
+    active: false   # 한국어 하나만 다룬다
+  UnsafeCallOnNullableType:
+    active: false   # 상태 불변식으로 보장된 값에 !!를 쓴다
+
+empty-blocks:
+  EmptyElseBlock:
+    active: false   # when의 else -> {}
+  EmptyFunctionBlock:
+    active: false   # 빈 콜백

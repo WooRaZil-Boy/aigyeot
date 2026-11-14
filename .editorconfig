@@ -8,8 +8,22 @@ indent_size = 4
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.{kt,kts,swift}]
+[*.swift]
 max_line_length = 160
+
+[*.{kt,kts}]
+max_line_length = 160
+# 안드로이드 스튜디오 기본 서식(4칸 들여쓰기, 후행 쉼표 강제 없음)에 맞춘다.
+ktlint_code_style = android_studio
+# @Composable 함수는 UpperCamelCase 이름을 쓰는 것이 Compose의 규칙이다.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+# 파일 이름을 바꾸면 그 파일의 최상위 함수가 들어가는 클래스 이름이 바뀌므로 파일 이름 규칙은 끈다.
+ktlint_standard_filename = disabled
+
+# 시험은 이름을 문장처럼 쓰고(백틱 함수 이름) 상수 같은 값을 소문자로 둔다.
+[**/src/{test,testDebug}/**/*.kt]
+ktlint_standard_function-naming = disabled
+ktlint_standard_property-naming = disabled
 
 [*.{ts,json,jsonc,yml,yaml,sh,md}]
 indent_size = 2

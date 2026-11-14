@@ -136,12 +136,13 @@ stateDiagram-v2
 | 대상 | 시험 | 줄 커버리지 |
 | --- | --- | --- |
 | 판단 코어 `engine/` | 상태 전이·규칙 단위 시험 | 약 98%(CI가 95% 하한을 강제) |
-| 차 앱 `app/` | Robolectric + Room으로 호스트·기록·연결·실행기, 가짜 호스트로 장면 27개 끝까지 | 약 53%(SDK 어댑터와 Compose 그리기 코드는 단위 시험 밖) |
-| 안드로이드 폰 | 도메인·유스케이스·화면 상태 | 약 40%(도메인 모델 96%) |
+| 차 앱 `app/` | Robolectric + Room으로 호스트·기록·연결·실행기, 가짜 호스트로 장면 27개 끝까지 | 약 49%(SDK 어댑터와 Compose 그리기 코드는 단위 시험 밖) |
+| 안드로이드 폰 | 도메인·유스케이스·화면 상태 | 약 39%(도메인 모델 96%) |
 | iOS 폰 | 도메인·유스케이스·화면 상태 | 약 44%(도메인 93~98%) |
 | 중계 `relay/` | Workers 런타임에서 vitest | 약 98% |
 
 - **커버리지는** Gradle 모듈(`engine/`·`app/`·안드로이드 폰)은 Kover(`./gradlew -Pcoverage …`, 차 앱·폰은 Room·Compose가 만든 코드를 뺀 값), iOS는 `xcodebuild test -enableCodeCoverage YES`, 중계는 vitest 커버리지(istanbul)를 임시로 더해 쟀고 저장소 의존성에는 넣지 않았습니다.
 - **골든 파일:** JSON 예제 46개(메시지 22개, API 요청·응답 24개)는 `shared`·iOS 휴대폰 앱·중계의 시험이 전부 읽어 왕복 대조하고, 차 앱과 안드로이드 휴대폰 앱의 시험은 자기가 주고받는 예제를 골라 확인합니다. 음성 문장 표, 장면의 할 일 기록, 화면에 나가는 글자도 파일로 고정했습니다.
+- **린트:** Kotlin은 ktlint, iOS는 SwiftLint로 봅니다. 둘 다 오류가 있으면 실패합니다. Kotlin은 `tools/check.sh`와 CI(`ci.yml`)가, iOS는 `tools/check.sh`와 손으로 돌리는 `ios.yml`이 돌립니다. 설정은 [.editorconfig](.editorconfig)와 [phone/ios/.swiftlint.yml](phone/ios/.swiftlint.yml)에 있고, 끈 규칙과 문턱값마다 까닭을 적어 두었습니다. 정적 분석 도구 detekt는 참고용으로만 둡니다(`./gradlew detektAll`, 설정 [config/detekt/detekt.yml](config/detekt/detekt.yml)). 알파판이고 컴파일러 플러그인이 만드는 선언을 해석하지 못해 검사에는 넣지 않았습니다.
 - **에뮬레이터 실측**(경보 지연, 뒷좌석 재생, 주행 중 차량 제어, 내비 경유지, 자원)은 [tools/measure/README.md](tools/measure/README.md)에 기록과 함께 있습니다.
-- 전체 시험은 `tools/check.sh` 한 번으로 돕니다. CI는 [.github/workflows/ci.yml](.github/workflows/ci.yml)입니다.
+- 린트와 전체 시험은 `tools/check.sh` 한 번으로 돕니다. CI는 [.github/workflows/ci.yml](.github/workflows/ci.yml)입니다.
