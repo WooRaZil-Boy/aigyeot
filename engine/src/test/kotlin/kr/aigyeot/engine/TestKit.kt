@@ -12,27 +12,28 @@ val WB = Method(MethodKind.WOMB)
 val LL = Method(MethodKind.LULLABY)
 val SONG = Method(MethodKind.SONG, "s1")
 
-fun profile(seat: CarSeat = CarSeat.LEFT, interval: Int? = null, sibling: Boolean = false) =
-    Profile("2026-03", seat, interval, sibling)
+fun profile(seat: CarSeat = CarSeat.LEFT, interval: Int? = null, sibling: Boolean = false) = Profile("2026-03", seat, interval, sibling)
 
-fun rest(id: String, km: Double, nursing: Boolean = false) =
-    RestCandidate(id, "$id 휴게소", RestKind.REST_AREA, km, nursing)
+fun rest(id: String, km: Double, nursing: Boolean = false) = RestCandidate(id, "$id 휴게소", RestKind.REST_AREA, km, nursing)
 
 /** 수유실이 있는 휴게소(여러 시험이 같은 후보를 쓴다). */
 val nurse = rest("n", 9.0, nursing = true)
 
 /** 복원 ② 시험용 Room 행. */
-internal fun roomRow(
-    id: String, sessionId: String, endedAt: Long? = null, kind: HandoffKind? = null, firstResult: TryResult? = null,
-) = EpisodeRecord(
+internal fun roomRow(id: String, sessionId: String, endedAt: Long? = null, kind: HandoffKind? = null, firstResult: TryResult? = null) = EpisodeRecord(
     id, sessionId, T0, endedAt, EpisodeTrigger.ALARM, null, null, null, null, firstResult, null, null, null, null, null,
-    null, kind, false, 0, false, 0, emptyList(),
+    null, kind, false, 0, false, 0, emptyList()
 )
 
 /** [told]: Room에서 이미 확정된 인계(에피소드 id → handoff_told_driver). */
 internal fun facts(
-    ended: Boolean = false, played: Long = 0, alarms: Int = 0, epPlayed: Long = 0, rows: List<EpisodeRecord> = emptyList(),
-    history: List<FirstTry> = emptyList(), told: Map<String, Boolean> = emptyMap(),
+    ended: Boolean = false,
+    played: Long = 0,
+    alarms: Int = 0,
+    epPlayed: Long = 0,
+    rows: List<EpisodeRecord> = emptyList(),
+    history: List<FirstTry> = emptyList(),
+    told: Map<String, Boolean> = emptyMap()
 ) = RoomFacts(ended, played, alarms, epPlayed, rows.associateBy { it.id }, history, told)
 
 class Sim(var s: EngineState, private val eng: Engine = Engine()) {
@@ -41,7 +42,10 @@ class Sim(var s: EngineState, private val eng: Engine = Engine()) {
     var last: Step = Step(s, emptyList(), null)
 
     fun ev(e: Event): Sim {
-        last = eng.step(s, e); s = last.state; log += last.commands; t = maxOf(t, e.at)
+        last = eng.step(s, e)
+        s = last.state
+        log += last.commands
+        t = maxOf(t, e.at)
         return this
     }
     fun tick(dt: Long = 0) = ev(Tick(t + dt))
@@ -78,7 +82,7 @@ fun SessionState.withStage(phase: Phase): SessionState = copy(
         Phase.WAIT -> Stage.Wait(attemptNo)
         Phase.HANDOFF -> Stage.Handoff(attemptNo)
     },
-    episode = if (phase == Phase.LISTENING) null else episode,
+    episode = if (phase == Phase.LISTENING) null else episode
 )
 
 /** 시험 조립: 제안 상태(OfferState)만 바꾼 세션. */
@@ -86,25 +90,38 @@ fun SessionState.withOffers(f: OfferState.() -> OfferState): SessionState = copy
 
 /** 지금 세션의 인계 장부(장부 하나 `handoffs`에서 세션 id로 고른다). */
 fun EngineState.openLedger(): HandoffLedger? = session?.let { x -> handoffs.firstOrNull { it.sessionId == x.id } }
+
 /** 닫힌 세션의 인계 장부. */
 fun EngineState.closedLedgers(): List<HandoffLedger> = handoffs.filter { it.sessionId != session?.id }
 val Sim.ledger: HandoffLedger? get() = s.openLedger()
+
 /** 지금까지 낸 보호자 인계 알림(handoff_alert) 명령. */
 fun Sim.alerts() = all<SendToPhone>().filter { it.type == "handoff_alert" }
+
 /** 위 알림의 body만. */
 fun Sim.alertBodies() = alerts().map { it.body }
+
 /** 알림 body의 문장. */
 fun text(c: SendToPhone) = c.body["text"]!!.jsonPrimitive.content
+
 /** 지금 시각에서 dt 뒤에 바쁜 조향 표본을 넣는다. */
 fun Sim.busyNow(dt: Long = 0) = ev(VehicleSample(t + dt, 60.0, true, 0.0, TurnSignal.NONE))
+
 /** 그 에피소드의 마지막 인계 확정(SettleHandoff, 지금까지 낸 할 일에서). 없으면 아직 확정 전. */
 fun Sim.settled(id: String = ep.id): SettleHandoff? = log.filterIsInstance<SettleHandoff>().lastOrNull { it.episodeId == id }
+
 /** 인계 문장을 말했나. 확정 전·PARKED면 null. */
 fun Sim.told(id: String = ep.id): Boolean? = settled(id)?.toldDriver
 
 fun idle(
-    prof: Profile? = profile(), methods: List<Method> = listOf(WN, LL), history: List<FirstTry> = emptyList(),
-    feedingStart: Long? = null, guardians: Int = 1, seed: Long = 42, mic: Boolean = true, gear: Gear = Gear.P,
+    prof: Profile? = profile(),
+    methods: List<Method> = listOf(WN, LL),
+    history: List<FirstTry> = emptyList(),
+    feedingStart: Long? = null,
+    guardians: Int = 1,
+    seed: Long = 42,
+    mic: Boolean = true,
+    gear: Gear = Gear.P
 ): Sim {
     val sim = Sim(EngineState.fresh(seed, prof, methods, history, feedingStart, guardians))
     sim.ev(Boot(T0, gear, 10))
@@ -119,23 +136,33 @@ fun Sim.route(vararg rests: RestCandidate, dest: Boolean = false, remainingSec: 
 
 /** LISTENING인 세션. */
 fun session(
-    prof: Profile? = profile(), methods: List<Method> = listOf(WN, LL), history: List<FirstTry> = emptyList(),
-    feedingStart: Long? = null, guardians: Int = 1, seed: Long = 42, mic: Boolean = true,
+    prof: Profile? = profile(),
+    methods: List<Method> = listOf(WN, LL),
+    history: List<FirstTry> = emptyList(),
+    feedingStart: Long? = null,
+    guardians: Int = 1,
+    seed: Long = 42,
+    mic: Boolean = true
 ): Sim = idle(prof, methods, history, feedingStart, guardians, seed, mic).doorCycle().gear(Gear.D)
 
 fun Sim.alarm(dt: Long = 0) = ev(CrySegment(t + dt, t + dt - 3_000, t + dt, 0.9, true))
+
 /** start에 시작한 3초 구간. 구간이 끝난 뒤 도착한다. */
 fun Sim.seg(start: Long, p: Double = 0.9) = ev(CrySegment(maxOf(t, start + 3_000), start, start + 3_000, p, false))
 fun Sim.started(fallback: Boolean = false) = ev(PlaybackStarted(t, play().id, "bus100_audio_zone_1", fallback))
 fun Sim.attempt1() = alarm().started()
 fun Sim.toGap() = ev(Tick(play().endAt))
+
 /** 지금 시작하는 울음 구간(GAP·CONFIRM 판정 창 안). */
 fun Sim.recry() = seg(t)
+
 /** 창을 조용히 닫는 구간(end > windowEnd). */
 fun Sim.closeQuiet() = seg(ses.windowEnd!! - 1_000, 0.1)
 fun Sim.toConfirm() = toGap().closeQuiet()
+
 /** 1차 실패 → ATTEMPT(2) 재생 중. */
 fun Sim.attempt2() = attempt1().toGap().recry().started()
+
 /** 두 번 시도 뒤 HANDOFF. */
 fun Sim.handoff() = attempt2().toGap().recry()
 

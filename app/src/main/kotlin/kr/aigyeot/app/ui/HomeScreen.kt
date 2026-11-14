@@ -73,103 +73,152 @@ fun reducedMotion(): Boolean {
     fun read() = Settings.Global.getFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     var v by remember { mutableStateOf(read()) }
     // 화면으로 돌아올 때마다 다시 읽는다(앱 밖에서 '애니메이션 삭제'를 켜고 돌아와도 바로 따르게)
-    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { v = read(); onPauseOrDispose { } }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        v = read()
+        onPauseOrDispose { }
+    }
     return v
 }
 
 @Composable
 fun HomeScreen(
-    ui: HomeUi, drive: Boolean,
-    onBabyAboard: () -> Unit, onFeedingNow: () -> Unit, onAsk: () -> Unit, onFeedingConfirm: (Boolean) -> Unit,
-    go: (Route) -> Unit,
+    ui: HomeUi,
+    drive: Boolean,
+    onBabyAboard: () -> Unit,
+    onFeedingNow: () -> Unit,
+    onAsk: () -> Unit,
+    onFeedingConfirm: (Boolean) -> Unit,
+    go: (Route) -> Unit
 ) {
     val p = LocalPalette.current
     val reduced = reducedMotion()
     val stage = ui.stage.copy(drive = drive, reducedMotion = reduced)
     // 분위기 빛: 듣는 중 곁빛 55%, 달래는 중 방법 색(브랜드 파랑), 경보 아이 빛. 정차 중 0.9초에 번지고 주행 중·동작 줄이기는 바로
     val atmoTarget = when (ui.stage.light) {
-        Light3d.LISTEN -> p.glow.copy(alpha = 0.55f); Light3d.SOOTHE -> p.accentInk; Light3d.ALERT -> p.childGlow; Light3d.BASE -> Color.Transparent
+        Light3d.LISTEN -> p.glow.copy(alpha = 0.55f)
+        Light3d.SOOTHE -> p.accentInk
+        Light3d.ALERT -> p.childGlow
+        Light3d.BASE -> Color.Transparent
     }
     val light = Tokens.motion.getValue("light")
     val atmo by animateColorAsState(atmoTarget, if (drive || reduced) tween(0) else tween(light.ms, easing = light.easing), label = "atmo")
-    BoxWithConstraints(Modifier.fillMaxSize()) { val narrowWindow = maxWidth < 1000.dp
-    Column(Modifier.fillMaxSize()) {
-        Header("아이곁", onBack = null) {
-            if (!drive) {
-                // 분할 840에서는 알약을 숨긴다: 제목이 잘리지 않게
-                if (!narrowWindow) Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(end = 8.dp)) {
-                    ui.pills.phone?.let { Pill(it, live = ui.pills.phoneLive) }
-                    ui.pills.tempC?.let { Pill("$it°", icon = R.drawable.ic_thermometer) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val narrowWindow = maxWidth < 1000.dp
+        Column(Modifier.fillMaxSize()) {
+            Header("아이곁", onBack = null) {
+                if (!drive) {
+                    // 분할 840에서는 알약을 숨긴다: 제목이 잘리지 않게
+                    if (!narrowWindow) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(end = 8.dp)) {
+                            ui.pills.phone?.let { Pill(it, live = ui.pills.phoneLive) }
+                            ui.pills.tempC?.let { Pill("$it°", icon = R.drawable.ic_thermometer) }
+                        }
+                    }
+                    IconBtn(R.drawable.ic_chart_column, "주행 리포트") { go(Route.Reports) }
+                    IconBtn(R.drawable.ic_smartphone, "휴대폰 연결") { go(Route.Connect) }
+                    IconBtn(R.drawable.ic_settings, "아기 설정") { go(Route.Setup) }
                 }
-                IconBtn(R.drawable.ic_chart_column, "주행 리포트") { go(Route.Reports) }
-                IconBtn(R.drawable.ic_smartphone, "휴대폰 연결") { go(Route.Connect) }
-                IconBtn(R.drawable.ic_settings, "아기 설정") { go(Route.Setup) }
+            }
+            BoxWithConstraints(Modifier.fillMaxSize().background(atmoBrush(atmo))) {
+                val narrow = maxWidth < 1000.dp
+                if (drive) DriveBody(ui, stage, narrow) else ParkBody(ui, stage, narrow, reduced, onBabyAboard, onFeedingNow, onAsk, onFeedingConfirm)
             }
         }
-        BoxWithConstraints(Modifier.fillMaxSize().background(atmoBrush(atmo))) {
-            val narrow = maxWidth < 1000.dp
-            if (drive) DriveBody(ui, stage, narrow) else ParkBody(ui, stage, narrow, reduced, onBabyAboard, onFeedingNow, onAsk, onFeedingConfirm)
-        }
-    }
     }
 }
 
 /** 홈 바탕: radial-gradient(60% 75% at 24% 52%, atmo 16%, transparent 72%). */
 private fun atmoBrush(atmo: Color): Brush = object : androidx.compose.ui.graphics.ShaderBrush() {
     override fun createShader(size: androidx.compose.ui.geometry.Size) = androidx.compose.ui.graphics.RadialGradientShader(
-        center = Offset(size.width * 0.24f, size.height * 0.52f), radius = maxOf(size.width * 0.6f, size.height * 0.75f),
-        colors = listOf(atmo.copy(alpha = atmo.alpha * 0.16f), Color.Transparent), colorStops = listOf(0f, 0.72f),
+        center = Offset(size.width * 0.24f, size.height * 0.52f),
+        radius = maxOf(size.width * 0.6f, size.height * 0.75f),
+        colors = listOf(atmo.copy(alpha = atmo.alpha * 0.16f), Color.Transparent),
+        colorStops = listOf(0f, 0.72f)
     )
 }
 
 @Composable
 private fun ParkBody(
-    ui: HomeUi, stage: kr.aigyeot.app.ui.car3d.Stage3d, narrow: Boolean, reduced: Boolean,
-    onBabyAboard: () -> Unit, onFeedingNow: () -> Unit, onAsk: () -> Unit, onFeedingConfirm: (Boolean) -> Unit,
+    ui: HomeUi,
+    stage: kr.aigyeot.app.ui.car3d.Stage3d,
+    narrow: Boolean,
+    reduced: Boolean,
+    onBabyAboard: () -> Unit,
+    onFeedingNow: () -> Unit,
+    onAsk: () -> Unit,
+    onFeedingConfirm: (Boolean) -> Unit
 ) {
     // 좁은 창은 머리 알약을 숨기므로 연결 문장을 열 아래에 쓴다
-    val column: @Composable (Modifier) -> Unit = { m -> StatusColumn(ui, reduced, m, if (narrow) ui.pills.phone else null, onBabyAboard,
-            onFeedingNow, onAsk, onFeedingConfirm) }
-    if (narrow) Column(Modifier.fillMaxSize()) {
-        // 분할 840 무대 높이 450. 창이 낮으면 무대를 줄여 상태 열·버튼 자리를 남긴다(무대:열 = 0.7:1)
-        CarStage(stage, Modifier.fillMaxWidth().weight(0.7f, fill = false).heightIn(max = 450.dp))
-        column(Modifier.padding(start = 28.dp, end = 28.dp, bottom = 28.dp).weight(1f))
-    } else Row(Modifier.fillMaxSize().padding(end = 48.dp)) {
-        // 무대는 위·아래·왼쪽 끝까지(여백 -36 0 -40 -28), 열은 기본 여백 그대로
-        CarStage(stage, Modifier.weight(1f).fillMaxHeight())
-        column(Modifier.padding(start = 36.dp, top = 36.dp, bottom = 40.dp).width(600.dp).fillMaxHeight())
+    val column: @Composable (Modifier) -> Unit = { m ->
+        StatusColumn(
+            ui,
+            reduced,
+            m,
+            if (narrow) ui.pills.phone else null,
+            onBabyAboard,
+            onFeedingNow,
+            onAsk,
+            onFeedingConfirm
+        )
+    }
+    if (narrow) {
+        Column(Modifier.fillMaxSize()) {
+            // 분할 840 무대 높이 450. 창이 낮으면 무대를 줄여 상태 열·버튼 자리를 남긴다(무대:열 = 0.7:1)
+            CarStage(stage, Modifier.fillMaxWidth().weight(0.7f, fill = false).heightIn(max = 450.dp))
+            column(Modifier.padding(start = 28.dp, end = 28.dp, bottom = 28.dp).weight(1f))
+        }
+    } else {
+        Row(Modifier.fillMaxSize().padding(end = 48.dp)) {
+            // 무대는 위·아래·왼쪽 끝까지(여백 -36 0 -40 -28), 열은 기본 여백 그대로
+            CarStage(stage, Modifier.weight(1f).fillMaxHeight())
+            column(Modifier.padding(start = 36.dp, top = 36.dp, bottom = 40.dp).width(600.dp).fillMaxHeight())
+        }
     }
 }
 
 /** 상태 열. 단계 열쇠가 바뀌면 옛 열이 블러 6으로 0.18초에 빠지고 새 열이 한 줄씩 0.05초 간격으로 올라온다. */
 @Composable
 private fun StatusColumn(
-    ui: HomeUi, reduced: Boolean, modifier: Modifier, connLine: String?,
-    onBabyAboard: () -> Unit, onFeedingNow: () -> Unit, onAsk: () -> Unit, onFeedingConfirm: (Boolean) -> Unit,
+    ui: HomeUi,
+    reduced: Boolean,
+    modifier: Modifier,
+    connLine: String?,
+    onBabyAboard: () -> Unit,
+    onFeedingNow: () -> Unit,
+    onAsk: () -> Unit,
+    onFeedingConfirm: (Boolean) -> Unit
 ) {
     // 열 바꿈: 열쇠가 바뀌면 옛 열이 0.15초 동안 흐려지며(블러 6·위로 6·투명) 빠진 뒤 새 열로 바꾸고, 새 열은 줄마다 Enter로 들어온다.
     // 옛 열이 다 빠진 뒤에 바꾸므로 둘이 겹쳐 보이지 않는다. 빠지는 중에 또 바뀌면 이어서 빠진 뒤 가장 새 값으로 바꾼다. 같은 열쇠 안의 값(시계·숫자)은 그 자리에서 고쳐 그린다
     val latest by rememberUpdatedState(ui)
-    val shown = remember { arrayOf(ui) }   // 지금 보이는 열의 가장 새 값(같은 열쇠 안의 갱신도 담아, 나가는 동안 옛 값으로 되돌아가지 않게)
+    val shown = remember { arrayOf(ui) } // 지금 보이는 열의 가장 새 값(같은 열쇠 안의 갱신도 담아, 나가는 동안 옛 값으로 되돌아가지 않게)
     var gen by remember { mutableStateOf(0) }
     val leaveA = remember { Animatable(0f) }
     val target = columnKey(ui)
     LaunchedEffect(target) {
         // 나가는 중에 원래 열쇠로 돌아오면 흐림을 거두고 그 열을 그대로 둔다
-        if (columnKey(shown[0]) == target) { leaveA.snapTo(0f); return@LaunchedEffect }
+        if (columnKey(shown[0]) == target) {
+            leaveA.snapTo(0f)
+            return@LaunchedEffect
+        }
         if (!reduced) leaveA.animateTo(1f, tween(COL_EXIT_MS, easing = EXIT_EASE))
-        shown[0] = latest; gen++; leaveA.snapTo(0f)
+        shown[0] = latest
+        gen++
+        leaveA.snapTo(0f)
     }
     val u = if (columnKey(ui) == columnKey(shown[0])) ui.also { shown[0] = it } else shown[0]
     Column(modifier) {
         key(gen) {
-            val isFirst = gen == 0   // 홈에 처음 들어올 때만 첫 열(22에서 올라옴)
+            val isFirst = gen == 0 // 홈에 처음 들어올 때만 첫 열(22에서 올라옴)
             val leave = leaveA.value
             // 정차 화면이라 넘치면 스크롤(분할 840·카드가 많은 단계에서 마지막 수유가 잘리지 않게). 버튼은 아래 고정
             Column(
-                Modifier.weight(1f).fillMaxWidth().graphicsLayer { translationY = -6.dp.toPx() * leave; alpha = 1f - leave }
+                Modifier.weight(1f).fillMaxWidth().graphicsLayer {
+                    translationY = -6.dp.toPx() * leave
+                    alpha = 1f - leave
+                }
                     .blur((leave * 6).dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 // 상태 한 줄(낱말)은 따로 들어오고 줄 순서에 끼지 않는다(줄 순서에서 상태 한 줄을 뺀다)
                 var i = 0
@@ -179,8 +228,15 @@ private fun StatusColumn(
                     u.sub?.let { Enter(i++, reduced, isFirst) { Text(it, style = CarType.bodyS, color = LocalPalette.current.textTertiary) } }
                 }
                 u.said?.let { s -> Enter(i++, reduced, isFirst) { SaidLine(s.text, ask = u.drive.ask) } }
-                if (u.pausesWarning) Enter(i++, reduced, isFirst) { Text("입력이 끊겨 판정을 잠시 멈췄어요",
-                        style = CarType.label.copy(fontWeight = FontWeight(600)), color = LocalPalette.current.danger) }
+                if (u.pausesWarning) {
+                    Enter(i++, reduced, isFirst) {
+                        Text(
+                            "입력이 끊겨 판정을 잠시 멈췄어요",
+                            style = CarType.label.copy(fontWeight = FontWeight(600)),
+                            color = LocalPalette.current.danger
+                        )
+                    }
+                }
                 if (u.confirmShown) Enter(i++, reduced, isFirst) { ConfirmCard(onFeedingConfirm) }
                 u.card?.let { c -> Enter(i++, reduced, isFirst) { ContextCard(c, reduced) } }
                 Enter(i++, reduced, isFirst) { FeedPanel(u.feed) }
@@ -194,9 +250,15 @@ private fun StatusColumn(
 }
 
 /** 열을 새로 들일지 정하는 열쇠(눈썹·상태·카드 종류·말한 문장이 바뀔 때만). 시계·숫자만 바뀌면 같은 열을 고쳐 그린다. */
-private fun columnKey(u: HomeUi) = listOf(u.eyebrow.text, u.status,
-        u.card?.let { it::class.simpleName + ((it as? HomeCard.Rest)?.added ?: "") + ((it as? HomeCard.Ask)?.answer ?: "") },
-        u.said?.at, u.confirmShown, u.pausesWarning, u.day != null).joinToString("|")
+private fun columnKey(u: HomeUi) = listOf(
+    u.eyebrow.text,
+    u.status,
+    u.card?.let { it::class.simpleName + ((it as? HomeCard.Rest)?.added ?: "") + ((it as? HomeCard.Ask)?.answer ?: "") },
+    u.said?.at,
+    u.confirmShown,
+    u.pausesWarning,
+    u.day != null
+).joinToString("|")
 
 /** 상태 한 줄은 낱말마다 블러 8이 걷히며 아래 12에서 올라온다(0.04초 간격, 0.5초). 낱말 단위로 줄바꿈(keep-all)이 되게 FlowRow로 둔다. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -205,8 +267,14 @@ private fun Headline(text: String, reduced: Boolean) {
     val style = CarType.headlineS.copy(letterSpacing = (-0.025).em)
     FlowRow(Modifier.offset(y = (-8).dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         text.split(' ').forEachIndexed { w, word ->
-            Rise(reduced, delayMs = 40L * w, ms = 500, dy = 12.dp, blur = 8.dp) { Text(word, style = style, color = LocalPalette.current.textPrimary,
-                    maxLines = 1) }
+            Rise(reduced, delayMs = 40L * w, ms = 500, dy = 12.dp, blur = 8.dp) {
+                Text(
+                    word,
+                    style = style,
+                    color = LocalPalette.current.textPrimary,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -219,8 +287,18 @@ private fun Enter(index: Int, reduced: Boolean, first: Boolean = false, content:
 @Composable
 private fun Rise(reduced: Boolean, delayMs: Long, ms: Int, dy: Dp, blur: Dp, content: @Composable () -> Unit) {
     val k = remember { Animatable(if (reduced) 1f else 0f) }
-    LaunchedEffect(Unit) { if (!reduced) { delay(delayMs); k.animateTo(1f, tween(ms, easing = ENTER_EASE)) } }
-    Box(Modifier.graphicsLayer { alpha = k.value; translationY = (1 - k.value) * dy.toPx() }.blur(blur * (1 - k.value))) { content() }
+    LaunchedEffect(Unit) {
+        if (!reduced) {
+            delay(delayMs)
+            k.animateTo(1f, tween(ms, easing = ENTER_EASE))
+        }
+    }
+    Box(
+        Modifier.graphicsLayer {
+            alpha = k.value
+            translationY = (1 - k.value) * dy.toPx()
+        }.blur(blur * (1 - k.value))
+    ) { content() }
 }
 
 /** 열 바꿈 곡선·시간(들어옴 [.2,.8,.2,1], 나감 0.15초 [.4,0,1,1]). */
@@ -234,8 +312,16 @@ private const val LIVE_FPS = 15
 @Composable
 private fun EyebrowRow(e: Eyebrow) {
     val p = LocalPalette.current
-    val color = when (e.tone) { Tone.CHILD -> p.child; else -> p.textSecondary }
-    val dot = when (e.tone) { Tone.MUTED -> p.textTertiary; Tone.ACCENT -> p.accent; Tone.CHILD -> p.child; Tone.METHOD -> p.accentInk }
+    val color = when (e.tone) {
+        Tone.CHILD -> p.child
+        else -> p.textSecondary
+    }
+    val dot = when (e.tone) {
+        Tone.MUTED -> p.textTertiary
+        Tone.ACCENT -> p.accent
+        Tone.CHILD -> p.child
+        Tone.METHOD -> p.accentInk
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Box(Modifier.size(14.dp), Alignment.Center) {
             if (e.live && !reducedMotion()) {
@@ -252,12 +338,14 @@ private fun EyebrowRow(e: Eyebrow) {
                     }
                 }
                 Canvas(Modifier.size(14.dp)) {
-                    val base = Tokens.motion.getValue("base").easing   // 1.8초 주기, 기본 곡선
+                    val base = Tokens.motion.getValue("base").easing // 1.8초 주기, 기본 곡선
                     val ring = if (r < 0.6f) base.transform(r / 0.6f) else 1f - base.transform((r - 0.6f) / 0.4f)
                     drawCircle(dot.copy(alpha = 0.4f * (1 - ring)), size.minDimension / 2 + 12.dp.toPx() * ring)
                     drawCircle(dot, size.minDimension / 2)
                 }
-            } else Box(Modifier.size(14.dp).clip(CircleShape).background(dot))
+            } else {
+                Box(Modifier.size(14.dp).clip(CircleShape).background(dot))
+            }
         }
         Text(e.text, style = CarType.label.copy(fontWeight = FontWeight(600), letterSpacing = 0.01.em), color = color, maxLines = 1)
     }
@@ -271,11 +359,19 @@ private fun SaidLine(text: String, ask: Boolean) {
         Row(verticalAlignment = Alignment.Top) {
             LineIcon(R.drawable.ic_volume_2, 28.dp, p.textTertiary)
             Spacer(Modifier.width(10.dp))
-            Text("“$text”", style = CarType.bodyL.copy(lineHeight = 42.sp, letterSpacing = (-0.01).em), color = p.textSecondary, maxLines = 3,
-                    overflow = TextOverflow.Ellipsis)
+            Text(
+                "“$text”",
+                style = CarType.bodyL.copy(lineHeight = 42.sp, letterSpacing = (-0.01).em),
+                color = p.textSecondary,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        if (ask) Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            YnHint("응", true); YnHint("아니", false)
+        if (ask) {
+            Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                YnHint("응", true)
+                YnHint("아니", false)
+            }
         }
     }
 }
@@ -285,7 +381,8 @@ private fun YnHint(text: String, yes: Boolean) {
     val p = LocalPalette.current
     Row(
         Modifier.heightIn(min = 72.dp).clip(RoundedCornerShape(percent = 50)).background(if (yes) p.accent else p.surfaceRaised).padding(horizontal = 32.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (yes) LineIcon(R.drawable.ic_mic, 30.dp, p.onAccent)
         Text(text, style = CarType.titleS, color = if (yes) p.onAccent else p.textPrimary)
@@ -303,7 +400,7 @@ private fun ConfirmCard(onConfirm: (Boolean) -> Unit) = Panel(label = "수유 �
 
 @Composable
 private fun ContextCard(c: HomeCard, reduced: Boolean) = when (c) {
-    is HomeCard.Track -> TrackCard(c, reduced)
+    is HomeCard.Track -> TrackCard(c)
     is HomeCard.Rest -> RestCard(c)
     is HomeCard.Episode -> EpisodeFlow(c)
     is HomeCard.Ask -> AskCard(c, reduced)
@@ -313,8 +410,15 @@ private fun ContextCard(c: HomeCard, reduced: Boolean) = when (c) {
 @Composable
 private fun elapsedSince(from: Long?, total: Long?): Long? {
     val v by produceState<Long?>(null, from, total) {
-        if (from == null || total == null) { value = null; return@produceState }
-        while (true) { value = (System.currentTimeMillis() - from).coerceIn(0, total); if (value == total) break; delay(1000) }
+        if (from == null || total == null) {
+            value = null
+            return@produceState
+        }
+        while (true) {
+            value = (System.currentTimeMillis() - from).coerceIn(0, total)
+            if (value == total) break
+            delay(1000)
+        }
     }
     return v
 }
@@ -322,31 +426,43 @@ private fun elapsedSince(from: Long?, total: Long?): Long? {
 private fun mmss(ms: Long) = (ms / 1000).let { "${it / 60}:%02d".format(it % 60) }
 
 @Composable
-private fun TrackCard(c: HomeCard.Track, reduced: Boolean) {
+private fun TrackCard(c: HomeCard.Track) {
     val p = LocalPalette.current
     val el = elapsedSince(c.from, c.totalMs)
     Panel {
         Row(Modifier.fillMaxWidth().padding(bottom = 22.dp), verticalAlignment = Alignment.Bottom) {
             Text("달래기 단계", style = CarType.label, color = p.textTertiary, modifier = Modifier.weight(1f))
-            if (el != null && c.totalMs != null) Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(mmss(el), style = CarType.numeral.copy(letterSpacing = (-0.03).em, fontFeatureSettings = "tnum"), color = p.textPrimary)
-                Text(
-                    "/ ${mmss(c.totalMs)}", style = CarType.bodyS.copy(fontFeatureSettings = "tnum"), color = p.textTertiary,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
+            if (el != null && c.totalMs != null) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(mmss(el), style = CarType.numeral.copy(letterSpacing = (-0.03).em, fontFeatureSettings = "tnum"), color = p.textPrimary)
+                    Text(
+                        "/ ${mmss(c.totalMs)}",
+                        style = CarType.bodyS.copy(fontFeatureSettings = "tnum"),
+                        color = p.textTertiary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
             }
         }
         val names = listOf("1차", "듣기 틈", "2차", "쉼터")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             names.forEachIndexed { i, n ->
                 val m = c.marks.getOrElse(i) { StepMark.NONE }
-                val frac = when (m) { StepMark.DONE,
-                        StepMark.FAIL -> 1f
-                        StepMark.NOW -> if (el != null && c.totalMs != null && c.totalMs > 0) el.toFloat() / c.totalMs else 0f
-                        StepMark.NONE -> 0f
+                val frac = when (m) {
+                    StepMark.DONE,
+                    StepMark.FAIL -> 1f
+                    StepMark.NOW -> if (el != null && c.totalMs != null && c.totalMs > 0) el.toFloat() / c.totalMs else 0f
+                    StepMark.NONE -> 0f
                 }
-                val fill = when (m) { StepMark.FAIL -> lerp(p.surfaceRaised, p.child,
-                        0.55f); StepMark.NOW -> if (i == 3) p.child else p.accent; else -> p.accent }
+                val fill = when (m) {
+                    StepMark.FAIL -> lerp(
+                        p.surfaceRaised,
+                        p.child,
+                        0.55f
+                    )
+                    StepMark.NOW -> if (i == 3) p.child else p.accent
+                    else -> p.accent
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(p.surfaceRaised)) {
                         Box(Modifier.fillMaxWidth(frac).fillMaxHeight().clip(RoundedCornerShape(4.dp)).background(fill))
@@ -354,8 +470,18 @@ private fun TrackCard(c: HomeCard.Track, reduced: Boolean) {
                     Column {
                         Text(n, style = CarType.label.copy(fontWeight = FontWeight(600)), color = if (m == StepMark.NOW) p.textPrimary else p.textTertiary)
                         val sub = if (m == StepMark.FAIL) "다시 울음" else c.subs.getOrElse(i) { "" }
-                        if (sub.isNotEmpty()) Text(sub, style = CarType.label,
-                                color = when (m) { StepMark.FAIL -> p.child; StepMark.NOW -> p.textSecondary; else -> p.textTertiary }, maxLines = 1)
+                        if (sub.isNotEmpty()) {
+                            Text(
+                                sub,
+                                style = CarType.label,
+                                color = when (m) {
+                                    StepMark.FAIL -> p.child
+                                    StepMark.NOW -> p.textSecondary
+                                    else -> p.textTertiary
+                                },
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
@@ -371,9 +497,11 @@ private fun RestCard(c: HomeCard.Rest) {
             Text(c.name, style = CarType.titleM, color = p.textPrimary, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             c.sub?.let { Text(it, style = CarType.label, color = p.textSecondary, maxLines = 1) }
         }
-        if (c.added) Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LineIcon(R.drawable.ic_check, 28.dp, p.accentInk)
-            Text("경유지로 넣었어요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.accentInk)
+        if (c.added) {
+            Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LineIcon(R.drawable.ic_check, 28.dp, p.accentInk)
+                Text("경유지로 넣었어요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.accentInk)
+            }
         }
     }
 }
@@ -385,8 +513,15 @@ private fun EpisodeFlow(c: HomeCard.Episode) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             c.flow.forEachIndexed { i, f ->
                 if (i > 0) Text("→", style = CarType.label, color = p.textTertiary)
-                Text(f.text, style = CarType.label.copy(fontWeight = FontWeight(if (f.tone == Tone.ACCENT) 600 else 500)),
-                    color = when (f.tone) { Tone.CHILD -> p.child; Tone.ACCENT -> p.accentInk; else -> p.textSecondary })
+                Text(
+                    f.text,
+                    style = CarType.label.copy(fontWeight = FontWeight(if (f.tone == Tone.ACCENT) 600 else 500)),
+                    color = when (f.tone) {
+                        Tone.CHILD -> p.child
+                        Tone.ACCENT -> p.accentInk
+                        else -> p.textSecondary
+                    }
+                )
             }
         }
     }
@@ -397,19 +532,40 @@ private fun AskCard(c: HomeCard.Ask, reduced: Boolean) {
     val p = LocalPalette.current
     Panel(label = "물어보기") {
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            if (c.listening) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                MicDot(reduced)
-                LevelBars(reduced)
+            if (c.listening) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    MicDot(reduced)
+                    LevelBars(reduced)
+                }
             }
             c.question?.let { q ->
                 Box(Modifier.fillMaxWidth(), Alignment.CenterEnd) {
-                    Text(q, style = CarType.bodyL.copy(fontWeight = FontWeight(500)), color = p.textPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clip(RoundedCornerShape(30.dp, 30.dp, 8.dp,
-                                30.dp)).background(p.surfaceRaised).padding(horizontal = 26.dp, vertical = 18.dp))
+                    Text(
+                        q,
+                        style = CarType.bodyL.copy(fontWeight = FontWeight(500)),
+                        color = p.textPrimary,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clip(
+                            RoundedCornerShape(
+                                30.dp,
+                                30.dp,
+                                8.dp,
+                                30.dp
+                            )
+                        ).background(p.surfaceRaised).padding(horizontal = 26.dp, vertical = 18.dp)
+                    )
                 }
             }
-            c.answer?.let { Text(it, style = CarType.titleS.copy(fontWeight = FontWeight(500), lineHeight = 44.sp), color = p.textPrimary,
-                    maxLines = 4, overflow = TextOverflow.Ellipsis) }
+            c.answer?.let {
+                Text(
+                    it,
+                    style = CarType.titleS.copy(fontWeight = FontWeight(500), lineHeight = 44.sp),
+                    color = p.textPrimary,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -432,16 +588,21 @@ private fun MicDot(reduced: Boolean) {
     val p = LocalPalette.current
     val ms = elapsedMs(!reduced)
     val ease = Tokens.motion.getValue("ripple").easing
-    Box(Modifier.size(88.dp).drawBehind {
-        // 둘째 테는 1초 기다렸다 시작
-        if (!reduced) for (delay in longArrayOf(0L, Tokens.loopMs.getValue("micRing") / 2L)) {
-            val t = ms() - delay
-            if (t < 0) continue
-            val per = Tokens.loopMs.getValue("micRing")
-            val k = ease.transform((t % per) / per.toFloat())
-            drawCircle(p.accent.copy(alpha = 0.6f * (1 - k)), size.minDimension / 2 * (1 + 0.6f * k), style = Stroke(2.dp.toPx()))
-        }
-    }.clip(CircleShape).background(p.accent), Alignment.Center) { LineIcon(R.drawable.ic_mic, 40.dp, p.onAccent) }
+    Box(
+        Modifier.size(88.dp).drawBehind {
+            // 둘째 테는 1초 기다렸다 시작
+            if (!reduced) {
+                for (delay in longArrayOf(0L, Tokens.loopMs.getValue("micRing") / 2L)) {
+                    val t = ms() - delay
+                    if (t < 0) continue
+                    val per = Tokens.loopMs.getValue("micRing")
+                    val k = ease.transform((t % per) / per.toFloat())
+                    drawCircle(p.accent.copy(alpha = 0.6f * (1 - k)), size.minDimension / 2 * (1 + 0.6f * k), style = Stroke(2.dp.toPx()))
+                }
+            }
+        }.clip(CircleShape).background(p.accent),
+        Alignment.Center
+    ) { LineIcon(R.drawable.ic_mic, 40.dp, p.onAccent) }
 }
 
 /** 듣는 중 마이크 막대(18개, 높이 18%↔90% 1.1초 ease-in-out, 막대마다 (i×97)%700ms 늦게, 멈춰 있을 때 높이 18+|sin(1.3i)|×70%). */
@@ -449,22 +610,28 @@ private fun MicDot(reduced: Boolean) {
 private fun LevelBars(reduced: Boolean) {
     val p = LocalPalette.current
     val ms = elapsedMs(!reduced)
-    val inOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)   // 1.1초 ease-in-out(토큰이 아닌 표준 곡선 정의)
+    val inOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f) // 1.1초 ease-in-out(토큰이 아닌 표준 곡선 정의)
     Canvas(Modifier.width(216.dp).height(56.dp)) {
-        val bw = 6.dp.toPx(); val gap = 6.dp.toPx()
+        val bw = 6.dp.toPx()
+        val gap = 6.dp.toPx()
         val now = ms()
         for (i in 0 until 18) {
             // 막대마다 (i×97)%700ms 기다리는 동안은 멈춘 높이, 그 뒤 1.1초 주기
             val t = now - i * 97 % 700
-            val k = if (reduced || t < 0) 0.18f + kotlin.math.abs(kotlin.math.sin(i * 1.3f)) * 0.7f
-            else {
+            val k = if (reduced || t < 0) {
+                0.18f + kotlin.math.abs(kotlin.math.sin(i * 1.3f)) * 0.7f
+            } else {
                 val per = Tokens.loopMs.getValue("levels")
                 val q = (t % per) / per.toFloat()
                 0.18f + 0.72f * inOut.transform(if (q < 0.5f) q * 2 else (1 - q) * 2)
             }
             val h = size.height * k
-            drawRoundRect(p.textTertiary, Offset(i * (bw + gap), (size.height - h) / 2), androidx.compose.ui.geometry.Size(bw, h),
-                    androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
+            drawRoundRect(
+                p.textTertiary,
+                Offset(i * (bw + gap), (size.height - h) / 2),
+                androidx.compose.ui.geometry.Size(bw, h),
+                androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
+            )
         }
     }
 }
@@ -475,14 +642,17 @@ private fun FeedPanel(f: FeedCard) {
     val p = LocalPalette.current
     Panel(label = "마지막 수유") {
         val start = f.start
-        if (start == null) { Text("기록 없음", style = CarType.bodyL, color = p.textSecondary); return@Panel }
+        if (start == null) {
+            Text("기록 없음", style = CarType.bodyL, color = p.textSecondary)
+            return@Panel
+        }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(f.ago, style = CarType.numeral.copy(letterSpacing = (-0.03).em, fontFeatureSettings = "tnum"), color = p.textPrimary)
             if (!f.fresh) Text("지난 시간", style = CarType.bodyS, color = p.textTertiary, modifier = Modifier.padding(bottom = 10.dp))
         }
         if (f.fill != null && f.windowMark != null) {
             val e = Tokens.motion.getValue("enter")
-            val v by animateFloatAsState(f.fill, tween(e.ms, easing = e.easing), label = "meter")   // 막대 폭이 enter 길이로 자란다
+            val v by animateFloatAsState(f.fill, tween(e.ms, easing = e.easing), label = "meter") // 막대 폭이 enter 길이로 자란다
             val w = f.windowMark
             Box(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 16.dp).height(24.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(p.surfaceRaised)) {
@@ -506,37 +676,58 @@ private fun LinkNotes(st: kr.aigyeot.app.link.LinkStatus, connLine: String?) {
     var paired by remember { mutableStateOf(false) }
     LaunchedEffect(st.justPaired) { if (pairedNotice.take(st.justPaired)) paired = true }
     val p = LocalPalette.current
-    connLine?.let { Text(it, style = CarType.label, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 10.dp)) }
+    connLine?.let {
+        Text(
+            it,
+            style = CarType.label,
+            color = p.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 10.dp)
+        )
+    }
     if (paired) Text("연결됐어요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.accentInk, modifier = Modifier.padding(top = 10.dp))
     st.error?.let { Text(it, style = CarType.label, color = p.danger, maxLines = 3, modifier = Modifier.padding(top = 10.dp)) }
 }
 
 /** 버튼: 출발 전이면 '아기 탔어요'(영웅), 그 밖은 '물어보기'(정차 중이면 영웅) + '지금 먹이기 시작했어요'. */
 @Composable
-private fun CtaButtons(ui: HomeUi, onBabyAboard: () -> Unit, onFeedingNow: () -> Unit,
-        onAsk: () -> Unit) = Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (ui.cta.board) CarButton("아기 탔어요", Modifier.fillMaxWidth(), BtnKind.BRAND, icon = R.drawable.ic_baby, onClick = onBabyAboard)
-    // 물어보기: 기어 P이고 마이크가 켜져 있을 때. 판단 코어가 AskButton을 받는 조건 그대로
-    else CarButton("물어보기", Modifier.fillMaxWidth(), if (ui.cta.askHero) BtnKind.BRAND else BtnKind.PLAIN, icon = R.drawable.ic_mic,
-            enabled = ui.askEnabled, onClick = onAsk)
-    CarButton("지금 먹이기 시작했어요", Modifier.fillMaxWidth(), icon = R.drawable.ic_bottle, onClick = onFeedingNow)
-}
+private fun CtaButtons(ui: HomeUi, onBabyAboard: () -> Unit, onFeedingNow: () -> Unit, onAsk: () -> Unit) =
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (ui.cta.board) {
+            CarButton("아기 탔어요", Modifier.fillMaxWidth(), BtnKind.BRAND, icon = R.drawable.ic_baby, onClick = onBabyAboard)
+        } // 물어보기: 기어 P이고 마이크가 켜져 있을 때. 판단 코어가 AskButton을 받는 조건 그대로
+        else {
+            CarButton(
+                "물어보기",
+                Modifier.fillMaxWidth(),
+                if (ui.cta.askHero) BtnKind.BRAND else BtnKind.PLAIN,
+                icon = R.drawable.ic_mic,
+                enabled = ui.askEnabled,
+                onClick = onAsk
+            )
+        }
+        CarButton("지금 먹이기 시작했어요", Modifier.fillMaxWidth(), icon = R.drawable.ic_bottle, onClick = onFeedingNow)
+    }
 
 // ── 주행 중 ──
 
 @Composable
 private fun DriveBody(ui: HomeUi, stage: kr.aigyeot.app.ui.car3d.Stage3d, narrow: Boolean) {
-    if (narrow) Column(Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, bottom = 48.dp)) {
-        CarStage(stage, Modifier.fillMaxWidth().weight(1f), interactive = false)
-        DriveSay(ui, 160.dp, 84.dp, RoundedCornerShape(52.dp), 28.dp)   // 분할 840 주행 중: 기호 160·글자 84·반경 52, 문장 간격 28
-    } else Row(
-        Modifier.fillMaxSize().padding(end = 64.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        CarStage(stage, Modifier.weight(1f).fillMaxHeight(), interactive = false)
-        Box(Modifier.width(640.dp)) { DriveSay(ui, 184.dp, 92.dp, CircleShape, 40.dp) }
+    if (narrow) {
+        Column(Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, bottom = 48.dp)) {
+            CarStage(stage, Modifier.fillMaxWidth().weight(1f), interactive = false)
+            DriveSay(ui, 160.dp, 84.dp, RoundedCornerShape(52.dp), 28.dp) // 분할 840 주행 중: 기호 160·글자 84·반경 52, 문장 간격 28
+        }
+    } else {
+        Row(
+            Modifier.fillMaxSize().padding(end = 64.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            CarStage(stage, Modifier.weight(1f).fillMaxHeight(), interactive = false)
+            Box(Modifier.width(640.dp)) { DriveSay(ui, 184.dp, 92.dp, CircleShape, 40.dp) }
+        }
     }
 }
 
@@ -548,8 +739,19 @@ private fun DriveSay(ui: HomeUi, sym: Dp, icon: Dp, shape: androidx.compose.ui.g
     val key = ui.status + ui.drive + ui.pausesWarning
     val seen = remember { arrayOfNulls<String>(1) }
     // 상태가 바뀔 때만 200ms 선형 페이드 한 번. 처음 보일 때는 바로
-    LaunchedEffect(key) { val prev = seen[0]; seen[0] = key; if (prev != null && prev != key) { a.snapTo(0f); a.animateTo(1f,
-            tween(Tokens.DRIVE_FADE_MS, easing = LinearEasing)) } else a.snapTo(1f) }
+    LaunchedEffect(key) {
+        val prev = seen[0]
+        seen[0] = key
+        if (prev != null && prev != key) {
+            a.snapTo(0f)
+            a.animateTo(
+                1f,
+                tween(Tokens.DRIVE_FADE_MS, easing = LinearEasing)
+            )
+        } else {
+            a.snapTo(1f)
+        }
+    }
     val child = ui.drive.symbol == Symbol.BABY
     val mc = if (child) p.child else p.accentInk
     Column(Modifier.graphicsLayer { alpha = a.value }, verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -557,20 +759,38 @@ private fun DriveSay(ui: HomeUi, sym: Dp, icon: Dp, shape: androidx.compose.ui.g
             LineIcon(symbolIcon(ui.drive.symbol), icon, mc)
         }
         // 주행 중 글은 합해서 3줄 이하(IMPLEMENT 주행 중 규칙): 경고·'응 / 아니'가 둘 다 있으면 상태는 한 줄
-        Text(ui.status, style = CarType.headlineL.copy(letterSpacing = (-0.02).em), color = p.textPrimary,
-                maxLines = if (ui.pausesWarning && ui.drive.ask) 1 else 2, overflow = TextOverflow.Ellipsis)
+        Text(
+            ui.status,
+            style = CarType.headlineL.copy(letterSpacing = (-0.02).em),
+            color = p.textPrimary,
+            maxLines = if (ui.pausesWarning && ui.drive.ask) 1 else 2,
+            overflow = TextOverflow.Ellipsis
+        )
         // 입력이 끊겨 판정을 멈춘 동안은 주행 중에도 알린다(듣고 있다는 거짓 안내가 되지 않게). 한 줄이라 3줄 이하
-        if (ui.pausesWarning) Text("입력이 끊겨 판정을 잠시 멈췄어요", style = CarType.bodyL.copy(fontWeight = FontWeight(600)), color = p.danger, maxLines = 1,
-                overflow = TextOverflow.Ellipsis)
-        if (ui.drive.ask) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            LineIcon(R.drawable.ic_mic, 36.dp, p.accentInk)
-            Text("응 / 아니", style = CarType.bodyL.copy(fontWeight = FontWeight(600)), color = p.textSecondary)
+        if (ui.pausesWarning) {
+            Text(
+                "입력이 끊겨 판정을 잠시 멈췄어요",
+                style = CarType.bodyL.copy(fontWeight = FontWeight(600)),
+                color = p.danger,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (ui.drive.ask) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                LineIcon(R.drawable.ic_mic, 36.dp, p.accentInk)
+                Text("응 / 아니", style = CarType.bodyL.copy(fontWeight = FontWeight(600)), color = p.textSecondary)
+            }
         }
     }
 }
 
 private fun symbolIcon(s: Symbol) = when (s) {
-    Symbol.EAR -> R.drawable.ic_ear_thin; Symbol.BABY -> R.drawable.ic_baby_thin; Symbol.PIN -> R.drawable.ic_map_pin_thin
-    Symbol.LULLABY -> R.drawable.ic_moon_star_thin; Symbol.NOISE -> R.drawable.ic_waves_thin
-    Symbol.WOMB -> R.drawable.ic_heart_pulse_thin; Symbol.SONG -> R.drawable.ic_song_thin
+    Symbol.EAR -> R.drawable.ic_ear_thin
+    Symbol.BABY -> R.drawable.ic_baby_thin
+    Symbol.PIN -> R.drawable.ic_map_pin_thin
+    Symbol.LULLABY -> R.drawable.ic_moon_star_thin
+    Symbol.NOISE -> R.drawable.ic_waves_thin
+    Symbol.WOMB -> R.drawable.ic_heart_pulse_thin
+    Symbol.SONG -> R.drawable.ic_song_thin
 }

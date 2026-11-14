@@ -5,10 +5,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 // store·link가 함께 쓰는 AppDatabase가 Robolectric + Room in-memory로 열리고, 표가 모두 있는지
 @RunWith(RobolectricTestRunner::class)
@@ -23,9 +23,9 @@ class AppDatabaseTest {
             setOf(
                 "child_profile", "session", "episode", "play_log", "alarm_log", "context_sample", "control_log",
                 "steer_window", "phone_link", "song", "engine_snapshot",
-                "relay_credential", "outbox", "processed_message", "song_download", "song_selection", "phone_link_mark", "care_applied", "sent_id",
+                "relay_credential", "outbox", "processed_message", "song_download", "song_selection", "phone_link_mark", "care_applied", "sent_id"
             ),
-            tables,
+            tables
         )
     }
 
@@ -33,21 +33,31 @@ class AppDatabaseTest {
     @Test fun `BACKFILL_ENDED_TOLD는 장면 옛 행만 참으로 채우고 이후 장면 닫기에도 참이다`() {
         val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), AppDatabase::class.java).allowMainThreadQueries().build()
         val dao = db.storeDao()
-        fun session(id: String, scenario: String?, ended: Long?) = SessionEntity(id, 1_000, ended, "DOOR_THEN_D", null, null, 0, 0, false, "[]", null, null, false, scenario, 10)
-        fun ep(id: String, sid: String, kind: String?) = EpisodeEntity(id, sid, 1_000, 2_000, "ALARM", 1_000, 100, null, null, "FAIL", null,
-            null, null, null, null, null, kind, false, false, 0, false, 0, emptyList())
-        dao.upsertSession(session("SC", "A", 3_000)); dao.upsertSession(session("RL", null, null))   // RL은 열린 실제 세션
-        dao.upsertEpisode(ep("scene", "SC", "SESSION_CAP")); dao.upsertEpisode(ep("scenePark", "SC", "PARKED"))
-        dao.upsertEpisode(ep("real", "RL", "SESSION_CAP")); dao.upsertEpisode(ep("sceneNone", "SC", null))
+        fun session(id: String, scenario: String?, ended: Long?) =
+            SessionEntity(id, 1_000, ended, "DOOR_THEN_D", null, null, 0, 0, false, "[]", null, null, false, scenario, 10)
+        fun ep(id: String, sid: String, kind: String?) = EpisodeEntity(
+            id, sid, 1_000, 2_000, "ALARM", 1_000, 100, null, null, "FAIL", null,
+            null, null, null, null, null, kind, false, false, 0, false, 0, emptyList()
+        )
+        dao.upsertSession(session("SC", "A", 3_000))
+        dao.upsertSession(session("RL", null, null)) // RL은 열린 실제 세션
+        dao.upsertEpisode(ep("scene", "SC", "SESSION_CAP"))
+        dao.upsertEpisode(ep("scenePark", "SC", "PARKED"))
+        dao.upsertEpisode(ep("real", "RL", "SESSION_CAP"))
+        dao.upsertEpisode(ep("sceneNone", "SC", null))
         val raw = db.openHelper.writableDatabase
-        raw.execSQL("UPDATE episode SET handoff_told_driver = NULL")   // v1에서 온 행: 칸이 새로 생겨 모두 null
-        raw.execSQL(BACKFILL_ENDED_TOLD)                                 // 이전이 쓰는 바로 그 문장
-        fun told(id: String) = raw.query("SELECT handoff_told_driver FROM episode WHERE id = '$id'").use { it.moveToFirst(); if (it.isNull(0)) null else it.getInt(0) }
+        raw.execSQL("UPDATE episode SET handoff_told_driver = NULL") // v1에서 온 행: 칸이 새로 생겨 모두 null
+        raw.execSQL(BACKFILL_ENDED_TOLD) // 이전이 쓰는 바로 그 문장
+        fun told(id: String) = raw.query("SELECT handoff_told_driver FROM episode WHERE id = '$id'").use {
+            it.moveToFirst()
+            if (it.isNull(0)) null else it.getInt(0)
+        }
         assertEquals(1, told("scene"))
         assertEquals(null, told("real"))
         assertEquals(null, told("scenePark"))
         assertEquals(null, told("sceneNone"))
-        dao.closeScenarioSessions(5_000); dao.settleScenarioHandoffs()
+        dao.closeScenarioSessions(5_000)
+        dao.settleScenarioHandoffs()
         assertEquals(1, told("scene"))
         db.close()
     }
@@ -61,18 +71,29 @@ class AppDatabaseTest {
                         db.execSQL("CREATE TABLE child_profile (id INTEGER PRIMARY KEY)")
                         db.execSQL("CREATE TABLE session (id TEXT PRIMARY KEY, scenario_id TEXT, ended_at INTEGER)")
                         db.execSQL("CREATE TABLE episode (id TEXT PRIMARY KEY, session_id TEXT, handoff_kind TEXT)")
-                        db.execSQL("CREATE TABLE steer_window (session_id TEXT NOT NULL, start_at INTEGER NOT NULL, PRIMARY KEY(session_id, start_at))")   // 이전이 observed 칸을 더한다
+                        // 이전이 observed 칸을 더한다
+                        db.execSQL("CREATE TABLE steer_window (session_id TEXT NOT NULL, start_at INTEGER NOT NULL, PRIMARY KEY(session_id, start_at))")
                         // SC: 끝난 장면, RL: 끝난 실주행, OP: 열린 실주행
                         db.execSQL("INSERT INTO session VALUES ('SC','A',3000),('RL',NULL,3000),('OP',NULL,NULL)")
-                        db.execSQL("INSERT INTO episode VALUES ('scene','SC','SESSION_CAP'),('park','SC','PARKED'),('real','RL','ARRIVAL_NOTICE'),('none','SC',NULL),('open','OP','ARRIVAL_NOTICE')")
+                        db.execSQL(
+                            "INSERT INTO episode VALUES ('scene','SC','SESSION_CAP'),('park','SC','PARKED'),('real','RL','ARRIVAL_NOTICE'),('none','SC',NULL),('open','OP','ARRIVAL_NOTICE')"
+                        )
                     }
                     override fun onUpgrade(db: SupportSQLiteDatabase, o: Int, n: Int) = Unit
-                }).build())
+                }).build()
+        )
         val raw = h.writableDatabase
         MIGRATION_1_2.migrate(raw)
-        fun told(id: String) = raw.query("SELECT handoff_told_driver FROM episode WHERE id = '$id'").use { it.moveToFirst(); if (it.isNull(0)) null else it.getInt(0) }
+        fun told(id: String) = raw.query("SELECT handoff_told_driver FROM episode WHERE id = '$id'").use {
+            it.moveToFirst()
+            if (it.isNull(0)) null else it.getInt(0)
+        }
         // 끝난 실주행·장면은 1, PARKED·종류 없음·열린 세션은 null 그대로
-        assertEquals(1, told("scene")); assertEquals(null, told("park")); assertEquals(1, told("real")); assertEquals(null, told("none")); assertEquals(null, told("open"))
+        assertEquals(1, told("scene"))
+        assertEquals(null, told("park"))
+        assertEquals(1, told("real"))
+        assertEquals(null, told("none"))
+        assertEquals(null, told("open"))
         h.close()
     }
 }

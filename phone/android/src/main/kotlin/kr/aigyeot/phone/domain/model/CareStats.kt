@@ -1,12 +1,12 @@
 package kr.aigyeot.phone.domain.model
 
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.MethodStat
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.TimelineEpisode
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
 
 /** 수유 간격 하나: [end]는 뒤 수유의 시작(간격이 속한 날을 정한다), [ms]는 앞 수유 시작부터. */
 data class FeedGap(val end: Long, val ms: Long)
@@ -68,6 +68,7 @@ object CareStats {
         reports.flatMap { it.timeline }.filter { it.trigger == EpisodeTrigger.CRY_ALARM }.mapNotNull { e -> instantOf(e.startedAt)?.let { CryAlarm(it, e) } }
 
     /** 방법별 성적에서 판정할 수 있는 최소 횟수(이보다 적으면 '아직 모름'). */
+    @Suppress("ktlint:standard:property-naming")
     const val methodKnownAttempts = 3
 
     /**
@@ -81,7 +82,7 @@ object CareStats {
             return if (n > 0) ok.toDouble() / n else 0.0
         }
         return stats.withIndex().sortedWith(
-            compareByDescending<IndexedValue<MethodStat>> { it.value.attempts >= methodKnownAttempts }.thenByDescending { rate(it.value) }.thenBy { it.index },
+            compareByDescending<IndexedValue<MethodStat>> { it.value.attempts >= methodKnownAttempts }.thenByDescending { rate(it.value) }.thenBy { it.index }
         )
     }
 }

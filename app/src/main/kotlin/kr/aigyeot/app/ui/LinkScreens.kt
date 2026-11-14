@@ -63,43 +63,51 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import kotlin.math.floor
+import kotlin.math.sqrt
 import kr.aigyeot.app.R
 import kr.aigyeot.app.link.LinkConn
 import kr.aigyeot.app.link.LinkStatus
 import kr.aigyeot.app.ui.car3d.Light3d
 import kr.aigyeot.app.ui.car3d.Stage3d
 import kr.aigyeot.app.ui.car3d.View3d
-import kotlin.math.floor
-import kotlin.math.sqrt
 
 /**
  * 연결 화면: 열면 코드를 받고, 닫으면 지운다. 왼쪽 QR·코드·남은 시간, 오른쪽 연결된 휴대폰·끊기·목록 새로 보기와 연결 그림.
  * 연결 상태·"연결됐어요"·오류 문장은 맨 위에 그대로 둔다.
  */
 @Composable
-fun ConnectScreen(
-    ui: ConnectUiState, onOpen: () -> Unit, onClose: () -> Unit, onDisconnect: (String) -> Unit, onRefresh: () -> Unit, onBack: () -> Unit,
-) = Column(Modifier.fillMaxSize()) {
-    DisposableEffect(Unit) { onOpen(); onDispose { onClose() } }
-    val st = ui.link
-    Header("휴대폰 연결", onBack)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val narrow = maxWidth < NarrowPage
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 44.dp, end = 44.dp, top = 32.dp, bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            LinkLines(st)
-            val left: @Composable ColumnScope.() -> Unit = { st.pairCode?.let { QrCard(it, st.pairUri, ui.remainingS) } }
-            val right: @Composable ColumnScope.() -> Unit = { Phones(st, onDisconnect, onRefresh) }
-            if (narrow) Column(verticalArrangement = Arrangement.spacedBy(36.dp)) { left(); right() }
-            else Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                Column(Modifier.weight(1f), content = left)
-                Column(Modifier.weight(1f), content = right)
+fun ConnectScreen(ui: ConnectUiState, onOpen: () -> Unit, onClose: () -> Unit, onDisconnect: (String) -> Unit, onRefresh: () -> Unit, onBack: () -> Unit) =
+    Column(Modifier.fillMaxSize()) {
+        DisposableEffect(Unit) {
+            onOpen()
+            onDispose { onClose() }
+        }
+        val st = ui.link
+        Header("휴대폰 연결", onBack)
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val narrow = maxWidth < NarrowPage
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 44.dp, end = 44.dp, top = 32.dp, bottom = 40.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                LinkLines(st)
+                val left: @Composable ColumnScope.() -> Unit = { st.pairCode?.let { QrCard(it, st.pairUri, ui.remainingS) } }
+                val right: @Composable ColumnScope.() -> Unit = { Phones(st, onDisconnect, onRefresh) }
+                if (narrow) {
+                    Column(verticalArrangement = Arrangement.spacedBy(36.dp)) {
+                        left()
+                        right()
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
+                        Column(Modifier.weight(1f), content = left)
+                        Column(Modifier.weight(1f), content = right)
+                    }
+                }
             }
         }
     }
-}
 
 /** QR 옆 코드 칸의 최소 폭: '123 456'이 자동 크기 최소(48sp)로 한 줄에 들어가는 폭(약 220dp). 차 창 1706의 두 열(코드 칸 약 323)은 옆에 둔다. */
 private val QR_CODE_MIN = 240.dp
@@ -114,8 +122,15 @@ private fun QrCard(code: String, uri: String?, remainingS: Long?) = BoxWithConst
     val stacked = maxWidth < 36.dp * 2 + qr + 36.dp + QR_CODE_MIN
     val body: @Composable (@Composable () -> Unit) -> Unit = { c ->
         val m = Modifier.fillMaxWidth().clip(RoundedCornerShape(CarRadius.l)).background(p.surface).padding(36.dp)
-        if (stacked) Column(m, verticalArrangement = Arrangement.spacedBy(28.dp)) { c() } else Row(m,
-                horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) { c() }
+        if (stacked) {
+            Column(m, verticalArrangement = Arrangement.spacedBy(28.dp)) { c() }
+        } else {
+            Row(
+                m,
+                horizontalArrangement = Arrangement.spacedBy(36.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { c() }
+        }
     }
     body {
         // 다크에서도 흰 판 위 검은 무늬: 뒤집힌 QR은 찍지 못하는 카메라가 있다
@@ -123,14 +138,22 @@ private fun QrCard(code: String, uri: String?, remainingS: Long?) = BoxWithConst
         Box(Modifier.width(qr).aspectRatio(1f).clip(plate).background(Color.White).border(2.dp, p.line, plate).padding(20.dp)) {
             uri?.let { u -> remember(u) { pairQr(u) }?.let { QrImage(it) } }
         }
-        Column(Modifier.fillMaxWidth()) {   // 가로 줄에서는 QR 뒤 남은 폭 전부
+        Column(Modifier.fillMaxWidth()) {
+            // 가로 줄에서는 QR 뒤 남은 폭 전부
             Text("휴대폰 앱에서 QR을 찍거나 코드를 넣어 주세요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.textTertiary)
             BasicText(
-                code.chunked(3).joinToString(" "), Modifier.padding(top = 10.dp),
+                code.chunked(3).joinToString(" "),
+                Modifier.padding(top = 10.dp),
                 // 코드 글자 300 72/80
-                style = CarType.numeral.copy(lineHeight = 80.sp, fontWeight = FontWeight(300), letterSpacing = 0.08.em, fontFeatureSettings = "tnum",
-                        color = p.textPrimary),
-                maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = CarType.headlineS.fontSize, maxFontSize = CarType.numeral.fontSize),
+                style = CarType.numeral.copy(
+                    lineHeight = 80.sp,
+                    fontWeight = FontWeight(300),
+                    letterSpacing = 0.08.em,
+                    fontFeatureSettings = "tnum",
+                    color = p.textPrimary
+                ),
+                maxLines = 1,
+                autoSize = TextAutoSize.StepBased(minFontSize = CarType.headlineS.fontSize, maxFontSize = CarType.numeral.fontSize)
             )
             remainingS?.let { s ->
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -172,8 +195,16 @@ internal fun qrLogoModules(n: Int): Int {
 
 /** 연결 링크(aigyeot://pair?code=…)의 QR(ZXing, 오류 정정 H). 가운데 로고 칸의 모듈을 비운다. 만들지 못하면 null. */
 internal fun pairQr(text: String): PairQr? = runCatching {
-    val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H,
-            EncodeHintType.MARGIN to QR_MARGIN))
+    val m = QRCodeWriter().encode(
+        text,
+        BarcodeFormat.QR_CODE,
+        0,
+        0,
+        mapOf(
+            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H,
+            EncodeHintType.MARGIN to QR_MARGIN
+        )
+    )
     val l = qrLogoModules(m.width - 2 * QR_MARGIN)
     val o = (m.width - l) / 2
     for (y in o until o + l) for (x in o until o + l) m.unset(x, y)
@@ -197,21 +228,48 @@ private fun Phones(st: LinkStatus, onDisconnect: (String) -> Unit, onRefresh: ()
 @Composable
 private fun LinkArt() {
     val p = LocalPalette.current
-    val phase: State<Float>? = if (reducedMotion()) null
-        else rememberInfiniteTransition("link").animateFloat(0f, -DASH * 2, infiniteRepeatable(tween(Tokens.loopMs.getValue("dash"),
-                easing = LinearEasing)), label = "dash")
+    val phase: State<Float>? = if (reducedMotion()) {
+        null
+    } else {
+        rememberInfiniteTransition("link").animateFloat(
+            0f,
+            -DASH * 2,
+            infiniteRepeatable(
+                tween(
+                    Tokens.loopMs.getValue("dash"),
+                    easing = LinearEasing
+                )
+            ),
+            label = "dash"
+        )
+    }
     val glow = lerp(p.stage, Color.White, 0.45f)
     Box(
         Modifier.padding(top = 20.dp).fillMaxWidth().height(300.dp).clip(RoundedCornerShape(CarRadius.l))
-            .drawBehind { drawRect(Brush.radialGradient(listOf(glow, p.stage), Offset(size.width / 2, size.height * 0.7f), size.width * 0.6f)) },
+            .drawBehind { drawRect(Brush.radialGradient(listOf(glow, p.stage), Offset(size.width / 2, size.height * 0.7f), size.width * 0.6f)) }
     ) {
         Car3dStill(Stage3d(view = View3d.CABIN, light = Light3d.LISTEN), Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.94f).align(Alignment.TopCenter))
         Canvas(Modifier.fillMaxSize().padding(start = 70.dp, end = 70.dp, top = 40.dp, bottom = 70.dp)) {
-            val sx = size.width / 100f; val sy = size.height / 60f
-            fun curve(x0: Float, c1: Float, c2: Float) = Path().apply { moveTo(x0 * sx, 48 * sy); cubicTo(c1 * sx, 10 * sy, c2 * sx, 10 * sy,
-                    50 * sx, 30 * sy) }
-            val stroke = Stroke(3.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(DASH.dp.toPx(), DASH.dp.toPx()),
-                    (phase?.value ?: 0f).dp.toPx()))
+            val sx = size.width / 100f
+            val sy = size.height / 60f
+            fun curve(x0: Float, c1: Float, c2: Float) = Path().apply {
+                moveTo(x0 * sx, 48 * sy)
+                cubicTo(
+                    c1 * sx,
+                    10 * sy,
+                    c2 * sx,
+                    10 * sy,
+                    50 * sx,
+                    30 * sy
+                )
+            }
+            val stroke = Stroke(
+                3.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(
+                    floatArrayOf(DASH.dp.toPx(), DASH.dp.toPx()),
+                    (phase?.value ?: 0f).dp.toPx()
+                )
+            )
             drawPath(curve(8f, 30f, 45f), p.accent, style = stroke)
             drawPath(curve(92f, 70f, 55f), p.accent, style = stroke)
         }
@@ -220,14 +278,19 @@ private fun LinkArt() {
     }
 }
 
-private const val DASH = 10f   // 점선 한 칸(dp)
+private const val DASH = 10f // 점선 한 칸(dp)
 
 @Composable
 private fun PhoneChip(modifier: Modifier) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(22.dp)
-    Box(modifier.size(72.dp).shadow(12.dp, shape).clip(shape).background(p.surface), Alignment.Center) { LineIcon(R.drawable.ic_smartphone, 38.dp,
-            p.accentInk) }
+    Box(modifier.size(72.dp).shadow(12.dp, shape).clip(shape).background(p.surface), Alignment.Center) {
+        LineIcon(
+            R.drawable.ic_smartphone,
+            38.dp,
+            p.accentInk
+        )
+    }
 }
 
 /** 정차 화면의 연결 상태 한 줄(한 칸의 상태라 모두 명사형). NONE은 표시하지 않는다. CONNECTED는 연결된 폰이 있을 때만 "연결됨". */
@@ -244,6 +307,7 @@ internal fun connText(c: LinkConn, hasPhone: Boolean): String? = when (c) {
  */
 internal class PairedNotice {
     private var shown: String? = null
+
     /** 정차 화면이 [now]를 실제로 그렸을 때 부른다. 아직 보여 주지 않은 기기면 true를 주고 보여 준 것으로 적는다. */
     @Synchronized fun take(now: String?): Boolean = (now != null && now != shown).also { if (it) shown = now }
 }
@@ -256,26 +320,25 @@ internal class LinkLine(val text: String, val error: Boolean = false)
 internal fun linkLines(st: LinkStatus, paired: Boolean): List<LinkLine> = listOfNotNull(
     connText(st.conn, st.phones.isNotEmpty())?.let(::LinkLine),
     if (paired) LinkLine("연결됐어요") else null,
-    st.error?.let { LinkLine(it, error = true) },
+    st.error?.let { LinkLine(it, error = true) }
 )
 
 /** 홈·연결 화면이 같이 쓰는 연결 표시. "연결됐어요"는 보여 준 방문 동안(화면을 떠날 때까지) 남는다. */
 @Composable
 internal fun LinkLines(st: LinkStatus) {
     var paired by remember { mutableStateOf(false) }
-    LaunchedEffect(st.justPaired) { if (pairedNotice.take(st.justPaired)) paired = true }   // 그린 뒤에만 본 것으로 적는다
+    LaunchedEffect(st.justPaired) { if (pairedNotice.take(st.justPaired)) paired = true } // 그린 뒤에만 본 것으로 적는다
     linkLines(st, paired).forEach { Body(it.text, if (it.error) LocalPalette.current.danger else Color.Unspecified) }
 }
 
 /** 노래 고르기 화면(목록 행). 고른 노래는 다음 주행부터 쓴다. */
 @Composable
-fun SongsScreen(rows: List<SongRow>, onSelect: (String) -> Unit, onBack: () -> Unit) =
-    Page("우리 노래", onBack) {
-        if (rows.isEmpty()) Body("휴대폰에서 노래를 보내면 여기 보여요")
-        rows.forEach { s ->
-            ListRow(s.label, icon = R.drawable.ic_song, selected = s.selected) {
-                CarButton("실험에 쓰기", size = BtnSize.M, enabled = !s.selected) { onSelect(s.id) }
-            }
+fun SongsScreen(rows: List<SongRow>, onSelect: (String) -> Unit, onBack: () -> Unit) = Page("우리 노래", onBack) {
+    if (rows.isEmpty()) Body("휴대폰에서 노래를 보내면 여기 보여요")
+    rows.forEach { s ->
+        ListRow(s.label, icon = R.drawable.ic_song, selected = s.selected) {
+            CarButton("실험에 쓰기", size = BtnSize.M, enabled = !s.selected) { onSelect(s.id) }
         }
-        Note("고른 노래는 다음 주행부터 써요")
     }
+    Note("고른 노래는 다음 주행부터 써요")
+}

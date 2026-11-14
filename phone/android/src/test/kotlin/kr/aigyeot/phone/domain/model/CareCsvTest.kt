@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.model
 
+import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -15,7 +16,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /** 기록 가져오기. 표준 예제는 shared의 파일을 경로 그대로 읽는다(복사본 없음, iOS와 같은 파일). */
 class CareCsvTest {
@@ -27,21 +27,23 @@ class CareCsvTest {
     private fun expected(name: String) = Json.parseToJsonElement(File(dir, "$name.expected.json").readText()).jsonObject
 
     /** 기대 JSON의 `profile`은 결과가 아니라 고른 아이(입력)다. 없으면 null. */
-    private fun parse(name: String): ImportDraft =
-        CareCsv.parse(csv(name), existing, now, expected(name)["profile"]?.jsonPrimitive?.contentOrNull)
+    private fun parse(name: String): ImportDraft = CareCsv.parse(csv(name), existing, now, expected(name)["profile"]?.jsonPrimitive?.contentOrNull)
 
     /** 기대 JSON 꼴: format·profiles·rows(createdAt·updatedAt 뺌)·skipped 넷. */
     private fun ImportDraft.json() = buildJsonObject {
         put("format", format.name)
         put("profiles", JsonArray(profiles.map(::JsonPrimitive)))
         put("rows", JsonArray(rows.map { JsonObject(CareJson.encodeToJsonElement(CareEvent.serializer(), it).jsonObject - "createdAt" - "updatedAt") }))
-        put("skipped", buildJsonObject {
-            put("unsupported", skipped.unsupported)
-            put("unreadable", skipped.unreadable)
-            put("future", skipped.future)
-            put("old", skipped.old)
-            put("duplicate", skipped.duplicate)
-        })
+        put(
+            "skipped",
+            buildJsonObject {
+                put("unsupported", skipped.unsupported)
+                put("unreadable", skipped.unreadable)
+                put("future", skipped.future)
+                put("old", skipped.old)
+                put("duplicate", skipped.duplicate)
+            }
+        )
     }
 
     private fun aigyeot(vararg rows: String) = (listOf(CSV_HEADER) + rows).joinToString("\r\n") + "\r\n"
@@ -75,7 +77,7 @@ class CareCsvTest {
         assertEquals(line.repeat(CareCsv.MAX_LINES), CareCsv.read(line.repeat(CareCsv.MAX_LINES).toByteArray()))
         assertNull(CareCsv.read((line.repeat(CareCsv.MAX_LINES) + "a").toByteArray())) // 끝 줄바꿈이 없는 마지막 줄도 센다
         // UTF-8, 앞 BOM은 버린다. UTF-8로 풀 수 없으면(EUC-KR 등) 빈 글이라 형식을 정하지 못한다(import.unreadable).
-        assertEquals(CSV_HEADER, CareCsv.read(("﻿" + CSV_HEADER).toByteArray()))
+        assertEquals(CSV_HEADER, CareCsv.read(("\uFEFF" + CSV_HEADER).toByteArray()))
         val euckr = CareCsv.read("Type,Start,End,Duration\n수유,,,\n".toByteArray(charset("EUC-KR")))
         assertEquals("", euckr)
         assertEquals(ImportFormat.UNKNOWN, CareCsv.parse(euckr!!, existing, now).format)
@@ -135,7 +137,7 @@ class CareCsvTest {
             "DIAPER,${rfc3339(h + 60_000)},,false,,,WET,EXAMPLE 가져오기로 정한 앞줄과 60초(파일 안도 같은 규칙)",
             "FEED,${rfc3339(h - HOUR)},,true,BOTTLE,12.5,,EXAMPLE 건너뛴 줄",
             "FEED,${rfc3339(h - HOUR + 30_000)},,true,BOTTLE,120,,EXAMPLE 건너뛴 줄과 30초(건너뛴 줄과는 견주지 않는다)",
-            "FEED,${rfc3339(h - HOUR + 61_000)},,true,LEFT,,,EXAMPLE 가져오기로 정한 앞줄과 31초",
+            "FEED,${rfc3339(h - HOUR + 61_000)},,true,LEFT,,,EXAMPLE 가져오기로 정한 앞줄과 31초"
         )
         val d = CareCsv.parse(text, existing, now)
         assertEquals(ImportSkipped(unsupported = 1, unreadable = 2, future = 2, old = 1, duplicate = 3), d.skipped)
@@ -153,9 +155,10 @@ class CareCsvTest {
                 "NOTE,2026-11-04 16:00:00+09:00,,false,,,,EXAMPLE 공백인데 오프셋 있음",
                 "NOTE,2026-02-30 09:00,,false,,,,EXAMPLE 없는 날",
                 "NOTE,2026-11-04 24:00,,false,,,,EXAMPLE 24시",
-                "  ,  , ,,,,,   ",
+                "  ,  , ,,,,,   "
             ),
-            CareFile(), now,
+            CareFile(),
+            now
         )
         // 2026-11-04 12:00(서울) = now - 51시간
         val noon = now - 51 * HOUR
@@ -172,7 +175,7 @@ class CareCsvTest {
         val d = CareCsv.parse((listOf(head) + rows).joinToString("\n"), CareFile(), now)
         assertEquals(
             listOf(FeedSide.RIGHT to null, FeedSide.LEFT to null, null to null, FeedSide.LEFT to null, FeedSide.BOTTLE to 120, FeedSide.BOTH to null),
-            d.rows.map { it.feedSide to it.amountMl },
+            d.rows.map { it.feedSide to it.amountMl }
         )
     }
 
@@ -192,7 +195,7 @@ class CareCsvTest {
             "Bottle Feed,,2026-11-02 05:00:00,,,,13.53,oz",
             "Bottle Feed,,2026-11-02 06:00:00,,,,13.52,oz",
             "Bottle Feed,,2026-11-02 07:00:00,,,,0.5,ml",
-            "Bottle Feed,,2026-11-02 08:00:00,,,,120.49,ml",
+            "Bottle Feed,,2026-11-02 08:00:00,,,,120.49,ml"
         ).joinToString("\n")
         val d = CareCsv.parse(nara, CareFile(), now)
         val feeds = d.rows.filter { it.feedSide != FeedSide.BOTTLE }
@@ -205,11 +208,16 @@ class CareCsvTest {
         val huck = CareCsv.parse(
             "Type,Start,End,Duration,Notes\nFeed,2026-11-03 09:00,,400.4ml,\nFeed,2026-11-03 10:00,,399.5ml,\n" +
                 "Feed,2026-11-03 11:00,,-0.4ml 0:10R,\n", // 부호도 숫자다: 범위 밖이라 쪽 조각으로 살리지 않는다
-            CareFile(), now,
+            CareFile(),
+            now
         )
         assertEquals(listOf(400), huck.rows.map { it.amountMl })
         assertEquals(ImportSkipped(unreadable = 2), huck.skipped)
-        val mine = CareCsv.parse(aigyeot("FEED,2026-11-04T09:00:00+09:00,,true,BOTTLE,400,,", "FEED,2026-11-04T10:00:00+09:00,,true,BOTTLE,400.0,,"), CareFile(), now)
+        val mine = CareCsv.parse(
+            aigyeot("FEED,2026-11-04T09:00:00+09:00,,true,BOTTLE,400,,", "FEED,2026-11-04T10:00:00+09:00,,true,BOTTLE,400.0,,"),
+            CareFile(),
+            now
+        )
         assertEquals(listOf(400), mine.rows.map { it.amountMl })
         assertEquals(ImportSkipped(unreadable = 1), mine.skipped)
     }
@@ -225,9 +233,10 @@ class CareCsvTest {
                 "DIAPER,${rfc3339(now - 2 * HOUR)},,false,LEFT,120,WET,",
                 "NOTE,${rfc3339(now - HOUR)},,false,LEFT,120,DIRTY,EXAMPLE",
                 "SLEEP,${rfc3339(now - 10 * HOUR)},,true,,401,,EXAMPLE 양 검사는 모든 종류에", // 범위 밖 → 읽을 수 없는 줄
-                "DIAPER,${rfc3339(now - 9 * HOUR)},,false,,12.5,DRY,EXAMPLE 정수 아님", // 정수 아님 → 읽을 수 없는 줄
+                "DIAPER,${rfc3339(now - 9 * HOUR)},,false,,12.5,DRY,EXAMPLE 정수 아님" // 정수 아님 → 읽을 수 없는 줄
             ),
-            CareFile(), now,
+            CareFile(),
+            now
         )
         val by = d.rows.associateBy { it.kind }
         val sleep = by.getValue(CareKind.SLEEP)
@@ -248,13 +257,13 @@ class CareCsvTest {
         // 메모의 닫는 따옴표가 빠지면 뒤 기록들이 그 메모 한 칸으로 삼켜진다(기저귀가 빠지고 건너뛴 수에도 안 잡힘). 파일째 읽을 수 없음(import.unreadable).
         val broken = aigyeot(
             "NOTE,${rfc3339(now - 2 * HOUR)},,false,,,,\"EXAMPLE 메모",
-            "DIAPER,${rfc3339(now - HOUR)},,false,,,WET,",
+            "DIAPER,${rfc3339(now - HOUR)},,false,,,WET,"
         )
         assertEquals(ImportDraft(ImportFormat.UNKNOWN, emptyList(), emptyList(), ImportSkipped()), CareCsv.parse(broken, CareFile(), now))
         // 닫힌 따옴표 안의 줄바꿈은 그대로 칸 글자다(뒤 기록도 들어온다).
         val ok = aigyeot(
             "NOTE,${rfc3339(now - 2 * HOUR)},,false,,,,\"EXAMPLE 첫 줄\n둘째 줄\"",
-            "DIAPER,${rfc3339(now - HOUR)},,false,,,WET,",
+            "DIAPER,${rfc3339(now - HOUR)},,false,,,WET,"
         )
         assertEquals(listOf("EXAMPLE 첫 줄\n둘째 줄", null), CareCsv.parse(ok, CareFile(), now).rows.map { it.note })
     }
@@ -277,9 +286,10 @@ class CareCsvTest {
         val d = CareCsv.parse(
             aigyeot(
                 "FEED,${rfc3339(now - 10 * MINUTE)},${rfc3339(now + MINUTE)},false,LEFT,,,EXAMPLE 끝 지금 + 1분",
-                "SLEEP,${rfc3339(now - HOUR)},${rfc3339(now + MINUTE + 1_000)},false,,,,EXAMPLE 끝 지금 + 1분 1초",
+                "SLEEP,${rfc3339(now - HOUR)},${rfc3339(now + MINUTE + 1_000)},false,,,,EXAMPLE 끝 지금 + 1분 1초"
             ),
-            CareFile(), now,
+            CareFile(),
+            now
         )
         assertEquals(listOf(now + MINUTE to false, null to true), d.rows.sortedBy { it.kind }.map { it.endAt to it.endUnknown })
         // 끝 모름이면 id의 endAt도 빈 글자다(두 앱 같은 id).
@@ -323,11 +333,14 @@ class CareCsvTest {
                 skipTitle = "가져오지 않는 것",
                 skips = listOf("이미 있는 기록 4건", "14일보다 오래된 기록 2건", "앞으로의 시각 1건", "읽을 수 없는 줄 5건", "가져오지 않는 종류 2건"),
                 note = "시각은 한국 시간으로 읽어요",
-                buttons = listOf("가져오기", "취소"),
+                buttons = listOf("가져오기", "취소")
             ),
-            importPreview(parse("nara"), now, APP_ZONE),
+            importPreview(parse("nara"), now, APP_ZONE)
         )
         val memo = CareCsv.parse(aigyeot("NOTE,${rfc3339(now - HOUR)},,false,,,,EXAMPLE"), CareFile(), now)
-        assertEquals(ImportPreview("기록 1건을 가져올게요", listOf("메모 1"), null, emptyList(), "시각은 한국 시간으로 읽어요", listOf("가져오기", "취소")), importPreview(memo, now, APP_ZONE))
+        assertEquals(
+            ImportPreview("기록 1건을 가져올게요", listOf("메모 1"), null, emptyList(), "시각은 한국 시간으로 읽어요", listOf("가져오기", "취소")),
+            importPreview(memo, now, APP_ZONE)
+        )
     }
 }

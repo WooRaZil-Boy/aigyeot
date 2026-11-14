@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import java.io.File
 import kr.aigyeot.app.ui.AppTheme
 import kr.aigyeot.app.ui.CarStage
 import kr.aigyeot.app.ui.LocalPalette
@@ -26,7 +27,6 @@ import kr.aigyeot.app.ui.car3d.Light3d
 import kr.aigyeot.app.ui.car3d.Seat3d
 import kr.aigyeot.app.ui.car3d.Stage3d
 import kr.aigyeot.app.ui.car3d.View3d
-import java.io.File
 
 // debug 전용(3D 실측): 홈 무대와 같은 크기의 3D 보기 하나를 띄우고 카메라 이동·대기 프레임을 잰다. 태그 CAR3D.
 //   am start --user 10 -n kr.aigyeot.app/.car3d.Car3dSpikeActivity [--es view rear|hero|top|did] [--es light listen|soothe|alert|base]
@@ -45,23 +45,31 @@ class Car3dSpikeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CarEngine.debugNoAo = intent.getBooleanExtra("noao", false)   // 엔진 준비는 CarView가 기다린다(CarEngine 로그에 단계별 시간)
+        CarEngine.debugNoAo = intent.getBooleanExtra("noao", false) // 엔진 준비는 CarView가 기다린다(CarEngine 로그에 단계별 시간)
         CarEngine.debugNoChildSeat = intent.getBooleanExtra("noseat", false)
         car = CarView(this, interactive = true)
-        car.dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-            || intent.getBooleanExtra("dark", false)
+        car.dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES ||
+            intent.getBooleanExtra("dark", false)
         car.onFrame = { ft, ms, rendered ->
-            if (measuring) { frames += ft; cpu += ms }
+            if (measuring) {
+                frames += ft
+                cpu += ms
+            }
             if (idleFrom > 0 && rendered) idleCount++
         }
-        setContentView(FrameLayout(this).apply {
-            setBackgroundColor(0xFFE9ECEF.toInt())
-            addView(car, FrameLayout.LayoutParams(intent.getIntExtra("w", 1706 - 600 - 36), intent.getIntExtra("h", 1210 - 112)))
-        })
+        setContentView(
+            FrameLayout(this).apply {
+                setBackgroundColor(0xFFE9ECEF.toInt())
+                addView(car, FrameLayout.LayoutParams(intent.getIntExtra("w", 1706 - 600 - 36), intent.getIntExtra("h", 1210 - 112)))
+            }
+        )
         intent.getStringExtra("capture")?.let { name ->
             car.onFirstFrame = {
                 car.postDelayed({
-                    val b = car.bitmap ?: run { Log.e(TAG, "capture $name: 그림 없음"); return@postDelayed }
+                    val b = car.bitmap ?: run {
+                        Log.e(TAG, "capture $name: 그림 없음")
+                        return@postDelayed
+                    }
                     File(filesDir, "$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
                     Log.i(TAG, "capture $name ${b.width}x${b.height} alpha=${b.hasAlpha()}")
                 }, 800)
@@ -70,7 +78,11 @@ class Car3dSpikeActivity : Activity() {
         apply(intent)
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); apply(intent) }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        apply(intent)
+    }
 
     private fun apply(i: Intent) {
         val s = Stage3d(
@@ -79,24 +91,39 @@ class Car3dSpikeActivity : Activity() {
             ripple = i.getBooleanExtra("ripple", false),
             callouts = i.getStringExtra("callouts").orEmpty().split(',').filter { it.isNotBlank() }.map { Callout3d.valueOf(it.uppercase()) }.toSet(),
             drive = i.getBooleanExtra("drive", false),
-            seat = Seat3d.valueOf((i.getStringExtra("seat") ?: "rr").uppercase()),
+            seat = Seat3d.valueOf((i.getStringExtra("seat") ?: "rr").uppercase())
         )
         if (i.hasExtra("dark")) car.dark = i.getBooleanExtra("dark", false)
-        frames.clear(); cpu.clear(); measuring = true; idleFrom = 0; idleCount = 0
+        frames.clear()
+        cpu.clear()
+        measuring = true
+        idleFrom = 0
+        idleCount = 0
         Log.i(TAG, "set $s")
         car.set(s, animate = !i.hasExtra("capture")) {
             measuring = false
             val iv = frames.zipWithNext { a, b -> (b - a) / 1e6 }
-            Log.i(TAG, "fly frames=${frames.size} interval avg=${"%.1f".format(iv.average())} max=${"%.1f".format(iv.maxOrNull() ?: 0.0)} ms; " +
-                "cpu avg=${"%.2f".format(cpu.average())} max=${"%.2f".format(cpu.maxOrNull() ?: 0.0)} ms; >33ms=${iv.count { it > 33.4 }}")
+            Log.i(
+                TAG,
+                "fly frames=${frames.size} interval avg=${"%.1f".format(iv.average())} max=${"%.1f".format(iv.maxOrNull() ?: 0.0)} ms; " +
+                    "cpu avg=${"%.2f".format(cpu.average())} max=${"%.2f".format(cpu.maxOrNull() ?: 0.0)} ms; >33ms=${iv.count { it > 33.4 }}"
+            )
             idleFrom = SystemClock.elapsedRealtime()
-            car.postDelayed({ Log.i(TAG, "idle 5s rendered=$idleCount (ripple=${s.ripple})"); idleFrom = 0 }, 5000)
+            car.postDelayed({
+                Log.i(TAG, "idle 5s rendered=$idleCount (ripple=${s.ripple})")
+                idleFrom = 0
+            }, 5000)
         }
     }
 
-    override fun onDestroy() { car.destroy(); super.onDestroy() }
+    override fun onDestroy() {
+        car.destroy()
+        super.onDestroy()
+    }
 
-    private companion object { const val TAG = "CAR3D" }
+    private companion object {
+        const val TAG = "CAR3D"
+    }
 }
 
 /**
@@ -121,7 +148,11 @@ class Car3dStageActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); stage.value = stageOf(intent) }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        stage.value = stageOf(intent)
+    }
 
     private fun stageOf(i: Intent) = Stage3d(
         view = View3d.valueOf((i.getStringExtra("view") ?: "hero").uppercase()),
@@ -129,6 +160,6 @@ class Car3dStageActivity : ComponentActivity() {
         ripple = i.getBooleanExtra("ripple", false),
         callouts = i.getStringExtra("callouts").orEmpty().split(',').filter { it.isNotBlank() }.map { Callout3d.valueOf(it.uppercase()) }.toSet(),
         drive = i.getBooleanExtra("drive", false),
-        seat = Seat3d.valueOf((i.getStringExtra("seat") ?: "rr").uppercase()),
+        seat = Seat3d.valueOf((i.getStringExtra("seat") ?: "rr").uppercase())
     )
 }

@@ -46,84 +46,106 @@ import kr.aigyeot.shared.ProtocolJson
  * 공개 모양(생성자·메서드 이름과 인자)은 처음 정한 그대로다. 더한 메서드: [wake], [restoreEvents].
  */
 class Link internal constructor(
-    private val context: Context,
-    private val db: AppDatabase,
+    context: Context,
+    db: AppDatabase,
     private val clock: () -> Long,
     private val post: (Event) -> Unit,
-    private val state: () -> EngineState?,         // 최신 상태 읽기(상황판 호출에 넣는 상태 JSON)
-    private val relay: Relay,
-    private val cipher: TokenCipher,
-    private val probe: (File) -> SongProbe?,
-    private val makeCopy: suspend (File, File) -> LoudnessResult,
+    state: () -> EngineState?, // 최신 상태 읽기(상황판 호출에 넣는 상태 JSON)
+    relay: Relay,
+    cipher: TokenCipher,
+    probe: (File) -> SongProbe?,
+    makeCopy: suspend (File, File) -> LoudnessResult,
     private val scope: CoroutineScope,
-    private val qaWaitMs: Long = Params().qaReplyWaitMs,
-    private val stateReady: suspend () -> Unit = {},   // 호스트 복원 뒤 첫 상태가 공개될 때까지 기다린다: 복원 전에 낸 사건이 Boot·복원 대조보다 앞서지 않게(요약 판정은 Room 행이 기준이라 상태와 무관하다). 취소되면 함께 취소
-    private val postInjected: (Event) -> Unit = post,   // 장면 phone 단계가 주입한 사건: override로 막지 않는 길. [post]는 실제로 받은 사건
+    qaWaitMs: Long = Params().qaReplyWaitMs,
+    private val stateReady: suspend () -> Unit = {}, // 호스트 복원 뒤 첫 상태가 공개될 때까지 기다린다: 복원 전에 낸 사건이 Boot·복원 대조보다 앞서지 않게(요약 판정은 Room 행이 기준이라 상태와 무관하다). 취소되면 함께 취소
+    // 장면 phone 단계가 주입한 사건: override로 막지 않는 길. [post]는 실제로 받은 사건
+    private val postInjected: (Event) -> Unit = post
 ) {
     constructor(
-        context: Context, db: AppDatabase, clock: () -> Long, post: (Event) -> Unit, state: () -> EngineState?,
-        postInjected: (Event) -> Unit = post, stateReady: suspend () -> Unit = {},
+        context: Context,
+        db: AppDatabase,
+        clock: () -> Long,
+        post: (Event) -> Unit,
+        state: () -> EngineState?,
+        postInjected: (Event) -> Unit = post,
+        stateReady: suspend () -> Unit = {}
     ) : this(
         context, db, clock, post, state, OkRelay(RelayAddress.of(context)), KeystoreCipher(), ::probeSong,
         // 잡히지 않은 예외로 앱이 죽지 않게
         { i, o -> SongLoudness.makeCopy(i, o) },
         CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.e(TAG, "link 코루틴 오류", e) }),
-        stateReady = stateReady, postInjected = postInjected,
+        stateReady = stateReady, postInjected = postInjected
     )
 
     private val room = LinkRoom(db)
     private val dao = room.dao
     private val _status = MutableStateFlow(LinkStatus())
-    val status: StateFlow<LinkStatus> = _status   // 차 화면 연결·폰 목록용
+    val status: StateFlow<LinkStatus> = _status // 차 화면 연결·폰 목록용
 
-    private val rx = Mutex()                                    // 받기는 한 번에 하나, seq 순서
+    private val rx = Mutex() // 받기는 한 번에 하나, seq 순서
     private val creds: Creds = Creds(
         context, room, relay, cipher, clock, _status, rx,
-        onRegistered = { outbox.signal(); songs.signal() },
+        onRegistered = {
+            outbox.signal()
+            songs.signal()
+        },
         dropSocket = { connection.dropSocket() },
         resetPairing = { pairing.onInvalidated() },
-        after = { inbox.after(it) },
+        after = { inbox.after(it) }
     )
     private val inbox: Inbox = Inbox(
         room, relay, clock, post, creds, rx, _status,
-        wakeOutbox = { outbox.signal() }, wakeSongs = { songs.signal() }, recheck = { connection.recheck() }, onNewOwner = { pairing.onNewOwner() },
+        wakeOutbox = { outbox.signal() }, wakeSongs = { songs.signal() }, recheck = { connection.recheck() }, onNewOwner = { pairing.onNewOwner() }
     )
     private val connection: Connection = Connection(
         context, room, relay, clock, _status, rx, creds, inbox, scope, stateReady,
-        pairingOpen = { pairing.isOpen }, wakeOutbox = { outbox.signal() }, wakeSongs = { songs.signal() },
+        pairingOpen = { pairing.isOpen }, wakeOutbox = { outbox.signal() }, wakeSongs = { songs.signal() }
     )
     private val outbox: Outbox = Outbox(db, room, relay, clock, creds, rx, scope, after = { inbox.after(it) })
     private val songs: SongWorker = SongWorker(context, room, relay, clock, creds, rx, probe, makeCopy, scope, after = { inbox.after(it) })
-    private val pairing: Pairing = Pairing(room, relay, clock, _status, rx, creds, inbox, scope,
-        kick = { connection.kick() }, recheck = { connection.recheck() })
+    private val pairing: Pairing = Pairing(
+        room, relay, clock, _status, rx, creds, inbox, scope,
+        kick = { connection.kick() }, recheck = { connection.recheck() }
+    )
     private val qaService = QaService(dao, relay, clock, post, state, creds, scope, qaWaitMs)
 
-    private val cmds = Channel<Command>(Channel.UNLIMITED)      // 할 일은 받은 순서대로 한 일꾼이(feeding_state 순서)
+    // 할 일은 받은 순서대로 한 일꾼이(feeding_state 순서)
+    private val cmds = Channel<Command>(Channel.UNLIMITED)
+
     @Volatile private var jobs: List<Job> = emptyList()
 
     init {
         scope.launch {
-            for (c in cmds) try { exec(c) } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { Log.e(TAG, "할 일 실패 ${c::class.simpleName}", e) }
+            for (c in cmds) {
+                try {
+                    exec(c)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "할 일 실패 ${c::class.simpleName}", e)
+                }
+            }
         }
     }
 
     // ---------------------------------------------------------------- 시작·멈춤
 
-    fun start() {                                  // 차 등록·WebSocket·보낼 함(감시 서비스 시작 때)
+    fun start() { // 차 등록·WebSocket·보낼 함(감시 서비스 시작 때)
         if (jobs.isNotEmpty()) return
         jobs = listOf(connection.startLoop(), outbox.startConsumer(), songs.startConsumer(), connection.startRecheck())
-        outbox.watch()   // store가 넣는 report_summary·records_clear도 깨운다(같은 outbox 표)
+        outbox.watch() // store가 넣는 report_summary·records_clear도 깨운다(같은 outbox 표)
         connection.watchNetwork()
         outbox.signal()
         songs.signal()
-        if (pairing.isOpen) pairing.open()   // 연결 화면이 열린 채 다시 시작: stop이 멈춘 코드 갱신도 다시
+        if (pairing.isOpen) pairing.open() // 연결 화면이 열린 채 다시 시작: stop이 멈춘 코드 갱신도 다시
     }
 
-    fun stop() {                                   // 연결 없음(멈춤 조건). 보낼 함은 남긴다
+    fun stop() { // 연결 없음(멈춤 조건). 보낼 함은 남긴다
         jobs.forEach { it.cancel() }
         jobs = emptyList()
-        pairing.stop(); outbox.cancelWake(); songs.cancelWake()
+        pairing.stop()
+        outbox.cancelWake()
+        songs.cancelWake()
         connection.dropSocket()
         outbox.unwatch()
         connection.stopWatching()
@@ -134,15 +156,15 @@ class Link internal constructor(
 
     // ---------------------------------------------------------------- 할 일
 
-    fun handle(cmd: Command) {                     // SendToPhone, Qa(상황판 호출). DeleteRelayRecords는 store가 보낼 함에 넣는다
+    fun handle(cmd: Command) { // SendToPhone, Qa(상황판 호출). DeleteRelayRecords는 store가 보낼 함에 넣는다
         cmds.trySend(cmd)
     }
 
-    internal fun enqueueNow(cmds: List<SendToPhone>, also: () -> Unit = {}): Boolean = outbox.enqueueNow(cmds, also)   // 보낼 함 바로 넣기
+    internal fun enqueueNow(cmds: List<SendToPhone>, also: () -> Unit = {}): Boolean = outbox.enqueueNow(cmds, also) // 보낼 함 바로 넣기
 
     internal suspend fun exec(c: Command) {
         when (c) {
-            is SendToPhone -> retryingSuspend("보낼 함 넣기 ${c.type}") { enqueueNow(listOf(c)) }   // 다 실패하면 할 일 소비가 로그를 남긴다
+            is SendToPhone -> retryingSuspend("보낼 함 넣기 ${c.type}") { enqueueNow(listOf(c)) } // 다 실패하면 할 일 소비가 로그를 남긴다
             is Qa -> scope.launch { qa(c) }
             else -> Unit
         }
@@ -168,7 +190,9 @@ class Link internal constructor(
     /** 시험용: 맨 앞을 고른 직후, 보낸 id를 적기 전에 부른다. 운영에서는 null. */
     internal var afterFrontSelect: (() -> Unit)?
         get() = outbox.afterFrontSelect
-        set(v) { outbox.afterFrontSelect = v }
+        set(v) {
+            outbox.afterFrontSelect = v
+        }
 
     internal suspend fun pumpOnce() = outbox.pumpOnce()
 
@@ -184,13 +208,13 @@ class Link internal constructor(
 
     // ---------------------------------------------------------------- 연결 화면
 
-    fun openPairing() = pairing.open()             // 연결 화면 열림
+    fun openPairing() = pairing.open() // 연결 화면 열림
 
-    fun closePairing() = pairing.close()           // 연결 화면 닫기
+    fun closePairing() = pairing.close() // 연결 화면 닫기
 
-    fun disconnect(deviceId: String) = pairing.disconnect(deviceId)   // 폰 연결 끊기
+    fun disconnect(deviceId: String) = pairing.disconnect(deviceId) // 폰 연결 끊기
 
-    fun refreshPhones() = pairing.refreshPhones()  // 폰 목록 새로고침
+    fun refreshPhones() = pairing.refreshPhones() // 폰 목록 새로고침
 
     // ---------------------------------------------------------------- 복원·장면
 
@@ -203,14 +227,19 @@ class Link internal constructor(
         val care = mutableListOf<Event>()
         room.tx {
             var row = dao.careApplied()
-            var rowCare = row?.let { r -> runCatching { SnapshotJson.decodeFromString(CareView.serializer(), r.summaryJson) }.getOrNull() }
-            if (row != null && rowCare == null) { dao.clearCareApplied(); row = null }   // 깨진 행
+            val rowCare = row?.let { r -> runCatching { SnapshotJson.decodeFromString(CareView.serializer(), r.summaryJson) }.getOrNull() }
+            if (row != null && rowCare == null) {
+                dao.clearCareApplied()
+                row = null
+            } // 깨진 행
             // Room 행이 정답이다. 판정 기준이 행이라, 연결 해제로 행이 지워진 뒤 더 이른 요약이 행이 된 경우도 스냅숏이 아닌 행을 따른다
             val use = row != null && rowCare != null && !(snapshot.care == rowCare && snapshot.careSeq == row.seq && snapshot.careRoom == row.carId)
-            if (use) {   // 처리 완료 뒤 스냅숏 전에 죽어도 요약이 빠지지 않는다. 판단 코어는 care == null일 때만 받으므로 스냅숏 값이 있으면 먼저 비운다
+            if (use) { // 처리 완료 뒤 스냅숏 전에 죽어도 요약이 빠지지 않는다. 판단 코어는 care == null일 때만 받으므로 스냅숏 값이 있으면 먼저 비운다
                 if (snapshot.care != null) care.add(CareCleared(at))
-                care.add(CareSummary(at, rowCare!!, row!!.seq, row.carId))
-            } else if (row == null && snapshot.careSeq != null) care.add(CareCleared(at))   // 중계 seq가 있는 요약은 행이 있던 것이다(장면 주입은 seq 없음). 행을 지운 뒤 스냅숏 전에 죽었다
+                care.add(CareSummary(at, rowCare, row.seq, row.carId))
+            } else if (row == null && snapshot.careSeq != null) {
+                care.add(CareCleared(at)) // 중계 seq가 있는 요약은 행이 있던 것이다(장면 주입은 seq 없음). 행을 지운 뒤 스냅숏 전에 죽었다
+            }
         }
         val fed = dao.profile()?.lastFeedingStart
         val guardians = dao.otherGuardians()
@@ -225,11 +254,14 @@ class Link internal constructor(
      * 장면 'phone' 단계: 받는 type은 feeding_started뿐이다. Room·보낼 함은 쓰지 않고 FeedingStarted(PHONE) 사건 하나만 낸다.
      * 장면 봉투는 seq가 비어 오고 장면은 실제 상태를 바꾸지 않아야 하므로 받기 길(seq·processed_message)을 타지 않는다.
      */
-    suspend fun receiveForScenario(envelopeJson: String) {
+    fun receiveForScenario(envelopeJson: String) {
         val env = runCatching { ProtocolJson.decodeFromString(Envelope.serializer(), envelopeJson) }.getOrNull()
             ?: return Unit.also { Log.w(TAG, "장면 봉투를 읽지 못함") }
-        val at: Long? = if (env.type != "feeding_started") null else
+        val at: Long? = if (env.type != "feeding_started") {
+            null
+        } else {
             runCatching { instantOf(ProtocolJson.decodeFromJsonElement(FeedingStartedBody.serializer(), env.body).at) }.getOrNull()
+        }
         if (at == null) {
             Log.w(TAG, "장면 phone 봉투를 쓰지 않음 type=${env.type}")
             return
@@ -247,10 +279,14 @@ enum class LinkConn { NONE, CONNECTING, CONNECTED, BACKOFF }
 
 data class LinkStatus(
     val registered: Boolean = false,
-    val pairCode: String? = null, val pairUri: String? = null, val pairExpiresAt: Long? = null,
-    val phones: List<LinkedPhone> = emptyList(), val error: String? = null,
-    val conn: LinkConn = LinkConn.NONE,             // 정차 화면 표시
-    val justPaired: String? = null,                 // 실시간 paired로 새로 붙은 기기 id. 바뀌면 화면이 "연결됐어요"
+    val pairCode: String? = null,
+    val pairUri: String? = null,
+    val pairExpiresAt: Long? = null,
+    val phones: List<LinkedPhone> = emptyList(),
+    val error: String? = null,
+    val conn: LinkConn = LinkConn.NONE, // 정차 화면 표시
+    // 실시간 paired로 새로 붙은 기기 id. 바뀌면 화면이 "연결됐어요"
+    val justPaired: String? = null
 )
 
 data class LinkedPhone(val deviceId: String, val role: String, val lastSeenAt: Long?)

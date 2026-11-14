@@ -1,6 +1,5 @@
 package kr.aigyeot.app.exec
 
-import kr.aigyeot.engine.Params
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -9,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kr.aigyeot.engine.Params
 
 // '−30 LUFS ±1 이내로 맞춤': 이득을 곱한 결과를 다시 재어 확인한다
 class SongLoudnessTest {

@@ -11,26 +11,37 @@ import kotlinx.serialization.json.put
 private fun Tx.nursing(ns: NursingStop?) {
     val shown = s.ign.nursingStop?.confirmShown == true
     s = s.copy(ign = s.ign.copy(nursingStop = ns))
-    if (shown && ns?.confirmShown != true) out += HideNotice(Notice.FEEDING_CONFIRM)  // 띄운 확인이 사라지면 알림도 내린다(출발·쉼터 실패·Boot·DROP·답)
+    if (shown && ns?.confirmShown != true) out += HideNotice(Notice.FEEDING_CONFIRM) // 띄운 확인이 사라지면 알림도 내린다(출발·쉼터 실패·Boot·DROP·답)
 }
 
 /** S06의 값. 수유 창이 아니면 null(말하지 않음). 넣을 때(saySinceFeeding)와 꺼낼 때(Rules.refreshed)가 같이 쓴다. */
 internal fun Tx.s06Vars(): Map<String, String>? = if (feeding()) mapOf("elapsed" to hm(now - (s.feedingStart ?: now))) else null
 
-internal fun Tx.saySinceFeeding() { s06Vars()?.let { say(Sid.S06, it) } }
+internal fun Tx.saySinceFeeding() {
+    s06Vars()?.let { say(Sid.S06, it) }
+}
 
 /** 출발 제안: 세션이 열렸고 기어가 D인 첫 경로에서 한 번만 본다. 세션을 연 GearChanged(D)와 같은 Step에서도 본다. */
 internal fun Tx.departOffer() {
     val x = ses ?: return
-    if (s.car.inCall || suspended) return   // 통화·Suspend 중엔 say()가 거절하니 기회(departChecked)를 쓰지 않는다
-    if (!s.car.micRunning) return           // 마이크가 꺼져 있으면 쉼터 질문을 들을 수 없으니 기회를 쓰지 않는다(MicService(true)가 다시 본다)
+    if (s.car.inCall || suspended) return // 통화·Suspend 중엔 say()가 거절하니 기회(departChecked)를 쓰지 않는다
+    if (!s.car.micRunning) return // 마이크가 꺼져 있으면 쉼터 질문을 들을 수 없으니 기회를 쓰지 않는다(MicService(true)가 다시 본다)
     val r = s.car.route
     // 경로가 오면 다시 본다. rests가 비면 DrivingInfo만 먼저 온 것일 수 있다(TBT가 늦다). 같은 Step에 다른 제안이 나갔으면 다음 RouteState로 미룬다
-    if (s.car.gear != Gear.D || offered || routePending() || x.pendingAsk != null ||
+    if (s.car.gear != Gear.D ||
+        offered ||
+        routePending() ||
+        x.pendingAsk != null ||
         s.speech.queue.any { it.sid in OTHER_OFFERS } ||
         OTHER_OFFERS.any { offerBanned(x.spokenAt, s.speech.queue, x.id, it, now, p) } ||
-        x.departChecked || r?.hasDestination != true || r.remainingKm == null || r.remainingSec == null || r.rests.isEmpty()
-    ) return
+        x.departChecked ||
+        r?.hasDestination != true ||
+        r.remainingKm == null ||
+        r.remainingSec == null ||
+        r.rests.isEmpty()
+    ) {
+        return
+    }
     ses { copy(departChecked = true) }
     val fs = s.feedingStart ?: return
     val rest = pickDepartRest(r, fs, s.profile?.feedingIntervalMin, now, p.departLeadMin) ?: return
@@ -45,15 +56,19 @@ internal fun Tx.feedingStarted(e: FeedingStarted) {
     if (laterFeeding(s.feedingStart, e.startedAt)) s = s.copy(feedingStart = e.startedAt)
 }
 
-internal fun Tx.feedingConfirmed(yes: Boolean) {                                                           // 수유 확인 답
+internal fun Tx.feedingConfirmed(yes: Boolean) { // 수유 확인 답
     val ns = s.ign.nursingStop ?: return
-    if (!yes) { if (ns.confirmShown) nursing(null); return }   // 옛 알림의 '아니요'가 확인 전 새 정차를 지우지 않게
+    if (!yes) {
+        if (ns.confirmShown) nursing(null)
+        return
+    } // 옛 알림의 '아니요'가 확인 전 새 정차를 지우지 않게
     val at = ns.firstPAt
     if (!ns.confirmShown || at == null || !gearP) return
     nursing(null)
     if (!laterFeeding(s.feedingStart, at)) return
     s = s.copy(feedingStart = at)
-    out += SaveFeedingStart(at); out += SendToPhone("feeding_state", feedingBody())
+    out += SaveFeedingStart(at)
+    out += SendToPhone("feeding_state", feedingBody())
 }
 
 // ---- 수유실 들름(시동 단위) ----
@@ -62,11 +77,13 @@ internal fun Tx.feedingConfirmed(yes: Boolean) {                                
 internal fun Tx.nursingRequested(restId: String) = nursing(NursingStop.Requested(restId))
 
 /** 그 경유지가 들어갔다. */
-internal fun Tx.nursingAdded() = nursing(when (val ns = s.ign.nursingStop) {
-    null -> null
-    is NursingStop.Parked -> ns.copy(addedAt = now)
-    else -> NursingStop.Added(ns.restId, now)
-})
+internal fun Tx.nursingAdded() = nursing(
+    when (val ns = s.ign.nursingStop) {
+        null -> null
+        is NursingStop.Parked -> ns.copy(addedAt = now)
+        else -> NursingStop.Added(ns.restId, now)
+    }
+)
 
 /** 그 쉼터 실패·수명 표 Nursing 행의 DROP. */
 internal fun Tx.dropNursing() = nursing(null)
@@ -78,7 +95,9 @@ internal fun Tx.nursingParked() {
 }
 
 /** 첫 P 뒤 P에서 나오면 수유 확인을 버린다. */
-internal fun Tx.nursingLeftPark() { if (s.ign.nursingStop?.firstPAt != null) nursing(null) }
+internal fun Tx.nursingLeftPark() {
+    if (s.ign.nursingStop?.firstPAt != null) nursing(null)
+}
 
 /** 첫 P에서 오래 서 있으면 수유 확인을 띄운다. */
 internal fun Tx.nursingTimer() {

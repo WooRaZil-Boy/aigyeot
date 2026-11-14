@@ -1,15 +1,15 @@
 package kr.aigyeot.app.detect
 
+import java.io.File
+import kotlin.math.round
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assume
-import java.io.File
-import kotlin.math.round
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 /**
  * 맥 파이썬 기준값(ref.json)과 소수 둘째 자리까지 대조한다. 녹음·기준값은 저장소 밖 로컬 데이터 폴더에 있다(CC BY-NC 등 데이터셋 라이선스).

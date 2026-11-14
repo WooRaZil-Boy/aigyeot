@@ -10,5 +10,11 @@ internal class CallbackEntry(private val lock: Any, private val lane: (() -> Uni
     fun enter(f: () -> Unit) = lane { locked(f) }
 
     /** 이미 실행기 스레드에서(예약 작업) 잠금 안에서 바로 돌린다. */
-    fun locked(f: () -> Unit) = synchronized(lock) { try { f() } catch (e: Exception) { onError(e) } }
+    fun locked(f: () -> Unit) = synchronized(lock) {
+        try {
+            f()
+        } catch (e: Exception) {
+            onError(e)
+        }
+    }
 }

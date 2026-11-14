@@ -1,5 +1,7 @@
 package kr.aigyeot.app.scenario
 
+import java.time.Instant
+import java.util.PriorityQueue
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,8 +44,6 @@ import kr.aigyeot.engine.VehicleSample
 import kr.aigyeot.engine.WaypointResult
 import kr.aigyeot.engine.YesNo
 import kr.aigyeot.engine.fresh
-import java.time.Instant
-import java.util.PriorityQueue
 
 /**
  * 호스트 없이 장면을 끝까지 돌리는 가짜 세상: 진짜 판단 코어(Engine)를 돌리는 호스트,
@@ -56,15 +56,19 @@ import java.util.PriorityQueue
  * @param micAvailable false면 앱 화면이 없는 것처럼 micOn이 실패한다.
  */
 class FakeWorld(
-    private val cryLenSec: Map<String, Double> = emptyMap(), private val speechMs: Long = 3_000,
-    private val vcFails: Boolean = false, private val micAvailable: Boolean = true, private val audioDelayMs: Long = 0,
-) : HostApi, ScenePorts {
+    private val cryLenSec: Map<String, Double> = emptyMap(),
+    private val speechMs: Long = 3_000,
+    private val vcFails: Boolean = false,
+    private val micAvailable: Boolean = true,
+    private val audioDelayMs: Long = 0
+) : HostApi,
+    ScenePorts {
     var now = T0
     private var state = EngineState.fresh(0, null, emptyList(), emptyList(), null, 0)
     private val _steps = MutableStateFlow<Step?>(null)
     override val steps: StateFlow<Step?> = _steps
     override val controlLog = MutableSharedFlow<ControlLogEntity>()
-    override val stepLog = MutableSharedFlow<Step>()   // 가짜 세상은 run.onStep에 바로 넣는다
+    override val stepLog = MutableSharedFlow<Step>() // 가짜 세상은 run.onStep에 바로 넣는다
     override val stepLogDrops = MutableStateFlow(0L)
     private var run: SceneRun? = null
     val commands = ArrayList<Pair<Long, Command>>()
@@ -78,7 +82,9 @@ class FakeWorld(
     private class Job(val at: Long, val seq: Int, val f: () -> Unit)
     private val queue = PriorityQueue<Job>(compareBy<Job>({ it.at }, { it.seq }))
     private var seq = 0
-    private fun at(t: Long, f: () -> Unit) { queue += Job(t, seq++, f) }
+    private fun at(t: Long, f: () -> Unit) {
+        queue += Job(t, seq++, f)
+    }
 
     // ---- 호스트 ----
     override fun clock() = now
@@ -88,26 +94,36 @@ class FakeWorld(
         state = st.state
         _steps.value = st
         run?.onStep(st)
-        st.commands.forEach { commands += now to it; exec(it) }
+        st.commands.forEach {
+            commands += now to it
+            exec(it)
+        }
     }
     override fun startScenario(setup: ScenarioSetup) {
         this.setup = setup
         state = EngineState.fresh(setup.seed, setup.profile, setup.methods, setup.history, setup.feedingStart, setup.otherGuardians)
-        setup.care?.let { post(CareSummary(now, it)) }   // 호스트와 같게 첫 Step 뒤 요약 흉내
+        setup.care?.let { post(CareSummary(now, it)) } // 호스트와 같게 첫 Step 뒤 요약 흉내
     }
-    override fun endScenario() { ended = true }
+    override fun endScenario() {
+        ended = true
+    }
 
     // ---- 장면 입력 ----
     override fun vc(method: String, path: String, done: (Boolean, String) -> Unit) {
         vcSent += "$method $path"
-        if (vcFails) { done(false, "모의 실패"); return }
+        if (vcFails) {
+            done(false, "모의 실패")
+            return
+        }
         done(true, "")
         val q = path.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.associate { it.substringBefore('=') to it.substringAfter('=') }
         at(now + 100) {
             when {
                 path.startsWith("/vehicle/gear") -> post(GearChanged(now, if (q["gear"] == "Drive") Gear.D else Gear.P))
                 path.startsWith("/vehicle/controls") ->
-                    post(VehicleSample(now, q.getValue("speed").toDouble(), q.getValue("brake").toInt() > 0, q.getValue("steering").toDouble(), TurnSignal.NONE))
+                    post(
+                        VehicleSample(now, q.getValue("speed").toDouble(), q.getValue("brake").toInt() > 0, q.getValue("steering").toDouble(), TurnSignal.NONE)
+                    )
             }
         }
     }
@@ -122,11 +138,19 @@ class FakeWorld(
     }
     override fun micOn(): Boolean {
         if (!micAvailable) return false
-        at(now + 300) { mic = true; post(MicService(now, true, MicPath.HOME_BUTTON)); detect(now + 3 * WINDOW) }
+        at(now + 300) {
+            mic = true
+            post(MicService(now, true, MicPath.HOME_BUTTON))
+            detect(now + 3 * WINDOW)
+        }
         return true
     }
-    override fun phone(envelopeJson: String, done: (Boolean, String) -> Unit) { done(true, "") }
-    override fun simulated(what: String) { simulated++ }
+    override fun phone(envelopeJson: String, done: (Boolean, String) -> Unit) {
+        done(true, "")
+    }
+    override fun simulated(what: String) {
+        simulated++
+    }
 
     /** 가짜 감지기: 0.975초마다 3창(2.925초) 구간. 울음이 구간의 절반 이상이면 p = 0.95, 경보는 이 구간과 앞 구간이 모두 큼. */
     private fun detect(t: Long): Unit = at(t) {
@@ -152,12 +176,13 @@ class FakeWorld(
             is Speak -> at(now + speechMs) { post(SpeechDone(now, c.utteranceId, true)) }
             is Ask -> {
                 at(now + speechMs) { post(SpeechDone(now, c.askId, true)) }
-                at(now + speechMs + c.listenMs) { post(Answer(now, c.askId, YesNo.NONE)) }   // 답이 이미 왔으면 판단 코어가 버린다
+                at(now + speechMs + c.listenMs) { post(Answer(now, c.askId, YesNo.NONE)) } // 답이 이미 왔으면 판단 코어가 버린다
             }
             is Listen -> at(now + c.ms) { post(Heard(now, c.listenId, null)) }
             is SetSeatHeat -> result(c.cmdId, ControlKind.SEAT_HEAT, c.areas.associateWith { c.level.toDouble() })
             is SetReadingLight -> result(c.cmdId, ControlKind.READING_LIGHT, c.areas.associateWith { if (c.on) 1.0 else 0.0 })
-            is LowerHvac -> at(now + 300) {   // 22℃에서 시작해 deltaC만큼 내린 실제 before·after(최솟값 15℃)
+            is LowerHvac -> at(now + 300) {
+                // 22℃에서 시작해 deltaC만큼 내린 실제 before·after(최솟값 15℃)
                 val before = hvacC
                 hvacC = maxOf(15.0, before + c.deltaC)
                 c.areas.forEach { area ->
@@ -188,17 +213,27 @@ class FakeWorld(
         startScenario(r.setup())
         tick(now + 1_000)
         while (!r.done(now)) {
-            if (now > r.endAt + 60_000) { r.finish("시간 초과"); break }
+            if (now > r.endAt + 60_000) {
+                r.finish("시간 초과")
+                break
+            }
             r.advance(now)
             val next = now + SLICE
-            while (queue.isNotEmpty() && queue.peek()!!.at <= next) { val j = queue.poll()!!; now = maxOf(now, j.at); j.f() }
+            while (queue.isNotEmpty() && queue.peek()!!.at <= next) {
+                val j = queue.poll()!!
+                now = maxOf(now, j.at)
+                j.f()
+            }
             now = next
         }
         endScenario()
         return r.row()
     }
 
-    private fun tick(t: Long): Unit = at(t) { post(Tick(now)); tick(t + 1_000) }
+    private fun tick(t: Long): Unit = at(t) {
+        post(Tick(now))
+        tick(t + 1_000)
+    }
 
     companion object {
         val T0: Long = Instant.parse("2026-11-05T00:00:00Z").toEpochMilli()

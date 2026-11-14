@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import java.time.YearMonth
+import kotlin.math.roundToInt
 import kr.aigyeot.app.R
 import kr.aigyeot.app.store.db.ChildProfileEntity
 import kr.aigyeot.app.store.db.consentChecked
@@ -63,8 +65,6 @@ import kr.aigyeot.app.ui.car3d.Stage3d
 import kr.aigyeot.app.ui.car3d.View3d
 import kr.aigyeot.engine.CarSeat
 import kr.aigyeot.engine.MethodKind
-import java.time.YearMonth
-import kotlin.math.roundToInt
 
 /** 이 폭보다 좁으면 분할 840 배치: 한 줄로 쌓는다. 단독 창은 1706. */
 internal val NarrowPage = 1200.dp
@@ -76,7 +76,11 @@ internal val SEATS = listOf(CarSeat.LEFT to "뒷좌석 왼쪽", CarSeat.CENTER t
 internal fun nearestSeat(pts: Map<Seat3d, Offset>, t: Offset, r: Float): Seat3d? =
     pts.minByOrNull { (it.value - t).getDistance() }?.takeIf { (it.value - t).getDistance() <= r }?.key
 
-internal fun seat3d(seat: CarSeat): Seat3d = when (seat) { CarSeat.LEFT -> Seat3d.RL; CarSeat.CENTER -> Seat3d.RC; CarSeat.RIGHT -> Seat3d.RR }
+internal fun seat3d(seat: CarSeat): Seat3d = when (seat) {
+    CarSeat.LEFT -> Seat3d.RL
+    CarSeat.CENTER -> Seat3d.RC
+    CarSeat.RIGHT -> Seat3d.RR
+}
 
 /** 저장된 자리 이름(ChildProfileEntity.carseat) → 자리. 모르는 값이면 기본 오른쪽(첫 설정 기본값과 같다). */
 internal fun carSeatOf(name: String?): CarSeat = CarSeat.entries.firstOrNull { it.name == name } ?: CarSeat.RIGHT
@@ -92,9 +96,15 @@ internal fun carSeatOf(name: String?): CarSeat = CarSeat.entries.firstOrNull { i
  */
 @Composable
 fun SetupScreen(
-    old: ChildProfileEntity?, now: () -> Long, noRearOutput: Boolean, onBack: (() -> Unit)?,
-    onSongs: (() -> Unit)? = null, onDemo: (() -> Unit)? = null, onClear: (() -> Unit)? = null,
-    clearEnabled: Boolean = true, onSave: (ChildProfileEntity) -> Unit,
+    old: ChildProfileEntity?,
+    now: () -> Long,
+    noRearOutput: Boolean,
+    onBack: (() -> Unit)?,
+    onSongs: (() -> Unit)? = null,
+    onDemo: (() -> Unit)? = null,
+    onClear: (() -> Unit)? = null,
+    clearEnabled: Boolean = true,
+    onSave: (ChildProfileEntity) -> Unit
 ) = Column(Modifier.fillMaxSize()) {
     val ym = birthMonthOf(old?.birthYm, now())
     var consent by rememberSaveable { mutableStateOf(old.consentChecked()) }
@@ -118,22 +128,37 @@ fun SetupScreen(
         FieldLabel("아기 별명")
         val fieldShape = RoundedCornerShape(CarRadius.m)
         BasicTextField(
-            nickname, { nickname = it.take(20) }, singleLine = true,
-            textStyle = CarType.titleS.copy(fontWeight = FontWeight(400), lineHeight = CarType.titleS.fontSize, color = p.textPrimary),   // 입력칸 글자 400 32px/1
+            nickname,
+            { nickname = it.take(20) },
+            singleLine = true,
+            textStyle = CarType.titleS.copy(fontWeight = FontWeight(400), lineHeight = CarType.titleS.fontSize, color = p.textPrimary), // 입력칸 글자 400 32px/1
             cursorBrush = SolidColor(p.accent),
             modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).clip(fieldShape).background(p.surface).border(3.dp, p.line, fieldShape)
                 .semantics { contentDescription = "아기 별명" },
-            decorationBox = { inner -> Box(Modifier.padding(horizontal = 30.dp), Alignment.CenterStart) { inner() } },
+            decorationBox = { inner -> Box(Modifier.padding(horizontal = 30.dp), Alignment.CenterStart) { inner() } }
         )
         // 값 줄 둘: 누르면 그 줄의 고르기 창. 도움말은 카드 바로 아래 한 줄(없으면 두지 않는다)
         val birth = YearMonth.of(year, month)
         RowsCard(Modifier.padding(top = 24.dp)) {
-            ValueRow("태어난 해·달", ageText(birth, now()), birthMonthText(birth)) { dYear = year; dMonth = month; pick = Pick.BIRTH }
+            ValueRow("태어난 해·달", ageText(birth, now()), birthMonthText(birth)) {
+                dYear = year
+                dMonth = month
+                pick = Pick.BIRTH
+            }
             Spacer(Modifier.height(6.dp))
-            ValueRow("평소 수유 간격", null, intervalText(interval)) { dInterval = interval; pick = Pick.INTERVAL }
+            ValueRow("평소 수유 간격", null, intervalText(interval)) {
+                dInterval = interval
+                pick = Pick.INTERVAL
+            }
         }
-        setupHelp(birth, interval, now())?.let { Text(it, style = CarType.label.copy(lineHeight = 32.sp), color = p.textTertiary,
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 12.dp)) }
+        setupHelp(birth, interval, now())?.let {
+            Text(
+                it,
+                style = CarType.label.copy(lineHeight = 32.sp),
+                color = p.textTertiary,
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 12.dp)
+            )
+        }
         RowsCard(Modifier.padding(top = 24.dp)) {
             // 형제 여부는 뒷창 잠금에만 쓰는 값이라 스위치 이름을 하는 일로
             SwitchRow("뒷창 잠그기", "형제·자매가 함께 탈 때 켜요", sibling, R.drawable.ic_users) { sibling = it }
@@ -143,50 +168,88 @@ fun SetupScreen(
         CarButton("저장하기", Modifier.fillMaxWidth().padding(top = 28.dp), BtnKind.BRAND, enabled = canSave(consent, nickname)) {
             onSave(profileEntity(old, nickname, YearMonth.of(year, month), seat, interval, sibling, song, front, noRearOutput, now()))
         }
-        if (onSongs != null || onDemo != null || onClear != null) RowsCard(Modifier.padding(top = 28.dp)) {
-            val chev: @Composable () -> Unit = { LineIcon(R.drawable.ic_chevron_right, 36.dp, p.textTertiary) }
-            if (onSongs != null) ListRow("우리 노래", icon = R.drawable.ic_song, onClick = onSongs, trailing = chev)
-            if (onDemo != null) ListRow("시연·측정", icon = R.drawable.ic_activity, onClick = onDemo, trailing = chev)
-            if (onClear != null) ListRow("모든 기록 지우기", if (clearEnabled) "프로필·연결·노래는 남겨요" else "장면이 끝나면 지울 수 있어요", R.drawable.ic_trash_2,
-                enabled = clearEnabled, onClick = { pick = Pick.CLEAR })   // 장면 중에는 호스트가 지우기를 받지 않는다(debug 장면만)
+        if (onSongs != null || onDemo != null || onClear != null) {
+            RowsCard(Modifier.padding(top = 28.dp)) {
+                val chev: @Composable () -> Unit = { LineIcon(R.drawable.ic_chevron_right, 36.dp, p.textTertiary) }
+                if (onSongs != null) ListRow("우리 노래", icon = R.drawable.ic_song, onClick = onSongs, trailing = chev)
+                if (onDemo != null) ListRow("시연·측정", icon = R.drawable.ic_activity, onClick = onDemo, trailing = chev)
+                if (onClear != null) {
+                    ListRow(
+                        "모든 기록 지우기",
+                        if (clearEnabled) "프로필·연결·노래는 남겨요" else "장면이 끝나면 지울 수 있어요",
+                        R.drawable.ic_trash_2,
+                        enabled = clearEnabled,
+                        onClick = { pick = Pick.CLEAR }
+                    ) // 장면 중에는 호스트가 지우기를 받지 않는다(debug 장면만)
+                }
+            }
         }
     }
 
     Header("아기 설정", onBack)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < NarrowPage
-        if (narrow) Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 44.dp, end = 44.dp, top = 32.dp, bottom = 40.dp)) {
-            SeatPick(seat, narrow = true) { seat = it }
-            Spacer(Modifier.height(40.dp))
-            form()
-        } else Row(Modifier.fillMaxSize().padding(start = 44.dp, end = 44.dp, top = 32.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-            Column(Modifier.width(600.dp)) { SeatPick(seat, narrow = false) { seat = it } }   // 자리 고르기는 고정하고 양식만 스크롤
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 40.dp)) { form() }
+        if (narrow) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 44.dp, end = 44.dp, top = 32.dp, bottom = 40.dp)) {
+                SeatPick(seat, narrow = true) { seat = it }
+                Spacer(Modifier.height(40.dp))
+                form()
+            }
+        } else {
+            Row(Modifier.fillMaxSize().padding(start = 44.dp, end = 44.dp, top = 32.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                Column(Modifier.width(600.dp)) { SeatPick(seat, narrow = false) { seat = it } } // 자리 고르기는 고정하고 양식만 스크롤
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 40.dp)) { form() }
+            }
         }
     }
     when (pick) {
-        Pick.BIRTH -> Popup("태어난 해·달", ageText(YearMonth.of(dYear, dMonth), now()), "고르기", "취소",
-            onConfirm = { year = dYear; month = dMonth; pick = null }, onDismiss = { pick = null }) {
+        Pick.BIRTH -> Popup(
+            "태어난 해·달",
+            ageText(YearMonth.of(dYear, dMonth), now()),
+            "고르기",
+            "취소",
+            onConfirm = {
+                year = dYear
+                month = dMonth
+                pick = null
+            },
+            onDismiss = { pick = null }
+        ) {
             WheelPanel {
                 val t = now()
-                val years = birthYears(t, saved = year)   // 양식의 이른 해(저장값)는 목록에 더해 지킨다
+                val years = birthYears(t, saved = year) // 양식의 이른 해(저장값)는 목록에 더해 지킨다
                 Wheel(years, years.indexOf(dYear), "태어난 해", { "${it}년" }) { i ->
-                    clampBirth(years[i], dMonth, t).let { dYear = it.year; dMonth = it.monthValue }
+                    clampBirth(years[i], dMonth, t).let {
+                        dYear = it.year
+                        dMonth = it.monthValue
+                    }
                 }
                 val months = birthMonths(dYear, t)
                 Wheel(months, months.indexOf(dMonth), "태어난 달", { "${it}월" }) { i -> dMonth = months[i] }
             }
         }
-        Pick.INTERVAL -> Popup("평소 수유 간격", setupHelp(YearMonth.of(year, month), dInterval, now()), "고르기", "취소",
-            onConfirm = { interval = dInterval; pick = null }, onDismiss = { pick = null }) {
+        Pick.INTERVAL -> Popup(
+            "평소 수유 간격",
+            setupHelp(YearMonth.of(year, month), dInterval, now()),
+            "고르기",
+            "취소",
+            onConfirm = {
+                interval = dInterval
+                pick = null
+            },
+            onDismiss = { pick = null }
+        ) {
             WheelPanel {
-                val list = intervals(interval)   // 목록 밖 저장값(30분 단위가 아님)은 크기 순 자리에 더해 지킨다
+                val list = intervals(interval) // 목록 밖 저장값(30분 단위가 아님)은 크기 순 자리에 더해 지킨다
                 Wheel(list, list.indexOf(dInterval), "평소 수유 간격", ::intervalText) { i -> dInterval = list[i] }
             }
         }
         Pick.CONSENT -> Popup(CONSENT_DETAIL_TITLE, CONSENT_DETAIL, "닫기", null, onConfirm = { pick = null }, onDismiss = { pick = null })
         // 장면은 시연 화면에서만 시작해 창이 열린 채 장면이 되지 않는다
-        Pick.CLEAR -> Popup("모든 기록을 지울까요?", CLEAR_DETAIL, "지우기", "닫기", onConfirm = { pick = null; onClear?.invoke() }, onDismiss = { pick = null })
+        Pick.CLEAR -> Popup("모든 기록을 지울까요?", CLEAR_DETAIL, "지우기", "닫기", onConfirm = {
+            pick = null
+            onClear?.invoke()
+        }, onDismiss = { pick = null })
         null -> {}
     }
 }
@@ -205,19 +268,22 @@ internal const val CLEAR_DETAIL = "주행 기록과 달래기 성적을 모두 �
 private fun Consent(on: Boolean, onToggle: (Boolean) -> Unit, onMore: () -> Unit) {
     val p = LocalPalette.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(CarRadius.l)).background(p.surface).padding(horizontal = 32.dp, vertical = 28.dp)) {
-        Row(Modifier.fillMaxWidth().toggleable(on, null, null, role = Role.Checkbox, onValueChange = onToggle),
-                horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-            Box(Modifier.offset(y = (-4).dp)) { CheckBox(on) }   // 체크 칸 가운데를 굵은 줄 첫 줄(38) 가운데에
+        Row(
+            Modifier.fillMaxWidth().toggleable(on, null, null, role = Role.Checkbox, onValueChange = onToggle),
+            horizontalArrangement = Arrangement.spacedBy(22.dp)
+        ) {
+            Box(Modifier.offset(y = (-4).dp)) { CheckBox(on) } // 체크 칸 가운데를 굵은 줄 첫 줄(38) 가운데에
             Column(Modifier.weight(1f)) {
                 Text(CONSENT_TITLE, style = CarType.bodyL.copy(fontWeight = FontWeight(700), lineHeight = 38.sp), color = p.textPrimary)
                 Text(CONSENT_SUMMARY, style = CarType.label.copy(lineHeight = 32.sp), color = p.textSecondary, modifier = Modifier.padding(top = 8.dp))
             }
         }
         Row(
-            Modifier.padding(start = 70.dp).heightIn(min = 80.dp)   // 글 열에 맞춤(체크 48 + 사이 22)
+            Modifier.padding(start = 70.dp).heightIn(min = 80.dp) // 글 열에 맞춤(체크 48 + 사이 22)
                 .press(label = "AI 서버로 가는 정보 자세히 보기", shape = RoundedCornerShape(CarRadius.s), pressedBg = p.ink(8), onClick = onMore)
                 .semantics { contentDescription = "AI 서버로 가는 정보 자세히 보기" }.padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text("자세히 보기", style = CarType.label.copy(fontSize = 26.sp, fontWeight = FontWeight(600)), color = p.textSecondary)
             LineIcon(R.drawable.ic_chevron_right, 28.dp, p.textSecondary)
@@ -241,25 +307,40 @@ private fun ValueRow(title: String, sub: String?, value: String, onClick: () -> 
 @Composable
 private fun SeatPick(seat: CarSeat, narrow: Boolean, onSeat: (CarSeat) -> Unit) {
     val p = LocalPalette.current
-    var pts by remember { mutableStateOf<Map<Seat3d, Offset>>(emptyMap()) }   // 같은 값이면 다시 그리지 않는다(구조 비교)
+    var pts by remember { mutableStateOf<Map<Seat3d, Offset>>(emptyMap()) } // 같은 값이면 다시 그리지 않는다(구조 비교)
     val glow = lerp(p.stage, Color.White, 0.55f)
     Box(
         Modifier.fillMaxWidth().aspectRatio(if (narrow) 1.3f else 1200f / 1400f).clip(RoundedCornerShape(48.dp))
-            .drawBehind { drawRect(Brush.radialGradient(listOf(glow, p.stage), center, size.width * 0.7f)) },
+            .drawBehind { drawRect(Brush.radialGradient(listOf(glow, p.stage), center, size.width * 0.7f)) }
     ) {
         Car3dStill(
-            Stage3d(view = View3d.TOP, light = Light3d.LISTEN, seat = seat3d(seat)), Modifier.fillMaxSize(),
-            onRender = if (narrow) null else { v -> pts = Seat3d.entries.mapNotNull { s -> v.project(s.anchor)?.let { s to Offset(it[0], it[1]) } }.toMap() },
+            Stage3d(view = View3d.TOP, light = Light3d.LISTEN, seat = seat3d(seat)),
+            Modifier.fillMaxSize(),
+            onRender = if (narrow) null else { v -> pts = Seat3d.entries.mapNotNull { s -> v.project(s.anchor)?.let { s to Offset(it[0], it[1]) } }.toMap() }
         )
         if (!narrow) {
             SEATS.forEach { (c, label) ->
-                pts[seat3d(c)]?.let { o -> SeatHit(c == seat, label, Modifier.offset { IntOffset(o.x.roundToInt() - 48.dp.roundToPx(),
-                        o.y.roundToInt() - 48.dp.roundToPx()) }) { onSeat(c) } }
+                pts[seat3d(c)]?.let { o ->
+                    SeatHit(
+                        c == seat,
+                        label,
+                        Modifier.offset {
+                            IntOffset(
+                                o.x.roundToInt() - 48.dp.roundToPx(),
+                                o.y.roundToInt() - 48.dp.roundToPx()
+                            )
+                        }
+                    ) { onSeat(c) }
+                }
             }
             // 누름은 가장 가까운 자리로: 위에서 본 차의 자리 간격(약 52)이 원 96보다 좁아, 원마다 누름을 받으면 나중 원이 앞 원을 가린다
-            Box(Modifier.matchParentSize().pointerInput(pts) {
-                detectTapGestures { t -> nearestSeat(pts, t, 48.dp.toPx())?.let { s -> SEATS.firstOrNull { seat3d(it.first) == s }?.let { onSeat(it.first) } } }
-            })
+            Box(
+                Modifier.matchParentSize().pointerInput(pts) {
+                    detectTapGestures { t ->
+                        nearestSeat(pts, t, 48.dp.toPx())?.let { s -> SEATS.firstOrNull { seat3d(it.first) == s }?.let { onSeat(it.first) } }
+                    }
+                }
+            )
         }
     }
     FieldLabel("카시트 자리")
@@ -272,15 +353,29 @@ private fun SeatHit(on: Boolean, label: String, modifier: Modifier, onClick: () 
     val a = LocalPalette.current.accent
     Box(
         // 손가락 누름은 SeatPick이 가장 가까운 자리로 고른다(겹침). 여기는 접근성 동작만(읽어 주기·두 번 눌러 고르기)
-        modifier.size(96.dp).semantics { contentDescription = label; selected = on; role = Role.RadioButton; onClick(label) { onClick(); true } }
+        modifier.size(96.dp).semantics {
+            contentDescription = label
+            selected = on
+            role = Role.RadioButton
+            onClick(label) {
+                onClick()
+                true
+            }
+        }
             .drawBehind {
                 val r = size.minDimension / 2
                 if (on) drawCircle(a.copy(alpha = 0.14f), r + 10.dp.toPx())
                 drawCircle(a.copy(alpha = if (on) 0.16f else 0.08f), r)
                 val w = (if (on) 4 else 3).dp.toPx()
-                drawCircle(if (on) a else a.copy(alpha = 0.6f), r - w / 2, style = Stroke(w,
-                        pathEffect = if (on) null else PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 7.dp.toPx()))))
-            },
+                drawCircle(
+                    if (on) a else a.copy(alpha = 0.6f),
+                    r - w / 2,
+                    style = Stroke(
+                        w,
+                        pathEffect = if (on) null else PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 7.dp.toPx()))
+                    )
+                )
+            }
     )
 }
 
@@ -299,15 +394,20 @@ internal fun Car3dStill(stage: Stage3d, modifier: Modifier = Modifier, onRender:
     val load = remember { StageLoad() }
     Box(modifier) {
         AndroidView(
-            factory = { CarView(it, interactive = false).also { v -> v.onFirstFrame = { load.firstFrame(v, hide = true) }; v.onFailed = load::failed } },
+            factory = {
+                CarView(it, interactive = false).also { v ->
+                    v.onFirstFrame = { load.firstFrame(v, hide = true) }
+                    v.onFailed = load::failed
+                }
+            },
             modifier = Modifier.fillMaxSize(),
             update = { v ->
                 v.dark = dark
                 v.onRender = onRender?.let { f -> { f(v) } }
-                stage.copy(reducedMotion = true).let { s -> if (v.state != s) v.set(s, animate = false) }   // 정지 그림: 효과 움직임 없음
+                stage.copy(reducedMotion = true).let { s -> if (v.state != s) v.set(s, animate = false) } // 정지 그림: 효과 움직임 없음
             },
-            onRelease = { it.destroy() },
+            onRelease = { it.destroy() }
         )
-        StageMarkLayer(load, reduced = reducedMotion(), drive = false)   // 정차 화면에서만 열린다
+        StageMarkLayer(load, reduced = reducedMotion(), drive = false) // 정차 화면에서만 열린다
     }
 }

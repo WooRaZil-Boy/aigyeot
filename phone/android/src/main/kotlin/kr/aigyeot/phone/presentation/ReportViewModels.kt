@@ -53,7 +53,7 @@ data class GuardiansUiState(
     val online: Boolean,
     val busy: Boolean,
     val error: String?,
-    val invite: InviteResponse?,
+    val invite: InviteResponse?
 )
 
 /** 차를 뺀 연결된 폰, 인계 알림 받기는 중계 값(없으면 꺼짐). */
@@ -65,7 +65,7 @@ class GuardiansViewModel(
     connection: KeepConnected,
     private val invite: Invite,
     private val setHandoffAlerts: SetHandoffAlerts,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     private data class Local(val busy: Boolean = false, val error: String? = null, val invite: InviteResponse? = null)
 

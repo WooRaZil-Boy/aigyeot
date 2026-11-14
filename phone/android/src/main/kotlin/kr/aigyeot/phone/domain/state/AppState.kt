@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.state
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +20,6 @@ import kr.aigyeot.phone.domain.model.withNoticeLine
 import kr.aigyeot.phone.domain.repository.LinkMarks
 import kr.aigyeot.phone.domain.repository.Mark
 import kr.aigyeot.phone.domain.repository.MarkEdit
-import java.util.concurrent.ConcurrentHashMap
 
 // 앱 수명 메모리 상태의 원본. 칸마다 뜻 하나, 바꾸는 곳은 그 클래스의 메서드뿐이다.
 
@@ -51,8 +51,7 @@ class Notices {
     fun saveFailed() = addLine(SAVE_FAILED)
 
     /** 저장해 둔 버린 메시지 안내를 띠에 더한다. 떠 있는 안내는 덮지 않고, 같은 글은 한 번. */
-    fun showDrops(unseenDrops: Map<String, String>) =
-        _notice.update { withDropNotices(it, unseenDrops.filterKeys { id -> id !in dismissed }.values.toList()) }
+    fun showDrops(unseenDrops: Map<String, String>) = _notice.update { withDropNotices(it, unseenDrops.filterKeys { id -> id !in dismissed }.values.toList()) }
 
     /** 뒤늦게 차 반영이 확인돼 버림 표시에서 걷은 수유가 있으면, 남은 수유 버림이 없을 때 띠의 그 줄을 지운다. */
     fun pruneFeedingDrop(unseenDrops: Map<String, String>) {

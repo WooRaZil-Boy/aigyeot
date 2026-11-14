@@ -1,14 +1,14 @@
 package kr.aigyeot.shared
 
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /** `protocol/`의 모든 예제를 해당 타입으로 decode → encode 해 원래 JSON과 트리로 같은지 본다. */
 class ProtocolFixturesTest {
@@ -63,7 +63,7 @@ class ProtocolFixturesTest {
         "api_llm_request_care" to LlmRequest.serializer(),
         "api_llm_response" to LlmResponse.serializer(),
         "api_llm_response_tool" to LlmResponse.serializer(),
-        "api_llm_response_answer" to LlmResponse.serializer(),
+        "api_llm_response_answer" to LlmResponse.serializer()
     )
 
     private fun roundTrip(text: String, serializer: KSerializer<*>): Pair<JsonElement, JsonElement> {
@@ -92,6 +92,7 @@ class ProtocolFixturesTest {
                 val env = json.decodeFromString(Envelope.serializer(), text)
                 assertEquals(target, env.type, "${f.name}: type")
                 val bs = assertNotNull(bodySerializers[target], "${f.name}: body 직렬화기 없음")
+
                 @Suppress("UNCHECKED_CAST")
                 val s = bs as KSerializer<Any>
                 val body: JsonObject = env.body

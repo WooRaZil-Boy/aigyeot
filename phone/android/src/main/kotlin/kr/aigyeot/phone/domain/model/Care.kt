@@ -1,11 +1,11 @@
 package kr.aigyeot.phone.domain.model
 
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kr.aigyeot.shared.ReportSummaryBody
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kr.aigyeot.shared.ReportSummaryBody
 
 // 돌봄 기록. 폰 안에만 두는 care.json 한 파일이다. 키·값 글자는 iOS와 같다.
 // 규칙: 최대 길이를 넘은 진행 중 기록을 빠른 길로 닫으면 끝 모름, 차 기록 줄 글자,
@@ -61,7 +61,7 @@ data class CareEvent(
     val source: CareSource = CareSource.PHONE,
     val createdAt: Long,
     val updatedAt: Long,
-    val deletedAt: Long? = null,
+    val deletedAt: Long? = null
 )
 
 @Serializable
@@ -70,7 +70,7 @@ data class CareFile(
     val events: List<CareEvent> = emptyList(),
     val childNickname: String? = null,
     val sleepDiaperEnabled: Boolean = false,
-    val migratedFeedings: Boolean = false,
+    val migratedFeedings: Boolean = false
 )
 
 /** 수유·잠이고 끝이 없고 끝 모름도 아니며 지우지 않았다. */
@@ -82,9 +82,11 @@ fun CareFile.ongoing(kind: CareKind): CareEvent? = events.firstOrNull { it.kind 
 fun CareEvent.elapsed(now: Long) = (now - startAt).coerceAtLeast(0)
 
 /** 진행 중 기록을 지금 닫는다. 최대 길이를 넘었으면 끝 모름으로 닫는다. */
-private fun CareEvent.closed(now: Long): CareEvent =
-    if (now - startAt > (kind.maxMs ?: Long.MAX_VALUE)) copy(endUnknown = true, updatedAt = now)
-    else copy(endAt = maxOf(now, startAt), updatedAt = now)
+private fun CareEvent.closed(now: Long): CareEvent = if (now - startAt > (kind.maxMs ?: Long.MAX_VALUE)) {
+    copy(endUnknown = true, updatedAt = now)
+} else {
+    copy(endAt = maxOf(now, startAt), updatedAt = now)
+}
 
 /** `closedPrevious`는 이번 시작으로 닫힌 앞 기록(닫힌 뒤 모양). 없으면 null. */
 data class Started(val file: CareFile, val closedPrevious: CareEvent?) {
@@ -100,8 +102,7 @@ fun CareFile.start(kind: CareKind, now: Long, zone: String, side: FeedSide? = nu
 }
 
 /** 띠: "앞 수유를 끝냈어요", 끝 모름으로 닫았으면 " · 끝 시각 모름"을 붙인다. */
-fun restartNotice(closed: CareEvent): String =
-    (if (closed.kind == CareKind.SLEEP) "앞 잠을 끝냈어요" else "앞 수유를 끝냈어요") + if (closed.endUnknown) " · 끝 시각 모름" else ""
+fun restartNotice(closed: CareEvent): String = (if (closed.kind == CareKind.SLEEP) "앞 잠을 끝냈어요" else "앞 수유를 끝냈어요") + if (closed.endUnknown) " · 끝 시각 모름" else ""
 
 /** 타이머·잠금 화면의 '끝내기'. 최대 길이를 넘었으면 끝 모름으로 닫는다. 진행 중이 아니면 그대로. */
 fun CareFile.endNow(id: String, now: Long) = copy(events = events.map { if (it.id == id && it.isOngoing) it.closed(now) else it })
@@ -227,8 +228,7 @@ fun CareFile.migrated(feedings: List<FeedingRecord>, zone: String): CareFile {
 }
 
 /** 지우지 않은 수유 중 가장 늦은 시작과 차의 마지막 수유 시작 중 늦은 것. */
-fun lastFeedingAt(care: CareFile, state: PhoneState): Long? =
-    listOfNotNull(care.lastFeedStart(), instantOf(state.feeding?.value?.lastFeedingStart)).maxOrNull()
+fun lastFeedingAt(care: CareFile, state: PhoneState): Long? = listOfNotNull(care.lastFeedStart(), instantOf(state.feeding?.value?.lastFeedingStart)).maxOrNull()
 
 fun CareFile.lastFeedStart(): Long? = events.lastFeedStart()
 
@@ -253,8 +253,7 @@ fun durationOn(events: List<CareEvent>, kind: CareKind, date: LocalDate, zone: Z
 }
 
 /** 빠른 버튼(순서: 수유, 메모, 켜면 잠·기저귀). */
-fun quickKinds(sleepDiaper: Boolean) =
-    listOf(CareKind.FEED, CareKind.NOTE) + if (sleepDiaper) listOf(CareKind.SLEEP, CareKind.DIAPER) else emptyList()
+fun quickKinds(sleepDiaper: Boolean) = listOf(CareKind.FEED, CareKind.NOTE) + if (sleepDiaper) listOf(CareKind.SLEEP, CareKind.DIAPER) else emptyList()
 
 /** 패턴. 날짜는 오래된 것부터 오늘까지 7개. 잠·기저귀를 끄면 그 칸은 null. */
 data class CarePattern(
@@ -264,7 +263,7 @@ data class CarePattern(
     val feedGapsMs: List<Long>,
     val sleepPerDayMs: List<Long>?,
     val diapersPerDay: List<Int>?,
-    val carCryEpisodes: Int,
+    val carCryEpisodes: Int
 ) {
     /** 보통 간격(중앙값). 간격이 5개 미만이면 null(간격에서 계산). */
     val feedIntervalMs: Long? get() = CareStats.usualGap(feedGapsMs)
@@ -282,8 +281,7 @@ data class CarePattern(
 }
 
 /** pattern.value: 횟수 "평균 {n}번"(소수 첫째 자리), 기록한 날이 없으면 "기록 없음". */
-fun avgCountText(perDay: List<Int>): String =
-    CareStats.perRecordedDay(perDay)?.let { "평균 ${String.format(java.util.Locale.ROOT, "%.1f", it)}번" } ?: "기록 없음"
+fun avgCountText(perDay: List<Int>): String = CareStats.perRecordedDay(perDay)?.let { "평균 ${String.format(java.util.Locale.ROOT, "%.1f", it)}번" } ?: "기록 없음"
 
 /** 잠 "평균 {기간}"(길이 형식). */
 fun avgDurationText(perDayMs: List<Long>): String = CareStats.perRecordedDay(perDayMs)?.let { "평균 ${durationText(it)}" } ?: "기록 없음"
@@ -305,7 +303,7 @@ fun carePattern(care: CareFile, reports: Collection<ReportSummaryBody>, now: Lon
         sleepPerDayMs = if (care.sleepDiaperEnabled) sleepMs else null,
         diapersPerDay = if (care.sleepDiaperEnabled) CareStats.countPerDay(care.events, CareKind.DIAPER, days, zone) else null,
         // 차 시계가 앞서 내일로 찍힌 것은 뺀다.
-        carCryEpisodes = CareStats.cryAlarms(reports).count { dayOf(it.at) in days },
+        carCryEpisodes = CareStats.cryAlarms(reports).count { dayOf(it.at) in days }
     )
 }
 

@@ -48,7 +48,7 @@ data class AppUiState(
     /** 링크·QR로 받은 코드. 확인 화면을 거친 뒤에만 쓴다. 확인 화면 경로에 실으면 비운다. */
     val pendingCode: String?,
     /** 시스템 알림을 눌러 연 인계 알림 id. */
-    val openAlert: String?,
+    val openAlert: String?
 )
 
 class AppViewModel(
@@ -58,7 +58,7 @@ class AppViewModel(
     private val pair: PairDevice,
     private val lose: LoseConnection,
     scope: CoroutineScope = vmScope(),
-    private val bannerMs: Long = BANNER_MS,
+    private val bannerMs: Long = BANNER_MS
 ) : ViewModel(scope) {
     private val pendingCode = MutableStateFlow<String?>(null)
     private val openAlert = MutableStateFlow<String?>(null)
@@ -133,11 +133,7 @@ class AppViewModel(
 
 data class ConnectUiState(val run: PairRun?, val lockedUntil: Long?, val connected: Boolean)
 
-class ConnectViewModel(
-    private val state: PhoneStateRepository,
-    private val pair: PairDevice,
-    scope: CoroutineScope = vmScope(),
-) : ViewModel(scope) {
+class ConnectViewModel(state: PhoneStateRepository, private val pair: PairDevice, scope: CoroutineScope = vmScope()) : ViewModel(scope) {
     val ui: StateFlow<ConnectUiState> = derive(pair.run, pair.lockedUntil, state.connection) {
         ConnectUiState(pair.run.value, pair.lockedUntil.value, state.creds != null)
     }
@@ -152,12 +148,8 @@ class ConnectViewModel(
 
 data class StatusUiState(val status: LinkStatus, val notice: String?)
 
-class StatusViewModel(
-    private val connection: KeepConnected,
-    notices: Notices,
-    private val outbox: SendOutbox,
-    scope: CoroutineScope = vmScope(),
-) : ViewModel(scope) {
+class StatusViewModel(private val connection: KeepConnected, notices: Notices, private val outbox: SendOutbox, scope: CoroutineScope = vmScope()) :
+    ViewModel(scope) {
     val ui: StateFlow<StatusUiState> = derive(connection.status, notices.notice) { StatusUiState(connection.status.value, notices.notice.value) }
 
     fun retryNow() = connection.retryNow()

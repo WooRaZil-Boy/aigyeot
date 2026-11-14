@@ -1,6 +1,7 @@
 package kr.aigyeot.app.link
 
 import android.content.Context
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -15,7 +16,6 @@ import kr.aigyeot.app.link.db.SongDownloadEntity
 import kr.aigyeot.app.store.WORKER_RETRY_MS
 import kr.aigyeot.app.store.bestEffortSuspend
 import kr.aigyeot.engine.Params
-import java.io.File
 
 private val MAX_SONG_BYTES = Params().songMaxBytes
 
@@ -30,32 +30,45 @@ internal class SongWorker(
     private val probe: (File) -> SongProbe?,
     private val makeCopy: suspend (File, File) -> LoudnessResult,
     private val scope: CoroutineScope,
-    private val after: (Applied) -> Unit,
+    private val after: (Applied) -> Unit
 ) {
     private val dao = room.dao
     private val songSignal = Channel<Unit>(Channel.CONFLATED)
+
     @Volatile private var songWake: Job? = null
 
-    fun signal() { songSignal.trySend(Unit) }
+    fun signal() {
+        songSignal.trySend(Unit)
+    }
 
+    // 신호만 받는 반복이라 값 x는 쓰지 않는다.
+    @Suppress("UnusedVariable")
     fun startConsumer(): Job = scope.launch { for (x in songSignal) if (!bestEffortSuspend("노래 받기") { songsOnce() }) wakeSongsAt(clock() + WORKER_RETRY_MS) }
 
-    fun cancelWake() { songWake?.cancel() }
+    fun cancelWake() {
+        songWake?.cancel()
+    }
 
     suspend fun songsOnce() {
         while (true) {
             val now = clock()
             val d = dao.nextDownload(now) ?: return dao.nextDownloadAt()?.let(::wakeSongsAt) ?: Unit
-            if (!room.stillWanted(d)) { dao.deleteDownload(d.songId); continue }   // 그사이 지움이 왔다
+            if (!room.stillWanted(d)) {
+                dao.deleteDownload(d.songId)
+                continue
+            } // 그사이 지움이 왔다
             val c = creds.credential() ?: return wakeSongsAt(now + 60_000)
             val raw = CarPaths.songDownload(context, d.songId).apply { parentFile?.mkdirs() }
             when (val r = relay.song(c.token, d.songId, raw, MAX_SONG_BYTES)) {
                 is Res.Ok -> finishSong(d, raw, r.value, null)
                 is Res.Err -> when {
-                    r.status == 401 -> { raw.delete(); return creds.invalidate(c) }
+                    r.status == 401 -> {
+                        raw.delete()
+                        return creds.invalidate(c)
+                    }
                     r.status == 429 -> dao.retryDownload(d.songId, now + (r.retryAfterS?.times(1000)?.coerceAtLeast(1000) ?: backoffMs(d.attempts)))
                     r.status >= 500 -> dao.retryDownload(d.songId, now + backoffMs(d.attempts))
-                    else -> finishSong(d, raw, null, "download_failed")   // 404: 중계에 파일이 없다(이미 지움·7일 지남)
+                    else -> finishSong(d, raw, null, "download_failed") // 404: 중계에 파일이 없다(이미 지움·7일 지남)
                 }
                 Res.Offline -> dao.retryDownload(d.songId, now + backoffMs(d.attempts))
             }
@@ -74,9 +87,17 @@ internal class SongWorker(
         }
         val copy = CarPaths.songFile(context, d.songId)
         val made = if (checked == null) {
-            try { makeCopy(raw, copy) } catch (e: CancellationException) { throw e }   // 취소는 거절이 아니다. 다음에 다시 받는다
-            catch (e: Exception) { LoudnessResult(false, "bad_format") }
-        } else null
+            try {
+                makeCopy(raw, copy)
+            } catch (e: CancellationException) {
+                throw e
+            } // 취소는 거절이 아니다. 다음에 다시 받는다
+            catch (e: Exception) {
+                LoudnessResult(false, "bad_format")
+            }
+        } else {
+            null
+        }
         // 실행기의 거절 이유는 그대로 싣는다. 열거에 없는 글자면 bad_format으로 둔다(폰이 읽지 못하는 값을 보내지 않게)
         val reason = checked ?: made?.takeIf { !it.ok }?.let { m -> m.reason?.takeIf { LinkRoom.rejectReason(it) != null } ?: "bad_format" }
         val out = Applied()
@@ -88,6 +109,9 @@ internal class SongWorker(
 
     private fun wakeSongsAt(at: Long) {
         songWake?.cancel()
-        songWake = scope.launch { delay((at - clock()).coerceAtLeast(0)); signal() }
+        songWake = scope.launch {
+            delay((at - clock()).coerceAtLeast(0))
+            signal()
+        }
     }
 }

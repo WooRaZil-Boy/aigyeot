@@ -1,5 +1,7 @@
 package kr.aigyeot.app.ui
 
+import java.time.OffsetDateTime
+import kotlin.math.roundToInt
 import kr.aigyeot.app.link.methodKindOf
 import kr.aigyeot.app.store.db.SessionEntity
 import kr.aigyeot.app.ui.car3d.Callout3d
@@ -23,8 +25,6 @@ import kr.aigyeot.shared.SteeringUnavailableReason
 import kr.aigyeot.shared.StopInfo
 import kr.aigyeot.shared.StopReason
 import kr.aigyeot.shared.TimelineEpisode
-import java.time.OffsetDateTime
-import kotlin.math.roundToInt
 
 // 리포트 목록·상세의 화면 상태와 그 계산(순수 함수). 화면(ReportScreen)은 여기서 만든 값을 그리기만 한다.
 
@@ -54,7 +54,6 @@ internal fun triggerText(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM)
  */
 internal fun episodeHead(t: EpisodeTrigger) = if (t == EpisodeTrigger.CRY_ALARM) "울음" else SWITCH_SOUND_NAME
 
-
 // ── 상세 화면 상태(숫자 줄 → 에피소드 → 자세히 → 차가 한 일 | 조향 → 방법별 성적) ──
 
 /** 숫자 칸 하나: 이름·값·부가. */
@@ -81,14 +80,15 @@ data class ReportView(
     /** 조향 막대(비교할 수 없으면 null이고 [steerText]가 이유). */
     val steer: List<SteerBar>?,
     val steerText: String?,
-    val methods: List<MethodDots>,
+    val methods: List<MethodDots>
 )
 
 /** ISO 8601 시각 → epoch ms(못 읽으면 null). */
 internal fun epochMs(iso: String): Long? = runCatching { OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrNull()
 
 internal fun reportView(b: ReportSummaryBody, settling: Boolean): ReportView {
-    val start = epochMs(b.startedAt); val end = epochMs(b.endedAt)
+    val start = epochMs(b.startedAt)
+    val end = epochMs(b.endedAt)
     val title = if (start != null && end != null) "${TimeText.date(start)} ${TimeText.range(start, end)} · ${TimeText.duration(end - start)}" else b.startedAt
     val steer = steerBars(b.steering)
     return ReportView(
@@ -105,13 +105,15 @@ internal fun reportView(b: ReportSummaryBody, settling: Boolean): ReportView {
         callouts = b.carActions.filter { it.count > 0 }.mapNotNull { CALLOUT[it.action] }.toSet(),
         steer = steer,
         steerText = if (steer == null) steeringUnavailable(b.steering) else null,
-        methods = methodDots(b.methodStats),
+        methods = methodDots(b.methodStats)
     )
 }
 
 private val CALLOUT = mapOf(
-    CarActionKind.REAR_WINDOW_LOCK to Callout3d.LOCK, CarActionKind.SEAT_HEATER_OFF to Callout3d.HEAT,
-    CarActionKind.AMBIENT_DIM to Callout3d.DIM, CarActionKind.CABIN_COOL to Callout3d.HVAC,
+    CarActionKind.REAR_WINDOW_LOCK to Callout3d.LOCK,
+    CarActionKind.SEAT_HEATER_OFF to Callout3d.HEAT,
+    CarActionKind.AMBIENT_DIM to Callout3d.DIM,
+    CarActionKind.CABIN_COOL to Callout3d.HVAC
 )
 
 /**
@@ -130,7 +132,7 @@ internal fun reportStats(b: ReportSummaryBody): List<Stat> {
         Stat("울음", "${cries.size}번", first?.let { TimeText.clock(it) }),
         lat.takeIf { it.isNotEmpty() }?.let { Stat("감지까지", "%.1f초".format(it.average())) },
         Stat("울음 시간", TimeText.duration(b.timeline.sumOf { it.totalCryS } * 1000L, seconds = true)),
-        Stat("차가 한 일", "${b.carActions.filter { it.count > 0 }.map { it.action }.distinct().size}가지"),
+        Stat("차가 한 일", "${b.carActions.filter { it.count > 0 }.map { it.action }.distinct().size}가지")
     )
 }
 
@@ -167,17 +169,21 @@ internal fun episodeChart(e: TimelineEpisode, settling: Boolean = false): Episod
         e.totalCryS.takeIf { it > 0 }?.let { "울음 ${it}초" },
         // 묻지 못했거나 확정 전이면 제안했다고 보이지 않는다
         "쉼터 제안".takeIf { e.stop?.let { it.mode == HandoffKind.REST_OFFER && toldShown(it.toldDriver, settled = !settling) } == true },
-        resultText(EpisodeResult.SUCCESS).takeIf { e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS },
+        resultText(EpisodeResult.SUCCESS).takeIf { e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS }
     )
     return EpisodeChartData(maxOf(sounds.maxOf { it.to }, 1), sounds, marks, outcomes, episodeHead(e.trigger))
 }
 
 /** 조향 막대 셋(평소·울음 중·달랜 뒤). 값이 없는 막대는 뺀다. 비교할 수 없으면 null. */
-internal fun steerBars(s: Steering): List<SteerBar>? = if (!s.available) null else listOfNotNull(
-    s.baselinePerMin?.let { SteerBar("평소", it, false) },
-    s.duringCryPerMin?.let { SteerBar("울음 중", it, true) },
-    s.afterResponsePerMin?.let { SteerBar("달랜 뒤", it, false) },
-).ifEmpty { null }
+internal fun steerBars(s: Steering): List<SteerBar>? = if (!s.available) {
+    null
+} else {
+    listOfNotNull(
+        s.baselinePerMin?.let { SteerBar("평소", it, false) },
+        s.duringCryPerMin?.let { SteerBar("울음 중", it, true) },
+        s.afterResponsePerMin?.let { SteerBar("달랜 뒤", it, false) }
+    ).ifEmpty { null }
+}
 
 private fun steeringUnavailable(s: Steering) =
     if (!s.available && s.unavailableReason == SteeringUnavailableReason.NO_CRY) "울음이 없어 비교하지 않았어요" else "비교할 구간이 없어요"
@@ -197,17 +203,19 @@ internal fun detailLines(b: ReportSummaryBody, settling: Boolean) = buildList {
         // 폴백이 한 번이라도 있었다는 값이라 원인·전부를 말하지 않는다(폰 report.route와 같은 글)
         OutputRoute.REAR_ZONE -> add(DetailLine("소리 나간 곳 · 뒷좌석"))
         OutputRoute.DEFAULT_ZONE_FALLBACK -> add(DetailLine("소리 나간 곳 · 앞에서도 들림"))
-        OutputRoute.NO_PLAYBACK -> Unit   // 재생이 없었으면 출력 경로를 보이지 않는다
+        OutputRoute.NO_PLAYBACK -> Unit // 재생이 없었으면 출력 경로를 보이지 않는다
     }
     if (b.truncated == true) add(DetailLine("기록이 많아 일부를 줄였어요"))
-    if (b.timeline.isEmpty()) add(DetailLine("기록된 울음이 없어요"))   // 통화 중 경보처럼 에피소드 없이 기록만 한 경보도 있다(울음이 없었다고 단정하지 않는다)
+    if (b.timeline.isEmpty()) add(DetailLine("기록된 울음이 없어요")) // 통화 중 경보처럼 에피소드 없이 기록만 한 경보도 있다(울음이 없었다고 단정하지 않는다)
     b.timeline.forEach { e ->
         val at = epochMs(e.startedAt)?.let { TimeText.clock(it) } ?: ""
-        add(DetailLine(
-            "$at " + triggerText(e.trigger) +
-                (if (e.trigger == EpisodeTrigger.CRY_ALARM) e.alarmLatencyS?.let { " · 감지까지 ${"%.1f".format(it)}초" } else null).orEmpty(),
-            head = true,
-        ))
+        add(
+            DetailLine(
+                "$at " + triggerText(e.trigger) +
+                    (if (e.trigger == EpisodeTrigger.CRY_ALARM) e.alarmLatencyS?.let { " · 감지까지 ${"%.1f".format(it)}초" } else null).orEmpty(),
+                head = true
+            )
+        )
         add(DetailLine("${e.sound?.label ?: "재생 없음"} · ${e.playS}초" + (e.plays.size.takeIf { it > 1 }?.let { " · 재생 ${it}번" } ?: "")))
         e.plays.forEach { pl ->
             val span = epochMs(pl.startedAt)?.let { a -> epochMs(pl.endedAt)?.let { z -> TimeText.range(a, z) } } ?: ""
@@ -223,10 +231,12 @@ internal fun detailLines(b: ReportSummaryBody, settling: Boolean) = buildList {
     if (b.preCryContext.isNotEmpty()) add(DetailLine("울음 직전 주행", head = true))
     b.preCryContext.forEach { c ->
         add(DetailLine("평균 ${c.speedKmhAvg}km/h · 최고 ${c.speedKmhMax}km/h · 브레이크 ${c.brakePresses}번"))
-        add(DetailLine(
-            "큰 조향 ${c.steeringReversals}번" + (if (c.turnSignalUsed) " · 방향지시등 씀" else "") + " · 기어 ${c.gear.name}" +
-                (c.cabinTempC?.let { " · 실내 ${"%.1f".format(it)}℃" } ?: "") + if (c.playing) " · 재생 중" else "",
-        ))
+        add(
+            DetailLine(
+                "큰 조향 ${c.steeringReversals}번" + (if (c.turnSignalUsed) " · 방향지시등 씀" else "") + " · 기어 ${c.gear.name}" +
+                    (c.cabinTempC?.let { " · 실내 ${"%.1f".format(it)}℃" } ?: "") + if (c.playing) " · 재생 중" else ""
+            )
+        )
     }
     add(DetailLine("제어 기록", head = true))
     if (b.controls.isEmpty()) add(DetailLine("없어요"))
@@ -236,11 +246,18 @@ internal fun detailLines(b: ReportSummaryBody, settling: Boolean) = buildList {
 /** 이름은 판단 코어 methodLabel 하나. 받은 모르는 방식(UNKNOWN)만 "기타". */
 private fun method(m: SoundMethod) = methodKindOf(m)?.let(::methodLabel) ?: "기타"
 
-private fun purpose(p: PlayPurpose) = when (p) { PlayPurpose.AUTO_FIRST -> "자동 1차"; PlayPurpose.AUTO_SECOND -> "자동 2차"; PlayPurpose.REQUEST -> "운전자 요청" }
+private fun purpose(p: PlayPurpose) = when (p) {
+    PlayPurpose.AUTO_FIRST -> "자동 1차"
+    PlayPurpose.AUTO_SECOND -> "자동 2차"
+    PlayPurpose.REQUEST -> "운전자 요청"
+}
 
 /** 울음 결과 낱말(차·두 폰 같은 글자): 리포트 '자세히'·울음 띠·정차 홈 흐름이 이 하나를 쓴다. 1차 시도가 없으면 null. */
 internal fun resultText(r: EpisodeResult?) = when (r) {
-    EpisodeResult.SUCCESS -> "그침"; EpisodeResult.FAILURE -> "계속 울음"; EpisodeResult.UNDETERMINED -> "판정하지 못함"; null -> "1차 시도 없음"
+    EpisodeResult.SUCCESS -> "그침"
+    EpisodeResult.FAILURE -> "계속 울음"
+    EpisodeResult.UNDETERMINED -> "판정하지 못함"
+    null -> "1차 시도 없음"
 }
 
 /** 성적에서 뺀 이유(차·두 폰 같은 글자. 열거 이름을 그대로 쓰지 않는다). */
@@ -275,21 +292,28 @@ private fun secondText(sec: SecondAttempt): String {
 
 /** [settling]: 인계 행에 아직 확정 안 된(말하는 종류인데 told_driver null) 것이 있으면(`handoffSettled` 거짓) 한 줄로만 보인다. */
 internal fun stopText(st: StopInfo, settling: Boolean = false) = buildString {
-    append(when (st.reason) {
-        StopReason.ATTEMPT_LIMIT -> "두 번 시도 뒤"
-        StopReason.SESSION_CAP -> SESSION_CAP_TEXT
-        StopReason.FEEDING_WINDOW -> "수유 시간대"
-        StopReason.NO_SOUND -> "뒷좌석 출력 없음"
-    })
+    append(
+        when (st.reason) {
+            StopReason.ATTEMPT_LIMIT -> "두 번 시도 뒤"
+            StopReason.SESSION_CAP -> SESSION_CAP_TEXT
+            StopReason.FEEDING_WINDOW -> "수유 시간대"
+            StopReason.NO_SOUND -> "뒷좌석 출력 없음"
+        }
+    )
     append(" · ")
-    if (settling) { append("정리하는 중이에요"); return@buildString }
-    val told = toldShown(st.toldDriver, settled = true)   // 인계 문장을 못 말했으면 "했다"고 쓰지 않는다(폰 앱과 같은 글). 확정 전은 위에서 끝났다
-    append(when (st.mode) {
-        HandoffKind.REST_OFFER -> if (told) "${st.restName ?: "쉼터"}에 들르자고 제안했어요" else "쉼터는 묻지 못했어요"
-        HandoffKind.ARRIVAL_NOTICE -> if (told) "도착 안내를 했어요" else "도착 안내는 하지 못했어요"
-        HandoffKind.NO_REST -> if (told) "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요" else "안전한 곳에 세우도록 안내하지 못했어요"
-        HandoffKind.PARKED -> if (st.reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"
-    })
+    if (settling) {
+        append("정리하는 중이에요")
+        return@buildString
+    }
+    val told = toldShown(st.toldDriver, settled = true) // 인계 문장을 못 말했으면 "했다"고 쓰지 않는다(폰 앱과 같은 글). 확정 전은 위에서 끝났다
+    append(
+        when (st.mode) {
+            HandoffKind.REST_OFFER -> if (told) "${st.restName ?: "쉼터"}에 들르자고 제안했어요" else "쉼터는 묻지 못했어요"
+            HandoffKind.ARRIVAL_NOTICE -> if (told) "도착 안내를 했어요" else "도착 안내는 하지 못했어요"
+            HandoffKind.NO_REST -> if (told) "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요" else "안전한 곳에 세우도록 안내하지 못했어요"
+            HandoffKind.PARKED -> if (st.reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"
+        }
+    )
     if (st.waypointAdded) append(" · 경유지 추가")
     if (st.guardianNotified) append(" · 다른 보호자에게 알림")
 }

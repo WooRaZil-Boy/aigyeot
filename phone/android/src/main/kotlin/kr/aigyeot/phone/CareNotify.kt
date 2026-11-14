@@ -32,14 +32,16 @@ object CareNotify {
                 continue
             }
             val open = PendingIntent.getActivity(
-                context, noticeId(kind),
+                context,
+                noticeId(kind),
                 Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
             val end = PendingIntent.getBroadcast(
-                context, noticeId(kind),
+                context,
+                noticeId(kind),
                 Intent(context, CareEndReceiver::class.java).setAction(ACTION_END).putExtra(EXTRA_ID, e.id),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
             val n = NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_aigyeot) // 앱 아이콘 앞 층의 흰 실루엣

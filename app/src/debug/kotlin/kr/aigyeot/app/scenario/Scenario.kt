@@ -8,6 +8,11 @@ import android.content.IntentFilter
 import android.media.AudioManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -31,34 +36,27 @@ import kr.aigyeot.app.host.HostApi
 import kr.aigyeot.app.link.Link
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MicPath
-import java.io.File
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * 장면 재생기. 장면을 시간축대로 돌리고 기대값을 판정해 측정표를 쓴다.
  * 판단 코어 상태는 [HostApi.stepLog]로 읽기만 하고, 입력은 Virtual Console·녹음·사건 주입으로 넣는다.
  * 마이크 서비스를 켜므로 장면 화면(앱 화면)이 떠 있을 때만 [run]한다.
  */
-class Scenario(
-    private val context: Context,
-    private val host: HostApi,
-    private val link: Link,
-) {
+class Scenario(private val context: Context, private val host: HostApi, private val link: Link) {
     private val _progress = MutableStateFlow<ScenarioProgress?>(null)
     val progress: StateFlow<ScenarioProgress?> = _progress
     private val _running = MutableStateFlow(false)
+
     /** 장면이 도는 중. */
     val running: StateFlow<Boolean> = _running
     private val _results = MutableStateFlow<SceneResults?>(null)
+
     /** 마지막으로 실행한 장면의 끝난 반복 행(측정표 CSV와 같은 값, 읽기 전용). 반복이 끝날 때마다 늘어난다. */
     val results: StateFlow<SceneResults?> = _results
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
     private val vc = VirtualConsole()
-    private val loudness = SourceLoudness { androidLufs(context, it) }   // 잰 음원은 반복마다 다시 재지 않는다
+    private val loudness = SourceLoudness { androidLufs(context, it) } // 잰 음원은 반복마다 다시 재지 않는다
 
     /** 시연·측정 화면의 장면 행(id 순, assets/scenario + 흘려 넣은 장면). 부를 때마다 파일을 다시 본다. 읽지 못한 파일은 제목·녹음 없이 둔다. */
     fun list(): List<SceneInfo> = files().entries.sortedBy { it.key }.map { (id, f) -> sceneInfo(id, f.scene) }
@@ -68,7 +66,10 @@ class Scenario(
      * 끝 알림은 SCENARIO 로그와 결과 폴더의 .done 파일(첫 줄이 같은 알림 줄) 두 곳에 남긴다. scene-result.sh는 둘 중 먼저 오는 것을 본다(한쪽이 빠져도 끝난다).
      */
     fun run(id: String, repeat: Int? = null) {
-        if (job?.isCompleted == false) { notStarted("앞 실행의 정리가 아직 끝나지 않음"); return }   // 취소 중인 이전 실행의 정리가 끝나기 전에는 새로 시작하지 않는다
+        if (job?.isCompleted == false) {
+            notStarted("앞 실행의 정리가 아직 끝나지 않음")
+            return
+        } // 취소 중인 이전 실행의 정리가 끝나기 전에는 새로 시작하지 않는다
         val scene = try {
             parseScene((files()[id] ?: throw SceneError("장면 '$id'가 없다")).text.getOrThrow())
         } catch (e: Exception) {
@@ -78,10 +79,18 @@ class Scenario(
         }
         _running.value = true
         _results.value = SceneResults(scene.id, emptyList())
-        job = scope.launch { try { runAll(scene, repeat ?: scene.repeat) } finally { _running.value = false } }
+        job = scope.launch {
+            try {
+                runAll(scene, repeat ?: scene.repeat)
+            } finally {
+                _running.value = false
+            }
+        }
     }
 
-    fun stop() { job?.cancel() }
+    fun stop() {
+        job?.cancel()
+    }
 
     /** 시작하지 못함 알림: 로그 한 줄과 .done 파일(못 써도 로그는 남는다). */
     private fun notStarted(why: String) {
@@ -92,14 +101,21 @@ class Scenario(
 
     /** 끝 알림 파일. 결과 CSV를 다 쓴 뒤에 쓴다(scene-result.sh는 이 파일이 보이면 CSV를 읽는다). */
     private fun writeDone(f: File, line: String) {
-        try { writeWhole(f, line + "\n") } catch (e: Exception) { Log.w(TAG, "끝 알림 파일 쓰기 실패: $e") }
+        try {
+            writeWhole(f, line + "\n")
+        } catch (e: Exception) {
+            Log.w(TAG, "끝 알림 파일 쓰기 실패: $e")
+        }
     }
 
     /** 다 쓴 임시 파일을 이름만 바꿔 놓는다. 읽는 쪽(scene-result.sh)이 쓰다 만 파일을 보지 않게. */
     private fun writeWhole(f: File, text: String) {
         val tmp = File(f.parentFile, f.name + ".tmp")
         tmp.writeText(text)
-        if (!tmp.renameTo(f)) { tmp.delete(); throw IOException("이름 바꾸기 실패: ${f.name}") }
+        if (!tmp.renameTo(f)) {
+            tmp.delete()
+            throw IOException("이름 바꾸기 실패: ${f.name}")
+        }
     }
 
     /** 앱 안에서 Virtual Console(127.0.0.1:8088)에 닿는지(측정 전 항목). 세션 신호 뒤 차량 상태를 읽어 본다. */
@@ -129,15 +145,28 @@ class Scenario(
 
     private suspend fun runAll(scene: Scene, n: Int) {
         val dir = CarPaths.scenarioResults(context).also { it.mkdirs() }
-        val out = freeResultFile(dir, scene.id, SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date()))   // 같은 분에 다시 돌려도 덮어쓰지 않는다
+        val out = freeResultFile(dir, scene.id, SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date())) // 같은 분에 다시 돌려도 덮어쓰지 않는다
         val rows = ArrayList<RunRow>()
+
         /** 결과 CSV(scene-result.sh가 읽는 원본)와 보조 .txt를 쓴다. 이번에 CSV를 썼으면 true. 못 써도 장면은 이어 가고 끝의 결과 로그는 남긴다. */
         fun save(): Boolean {
             _results.value = SceneResults(scene.id, rows.toList())
-            val wrote = try { writeWhole(out, csv(rows)); true } catch (e: Exception) { Log.w(TAG, "결과 파일 쓰기 실패: $e"); false }
-            try { File(dir, out.nameWithoutExtension + ".txt").writeText(
-                rows.joinToString("\n") { r -> "run ${r.run}: " + (r.failures.ifEmpty { listOf("통과") }).joinToString(" | ") } + "\n") }
-            catch (e: Exception) { Log.w(TAG, "결과 요약 글 쓰기 실패: $e") }   // 보조 파일이라 CSV 상태에 넣지 않는다
+            val wrote = try {
+                writeWhole(out, csv(rows))
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "결과 파일 쓰기 실패: $e")
+                false
+            }
+            try {
+                File(dir, out.nameWithoutExtension + ".txt").writeText(
+                    rows.joinToString("\n") { r -> "run ${r.run}: " + (r.failures.ifEmpty { listOf("통과") }).joinToString(" | ") } + "\n"
+                )
+            } catch (
+                e: Exception
+            ) {
+                Log.w(TAG, "결과 요약 글 쓰기 실패: $e")
+            } // 보조 파일이라 CSV 상태에 넣지 않는다
             return wrote
         }
         // 원래 마이크 상태는 한 번만 읽고 끝에서 한 번만 되돌린다(반복 사이에는 켜지 않는다). 마이크 서비스는 시작할 때만 입력원을 보므로 장면 동안은 끈다
@@ -146,21 +175,28 @@ class Scenario(
             var micOff = true
             if (micBefore) {
                 MicService.stop(context)
-                try { micOff = awaitMicOff() } catch (e: CancellationException) { micOff = false }   // 멈춤: runOnce가 세션 신호 대기에서 바로 취소되어 '멈춤' 행을 돌려준다
+                try {
+                    micOff = awaitMicOff()
+                } catch (e: CancellationException) {
+                    micOff = false
+                } // 멈춤: runOnce가 세션 신호 대기에서 바로 취소되어 '멈춤' 행을 돌려준다
             }
             for (k in 0 until n) {
-                rows += runOnce(scene, k, n, micOff); save()   // 멈춰도 끝난 반복은 남는다
+                rows += runOnce(scene, k, n, micOff)
+                save() // 멈춰도 끝난 반복은 남는다
                 if (!currentCoroutineContext().isActive) break
             }
         } finally {
             withContext(NonCancellable) {
-                var note = "결과 파일 · ${out.path} · 요청 ${n}회"   // 요청 횟수: 멈춰서 회차가 모자라면 scene-result.sh가 실패로 친다
-                if (micBefore) when (runCatching { startMicIfForeground() }.onFailure { Log.w(TAG, "마이크 다시 켜기 실패: $it") }.getOrNull()) {
-                    true -> Unit
-                    false -> note += " · 앱 화면이 없어 마이크를 다시 켜지 못함"
-                    null -> note += " · 마이크를 다시 켜지 못함"   // 실패해도 아래 결과 로그는 남긴다
+                var note = "결과 파일 · ${out.path} · 요청 ${n}회" // 요청 횟수: 멈춰서 회차가 모자라면 scene-result.sh가 실패로 친다
+                if (micBefore) {
+                    when (runCatching { startMicIfForeground() }.onFailure { Log.w(TAG, "마이크 다시 켜기 실패: $it") }.getOrNull()) {
+                        true -> Unit
+                        false -> note += " · 앱 화면이 없어 마이크를 다시 켜지 못함"
+                        null -> note += " · 마이크를 다시 켜지 못함" // 실패해도 아래 결과 로그는 남긴다
+                    }
                 }
-                if (!save()) note += " · 결과 파일을 쓰지 못함(아래 표만 남음)"   // 마지막 저장의 결과만 본다(앞 회차 저장 실패는 이번에 다시 썼으면 상관없다)
+                if (!save()) note += " · 결과 파일을 쓰지 못함(아래 표만 남음)" // 마지막 저장의 결과만 본다(앞 회차 저장 실패는 이번에 다시 썼으면 상관없다)
                 _progress.value = _progress.value?.copy(note = note)
                 Log.i(TAG, "$note\n${csv(rows)}")
                 writeDone(File(dir, out.nameWithoutExtension + ".done"), note)
@@ -181,7 +217,7 @@ class Scenario(
     private suspend fun runOnce(scene: Scene, k: Int, n: Int, micOff: Boolean): RunRow {
         // 세션 신호 확인이 먼저다(t0·장면 전 Step 기준을 대기 뒤에 잡는다): 첫 vc가 세션 신호보다 먼저 나가면 emulator_inactive로 실패한다. 최대 3번
         var waitNote: String? = null
-        var stoppedEarly = false   // 대기 중 멈춤이어도 행은 남긴다(실행마다 한 줄)
+        var stoppedEarly = false // 대기 중 멈춤이어도 행은 남긴다(실행마다 한 줄)
         try {
             withContext(Dispatchers.IO) {
                 for (i in 0 until 3) {
@@ -191,7 +227,9 @@ class Scenario(
                     if (i < 2) delay(500)
                 }
             }
-        } catch (e: CancellationException) { stoppedEarly = true }
+        } catch (e: CancellationException) {
+            stoppedEarly = true
+        }
         val t0 = host.clock()
         val mix = MixSource()
         val vcQueue = Channel<VcReq>(Channel.UNLIMITED)
@@ -200,37 +238,59 @@ class Scenario(
         val jobs = ArrayList<Job>()
         lateinit var run: SceneRun
         val ports = object : ScenePorts {
-            override fun vc(method: String, path: String, done: (Boolean, String) -> Unit) { vcQueue.trySend(VcReq(method, path, done)) }
+            override fun vc(method: String, path: String, done: (Boolean, String) -> Unit) {
+                vcQueue.trySend(VcReq(method, path, done))
+            }
             override fun audio(a: Audio, at: Long): Long? = try {
                 val pcm = openRecording(a.file).let { MixSource.load(it, a.fromSec, a.durSec) }
                 mix.play(pcm, a.durSec, a.gainDb)
-                val started = host.clock()   // 실제로 섞기 시작한 시각
-                if (a.cry) {   // 경보 지연 기준점을 감지기에 알린다. 녹음이 끝나면 지운다
+                val started = host.clock() // 실제로 섞기 시작한 시각
+                if (a.cry) { // 경보 지연 기준점을 감지기에 알린다. 녹음이 끝나면 지운다
                     MicService.running?.injectedCryAt = started
-                    scope.launch { delay(Math.round(a.durSec * 1000)); MicService.running?.let { if (it.injectedCryAt == started) it.injectedCryAt = null } }
+                    scope.launch {
+                        delay(Math.round(a.durSec * 1000))
+                        MicService.running?.let { if (it.injectedCryAt == started) it.injectedCryAt = null }
+                    }
                 }
                 started
-            } catch (e: Exception) { Log.w(TAG, "녹음 ${a.file}: $e"); null }
+            } catch (e: Exception) {
+                Log.w(TAG, "녹음 ${a.file}: $e")
+                null
+            }
             override fun micOn(): Boolean = startMicIfForeground().also { if (it) micRequested = true }
             override fun phone(envelopeJson: String, done: (Boolean, String) -> Unit) {
                 jobs += scope.launch {
-                    try { link.receiveForScenario(envelopeJson); done(true, "") }
-                    catch (e: CancellationException) { throw e }   // 취소되면 done을 부르지 않는다: finish가 실패로 닫는다
-                    catch (e: Exception) { done(false, "${e.javaClass.simpleName} ${e.message}") }
+                    try {
+                        link.receiveForScenario(envelopeJson)
+                        done(true, "")
+                    } catch (e: CancellationException) {
+                        throw e
+                    } // 취소되면 done을 부르지 않는다: finish가 실패로 닫는다
+                    catch (e: Exception) {
+                        done(false, "${e.javaClass.simpleName} ${e.message}")
+                    }
                 }
             }
-            override fun simulated(what: String) { Log.i(TAG, "시뮬레이션 입력 $what") }
+            override fun simulated(what: String) {
+                Log.i(TAG, "시뮬레이션 입력 $what")
+            }
             override fun lufs(method: Method): Double? = loudness.lufs(method)
         }
-        val volume = object : BroadcastReceiver() {   // system_volume_changes: STREAM_MUSIC 볼륨 변화 콜백을 센다
+        val volume = object : BroadcastReceiver() { // system_volume_changes: STREAM_MUSIC 볼륨 변화 콜백을 센다
             override fun onReceive(c: Context, i: Intent) {
                 if (i.getIntExtra(EXTRA_STREAM, -1) == AudioManager.STREAM_MUSIC) run.onVolumeChange()
             }
         }
         run = SceneRun(scene, k, host, ports, t0)
-        if (stoppedEarly) { run.finish("멈춤"); return run.row() }   // startScenario·sourceFactory는 건드리지 않는다
-        if (!micOff) { run.finish("마이크 서비스를 끄지 못함"); return run.row() }   // 장면 시작 전: startScenario를 부르지 않는다
-        MicService.sourceFactory = { mix }   // BABY_ABOARD가 켜는 마이크 서비스가 장면 입력원을 쓴다
+        if (stoppedEarly) {
+            run.finish("멈춤")
+            return run.row()
+        } // startScenario·sourceFactory는 건드리지 않는다
+        if (!micOff) {
+            run.finish("마이크 서비스를 끄지 못함")
+            return run.row()
+        } // 장면 시작 전: startScenario를 부르지 않는다
+        MicService.sourceFactory = { mix } // BABY_ABOARD가 켜는 마이크 서비스가 장면 입력원을 쓴다
         try {
             ContextCompat.registerReceiver(context, volume, IntentFilter(VOLUME_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
             // stepLog는 모든 Step을 버퍼에 담아 순서대로 낸다(느려도 중간 Step을 놓치지 않는다). startScenario보다 먼저 붙어(UNDISPATCHED:
@@ -239,10 +299,16 @@ class Scenario(
             jobs += scope.launch(Dispatchers.Unconfined, CoroutineStart.UNDISPATCHED) { host.stepLog.collect { if (gate.accept(it)) run.onStep(it) } }
             host.startScenario(run.setup())
             jobs += scope.launch(Dispatchers.Unconfined) { host.controlLog.collect { run.onControl(it) } }
-            jobs += scope.launch(Dispatchers.IO) {   // 세션 신호: 실행 중 1초마다
-                while (isActive) { val r = vc.send("POST", VirtualConsole.SESSION); if (!r.ok) note = "VC 세션 실패 ${r.code} ${r.body.take(60)}"; delay(1_000) }
+            jobs += scope.launch(Dispatchers.IO) {
+                // 세션 신호: 실행 중 1초마다
+                while (isActive) {
+                    val r = vc.send("POST", VirtualConsole.SESSION)
+                    if (!r.ok) note = "VC 세션 실패 ${r.code} ${r.body.take(60)}"
+                    delay(1_000)
+                }
             }
-            jobs += scope.launch(Dispatchers.IO) {   // 차량 입력은 순서대로 하나씩
+            jobs += scope.launch(Dispatchers.IO) {
+                // 차량 입력은 순서대로 하나씩
                 for (v in vcQueue) {
                     val r = vc.send(v.method, v.path)
                     Log.i(TAG, "VC ${v.method} ${v.path} → ${r.code} ${r.body.take(80)}")
@@ -254,30 +320,41 @@ class Scenario(
             while (true) {
                 val now = host.clock()
                 if (run.done(now)) break
-                if (now > run.endAt + OVERTIME_MS) { run.finish("시간 초과"); break }
+                if (now > run.endAt + OVERTIME_MS) {
+                    run.finish("시간 초과")
+                    break
+                }
                 run.advance(now)
                 // 정수 초: 같은 값이면 StateFlow가 거른다
                 _progress.value = ScenarioProgress(scene.id, k + 1, n, ((now - t0) / 1000).toDouble(), run.firstFail(), note ?: "연습 장면 실행 중")
                 delay(TICK_MS)
             }
         } catch (e: CancellationException) {
-            run.finish("멈춤")   // 다시 던지지 않는다: 멈춘 반복의 행도 남기고, 부르는 쪽이 isActive로 멈춘다
+            run.finish("멈춤") // 다시 던지지 않는다: 멈춘 반복의 행도 남기고, 부르는 쪽이 isActive로 멈춘다
         } catch (e: Exception) {
             run.finish("오류: ${e.javaClass.simpleName} ${e.message}")
         } finally {
-            withContext(NonCancellable) { try {
-                run.checkStepLog()   // 장면 Step이 버려졌으면 이 반복은 통과가 아니다(endScenario 복원의 Step은 세지 않게 먼저)
-                jobs.forEach { it.cancel() }
-                withTimeoutOrNull(6_000) { jobs.joinAll() }   // HttpURLConnection은 취소로 멈추지 않으니 endScenario 전에 끝나길 기다린다
-                vcQueue.close()
-                runCatching { context.unregisterReceiver(volume) }
-                if (micRequested || MicService.runningPauses() != null) {   // 장면 입력원 끄기. 준비 중인 서비스가 나중에 살아나지 않게 요청했으면 늘 stop을 보낸다
-                    MicService.stop(context)
-                    if (micRequested) delay(500)
-                    if (!awaitMicOff()) run.failEnd("마이크 서비스를 끄지 못함")
+            withContext(NonCancellable) {
+                try {
+                    run.checkStepLog() // 장면 Step이 버려졌으면 이 반복은 통과가 아니다(endScenario 복원의 Step은 세지 않게 먼저)
+                    jobs.forEach { it.cancel() }
+                    withTimeoutOrNull(6_000) { jobs.joinAll() } // HttpURLConnection은 취소로 멈추지 않으니 endScenario 전에 끝나길 기다린다
+                    vcQueue.close()
+                    runCatching { context.unregisterReceiver(volume) }
+                    if (micRequested || MicService.runningPauses() != null) { // 장면 입력원 끄기. 준비 중인 서비스가 나중에 살아나지 않게 요청했으면 늘 stop을 보낸다
+                        MicService.stop(context)
+                        if (micRequested) delay(500)
+                        if (!awaitMicOff()) run.failEnd("마이크 서비스를 끄지 못함")
+                    }
+                    try {
+                        host.endScenario()
+                    } catch (e: Exception) {
+                        run.failEnd("endScenario 실패: ${e.javaClass.simpleName} ${e.message}")
+                    }
+                } finally {
+                    MicService.sourceFactory = null
                 }
-                try { host.endScenario() } catch (e: Exception) { run.failEnd("endScenario 실패: ${e.javaClass.simpleName} ${e.message}") }
-            } finally { MicService.sourceFactory = null } }
+            }
         }
         return run.row()
     }
@@ -297,12 +374,13 @@ class Scenario(
 
     private companion object {
         const val TAG = "SCENARIO"
+
         /** 장면을 시작하지 못했을 때 남기는 SCENARIO 로그 줄의 머리(scene-result.sh가 읽는다). */
         const val NOT_STARTED = "시작하지 못함"
         const val ASSET_DIR = "scenario"
         const val TICK_MS = 50L
         const val OVERTIME_MS = 60_000L
-        const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"   // 숨은 시스템 방송(공개 콜백이 없다)
+        const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION" // 숨은 시스템 방송(공개 콜백이 없다)
         const val EXTRA_STREAM = "android.media.EXTRA_VOLUME_STREAM_TYPE"
     }
 }

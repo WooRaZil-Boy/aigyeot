@@ -12,10 +12,20 @@ class GatesTest {
     private var stops = 0
     private var focusHeld = 0
     private var focusOk = true
-    private val g = TtsGate({ said += it }, { stops++ }, { if (focusOk) { focusHeld++; true } else false }, { focusHeld-- }, t)
+    private val g = TtsGate({ said += it }, { stops++ }, {
+        if (focusOk) {
+            focusHeld++
+            true
+        } else {
+            false
+        }
+    }, { focusHeld-- }, t)
     private var doneA: Boolean? = null
     private var doneB: Boolean? = null
-    private fun ready() { g.warm(); g.settled(true) }
+    private fun ready() {
+        g.warm()
+        g.settled(true)
+    }
 
     @Test fun `A를 끊고 B를 말하면 A의 늦은 끝 신호 뒤에 B가 시작되고 B의 끝 신호로 B가 끝난다`() {
         ready()
@@ -25,7 +35,7 @@ class GatesTest {
         assertEquals(1, stops)
         g.speak("B") { doneB = it }
         assertEquals(listOf("", "A"), said, "A의 요청이 아직 걸려 있어 B를 미룬다")
-        g.settled(true)                                  // A의 늦은 onDone
+        g.settled(true) // A의 늦은 onDone
         assertEquals(listOf("", "A", "B"), said, "A의 끝 신호 뒤에 B 시작")
         assertNull(doneB, "A의 끝 신호가 B를 끝내면 안 된다")
         assertNull(doneA, "끊은 A에는 알리지 않는다")
@@ -51,7 +61,7 @@ class GatesTest {
         g.warm()
         g.speak("A") { doneA = it }
         assertEquals(listOf(""), said, "예열 중에는 미룬다")
-        g.settled(true)                                  // 예열 onDone
+        g.settled(true) // 예열 onDone
         assertEquals(listOf("", "A"), said)
         assertNull(doneA)
         g.settled(true)
@@ -102,7 +112,7 @@ class GatesTest {
         g.focusLost()
         assertEquals(0, stops)
         g.speak("A") { doneA = it }
-        g.settled(true)                                  // 예열 onDone
+        g.settled(true) // 예열 onDone
         assertEquals(listOf("", "A"), said)
         assertNull(doneA)
     }
@@ -113,7 +123,7 @@ class GatesTest {
         g.focusLost()
         g.speak("B") { doneB = it }
         assertEquals(listOf("", "A"), said, "A의 끝 신호를 기다리며 미룬다")
-        g.settled(false)                                 // A의 늦은 onStop
+        g.settled(false) // A의 늦은 onStop
         assertEquals(listOf("", "A", "B"), said)
         assertNull(doneB, "onStop이 B를 끝내면 안 된다")
         g.settled(true)
@@ -124,7 +134,7 @@ class GatesTest {
     @Test fun `상실 전에 큐에 있던 문장은 지우지 않고 상실 뒤 이어서 말한다`() {
         ready()
         g.speak("A") { doneA = it }
-        g.speak("B") { doneB = it }                      // A가 걸려 있어 큐
+        g.speak("B") { doneB = it } // A가 걸려 있어 큐
         g.focusLost()
         assertEquals(false, doneA)
         t.advance(TtsGate.SETTLE_MS)
@@ -133,7 +143,9 @@ class GatesTest {
 
     @Test fun `STT는 PCM을 넣기 전에 온 결과를 버리고 넣은 뒤 결과는 전달한다`() {
         val got = mutableListOf<Pair<String, Boolean>>()
-        val sent = mutableListOf<Int>(); var completes = 0; var stops = 0
+        val sent = mutableListOf<Int>()
+        var completes = 0
+        var stops = 0
         val s = SttGate({ sent += it.size }, { completes++ }, { stops++ })
         s.begin { x, f -> got += x to f }
         s.result("앞 묶음의 글", true)
@@ -144,12 +156,15 @@ class GatesTest {
         s.error()
         assertEquals(listOf("응" to false, "" to true), got)
         s.finish()
-        assertEquals(1, completes); assertEquals(listOf(2), sent)
-        s.begin { x, f -> got += "새" + x to f }          // 새 묶음
+        assertEquals(1, completes)
+        assertEquals(listOf(2), sent)
+        s.begin { x, f -> got += "새" + x to f } // 새 묶음
         s.result("늦은 결과", true)
         assertEquals(2, got.size, "새 묶음도 feed 전에는 버린다")
         s.cancel()
-        s.feed(byteArrayOf(1)); s.result("취소 뒤", true)
-        assertEquals(2, got.size); assertEquals(1, stops)
+        s.feed(byteArrayOf(1))
+        s.result("취소 뒤", true)
+        assertEquals(2, got.size)
+        assertEquals(1, stops)
     }
 }

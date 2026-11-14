@@ -9,8 +9,16 @@ import kr.aigyeot.engine.VehicleSample
 
 /** 맥락 1초 표본 하나. [at]은 그 초의 끝이다. 저장소가 context_sample 행으로 바꿔 쓰고, 리포트 계산(preCry)은 이 타입만 읽는다. */
 data class ContextSample(
-    val episodeId: String, val at: Long, val speedKmh: Double, val brake: Boolean, val steeringDeg: Double,
-    val turnSignal: TurnSignal, val gear: Gear, val cabinC: Double?, val playback: String?, val cryP: Double?,
+    val episodeId: String,
+    val at: Long,
+    val speedKmh: Double,
+    val brake: Boolean,
+    val steeringDeg: Double,
+    val turnSignal: TurnSignal,
+    val gear: Gear,
+    val cabinC: Double?,
+    val playback: String?,
+    val cryP: Double?
 )
 
 /**
@@ -22,19 +30,22 @@ class ContextRecorder(private val halfMs: Long = 30_000, private val stepMs: Lon
     private data class Second(val at: Long, val v: VehicleSample, val gear: Gear, val cabinC: Double?, val playback: String?, val cryP: Double?)
 
     private val recent = ArrayDeque<Second>()
-    private val pending = mutableMapOf<String, Long>()   // episodeId → alarmAt
-    private var bucket = Long.MIN_VALUE                    // 지금 채우는 초의 시작(Second.at은 그 끝)
+    private val pending = mutableMapOf<String, Long>() // episodeId → alarmAt
+    private var bucket = Long.MIN_VALUE // 지금 채우는 초의 시작(Second.at은 그 끝)
     private var vehicle: VehicleSample? = null
     private var gear: Gear? = null
     private var cabin: Double? = null
     private var playback: String? = null
-    private var cryP: Double? = null                       // 이 초의 최대 울음 확률
+    private var cryP: Double? = null // 이 초의 최대 울음 확률
 
     /** 사건 하나를 넣는다. 초가 넘어가면 앞 초를 마감하고, 그 초를 기다리던 캡처의 줄을 돌려준다. */
     fun observe(e: Event, s: EngineState): List<ContextSample> {
         val sec = e.at - Math.floorMod(e.at, stepMs)
         val out = if (sec > bucket && bucket != Long.MIN_VALUE) close() else emptyList()
-        if (sec > bucket) { bucket = sec; cryP = null }
+        if (sec > bucket) {
+            bucket = sec
+            cryP = null
+        }
         when (e) {
             is VehicleSample -> vehicle = e
             is CrySegment -> cryP = maxOf(cryP ?: 0.0, e.p)
@@ -56,10 +67,17 @@ class ContextRecorder(private val halfMs: Long = 30_000, private val stepMs: Lon
      * 모든 기록 지우기: 메모리 버퍼와 기다리는 캡처, 작성 중인 칸을 버린다.
      * 차량·기어·실내 온도 같은 지금 차 상태 값은 기록이 아니라 남겨도 된다.
      */
-    fun clear() { recent.clear(); pending.clear(); bucket = Long.MIN_VALUE; cryP = null }
+    fun clear() {
+        recent.clear()
+        pending.clear()
+        bucket = Long.MIN_VALUE
+        cryP = null
+    }
 
     /** 지운 에피소드의 기다리는 캡처를 버린다. */
-    fun drop(episodeId: String) { pending.remove(episodeId) }
+    fun drop(episodeId: String) {
+        pending.remove(episodeId)
+    }
 
     /**
      * 장면 경계(장면 시작·끝의 맥락 캡처): 작성 중인 칸은 경계 앞 세계의 값이라 마감해 기다리는 캡처의 줄로 돌려주고, 캡처는 거기서 끝낸다
@@ -67,7 +85,11 @@ class ContextRecorder(private val halfMs: Long = 30_000, private val stepMs: Lon
      */
     fun reset(): List<ContextSample> {
         val rows = if (bucket != Long.MIN_VALUE) close() else emptyList()
-        clear(); vehicle = null; gear = null; cabin = null; playback = null
+        clear()
+        vehicle = null
+        gear = null
+        cabin = null
+        playback = null
         return rows
     }
 

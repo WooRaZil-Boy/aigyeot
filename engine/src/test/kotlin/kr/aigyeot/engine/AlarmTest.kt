@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 // 경보와 1차 시도.
 class AlarmAndFirstAttemptTest {
     private val feedProfile = profile(interval = 180)
-    private val feedStart = T0 - 150 * MIN   // 시간대 = 시작 + 144분 ~ + 360분
+    private val feedStart = T0 - 150 * MIN // 시간대 = 시작 + 144분 ~ + 360분
 
     @Test fun alarm_startsAttempt1() {
         val sim = session().alarm()
@@ -36,7 +36,9 @@ class AlarmAndFirstAttemptTest {
         val sim = session().alarm()
         sim.ev(PlaybackRejected(sim.t, sim.play().id, RejectReason.FOCUS_DENIED))
         assertEquals(Phase.LISTENING, sim.ses.phase)
-        assertNull(sim.ses.episode); assertNull(sim.ses.pendingAlarm); assertNull(sim.ses.play)
+        assertNull(sim.ses.episode)
+        assertNull(sim.ses.pendingAlarm)
+        assertNull(sim.ses.play)
         assertEquals(listOf<Command>(LogAlarm(sim.ses.id, sim.t, AlarmOnly.FOCUS_DENIED)), sim.cmds)
     }
 
@@ -44,7 +46,9 @@ class AlarmAndFirstAttemptTest {
         val sim = session().alarm()
         sim.ev(PlaybackRejected(sim.t, sim.play().id, RejectReason.ERROR))
         assertEquals(Phase.LISTENING, sim.ses.phase)
-        assertNull(sim.ses.episode); assertNull(sim.ses.play); assertNull(sim.ses.pendingAlarm)
+        assertNull(sim.ses.episode)
+        assertNull(sim.ses.play)
+        assertNull(sim.ses.pendingAlarm)
         assertEquals(listOf<Command>(LogAlarm(sim.ses.id, sim.t, AlarmOnly.FOCUS_DENIED)), sim.cmds)
         assertTrue(sim.all<SavePlay>().isEmpty())
     }
@@ -54,12 +58,15 @@ class AlarmAndFirstAttemptTest {
         sim.ev(PlaybackRejected(sim.t, sim.play().id, RejectReason.NO_REAR_OUTPUT))
         assertEquals(Phase.HANDOFF, sim.ses.phase)
         val e = sim.ep
-        assertEquals(sim.t, e.alarmAt); assertNull(e.first); assertNull(e.second); assertEquals(0, e.playedMs)
+        assertEquals(sim.t, e.alarmAt)
+        assertNull(e.first)
+        assertNull(e.second)
+        assertEquals(0, e.playedMs)
         assertEquals(HandoffCause.NO_SOUND, e.handoff!!.cause)
         assertTrue(sim.step<CaptureContext>().isNotEmpty())
         assertTrue(Sid.S02 !in sim.sids())
-        assertTrue(Sid.S10 in sim.sids())   // 경로 정보 없음 → 쉼터 없음
-        assertTrue(sim.step<SendToPhone>().isEmpty())   // 알림은 S10을 말한 뒤
+        assertTrue(Sid.S10 in sim.sids()) // 경로 정보 없음 → 쉼터 없음
+        assertTrue(sim.step<SendToPhone>().isEmpty()) // 알림은 S10을 말한 뒤
         sim.done()
         assertEquals("handoff_alert", sim.all<SendToPhone>().single().type)
     }
@@ -79,12 +86,12 @@ class AlarmAndFirstAttemptTest {
         assertEquals(listOf(Sid.S02, Sid.S06, Sid.S07), sim.sids())
         assertTrue(sim.all<SendToPhone>().isEmpty())
         assertTrue(!sim.ep.s06Said)
-        sim.done().tick(8_000)                          // S06을 낸다
+        sim.done().tick(8_000) // S06을 낸다
         assertEquals(Sid.S06, sim.step<Speak>().single().sid)
         assertTrue(!sim.ep.s06Said)
         sim.done()
-        assertTrue(sim.ep.s06Said)                      // SpeechDone(spoken) 뒤에만 참
-        assertEquals(PlayMode.NORMAL, sim.play().mode)   // 재생은 계속
+        assertTrue(sim.ep.s06Said) // SpeechDone(spoken) 뒤에만 참
+        assertEquals(PlayMode.NORMAL, sim.play().mode) // 재생은 계속
     }
 
     @Test fun firstSix_roundRobin() {
@@ -107,9 +114,9 @@ class AlarmAndFirstAttemptTest {
 
     @Test fun feeding_usesBestNotExperiment() {
         val h = listOf(FirstTry(T0, WN, true), FirstTry(T0, WN, true), FirstTry(T0, LL, false))
-        assertEquals(LL, session(history = h).alarm().step<StartPlayback>().single().method)   // 평소: 처음 6번
+        assertEquals(LL, session(history = h).alarm().step<StartPlayback>().single().method) // 평소: 처음 6번
         val sim = session(prof = feedProfile, history = h, feedingStart = feedStart, seed = 5).alarm()
-        assertEquals(WN, sim.step<StartPlayback>().single().method)                           // 수유: 성적
+        assertEquals(WN, sim.step<StartPlayback>().single().method) // 수유: 성적
         assertEquals(5L, sim.s.rng)
     }
 
@@ -125,7 +132,8 @@ class AlarmAndFirstAttemptTest {
         assertEquals(Unjudged.PARKED_ALARM, sim.ep.first!!.unjudged)
         assertEquals(TryResult.UNJUDGED, sim.ep.first!!.result)
         val light = sim.step<SetReadingLight>().single()
-        assertEquals(listOf(Area.ROW_2_LEFT), light.areas); assertEquals(false, light.on)
+        assertEquals(listOf(Area.ROW_2_LEFT), light.areas)
+        assertEquals(false, light.on)
         assertTrue(Sid.S02 in sim.sids())
     }
 
@@ -135,14 +143,14 @@ class AlarmAndFirstAttemptTest {
         val alarmAt = sim.t
         sim.ev(PlaybackStarted(sim.t + 400, sim.play().id, null, false))
         assertEquals(alarmAt, sim.ep.alarmAt)
-        assertEquals(5_000, sim.ep.alarmDelayMs)   // 기준점은 PlaybackStarted가 아니다
+        assertEquals(5_000, sim.ep.alarmDelayMs) // 기준점은 PlaybackStarted가 아니다
 
         val drop = session().alarm()
         drop.ev(DriverStop(drop.t, Via.SCENARIO))
         assertEquals(Phase.WAIT, drop.ses.phase)
         assertNull(drop.ses.pendingAlarm)
         assertNull(drop.ses.episode)
-        assertTrue(drop.all<SavePlay>().isEmpty())   // 에피소드 전 재생은 행을 만들지 않는다
+        assertTrue(drop.all<SavePlay>().isEmpty()) // 에피소드 전 재생은 행을 만들지 않는다
     }
 
     @Test fun alarmInCall_logsOnly() {
@@ -158,7 +166,8 @@ class CrySeedTest {
 
     @Test fun alarmEpisode_startsWithAlarmSegments() {
         val sim = session().attempt1()
-        assertEquals(EpisodeTrigger.ALARM, sim.ep.trigger); assertEquals(Phase.ATTEMPT, sim.ses.phase)
+        assertEquals(EpisodeTrigger.ALARM, sim.ep.trigger)
+        assertEquals(Phase.ATTEMPT, sim.ses.phase)
         assertEquals(seed, sim.ep.cryMs)
     }
 
@@ -197,7 +206,8 @@ class CrySeedTest {
     // 재울음 구간은 recry()가 1차를 저장한 뒤에도 열려 있는 에피소드(2차)에 더해져 최종 기록에 들어간다
     @Test fun recrySegment_inFinalRecord() {
         val sim = session().attempt1().toGap().recry()
-        assertEquals(Phase.ATTEMPT, sim.ses.phase); assertEquals(2, sim.ses.attemptNo)
+        assertEquals(Phase.ATTEMPT, sim.ses.phase)
+        assertEquals(2, sim.ses.attemptNo)
         sim.started().toConfirm()
         assertEquals(Phase.CONFIRM, sim.ses.phase)
         sim.closeQuiet()
@@ -214,7 +224,7 @@ class CrySeedTest {
 
     @Test fun seenCryAfterOpen_addsOnTop() {
         val sim = session().attempt1()
-        sim.ev(CrySegment(sim.t + 3_000, sim.t, sim.t + 3_000, 0.9, true))   // ATTEMPT 중은 보지 않는다
+        sim.ev(CrySegment(sim.t + 3_000, sim.t, sim.t + 3_000, 0.9, true)) // ATTEMPT 중은 보지 않는다
         assertEquals(seed, sim.ep.cryMs, "ATTEMPT 중 구간은 더하지 않는다")
         sim.toGap()
         val from = sim.ses.judgeFrom!!

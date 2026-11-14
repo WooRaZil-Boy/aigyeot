@@ -14,16 +14,22 @@ internal class ReadyProbe(
     private val intervalMs: Long,
     private val alive: () -> Boolean,
     private val request: (ok: () -> Unit, fail: (Exception) -> Unit) -> Unit,
-    private val onReady: () -> Unit,
+    private val onReady: () -> Unit
 ) {
     var ready = false
         private set
 
-    fun start() { attempt() }
+    fun start() {
+        attempt()
+    }
 
+    // 취소 핸들은 쓰지 않는다: 예약한 일은 지금 취소할 일이 없다.
+    @Suppress("IgnoredReturnValue")
     private fun attempt() {
         if (ready || !alive()) return
-        try { request({ answered() }, { e -> if (notSupported(e)) answered() }) } catch (e: Exception) { /* 연결 전: 다음 간격에 */ }
+        try {
+            request({ answered() }, { e -> if (notSupported(e)) answered() })
+        } catch (e: Exception) { /* 연결 전: 다음 간격에 */ }
         sched.after(intervalMs) { attempt() }
     }
 

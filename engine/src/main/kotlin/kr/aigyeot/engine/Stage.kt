@@ -11,34 +11,57 @@ import kotlinx.serialization.Serializable
 sealed interface Stage {
     /** 읽기 투영(앱·장면 expect.state·시험이 읽는 이름). 직렬화되지 않는다. */
     val phase: Phase
+
     /** 시도 번호. LISTENING은 0. WAIT·HANDOFF는 직전 자동 시도 번호(판단에는 안 쓰고 시험·장면 측정이 읽는다). */
     val n: Int
+
     /** 재생(ATTEMPT 자동 시도, WAIT 요청 재생). */
     val play: Play? get() = null
+
     /** 판정 창(GAP·CONFIRM). null이면 판정 멈춤(입력 끊김·복원). */
     val window: JudgeWindow? get() = null
+
     /** 조용함 누적(WAIT·HANDOFF). */
     val quietMs: Long get() = 0
 
-    @Serializable @SerialName("LISTENING")
-    data object Listening : Stage { override val phase get() = Phase.LISTENING; override val n get() = 0 }
+    @Serializable
+    @SerialName("LISTENING")
+    data object Listening : Stage {
+        override val phase get() = Phase.LISTENING
+        override val n get() = 0
+    }
 
     /** 자동 시도 재생(시작 대기 포함). [alarm] = 1차 시작 전 경보 시각. PlaybackStarted가 에피소드로 옮긴다. */
-    @Serializable @SerialName("ATTEMPT")
-    data class Attempt(override val n: Int, override val play: Play, val alarm: PendingAlarm? = null) : Stage { override val phase get() = Phase.ATTEMPT }
+    @Serializable
+    @SerialName("ATTEMPT")
+    data class Attempt(override val n: Int, override val play: Play, val alarm: PendingAlarm? = null) : Stage {
+        override val phase get() = Phase.ATTEMPT
+    }
 
-    @Serializable @SerialName("GAP")
-    data class Gap(override val n: Int, override val window: JudgeWindow?) : Stage { override val phase get() = Phase.GAP }
+    @Serializable
+    @SerialName("GAP")
+    data class Gap(override val n: Int, override val window: JudgeWindow?) : Stage {
+        override val phase get() = Phase.GAP
+    }
 
-    @Serializable @SerialName("CONFIRM")
-    data class Confirm(override val n: Int, override val window: JudgeWindow?) : Stage { override val phase get() = Phase.CONFIRM }
+    @Serializable
+    @SerialName("CONFIRM")
+    data class Confirm(override val n: Int, override val window: JudgeWindow?) : Stage {
+        override val phase get() = Phase.CONFIRM
+    }
 
     /** [play]는 요청 재생만. */
-    @Serializable @SerialName("WAIT")
-    data class Wait(override val n: Int, override val quietMs: Long = 0, override val play: Play? = null) : Stage { override val phase get() = Phase.WAIT }
+    @Serializable
+    @SerialName("WAIT")
+    data class Wait(override val n: Int, override val quietMs: Long = 0, override val play: Play? = null) : Stage {
+        override val phase get() = Phase.WAIT
+    }
 
-    @Serializable @SerialName("HANDOFF")
-    data class Handoff(override val n: Int, override val quietMs: Long = 0) : Stage { override val phase get() = Phase.HANDOFF }
+    @Serializable
+    @SerialName("HANDOFF")
+    data class Handoff(override val n: Int, override val quietMs: Long = 0) : Stage {
+        override val phase get() = Phase.HANDOFF
+    }
 }
 
 /** 판정 구간: start ≥ from([sees]), end ≤ end. */

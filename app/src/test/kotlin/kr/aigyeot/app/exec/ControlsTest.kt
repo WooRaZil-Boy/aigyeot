@@ -1,5 +1,9 @@
 package kr.aigyeot.app.exec
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kr.aigyeot.engine.AddWaypoint
 import kr.aigyeot.engine.Area.ROW_1_LEFT
 import kr.aigyeot.engine.Area.ROW_2_LEFT
@@ -19,18 +23,24 @@ import kr.aigyeot.engine.SetReadingLight
 import kr.aigyeot.engine.SetSeatHeat
 import kr.aigyeot.engine.SetWindowLock
 import kr.aigyeot.engine.WaypointResult
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 // 차 제어·내비(0.1초부터 0.15초 간격, 5초, 재시도 1회)와 ControlResult·WaypointResult
 class ControlsTest {
     private class FakeNavi : NaviPort {
-        val asked = mutableListOf<String>(); var rests = mutableListOf<RestCandidate?>(); var done: ((Boolean, String) -> Unit)? = null
-        override fun addWaypoint(restId: String, rest: RestCandidate?, done: (Boolean, String) -> Unit) { asked += restId; rests += rest; this.done = done }
-        var cancels = 0; var throwCancel = false
-        override fun cancelWaypoint() { cancels++; if (throwCancel) error("cancel 실패") }
+        val asked = mutableListOf<String>()
+        var rests = mutableListOf<RestCandidate?>()
+        var done: ((Boolean, String) -> Unit)? = null
+        override fun addWaypoint(restId: String, rest: RestCandidate?, done: (Boolean, String) -> Unit) {
+            asked += restId
+            rests += rest
+            this.done = done
+        }
+        var cancels = 0
+        var throwCancel = false
+        override fun cancelWaypoint() {
+            cancels++
+            if (throwCancel) error("cancel 실패")
+        }
     }
 
     private val t = FakeTime()
@@ -51,7 +61,8 @@ class ControlsTest {
         val row = r.rows.single()
         assertEquals(listOf("setHvacSeatTemperature", "ROW_2_LEFT", "0", "0"), listOf(row.api, row.target, row.goal, row.actual))
         assertEquals(listOf<Long?>(50L, 400L), listOf(row.ackMs, row.appliedMs))
-        assertTrue(row.ok); assertEquals(0, row.retries)
+        assertTrue(row.ok)
+        assertEquals(0, row.retries)
         assertEquals(0, t.pending(), "끝나면 타이머를 남기지 않는다")
     }
 
@@ -80,13 +91,16 @@ class ControlsTest {
         car.values[READING_LIGHT to ROW_2_RIGHT] = 0.0
         t.advance(500)
         val e = r.of<ControlResult>().single()
-        assertTrue(e.ok); assertEquals(1.0, e.before); assertEquals(0.0, e.after)
+        assertTrue(e.ok)
+        assertEquals(1.0, e.before)
+        assertEquals(0.0, e.after)
         assertEquals(1, r.rows.single().retries)
     }
 
     @Test fun `거절된 명령은 값이 우연히 같아도 실패이고 5초 뒤 한 번 다시 보내 10초에 닫는다`() {
         car.values[READING_LIGHT to ROW_2_LEFT] = 1.0
-        car.ackOk = false; car.applyAfterMs = 10
+        car.ackOk = false
+        car.applyAfterMs = 10
         c.readingLight(SetReadingLight("s1-9", listOf(ROW_2_LEFT), false))
         t.advance(200)
         assertEquals(0.0, car.values[READING_LIGHT to ROW_2_LEFT], "값은 목표와 같아졌다(우연히)")
@@ -194,7 +208,8 @@ class ControlsTest {
         assertEquals(listOf("tbt:안성"), navi.asked)
         assertEquals(listOf<RestCandidate?>(anseong), navi.rests, "경로 상태의 쉼터(이름·거리)를 함께 넘긴다")
         assertTrue(r.events.isEmpty(), "호출만으로는 성공이 아니다")
-        t.advance(1_200); navi.done!!(true, "added")
+        t.advance(1_200)
+        navi.done!!(true, "added")
         assertEquals(WaypointResult(t.now, "s1-12", "tbt:안성", true), r.events.single())
         assertEquals(listOf("addWaypoint", "tbt:안성", "added"), r.rows.single().let { listOf(it.api, it.target, it.actual) })
         navi.done!!(false, "late")
@@ -220,7 +235,7 @@ class ControlsTest {
         t.advance(1)
         assertEquals(WaypointResult(t.now, "s1-12", "tbt:안성", false), r.events.single())
         assertEquals(1, navi.cancels)
-        navi.done!!(true, "added")                       // 11초에 늦게 도착한 위치·알림
+        navi.done!!(true, "added") // 11초에 늦게 도착한 위치·알림
         assertEquals(1, r.events.size)
     }
 
@@ -240,7 +255,10 @@ class ControlsTest {
         t.advance(2_000)
         assertTrue(r.events.isEmpty() && car.writes.size == 1 && navi.cancels == 0, "조건: 둘 다 진행 중")
         c.closeAll("stop")
-        assertEquals(listOf<Event>(ControlResult(t.now, "s1-8", WINDOW_LOCK, ROW_2_LEFT, false, 1.0, 1.0), WaypointResult(t.now, "s1-12", "tbt:안성", false)), r.events)
+        assertEquals(
+            listOf<Event>(ControlResult(t.now, "s1-8", WINDOW_LOCK, ROW_2_LEFT, false, 1.0, 1.0), WaypointResult(t.now, "s1-12", "tbt:안성", false)),
+            r.events
+        )
         assertEquals(1, navi.cancels)
         assertEquals(0, t.pending(), "타이머 취소")
         t.advance(30_000)
@@ -261,7 +279,13 @@ class ControlsTest {
     }
 
     // 지금 세션이 없어도(세션 닫힘 뒤 늦은 결과) 제어 기록은 명령을 낸 세션 id로 남는다
-    private val closed = Controls(car, navi, t, { t.now }, { r.events += it }, ControlLogger({ t.now }, { null }, { r.rows += it }), Params()) { id -> anseong.takeIf { it.id == id } }
+    private val closed =
+        Controls(car, navi, t, { t.now }, { r.events += it }, ControlLogger({ t.now }, { null }, { r.rows += it }), Params()) { id ->
+            anseong.takeIf {
+                it.id ==
+                    id
+            }
+        }
 
     @Test fun `열선·창문 잠금·독서등·공조 기록은 지금 세션이 없어도 명령 세션 id`() {
         car.values[SEAT_HEAT to ROW_2_LEFT] = 2.0

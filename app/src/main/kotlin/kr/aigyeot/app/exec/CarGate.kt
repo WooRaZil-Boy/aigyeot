@@ -7,13 +7,15 @@ package kr.aigyeot.app.exec
  * 모든 호출은 실행기 잠금 안에서 한다.
  */
 internal class CarGate(private val sched: Sched, private val timeoutMs: Long, private val ready: () -> Boolean) {
-    private class Entry(val run: () -> Unit, val fail: () -> Unit) { var cancel: () -> Unit = {} }
+    private class Entry(val run: () -> Unit, val fail: () -> Unit) {
+        var cancel: () -> Unit = {}
+    }
     private val queue = ArrayDeque<Entry>()
 
     /** 준비돼 있고 앞서 미룬 것이 없으면 바로, 아니면 줄에 세운다. */
     fun submit(run: () -> Unit, fail: () -> Unit, defer: Boolean = true) {
         if (queue.isEmpty() && ready()) return run()
-        if (!defer) return fail()   // 낮춤은 미루지 않는다: 준비를 기다리는 사이 달래기·장면이 끝나면 주인 없는 낮춤이 뒤늦게 실행돼 조명이 낮은 채 남는다
+        if (!defer) return fail() // 낮춤은 미루지 않는다: 준비를 기다리는 사이 달래기·장면이 끝나면 주인 없는 낮춤이 뒤늦게 실행돼 조명이 낮은 채 남는다
         val e = Entry(run, fail)
         e.cancel = sched.after(timeoutMs) { if (queue.remove(e)) fail() }
         queue += e
@@ -30,7 +32,11 @@ internal class CarGate(private val sched: Sched, private val timeoutMs: Long, pr
 
     /** Exec.stop: 미룬 명령을 모두 실패로 닫는다. */
     fun failAll() {
-        val all = queue.toList(); queue.clear()
-        all.forEach { it.cancel(); it.fail() }
+        val all = queue.toList()
+        queue.clear()
+        all.forEach {
+            it.cancel()
+            it.fail()
+        }
     }
 }

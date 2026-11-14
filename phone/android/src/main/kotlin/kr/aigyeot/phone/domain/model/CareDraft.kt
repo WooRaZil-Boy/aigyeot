@@ -1,9 +1,9 @@
 package kr.aigyeot.phone.domain.model
 
-import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.serialization.Serializable
 
 // 돌봄 기록 편집 규칙(타이머·시트). 화면은 동작만 보내고, 입력을 기록으로 만들고 검사하는 일은 여기서 한다(iOS `CareDraft`와 같은 이름).
 
@@ -52,7 +52,7 @@ data class CareDraft(
     val amount: Int?,
     val diaper: Diaper,
     val note: String,
-    val datePicked: Boolean = false,
+    val datePicked: Boolean = false
 ) {
     val hasDuration: Boolean get() = kind == CareKind.FEED || kind == CareKind.SLEEP
 
@@ -83,7 +83,7 @@ data class CareDraft(
             side = null,
             amount = null,
             diaper = Diaper.WET,
-            note = "",
+            note = ""
         )
 
         /** 고치기: 그 기록의 값에서 시작한다. */
@@ -97,7 +97,7 @@ data class CareDraft(
             side = e.feedSide,
             amount = e.amountMl,
             diaper = e.diaper ?: Diaper.WET,
-            note = e.note.orEmpty(),
+            note = e.note.orEmpty()
         )
     }
 }
@@ -106,13 +106,15 @@ data class CareDraft(
  * 몇 분 전 칩: 누른 때 기준으로 시작을 정한다. null('직접')이면 지금 값에서 날짜·시각을 고른다.
  * 시작을 옮겨도 사용자가 고른 끝은 말없이 바꾸지 않는다: 끝이 시작보다 빠르면 저장 검사가 알린다(setStart도 같다).
  */
-fun CareDraft.pick(chip: Int?, now: Long) =
-    if (chip == null) copy(chip = null) else copy(chip = chip, start = now - chip * MINUTE, datePicked = false)
+fun CareDraft.pick(chip: Int?, now: Long) = if (chip == null) copy(chip = null) else copy(chip = chip, start = now - chip * MINUTE, datePicked = false)
 
 /** 시작 시각 칩. 고치기·다른 날·날짜를 고른 시트는 지금 보이는 날 그대로, 오늘 새 기록이면 지금 이전에서 가장 늦은 그 시각. */
 fun CareDraft.setStart(hour: Int, minute: Int, now: Long): CareDraft {
-    val at = if (original != null || day != null || datePicked) onDate(Instant.ofEpochMilli(start).atZone(zone).toLocalDate(), hour, minute, zone)
-    else latestAtOrBefore(hour, minute, latestPick(now), zone)
+    val at = if (original != null || day != null || datePicked) {
+        onDate(Instant.ofEpochMilli(start).atZone(zone).toLocalDate(), hour, minute, zone)
+    } else {
+        latestAtOrBefore(hour, minute, latestPick(now), zone)
+    }
     return copy(start = at, chip = null)
 }
 
@@ -149,7 +151,7 @@ fun CareDraft.event(now: Long, base: CareEvent? = original): CareEvent {
         feedSide = side,
         amountMl = amount,
         diaper = diaper,
-        note = note,
+        note = note
     ).normalized()
 }
 
@@ -158,7 +160,7 @@ fun CareEvent.normalized(): CareEvent = copy(
     feedSide = if (kind == CareKind.FEED) feedSide else null,
     amountMl = if (kind == CareKind.FEED && feedSide == FeedSide.BOTTLE) amountMl else null,
     diaper = if (kind == CareKind.DIAPER) diaper else null,
-    note = note?.trim()?.ifEmpty { null },
+    note = note?.trim()?.ifEmpty { null }
 )
 
 // ---- 기록 시트 v8: 질문·줄 값·저장 단추 글. 화면은 이 글을 그리기만 한다(iOS `CareDraft`와 같은 규칙) ----

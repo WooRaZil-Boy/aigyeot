@@ -1,8 +1,8 @@
 package kr.aigyeot.app.exec
 
-import kr.aigyeot.app.exec.android.keepTail
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kr.aigyeot.app.exec.android.keepTail
 
 // 듣기 전 소리를 STT에 넣지 않는다: MicService는 975ms 창(15,600표본)을 다 읽은 뒤 부른다
 class MicWindowTest {

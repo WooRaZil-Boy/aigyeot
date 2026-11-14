@@ -20,15 +20,23 @@ class VirtualConsole(private val base: String = "http://127.0.0.1:8088") {
             c.requestMethod = method
             c.connectTimeout = 1_500
             c.readTimeout = 3_000
-            if (method != "GET") { c.doOutput = true; c.setFixedLengthStreamingMode(0); c.outputStream.close() }
+            if (method != "GET") {
+                c.doOutput = true
+                c.setFixedLengthStreamingMode(0)
+                c.outputStream.close()
+            }
             val code = c.responseCode
             Reply(code, ((if (code < 400) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: "").take(300))
-        } finally { c.disconnect() }
+        } finally {
+            c.disconnect()
+        }
     } catch (e: IOException) {
         Reply(-1, "${e.javaClass.simpleName}: ${e.message}")
-    } catch (e: SecurityException) {   // 평문 금지(release 네트워크 설정) 등
+    } catch (e: SecurityException) { // 평문 금지(release 네트워크 설정) 등
         Reply(-1, "${e.javaClass.simpleName}: ${e.message}")
     }
 
-    companion object { const val SESSION = "/browser/session?client=aigyeot" }
+    companion object {
+        const val SESSION = "/browser/session?client=aigyeot"
+    }
 }

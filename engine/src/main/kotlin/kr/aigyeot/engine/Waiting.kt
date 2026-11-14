@@ -9,28 +9,40 @@ package kr.aigyeot.engine
 internal sealed interface Waiting {
     /** 인계 알림 장부. 열린 세션 것인지는 상태로 가른다. */
     data class Ledger(val a: HandoffLedger) : Waiting
+
     /** 재생(Play)과 그 자동 시도 단계(ATTEMPT·GAP·CONFIRM의 결과 기다림). 경보 대기(PendingAlarm)는 ATTEMPT 안에만 있어 이 행과 같이 간다. */
     data object Playing : Waiting
+
     /** 말하는 줄(큐 맨 앞, speech.speaking)과 실행기 발화. */
     data object Speaking : Waiting
+
     /** 큐에서 차례를 기다리는 줄(말하는 맨 앞 줄 빼고). 실행기에 아직 없어 CUT도 DROP도 큐에서 빼기만 한다. */
     data class Queued(val line: Line) : Waiting
+
     /** 쉼터 질문의 답 기다림(session.pendingAsk, 실행기 답 듣기). */
     data object AskAnswer : Waiting
+
     /** 질문 창(speech.qa, 실행기 듣기·link 답). */
     data object QaTurn : Waiting
+
     /** 경유지 결과 기다림(session.waypointPending). */
     data object Waypoint : Waiting
+
     /** 수유실 들름(ign.nursingStop, 시동 단위). */
     data object Nursing : Waiting
+
     /** 쾌적 조정 결과 기다림(session.comfortPending). */
     data object Comfort : Waiting
+
     /** 뒷창 잠금·되돌림 결과 기다림(ign.windowLockPending). */
     data object WindowLock : Waiting
+
     /** 앰비언트 조명 낮춤·되돌림 결과 기다림(ign.ambient). 처리 순서는 뒷창 다음. */
     data object Ambient : Waiting
+
     /** 진행 중 조향 창(steer.window). */
     data object SteerWindow : Waiting
+
     /** 세션 예약(ign.reserved). 타입이 아니라 칸이다. */
     data object Reserved : Waiting
 }
@@ -39,24 +51,32 @@ internal sealed interface Waiting {
 internal enum class Life {
     /** 세션 닫힘(closeSession). */
     SESSION_CLOSE,
+
     /** 복원 ②(Room에서 이미 끝난 세션): 세션 닫힘의 할 일은 그때 나갔으니 SESSION_CLOSE 열의 DROP만 상태에 맞춘다. */
     ROOM_CLOSED,
+
     /** 새 세션(maybeOpen). */
     SESSION_OPEN,
+
     /** 장면 시작: 보관할 실제 상태(Engine.sceneStart). 장면이 실행기·결과 사건을 넘겨받으므로 실제 감시를 Suspend처럼 멈춘다. */
     SCENE_START,
+
     /** 장면 끝: 버릴 장면 상태(Engine.sceneEnd). */
     SCENE_END,
+
     /** 복원 ③ 비우기(Engine.afterRestore). 프로세스 시작과 장면 끝이 같이 탄다. */
     RESTORE,
+
     /** 복원 ④ Boot: 새 프로세스라 옛 콜백이 오지 않는다. */
     BOOT,
+
     /** 기록 지우기(ClearRecords). */
     CLEAR,
     SUSPEND,
     RESUME,
+
     /** 통화 시작(CallMode(inCall = true)). */
-    CALL,
+    CALL
 }
 
 /**
@@ -81,25 +101,25 @@ internal fun fate(w: Waiting, life: Life, s: EngineState): Fate {
             when (life) {
                 // 그 줄을 말하는 중이면 닫힌 세션 장부로 남아 그 SpeechDone까지 따라간다
                 Life.SESSION_CLOSE -> if (open && !(w.a.utteranceId != null && w.a.utteranceId == s.speech.speaking)) Fate.SETTLE else Fate.KEEP
-                Life.SCENE_END -> Fate.SETTLE   // 알림 없이 Room만(호스트가 SceneEnd.settle로 store에)
+                Life.SCENE_END -> Fate.SETTLE // 알림 없이 Room만(호스트가 SceneEnd.settle로 store에)
                 // CLEAR: 알림은 기록이 아니라 지금 우는 아기에 대한 통지라 버리지 않는다. 줄을 따라 알림이 나가고 Room 확정은 recordsCleared가 막는다.
                 // 여기서 바로 확정하면 같은 Step의 DeleteRecords(보낼 함의 미전송 알림 지우기)보다 앞서 넣어져 지워진다
                 else -> Fate.KEEP
             }
         }
         Waiting.Playing -> when (life) {
-            Life.SESSION_CLOSE, Life.SCENE_START, Life.SCENE_END, Life.SUSPEND, Life.CALL -> Fate.CUT   // SCENE_START: 장면 재생이 덮을 때까지 두지 않는다
+            Life.SESSION_CLOSE, Life.SCENE_START, Life.SCENE_END, Life.SUSPEND, Life.CALL -> Fate.CUT // SCENE_START: 장면 재생이 덮을 때까지 두지 않는다
             // RESTORE: 호스트가 lifecycle 앞에서 사실 사건 PlaybackEnded(ERROR, recorded)로 끝낸다(Room 읽기가 필요하다. 멈춘 시각은 스냅숏 now)
             else -> Fate.KEEP
         }
         Waiting.Speaking -> when (life) {
-            Life.SCENE_START, Life.SCENE_END, Life.SUSPEND, Life.CALL -> Fate.CUT   // 말하는 줄이 없어도 실행기를 끊는다(답·질문 듣기)
-            Life.RESTORE -> Fate.DROP   // 말하지 않은 것으로 버린다(장면 중에는 실제 발화가 없다)
-            else -> Fate.KEEP           // SESSION_CLOSE: 끝까지 말한다(인계 줄이면 장부가 따라간다)
+            Life.SCENE_START, Life.SCENE_END, Life.SUSPEND, Life.CALL -> Fate.CUT // 말하는 줄이 없어도 실행기를 끊는다(답·질문 듣기)
+            Life.RESTORE -> Fate.DROP // 말하지 않은 것으로 버린다(장면 중에는 실제 발화가 없다)
+            else -> Fate.KEEP // SESSION_CLOSE: 끝까지 말한다(인계 줄이면 장부가 따라간다)
         }
         is Waiting.Queued -> when (life) {
             Life.SESSION_CLOSE -> if (w.line.sid in SESSION_OFFERS) Fate.DROP else Fate.KEEP
-            Life.SCENE_START, Life.SUSPEND, Life.CALL -> Fate.CUT   // 장면 뒤 옛 값(S06 경과 시간 등)을 말하지 않게
+            Life.SCENE_START, Life.SUSPEND, Life.CALL -> Fate.CUT // 장면 뒤 옛 값(S06 경과 시간 등)을 말하지 않게
             Life.SCENE_END -> Fate.DROP
             // 옛 값 S06·질문 답이 남는 것은 프로세스 재시작뿐이다(장면 끝 복원은 장면 시작이 이미 비웠다)
             Life.RESTORE -> if (w.line.longDrive && !w.line.handoff) Fate.DROP else Fate.KEEP
@@ -108,13 +128,13 @@ internal fun fate(w: Waiting, life: Life, s: EngineState): Fate {
         }
         Waiting.AskAnswer -> when (life) {
             Life.SESSION_CLOSE, Life.SCENE_END, Life.RESTORE -> Fate.DROP
-            Life.SCENE_START, Life.SUSPEND, Life.CALL -> Fate.CUT   // 질문이 끝나 듣는 중이어도 끊는다(실제 '응'이 장면 상태로 가 버려지지 않게)
+            Life.SCENE_START, Life.SUSPEND, Life.CALL -> Fate.CUT // 질문이 끝나 듣는 중이어도 끊는다(실제 '응'이 장면 상태로 가 버려지지 않게)
             else -> Fate.KEEP
         }
         Waiting.QaTurn -> when (life) {
             Life.SCENE_END, Life.RESTORE, Life.CLEAR -> Fate.DROP
             Life.SCENE_START, Life.SUSPEND, Life.CALL -> Fate.CUT
-            else -> Fate.KEEP           // SESSION_CLOSE: 질문 답은 세션 없이도 된다
+            else -> Fate.KEEP // SESSION_CLOSE: 질문 답은 세션 없이도 된다
         }
         Waiting.Waypoint -> when (life) {
             // BOOT: 옛 AddWaypoint 콜백은 오지 않는다. SCENE_START: 결과는 장면 상태로 가 받을 곳이 없다. 실행기 요청은 끊지 않는다
@@ -130,28 +150,28 @@ internal fun fate(w: Waiting, life: Life, s: EngineState): Fate {
             else -> Fate.KEEP
         }
         Waiting.Comfort -> when (life) {
-            Life.SESSION_CLOSE, Life.SCENE_START, Life.BOOT -> Fate.DROP   // BOOT: 옛 ControlResult는 오지 않는다. SCENE_START: 결과는 장면 상태로 가고 그 재생도 끊었다
+            Life.SESSION_CLOSE, Life.SCENE_START, Life.BOOT -> Fate.DROP // BOOT: 옛 ControlResult는 오지 않는다. SCENE_START: 결과는 장면 상태로 가고 그 재생도 끊었다
             else -> Fate.KEEP
         }
         Waiting.WindowLock -> when (life) {
-            Life.SESSION_CLOSE, Life.SCENE_END -> Fate.RESTORE   // SCENE_END: 장면 세션이 닫히기 전에 끝나도 되돌린다
-            Life.BOOT -> Fate.DROP                    // 결과 대기분 버림·열린 세션 영역 다시 잠금(장면 시작 때 남긴 실제 잠금 대기도 장면 끝 Boot가 맞춘다)
-            else -> Fate.KEEP   // SESSION_OPEN: 뒷창 잠금 결과가 같은 영역을 기다린다(lockWindows)
+            Life.SESSION_CLOSE, Life.SCENE_END -> Fate.RESTORE // SCENE_END: 장면 세션이 닫히기 전에 끝나도 되돌린다
+            Life.BOOT -> Fate.DROP // 결과 대기분 버림·열린 세션 영역 다시 잠금(장면 시작 때 남긴 실제 잠금 대기도 장면 끝 Boot가 맞춘다)
+            else -> Fate.KEEP // SESSION_OPEN: 뒷창 잠금 결과가 같은 영역을 기다린다(lockWindows)
         }
         // 조명은 기록이 아니라 KEEP이 많다: 재생·세션이 끝나면 Step 끝 syncAmbient(투영)가 되돌린다. SCENE_END는 장면 상태의 back 있는 Dimmed를 되돌리고,
         // BOOT는 옛 결과가 오지 않아 Dimming은 버리고 Restoring은 Dimmed로 돌려 다시 보낸다
         Waiting.Ambient -> when (life) {
-            Life.SCENE_START -> Fate.CUT   // 실제 Dimming의 결과는 장면 상태로 가 버려지니 칸을 비우고 실행기 낮춤 작업을 장부 되돌림으로 버린다. Dimmed·Restoring은 그대로(realStep 끝에서 되돌림)
+            Life.SCENE_START -> Fate.CUT // 실제 Dimming의 결과는 장면 상태로 가 버려지니 칸을 비우고 실행기 낮춤 작업을 장부 되돌림으로 버린다. Dimmed·Restoring은 그대로(realStep 끝에서 되돌림)
             Life.SCENE_END -> Fate.RESTORE
             Life.BOOT -> Fate.DROP
             else -> Fate.KEEP
         }
         Waiting.SteerWindow -> when (life) {
-            Life.SESSION_CLOSE, Life.RESTORE -> Fate.DROP   // RESTORE: 이미 커밋된 창을 옛 부분 집계로 덮지 않게
+            Life.SESSION_CLOSE, Life.RESTORE -> Fate.DROP // RESTORE: 이미 커밋된 창을 옛 부분 집계로 덮지 않게
             else -> Fate.KEEP
         }
         Waiting.Reserved -> when (life) {
-            Life.SESSION_OPEN, Life.SUSPEND -> Fate.DROP   // 열며 씀. Suspend가 지움
+            Life.SESSION_OPEN, Life.SUSPEND -> Fate.DROP // 열며 씀. Suspend가 지움
             else -> Fate.KEEP
         }
     }
@@ -166,21 +186,25 @@ internal fun fate(w: Waiting, life: Life, s: EngineState): Fate {
 internal fun Tx.lifecycle(life: Life) {
     val s0 = s
     fun f(w: Waiting) = fate(w, life, s0)
-    for (a in s0.handoffs) when (f(Waiting.Ledger(a))) {
-        Fate.SETTLE -> if (life == Life.SCENE_END) dropLedger(a) else settleLedger(a, false)   // SCENE_END: Room 확정은 호스트(SceneEnd.settle)
-        Fate.DROP -> dropLedger(a)
-        else -> {}
+    for (a in s0.handoffs) {
+        when (f(Waiting.Ledger(a))) {
+            Fate.SETTLE -> if (life == Life.SCENE_END) dropLedger(a) else settleLedger(a, false) // SCENE_END: Room 확정은 호스트(SceneEnd.settle)
+            Fate.DROP -> dropLedger(a)
+            else -> {}
+        }
     }
     if (f(Waiting.Playing) == Fate.CUT) cutPlaying(life)
     // 말하기·질문 답 듣기·질문 듣기는 실행기(Voice) 하나라 하나라도 CUT이면 CancelSpeech 하나
     val speak = f(Waiting.Speaking)
     if (speak == Fate.CUT || f(Waiting.AskAnswer) == Fate.CUT || f(Waiting.QaTurn) == Fate.CUT) out += CancelSpeech
-    if (s.speech.speaking != null) when (speak) {
-        Fate.CUT -> cutSpeaking()
-        Fate.DROP -> endSpeaking()   // 말하기 간격은 지금부터
-        else -> {}
+    if (s.speech.speaking != null) {
+        when (speak) {
+            Fate.CUT -> cutSpeaking()
+            Fate.DROP -> endSpeaking() // 말하기 간격은 지금부터
+            else -> {}
+        }
     }
-    dropQueued { f(Waiting.Queued(it)) != Fate.KEEP }   // 말하는 맨 앞 줄은 위 Speaking 행이 정했다
+    dropQueued { f(Waiting.Queued(it)) != Fate.KEEP } // 말하는 맨 앞 줄은 위 Speaking 행이 정했다
     if (f(Waiting.AskAnswer) != Fate.KEEP) dropAsk()
     if (f(Waiting.QaTurn) != Fate.KEEP) closeQa()
     if (f(Waiting.Waypoint) != Fate.KEEP) dropWaypoint()
@@ -195,7 +219,7 @@ internal fun Tx.lifecycle(life: Life) {
         Fate.DROP -> dropLostLocks()
         else -> {}
     }
-    when (f(Waiting.Ambient)) {   // 뒷창 다음
+    when (f(Waiting.Ambient)) { // 뒷창 다음
         Fate.RESTORE -> restoreAmbientAtSceneEnd()
         Fate.CUT -> cutAmbientAtSceneStart()
         Fate.DROP -> dropAmbient()
@@ -211,14 +235,17 @@ private fun Tx.cutPlaying(life: Life) {
     when (life) {
         Life.SESSION_CLOSE -> {
             stopPlay(PlayEndReason.SESSION_END)
-            if (ses!!.episode != null) { unjudge(Unjudged.SESSION_END); closeEpisode() }
+            if (ses!!.episode != null) {
+                unjudge(Unjudged.SESSION_END)
+                closeEpisode()
+            }
         }
         // 자동 시도면 WAIT. 장면 시작은 실제 감시를 멈추는 것이라 Suspend와 같은 사유다(리포트 '일시 중단', 사유 값을 새로 만들지 않는다)
         Life.SUSPEND, Life.CALL, Life.SCENE_START -> {
             val r = if (life == Life.CALL) Unjudged.CALL else Unjudged.SUSPEND
             if (x.phase in AUTO_PHASES) toWait(r) else stopPlay(PlayEndReason.valueOf(r.name))
         }
-        Life.SCENE_END -> x.play?.let { out += StopPlayback(it.id, false) }   // 장면 상태는 버린다: 실행기만 멈추고 장면 세션 기록은 Room 정리가 닫는다
-        Life.ROOM_CLOSED, Life.SESSION_OPEN, Life.RESTORE, Life.BOOT, Life.CLEAR, Life.RESUME -> {}   // 표에 CUT이 없는 열
+        Life.SCENE_END -> x.play?.let { out += StopPlayback(it.id, false) } // 장면 상태는 버린다: 실행기만 멈추고 장면 세션 기록은 Room 정리가 닫는다
+        Life.ROOM_CLOSED, Life.SESSION_OPEN, Life.RESTORE, Life.BOOT, Life.CLEAR, Life.RESUME -> {} // 표에 CUT이 없는 열
     }
 }

@@ -59,7 +59,7 @@ data class DeviceInfo(
     val lastSeenAt: String?,
     val online: Boolean,
     /** 차 행에는 없다. */
-    val handoffAlerts: Boolean? = null,
+    val handoffAlerts: Boolean? = null
 )
 
 @Serializable
@@ -101,13 +101,7 @@ object PushTokenPatchSerializer : KSerializer<PushTokenPatch> {
 data class PatchDeviceRequest(val pushToken: PushTokenPatch = PushTokenPatch.Keep, val handoffAlerts: Boolean? = null)
 
 @Serializable
-data class PatchDeviceResponse(
-    val deviceId: String,
-    val role: Role,
-    val platform: Platform,
-    val handoffAlerts: Boolean,
-    val pushTokenSet: Boolean,
-)
+data class PatchDeviceResponse(val deviceId: String, val role: Role, val platform: Platform, val handoffAlerts: Boolean, val pushTokenSet: Boolean)
 
 /** `POST /v1/messages` 응답. `body`는 중계가 저장한 그대로(고쳐진 값 포함). */
 @Serializable
@@ -143,7 +137,7 @@ data class LlmDiaper(val minAgo: Int?, val todayCount: Int?)
 data class LlmState(
     val cry: LlmCry,
     val feeding: LlmFeeding?,
-    val carseatMin: Int?,   // 세션이 없으면 null
+    val carseatMin: Int?, // 세션이 없으면 null
     val cabinTemp: Double?,
     val nextRest: LlmNextRest?,
     val methodStats: List<MethodStat>,
@@ -152,7 +146,7 @@ data class LlmState(
     val sleep: LlmSleep? = null,
     val diaper: LlmDiaper? = null,
     val feedsToday: Int? = null,
-    val careAsOfMinAgo: Int? = null,
+    val careAsOfMinAgo: Int? = null
 )
 
 @Serializable
@@ -169,5 +163,5 @@ data class LlmResponse(
     val stopReason: String,
     val model: String,
     val promptVersion: String,
-    val latencyMs: Long,
+    val latencyMs: Long
 )

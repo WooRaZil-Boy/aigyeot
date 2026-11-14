@@ -1,9 +1,9 @@
 package kr.aigyeot.phone.domain.model
 
+import java.time.ZoneId
 import kr.aigyeot.shared.CarActionKind
 import kr.aigyeot.shared.ControlRecord
 import kr.aigyeot.shared.DeviceInfo
-import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.ExcludedReason
 import kr.aigyeot.shared.HandoffKind
@@ -20,10 +20,8 @@ import kr.aigyeot.shared.SoundMethod
 import kr.aigyeot.shared.SoundRef
 import kr.aigyeot.shared.StopInfo
 import kr.aigyeot.shared.StopReason
-import java.time.ZoneId
 
 // 화면 문구 고르기(규칙 하나 함수 하나). 리포트·노래·차 타일·수유 전송 상태. 화면은 이 함수의 글을 그리기만 한다.
-
 
 /** car.songs.full·거절 이유 `limit_reached`: 3곡이 찼을 때 목록 아래 안내와 거절 글이 같다(iOS와 같음). */
 const val SONGS_FULL = "노래는 3곡까지예요. 한 곡을 지운 뒤 보내 주세요."
@@ -118,7 +116,7 @@ fun stopText(
     rest: String?,
     toldDriver: Boolean? = null,
     waypointAdded: Boolean = false,
-    guardianNotified: Boolean = false,
+    guardianNotified: Boolean = false
 ) = buildString {
     append(
         when (reason) {
@@ -126,7 +124,7 @@ fun stopText(
             StopReason.SESSION_CAP -> "달래기 20분 끝남"
             StopReason.FEEDING_WINDOW -> "수유 시간대"
             StopReason.NO_SOUND -> "뒷좌석 출력 없음"
-        },
+        }
     )
     append(" · ")
     append(
@@ -135,7 +133,7 @@ fun stopText(
             HandoffKind.ARRIVAL_NOTICE -> if (toldDriver == false) "도착 안내는 하지 못했어요" else "도착 안내를 했어요"
             HandoffKind.NO_REST -> if (toldDriver == false) "안전한 곳에 세우도록 안내하지 못했어요" else "경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요"
             HandoffKind.PARKED -> if (reason == StopReason.NO_SOUND) "차가 선 채로 소리를 틀지 못했어요" else "차가 선 채로 달래기를 멈췄어요"
-        },
+        }
     )
     if (waypointAdded) append(" · 경유지 추가")
     if (guardianNotified) append(" · 다른 보호자에게 알림")

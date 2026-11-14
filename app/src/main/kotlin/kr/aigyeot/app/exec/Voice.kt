@@ -20,6 +20,7 @@ import kr.aigyeot.engine.plainWord
 
 /** 차가 말하기 시작한 문장(화면 표시용). [at]은 말하기를 시작한 시각. 말하지 못하고 끝난 문장(TTS 실패·포커스 거절·시간 초과)은 거둔다. */
 data class Said(val sid: Sid, val text: String, val at: Long)
+
 /** 듣기 창 [listenId]가 받은 글(물어보기 질문 표시용). */
 data class HeardText(val listenId: String, val text: String, val at: Long)
 
@@ -34,23 +35,24 @@ internal class Voice(
     private val sched: Sched,
     private val clock: () -> Long,
     private val post: (Event) -> Unit,
-    private val micRunning: () -> Boolean,
+    private val micRunning: () -> Boolean
 ) {
     private var speaking: String? = null
     private val _said = MutableStateFlow<Said?>(null)
     private val _heard = MutableStateFlow<HeardText?>(null)
+
     /** 화면용 읽기 투영(홈 '차가 방금 말한 문장'·물어보기 질문). 판단에는 쓰지 않는다. */
     val said: StateFlow<Said?> = _said
     val heard: StateFlow<HeardText?> = _heard
-    private var lastDone: Triple<String, Boolean, Long>? = null   // 마지막으로 끝난 발화·spoken·실제 완료 시각
+    private var lastDone: Triple<String, Boolean, Long>? = null // 마지막으로 끝난 발화·spoken·실제 완료 시각
     private var watchdog: () -> Unit = {}
     private var hearing: Hearing? = null
 
     private inner class Hearing(val deliver: (String?) -> Unit) {
         var text: String? = null
         var closed = false
-        var gotFinal = false                       // STT 최종 결과(오류 포함)를 받았다
-        val finals = mutableListOf<String>()       // 비지 않은 최종 결과(온 순서, 한 창의 최종 결과를 이어 하나로 낸다)
+        var gotFinal = false // STT 최종 결과(오류 포함)를 받았다
+        val finals = mutableListOf<String>() // 비지 않은 최종 결과(온 순서, 한 창의 최종 결과를 이어 하나로 낸다)
         val timers = mutableListOf<() -> Unit>()
     }
 
@@ -63,18 +65,27 @@ internal class Voice(
         val mine = Said(sid, text, clock()).also { _said.value = it }
         val undo = { if (_said.value === mine) _said.value = prev }
         unshow = undo
-        return { spoken -> if (unshow === undo) unshow = null; if (!spoken) undo() }
+        return { spoken ->
+            if (unshow === undo) unshow = null
+            if (!spoken) undo()
+        }
     }
 
-    fun speak(c: Speak) { val t = Lines.text(c.sid, c.vars); say(c.utteranceId, t, show(c.sid, t)) }
+    fun speak(c: Speak) {
+        val t = Lines.text(c.sid, c.vars)
+        say(c.utteranceId, t, show(c.sid, t))
+    }
 
     fun ask(c: Ask) {
         val t = Lines.text(c.sid, c.vars)
         val shown = show(c.sid, t)
         say(c.askId, t) { spoken ->
             shown(spoken)
-            if (!spoken || !micRunning()) post(Answer(clock(), c.askId, YesNo.NONE))
-            else hear(c.listenMs) { post(Answer(clock(), c.askId, yesNo(it))) }
+            if (!spoken || !micRunning()) {
+                post(Answer(clock(), c.askId, YesNo.NONE))
+            } else {
+                hear(c.listenMs) { post(Answer(clock(), c.askId, yesNo(it))) }
+            }
         }
     }
 
@@ -90,18 +101,35 @@ internal class Voice(
 
     /** CancelSpeech: 말하기와 듣기를 끊는다. 돌려줄 사건은 없다. */
     fun cancel() {
-        if (speaking != null) { speaking = null; watchdog(); tts.stop(); unshow?.invoke(); unshow = null }
-        hearing?.let { h -> hearing = null; h.timers.forEach { it() }; tap.close(); stt.cancel() }
+        if (speaking != null) {
+            speaking = null
+            watchdog()
+            tts.stop()
+            unshow?.invoke()
+            unshow = null
+        }
+        hearing?.let { h ->
+            hearing = null
+            h.timers.forEach { it() }
+            tap.close()
+            stt.cancel()
+        }
     }
 
     /** [id]가 아직 말하는 중이면 끊고 null('끊음'), 이미 끝났으면 그 spoken(SpeechDone이 호스트 큐에 있다). done 콜백과 같은 잠금 안에서 부른다. */
     fun cancelIfSpeaking(id: String): Pair<Boolean, Long>? {
-        if (speaking == id) { cancel(); return null }
-        return lastDone?.takeIf { it.first == id }?.let { it.second to it.third }   // 완료 시각도 돌려준다
+        if (speaking == id) {
+            cancel()
+            return null
+        }
+        return lastDone?.takeIf { it.first == id }?.let { it.second to it.third } // 완료 시각도 돌려준다
     }
 
     private fun say(id: String, text: String, then: (Boolean) -> Unit) {
-        if (speaking != null) { watchdog(); tts.stop() }          // 판단 코어는 하나씩 내지만, 남은 문장이 있으면 끊고 새 문장을 말한다
+        if (speaking != null) {
+            watchdog()
+            tts.stop()
+        } // 판단 코어는 하나씩 내지만, 남은 문장이 있으면 끊고 새 문장을 말한다
         speaking = id
         fun done(spoken: Boolean) {
             if (speaking != id) return
@@ -112,8 +140,17 @@ internal class Voice(
             post(SpeechDone(at, id, spoken))
             then(spoken)
         }
-        watchdog = sched.after(SPEECH_TIMEOUT_MS) { if (speaking == id) { tts.stop(); done(false) } }
-        try { tts.speak(text) { done(it) } } catch (e: Exception) { done(false) }
+        watchdog = sched.after(SPEECH_TIMEOUT_MS) {
+            if (speaking == id) {
+                tts.stop()
+                done(false)
+            }
+        }
+        try {
+            tts.speak(text) { done(it) }
+        } catch (e: Exception) {
+            done(false)
+        }
     }
 
     /**
@@ -121,7 +158,13 @@ internal class Voice(
      * 넘기는 글은 비지 않은 최종 결과를 온 순서대로 띄어 이은 것이고, 최종이 없으면 마지막 부분 인식이다.
      */
     private fun hear(ms: Long, deliver: (String?) -> Unit) {
-        hearing?.let { old -> hearing = null; old.timers.forEach { it() }; tap.close(); stt.cancel(); old.deliver(null) }
+        hearing?.let { old ->
+            hearing = null
+            old.timers.forEach { it() }
+            tap.close()
+            stt.cancel()
+            old.deliver(null)
+        }
         val h = Hearing(deliver).also { hearing = it }
         fun finish() {
             if (hearing !== h) return
@@ -133,18 +176,20 @@ internal class Voice(
         try {
             stt.begin { text, final ->
                 if (hearing !== h) return@begin
-                if (final) {   // 최종이 하나라도 왔으면 부분 인식은 버린다('답이 없으면 아무것도 안 한다'). 빈 최종은 앞의 최종을 지우지 않는다
+                if (final) { // 최종이 하나라도 왔으면 부분 인식은 버린다('답이 없으면 아무것도 안 한다'). 빈 최종은 앞의 최종을 지우지 않는다
                     h.gotFinal = true
                     if (text.isNotBlank()) h.finals += text.trim()
                     h.text = h.finals.joinToString(" ").takeIf { it.isNotEmpty() }
+                } else if (text.isNotBlank() && !h.gotFinal) {
+                    h.text = text
                 }
-                else if (text.isNotBlank() && !h.gotFinal) h.text = text
                 // 창이 닫힌 뒤에도 바로 끝내지 않는다: 유예 중 더 올 최종 결과까지 모아 유예가 끝날 때 한 번 낸다
             }
             tap.open { pcm -> if (hearing === h && !h.closed) stt.feed(pcm) }
-        } catch (e: Exception) {                                   // 시작에서 던지면 그 듣기를 빈 결과로 끝낸다
+        } catch (e: Exception) { // 시작에서 던지면 그 듣기를 빈 결과로 끝낸다
             hearing = null
-            runCatching { tap.close() }; runCatching { stt.cancel() }
+            runCatching { tap.close() }
+            runCatching { stt.cancel() }
             return deliver(null)
         }
         h.timers += sched.after(ms) {
@@ -153,7 +198,7 @@ internal class Voice(
             tap.close()
             stt.finish()
             h.timers += sched.after(STT_FINAL_GRACE_MS) {
-                if (hearing === h && !h.gotFinal) stt.cancel()     // 최종 없이 끝나면 마지막 부분 인식을 쓰되 묶음은 닫는다
+                if (hearing === h && !h.gotFinal) stt.cancel() // 최종 없이 끝나면 마지막 부분 인식을 쓰되 묶음은 닫는다
                 finish()
             }
         }
@@ -162,6 +207,7 @@ internal class Voice(
     companion object {
         /** TTS 끝 신호가 오지 않을 때 문장 큐가 영원히 막히지 않게. 설계값, 근거 없음(가장 긴 S07_DEPART도 10초 안팎). */
         const val SPEECH_TIMEOUT_MS = 20_000L
+
         /** 듣기 창이 끝난 뒤 STT 최종 결과를 기다리는 시간. 판단 코어가 듣기 창 끝에 1초 여유를 두므로 그 안에 Heard가 닿게. */
         const val STT_FINAL_GRACE_MS = 800L
 
@@ -177,7 +223,7 @@ internal class Voice(
             if (text == null) return YesNo.NONE
             val all = text.filter { it.isLetterOrDigit() }
             if (NO.any { all.contains(it) }) return YesNo.NO
-            val words = text.split(Regex("\\s+")).map(::plainWord).filter { it.isNotEmpty() }   // '그만'과 같은 정규화
+            val words = text.split(Regex("\\s+")).map(::plainWord).filter { it.isNotEmpty() } // '그만'과 같은 정규화
             return if (words.isNotEmpty() && words.all { it in YES }) YesNo.YES else YesNo.NONE
         }
     }
@@ -215,9 +261,10 @@ internal object Lines {
     internal fun clock(ms: String): String {
         val t = ms.toLongOrNull() ?: return ms
         val c = Calendar.getInstance().apply { timeInMillis = t }
-        val h = c.get(Calendar.HOUR_OF_DAY); val m = c.get(Calendar.MINUTE)
+        val h = c.get(Calendar.HOUR_OF_DAY)
+        val m = c.get(Calendar.MINUTE)
         return "${if (h < 12) "오전" else "오후"} ${if (h % 12 == 0) 12 else h % 12}시" + if (m == 0) "" else " ${m}분"
     }
 
-    private fun ro(w: String) = jong(w).let { if (it == 0 || it == 8) "로" else "으로" }   // 받침·을/를은 Wire 한 곳
+    private fun ro(w: String) = jong(w).let { if (it == 0 || it == 8) "로" else "으로" } // 받침·을/를은 Wire 한 곳
 }

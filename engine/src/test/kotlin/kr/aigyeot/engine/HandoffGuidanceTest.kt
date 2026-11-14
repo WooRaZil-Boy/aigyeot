@@ -1,30 +1,31 @@
 package kr.aigyeot.engine
 
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 // 기다리는 S15·S10은 꺼낼 때 지금 경로로 다시 본다.
 class GuidanceRecheckAtPopTest {
     /** 말하기 간격 8초에 막혀 인계 줄이 큐에서 기다리는 상태. */
-    private fun waiting(sim: Sim): Sim = sim.handoff()   // 앞 발화(S03)가 말하는 중이라 인계 줄은 그 뒤에서 기다린다
+    private fun waiting(sim: Sim): Sim = sim.handoff() // 앞 발화(S03)가 말하는 중이라 인계 줄은 그 뒤에서 기다린다
     private fun Sim.queued() = s.speech.queue.map { it.sid }.filter { it == Sid.S15 || it == Sid.S10 }
     private fun Sim.release() = done(2_000).tick(P.speechGapMs)
     private fun Sim.reroute(sec: Int?, dest: Boolean = true, vararg rests: RestCandidate) = ev(RouteState(t + 1_000, dest, sec, rests.toList(), null))
     private fun Sim.text() = all<SendToPhone>().filter { it.type == "handoff_alert" }.map { it.body["text"]!!.jsonPrimitive.content }
 
-    @Test fun s15_routeNowLong_notSpokenAsS15() {   // 버리지 않고 다시 고른다(쉼터 있으면 S08). 다시 고른 줄은 GuidanceRepickTest
+    @Test fun s15_routeNowLong_notSpokenAsS15() { // 버리지 않고 다시 고른다(쉼터 있으면 S08). 다시 고른 줄은 GuidanceRepickTest
         val sim = waiting(session().route(rest("a", 5.0), dest = true, remainingSec = 360))
         assertEquals(listOf(Sid.S15), sim.queued())
         sim.reroute(3600, true, rest("a", 5.0)).release()
-        assertTrue(sim.s.speech.queue.none { it.sid == Sid.S15 }); assertTrue(sim.all<Speak>().none { it.sid == Sid.S15 })
-        assertEquals(listOf(Sid.S08), sim.all<Ask>().map { it.sid })   // 인계 안내가 대신 나간다
+        assertTrue(sim.s.speech.queue.none { it.sid == Sid.S15 })
+        assertTrue(sim.all<Speak>().none { it.sid == Sid.S15 })
+        assertEquals(listOf(Sid.S08), sim.all<Ask>().map { it.sid }) // 인계 안내가 대신 나간다
     }
 
     @Test fun s15_minutesRefreshed() {
@@ -39,12 +40,13 @@ class GuidanceRecheckAtPopTest {
         assertEquals("6", sim.all<Speak>().single { it.sid == Sid.S15 }.vars["minutes"])
     }
 
-    @Test fun s10_restAppeared_notSpokenAsS10_forgotten() {   // S10 대신 쉼터 제안(S08)을 다시 고른다
+    @Test fun s10_restAppeared_notSpokenAsS10_forgotten() { // S10 대신 쉼터 제안(S08)을 다시 고른다
         val sim = waiting(session())
         assertEquals(listOf(Sid.S10), sim.queued())
         assertTrue(!sim.ses.spokenAt.containsKey(Sid.S10), "큐에 든 동안은 금지 시각이 없다")
         sim.reroute(null, false, rest("n", 8.0)).release()
-        assertTrue(sim.s.speech.queue.none { it.sid == Sid.S10 }); assertTrue(sim.all<Speak>().none { it.sid == Sid.S10 })
+        assertTrue(sim.s.speech.queue.none { it.sid == Sid.S10 })
+        assertTrue(sim.all<Speak>().none { it.sid == Sid.S10 })
         assertEquals(listOf(Sid.S08), sim.all<Ask>().map { it.sid })
         assertTrue(!sim.ses.spokenAt.containsKey(Sid.S10))
     }
@@ -69,14 +71,15 @@ class GuidanceRecheckAtPopTest {
         assertEquals("4", sim.all<Speak>().single { it.sid == Sid.S15 }.vars["minutes"])
     }
 
-    @Test fun restoredS15_longRoute_notSpokenAsS15() {   // 다시 고른다
+    @Test fun restoredS15_longRoute_notSpokenAsS15() { // 다시 고른다
         val sim = restoredWaiting()
         sim.ev(RouteState(sim.t + 1_000, true, 3600, listOf(rest("a", 5.0)), null)).tick(P.speechGapMs)
-        assertTrue(sim.queued().isEmpty()); assertTrue(sim.all<Speak>().none { it.sid == Sid.S15 })
+        assertTrue(sim.queued().isEmpty())
+        assertTrue(sim.all<Speak>().none { it.sid == Sid.S15 })
         assertEquals(listOf(Sid.S08), sim.all<Ask>().map { it.sid })
     }
 
-    @Test fun restoredS15_noRoute_s10AfterWait() {   // 경로가 끝내 없으면 S10으로 다시 고른다
+    @Test fun restoredS15_noRoute_s10AfterWait() { // 경로가 끝내 없으면 S10으로 다시 고른다
         val sim = restoredWaiting()
         sim.ev(Tick(sim.s.bootAt!! + P.routeWaitMs + 1_000))
         assertTrue(sim.all<Speak>().none { it.sid == Sid.S15 })
@@ -109,7 +112,7 @@ class GuidanceRepickTest {
 
     @Test fun s10_restBlockedByRepeatBan_noLine_unnamedAlert() {
         val sim = waiting(session())
-        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(spokenAt = spokenAt + (Sid.S08 to sim.t)) })   // S08은 10분 안에 냈다
+        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(spokenAt = spokenAt + (Sid.S08 to sim.t)) }) // S08은 10분 안에 냈다
         sim.reroute(null, false, rest("n", 8.0)).release()
         assertTrue(sim.all<Speak>().none { it.sid == Sid.S10 } && sim.asked().isEmpty(), "쉼터가 있는데 '못 찾았다'고 하지 않는다")
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
@@ -131,7 +134,7 @@ class GuidanceRepickTest {
 
     @Test fun s15_routeLonger_restExists_asksRest_noSecondAlert() {
         val sim = waiting(session().route(rest("a", 5.0), dest = true, remainingSec = 360))
-        assertEquals(listOf("arrival_notice"), sim.kinds())   // 도착 알림은 바로 갔다
+        assertEquals(listOf("arrival_notice"), sim.kinds()) // 도착 알림은 바로 갔다
         sim.reroute(3600, true, rest("a", 5.0)).release()
         assertEquals(listOf(Sid.S08), sim.asked())
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
@@ -160,11 +163,13 @@ class GuidanceRepickTest {
         assertEquals(false, sim.s.session?.episode?.let { sim.told(it.id) } ?: false)
     }
 
-    @Test fun unboundS10_restAppeared_repickedS08() {   // 예전에는 버렸다. 인계가 아닌 줄도 지금 경로로 다시 고른다(알림 없음)
+    @Test fun unboundS10_restAppeared_repickedS08() { // 예전에는 버렸다. 인계가 아닌 줄도 지금 경로로 다시 고른다(알림 없음)
         val sim = waiting(session())
-        sim.s = sim.s.copy(handoffs = emptyList(), speech =sim.s.speech.copy(queue = sim.s.speech.queue.map { it.copy(handoff = false) }))   // 인계에 묶이지 않은 줄(표시 없는 줄)
+        // 인계에 묶이지 않은 줄(표시 없는 줄)
+        sim.s = sim.s.copy(handoffs = emptyList(), speech = sim.s.speech.copy(queue = sim.s.speech.queue.map { it.copy(handoff = false) }))
         sim.reroute(null, false, rest("n", 8.0)).release()
-        assertTrue(sim.all<Speak>().none { it.sid == Sid.S10 }); assertEquals(listOf(Sid.S08), sim.asked())
+        assertTrue(sim.all<Speak>().none { it.sid == Sid.S10 })
+        assertEquals(listOf(Sid.S08), sim.asked())
         assertTrue(!sim.ses.spokenAt.containsKey(Sid.S10))
         assertTrue(sim.alerts().isEmpty())
     }
@@ -203,9 +208,9 @@ class BoundLineRepickTest {
         assertEquals(HandoffKind.ARRIVAL_NOTICE, sim.ep.handoff!!.kind)
     }
 
-    @Test fun unboundS08_restGone_repickedNewRest() {   // 예전에는 버렸다. 인계가 아닌 줄도 지금 경로의 쉼터로 다시 묻는다
+    @Test fun unboundS08_restGone_repickedNewRest() { // 예전에는 버렸다. 인계가 아닌 줄도 지금 경로의 쉼터로 다시 묻는다
         val sim = session().route(rest("a", 8.0), dest = true, remainingSec = 3600).handoff()
-        sim.s = sim.s.copy(handoffs = emptyList(), speech =sim.s.speech.copy(queue = sim.s.speech.queue.map { it.copy(handoff = false) }))   // 표시 없는 줄
+        sim.s = sim.s.copy(handoffs = emptyList(), speech = sim.s.speech.copy(queue = sim.s.speech.queue.map { it.copy(handoff = false) })) // 표시 없는 줄
         val before = sim.asked().size
         sim.reroute(3600, true, rest("b", 9.0)).done(2_000).tick(P.speechGapMs)
         assertEquals(before + 1, sim.asked().size)
@@ -213,7 +218,7 @@ class BoundLineRepickTest {
     }
 
     @Test fun repickedS15_alertMinutesFollowSpeech() {
-        val sim = session().handoff()   // 경로 없음: S10이 묶인다
+        val sim = session().handoff() // 경로 없음: S10이 묶인다
         sim.reroute(360, true).done(2_000)
         sim.reroute(299, true).tick(P.speechGapMs)
         assertEquals("5", sim.all<Speak>().last { it.sid == Sid.S15 }.vars["minutes"])
@@ -228,9 +233,14 @@ class HandoffGuidanceTest {
     private fun Sim.reroute(sec: Int?, dest: Boolean = true, vararg rests: RestCandidate) = ev(RouteState(t + 1_000, dest, sec, rests.toList(), null))
     private fun JsonObject.str(k: String) = this[k]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
     private val handoffSids = setOf(Sid.S07, Sid.S08, Sid.S10, Sid.S15)
+
     /** 실제로 낸 인계 문장(Speak·Ask)과 그 vars. */
-    private fun Sim.said() = log.mapNotNull { c -> (c as? Speak)?.let { it.sid to it.vars } ?: (c as? Ask)?.let { it.sid to it.vars } }.filter { it.first in handoffSids }
+    private fun Sim.said() = log.mapNotNull { c -> (c as? Speak)?.let { it.sid to it.vars } ?: (c as? Ask)?.let { it.sid to it.vars } }.filter {
+        it.first in
+            handoffSids
+    }
     private fun Sim.marks() = s.speech.queue.count { it.handoff }
+
     /** 앞 발화(S02) 뒤에서 기다리던 인계 줄을 꺼내 낸다(S03은 그 재생이 끝나 버려진다). */
     private fun Sim.release() = done(2_000).tick(P.speechGapMs)
 
@@ -239,19 +249,25 @@ class HandoffGuidanceTest {
     private fun s10() = session().handoff()
 
     /** 표 한 칸의 끝: 낸 줄을 말한 뒤(spoken) 알림·기록을 본다. */
-    private fun Sim.finish(): Sim { if (s.speech.speaking != null) done(2_000); return this }
+    private fun Sim.finish(): Sim {
+        if (s.speech.speaking != null) done(2_000)
+        return this
+    }
 
     // ---- 처음 S15(도착 알림은 인계 때 이미 보냄) ----
     @Test fun s15_arrivalStill_minutesRefreshed() {
         val sim = s15()
-        assertEquals(1, sim.marks()); assertEquals(Sid.S15, sim.s.speech.queue.single { it.handoff }.sid)
+        assertEquals(1, sim.marks())
+        assertEquals(Sid.S15, sim.s.speech.queue.single { it.handoff }.sid)
         sim.reroute(240, true, rest("a", 5.0)).release()
         assertEquals(listOf(Sid.S15 to mapOf("minutes" to "4")), sim.said())
         assertEquals(HandoffKind.ARRIVAL_NOTICE, sim.ep.handoff!!.kind)
         sim.finish()
         val a = sim.alertBodies().single()
-        assertEquals("arrival_notice", a.str("kind")); assertEquals("6", a.str("minutes_to_arrival"), "인계 때 보낸 알림 한 건뿐")
-        assertEquals(true, sim.told()); assertNull(sim.settled()?.restName)
+        assertEquals("arrival_notice", a.str("kind"))
+        assertEquals("6", a.str("minutes_to_arrival"), "인계 때 보낸 알림 한 건뿐")
+        assertEquals(true, sim.told())
+        assertNull(sim.settled()?.restName)
     }
 
     @Test fun s15_restNow_asksRest_noSecondAlert() {
@@ -260,18 +276,20 @@ class HandoffGuidanceTest {
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
         sim.finish()
         assertEquals(listOf("arrival_notice"), sim.alertBodies().map { it.str("kind") })
-        assertEquals(true, sim.told()); assertEquals("a 휴게소", sim.settled()?.restName)
+        assertEquals(true, sim.told())
+        assertEquals("a 휴게소", sim.settled()?.restName)
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.all<SaveEpisode>().last().record.handoffKind)
     }
 
     @Test fun s15_restNowBlocked_noLine_toldFalse() {
         val sim = s15()
-        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(spokenAt = spokenAt + (Sid.S08 to sim.t)) })   // S08을 10분 안에 냈다
+        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(spokenAt = spokenAt + (Sid.S08 to sim.t)) }) // S08을 10분 안에 냈다
         sim.reroute(3600, true, rest("a", 5.0)).release().finish()
         assertTrue(sim.said().isEmpty(), "도착 안내도 쉼터 없음 안내도 하지 않는다")
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
         assertEquals(listOf("arrival_notice"), sim.alertBodies().map { it.str("kind") })
-        assertEquals(false, sim.told()); assertNull(sim.ledger)
+        assertEquals(false, sim.told())
+        assertNull(sim.ledger)
         assertEquals(0, sim.marks())
     }
 
@@ -280,7 +298,8 @@ class HandoffGuidanceTest {
         assertEquals(listOf(Sid.S10), sim.said().map { it.first })
         assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind)
         sim.finish()
-        assertEquals(1, sim.alertBodies().size); assertEquals(true, sim.told())
+        assertEquals(1, sim.alertBodies().size)
+        assertEquals(true, sim.told())
     }
 
     // ---- 처음 S08(알림은 낼 때) ----
@@ -289,16 +308,20 @@ class HandoffGuidanceTest {
         assertEquals(listOf(Sid.S08 to mapOf("distanceKm" to "6", "restName" to "a 휴게소")), sim.said())
         sim.finish()
         val a = sim.alertBodies().single()
-        assertEquals("rest_offer", a.str("kind")); assertEquals("a 휴게소", a.str("rest_name"))
-        assertEquals(true, sim.told()); assertEquals("a 휴게소", sim.settled()?.restName)
+        assertEquals("rest_offer", a.str("kind"))
+        assertEquals("a 휴게소", a.str("rest_name"))
+        assertEquals(true, sim.told())
+        assertEquals("a 휴게소", sim.settled()?.restName)
     }
 
     @Test fun s08_otherRest_asksNewRest() {
         val sim = s08().reroute(3600, true, rest("b", 9.0)).release()
-        assertEquals(listOf(Sid.S08), sim.said().map { it.first }); assertEquals("b", sim.ses.pendingAsk!!.restId)
+        assertEquals(listOf(Sid.S08), sim.said().map { it.first })
+        assertEquals("b", sim.ses.pendingAsk!!.restId)
         sim.finish()
         assertEquals("b 휴게소", sim.alertBodies().single().str("rest_name"))
-        assertEquals(true, sim.told()); assertEquals("b 휴게소", sim.settled()?.restName)
+        assertEquals(true, sim.told())
+        assertEquals("b 휴게소", sim.settled()?.restName)
     }
 
     @Test fun s08_nearDestination_s15_alertMinutes() {
@@ -307,8 +330,11 @@ class HandoffGuidanceTest {
         assertEquals(HandoffKind.ARRIVAL_NOTICE, sim.ep.handoff!!.kind)
         sim.finish()
         val a = sim.alertBodies().single()
-        assertEquals("arrival_notice", a.str("kind")); assertEquals("6", a.str("minutes_to_arrival")); assertNull(a.str("rest_name"))
-        assertEquals(true, sim.told()); assertNull(sim.settled()?.restName)
+        assertEquals("arrival_notice", a.str("kind"))
+        assertEquals("6", a.str("minutes_to_arrival"))
+        assertNull(a.str("rest_name"))
+        assertEquals(true, sim.told())
+        assertNull(sim.settled()?.restName)
     }
 
     @Test fun s08_restGone_s10_namedNoRestAlert() {
@@ -316,18 +342,23 @@ class HandoffGuidanceTest {
         assertEquals(listOf(Sid.S10), sim.said().map { it.first })
         sim.finish()
         val a = sim.alertBodies().single()
-        assertEquals("no_rest", a.str("kind")); assertEquals("아기가 계속 울어요. 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요.", a.str("text"))
-        assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind); assertEquals(true, sim.told())
+        assertEquals("no_rest", a.str("kind"))
+        assertEquals("아기가 계속 울어요. 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요.", a.str("text"))
+        assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind)
+        assertEquals(true, sim.told())
     }
 
     @Test fun s08_blockedByWaypointInProgress_plainAlert() {
         val sim = s08()
-        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(waypointPending = WaypointPending("c", "z", sim.ses.id, null)) })   // 다른 경유지 요청이 진행 중
+        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(waypointPending = WaypointPending("c", "z", sim.ses.id, null)) }) // 다른 경유지 요청이 진행 중
         sim.release().finish()
         assertTrue(sim.said().isEmpty())
         val a = sim.alertBodies().single()
-        assertEquals("rest_offer", a.str("kind")); assertNull(a.str("rest_name")); assertEquals("아기가 계속 울어요.", a.str("text"))
-        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind); assertEquals(false, sim.told())
+        assertEquals("rest_offer", a.str("kind"))
+        assertNull(a.str("rest_name"))
+        assertEquals("아기가 계속 울어요.", a.str("text"))
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        assertEquals(false, sim.told())
         assertTrue(Sid.S08 !in sim.ses.spokenAt, "듣지 못한 질문은 10분 금지를 남기지 않는다")
     }
 
@@ -337,8 +368,10 @@ class HandoffGuidanceTest {
         assertEquals(listOf(Sid.S08), sim.said().map { it.first })
         assertTrue(Sid.S10 !in sim.ses.spokenAt)
         sim.finish()
-        assertEquals("rest_offer", sim.alertBodies().single().str("kind")); assertEquals("n 휴게소", sim.alertBodies().single().str("rest_name"))
-        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind); assertEquals(true, sim.told())
+        assertEquals("rest_offer", sim.alertBodies().single().str("kind"))
+        assertEquals("n 휴게소", sim.alertBodies().single().str("rest_name"))
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        assertEquals(true, sim.told())
     }
 
     @Test fun s10_restAppearedBlocked_plainRestOffer() {
@@ -347,8 +380,11 @@ class HandoffGuidanceTest {
         sim.reroute(null, false, rest("n", 8.0)).release().finish()
         assertTrue(sim.said().isEmpty(), "쉼터가 있는데 '못 찾았다'고 하지 않는다")
         val a = sim.alertBodies().single()
-        assertEquals("rest_offer", a.str("kind")); assertNull(a.str("rest_name")); assertEquals("아기가 계속 울어요.", a.str("text"))
-        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind); assertEquals(false, sim.told())
+        assertEquals("rest_offer", a.str("kind"))
+        assertNull(a.str("rest_name"))
+        assertEquals("아기가 계속 울어요.", a.str("text"))
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        assertEquals(false, sim.told())
     }
 
     @Test fun s10_nearDestination_s15() {
@@ -356,8 +392,10 @@ class HandoffGuidanceTest {
         assertEquals(listOf(Sid.S15 to mapOf("minutes" to "5")), sim.said())
         sim.finish()
         val a = sim.alertBodies().single()
-        assertEquals("arrival_notice", a.str("kind")); assertEquals("5", a.str("minutes_to_arrival"))
-        assertEquals(HandoffKind.ARRIVAL_NOTICE, sim.ep.handoff!!.kind); assertEquals(true, sim.told())
+        assertEquals("arrival_notice", a.str("kind"))
+        assertEquals("5", a.str("minutes_to_arrival"))
+        assertEquals(HandoffKind.ARRIVAL_NOTICE, sim.ep.handoff!!.kind)
+        assertEquals(true, sim.told())
     }
 
     @Test fun s10_unchanged_spoken() {
@@ -365,12 +403,13 @@ class HandoffGuidanceTest {
         assertEquals(listOf(Sid.S10), sim.said().map { it.first })
         sim.finish()
         assertEquals("no_rest", sim.alertBodies().single().str("kind"))
-        assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind); assertEquals(true, sim.told())
+        assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind)
+        assertEquals(true, sim.told())
     }
 
     // ---- 바꾼 뒤 8초 간격 대기 중 경로가 또 바뀜 ----
     @Test fun swappedThenRouteChangesAgain_nextDrainSwapsAgain() {
-        val sim = s10().reroute(null, false, rest("n", 8.0)).done(2_000)   // 간격 대기 중 S08로 바꿨다
+        val sim = s10().reroute(null, false, rest("n", 8.0)).done(2_000) // 간격 대기 중 S08로 바꿨다
         val l = sim.s.speech.queue.single { it.handoff }
         assertEquals(Sid.S08, l.sid)
         val a = sim.ledger!!
@@ -379,7 +418,8 @@ class HandoffGuidanceTest {
         assertEquals(listOf(Sid.S15 to mapOf("minutes" to "5")), sim.said())
         assertEquals(1, sim.marks())
         sim.finish()
-        assertEquals("arrival_notice", sim.alertBodies().single().str("kind")); assertEquals("5", sim.alertBodies().single().str("minutes_to_arrival"))
+        assertEquals("arrival_notice", sim.alertBodies().single().str("kind"))
+        assertEquals("5", sim.alertBodies().single().str("minutes_to_arrival"))
         assertEquals(HandoffKind.ARRIVAL_NOTICE, sim.ep.handoff!!.kind)
     }
 
@@ -391,7 +431,8 @@ class HandoffGuidanceTest {
         sim.reroute(null, false, rest("n", 8.0)).release()
         sim.flush()
         assertEquals(listOf(Sid.S08), sim.said().map { it.first }, "S08을 두 번 묻지 않는다")
-        assertEquals("n 휴게소", sim.alertBodies().single().str("rest_name")); assertEquals(true, sim.told())
+        assertEquals("n 휴게소", sim.alertBodies().single().str("rest_name"))
+        assertEquals(true, sim.told())
     }
 
     @Test fun swapToQueuedSameSentenceOtherRest_takesItsSlotWithNewRest() {
@@ -404,39 +445,45 @@ class HandoffGuidanceTest {
         assertTrue(sim.s.speech.queue.single { it.sid == Sid.S08 }.handoff)
         sim.tick(P.speechGapMs).flush()
         assertEquals(listOf(Sid.S08 to mapOf("restName" to "b 휴게소", "distanceKm" to "8")), sim.said())
-        assertEquals("b 휴게소", sim.alertBodies().single().str("rest_name")); assertEquals(true, sim.told())
+        assertEquals("b 휴게소", sim.alertBodies().single().str("rest_name"))
+        assertEquals(true, sim.told())
     }
 
     // ---- 운전 바쁨 보류: 보류 중 경로가 바뀌면 먼저 다시 고르고 그 문장으로 미룰지 정한다 ----
     @Test fun heldWhileBusy_routeChanged_repickedS08NotHeld() {
         val sim = session()
-        sim.attempt2().toGap().recry().busyNow().done()   // recry가 시각을 3초 밀므로 바쁨은 인계 뒤에 넣는다
+        sim.attempt2().toGap().recry().busyNow().done() // recry가 시각을 3초 밀므로 바쁨은 인계 뒤에 넣는다
         assertEquals(Sid.S10, sim.s.speech.queue.single { it.handoff }.sid)
         sim.reroute(null, false, rest("n", 8.0))
         assertEquals(Sid.S08, sim.s.speech.queue.single { it.handoff }.sid, "꺼낼 차례 전에도 다시 고른다")
         sim.busyNow(P.speechGapMs)
         assertEquals(listOf(Sid.S08), sim.said().map { it.first }, "다시 고른 S08은 미루는 문장이 아니라 바빠도 낸다")
         sim.done(2_000)
-        assertEquals("n 휴게소", sim.alertBodies().single().str("rest_name")); assertEquals(true, sim.told())
+        assertEquals("n 휴게소", sim.alertBodies().single().str("rest_name"))
+        assertEquals(true, sim.told())
     }
 
     // ---- 바쁨으로 너무 오래 미뤄진 인계 줄은 버린다(바꾼 줄도 그 종류로) ----
     @Test fun swappedLineExpiredS6_plainAlertOfNewKind() {
-        val sim = s10().reroute(null, false, rest("n", 8.0, nursing = true)).done(2_000)   // S07(holdable)로 바뀜
+        val sim = s10().reroute(null, false, rest("n", 8.0, nursing = true)).done(2_000) // S07(holdable)로 바뀜
         assertEquals(Sid.S07, sim.s.speech.queue.single { it.handoff }.sid)
         repeat(35) { sim.busyNow(1_000) }
-        assertTrue(sim.said().isEmpty()); assertEquals(0, sim.marks())
+        assertTrue(sim.said().isEmpty())
+        assertEquals(0, sim.marks())
         val a = sim.alertBodies().single()
-        assertEquals("rest_offer", a.str("kind")); assertNull(a.str("rest_name"))
-        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind); assertEquals(false, sim.told())
+        assertEquals("rest_offer", a.str("kind"))
+        assertNull(a.str("rest_name"))
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        assertEquals(false, sim.told())
         assertTrue(Sid.S07 !in sim.ses.spokenAt)
     }
 
     // ---- 앞 버림(dropWhile): 인계 줄은 경로 때문에 앞에서 버리지 않고, 기어 P면 버린다 ----
     private fun heldAtFront(): Sim {
         val sim = session()
-        sim.attempt2().toGap().recry().busyNow().done()   // S02 끝 → S03은 재생이 끝나 버려지고 S10이 맨 앞에서 바쁨으로 보류
-        assertEquals(Sid.S10, sim.s.speech.queue.first().sid); assertTrue(sim.s.speech.queue.first().handoff)
+        sim.attempt2().toGap().recry().busyNow().done() // S02 끝 → S03은 재생이 끝나 버려지고 S10이 맨 앞에서 바쁨으로 보류
+        assertEquals(Sid.S10, sim.s.speech.queue.first().sid)
+        assertTrue(sim.s.speech.queue.first().handoff)
         return sim
     }
 
@@ -452,9 +499,11 @@ class HandoffGuidanceTest {
 
     @Test fun frontGuide_gearP_droppedPlain() {
         val sim = heldAtFront().gear(Gear.P, 1_000)
-        assertTrue(sim.said().isEmpty()); assertEquals(0, sim.marks())
+        assertTrue(sim.said().isEmpty())
+        assertEquals(0, sim.marks())
         val a = sim.alertBodies().single()
-        assertEquals("no_rest", a.str("kind")); assertEquals("아기가 계속 울어요.", a.str("text"))
+        assertEquals("no_rest", a.str("kind"))
+        assertEquals("아기가 계속 울어요.", a.str("text"))
         assertEquals(false, sim.told())
     }
 
@@ -463,7 +512,8 @@ class HandoffGuidanceTest {
         val sim = s08()
         sim.s = sim.s.copy(bootAt = sim.t, car = sim.s.car.copy(route = null))
         sim.release()
-        assertTrue(sim.said().isEmpty()); assertEquals(Sid.S08, sim.s.speech.queue.single { it.handoff }.sid)
+        assertTrue(sim.said().isEmpty())
+        assertEquals(Sid.S08, sim.s.speech.queue.single { it.handoff }.sid)
         sim.ev(RouteState(sim.t + 1_000, true, 3600, listOf(rest("b", 9.0)), null)).tick(P.speechGapMs)
         assertEquals(listOf(Sid.S08 to mapOf("distanceKm" to "9", "restName" to "b 휴게소")), sim.said())
         sim.finish()
@@ -476,40 +526,48 @@ class HandoffGuidanceTest {
         sim.release().ev(Tick(sim.s.bootAt!! + P.routeWaitMs + 1_000))
         assertEquals(listOf(Sid.S10), sim.said().map { it.first })
         sim.finish()
-        assertEquals("no_rest", sim.alertBodies().single().str("kind")); assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind)
+        assertEquals("no_rest", sim.alertBodies().single().str("kind"))
+        assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind)
     }
 
     // ---- 버림 길: 세션 닫힘·통화·TTS 실패·장면 시작은 그때(바꾼 뒤)의 종류로 이름 없는 알림 ----
     private fun swappedToS08(): Sim = s10().reroute(null, false, rest("n", 8.0)).done(2_000).also {
-        assertEquals(Sid.S08, it.s.speech.queue.single { l -> l.handoff }.sid); assertTrue(it.alertBodies().isEmpty())
+        assertEquals(Sid.S08, it.s.speech.queue.single { l -> l.handoff }.sid)
+        assertTrue(it.alertBodies().isEmpty())
     }
     private fun Sim.plainRestOffer() {
         val a = alertBodies().single()
-        assertEquals("rest_offer", a.str("kind")); assertNull(a.str("rest_name")); assertEquals("아기가 계속 울어요.", a.str("text"))
+        assertEquals("rest_offer", a.str("kind"))
+        assertNull(a.str("rest_name"))
+        assertEquals("아기가 계속 울어요.", a.str("text"))
     }
 
     @Test fun swapped_sessionClosed_plainOfNewKind() {
         val sim = swappedToS08()
         sim.s = sim.s.copy(car = sim.s.car.copy(gear = Gear.P))
         sim.ev(RearDoor(sim.t, Side.LEFT, true))
-        assertNull(sim.s.session); assertEquals(0, sim.marks())
+        assertNull(sim.s.session)
+        assertEquals(0, sim.marks())
         sim.plainRestOffer()
         val r = sim.all<SettleHandoff>().last()
-        assertEquals(false, r.toldDriver); assertEquals(HandoffKind.WAYPOINT_OFFER, r.kind)
+        assertEquals(false, r.toldDriver)
+        assertEquals(HandoffKind.WAYPOINT_OFFER, r.kind)
     }
 
     @Test fun swapped_call_plainOfNewKind() {
         val sim = swappedToS08()
         sim.ev(CallMode(sim.t, true))
         sim.plainRestOffer()
-        assertEquals(false, sim.told()); assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        assertEquals(false, sim.told())
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
         assertTrue(Sid.S08 !in sim.ses.spokenAt)
     }
 
     @Test fun swapped_suspend_plainOfNewKind() {
         val sim = swappedToS08()
         sim.ev(Suspend(sim.t + 500))
-        sim.plainRestOffer(); assertEquals(false, sim.told())
+        sim.plainRestOffer()
+        assertEquals(false, sim.told())
     }
 
     @Test fun swapped_ttsFailed_plainToldFalse() {
@@ -517,7 +575,8 @@ class HandoffGuidanceTest {
         assertEquals(Sid.S08, sim.said().single().first)
         sim.done(spoken = false)
         sim.plainRestOffer()
-        assertEquals(false, sim.told()); assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
+        assertEquals(false, sim.told())
+        assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind)
     }
 
     @Test fun swapped_cancelForScene_plainOfNewKind() {
@@ -526,9 +585,11 @@ class HandoffGuidanceTest {
         assertEquals(Sid.S08, sim.said().single().first)
         val step = Engine().sceneStart(sim.s, sim.s, sim.t + 100).realStep
         val a = step.commands.filterIsInstance<SendToPhone>().single { it.type == "handoff_alert" }.body
-        assertEquals("rest_offer", a.str("kind")); assertNull(a.str("rest_name"))
+        assertEquals("rest_offer", a.str("kind"))
+        assertNull(a.str("rest_name"))
         val r = step.commands.filterIsInstance<SettleHandoff>().last()
-        assertEquals(false, r.toldDriver); assertEquals(HandoffKind.WAYPOINT_OFFER, r.kind)
+        assertEquals(false, r.toldDriver)
+        assertEquals(HandoffKind.WAYPOINT_OFFER, r.kind)
         assertNull(step.state.openLedger())
     }
 
@@ -538,7 +599,8 @@ class HandoffGuidanceTest {
         assertEquals(Sid.S08, sim.said().single().first)
         val after = Sim(Engine().dropSpeaking(sim.s, sim.t + 1_000)).tick()
         after.plainRestOffer()
-        assertEquals(false, after.told()); assertNull(after.ledger)
+        assertEquals(false, after.told())
+        assertNull(after.ledger)
     }
 
     // ---- 기록 지우기: 기록은 버리지만 운전자에게는 지금 경로의 안내를 내고, 보호자 알림은 그 안내를 따라 나간다 ----
@@ -558,8 +620,9 @@ class HandoffGuidanceTest {
     @Test fun repickedKind_writtenToEpisodeAtRepick() {
         val sim = s10().reroute(null, false, rest("n", 8.0))
         assertEquals(HandoffKind.NO_REST, sim.ep.handoff!!.kind, "전제: 처음 고른 종류")
-        sim.done(2_000)   // 앞 발화(S02)가 끝나고 듣기 창이 닫혀 큐를 다시 고른다. 말하기 간격 때문에 아직 말하지 않는다
-        assertNull(sim.s.speech.speaking); assertTrue(sim.s.speech.queue.any { it.sid == Sid.S08 && it.handoff }, "전제: 다시 고른 S08이 말하지 않은 채 큐에 있다")
+        sim.done(2_000) // 앞 발화(S02)가 끝나고 듣기 창이 닫혀 큐를 다시 고른다. 말하기 간격 때문에 아직 말하지 않는다
+        assertNull(sim.s.speech.speaking)
+        assertTrue(sim.s.speech.queue.any { it.sid == Sid.S08 && it.handoff }, "전제: 다시 고른 S08이 말하지 않은 채 큐에 있다")
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ledger!!.kind)
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.ep.handoff!!.kind, "다시 고를 때 에피소드에도 쓴다")
         assertEquals(HandoffKind.WAYPOINT_OFFER, sim.all<SaveEpisode>().last().record.handoffKind, "행에도 쓴다")
@@ -573,21 +636,24 @@ class HandoffGuidanceTest {
         val q = sim.s.speech.queue
         sim.s = sim.s.copy(
             speech = if (speaking) sim.s.speech.copy(speaking = "u0", queue = listOf(old) + q) else sim.s.speech.copy(queue = q + old),
-            handoffs = listOf(HandoffLedger(sim.ses.id, "prev-ep", sim.t, HandoffCause.TWO_ATTEMPTS, HandoffKind.NO_REST, null)))
+            handoffs = listOf(HandoffLedger(sim.ses.id, "prev-ep", sim.t, HandoffCause.TWO_ATTEMPTS, HandoffKind.NO_REST, null))
+        )
         return sim.recry()
     }
 
     @Test fun secondHandoff_oldGuideDropped_prevFlushedPlain() {
         val sim = secondHandoff(speaking = false)
         val prev = sim.alertBodies().single()
-        assertEquals("prev-ep", prev.str("episode_id")); assertEquals("아기가 계속 울어요.", prev.str("text"))
+        assertEquals("prev-ep", prev.str("episode_id"))
+        assertEquals("아기가 계속 울어요.", prev.str("text"))
         assertEquals(false, sim.told("prev-ep"))
         assertEquals(listOf(Sid.S08), sim.s.speech.queue.filter { it.handoff }.map { it.sid })
         assertTrue(sim.s.speech.queue.none { it.sid == Sid.S10 }, "앞 인계의 S10은 새 안내가 대신한다")
         assertTrue(Sid.S10 !in sim.ses.spokenAt)
         sim.flush()
         assertEquals(listOf(Sid.S08), sim.said().map { it.first })
-        assertEquals("a 휴게소", sim.alertBodies().last().str("rest_name")); assertEquals(true, sim.told())
+        assertEquals("a 휴게소", sim.alertBodies().last().str("rest_name"))
+        assertEquals(true, sim.told())
     }
 
     @Test fun secondHandoff_oldGuideSpeaking_unmarkedKept() {
@@ -605,9 +671,11 @@ class HandoffGuidanceTest {
     @Test fun handoffMarksExactlyOneLine() {
         for (sim in listOf(s15(), s08(), s10())) assertEquals(1, sim.marks())
         val p = session().route(rest("a", 5.0)).gear(Gear.P, MIN).handoff()
-        assertEquals(0, p.marks()); assertNull(p.ledger)
+        assertEquals(0, p.marks())
+        assertNull(p.ledger)
         val (spk, _) = HandoffTest().speakingOffer()
-        assertTrue(spk.s.speech.queue.first().handoff); assertEquals("u1", spk.ledger!!.utteranceId)
+        assertTrue(spk.s.speech.queue.first().handoff)
+        assertEquals("u1", spk.ledger!!.utteranceId)
         assertEquals(spk.ses.id, spk.s.speech.queue.first().sessionId, "세션 id 없는 줄에는 지금 세션을 적는다")
     }
 
@@ -617,15 +685,17 @@ class HandoffGuidanceTest {
         val epA = sim.ep.id
         sim.s = sim.s.copy(car = sim.s.car.copy(gear = Gear.P))
         sim.ev(RearDoor(sim.t, Side.LEFT, true))
-        sim.gear(Gear.P).doorCycle().gear(Gear.D).route(rest("n", 14.0, nursing = true))   // 세션 B
+        sim.gear(Gear.P).doorCycle().gear(Gear.D).route(rest("n", 14.0, nursing = true)) // 세션 B
         sim.attempt2().toGap().recry()
         assertEquals(Phase.HANDOFF, sim.ses.phase)
         assertTrue(sim.s.speech.queue.first().handoff, "A의 말하는 줄 표시를 떼지 않는다")
-        assertEquals("u1", sim.s.closedLedgers().single().utteranceId); assertTrue(sim.alertBodies().isEmpty())
+        assertEquals("u1", sim.s.closedLedgers().single().utteranceId)
+        assertTrue(sim.alertBodies().isEmpty())
         assertEquals(listOf(sim.ses.id), sim.s.speech.queue.drop(1).filter { it.handoff }.map { it.sessionId })
         sim.ev(SpeechDone(sim.t + 1_000, "u1", true))
         val a = sim.alertBodies().single()
-        assertEquals(epA, a.str("episode_id")); assertEquals("n 휴게소", a.str("rest_name"))
+        assertEquals(epA, a.str("episode_id"))
+        assertEquals("n 휴게소", a.str("rest_name"))
         assertEquals(true, sim.told(epA))
         assertEquals(null, sim.told(), "B는 아직 묻지 않았다")
     }
@@ -637,6 +707,7 @@ class HandoffGuidanceTest {
         assertEquals(listOf(true), sim.s.speech.queue.filter { it.handoff }.map { it.sid == Sid.S07 }, "닫힌 세션의 표시 줄은 말하는 맨 앞 줄 하나")
         assertEquals("u1", sim.s.closedLedgers().single().utteranceId)
         sim.ev(SpeechDone(sim.t + 1_000, "u1", false))
-        assertEquals(null, sim.alertBodies().single().str("rest_name")); assertTrue(sim.s.closedLedgers().isEmpty())
+        assertEquals(null, sim.alertBodies().single().str("rest_name"))
+        assertTrue(sim.s.closedLedgers().isEmpty())
     }
 }

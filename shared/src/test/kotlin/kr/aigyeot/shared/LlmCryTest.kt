@@ -9,5 +9,9 @@ class LlmCryTest {
     private fun enc(c: LlmCry) = ProtocolJson.encodeToString(LlmCry.serializer(), c)
 
     @Test fun unavailableFalse_omitted() = assertEquals(false, "unavailable" in enc(LlmCry(2, 1)))
-    @Test fun unavailableTrue_written() = assertTrue("\"unavailable\":true" in enc(LlmCry(null, 1, unavailable = true)), enc(LlmCry(null, 1, unavailable = true)))
+
+    @Test fun unavailableTrue_written() = assertTrue(
+        "\"unavailable\":true" in enc(LlmCry(null, 1, unavailable = true)),
+        enc(LlmCry(null, 1, unavailable = true))
+    )
 }

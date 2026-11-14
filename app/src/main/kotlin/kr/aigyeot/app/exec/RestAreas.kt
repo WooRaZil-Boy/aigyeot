@@ -1,9 +1,9 @@
 package kr.aigyeot.app.exec
 
-import kr.aigyeot.engine.RestKind
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
+import kr.aigyeot.engine.RestKind
 
 /** 휴게소 공공데이터 한 줄(RestAreaData.kt). */
 internal data class RestArea(val name: String, val route: String, val dir: String, val lat: Double, val lon: Double, val nursing: Boolean)
@@ -17,6 +17,7 @@ internal data class Here(val lat: Double, val lon: Double)
  */
 internal object RestAreas {
     val all: List<RestArea> by lazy { parse(REST_AREA_CSV) }
+
     /** 졸음쉼터 공공데이터(RestAreaData.kt SHELTER_CSV). 이름은 '쉼터명(종점)' 꼴. 휴게소 자료와 섞지 않는다. */
     val shelters: List<RestArea> by lazy { parse(SHELTER_CSV) }
 
@@ -32,8 +33,8 @@ internal object RestAreas {
         val n = norm(tbtName)
         if (n.isEmpty()) return emptyList()
         val exact = rows.filter { norm(it.name) == n }
-        if (exact.isNotEmpty() || '(' in n) return exact              // 방향을 적었으면 방향까지 같은 줄만(없으면 못 맞춘 것)
-        return rows.filter { norm(it.name).substringBefore('(') == n }  // 방향이 없을 때만 괄호 앞 이름(양방향 둘)
+        if (exact.isNotEmpty() || '(' in n) return exact // 방향을 적었으면 방향까지 같은 줄만(없으면 못 맞춘 것)
+        return rows.filter { norm(it.name).substringBefore('(') == n } // 방향이 없을 때만 괄호 앞 이름(양방향 둘)
     }
 
     /** 맞춘 줄이 있고 모두 수유실이 있을 때만 참. 못 맞추면 없음. */
@@ -59,8 +60,7 @@ internal object RestAreas {
     fun placeable(tbtName: String, rows: List<RestArea> = all): Boolean = pointOf(tbtName, rows) != null
 
     /** 이름이 한 점으로 정해지는가의 한 출처. 맞춘 줄이 하나면 그 줄, 여럿이 모두 사실상 같은 점이면 첫 줄, 아니면 null. [placeable]·[place]·[waypointListed]가 쓴다. */
-    fun pointOf(tbtName: String, rows: List<RestArea> = all): RestArea? =
-        match(tbtName, rows).let { if (it.size == 1 || tied(it)) it.first() else null }
+    fun pointOf(tbtName: String, rows: List<RestArea> = all): RestArea? = match(tbtName, rows).let { if (it.size == 1 || tied(it)) it.first() else null }
 
     fun tied(c: List<RestArea>) =
         c.size > 1 && c.all { a -> c.all { b -> hypot((a.lon - b.lon) * 111_320 * cos(a.lat * PI / 180), (a.lat - b.lat) * 110_574) <= TIE_M } }
@@ -69,8 +69,7 @@ internal object RestAreas {
 
     /** (동, 북) m. 짧은 거리라 평면으로 본다. */
     private fun enu(h: Here, r: RestArea) = enu(h, Here(r.lat, r.lon))
-    private fun enu(h: Here, r: Here): Pair<Double, Double> =
-        (r.lon - h.lon) * 111_320 * cos(h.lat * PI / 180) to (r.lat - h.lat) * 110_574
+    private fun enu(h: Here, r: Here): Pair<Double, Double> = (r.lon - h.lon) * 111_320 * cos(h.lat * PI / 180) to (r.lat - h.lat) * 110_574
     private fun km(h: Here, r: RestArea) = enu(h, r).let { (x, y) -> hypot(x, y) / 1000 }
 
     /** 곧은 거리 여유(좌표·TBT 기준점 차이). 설계값, 근거 없음. */
@@ -84,12 +83,18 @@ private const val TIE_M = 10.0
  * 경유지 목록 판정. 점은 (이름, 위도, 경도). 좌표가 0·0이면(실제 내비는 이름만 맞게 준다) 이름을 [rows]의 줄로 바꿔
  * 한 점으로 정해지고([RestAreas.pointOf]) [target]과 같은 점일 때만 성공이다(방향 없는 이름이 서로 다른 두 점이면 아님). 좌표가 있으면 [waypointPresent]의 300m 규칙.
  */
-internal fun waypointListed(points: List<Triple<String, Double, Double>>, target: RestArea,
-        rows: List<RestArea> = RestAreas.all, radiusM: Double = 300.0): Boolean =
-    points.any { (name, la, lo) ->
-        if (la == 0.0 && lo == 0.0) RestAreas.pointOf(name, rows)?.let { it == target || RestAreas.tied(listOf(it, target)) } == true
-        else waypointPresent(listOf(la to lo), target, rows, radiusM)
+internal fun waypointListed(
+    points: List<Triple<String, Double, Double>>,
+    target: RestArea,
+    rows: List<RestArea> = RestAreas.all,
+    radiusM: Double = 300.0
+): Boolean = points.any { (name, la, lo) ->
+    if (la == 0.0 && lo == 0.0) {
+        RestAreas.pointOf(name, rows)?.let { it == target || RestAreas.tied(listOf(it, target)) } == true
+    } else {
+        waypointPresent(listOf(la to lo), target, rows, radiusM)
     }
+}
 
 /**
  * 경유지 목록([points], 위도·경도)에 요청한 줄 [target]이 들어 있는가. 점이 [target]에서 [radiusM](300m, 설계값·근거 없음) 안이면서
@@ -100,6 +105,7 @@ internal fun waypointPresent(points: List<Pair<Double, Double>>, target: RestAre
     fun m(la: Double, lo: Double, r: RestArea) = hypot((r.lon - lo) * 111_320 * cos(la * PI / 180), (r.lat - la) * 110_574)
     val base = target.name.substringBefore('(')
     val same = rows.filter { it.name.substringBefore('(') == base }.ifEmpty { listOf(target) }
+
     // 동률은 데이터 좌표끼리 TIE_M 안인 줄(보성녹차 순천·영암)에만 허용한다: 그 점에서 가장 가까운 줄이 target이거나,
     // 가장 가까운 줄과 target의 데이터 좌표가 TIE_M 안일 때만(좌표가 다른 쌍은 점에서 잰 거리 차이로 구분하지 않는다)
     fun apart(a: RestArea, b: RestArea) = hypot((a.lon - b.lon) * 111_320 * cos(a.lat * PI / 180), (a.lat - b.lat) * 110_574)
@@ -120,17 +126,31 @@ internal class WaypointPrecheck(private val sched: Sched, private val waitMs: Lo
         cancel()
         this.result = result
         cancelTimer = sched.after(waitMs) { finish(false) }
-        try { ask() } catch (e: Exception) { finish(false) }
+        try {
+            ask()
+        } catch (e: Exception) {
+            finish(false)
+        }
     }
 
     /** 사전 확인 중이면 결과를 내고 true. 아니면 false(소비하지 않음). */
-    fun onList(listed: Boolean): Boolean { if (result == null) return false; finish(listed); return true }
+    fun onList(listed: Boolean): Boolean {
+        if (result == null) return false
+        finish(listed)
+        return true
+    }
 
-    fun cancel() { cancelTimer(); cancelTimer = {}; result = null }
+    fun cancel() {
+        cancelTimer()
+        cancelTimer = {}
+        result = null
+    }
 
     private fun finish(listed: Boolean) {
         val r = result ?: return
-        cancelTimer(); cancelTimer = {}; result = null
+        cancelTimer()
+        cancelTimer = {}
+        result = null
         r(listed)
     }
 }

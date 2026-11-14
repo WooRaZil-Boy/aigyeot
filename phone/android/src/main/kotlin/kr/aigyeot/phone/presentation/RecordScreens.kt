@@ -8,37 +8,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,8 +44,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -67,18 +53,17 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.Instant
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.R
-import kr.aigyeot.phone.domain.model.AGO_CHIPS
 import kr.aigyeot.phone.domain.model.CarLine
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.Connection
-import kr.aigyeot.phone.domain.model.Diaper
-import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.MINUTE
-import kr.aigyeot.phone.domain.model.agoChipText
 import kr.aigyeot.phone.domain.model.avgCountText
 import kr.aigyeot.phone.domain.model.avgDurationText
 import kr.aigyeot.phone.domain.model.carLines
@@ -86,22 +71,11 @@ import kr.aigyeot.phone.domain.model.carePattern
 import kr.aigyeot.phone.domain.model.dayEvents
 import kr.aigyeot.phone.domain.model.dayLabel
 import kr.aigyeot.phone.domain.model.daysText
-import kr.aigyeot.phone.domain.model.diaperName
 import kr.aigyeot.phone.domain.model.durationText
 import kr.aigyeot.phone.domain.model.isOngoing
-import kr.aigyeot.phone.domain.model.kindName
-import kr.aigyeot.phone.domain.model.koClock
-import kr.aigyeot.phone.domain.model.koDate
 import kr.aigyeot.phone.domain.model.logRowText
 import kr.aigyeot.phone.domain.model.memoLine
-import kr.aigyeot.phone.domain.model.quickKinds
-import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.text
-import kr.aigyeot.phone.domain.model.ulid
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
 
 // 기록 탭(하루·패턴)과 빠른 기록·고치기 시트.
 
@@ -123,11 +97,11 @@ internal fun EmptyState(@androidx.annotation.DrawableRes icon: Int, text: String
     Column(
         Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Box(
             Modifier.size(64.dp).scale(ring.value).clip(androidx.compose.foundation.shape.CircleShape).background(p.surface),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) { AIcon(icon, Modifier.size(26.dp), p.textSecondary) }
         Text(text, style = Type.rowTitle, color = p.textPrimary)
         action()
@@ -141,7 +115,7 @@ private fun IntervalProgress(count: Int) {
     Column(
         Modifier.fillMaxWidth().padding(top = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text("기록이 더 쌓이면 보여 드려요", style = Type.sheetValue, color = p.textSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -149,9 +123,12 @@ private fun IntervalProgress(count: Int) {
                 Box(
                     Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape)
                         .then(
-                            if (i < count) Modifier.background(p.textPrimary)
-                            else Modifier.border(1.5.dp, p.textPrimary.copy(alpha = 0.26f), androidx.compose.foundation.shape.CircleShape),
-                        ),
+                            if (i < count) {
+                                Modifier.background(p.textPrimary)
+                            } else {
+                                Modifier.border(1.5.dp, p.textPrimary.copy(alpha = 0.26f), androidx.compose.foundation.shape.CircleShape)
+                            }
+                        )
                 )
             }
         }
@@ -190,11 +167,14 @@ fun RecordsTab(go: (Route) -> Unit, vm: RecordsViewModel = appViewModel()) {
         Segmented(listOf("하루", "패턴"), if (pattern) 1 else 0, { pattern = it == 1 }) // log.segment
         // 하루·패턴을 바꾸면 그 아래 새 블록만 한 줄씩 올라온다(세그먼트는 그대로, iOS와 같음).
         StaggerColumn(replay = pattern, animateFirst = false) {
-            if (pattern) PatternView(ui, now)
-            else DayView(
-                ui, today, LocalDate.ofEpochDay(dayEpoch), { dayEpoch = it.toEpochDay() }, go, vm::delete,
-                { editingId = it }, { adding = true }, fresh, vm::clearFresh,
-            )
+            if (pattern) {
+                PatternView(ui, now)
+            } else {
+                DayView(
+                    ui, today, LocalDate.ofEpochDay(dayEpoch), { dayEpoch = it.toEpochDay() }, go, vm::delete,
+                    { editingId = it }, { adding = true }, fresh, vm::clearFresh
+                )
+            }
         }
     }
     val editing = editingId?.let { id -> ui.care.events.firstOrNull { it.id == id && it.deletedAt == null } }
@@ -220,7 +200,7 @@ private fun DayView(
     edit: (String) -> Unit,
     add: () -> Unit,
     fresh: String?,
-    clearFresh: (String) -> Unit,
+    clearFresh: (String) -> Unit
 ) {
     val care = ui.care
     val s = ui.phone
@@ -238,7 +218,7 @@ private fun DayView(
         LazyRow(
             state = strip,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)
         ) {
             items(span, key = { first.toEpochDay() + it }) { i ->
                 val d = first.plusDays(i.toLong())
@@ -249,12 +229,12 @@ private fun DayView(
                         .selectable(on, interactionSource = null, indication = null, role = Role.Tab) { pickDay(d) }
                         .semantics { contentDescription = dayLabel(d, today) }.padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically)
                 ) {
                     Text(
                         if (d == today) "오늘" else "월화수목금토일"[d.dayOfWeek.value - 1].toString(),
                         style = Type.micro,
-                        color = if (on) p.bg.copy(alpha = 0.75f) else p.textTertiary,
+                        color = if (on) p.bg.copy(alpha = 0.75f) else p.textTertiary
                     )
                     Text("${d.dayOfMonth}", style = Type.dateNumber, color = if (on) p.bg else p.textPrimary)
                 }
@@ -269,7 +249,7 @@ private fun DayView(
                 Box(
                     Modifier.heightIn(min = 48.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.accentSoft).pressable(onClick = add)
                         .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center,
+                    contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         AIcon(R.drawable.ic_plus, Modifier.size(18.dp), p.onAccentSoft)
@@ -295,7 +275,7 @@ private fun DayView(
                             fresh = fresh == row.id,
                             onFreshDone = { clearFresh(row.id) },
                             onOpen = { if (row.isOngoing) go(Route.Timer(row.id)) else edit(row.id) },
-                            onDelete = { fail -> delete(row.id, fail) },
+                            onDelete = { fail -> delete(row.id, fail) }
                         )
                     }
                     is CarLine -> key(row.sessionId + (row.episodeId ?: "")) {
@@ -324,9 +304,9 @@ private fun HourHead(hour: Int) {
                     Offset(0f, 0f),
                     Offset(size.width, 0f),
                     size.height,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
                 )
-            },
+            }
         )
     }
 }
@@ -337,7 +317,7 @@ private fun Timeline(content: @Composable () -> Unit) {
     val p = Tokens.colors
     Column(
         Modifier.fillMaxWidth().drawBehind { drawLine(p.line, Offset(33.dp.toPx(), 0f), Offset(33.dp.toPx(), size.height), 1.dp.toPx()) },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) { content() }
 }
 
@@ -351,7 +331,7 @@ private fun TimelineCard(
     tall: Boolean = false,
     glow: Float = 0f,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit,
+    onClick: () -> Unit
 ) {
     val p = Tokens.colors
     val dot = kindColor(kind, p)
@@ -365,7 +345,7 @@ private fun TimelineCard(
             Modifier.weight(1f).heightIn(min = if (tall) 92.dp else 56.dp).clip(CardShape).background(lerpColor(p.surface, p.accentSoft, glow))
                 .pressable(scale = 0.98f, onClick = onClick).padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             AIcon(kindIcon(kind), Modifier.size(18.dp), p.textTertiary)
             Column(Modifier.weight(1f)) {
@@ -392,7 +372,10 @@ private fun HandRow(e: CareEvent, fresh: Boolean, onFreshDone: () -> Unit, onOpe
     val glow = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(fresh) {
         // 기다리거나 걷히는 중에 다른 기록을 저장해 이 줄의 표시가 넘어가면(거짓) 강조를 바로 처음으로 둔다(남지 않게).
-        if (!fresh) { glow.snapTo(0f); return@LaunchedEffect }
+        if (!fresh) {
+            glow.snapTo(0f)
+            return@LaunchedEffect
+        }
         glow.snapTo(1f)
         kotlinx.coroutines.delay(if (reduced) 1_600 else 1_400)
         if (reduced) glow.snapTo(0f) else glow.animateTo(0f, Motion.light.spec())
@@ -403,21 +386,33 @@ private fun HandRow(e: CareEvent, fresh: Boolean, onFreshDone: () -> Unit, onOpe
         enableDismissFromStartToEnd = false,
         // 밀 때만 그린다(가만히 있을 때 카드 모서리 밖으로 빨간 테두리가 비치지 않게).
         backgroundContent = {
-            if (swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart) Row(Modifier.fillMaxSize()) {
-                Spacer(Modifier.width(52.dp))
-                Box(Modifier.weight(1f).fillMaxSize().clip(CardShape).background(p.danger).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
-                    AIcon(R.drawable.ic_trash_2, Modifier.size(20.dp), androidx.compose.ui.graphics.Color.White)
+            if (swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                Row(Modifier.fillMaxSize()) {
+                    Spacer(Modifier.width(52.dp))
+                    Box(Modifier.weight(1f).fillMaxSize().clip(CardShape).background(p.danger).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
+                        AIcon(R.drawable.ic_trash_2, Modifier.size(20.dp), androidx.compose.ui.graphics.Color.White)
+                    }
                 }
             }
-        },
+        }
     ) {
         // 밀기를 못 쓰는 화면 읽기에도 같은 지우기(되돌리기 포함)를 준다(iOS swipeActions와 같음).
         TimelineCard(
-            e.kind, title, sub, memoLine(e),
+            e.kind,
+            title,
+            sub,
+            memoLine(e),
             tall = e.kind == CareKind.SLEEP && (e.endAt ?: e.startAt) - e.startAt >= 60 * MINUTE,
             glow = glow.value,
-            modifier = Modifier.background(p.bg).semantics { customActions = listOf(CustomAccessibilityAction("지우기") { onDelete(restore); true }) },
-            onClick = onOpen,
+            modifier = Modifier.background(p.bg).semantics {
+                customActions = listOf(
+                    CustomAccessibilityAction("지우기") {
+                        onDelete(restore)
+                        true
+                    }
+                )
+            },
+            onClick = onOpen
         )
     }
 }
@@ -446,7 +441,7 @@ private fun PatternView(ui: RecordsUiState, now: Long) {
                 add(Kpi("차에서 울음", "${p.carCryEpisodes}번", "7일 동안"))
                 p.sleepPerDayMs?.let { add(Kpi("하루 잠", avgDurationText(it), daysText(p.sleepDays))) }
                 p.diapersPerDay?.let { add(Kpi("하루 기저귀", avgCountText(it), daysText(p.diaperDays))) }
-            },
+            }
         )
     }
     Block {
@@ -464,11 +459,13 @@ private fun PatternView(ui: RecordsUiState, now: Long) {
             WeekBars(iw.bars, c.cFeed, ::durationText, "지난 7일 보통 수유 간격", target = iw.usualMs, targetLabel = iw.usualMs?.let { "평소 ${durationText(it)}" })
         }
     }
-    if (ui.care.sleepDiaperEnabled) Block {
-        val g = remember(ui.care, minute) { sleepGrid(ui.care, now, deviceZone) }
-        BlockHeader("잠 패턴")
-        g.avgMs?.let { BlockSub("하루 평균 **${durationText(it)}** · ${g.sleepDays}일 기준") }
-        SleepHeat(g)
+    if (ui.care.sleepDiaperEnabled) {
+        Block {
+            val g = remember(ui.care, minute) { sleepGrid(ui.care, now, deviceZone) }
+            BlockHeader("잠 패턴")
+            g.avgMs?.let { BlockSub("하루 평균 **${durationText(it)}** · ${g.sleepDays}일 기준") }
+            SleepHeat(g)
+        }
     }
     Block {
         BlockHeader("차에서 울음")

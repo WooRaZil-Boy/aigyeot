@@ -14,31 +14,36 @@ class Empty
 /** `paired`·`unpaired` body의 폰 역할(owner | guardian). */
 @Serializable
 enum class PhoneRole {
-    @SerialName("owner") OWNER,
-    @SerialName("guardian") GUARDIAN,
+    @SerialName("owner")
+    OWNER,
+
+    @SerialName("guardian")
+    GUARDIAN
 }
 
 /** `paired` body의 폰 플랫폼(android | ios). */
 @Serializable
 enum class PhonePlatform {
-    @SerialName("android") ANDROID,
-    @SerialName("ios") IOS,
+    @SerialName("android")
+    ANDROID,
+
+    @SerialName("ios")
+    IOS
 }
 
 @Serializable
-data class PairedBody(
-    val deviceId: String,
-    val role: PhoneRole,
-    val platform: PhonePlatform,
-    val pairedAt: String,
-    val handoffAlerts: Boolean,
-)
+data class PairedBody(val deviceId: String, val role: PhoneRole, val platform: PhonePlatform, val pairedAt: String, val handoffAlerts: Boolean)
 
 @Serializable
 enum class UnpairedBy {
-    @SerialName("car") CAR,
-    @SerialName("self") SELF,
-    @SerialName("relay") RELAY,
+    @SerialName("car")
+    CAR,
+
+    @SerialName("self")
+    SELF,
+
+    @SerialName("relay")
+    RELAY
 }
 
 @Serializable
@@ -56,20 +61,38 @@ data class SongRefBody(val songId: String)
 
 @Serializable
 enum class SongStatusKind {
-    @SerialName("accepted") ACCEPTED,
-    @SerialName("rejected") REJECTED,
-    @SerialName("removed") REMOVED,
+    @SerialName("accepted")
+    ACCEPTED,
+
+    @SerialName("rejected")
+    REJECTED,
+
+    @SerialName("removed")
+    REMOVED
 }
 
 @Serializable
 enum class SongRejectReason {
-    @SerialName("peak_limit") PEAK_LIMIT,
-    @SerialName("silent") SILENT,
-    @SerialName("bad_format") BAD_FORMAT,
-    @SerialName("too_long") TOO_LONG,
-    @SerialName("too_large") TOO_LARGE,
-    @SerialName("limit_reached") LIMIT_REACHED,
-    @SerialName("download_failed") DOWNLOAD_FAILED,
+    @SerialName("peak_limit")
+    PEAK_LIMIT,
+
+    @SerialName("silent")
+    SILENT,
+
+    @SerialName("bad_format")
+    BAD_FORMAT,
+
+    @SerialName("too_long")
+    TOO_LONG,
+
+    @SerialName("too_large")
+    TOO_LARGE,
+
+    @SerialName("limit_reached")
+    LIMIT_REACHED,
+
+    @SerialName("download_failed")
+    DOWNLOAD_FAILED
 }
 
 @Serializable
@@ -79,7 +102,7 @@ data class SongStatusBody(
     val status: SongStatusKind,
     val reason: SongRejectReason?,
     val durationS: Double?,
-    val candidate: Boolean,
+    val candidate: Boolean
 )
 
 @Serializable
@@ -89,9 +112,14 @@ data class FeedingStateBody(val lastFeedingStart: String?, val windowStartExpect
 
 @Serializable
 enum class OutputRoute {
-    @SerialName("rear_zone") REAR_ZONE,
-    @SerialName("default_zone_fallback") DEFAULT_ZONE_FALLBACK,
-    @SerialName("no_playback") NO_PLAYBACK,
+    @SerialName("rear_zone")
+    REAR_ZONE,
+
+    @SerialName("default_zone_fallback")
+    DEFAULT_ZONE_FALLBACK,
+
+    @SerialName("no_playback")
+    NO_PLAYBACK
 }
 
 @Serializable(with = SoundMethodSerializer::class)
@@ -100,8 +128,9 @@ enum class SoundMethod(val wire: String) {
     WOMB("womb"),
     LULLABY("lullaby"),
     PARENT_SONG("parent_song"),
+
     /** 받기 전용: 모르는 글자(새 방식)를 읽을 때만 쓴다. 차는 보내지 않는다. */
-    UNKNOWN("unknown"),
+    UNKNOWN("unknown")
 }
 
 /** 모르는 method 글자 하나가 리포트 전체를 버리지 않게 UNKNOWN으로 읽는다(report_summary의 method). */
@@ -114,93 +143,182 @@ object SoundMethodSerializer : KSerializer<SoundMethod> {
 
 @Serializable
 enum class EpisodeTrigger {
-    @SerialName("cry_alarm") CRY_ALARM,
-    @SerialName("switch_sound") SWITCH_SOUND,
+    @SerialName("cry_alarm")
+    CRY_ALARM,
+
+    @SerialName("switch_sound")
+    SWITCH_SOUND
 }
 
 @Serializable
 enum class EpisodeResult {
-    @SerialName("success") SUCCESS,
-    @SerialName("failure") FAILURE,
-    @SerialName("undetermined") UNDETERMINED,
+    @SerialName("success")
+    SUCCESS,
+
+    @SerialName("failure")
+    FAILURE,
+
+    @SerialName("undetermined")
+    UNDETERMINED
 }
 
 @Serializable
 enum class ExcludedReason {
-    @SerialName("driver_stop") DRIVER_STOP,
-    @SerialName("call") CALL,
-    @SerialName("gear_to_park") GEAR_TO_PARK,
-    @SerialName("started_in_park") STARTED_IN_PARK,
-    @SerialName("switch_sound") SWITCH_SOUND,
-    @SerialName("session_cap") SESSION_CAP,
-    @SerialName("feeding_window") FEEDING_WINDOW,
-    @SerialName("mic_error") MIC_ERROR,
-    @SerialName("focus_loss") FOCUS_LOSS,
-    @SerialName("detector_timeout") DETECTOR_TIMEOUT,
-    @SerialName("input_silenced") INPUT_SILENCED,
-    @SerialName("suspend") SUSPEND,
-    @SerialName("session_end") SESSION_END,
+    @SerialName("driver_stop")
+    DRIVER_STOP,
+
+    @SerialName("call")
+    CALL,
+
+    @SerialName("gear_to_park")
+    GEAR_TO_PARK,
+
+    @SerialName("started_in_park")
+    STARTED_IN_PARK,
+
+    @SerialName("switch_sound")
+    SWITCH_SOUND,
+
+    @SerialName("session_cap")
+    SESSION_CAP,
+
+    @SerialName("feeding_window")
+    FEEDING_WINDOW,
+
+    @SerialName("mic_error")
+    MIC_ERROR,
+
+    @SerialName("focus_loss")
+    FOCUS_LOSS,
+
+    @SerialName("detector_timeout")
+    DETECTOR_TIMEOUT,
+
+    @SerialName("input_silenced")
+    INPUT_SILENCED,
+
+    @SerialName("suspend")
+    SUSPEND,
+
+    @SerialName("session_end")
+    SESSION_END
 }
 
 @Serializable
 enum class PlayPurpose {
-    @SerialName("auto_first") AUTO_FIRST,
-    @SerialName("auto_second") AUTO_SECOND,
-    @SerialName("request") REQUEST,
+    @SerialName("auto_first")
+    AUTO_FIRST,
+
+    @SerialName("auto_second")
+    AUTO_SECOND,
+
+    @SerialName("request")
+    REQUEST
 }
 
 @Serializable
 enum class SecondAction {
-    @SerialName("comfort_cool") COMFORT_COOL,
-    @SerialName("feeding_window") FEEDING_WINDOW,
-    @SerialName("other_sound") OTHER_SOUND,
-    @SerialName("focus_denied") FOCUS_DENIED,
+    @SerialName("comfort_cool")
+    COMFORT_COOL,
+
+    @SerialName("feeding_window")
+    FEEDING_WINDOW,
+
+    @SerialName("other_sound")
+    OTHER_SOUND,
+
+    @SerialName("focus_denied")
+    FOCUS_DENIED
 }
 
 /** 정차 이유(`stop.reason`). */
 @Serializable
 enum class StopReason {
-    @SerialName("attempt_limit") ATTEMPT_LIMIT,
-    @SerialName("session_cap") SESSION_CAP,
-    @SerialName("feeding_window") FEEDING_WINDOW,
-    @SerialName("no_sound") NO_SOUND,
+    @SerialName("attempt_limit")
+    ATTEMPT_LIMIT,
+
+    @SerialName("session_cap")
+    SESSION_CAP,
+
+    @SerialName("feeding_window")
+    FEEDING_WINDOW,
+
+    @SerialName("no_sound")
+    NO_SOUND
 }
 
 /** 인계 방식. `report_summary.timeline[].stop.mode`와 `handoff_alert.kind`가 함께 쓴다. */
 @Serializable
 enum class HandoffKind {
-    @SerialName("rest_offer") REST_OFFER,
-    @SerialName("arrival_notice") ARRIVAL_NOTICE,
-    @SerialName("no_rest") NO_REST,
-    @SerialName("parked") PARKED,
+    @SerialName("rest_offer")
+    REST_OFFER,
+
+    @SerialName("arrival_notice")
+    ARRIVAL_NOTICE,
+
+    @SerialName("no_rest")
+    NO_REST,
+
+    @SerialName("parked")
+    PARKED
 }
 
 @Serializable
 enum class Gear {
-    @SerialName("P") P,
-    @SerialName("R") R,
-    @SerialName("N") N,
-    @SerialName("D") D,
+    @SerialName("P")
+    P,
+
+    @SerialName("R")
+    R,
+
+    @SerialName("N")
+    N,
+
+    @SerialName("D")
+    D
 }
 
 @Serializable
 enum class SteeringUnavailableReason {
-    @SerialName("no_comparable_window") NO_COMPARABLE_WINDOW,
-    @SerialName("no_cry") NO_CRY,
+    @SerialName("no_comparable_window")
+    NO_COMPARABLE_WINDOW,
+
+    @SerialName("no_cry")
+    NO_CRY
 }
 
 @Serializable
 enum class CarActionKind {
-    @SerialName("rear_playback") REAR_PLAYBACK,
-    @SerialName("default_zone_playback") DEFAULT_ZONE_PLAYBACK,
-    @SerialName("seat_heater_off") SEAT_HEATER_OFF,
-    @SerialName("rear_window_lock") REAR_WINDOW_LOCK,
-    @SerialName("cabin_cool") CABIN_COOL,
-    @SerialName("reading_light_off") READING_LIGHT_OFF,
-    @SerialName("ambient_dim") AMBIENT_DIM,   // 달래는 동안 실내 앰비언트 조명 낮춤. 폰 두 앱의 enum에도 있어야 한다(iOS는 모르는 값에서 디코딩이 깨진다)
-    @SerialName("waypoint_added") WAYPOINT_ADDED,
-    @SerialName("arrival_notice") ARRIVAL_NOTICE,
-    @SerialName("guardian_alert") GUARDIAN_ALERT,
+    @SerialName("rear_playback")
+    REAR_PLAYBACK,
+
+    @SerialName("default_zone_playback")
+    DEFAULT_ZONE_PLAYBACK,
+
+    @SerialName("seat_heater_off")
+    SEAT_HEATER_OFF,
+
+    @SerialName("rear_window_lock")
+    REAR_WINDOW_LOCK,
+
+    @SerialName("cabin_cool")
+    CABIN_COOL,
+
+    @SerialName("reading_light_off")
+    READING_LIGHT_OFF,
+
+    // 달래는 동안 실내 앰비언트 조명 낮춤. 폰 두 앱의 enum에도 있어야 한다(iOS는 모르는 값에서 디코딩이 깨진다)
+    @SerialName("ambient_dim")
+    AMBIENT_DIM,
+
+    @SerialName("waypoint_added")
+    WAYPOINT_ADDED,
+
+    @SerialName("arrival_notice")
+    ARRIVAL_NOTICE,
+
+    @SerialName("guardian_alert")
+    GUARDIAN_ALERT
 }
 
 /** `timeline[].sound`, `second.sound`. */
@@ -208,14 +326,7 @@ enum class CarActionKind {
 data class SoundRef(val method: SoundMethod, val label: String)
 
 @Serializable
-data class PlayEntry(
-    val purpose: PlayPurpose,
-    val method: SoundMethod,
-    val songId: String?,
-    val startedAt: String,
-    val endedAt: String,
-    val playS: Int,
-)
+data class PlayEntry(val purpose: PlayPurpose, val method: SoundMethod, val songId: String?, val startedAt: String, val endedAt: String, val playS: Int)
 
 @Serializable
 data class SecondAttempt(val action: SecondAction, val sound: SoundRef?, val result: EpisodeResult?)
@@ -228,7 +339,8 @@ data class StopInfo(
     val restName: String?,
     val waypointAdded: Boolean,
     val guardianNotified: Boolean,
-    @SerialName("told_driver") val toldDriver: Boolean? = null,   // 인계 문장을 운전자에게 냈는가(없으면 참으로 읽는다)
+    // 인계 문장을 운전자에게 냈는가(없으면 참으로 읽는다)
+    @SerialName("told_driver") val toldDriver: Boolean? = null
 )
 
 /** 필드 순서는 메시지 형식 표의 순서(인코더도 이 순서로 쓴다). */
@@ -246,7 +358,7 @@ data class TimelineEpisode(
     val recried: Boolean,
     val second: SecondAttempt?,
     val stop: StopInfo?,
-    val totalCryS: Int,
+    val totalCryS: Int
 )
 
 @Serializable
@@ -261,7 +373,7 @@ data class PreCryContext(
     val gear: Gear,
     val cabinTempC: Double?,
     val windowOpen: Boolean?,
-    val playing: Boolean,
+    val playing: Boolean
 )
 
 @Serializable
@@ -271,21 +383,14 @@ data class Steering(
     val duringCryPerMin: Double?,
     val afterResponsePerMin: Double?,
     val duringCryZ: Double?,
-    val unavailableReason: SteeringUnavailableReason?,
+    val unavailableReason: SteeringUnavailableReason?
 )
 
 @Serializable
 data class CarAction(val action: CarActionKind, val count: Int, val totalS: Int?)
 
 @Serializable
-data class ControlRecord(
-    val api: String,
-    val target: String,
-    val attempts: Int,
-    val succeeded: Int,
-    val failed: Int,
-    val retries: Int,
-)
+data class ControlRecord(val api: String, val target: String, val attempts: Int, val succeeded: Int, val failed: Int, val retries: Int)
 
 /** `report_summary.method_stats[]`와 `POST /v1/llm`의 `state.method_stats[]`가 함께 쓴다. */
 @Serializable
@@ -304,7 +409,7 @@ data class ReportSummaryBody(
     val steering: Steering,
     val carActions: List<CarAction>,
     val controls: List<ControlRecord>,
-    val methodStats: List<MethodStat>? = null,
+    val methodStats: List<MethodStat>? = null
 )
 
 @Serializable
@@ -315,7 +420,7 @@ data class HandoffAlertBody(
     val minutesToArrival: Int?,
     val occurredAt: String,
     val sessionId: String,
-    val episodeId: String,
+    val episodeId: String
 )
 
 /** `care_summary` body. null 가능 칸은 모두 "또는 null"이라 기본값이 없다(명시적 null). */
@@ -331,7 +436,7 @@ data class CareSummaryBody(
     val nightWakeups: Int?,
     val lastDiaperAt: String?,
     val todayDiaperCount: Int?,
-    val todayFeedCount: Int,
+    val todayFeedCount: Int
 )
 
 @Serializable
@@ -352,5 +457,5 @@ val bodySerializers: Map<String, KSerializer<*>> = mapOf(
     "report_summary" to ReportSummaryBody.serializer(),
     "handoff_alert" to HandoffAlertBody.serializer(),
     "care_summary" to CareSummaryBody.serializer(),
-    "ack" to AckBody.serializer(),
+    "ack" to AckBody.serializer()
 )

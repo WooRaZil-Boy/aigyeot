@@ -57,12 +57,23 @@ fun WheelPanel(content: @Composable RowScope.() -> Unit) {
                 drawContent()
                 val f = fade.toPx()
                 drawRect(Brush.verticalGradient(listOf(p.bg, p.bg.copy(alpha = 0f)), 0f, f), size = androidx.compose.ui.geometry.Size(size.width, f))
-                drawRect(Brush.verticalGradient(listOf(p.bg.copy(alpha = 0f), p.bg), size.height - f, size.height), topLeft = Offset(0f,
-                        size.height - f), size = androidx.compose.ui.geometry.Size(size.width, f))
-            },
+                drawRect(
+                    Brush.verticalGradient(listOf(p.bg.copy(alpha = 0f), p.bg), size.height - f, size.height),
+                    topLeft = Offset(
+                        0f,
+                        size.height - f
+                    ),
+                    size = androidx.compose.ui.geometry.Size(size.width, f)
+                )
+            }
     ) {
-        Box(Modifier.padding(start = 16.dp, end = 16.dp,
-                top = WHEEL_BAND_TOP.dp).fillMaxWidth().height(WHEEL_ROW.dp).clip(RoundedCornerShape(24.dp)).background(p.ink(5)))
+        Box(
+            Modifier.padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = WHEEL_BAND_TOP.dp
+            ).fillMaxWidth().height(WHEEL_ROW.dp).clip(RoundedCornerShape(24.dp)).background(p.ink(5))
+        )
         Row(Modifier.fillMaxSize().padding(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(24.dp), content = content)
     }
 }
@@ -95,7 +106,10 @@ fun <T> RowScope.Wheel(values: List<T>, selected: Int, label: String, text: (T) 
     val base = Tokens.motion.getValue("base")
     suspend fun go(i: Int) {
         val target = i.coerceIn(0, values.size - 1)
-        if (reduced) { state.scrollToItem(target); return }
+        if (reduced) {
+            state.scrollToItem(target)
+            return
+        }
         val d = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.offset?.toFloat() ?: ((target - centered) * rowPx)
         state.animateScrollBy(d, tween(base.ms, easing = base.easing))
     }
@@ -105,23 +119,35 @@ fun <T> RowScope.Wheel(values: List<T>, selected: Int, label: String, text: (T) 
         Modifier.weight(1f).fillMaxHeight().clearAndSetSemantics {
             contentDescription = label
             if (centered in values.indices) stateDescription = text(values[centered])
-            progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(centered.toFloat(),
-                    0f..(values.size - 1).coerceAtLeast(1).toFloat(), (values.size - 2).coerceAtLeast(0))
-            setProgress { v -> scope.launch { go(kotlin.math.round(v).toInt()) }; true }
+            progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(
+                centered.toFloat(),
+                0f..(values.size - 1).coerceAtLeast(1).toFloat(),
+                (values.size - 2).coerceAtLeast(0)
+            )
+            setProgress { v ->
+                scope.launch { go(kotlin.math.round(v).toInt()) }
+                true
+            }
         },
         state = state,
         contentPadding = PaddingValues(vertical = WHEEL_BAND_TOP.dp),
-        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(state,
-                androidx.compose.foundation.gestures.snapping.SnapPosition.Start),
+        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(
+            state,
+            androidx.compose.foundation.gestures.snapping.SnapPosition.Start
+        )
     ) {
         items(values.size) { i ->
             val on = i == centered
             Box(
                 Modifier.fillMaxWidth().height(WHEEL_ROW.dp).clickable(remember { MutableInteractionSource() }, null) { scope.launch { go(i) } },
-                Alignment.Center,
+                Alignment.Center
             ) {
-                Text(text(values[i]), style = CarType.headlineS.copy(fontWeight = FontWeight(if (on) 700 else 400), lineHeight = 52.sp),
-                    color = if (on) p.textPrimary else p.textPrimary.copy(alpha = 0.32f), maxLines = 1)
+                Text(
+                    text(values[i]),
+                    style = CarType.headlineS.copy(fontWeight = FontWeight(if (on) 700 else 400), lineHeight = 52.sp),
+                    color = if (on) p.textPrimary else p.textPrimary.copy(alpha = 0.32f),
+                    maxLines = 1
+                )
             }
         }
     }

@@ -82,17 +82,29 @@ class LinkQaTest : LinkKit() {
     private fun crying(alarm: Boolean = true): EngineState {
         val eng = Engine()
         var s = EngineState.fresh(
-            7, Profile("2026-03", CarSeat.LEFT, 180, false), listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), song),
-            List(7) { FirstTry(T0 - 1_000_000, Method(MethodKind.LULLABY), it < 6) }, T0 - 170 * 60_000L, 0,
+            7,
+            Profile("2026-03", CarSeat.LEFT, 180, false),
+            listOf(Method(MethodKind.WHITE_NOISE), Method(MethodKind.LULLABY), song),
+            List(7) { FirstTry(T0 - 1_000_000, Method(MethodKind.LULLABY), it < 6) },
+            T0 - 170 * 60_000L,
+            0
         )
-        fun ev(e: Event) { s = eng.step(s, e).state }
-        ev(Boot(T0, Gear.P, 10)); ev(MicService(T0, true, MicPath.HOME_BUTTON))
-        ev(RearDoor(T0, Side.LEFT, true)); ev(RearDoor(T0, Side.LEFT, false)); ev(GearChanged(T0, Gear.D))
+        fun ev(e: Event) {
+            s = eng.step(s, e).state
+        }
+        ev(Boot(T0, Gear.P, 10))
+        ev(MicService(T0, true, MicPath.HOME_BUTTON))
+        ev(RearDoor(T0, Side.LEFT, true))
+        ev(RearDoor(T0, Side.LEFT, false))
+        ev(GearChanged(T0, Gear.D))
         ev(RouteState(T0, false, null, listOf(RestCandidate("r1", "○○휴게소", RestKind.REST_AREA, 7.23, true))))
         ev(CabinTemp(T0, 27.46))
-        if (alarm) ev(CrySegment(T0 + 120_000, T0 + 117_000, T0 + 120_000, 0.9, true))
-        else ev(SwitchSound(T0 + 120_000, Method(MethodKind.LULLABY)))
-        ev(PlaybackStarted(T0 + 121_000, s.session!!.play!!.id, "bus100_audio_zone_1", false))   // 에피소드는 재생이 시작될 때 열린다
+        if (alarm) {
+            ev(CrySegment(T0 + 120_000, T0 + 117_000, T0 + 120_000, 0.9, true))
+        } else {
+            ev(SwitchSound(T0 + 120_000, Method(MethodKind.LULLABY)))
+        }
+        ev(PlaybackStarted(T0 + 121_000, s.session!!.play!!.id, "bus100_audio_zone_1", false)) // 에피소드는 재생이 시작될 때 열린다
         check(s.session!!.episode != null)
         return s
     }
@@ -103,34 +115,41 @@ class LinkQaTest : LinkKit() {
      */
     private fun cryingNow(until: Long = T0 + 211_000): EngineState {
         var s = step(crying(), DriverStop(T0 + 121_000, Via.VOICE))
-        var t = T0 + 121_500                                              // 첫 경보(T0+120초)와 문턱(두 걸음) 안
-        while (t <= until) { s = step(s, CrySegment(t, t - 3_000, t, 0.9, true)); t += 975 }
+        var t = T0 + 121_500 // 첫 경보(T0+120초)와 문턱(두 걸음) 안
+        while (t <= until) {
+            s = step(s, CrySegment(t, t - 3_000, t, 0.9, true))
+            t += 975
+        }
         return s
     }
 
     private fun ask(text: String = "뭐가 제일 잘 통해?") = runBlocking { link.qa(Qa("L1", text)) }
-    private fun reply(text: String, vararg tools: LlmToolCall) = LlmResponse(text, tools.toList(), if (tools.isEmpty()) "end_turn" else "tool_use", "m", "p2", 1)
+    private fun reply(text: String, vararg tools: LlmToolCall) =
+        LlmResponse(text, tools.toList(), if (tools.isEmpty()) "end_turn" else "tool_use", "m", "p2", 1)
     private fun answer(vararg topics: String) = LlmToolCall("answer", buildJsonObject { put("topics", JsonArray(topics.map(::JsonPrimitive))) })
     private fun tool(name: String, vararg kv: Pair<String, String>) = LlmToolCall(name, buildJsonObject { kv.forEach { (k, v) -> put(k, JsonPrimitive(v)) } })
 
     @Test fun llmState_fromEngineState() {
         profile(nickname = "지우")
-        engineState = cryingNow(T0 + 150_000)   // 경보가 이어지는 중(자동 시도 재생 중이면 '확인할 수 없음')
+        engineState = cryingNow(T0 + 150_000) // 경보가 이어지는 중(자동 시도 재생 중이면 '확인할 수 없음')
         now = T0 + 150_000
         relay.llmRes = { Res.Ok(200, reply("")) }
         ask("지우가 왜 울어?")
         val req = relay.llmCalls.single()
-        assertEquals("아기가 왜 울어?", req.question)   // 별명은 '아기'로
+        assertEquals("아기가 왜 울어?", req.question) // 별명은 '아기'로
         val st = req.state
-        assertEquals(1, st.cry.currentMin)              // 경보 30초 뒤 = 1분째
-        assertEquals(1, st.cry.countThisDrive)          // 저장 전 에피소드도 센다
-        assertEquals(172, st.feeding!!.elapsedMin); assertEquals(180, st.feeding!!.intervalMin)
+        assertEquals(1, st.cry.currentMin) // 경보 30초 뒤 = 1분째
+        assertEquals(1, st.cry.countThisDrive) // 저장 전 에피소드도 센다
+        assertEquals(172, st.feeding!!.elapsedMin)
+        assertEquals(180, st.feeding!!.intervalMin)
         assertEquals(2, st.carseatMin)
         assertEquals(27.5, st.cabinTemp)
-        assertEquals(7.2, st.nextRest!!.distanceKm); assertEquals("r1", st.nextRest!!.id)
+        assertEquals(7.2, st.nextRest!!.distanceKm)
+        assertEquals("r1", st.nextRest!!.id)
         val lullaby = st.methodStats.single { it.label == "자장가" }
-        assertEquals(6, lullaby.successes); assertEquals(7, lullaby.attempts)
-        assertEquals("우리 노래", st.methodStats.last().label)   // 곡 이름은 보내지 않는다
+        assertEquals(6, lullaby.successes)
+        assertEquals(7, lullaby.attempts)
+        assertEquals("우리 노래", st.methodStats.last().label) // 곡 이름은 보내지 않는다
         assertNull(st.lastNightWakeups)
     }
 
@@ -139,9 +158,13 @@ class LinkQaTest : LinkKit() {
         val m = Method(MethodKind.WOMB)
         val since = T0 - 28 * DAY_MS
         val c = crying()
-        val st = c.copy(session = c.session!!.copy(methods = listOf(m)), history = listOf(FirstTry(since - 1, m, true), FirstTry(since, m, true), FirstTry(T0, m, false)))
+        val st = c.copy(
+            session = c.session!!.copy(methods = listOf(m)),
+            history = listOf(FirstTry(since - 1, m, true), FirstTry(since, m, true), FirstTry(T0, m, false))
+        )
         val s = llmState(st, T0, 0).methodStats.single()
-        assertEquals(1, s.successes); assertEquals(2, s.attempts)
+        assertEquals(1, s.successes)
+        assertEquals(2, s.attempts)
     }
 
     // 사실 주제 문장은 답이 도착한 순간 상태로 짠다(LLM에는 질문 때 상태를 보낸다)
@@ -149,28 +172,53 @@ class LinkQaTest : LinkKit() {
         profile()
         engineState = crying()
         now = T0 + 150_000
-        relay.llmRes = { now += 600_000; Res.Ok(200, reply("x", answer("feeding"))) }   // 기다리는 사이 10분이 흐른다(상태가 바뀜)
+        relay.llmRes = {
+            now += 600_000
+            Res.Ok(200, reply("x", answer("feeding")))
+        } // 기다리는 사이 10분이 흐른다(상태가 바뀜)
         ask("오늘 몇 번 먹었어?")
         assertEquals(172, relay.llmCalls.single().state.feeding!!.elapsedMin, "LLM에는 질문 때 상태")
-        (events.single() as QaReply).let { assertEquals(listOf("feeding"), it.factTopics, "사실 주제만 싣는다"); assertEquals("", it.text, "문장은 호스트가 큐에서 짠다") }
+        (events.single() as QaReply).let {
+            assertEquals(listOf("feeding"), it.factTopics, "사실 주제만 싣는다")
+            assertEquals("", it.text, "문장은 호스트가 큐에서 짠다")
+        }
     }
 
     @Test fun staleLlmText_replacedByFallback() {
         val st = stateWith(careNow())
         fun out(r: LlmResponse, q: String = "q") = qaEventsCare(r, "L1", T0, st, q, emptyList())
-        out(reply("불편할 수 있어요.", answer("why"))).let { assertTrue(it.llm); assertEquals("", it.fallback); assertEquals(listOf("why"), it.fallbackTopics); assertTrue(it.fallbackCare) }   // 글 대신 주제
-        out(reply("불편할 수 있어요.", answer("unknown"))).let { assertTrue(it.llm); assertEquals("그건 알 수 없어요.", it.fallback) }
+        out(reply("불편할 수 있어요.", answer("why"))).let {
+            assertTrue(it.llm)
+            assertEquals("", it.fallback)
+            assertEquals(listOf("why"), it.fallbackTopics)
+            assertTrue(it.fallbackCare)
+        } // 글 대신 주제
+        out(reply("불편할 수 있어요.", answer("unknown"))).let {
+            assertTrue(it.llm)
+            assertEquals("그건 알 수 없어요.", it.fallback)
+        }
         out(reply("아기가 불편할 수 있어요."), "q").let {
-            assertTrue(it.llm); assertEquals(offlineReply("q", st), it.fallback); assertEquals(emptyList(), it.fallbackTopics)
+            assertTrue(it.llm)
+            assertEquals(offlineReply("q", st), it.fallback)
+            assertEquals(emptyList(), it.fallbackTopics)
             assertEquals(offlineCareUsed("q"), it.fallbackCare)
         }
-        out(reply("아기가 불편할 수 있어요."), "왜 울어?").let { assertEquals("", it.fallback); assertEquals(listOf("why"), it.fallbackTopics) }
-        out(reply("x", answer("feeding"))).let { assertEquals(false, it.llm, "주제 문장은 LLM 글이 아니다"); assertEquals("", it.fallback) }
+        out(reply("아기가 불편할 수 있어요."), "왜 울어?").let {
+            assertEquals("", it.fallback)
+            assertEquals(listOf("why"), it.fallbackTopics)
+        }
+        out(reply("x", answer("feeding"))).let {
+            assertEquals(false, it.llm, "주제 문장은 LLM 글이 아니다")
+            assertEquals("", it.fallback)
+        }
     }
 
     @Test fun whyTextAndOfflineWhy_carriedAsTopic() {
         val st = stateWith(careNow())
-        qaEventsCare(reply("아기가 배고파서 울어요.", answer("why")), "L1", T0, st, "q", emptyList()).let { assertEquals("", it.second); assertEquals(listOf("why"), it.factTopics) }
+        qaEventsCare(reply("아기가 배고파서 울어요.", answer("why")), "L1", T0, st, "q", emptyList()).let {
+            assertEquals("", it.second)
+            assertEquals(listOf("why"), it.factTopics)
+        }
         assertEquals(listOf("why"), offlineFactTopics("왜 울어?"))
     }
 
@@ -200,7 +248,7 @@ class LinkQaTest : LinkKit() {
     }
 
     @Test fun switchSoundWomb_mapsToWombMethod() {
-        profile()   // 동의를 기록한 프로필이 있어야 AI에 묻는다
+        profile() // 동의를 기록한 프로필이 있어야 AI에 묻는다
         engineState = crying()
         relay.llmRes = { Res.Ok(200, reply("", tool("switch_sound", "method" to "womb"))) }
         ask("뱃속 소리 틀어줘")
@@ -208,14 +256,19 @@ class LinkQaTest : LinkKit() {
     }
 
     @Test fun methodStats_womb_labelAndMethod() {
-        profile()   // 동의를 기록한 프로필이 있어야 AI에 묻는다
-        engineState = crying().let { it.copy(session = it.session!!.copy(methods = it.session!!.methods + Method(MethodKind.WOMB)),
-            history = it.history + List(3) { i -> FirstTry(T0 - 1_000_000, Method(MethodKind.WOMB), i < 2) }) }
+        profile() // 동의를 기록한 프로필이 있어야 AI에 묻는다
+        engineState = crying().let {
+            it.copy(
+                session = it.session!!.copy(methods = it.session!!.methods + Method(MethodKind.WOMB)),
+                history = it.history + List(3) { i -> FirstTry(T0 - 1_000_000, Method(MethodKind.WOMB), i < 2) }
+            )
+        }
         relay.llmRes = { Res.Ok(200, reply("")) }
         ask()
         val w = relay.llmCalls.single().state.methodStats.single { it.label == "뱃속 소리" }
         assertEquals(SoundMethod.WOMB, w.method)
-        assertEquals(2, w.successes); assertEquals(3, w.attempts)
+        assertEquals(2, w.successes)
+        assertEquals(3, w.attempts)
     }
 
     // 질문 '자?'·'자니'·'자나'는 잠 주제, 'LLM이 쓴 "지금 자요."'는 사실 단정이라 막힌다
@@ -241,9 +294,13 @@ class LinkQaTest : LinkKit() {
 
     // 표의 모든 낱말은 질문 정규화 + 조각 나누기를 거친 뒤에도 그 행으로 분류된다(낱말 그대로·'아기 ' + 낱말·뒤에 다른 조각)
     @Test fun everyKeywordReachableAfterSplit() {
-        for ((topic, ws) in TOPIC_KEYWORDS) for (w in ws) for (q in listOf(w, "아기 $w", "아기 $w? 아직 안 와", "$w!")) {
-            val exp = TOPIC_KEYWORDS.first { (_, xs) -> xs.any { it in w } }.first   // 낱말이 다른 행 낱말을 품으면 앞 행이 우선
-            assertEquals(exp, questionTopic(q), "$topic/$w/$q")
+        for ((topic, ws) in TOPIC_KEYWORDS) {
+            for (w in ws) {
+                for (q in listOf(w, "아기 $w", "아기 $w? 아직 안 와", "$w!")) {
+                    val exp = TOPIC_KEYWORDS.first { (_, xs) -> xs.any { it in w } }.first // 낱말이 다른 행 낱말을 품으면 앞 행이 우선
+                    assertEquals(exp, questionTopic(q), "$topic/$w/$q")
+                }
+            }
         }
     }
 
@@ -259,12 +316,19 @@ class LinkQaTest : LinkKit() {
         assertEquals(false, care(reply("x 40분", answer("unknown"))))
         assertEquals(false, care(reply("x 40분"), "실내 온도 알려줘"), "오프라인 온도 문장")
         assertEquals(true, care(reply("x 40분"), "오늘 몇 번 먹었어"))
-        assertEquals(false, offlineCareUsed("실내 온도 알려줘")); assertEquals(true, offlineCareUsed("잠 잤어?"))
+        assertEquals(false, offlineCareUsed("실내 온도 알려줘"))
+        assertEquals(true, offlineCareUsed("잠 잤어?"))
     }
 
     @Test fun linkPassesCareUsed() {
-        profile(); engineState = crying()
-        fun careOf(res: LlmResponse, q: String): Boolean { events.clear(); relay.llmRes = { Res.Ok(200, res) }; ask(q); return (events.last() as QaReply).careUsed }
+        profile()
+        engineState = crying()
+        fun careOf(res: LlmResponse, q: String): Boolean {
+            events.clear()
+            relay.llmRes = { Res.Ok(200, res) }
+            ask(q)
+            return (events.last() as QaReply).careUsed
+        }
         assertEquals(false, careOf(reply("x", answer("cabin_temp")), "실내 온도 알려줘"))
         assertEquals(true, careOf(reply("x", answer("feeding")), "몇 번 먹었어"))
         assertEquals(false, careOf(reply("x", tool("switch_sound", "method" to "white_noise")), "소리 바꿔"))
@@ -275,9 +339,16 @@ class LinkQaTest : LinkKit() {
         val st = sleepAll()
         val ok = "죄송하지만 주변 소리까지는 알 수 없어요."
         assertEquals(ok, say(reply(ok), "그냥 얘기해 줘", st))
-        for (leak in listOf("answer 도구를 호출해 수유 주제를 고릅니다.", "Rendering the answer for the question.", "stop_soothing을 호출합니다.", "Sleep 주제로 알려 드릴게요.", "먼저 why 쪽으로 답을 고르겠습니다."))
+        for (leak in listOf(
+            "answer 도구를 호출해 수유 주제를 고릅니다.",
+            "Rendering the answer for the question.",
+            "stop_soothing을 호출합니다.",
+            "Sleep 주제로 알려 드릴게요.",
+            "먼저 why 쪽으로 답을 고르겠습니다."
+        )) {
             assertNotEquals(leak, say(reply(leak), "그냥 얘기해 줘", st), leak)
-        assertNotEquals("세 번이에요.", say(reply("세 번이에요."), "그냥 얘기해 줘", st))   // 진짜 숫자 말은 여전히 버린다
+        }
+        assertNotEquals("세 번이에요.", say(reply("세 번이에요."), "그냥 얘기해 줘", st)) // 진짜 숫자 말은 여전히 버린다
     }
 
     // LLM 글은 앞 두 문장만 말한다. 검사는 전체 글에 한다
@@ -286,27 +357,37 @@ class LinkQaTest : LinkKit() {
         assertEquals("주변 소리는 알 수 없어요. 그래도 곁에 있어요.", say(reply("주변 소리는 알 수 없어요. 그래도 곁에 있어요. 천천히 하세요."), "그냥 얘기해 줘", st))
         assertEquals("알 수 없어요.", say(reply("알 수 없어요."), "그냥 얘기해 줘", st))
         val bad = "주변 소리는 알 수 없어요. 그래도 곁에 있어요. 아기가 잤어요."
-        assertNotEquals(bad, say(reply(bad), "그냥 얘기해 줘", st))   // 셋째 문장의 상태 단정도 걸러 LLM 글을 쓰지 않는다
+        assertNotEquals(bad, say(reply(bad), "그냥 얘기해 줘", st)) // 셋째 문장의 상태 단정도 걸러 LLM 글을 쓰지 않는다
         assertTrue(!say(reply(bad), "그냥 얘기해 줘", st).contains("곁에 있어요"))
     }
 
     // 말하는 분 값은 60분 이상이면 시간·분으로
     @Test fun spokenDuration() {
-        assertEquals("0분", spokenMin(0)); assertEquals("59분", spokenMin(59)); assertEquals("1시간", spokenMin(60)); assertEquals("1시간 1분", spokenMin(61))
-        assertEquals("17시간 54분", spokenMin(1074)); assertEquals("2시간", spokenMin(120))
+        assertEquals("0분", spokenMin(0))
+        assertEquals("59분", spokenMin(59))
+        assertEquals("1시간", spokenMin(60))
+        assertEquals("1시간 1분", spokenMin(61))
+        assertEquals("17시간 54분", spokenMin(1074))
+        assertEquals("2시간", spokenMin(120))
         assertEquals("마지막 수유 시작부터 17시간 54분 지났어요.", topicSentence("feeding", sleepAll().copy(feedsToday = null, feeding = LlmFeeding(1074, 180))))
     }
 
     @Test fun linkPassesCareUsed_offline() {
-        profile(noticeVersion = 0); engineState = crying()   // AI에 묻지 않는 오프라인 길
-        events.clear(); ask("실내 온도 알려줘"); assertEquals(false, (events.last() as QaReply).careUsed)
-        events.clear(); ask("오늘 몇 번 먹었어"); assertEquals(true, (events.last() as QaReply).careUsed)
+        profile(noticeVersion = 0)
+        engineState = crying() // AI에 묻지 않는 오프라인 길
+        events.clear()
+        ask("실내 온도 알려줘")
+        assertEquals(false, (events.last() as QaReply).careUsed)
+        events.clear()
+        ask("오늘 몇 번 먹었어")
+        assertEquals(true, (events.last() as QaReply).careUsed)
     }
 
-    private fun QaReply.said(alarms: Int = 0) = if (factTopics.isEmpty()) text else fallbackReply(factTopics, llmState(engineState, now, alarms))   // 호스트가 큐에서 짜는 문장
+    private fun QaReply.said(alarms: Int = 0) =
+        if (factTopics.isEmpty()) text else fallbackReply(factTopics, llmState(engineState, now, alarms)) // 호스트가 큐에서 짜는 문장
     private fun QaOut.said(st: LlmState) = if (factTopics.isEmpty()) second else fallbackReply(factTopics, st)
     private fun say(call: LlmResponse, q: String, st: LlmState) = qaEventsCare(call, "L1", T0, st, q, emptyList()).said(st)
-    private val failing = "x 40분"   // 숫자 검사에 걸리는 글 → 대체 답
+    private val failing = "x 40분" // 숫자 검사에 걸리는 글 → 대체 답
 
     // 잠이 모두 있는 상태(마지막 잠 끝 134분 전, 길이 35분, 오늘 430분, 지난밤 깸 2번)
     private fun sleepAll(asOfAgo: Int = 10) = sleepSt(null, 134, 35, asOfAgo).copy(lastNightWakeups = 2)
@@ -332,7 +413,7 @@ class LinkQaTest : LinkKit() {
         // 낱말이 섞여도 주제별 값이 모두 나온다(재현 2)
         val two = "기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 4번이에요. 마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요."
         assertEquals(two, say(reply(failing, answer("diaper", "feeding")), "오늘 기저귀 몇 번 갈았고 마지막 수유는 언제 했어?", st))
-        assertEquals(2, say(reply(failing, answer("feeding", "sleep", "diaper")), "q", st).count { it == '.' })   // 앞 두 주제까지
+        assertEquals(2, say(reply(failing, answer("feeding", "sleep", "diaper")), "q", st).count { it == '.' }) // 앞 두 주제까지
         assertEquals(sleepFull + " 마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", say(reply(failing, answer("sleep", "feeding")), "q", st))
     }
 
@@ -358,10 +439,13 @@ class LinkQaTest : LinkKit() {
 
     @Test fun asOfPrefixOnce() {
         val st = sleepAll(90)
-        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 1시간 30분 전 기록 기준으로 오늘 3번 먹었어요. 기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.", say(reply(failing, answer("feeding", "diaper")), "q", st))
-        assertEquals(sleepFull.replace("기록상", "1시간 30분 전 기록 기준으로") , offlineReply("오늘 얼마나 잤어?", st))
-        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", say(reply(failing, answer("feeding")), "q", st.copy(feedsToday = null)))   // 돌봄 칸이 없는 문장엔 붙지 않는다
-        assertEquals(sleepFull, offlineReply("잠", sleepAll(60)))   // 60분 이하는 붙이지 않는다
+        assertEquals(
+            "마지막 수유 시작부터 2시간 50분 지났고, 1시간 30분 전 기록 기준으로 오늘 3번 먹었어요. 기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.",
+            say(reply(failing, answer("feeding", "diaper")), "q", st)
+        )
+        assertEquals(sleepFull.replace("기록상", "1시간 30분 전 기록 기준으로"), offlineReply("오늘 얼마나 잤어?", st))
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", say(reply(failing, answer("feeding")), "q", st.copy(feedsToday = null))) // 돌봄 칸이 없는 문장엔 붙지 않는다
+        assertEquals(sleepFull, offlineReply("잠", sleepAll(60))) // 60분 이하는 붙이지 않는다
     }
 
     // 기록이 오래되면 첫 돌봄 부분의 '기록상'만 시점으로 바뀐다(수유 경과·카시트 앞에는 안 붙는다)
@@ -370,8 +454,10 @@ class LinkQaTest : LinkKit() {
         val at = sleepFull.replace("기록상", "1시간 30분 전 기록 기준으로")
         assertEquals("카시트에 52분째예요. $at", say(reply(failing, answer("carseat", "sleep")), "q", st))
         assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 1시간 30분 전 기록 기준으로 오늘 3번 먹었어요.", say(reply(failing, answer("feeding")), "q", st))
-        assertEquals("$at 마지막 수유 시작부터 2시간 50분 지났어요.", say(reply(failing, answer("sleep", "feeding")), "q", st.copy(feedsToday = null)))   // 둘째 돌봄 문장에는 바꿀 '기록상'이 없고, 경과 앞에는 안 붙는다
-        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요. $at", say(reply(failing, answer("feeding", "sleep")), "q", st.copy(feedsToday = null)))   // 수유가 첫 문장이어도 돌봄 값 부분이 없으면 다음 돌봄 부분에서 한 번
+        // 둘째 돌봄 문장에는 바꿀 '기록상'이 없고, 경과 앞에는 안 붙는다
+        assertEquals("$at 마지막 수유 시작부터 2시간 50분 지났어요.", say(reply(failing, answer("sleep", "feeding")), "q", st.copy(feedsToday = null)))
+        // 수유가 첫 문장이어도 돌봄 값 부분이 없으면 다음 돌봄 부분에서 한 번
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요. $at", say(reply(failing, answer("feeding", "sleep")), "q", st.copy(feedsToday = null)))
     }
 
     // 돌봄 문장은 늘 '기록상'으로 시작, 값이 없거나 0이면 기록 없음, 일부만 0이면 그 부분만 뺀다
@@ -411,7 +497,7 @@ class LinkQaTest : LinkKit() {
         }
         assertEquals("수유 기록을 확인할 수 없어요.", topicSentence("feeding", none))
         assertEquals("수유 기록을 확인할 수 없어요.", topicSentence("feeding", stateWith(careNow(asOfAgoMin = 25 * 60)).copy(feeding = null)))
-        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", topicSentence("feeding", stateWith(null)))   // 경과가 있으면 그것만
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", topicSentence("feeding", stateWith(null))) // 경과가 있으면 그것만
     }
 
     // 어제 요약 같은 꼴: sleep·diaper 객체는 있지만 안의 값이 모두 null. 시점 안내도 붙지 않는다
@@ -424,8 +510,18 @@ class LinkQaTest : LinkKit() {
     }
 
     @Test fun zeroFromValidSummarySaysNoRecord() {
-        val st = stateWith(careNow().copy(todayFeedCount = 0, todaySleepMin = 0, nightWakeups = 0, todayDiaperCount = 0,
-            lastDiaperAt = null, lastSleepStartAt = null, lastSleepEndAt = null, sleepingSince = null)).copy(feeding = null)
+        val st = stateWith(
+            careNow().copy(
+                todayFeedCount = 0,
+                todaySleepMin = 0,
+                nightWakeups = 0,
+                todayDiaperCount = 0,
+                lastDiaperAt = null,
+                lastSleepStartAt = null,
+                lastSleepEndAt = null,
+                sleepingSince = null
+            )
+        ).copy(feeding = null)
         assertEquals("기록상 오늘 잠 기록이 없어요.", topicSentence("sleep", st))
         assertEquals("기록상 오늘 기저귀 기록이 없어요.", topicSentence("diaper", st))
         assertEquals("기록상 오늘 수유 기록이 없어요.", topicSentence("feeding", st))
@@ -440,10 +536,11 @@ class LinkQaTest : LinkKit() {
 
     @Test fun stateClaimText_topicSentence_orOffline() {
         val st = stateWith(careNow())
-        fun say(q: String, vararg t: String) = qaEventsCare(reply("아기가 잘 자고 있어요.", *(if (t.isEmpty()) emptyArray() else arrayOf(answer(*t)))), "L1", T0, st, q, emptyList()).said(st)
+        fun say(q: String, vararg t: String) =
+            qaEventsCare(reply("아기가 잘 자고 있어요.", *(if (t.isEmpty()) emptyArray() else arrayOf(answer(*t)))), "L1", T0, st, q, emptyList()).said(st)
         assertEquals("카시트에 52분째예요.", say("q", "carseat"))
-        assertEquals("카시트에 52분째예요.", say("카시트"))           // 주제도 없으면 질문 키워드로 고른 주제 문장
-        assertEquals(fallbackReply(listOf("why"), st), say("q", "why"))   // why만이면 글이 상태 단정 검사에 걸려 why 주제 문장
+        assertEquals("카시트에 52분째예요.", say("카시트")) // 주제도 없으면 질문 키워드로 고른 주제 문장
+        assertEquals(fallbackReply(listOf("why"), st), say("q", "why")) // why만이면 글이 상태 단정 검사에 걸려 why 주제 문장
     }
 
     // ---- 사실 주제는 차의 주제 문장, 사실 아닌 주제만 LLM 글(숫자 없음·상태 단정 없음) ----
@@ -452,7 +549,7 @@ class LinkQaTest : LinkKit() {
         // 글의 숫자가 상태값과 뒤바뀌어 있어도(수유 3분, 오늘 170번) 차의 주제 문장을 말한다
         val call = reply("마지막 수유는 3분 전이고 오늘 170번 먹었어요.", answer("feeding"))
         assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", say(call, "q", st))
-        assertEquals("카시트에 52분째예요.", say(reply("카시트에 마흔 분째예요.", answer("carseat")), "q", st))   // 숫자 없는 글도 쓰지 않는다
+        assertEquals("카시트에 52분째예요.", say(reply("카시트에 마흔 분째예요.", answer("carseat")), "q", st)) // 숫자 없는 글도 쓰지 않는다
     }
 
     @Test fun noAnswerTool_questionKeywordFactTopic_usesTopicSentence() {
@@ -470,7 +567,7 @@ class LinkQaTest : LinkKit() {
         val t = "배가 고프거나 불편할 수 있어요."
         assertEquals(t, say(reply(t, answer("why")), "왜 울어?", sleepAll()))
         assertEquals(t, say(reply(t, answer("unknown")), "q", sleepAll()))
-        assertEquals(t, say(reply(t), "왜 울어?", sleepAll()))   // answer 없이 키워드 주제 why여도 글 검사를 통과하면 그 글
+        assertEquals(t, say(reply(t), "왜 울어?", sleepAll())) // answer 없이 키워드 주제 why여도 글 검사를 통과하면 그 글
     }
 
     @Test fun whyOnly_llmTextWithDigitsOrKoreanCount_fallsBackToWhySentence() {
@@ -479,8 +576,8 @@ class LinkQaTest : LinkKit() {
         assertEquals(whySentence, say(reply("3분째 울고 있어서 불편할 수 있어요.", answer("why")), "q", st))
         assertEquals(whySentence, say(reply("세 번 울어서 불편할 수 있어요.", answer("why")), "q", st))
         assertEquals(whySentence, say(reply("두 시간 동안 불편할 수 있어요.", answer("why")), "q", st))
-        assertEquals(whySentence, say(reply("아기가 배고파서 울어요.", answer("why")), "q", st))   // 상태 단정
-        assertEquals(whySentence, say(reply("낯선 소리에 십여 분 동안 불편할 수 있어요.", answer("why")), "q", st))   // 한자어 수 + 여 + 단위
+        assertEquals(whySentence, say(reply("아기가 배고파서 울어요.", answer("why")), "q", st)) // 상태 단정
+        assertEquals(whySentence, say(reply("낯선 소리에 십여 분 동안 불편할 수 있어요.", answer("why")), "q", st)) // 한자어 수 + 여 + 단위
         assertEquals("그건 알 수 없어요.", say(reply("세 번 울었어요.", answer("unknown")), "q", st))
     }
 
@@ -492,7 +589,7 @@ class LinkQaTest : LinkKit() {
 
     @Test fun multipleAnswerCalls_merged() {
         val st = stateWith(careNow())
-        val call = reply("x 40분", answer("carseat"), answer("cabin_temp"), answer("carseat"))   // 글은 쓰지 않는다
+        val call = reply("x 40분", answer("carseat"), answer("cabin_temp"), answer("carseat")) // 글은 쓰지 않는다
         assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", qaEventsCare(call, "L1", T0, st, "q", emptyList()).said(st))
     }
 
@@ -506,11 +603,11 @@ class LinkQaTest : LinkKit() {
     @Test fun topics_orderedDistinctKnownMaxThree() {
         val st = stateWith(careNow())
         fun say(vararg t: String) = qaEventsCare(reply("x 40분", answer(*t)), "L1", T0, st, "q", emptyList()).said(st)
-        assertEquals("카시트에 52분째예요.", say("carseat", "unknown"))   // 사실 주제가 있으면 unknown은 말하지 않는다
-        assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", say("carseat", "carseat", "엉뚱", "cabin_temp"))   // 겹침·모르는 값은 버린다
-        assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", say("carseat", "cabin_temp", "unknown", "cry"))   // 앞 두 주제까지, 주제마다 한 문장
+        assertEquals("카시트에 52분째예요.", say("carseat", "unknown")) // 사실 주제가 있으면 unknown은 말하지 않는다
+        assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", say("carseat", "carseat", "엉뚱", "cabin_temp")) // 겹침·모르는 값은 버린다
+        assertEquals("카시트에 52분째예요. 실내 온도는 27.5도예요.", say("carseat", "cabin_temp", "unknown", "cry")) // 앞 두 주제까지, 주제마다 한 문장
         assertEquals("그건 알 수 없어요.", say("unknown"))
-        assertEquals("카시트에 52분째예요.", qaEventsCare(reply("x 40분", answer("엉뚱")), "L1", T0, st, "카시트", emptyList()).said(st))   // 알려진 주제가 하나도 없으면 오프라인 문장
+        assertEquals("카시트에 52분째예요.", qaEventsCare(reply("x 40분", answer("엉뚱")), "L1", T0, st, "카시트", emptyList()).said(st)) // 알려진 주제가 하나도 없으면 오프라인 문장
     }
 
     // 세션이 없으면 이번 주행 횟수가 없다. 세션이 있으면(마이크 일시정지여도) 지금 문장 그대로
@@ -527,7 +624,7 @@ class LinkQaTest : LinkKit() {
 
     @Test fun noSessionCarseatUnknown() {
         val none = llmState(crying().copy(session = null, feedingStart = N - 170 * MINUTE), N, 0)
-        assertNull(none.carseatMin)   // 세션이 없으면 카시트 분을 재지 않았다
+        assertNull(none.carseatMin) // 세션이 없으면 카시트 분을 재지 않았다
         assertEquals("카시트 시간은 출발한 뒤부터 재요.", topicSentence("carseat", none))
         val st = stateWith(null)
         assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", topicSentence("why", st))
@@ -564,15 +661,15 @@ class LinkQaTest : LinkKit() {
     @Test fun textOnly_offlineByKeyword_toolsFixedSentences() {
         profile()
         engineState = crying()
-        relay.llmRes = { Res.Ok(200, reply("아기가 잘 자고 있어요.")) }   // 도구 없이 글만: 글은 버리고 오프라인 문장
+        relay.llmRes = { Res.Ok(200, reply("아기가 잘 자고 있어요.")) } // 도구 없이 글만: 글은 버리고 오프라인 문장
         ask("뭐가 잘 통해?")
         assertEquals(listOf<Event>(QaReply(T0, "L1", "", careUsed = false, factTopics = listOf("sound_stats"))), events.toList())
         events.clear()
-        relay.llmRes = { Res.Ok(200, reply("2시간 50분 지났어요. 바꿀게요.", tool("switch_sound", "method" to "white_noise"))) }   // 다른 도구만: 글 대신 고정 문장
+        relay.llmRes = { Res.Ok(200, reply("2시간 50분 지났어요. 바꿀게요.", tool("switch_sound", "method" to "white_noise"))) } // 다른 도구만: 글 대신 고정 문장
         ask("뭐가 잘 통해?")
         assertEquals(listOf(SwitchSound(T0, Method(MethodKind.WHITE_NOISE), "L1"), QaReply(T0, "L1", "소리를 바꿀게요.", careUsed = false)), events.toList())
         events.clear()
-        relay.llmRes = { Res.Ok(200, reply("x 40분", tool("switch_sound", "method" to "white_noise"), answer("cry"))) }   // 다른 도구와 answer: 도구 사건 + 주제 문장
+        relay.llmRes = { Res.Ok(200, reply("x 40분", tool("switch_sound", "method" to "white_noise"), answer("cry"))) } // 다른 도구와 answer: 도구 사건 + 주제 문장
         ask("틀고 얼마나 울었어?")
         assertEquals(SwitchSound(T0, Method(MethodKind.WHITE_NOISE), "L1"), events[0])
         assertEquals("지금은 울음을 확인할 수 없고, 이번 주행에서 1번 울었어요.", (events[1] as QaReply).said(1), "crying()은 자동 시도 재생 중")
@@ -582,7 +679,8 @@ class LinkQaTest : LinkKit() {
         val st = llmState(null, T0, 0)
         val call = reply("x 40분", tool("switch_sound", "method" to "parent_song"), answer("carseat"))
         val (tools, text) = qaEvents(call, "L1", T0, st, "q", emptyList())
-        assertTrue(tools.isEmpty()); assertEquals("지금은 소리를 틀 수 없어요.", text)
+        assertTrue(tools.isEmpty())
+        assertEquals("지금은 소리를 틀 수 없어요.", text)
     }
 
     @Test fun summaryFromYesterday_dropsDayCounts() {
@@ -590,21 +688,30 @@ class LinkQaTest : LinkKit() {
         val c = crying()
         fun st(asOf: String, nowAt: String) = llmState(c.copy(care = careNow(asOf = instantOf(asOf)!!)), instantOf(nowAt)!!, 3, seoul)
         val same = st("2025-11-05T23:50:00+09:00", "2025-11-05T23:59:00+09:00")
-        assertEquals(3, same.feedsToday); assertEquals(430, same.sleep!!.todaySleepMin); assertEquals(2, same.diaper!!.todayCount); assertEquals(2, same.lastNightWakeups)
+        assertEquals(3, same.feedsToday)
+        assertEquals(430, same.sleep!!.todaySleepMin)
+        assertEquals(2, same.diaper!!.todayCount)
+        assertEquals(2, same.lastNightWakeups)
         val next = st("2025-11-05T23:55:00+09:00", "2025-11-06T00:05:00+09:00")
-        assertNull(next.feedsToday); assertNull(next.sleep!!.todaySleepMin); assertNull(next.diaper!!.todayCount); assertNull(next.lastNightWakeups)
-        assertEquals(10, next.careAsOfMinAgo); assertNotNull(next.diaper!!.minAgo); assertNotNull(next.sleep!!.sleepingSinceMin)   // 나머지 칸은 그대로
+        assertNull(next.feedsToday)
+        assertNull(next.sleep!!.todaySleepMin)
+        assertNull(next.diaper!!.todayCount)
+        assertNull(next.lastNightWakeups)
+        assertEquals(10, next.careAsOfMinAgo)
+        assertNotNull(next.diaper!!.minAgo)
+        assertNotNull(next.sleep!!.sleepingSinceMin) // 나머지 칸은 그대로
     }
 
     @Test fun summaryZone_decidesSameDay() {
         val seoul = ZoneId.of("Asia/Seoul")
-        val asOf = instantOf("2025-11-05T23:55:00+09:00")!!; val nowAt = instantOf("2025-11-06T00:05:00+09:00")!!   // 차(서울)는 날짜가 갈리고 LA는 같은 날
+        val asOf = instantOf("2025-11-05T23:55:00+09:00")!!
+        val nowAt = instantOf("2025-11-06T00:05:00+09:00")!! // 차(서울)는 날짜가 갈리고 LA는 같은 날
         fun st(zone: String?) = llmState(crying().copy(care = careNow(asOf = asOf).copy(zone = zone)), nowAt, 3, seoul)
-        assertEquals(3, st("America/Los_Angeles").feedsToday)       // 요약 시간대로 같은 날
-        assertNull(st(null).feedsToday)                              // 없으면 차 시간대
-        assertNull(st("엉뚱한 값").feedsToday)                       // 잘못된 값도 차 시간대
+        assertEquals(3, st("America/Los_Angeles").feedsToday) // 요약 시간대로 같은 날
+        assertNull(st(null).feedsToday) // 없으면 차 시간대
+        assertNull(st("엉뚱한 값").feedsToday) // 잘못된 값도 차 시간대
         val la = ZoneId.of("America/Los_Angeles")
-        val care = careNow(asOf = instantOf("2025-11-05T23:55:00-08:00")!!)   // 반대: 차(LA)는 날짜가 갈리고 서울은 같은 날
+        val care = careNow(asOf = instantOf("2025-11-05T23:55:00-08:00")!!) // 반대: 차(LA)는 날짜가 갈리고 서울은 같은 날
         assertNull(llmState(crying().copy(care = care), instantOf("2025-11-06T00:05:00-08:00")!!, 3, la).feedsToday)
         assertEquals(3, llmState(crying().copy(care = care.copy(zone = "Asia/Seoul")), instantOf("2025-11-06T00:05:00-08:00")!!, 3, la).feedsToday)
     }
@@ -618,16 +725,16 @@ class LinkQaTest : LinkKit() {
 
     @Test fun offline_jamkkanIsNotSleep() {
         val st = sleepSt(40, null, 35).copy(feeding = LlmFeeding(170, 180))
-        val feed = "마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요."   // sleepSt는 feeds_today가 있다
+        val feed = "마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요." // sleepSt는 feeds_today가 있다
         assertEquals(feed, offlineReply("잠깐, 수유 언제 했어?", st))
         assertEquals(feed, offlineReply("잠시만 수유 언제야", st))
         assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분이에요.", offlineReply("잠 언제 잤어?", st))
-        assertEquals(offlineReply("얼마나 울었어?", st), offlineReply("잠잠해지기 전까지 얼마나 울었어?", st))   // 잠잠은 잠 질문이 아니라 울음 행
+        assertEquals(offlineReply("얼마나 울었어?", st), offlineReply("잠잠해지기 전까지 얼마나 울었어?", st)) // 잠잠은 잠 질문이 아니라 울음 행
         assertTrue("잠 기록" !in offlineReply("잠잠해지기 전까지 얼마나 울었어?", st))
     }
 
     @Test fun toolOnly_fixedSentences_parentSongIsCandidate() {
-        profile()   // 동의를 기록한 프로필이 있어야 AI에 묻는다
+        profile() // 동의를 기록한 프로필이 있어야 AI에 묻는다
         engineState = crying()
         relay.llmRes = { Res.Ok(200, reply("", tool("switch_sound", "method" to "parent_song"))) }
         ask("우리 노래 틀어줘")
@@ -637,11 +744,11 @@ class LinkQaTest : LinkKit() {
         ask("그만 좀 해줄래")
         assertEquals(listOf(DriverStop(T0, Via.TOOL, "L1"), QaReply(T0, "L1", "소리를 멈출게요.", careUsed = false)), events.toList())
         events.clear()
-        relay.llmRes = { Res.Ok(200, reply("아기가 잘 자고 있어요.", tool("add_waypoint", "rest_id" to "r1"))) }   // 상태 단정 글은 QaReply로 나가지 않는다
+        relay.llmRes = { Res.Ok(200, reply("아기가 잘 자고 있어요.", tool("add_waypoint", "rest_id" to "r1"))) } // 상태 단정 글은 QaReply로 나가지 않는다
         ask("거기 들르자")
-        assertEquals(listOf(DriverAddWaypoint(T0, "r1", "L1"), QaReply(T0, "L1", "", careUsed = false)), events.toList())   // 판단 코어가 S09·S19로 답한다
+        assertEquals(listOf(DriverAddWaypoint(T0, "r1", "L1"), QaReply(T0, "L1", "", careUsed = false)), events.toList()) // 판단 코어가 S09·S19로 답한다
         events.clear()
-        relay.llmRes = { Res.Ok(200, reply("쉼터에 들를게요.", tool("add_waypoint", "rest_id" to "r1"))) }   // 도구만이면 통과한 글도 쓰지 않는다
+        relay.llmRes = { Res.Ok(200, reply("쉼터에 들를게요.", tool("add_waypoint", "rest_id" to "r1"))) } // 도구만이면 통과한 글도 쓰지 않는다
         ask("거기 들르자")
         assertEquals(listOf(DriverAddWaypoint(T0, "r1", "L1"), QaReply(T0, "L1", "", careUsed = false)), events.toList())
     }
@@ -655,21 +762,24 @@ class LinkQaTest : LinkKit() {
             ask("다음 수유실 어디야?")
             assertEquals(listOf<Event>(QaReply(T0, "L1", "", careUsed = false, factTopics = listOf("next_rest"))), events.toList())
         }
-        assertEquals(4, relay.llmCalls.size)   // 네 번 모두 중계를 불렀다
+        assertEquals(4, relay.llmCalls.size) // 네 번 모두 중계를 불렀다
     }
 
     @Test fun offlinePathOnNetworkFailureCapped() {
         profile()
         engineState = crying().copy(care = careNow())
-        assertTrue(offlineReply("잠 얼마나 잤어", llmState(engineState!!, T0, 3)).count { it == '.' } == 1)   // 잠 주제는 값을 모두 담은 한 문장
-        for (r in listOf(Res.Err(502, "llm_upstream", null), Res.Offline)) {   // 실패 길
+        assertTrue(offlineReply("잠 얼마나 잤어", llmState(engineState!!, T0, 3)).count { it == '.' } == 1) // 잠 주제는 값을 모두 담은 한 문장
+        for (r in listOf(Res.Err(502, "llm_upstream", null), Res.Offline)) { // 실패 길
             events.clear()
             relay.llmRes = { r }
             ask("잠 얼마나 잤어")
             assertEquals(1, (events.single() as QaReply).said().count { it == '.' })
         }
         events.clear()
-        relay.llmRes = { delay(1_000); Res.Ok(200, reply("x")) }   // 시간 초과 길
+        relay.llmRes = {
+            delay(1_000)
+            Res.Ok(200, reply("x"))
+        } // 시간 초과 길
         ask("잠 얼마나 잤어")
         assertEquals(1, (events.single() as QaReply).said().count { it == '.' })
     }
@@ -678,17 +788,21 @@ class LinkQaTest : LinkKit() {
         profile()
         engineState = crying()
         var called = 0
-        relay.llmRes = { called++; delay(1_000); Res.Ok(200, reply("", tool("switch_sound", "method" to "lullaby"))) }
+        relay.llmRes = {
+            called++
+            delay(1_000)
+            Res.Ok(200, reply("", tool("switch_sound", "method" to "lullaby")))
+        }
         val t = System.nanoTime()
         ask("언제 먹였지?")
-        assertTrue((System.nanoTime() - t) / 1_000_000 < 900)   // 기다림(시험 300ms)에 끝난다
-        Thread.sleep(1_200)                                      // 늦은 답이 와도
-        assertEquals(1, called)                                  // 중계는 실제로 불렀고(늦게 끝났을 뿐, 취소돼 llmCalls에는 안 남는다)
+        assertTrue((System.nanoTime() - t) / 1_000_000 < 900) // 기다림(시험 300ms)에 끝난다
+        Thread.sleep(1_200) // 늦은 답이 와도
+        assertEquals(1, called) // 중계는 실제로 불렀고(늦게 끝났을 뿐, 취소돼 llmCalls에는 안 남는다)
         assertEquals(listOf<Event>(QaReply(T0, "L1", "", factTopics = listOf("feeding"))), events.toList())
     }
 
     @Test fun offlineReply_fiveKeywords_useOnlyStateNumbers() {
-        val st = llmState(cryingNow(T0 + 150_000), T0 + 150_000, 3)   // 경보가 이어지는 중
+        val st = llmState(cryingNow(T0 + 150_000), T0 + 150_000, 3) // 경보가 이어지는 중
         val replies = listOf("왜 울어", "언제 먹였어", "얼마나 울었어", "뭐가 잘 통해", "다음 수유실", "노래 제목이 뭐야").map { offlineReply(it, st) }
         assertEquals(
             listOf(
@@ -697,9 +811,9 @@ class LinkQaTest : LinkKit() {
                 "지금 1분째 울고 있고, 이번 주행에서 3번 울었어요.",
                 "자장가를 틀었을 때 7번 중 6번 그쳤어요. 소리 덕분인지는 알 수 없어요.",
                 "○○휴게소까지 7.2km이고 수유실이 있어요.",
-                "지금은 답을 가져오지 못했어요.",
+                "지금은 답을 가져오지 못했어요."
             ),
-            replies,
+            replies
         )
         replies.forEach { r ->
             listOf("잠들", "배고파서", "그쳤다").forEach { banned -> assertTrue(banned !in r, r) }
@@ -713,9 +827,9 @@ class LinkQaTest : LinkKit() {
 
     @Test fun switchSoundEpisode_notCounted_asCrying() {
         val s = crying(alarm = false)
-        assertEquals(EpisodeTrigger.SWITCH_SOUND, s.session!!.episode!!.trigger)   // 소리 바꾸기로 연 에피소드가 맞다
+        assertEquals(EpisodeTrigger.SWITCH_SOUND, s.session!!.episode!!.trigger) // 소리 바꾸기로 연 에피소드가 맞다
         assertNull(llmState(s, T0 + 150_000, 0).cry.currentMin)
-        assertEquals(1, llmState(cryingNow(T0 + 150_000), T0 + 150_000, 0).cry.currentMin)   // 경보가 이어지면 울고 있음
+        assertEquals(1, llmState(cryingNow(T0 + 150_000), T0 + 150_000, 0).cry.currentMin) // 경보가 이어지면 울고 있음
     }
 
     @Test fun parentSong_withoutCandidate_noToolSentenceS20() {
@@ -723,34 +837,40 @@ class LinkQaTest : LinkKit() {
         val call = reply("아무 말 7번.", tool("switch_sound", "method" to "parent_song"))
         for (m in listOf(emptyList(), listOf(Method(MethodKind.SONG)), listOf(Method(MethodKind.WHITE_NOISE)))) {
             val (tools, text) = qaEvents(call, "L1", T0, st, "노래 틀어줘", m)
-            assertTrue(tools.isEmpty()); assertEquals("지금은 소리를 틀 수 없어요.", text)
+            assertTrue(tools.isEmpty())
+            assertEquals("지금은 소리를 틀 수 없어요.", text)
         }
         val other = reply("", tool("switch_sound", "method" to "parent_song"), tool("stop_soothing"))
-        assertEquals(listOf<Event>(DriverStop(T0, Via.TOOL, "L1")), qaEvents(other, "L1", T0, st, "q", emptyList()).first)   // 다른 도구는 그대로
+        assertEquals(listOf<Event>(DriverStop(T0, Via.TOOL, "L1")), qaEvents(other, "L1", T0, st, "q", emptyList()).first) // 다른 도구는 그대로
     }
 
     @Test fun llmCallThrows_stillOneOfflineReply() {
         profile()
         engineState = crying()
         var called = 0
-        relay.llmRes = { called++; error("예상 못 한 오류") }
+        relay.llmRes = {
+            called++
+            error("예상 못 한 오류")
+        }
         ask("다음 수유실 어디야?")
-        assertEquals(1, called)   // 던지는 중계 호출에 실제로 들어갔다
+        assertEquals(1, called) // 던지는 중계 호출에 실제로 들어갔다
         assertEquals(listOf<Event>(QaReply(T0, "L1", "", careUsed = false, factTopics = listOf("next_rest"))), events.toList())
     }
 
     // ---- 폰 돌봄 기록 요약 ----
-    private val N = T0 + 211_000                         // 경보 에피소드 시작(T0+121초)부터 90초 = 2분째
+    private val N = T0 + 211_000 // 경보 에피소드 시작(T0+121초)부터 90초 = 2분째
     private fun careNow(asOfAgoMin: Long = 10, enabled: Boolean = true, sleeping: Boolean = true, asOf: Long = N - asOfAgoMin * MINUTE) = CareView(
         asOf, enabled,
-        if (enabled) asOf - 160 * MINUTE else null, if (enabled) asOf - 160 * MINUTE + 35 * MINUTE + 30_000 else null,   // 35분 30초 잠
+        if (enabled) asOf - 160 * MINUTE else null, if (enabled) asOf - 160 * MINUTE + 35 * MINUTE + 30_000 else null, // 35분 30초 잠
         if (enabled && sleeping) asOf - 30 * MINUTE else null,
-        if (enabled) 430 else null, if (enabled) 2 else null, if (enabled) N - 235 * MINUTE else null, if (enabled) 2 else null, 3,
+        if (enabled) 430 else null, if (enabled) 2 else null, if (enabled) N - 235 * MINUTE else null, if (enabled) 2 else null, 3
     )
     private fun stateWith(care: CareView?): LlmState {
-        val c = cryingNow()   // 경보가 이어지는 중(울음 처음 T0+120초 → N에 2분째, 예제 current_min 2)
-        val ses = c.session!!.copy(methods = listOf(Method(MethodKind.LULLABY), Method(MethodKind.WHITE_NOISE)), openedAt = N - 52 * MINUTE)   // 카시트 시작 = 세션 시작
-        val hist = List(7) { FirstTry(T0 - 1_000_000, Method(MethodKind.LULLABY), it < 6) } + List(6) { FirstTry(T0 - 1_000_000, Method(MethodKind.WHITE_NOISE), it < 2) }
+        val c = cryingNow() // 경보가 이어지는 중(울음 처음 T0+120초 → N에 2분째, 예제 current_min 2)
+        val ses = c.session!!.copy(methods = listOf(Method(MethodKind.LULLABY), Method(MethodKind.WHITE_NOISE)), openedAt = N - 52 * MINUTE) // 카시트 시작 = 세션 시작
+        val hist =
+            List(7) { FirstTry(T0 - 1_000_000, Method(MethodKind.LULLABY), it < 6) } +
+                List(6) { FirstTry(T0 - 1_000_000, Method(MethodKind.WHITE_NOISE), it < 2) }
         return llmState(c.copy(session = ses, history = hist, feedingStart = N - 170 * MINUTE, care = care), N, 3)
     }
     private fun fixtureState() = Json.parseToJsonElement(File("../shared/src/test/resources/protocol/api_llm_request_care.json").readText())
@@ -761,27 +881,41 @@ class LinkQaTest : LinkKit() {
     }
 
     @Test fun summaryOlderThan24h_omittedAndWakeupsNull() {
-        val atEdge = stateWith(careNow(asOf = N - 24 * 60 * MINUTE))              // 정확히 24시간은 쓴다
-        assertEquals(1440, atEdge.careAsOfMinAgo); assertNotNull(atEdge.sleep)   // 어제 것이라 오늘·지난밤 값은 빠진다(summaryFromYesterday_dropsDayCounts)
+        val atEdge = stateWith(careNow(asOf = N - 24 * 60 * MINUTE)) // 정확히 24시간은 쓴다
+        assertEquals(1440, atEdge.careAsOfMinAgo)
+        assertNotNull(atEdge.sleep) // 어제 것이라 오늘·지난밤 값은 빠진다(summaryFromYesterday_dropsDayCounts)
         val over = stateWith(careNow(asOf = N - 24 * 60 * MINUTE - 1))
-        assertNull(over.sleep); assertNull(over.diaper); assertNull(over.feedsToday); assertNull(over.careAsOfMinAgo); assertNull(over.lastNightWakeups)
+        assertNull(over.sleep)
+        assertNull(over.diaper)
+        assertNull(over.feedsToday)
+        assertNull(over.careAsOfMinAgo)
+        assertNull(over.lastNightWakeups)
         val none = stateWith(null)
-        assertNull(none.sleep); assertNull(none.feedsToday); assertNull(none.careAsOfMinAgo)
+        assertNull(none.sleep)
+        assertNull(none.feedsToday)
+        assertNull(none.careAsOfMinAgo)
         val json = stateJson(over).toString()
-        listOf("\"sleep\"", "\"diaper\"", "feeds_today", "care_as_of_min_ago").forEach { assertTrue(it !in json, it) }   // 키 자체가 빠진다
+        listOf("\"sleep\"", "\"diaper\"", "feeds_today", "care_as_of_min_ago").forEach { assertTrue(it !in json, it) } // 키 자체가 빠진다
     }
 
     @Test fun sleepDiaperOff_dropsSleepDiaperKeepsFeeds() {
         val st = stateWith(careNow(enabled = false))
-        assertNull(st.sleep); assertNull(st.diaper); assertNull(st.lastNightWakeups)
-        assertEquals(3, st.feedsToday); assertEquals(10, st.careAsOfMinAgo)
+        assertNull(st.sleep)
+        assertNull(st.diaper)
+        assertNull(st.lastNightWakeups)
+        assertEquals(3, st.feedsToday)
+        assertEquals(10, st.careAsOfMinAgo)
     }
 
     @Test fun sleepInProgress_wokeMinAgoNull_endedSleep_hasWoke() {
         val on = stateWith(careNow()).sleep!!
-        assertEquals(40, on.sleepingSinceMin); assertNull(on.wokeMinAgo); assertEquals(35, on.lastSleepMin)
+        assertEquals(40, on.sleepingSinceMin)
+        assertNull(on.wokeMinAgo)
+        assertEquals(35, on.lastSleepMin)
         val ended = stateWith(careNow(sleeping = false)).sleep!!
-        assertNull(ended.sleepingSinceMin); assertEquals(134, ended.wokeMinAgo); assertEquals(35, ended.lastSleepMin)
+        assertNull(ended.sleepingSinceMin)
+        assertEquals(134, ended.wokeMinAgo)
+        assertEquals(35, ended.lastSleepMin)
     }
 
     private fun sleepSt(sinceMin: Int?, woke: Int?, last: Int?, asOfAgo: Int = 10) =
@@ -797,15 +931,15 @@ class LinkQaTest : LinkKit() {
     @Test fun offline_sleepRow() {
         assertEquals("기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분이에요.", offlineReply("언제 잤어?", sleepSt(40, null, 35)))
         assertEquals("기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 7시간 10분이에요.", offlineReply("언제 깼어?", sleepSt(null, 134, 35)))
-        assertEquals("기록상 오늘 잠은 모두 7시간 10분이에요.", offlineReply("잠", sleepSt(null, null, null)))   // 오늘 잠 값만 있으면 그 문장만
+        assertEquals("기록상 오늘 잠은 모두 7시간 10분이에요.", offlineReply("잠", sleepSt(null, null, null))) // 오늘 잠 값만 있으면 그 문장만
         assertEquals("잠 기록을 확인할 수 없어요.", offlineReply("잠", stateWith(null)))
-        assertEquals("기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 7시간 10분이에요.", offlineReply("얼마나 잤어?", sleepSt(null, 134, 35)))   // 질문 낱말로 고르지 않는다
+        assertEquals("기록상 2시간 14분 전에 잠이 끝났고, 마지막 잠은 35분, 오늘은 모두 7시간 10분이에요.", offlineReply("얼마나 잤어?", sleepSt(null, 134, 35))) // 질문 낱말로 고르지 않는다
     }
 
     @Test fun offline_whyRow_withWoke() {
         assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째이고, 기록상 2시간 14분 전에 깼어요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35)))
         assertEquals("카시트에 52분째이고, 기록상 2시간 14분 전에 깼어요. 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(null, 134, 35).copy(feeding = null)))
-        assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(40, null, 35)))   // woke 없으면 그대로
+        assertEquals("마지막 수유 시작부터 2시간 50분, 카시트에 52분째예요. 배고프거나 불편할 수 있어요.", offlineReply("왜 울어?", sleepSt(40, null, 35))) // woke 없으면 그대로
     }
 
     @Test fun offline_oldRecordPrefix_over60only() {
@@ -813,20 +947,20 @@ class LinkQaTest : LinkKit() {
         assertEquals("기록상 마지막 기저귀는 3시간 55분 전이고, 오늘 2번이에요.", offlineReply("기저귀", sleepSt(40, null, 35, 60)))
         assertEquals("3시간 20분 전 기록 기준으로 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분이에요.", offlineReply("잠", sleepSt(40, null, 35, 200)))
         assertTrue(offlineReply("왜 울어?", sleepSt(null, 134, 35, 90)).contains("카시트에 52분째이고, 1시간 30분 전 기록 기준으로 2시간 14분 전에 깼어요"))
-        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 5시간 전 기록 기준으로 오늘 3번 먹었어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300)))   // feeds_today를 쓴 문장
-        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300).copy(feedsToday = null)))   // 돌봄 칸을 안 쓴 문장은 붙이지 않는다
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 5시간 전 기록 기준으로 오늘 3번 먹었어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300))) // feeds_today를 쓴 문장
+        assertEquals("마지막 수유 시작부터 2시간 50분 지났어요.", offlineReply("먹였어?", sleepSt(40, null, 35, 300).copy(feedsToday = null))) // 돌봄 칸을 안 쓴 문장은 붙이지 않는다
     }
 
     @Test fun offline_keywordOrder() {
         val st = sleepSt(null, 134, 35)
-        assertTrue(offlineReply("수유실 기저귀 잠", st).startsWith("○○휴게소까지"))             // 1 수유실
-        assertTrue(offlineReply("기저귀 잠", st).startsWith("기록상 마지막 기저귀"))              // 2 기저귀
-        assertTrue(offlineReply("잠 언제", st).startsWith("기록상 2시간 14분 전에 잠이 끝났고"))           // 3 잠
-        assertTrue(offlineReply("카시트 얼마나 먹였어", st).startsWith("카시트에 52분째"))          // 4 카시트 > 5 수유
-        assertTrue(offlineReply("온도 먹였어", st).startsWith("실내 온도"))                       // 카시트 다음 온도
-        assertTrue(offlineReply("얼마나 먹였어", st).startsWith("마지막 수유 시작부터"))          // 수유가 얼마나보다 먼저
-        assertTrue(offlineReply("얼마나 울었어", st).startsWith("지금 "))                         // 얼마나
-        assertTrue(offlineReply("먹였어 왜", st).startsWith("마지막 수유 시작부터 2시간 50분 지났"))   // 먹였 > 왜
+        assertTrue(offlineReply("수유실 기저귀 잠", st).startsWith("○○휴게소까지")) // 1 수유실
+        assertTrue(offlineReply("기저귀 잠", st).startsWith("기록상 마지막 기저귀")) // 2 기저귀
+        assertTrue(offlineReply("잠 언제", st).startsWith("기록상 2시간 14분 전에 잠이 끝났고")) // 3 잠
+        assertTrue(offlineReply("카시트 얼마나 먹였어", st).startsWith("카시트에 52분째")) // 4 카시트 > 5 수유
+        assertTrue(offlineReply("온도 먹였어", st).startsWith("실내 온도")) // 카시트 다음 온도
+        assertTrue(offlineReply("얼마나 먹였어", st).startsWith("마지막 수유 시작부터")) // 수유가 얼마나보다 먼저
+        assertTrue(offlineReply("얼마나 울었어", st).startsWith("지금 ")) // 얼마나
+        assertTrue(offlineReply("먹였어 왜", st).startsWith("마지막 수유 시작부터 2시간 50분 지났")) // 먹였 > 왜
         assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요.", offlineReply("수유한 지 얼마나 됐어?", st))
         assertEquals("카시트에 52분째예요.", offlineReply("카시트에 얼마나 있었어?", st))
     }
@@ -878,21 +1012,44 @@ class LinkQaTest : LinkKit() {
         assertEquals(false, o.llm)
         assertEquals(listOf("cry"), qaEventsCare(reply("x", answer("why")), "L1", T0, st, "아직 울어?", emptyList()).factTopics)
         assertEquals("x", qaEventsCare(reply("x", answer("why")), "L1", T0, st, "왜 울어?", emptyList()).second, "'왜'가 든 질문은 why 그대로(LLM 글 허용)")
-        assertEquals(listOf("cry"), qaEventsCare(reply("", tool("switch_sound", "method" to "white_noise"), answer("unknown")),
-            "L1", T0, st, "울음 그치게 소리 바꿔", emptyList()).factTopics, "도구와 answer가 함께면 사실 키워드를 앞세운다")
+        assertEquals(
+            listOf("cry"),
+            qaEventsCare(
+                reply("", tool("switch_sound", "method" to "white_noise"), answer("unknown")),
+                "L1",
+                T0,
+                st,
+                "울음 그치게 소리 바꿔",
+                emptyList()
+            ).factTopics,
+            "도구와 answer가 함께면 사실 키워드를 앞세운다"
+        )
     }
 
     // ---- 도구와 함께 온 answer(unknown) ----
     @Test fun toolWithAnswerUnknown_factKeywordFirst_toolKept() {
         val st = llmState(crying(), N, 0)
-        val o = qaEventsCare(reply("지금은 울음이 들리지 않아요.", tool("switch_sound", "method" to "white_noise"), answer("unknown")), "L1", T0, st, "아직 울어? 백색소음으로 바꿔 줘", emptyList())
-        assertEquals("", o.second); assertEquals(listOf("cry"), o.factTopics); assertEquals(false, o.llm)
+        val o =
+            qaEventsCare(
+                reply("지금은 울음이 들리지 않아요.", tool("switch_sound", "method" to "white_noise"), answer("unknown")),
+                "L1",
+                T0,
+                st,
+                "아직 울어? 백색소음으로 바꿔 줘",
+                emptyList()
+            )
+        assertEquals("", o.second)
+        assertEquals(listOf("cry"), o.factTopics)
+        assertEquals(false, o.llm)
         assertTrue(o.first.any { it is SwitchSound }, "도구 사건은 그대로")
     }
 
     @Test fun toolOnly_keepsToolSentence() {
         val st = llmState(crying(), N, 0)
-        assertEquals("소리를 바꿀게요.", qaEventsCare(reply("지금은 울음이 들리지 않아요.", tool("switch_sound", "method" to "white_noise")), "L1", T0, st, "아직 울어? 백색소음으로 바꿔 줘", emptyList()).second)
+        assertEquals(
+            "소리를 바꿀게요.",
+            qaEventsCare(reply("지금은 울음이 들리지 않아요.", tool("switch_sound", "method" to "white_noise")), "L1", T0, st, "아직 울어? 백색소음으로 바꿔 줘", emptyList()).second
+        )
     }
 
     @Test fun whyQuestionWithToolAndAnswerWhy_staysWhy() {
@@ -905,22 +1062,29 @@ class LinkQaTest : LinkKit() {
     @Test fun factPieceBesideWhyPiece_factWins() {
         val st = llmState(crying(), N, 0)
         val o = qaEventsCare(reply("글", answer("why")), "L1", T0, st, "언제 먹였어? 왜 울어?", emptyList())
-        assertEquals(listOf("feeding"), o.factTopics); assertEquals(false, o.llm);
+        assertEquals(listOf("feeding"), o.factTopics)
+        assertEquals(false, o.llm)
         assertEquals(listOf("why"), qaEventsCare(reply("", answer("why")), "L1", T0, st, "왜 울어?", emptyList()).factTopics)
-        assertEquals(listOf("diaper"), qaEventsCare(reply("", answer("why")), "L1", T0, st, "왜 기저귀 갈아야 해?", emptyList()).factTopics, "표에서 기저귀(2행)가 왜(7행)보다 앞이라 사실")
+        assertEquals(
+            listOf("diaper"),
+            qaEventsCare(reply("", answer("why")), "L1", T0, st, "왜 기저귀 갈아야 해?", emptyList()).factTopics,
+            "표에서 기저귀(2행)가 왜(7행)보다 앞이라 사실"
+        )
     }
 
     @Test fun approxSinoAfterHangul_blocksWhyText() {
         val st = llmState(crying(), N, 0)
         val o = qaEventsCare(reply("약삼십 분 정도 쉬어 가도 좋아요.", answer("why")), "L1", T0, st, "왜 울어?", emptyList())
-        assertEquals(false, o.llm); assertEquals(listOf("why"), o.factTopics)
+        assertEquals(false, o.llm)
+        assertEquals(listOf("why"), o.factTopics)
     }
 
     // ---- 한자어 수사 뒤 '배'는 why 글을 막는다 ----
     @Test fun sinoTimes_blocksWhyText() {
         val st = llmState(crying(), N, 0)
         val o = qaEventsCare(reply("소리가 평소보다 백 배 클 수 있어요.", answer("why")), "L1", T0, st, "왜 울어?", emptyList())
-        assertEquals(false, o.llm, "글 검사에 걸려 LLM 글을 쓰지 않는다"); assertEquals(listOf("why"), o.factTopics)
+        assertEquals(false, o.llm, "글 검사에 걸려 LLM 글을 쓰지 않는다")
+        assertEquals(listOf("why"), o.factTopics)
     }
 
     // ---- 마이크가 꺼졌거나 입력이 끊긴 동안은 울음을 확인할 수 없다 ----
@@ -931,7 +1095,7 @@ class LinkQaTest : LinkKit() {
         val st = llmState(step(crying(false), InputLost(T0 + 130_000, PauseReason.MIC_ERROR)), N, 0)
         assertEquals(true, st.cry.unavailable)
         assertEquals(unavailableCry, topicSentence("cry", st))
-        assertEquals(unavailableCry, offlineReply("아직 울어?", st))   // 오프라인·3초 대체 답도 같은 문장
+        assertEquals(unavailableCry, offlineReply("아직 울어?", st)) // 오프라인·3초 대체 답도 같은 문장
     }
 
     @Test fun sessionPauseSilenced_beatsMinuteAndConfirming() {
@@ -943,7 +1107,8 @@ class LinkQaTest : LinkKit() {
     }
 
     // 인계(HANDOFF) 뒤에도 경보가 이어지면 울고 있다. 호스트 큐 사실 답(composeFacts)도 llmState + fallbackReply 같은 길
-    private fun handedOff(cause: HandoffCause): EngineState = cryingNow().let { s ->   // 인계 뒤에도 경보가 이어진다
+    private fun handedOff(cause: HandoffCause): EngineState = cryingNow().let { s ->
+        // 인계 뒤에도 경보가 이어진다
         val ses = s.session!!
         s.copy(session = ses.copy(stage = Stage.Handoff(ses.attemptNo, ses.quietMs), episode = ses.episode!!.copy(handoff = HandoffRecord(cause, null))))
     }
@@ -956,7 +1121,7 @@ class LinkQaTest : LinkKit() {
         assertEquals(false, st.cry.unavailable, "상한 인계도 확인할 수 없음이 아니다")
         assertEquals(llmState(handedOff(HandoffCause.TWO_ATTEMPTS), N, 1).cry, st.cry, "인계 원인과 상관없이 같은 감지 기준")
         assertTrue(topicSentence("cry", st).startsWith("지금 ") && "분째 울고 있고" in topicSentence("cry", st), topicSentence("cry", st))
-        assertTrue("분째 울고 있고" in fallbackReply(listOf("cry"), st))   // composeFacts가 쓰는 길
+        assertTrue("분째 울고 있고" in fallbackReply(listOf("cry"), st)) // composeFacts가 쓰는 길
     }
 
     @Test fun cryingHandoff_keepsMinute() {
@@ -971,7 +1136,10 @@ class LinkQaTest : LinkKit() {
     private fun switchThenCry(from: Long, untilMs: Long): EngineState {
         var s = crying(alarm = false)
         var t = from
-        while (t <= from + untilMs) { s = step(s, CrySegment(t, t - 3_000, t, 0.9, true)); t += 975 }
+        while (t <= from + untilMs) {
+            s = step(s, CrySegment(t, t - 3_000, t, 0.9, true))
+            t += 975
+        }
         return s
     }
 
@@ -979,7 +1147,7 @@ class LinkQaTest : LinkKit() {
         val s = switchThenCry(T0 + 130_000, 70_000)
         assertEquals(EpisodeTrigger.SWITCH_SOUND, s.session!!.episode!!.trigger)
         val last = s.session!!.alarmRun!!.last
-        val st = llmState(s, last + 500)                                  // 울음 수는 판단 코어 값
+        val st = llmState(s, last + 500) // 울음 수는 판단 코어 값
         assertEquals(2, st.cry.currentMin, "이어진 경보의 처음(T0+130초)부터 2분째")
         assertEquals("지금 2분째 울고 있고, 이번 주행에서 1번 울었어요.", topicSentence("cry", st), "지금 울음과 같은 기준으로 센다")
     }
@@ -991,7 +1159,7 @@ class LinkQaTest : LinkKit() {
         val quiet = llmState(s, last + 2 * Params().yamnetHopMs + 1)
         assertNull(quiet.cry.currentMin)
         assertEquals("지금은 울음이 들리지 않고, 이번 주행에서 1번 울었어요.", topicSentence("cry", quiet))
-        val again = step(s, CrySegment(last + 60_000, last + 57_000, last + 60_000, 0.9, true))   // 1분 뒤 다시 운다
+        val again = step(s, CrySegment(last + 60_000, last + 57_000, last + 60_000, 0.9, true)) // 1분 뒤 다시 운다
         val st = llmState(again, last + 60_500)
         assertEquals(1, st.cry.currentMin, "새로 이어진 경보의 처음부터")
         assertEquals("지금 1분째 울고 있고, 이번 주행에서 2번 울었어요.", topicSentence("cry", st), "끊겼다 다시 울면 2번")
@@ -1000,14 +1168,16 @@ class LinkQaTest : LinkKit() {
     // ---- 지금 울음과 횟수는 감지 기준 하나(에피소드 종류로 단정하지 않는다) ----
 
     @Test fun autoAttemptPlaying_unavailable() {
-        val st = llmState(crying(), T0 + 150_000)                         // 경보 에피소드의 자동 시도 재생 중: 판단 코어가 울음 구간을 보지 않는다
-        assertEquals(true, st.cry.unavailable); assertNull(st.cry.currentMin)
+        val st = llmState(crying(), T0 + 150_000) // 경보 에피소드의 자동 시도 재생 중: 판단 코어가 울음 구간을 보지 않는다
+        assertEquals(true, st.cry.unavailable)
+        assertNull(st.cry.currentMin)
         assertEquals("지금은 울음을 확인할 수 없고, 이번 주행에서 1번 울었어요.", topicSentence("cry", st))
     }
 
     @Test fun alarmEpisodeWait_alarmsStopped_notHeard() {
         val s = cryingNow(T0 + 150_000)
-        assertEquals(EpisodeTrigger.ALARM, s.session!!.episode!!.trigger); assertEquals(Phase.WAIT, s.session!!.phase)
+        assertEquals(EpisodeTrigger.ALARM, s.session!!.episode!!.trigger)
+        assertEquals(Phase.WAIT, s.session!!.phase)
         assertEquals("지금은 울음이 들리지 않고, 이번 주행에서 1번 울었어요.", topicSentence("cry", llmState(s, T0 + 160_000)), "경보 에피소드가 열려 있어도 경보가 끊기면")
     }
 
@@ -1016,12 +1186,13 @@ class LinkQaTest : LinkKit() {
     }
 
     @Test fun gapConfirming_beatsLiveAlarm() {
-        var s = step(crying(), Tick(T0 + 176_000))                       // 시도 끝 → GAP(판정 창 T0+176초~)
+        var s = step(crying(), Tick(T0 + 176_000)) // 시도 끝 → GAP(판정 창 T0+176초~)
         assertEquals(Phase.GAP, s.session!!.phase)
-        s = step(s, CrySegment(T0 + 178_000, T0 + 175_000, T0 + 178_000, 0.9, true))   // 창 앞에서 시작한 구간의 경보: 판정에는 안 쓰고 GAP 그대로
+        s = step(s, CrySegment(T0 + 178_000, T0 + 175_000, T0 + 178_000, 0.9, true)) // 창 앞에서 시작한 구간의 경보: 판정에는 안 쓰고 GAP 그대로
         assertEquals(Phase.GAP, s.session!!.phase)
         val st = llmState(s, T0 + 178_500)
-        assertEquals(true, st.cry.confirming); assertNull(st.cry.currentMin, "확인 중이 울고 있음보다 앞선다")
+        assertEquals(true, st.cry.confirming)
+        assertNull(st.cry.currentMin, "확인 중이 울고 있음보다 앞선다")
         assertTrue(topicSentence("cry", st).startsWith("울음이 그쳤는지 확인하고 있고"))
     }
 
@@ -1048,7 +1219,7 @@ class LinkQaTest : LinkKit() {
     }
 
     @Test fun healthyMic_keepsOriginalSentences() {
-        val s = cryingNow()   // crying()은 자동 시도 재생 중이라 확인할 수 없음
+        val s = cryingNow() // crying()은 자동 시도 재생 중이라 확인할 수 없음
         assertEquals(false, llmState(s, N, 1).cry.unavailable)
         assertEquals("지금 2분째 울고 있고, 이번 주행에서 3번 울었어요.", topicSentence("cry", LlmCry(2, 3).let { llmState(s, N, 3).copy(cry = it) }))
         assertEquals("지금은 울음이 들리지 않고, 이번 주행에서 0번 울었어요.", topicSentence("cry", llmState(crying(false), N, 0)))
@@ -1060,35 +1231,51 @@ class LinkQaTest : LinkKit() {
         val st = llmState(crying(), N, 0)
         // (질문, 사실 조각인가, 사실 조각의 주제)
         val questions = listOf(
-            Triple("아직 울어?", true, "cry"), Triple("왜 울어?", false, null), Triple("언제 먹였어? 왜 울어?", true, "feeding"),
-            Triple("왜 기저귀 갈아야 해?", true, "diaper"), Triple("왜 울어? 얼마나 울었어?", true, "cry"), Triple("고마워", false, null),
+            Triple("아직 울어?", true, "cry"),
+            Triple("왜 울어?", false, null),
+            Triple("언제 먹였어? 왜 울어?", true, "feeding"),
+            Triple("왜 기저귀 갈아야 해?", true, "diaper"),
+            Triple("왜 울어? 얼마나 울었어?", true, "cry"),
+            Triple("고마워", false, null)
         )
         val answers = listOf(emptyList(), listOf("why"), listOf("unknown"), listOf("sleep"), listOf("sleep", "why"))
-        for (hasTool in listOf(false, true)) for (a in answers) for ((q, factPiece, fact) in questions) {
-            val calls = (if (hasTool) listOf(tool("switch_sound", "method" to "white_noise")) else emptyList()) + (if (a.isEmpty()) emptyList() else listOf(answer(*a.toTypedArray())))
-            val o = qaEventsCare(reply("글이에요", *calls.toTypedArray()), "L1", T0, st, q, emptyList())
-            val label = "도구=$hasTool answer=$a 질문=$q"
-            val toolOnly = hasTool && a.isEmpty()
-            val answerFact = a.any { it == "sleep" }
-            val expectLlm = !toolOnly && !answerFact && !factPiece
-            assertEquals(expectLlm, o.llm, label)
-            if (expectLlm) assertEquals("글이에요", o.second, label) else assertTrue(o.second != "글이에요", label)
-            if (!toolOnly && factPiece && !answerFact) assertEquals(fact, o.factTopics.first(), label)
-            if (!toolOnly && answerFact) assertEquals("sleep", o.factTopics.first { it != "why" }.let { if (factPiece) o.factTopics.first { t -> t == "sleep" } else it }, label)
-            if (toolOnly) assertEquals("소리를 바꿀게요.", o.second, label)
+        for (hasTool in listOf(false, true)) {
+            for (a in answers) {
+                for ((q, factPiece, fact) in questions) {
+                    val calls =
+                        (if (hasTool) listOf(tool("switch_sound", "method" to "white_noise")) else emptyList()) +
+                            (if (a.isEmpty()) emptyList() else listOf(answer(*a.toTypedArray())))
+                    val o = qaEventsCare(reply("글이에요", *calls.toTypedArray()), "L1", T0, st, q, emptyList())
+                    val label = "도구=$hasTool answer=$a 질문=$q"
+                    val toolOnly = hasTool && a.isEmpty()
+                    val answerFact = a.any { it == "sleep" }
+                    val expectLlm = !toolOnly && !answerFact && !factPiece
+                    assertEquals(expectLlm, o.llm, label)
+                    if (expectLlm) assertEquals("글이에요", o.second, label) else assertTrue(o.second != "글이에요", label)
+                    if (!toolOnly && factPiece && !answerFact) assertEquals(fact, o.factTopics.first(), label)
+                    if (!toolOnly &&
+                        answerFact
+                    ) {
+                        assertEquals("sleep", o.factTopics.first { it != "why" }.let { if (factPiece) o.factTopics.first { t -> t == "sleep" } else it }, label)
+                    }
+                    if (toolOnly) assertEquals("소리를 바꿀게요.", o.second, label)
+                }
+            }
         }
     }
 
     @Test fun offlinePaths_useSamePieceRule() {
         val st = llmState(crying(), N, 0)
         listOf("왜 울어? 얼마나 울었어?" to "cry", "왜 울어? 소리 효과 있어?" to "sound_stats", "언제 먹였어? 왜 울어?" to "feeding", "왜 울어? 잠 잤어?" to "sleep").forEach { (q, t) ->
-            assertEquals(t, questionTopic(q), q); assertEquals(listOf(t), offlineFactTopics(q), q)
+            assertEquals(t, questionTopic(q), q)
+            assertEquals(listOf(t), offlineFactTopics(q), q)
             assertEquals(fallbackReply(listOf(t), st), offlineReply(q, st), q)
             // 본 길의 LLM 실패 대체(fallbackTopics)도 같은 주제
             val llm = qaEventsCare(reply("글이에요", answer("unknown")), "L1", T0, st, q, emptyList())
             assertEquals(listOf(t), llm.factTopics, q)
         }
-        assertEquals("why", questionTopic("왜 울어?")); assertNull(questionTopic("고마워"))
+        assertEquals("why", questionTopic("왜 울어?"))
+        assertNull(questionTopic("고마워"))
         // 3초 대체(answer·도구 없음)와 본 길(answer 없음)이 같은 주제
         assertEquals(listOf("cry"), qaEventsCare(reply("글이에요"), "L1", T0, st, "왜 울어? 얼마나 울었어?", emptyList()).factTopics)
     }
@@ -1098,35 +1285,50 @@ class LinkQaTest : LinkKit() {
         val st = llmState(crying(), N, 0)
         listOf(
             "왜 우는지랑 마지막 수유가 언제인지 알려줘" to "feeding", "왜 우는지 그리고 얼마나 울었는지 알려줘" to "cry", "왜 우는지랑 얼마나 울었는지" to "cry", "왜 이렇게 오래 울어?" to "cry",
-                "왜 효과가 없어?" to "sound_stats", "왜 우는지랑 마지막 수유가 언제인지" to "feeding", "왜 이렇게 추워" to "cabin_temp", "왜 이렇게 더워" to "cabin_temp",
-            "왜 울어?" to null, "왜 기저귀 갈아야 해?" to "diaper",
+            "왜 효과가 없어?" to "sound_stats", "왜 우는지랑 마지막 수유가 언제인지" to "feeding", "왜 이렇게 추워" to "cabin_temp", "왜 이렇게 더워" to "cabin_temp",
+            "왜 울어?" to null, "왜 기저귀 갈아야 해?" to "diaper"
         ).forEach { (q, fact) ->
             assertEquals(fact, questionFact(q), q)
             val o = qaEventsCare(reply("방금 먹었어요. 불편할 수 있어요.", answer("why")), "L1", T0, st, q, emptyList())
-            if (fact != null) { assertEquals(fact, o.factTopics.first(), q); assertFalse(o.llm, q); assertTrue(o.second != "방금 먹었어요. 불편할 수 있어요.", q) }
+            if (fact != null) {
+                assertEquals(fact, o.factTopics.first(), q)
+                assertFalse(o.llm, q)
+                assertTrue(o.second != "방금 먹었어요. 불편할 수 있어요.", q)
+            }
         }
         listOf("더워", "더운데", "더웠어", "추운데", "추웠어").forEach { assertEquals("cabin_temp", offlineTopic("차 안이 $it"), it) }
         assertEquals("cry", questionTopic("왜 우는지 그리고 얼마나 울었는지"))
-        assertEquals("why", questionTopic("왜 울었어?")); assertEquals("sleep", questionTopic("얼마나 잤어?"))
+        assertEquals("why", questionTopic("왜 울었어?"))
+        assertEquals("sleep", questionTopic("얼마나 잤어?"))
         assertEquals(listOf("feeding"), offlineFactTopics("왜 우는지랑 마지막 수유가 언제인지 알려줘"))
     }
 
     // 분류를 되돌려도 사실 단정 글은 상태 단정 검사 하나로 막힌다. 본 길·LLM 실패 대체 모두 차가 정한 문장
     @Test fun factClaimTextBlocked_evenIfClassifierMisses() {
         val st = llmState(crying(false), N, 0)
-        val claims = mapOf("지금은 울음이 들리지 않아요." to "cry", "방금 먹었어요." to "feeding", "아까 잤어요." to "sleep", "기저귀를 갈았어요." to "diaper",
-            "온도가 높아요." to "cabin_temp", "휴게소가 있어요." to "next_rest", "효과가 없었어요." to "sound_stats")
+        val claims = mapOf(
+            "지금은 울음이 들리지 않아요." to "cry",
+            "방금 먹었어요." to "feeding",
+            "아까 잤어요." to "sleep",
+            "기저귀를 갈았어요." to "diaper",
+            "온도가 높아요." to "cabin_temp",
+            "휴게소가 있어요." to "next_rest",
+            "효과가 없었어요." to "sound_stats"
+        )
         claims.keys.forEach { t ->
             for (a in listOf(listOf("why"), listOf("unknown"), emptyList())) {
                 val o = qaEventsCare(reply(t, *(if (a.isEmpty()) emptyArray() else arrayOf(answer(*a.toTypedArray())))), "L1", T0, st, "왜 울어?", emptyList())
-                assertFalse(o.llm, "$t $a"); assertTrue(o.second != t, "$t $a")
+                assertFalse(o.llm, "$t $a")
+                assertTrue(o.second != t, "$t $a")
             }
         }
         // 분류가 cry로 잡든 못 잡든 글은 쓰이지 않는다
         val o = qaEventsCare(reply("지금은 울음이 들리지 않아요.", answer("why")), "L1", T0, st, "왜 우는지 그리고 얼마나 울었는지", emptyList())
-        assertFalse(o.llm); assertEquals("cry", o.factTopics.first())
-        val o2 = qaEventsCare(reply("지금은 울음이 들리지 않아요.", answer("why")), "L1", T0, st, "왜 울어?", emptyList())   // 분류가 why로 놓친 꼴
-        assertFalse(o2.llm); assertTrue(o2.second != "지금은 울음이 들리지 않아요.")
+        assertFalse(o.llm)
+        assertEquals("cry", o.factTopics.first())
+        val o2 = qaEventsCare(reply("지금은 울음이 들리지 않아요.", answer("why")), "L1", T0, st, "왜 울어?", emptyList()) // 분류가 why로 놓친 꼴
+        assertFalse(o2.llm)
+        assertTrue(o2.second != "지금은 울음이 들리지 않아요.")
     }
 
     // why 답의 LLM 글에 "반 초"가 있으면 버린다
@@ -1139,8 +1341,9 @@ class LinkQaTest : LinkKit() {
 
     // 오프라인 키워드 표에 더한 활용형. '잘'·'자고'·'먹이'는 넣지 않는다
     @Test fun newKeywords() {
-        mapOf("쉴 곳 있어?" to "next_rest", "쉬는 곳 알려줘" to "next_rest", "애기 재워야 해?" to "sleep", "언제 재울까" to "sleep", "지금 자는 거야?" to "sleep",
-            "먹여야 해?" to "feeding", "언제 먹일까" to "feeding", "소리 통했어?" to "sound_stats", "울면 어떡해" to "cry", "또 울까?" to "cry",
+        mapOf(
+            "쉴 곳 있어?" to "next_rest", "쉬는 곳 알려줘" to "next_rest", "애기 재워야 해?" to "sleep", "언제 재울까" to "sleep", "지금 자는 거야?" to "sleep",
+            "먹여야 해?" to "feeding", "언제 먹일까" to "feeding", "소리 통했어?" to "sound_stats", "울면 어떡해" to "cry", "또 울까?" to "cry"
         ).forEach { (q, t) -> assertEquals(t, offlineTopic(q), q) }
         listOf("잘 모르겠어", "자고 싶어", "먹이를 줘").forEach { assertNull(offlineTopic(it), it) }
     }

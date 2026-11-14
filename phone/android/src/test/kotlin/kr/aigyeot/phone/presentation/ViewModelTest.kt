@@ -1,6 +1,7 @@
 package kr.aigyeot.phone.presentation
 
 import androidx.lifecycle.SavedStateHandle
+import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -41,7 +42,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /** 화면 상태 계산(순수 함수)과 ViewModel(가짜 중계·prefs, 진짜 파일 저장소). ViewModel 범위는 시험 범위의 자식이다. */
 class ViewModelTest {
@@ -85,7 +85,14 @@ class ViewModelTest {
     fun `보호자 목록은 차를 빼고 인계 알림 받기는 없으면 꺼짐이다`() {
         val car = DeviceInfo("d_car", Role.CAR, Platform.ANDROID, "2025-11-05T08:00:00+09:00", null, true)
         val phone = DeviceInfo("d_p", Role.GUARDIAN, Platform.IOS, "2025-11-05T08:00:00+09:00", null, true)
-        val ui = guardiansUi(PhoneState(role = Role.OWNER, devices = listOf(car, phone), myDeviceId = "d_x"), online = true, busy = false, error = null, invite = null)
+        val ui =
+            guardiansUi(
+                PhoneState(role = Role.OWNER, devices = listOf(car, phone), myDeviceId = "d_x"),
+                online = true,
+                busy = false,
+                error = null,
+                invite = null
+            )
         assertEquals(listOf(phone), ui.phones)
         assertFalse(ui.handoffAlerts)
     }
@@ -392,7 +399,10 @@ class ViewModelTest {
         // 먼저 수유 하나(30분 전~10분 전)
         vm.open("a", CareSheetTarget.New(CareKind.FEED, day = null))
         vm.pick(30)
-        vm.setEnd(java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).hour, java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).minute)
+        vm.setEnd(
+            java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).hour,
+            java.time.Instant.ofEpochMilli(NOW - 10 * 60_000).atZone(APP_ZONE).minute
+        )
         vm.save()
         until("첫 수유") { vm.sheet.value?.phase == CareSheetViewModel.Phase.Closed(saved = true) }
         vm.close("a")
@@ -455,13 +465,15 @@ class ViewModelTest {
     private fun Kit.settingsVm(files: Map<String, suspend () -> ByteArray?>) =
         SettingsViewModel(state, care, recordCare, clearRecords, disconnect, clock, { uri -> files[uri]?.invoke() }, vmScope())
 
-    private val wall = { ms: Long -> java.time.Instant.ofEpochMilli(ms).atZone(APP_ZONE).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) }
+    private val wall = { ms: Long ->
+        java.time.Instant.ofEpochMilli(ms).atZone(APP_ZONE).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+    }
 
     private fun naraTwoChildren() = listOf(
         "Type,Profile Name,Start Date/time,Note,[Breastfeed] Left Duration (Seconds),[Breastfeed] Right Duration (Seconds),[Diaper] Type",
         "Diaper,EXAMPLE-X,${wall(NOW - HOUR)},,,,Wet",
         "Breastfeed,EXAMPLE-Y,${wall(NOW - 2 * HOUR)},EXAMPLE,300,300,",
-        "Diaper,EXAMPLE-Y,${wall(NOW - 3 * HOUR)},,,,Dirty",
+        "Diaper,EXAMPLE-Y,${wall(NOW - 3 * HOUR)},,,,Dirty"
     ).joinToString("\n").toByteArray()
 
     @Test
@@ -471,8 +483,8 @@ class ViewModelTest {
                 "content://unknown" to { "date,activity\n2025-11-05,feed\n".toByteArray() },
                 "content://euckr" to { "Type,Start,End,Duration\n수유,,,\n".toByteArray(charset("EUC-KR")) }, // UTF-8로 풀 수 없다
                 "content://big" to { ByteArray(CareCsv.MAX_BYTES + 1) },
-                "content://nara" to { naraTwoChildren() },
-            ),
+                "content://nara" to { naraTwoChildren() }
+            )
         )
         suspend fun ended(message: String) = until(message) { vm.import.value == ImportUi.Ended(message) }
         // 끝내는 안내 셋(import.unreadable·tooLarge·failed): 글과 '닫기'만.
@@ -527,12 +539,17 @@ class ViewModelTest {
     @Test
     fun `가져오기 읽기는 ViewModel이 쥐고 마지막으로 고른 파일만 미리 본다`() = kitTest {
         val slow = CompletableDeferred<Unit>()
-        val one = "kind,start,end,end_unknown,side,amount_ml,diaper,note\nNOTE,${kr.aigyeot.phone.domain.model.rfc3339(NOW - HOUR)},,false,,,,EXAMPLE\n".toByteArray()
+        val one = "kind,start,end,end_unknown,side,amount_ml,diaper,note\nNOTE,${kr.aigyeot.phone.domain.model.rfc3339(
+            NOW - HOUR
+        )},,false,,,,EXAMPLE\n".toByteArray()
         val vm = settingsVm(
             mapOf(
-                "content://slow" to { slow.await(); naraTwoChildren() },
-                "content://fast" to { one },
-            ),
+                "content://slow" to {
+                    slow.await()
+                    naraTwoChildren()
+                },
+                "content://fast" to { one }
+            )
         )
         // 읽는 중에 다시 골랐다: 먼저 고른 파일이 늦게 끝나도 마지막 파일의 미리 보기만 남는다.
         vm.pick("content://slow")
@@ -544,14 +561,28 @@ class ViewModelTest {
         assertEquals(listOf(CareKind.NOTE), (vm.import.value as ImportUi.Preview).draft.rows.map { it.kind })
         // 화면이 회전·사라져도(ViewModel은 그대로) 읽기는 이어져 결과가 적용된다. 화면 범위가 아니라 ViewModel 범위다.
         val held = CompletableDeferred<Unit>()
-        val vm2 = settingsVm(mapOf("content://held" to { held.await(); naraTwoChildren() }))
+        val vm2 = settingsVm(
+            mapOf(
+                "content://held" to {
+                    held.await()
+                    naraTwoChildren()
+                }
+            )
+        )
         vm2.pick("content://held")
         settle()
         held.complete(Unit)
         until("아이 고르기") { vm2.import.value is ImportUi.PickChild }
         // 읽는 중에 닫으면 늦게 끝난 결과를 띄우지 않는다.
         val late = CompletableDeferred<Unit>()
-        val vm3 = settingsVm(mapOf("content://late" to { late.await(); one }))
+        val vm3 = settingsVm(
+            mapOf(
+                "content://late" to {
+                    late.await()
+                    one
+                }
+            )
+        )
         vm3.pick("content://late")
         vm3.closeImport()
         late.complete(Unit)
@@ -561,7 +592,10 @@ class ViewModelTest {
 
     private class FakeRecorder : SongRecorder {
         var recording = false
-        override fun start(file: File, onLimit: () -> Unit) = true.also { recording = true; file.writeText("audio") }
+        override fun start(file: File, onLimit: () -> Unit) = true.also {
+            recording = true
+            file.writeText("audio")
+        }
         override fun stop() = recording.also { recording = false }
         override fun play(file: File, onDone: () -> Unit) = file.exists()
         override fun stopPlaying() = Unit
@@ -589,7 +623,10 @@ class ViewModelTest {
 
     @Test
     fun `프로세스가 죽은 뒤 되살린 녹음 시트는 앞 프로세스 녹음을 버리고 새 이름으로 처음부터`() {
-        kitTest(prepare = { File(it, "cache").mkdirs(); File(it, "cache/recording-old.m4a").writeText("old") }) {
+        kitTest(prepare = {
+            File(it, "cache").mkdirs()
+            File(it, "cache/recording-old.m4a").writeText("old")
+        }) {
             val old = File(dir, "cache/recording-old.m4a")
             val vm = songsVm(SavedStateHandle(mapOf("song.sheet.file" to old.path, "song.sheet.done" to true, "song.sheet.ms" to 9_000L)))
             until("새 파일") { vm.sheetUi.value.file != null && vm.sheetUi.value.file != old }

@@ -37,15 +37,24 @@ import kr.aigyeot.engine.YesNo
 
 /** 실제 연결(또는 시험의 가짜) 묶음. 콜백·예약은 모두 [lock] 안에서 돈다. */
 internal class ExecIo(
-    val lock: Any, val sched: Sched, val audio: AudioPort, val tts: TtsPort, val stt: SttPort, val tap: MicTap,
-    val control: ControlPort, val navi: NaviPort, val start: () -> Unit = {}, val stop: () -> Unit = {},
-    val reemit: () -> Unit = {},   // 차량 신호·경로의 지금 값을 중복 억제 없이 다시 낸다(장면 끝)
-    val lastGear: () -> Gear? = { null },   // 마지막으로 받은 기어(장면 끝 복원의 기준선)
-    val resubscribeSpeed: () -> Unit = {},   // 속도 권한이 늦게 허용됐을 때 차량 구독을 다시 한다
-    val ambient: AmbientPort = NoAmbient,    // 앰비언트 조명
-    val ledger: LedgerStore = NoLedger,      // 실행기 낮춤 장부. 앱 저장소의 파일 하나
-    val carReady: () -> Boolean = { true },  // 차 연결(Vehicle 초기화)이 끝났는가. 끝나기 전 차 제어 명령은 CarGate가 미룬다
-    val onCarReady: (() -> Unit) -> Unit = {},   // 연결이 준비될 때 부를 일을 등록한다(실행기 잠금 안에서 불린다)
+    val lock: Any,
+    val sched: Sched,
+    val audio: AudioPort,
+    val tts: TtsPort,
+    val stt: SttPort,
+    val tap: MicTap,
+    val control: ControlPort,
+    val navi: NaviPort,
+    val start: () -> Unit = {},
+    val stop: () -> Unit = {},
+    val reemit: () -> Unit = {}, // 차량 신호·경로의 지금 값을 중복 억제 없이 다시 낸다(장면 끝)
+    val lastGear: () -> Gear? = { null }, // 마지막으로 받은 기어(장면 끝 복원의 기준선)
+    val resubscribeSpeed: () -> Unit = {}, // 속도 권한이 늦게 허용됐을 때 차량 구독을 다시 한다
+    val ambient: AmbientPort = NoAmbient, // 앰비언트 조명
+    val ledger: LedgerStore = NoLedger, // 실행기 낮춤 장부. 앱 저장소의 파일 하나
+    val carReady: () -> Boolean = { true }, // 차 연결(Vehicle 초기화)이 끝났는가. 끝나기 전 차 제어 명령은 CarGate가 미룬다
+    // 연결이 준비될 때 부를 일을 등록한다(실행기 잠금 안에서 불린다)
+    val onCarReady: (() -> Unit) -> Unit = {}
 )
 
 /**
@@ -57,22 +66,23 @@ internal class ExecIo(
 class Exec internal constructor(
     private val clock: () -> Long,
     private val post: (Event) -> Unit,
-    logControl: (ControlLogEntity) -> Unit,   // control_log 한 줄. 호스트가 store와 controlLog 흐름으로 넘긴다
-    private val state: () -> EngineState?,     // 최신 상태 읽기(예: 앞에서 틀기 허락)
-    private val io: ExecIo,
+    logControl: (ControlLogEntity) -> Unit, // control_log 한 줄. 호스트가 store와 controlLog 흐름으로 넘긴다
+    state: () -> EngineState?, // 최신 상태 읽기(예: 앞에서 틀기 허락)
+    private val io: ExecIo
 ) {
     constructor(
         context: Context,
         clock: () -> Long,
         post: (Event) -> Unit,
         logControl: (ControlLogEntity) -> Unit,
-        state: () -> EngineState?,
+        state: () -> EngineState?
     ) : this(clock, post, logControl, state, androidIo(context.applicationContext, clock, post))
 
     private val p = Params()
     private val log = ControlLogger(clock, { state()?.session?.id }, logControl)
     private val player = Player(io.audio, io.sched, clock, post, log, { state()?.profile?.frontFallbackAllowed == true }, p)
     private val voice = Voice(io.tts, io.stt, io.tap, io.sched, clock, post, { state()?.car?.micRunning == true })
+
     /** 화면 읽기 투영: 차가 방금 말한 문장·들은 질문. */
     val said get() = voice.said
     val heard get() = voice.heard
@@ -93,7 +103,11 @@ class Exec internal constructor(
     fun start() = synchronized(io.lock) {
         if (started) return@synchronized
         started = true
-        try { io.start() } catch (e: Exception) { log.row(null, "start", "Exec", "done", e.toString(), false) }
+        try {
+            io.start()
+        } catch (e: Exception) {
+            log.row(null, "start", "Exec", "done", e.toString(), false)
+        }
     }
 
     /** 말하기·듣기를 끊고 재생을 사건 없이 놓고 구독을 푼다. 시작 안 했거나 두 번 불러도 안전하며, 한 단계가 던져도 나머지 정리가 이어진다. */
@@ -142,7 +156,7 @@ class Exec internal constructor(
                 is AddWaypoint -> controls.waypoint(cmd)
                 is DimAmbient -> gated(cmd) { ambients.dim(cmd) }
                 is RestoreAmbient -> gated(cmd) { ambients.restore(cmd) }
-                is RestoreAmbientLedger -> gated(cmd) { ambients.restoreFromLedger(cmd.cmdId) }   // 장부는 판단 코어가 이 명령을 낼 때만 되돌린다
+                is RestoreAmbientLedger -> gated(cmd) { ambients.restoreFromLedger(cmd.cmdId) } // 장부는 판단 코어가 이 명령을 낼 때만 되돌린다
                 else -> {}
             }
         } catch (e: Exception) {
@@ -154,7 +168,12 @@ class Exec internal constructor(
 
     /** 차 제어 명령의 입구 하나: 연결 전이면 미뤘다가 준비되면 순서대로, 시간 안에 안 되면 실패 결과. */
     private fun gated(cmd: Command, run: () -> Unit) = gate.submit({
-        try { run() } catch (e: Exception) { log.row(null, "handle", cmd::class.simpleName.orEmpty(), "done", e.toString(), false); failed(cmd).forEach(post) }
+        try {
+            run()
+        } catch (e: Exception) {
+            log.row(null, "handle", cmd::class.simpleName.orEmpty(), "done", e.toString(), false)
+            failed(cmd).forEach(post)
+        }
     }, { failed(cmd).forEach(post) }, defer = cmd !is DimAmbient)
 
     private fun failed(cmd: Command): List<Event> {
@@ -171,7 +190,8 @@ class Exec internal constructor(
             is AddWaypoint -> listOf(WaypointResult(at, cmd.cmdId, cmd.restId, false))
             is DimAmbient -> listOf(ControlKind.AMBIENT_BRIGHTNESS, ControlKind.AMBIENT_COLOR).map { ControlResult(at, cmd.cmdId, it, null, false, null, null) }
             is RestoreAmbient -> listOfNotNull(
-                ControlKind.AMBIENT_BRIGHTNESS.takeIf { cmd.brightness != null }, ControlKind.AMBIENT_COLOR.takeIf { cmd.color != null },
+                ControlKind.AMBIENT_BRIGHTNESS.takeIf { cmd.brightness != null },
+                ControlKind.AMBIENT_COLOR.takeIf { cmd.color != null }
             ).map { ControlResult(at, cmd.cmdId, it, null, false, null, null) }
             else -> emptyList()
         }

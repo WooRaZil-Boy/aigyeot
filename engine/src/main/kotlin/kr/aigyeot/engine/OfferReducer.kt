@@ -16,9 +16,14 @@ private fun Tx.offers(f: OfferState.() -> OfferState) = ses { copy(offers = offe
 
 /** 지금 세션의 인계 장부(세션마다 하나). 나머지는 닫힌 세션의 것이다. */
 internal fun Tx.openLedger(): HandoffLedger? = ses?.let { x -> s.handoffs.firstOrNull { it.sessionId == x.id } }
-internal fun Tx.ledger(a: HandoffLedger, f: HandoffLedger.() -> HandoffLedger) { s = s.copy(handoffs = s.handoffs.map { if (it === a) it.f() else it }) }
+internal fun Tx.ledger(a: HandoffLedger, f: HandoffLedger.() -> HandoffLedger) {
+    s = s.copy(handoffs = s.handoffs.map { if (it === a) it.f() else it })
+}
+
 /** 장부를 알림·확정 없이 뺀다(수명 표 DROP·장면 끝 SETTLE은 Room이 확정, 복원 ② Room 확정이 앞섬). */
-internal fun Tx.dropLedger(a: HandoffLedger) { s = s.copy(handoffs = s.handoffs - a) }
+internal fun Tx.dropLedger(a: HandoffLedger) {
+    s = s.copy(handoffs = s.handoffs - a)
+}
 
 // ---- 제안 상태(offers)의 작은 변화: 다른 리듀서는 이 함수를 부른다 ----
 
@@ -49,12 +54,12 @@ internal fun Tx.offerSpoken(line: Line) {
 // ---- 인계·쉼터 ----
 
 internal fun Tx.handoff(cause: HandoffCause) {
-    offered = true                                   // 인계가 장시간 제안보다 앞선다
+    offered = true // 인계가 장시간 제안보다 앞선다
     val minutes = remainingMinutes(s.car.route)
-    flushOpenLedger(force = true)                   // 앞 인계의 대기 줄이 남았으면 먼저 정리한다(덮어써 잃지 않게)
-    val olds = s.speech.queue.filter(::guide)        // 앞 인계의 표시 줄: 이 안내가 대신한다(그 출처 속성을 새 줄로 옮긴다)
+    flushOpenLedger(force = true) // 앞 인계의 대기 줄이 남았으면 먼저 정리한다(덮어써 잃지 않게)
+    val olds = s.speech.queue.filter(::guide) // 앞 인계의 표시 줄: 이 안내가 대신한다(그 출처 속성을 새 줄로 옮긴다)
     val g = handoffGuidance()
-    val line = place(g, olds, mark = true)           // 새 줄, 또는 큐에 이미 있던 겹치는 줄
+    val line = place(g, olds, mark = true) // 새 줄, 또는 큐에 이미 있던 겹치는 줄
     // 앞 인계의 표시 줄은 이 안내가 대신한다: 말하는 줄은 표시만 떼고 나머지는 버린다(두 줄이 같은 안내로 겹쳐 나가지 않게)
     dropQueued { guide(it) && it !== line }
     mapLines { l -> if (guide(l) && l !== line) l.copy(handoff = false) else l }
@@ -63,13 +68,19 @@ internal fun Tx.handoff(cause: HandoffCause) {
     val speakingNow = line != null && s.speech.speaking != null && s.speech.queue.firstOrNull() === line
     ses?.let { enter(Stage.Handoff(it.attemptNo)) }
     markHandoff(cause, g.kind)
-    val alertNow = notify && (line == null || g.kind.alertsAtOnce())            // 주차(PARKED)·도착 알림(ARRIVAL_NOTICE)은 알림을 바로 보낸다. 줄이 없으면 이름 없는 알림
+    val alertNow = notify && (line == null || g.kind.alertsAtOnce()) // 주차(PARKED)·도착 알림(ARRIVAL_NOTICE)은 알림을 바로 보낸다. 줄이 없으면 이름 없는 알림
     if (alertNow) out += SendToPhone("handoff_alert", handoffBody(g.kind, null, minutes, plain = true, cause = cause))
     val x = ses!!
-    if (line != null) s = s.copy(handoffs = s.handoffs + HandoffLedger(x.id, x.episode?.id, now, cause, g.kind, minutes, alert = notify && !alertNow,
-        utteranceId = if (speakingNow) s.speech.speaking else null, restName = if (speakingNow) line.vars["restName"] else null))
+    if (line != null) {
+        s = s.copy(
+            handoffs = s.handoffs + HandoffLedger(
+                x.id, x.episode?.id, now, cause, g.kind, minutes, alert = notify && !alertNow,
+                utteranceId = if (speakingNow) s.speech.speaking else null, restName = if (speakingNow) line.vars["restName"] else null
+            )
+        )
+    }
     saveEpisode()
-    if (line == null) x.episode?.let { rec(settleHandoff(it.id, g.kind, told = false, restName = null)) }   // 줄이 없으면 바로 확정(주차는 말함이 null)
+    if (line == null) x.episode?.let { rec(settleHandoff(it.id, g.kind, told = false, restName = null)) } // 줄이 없으면 바로 확정(주차는 말함이 null)
 }
 
 /**
@@ -86,16 +97,21 @@ private fun Tx.handoffGuidance(old: Line? = null, handoff: Boolean = true, longD
     val x = ses!!
     val route = s.car.route
     val ld = !handoff && (old?.longDrive ?: longDrive)
-    val pick = if (handoff && nearDestination(route, p)) Line(Sid.S15, mapOf("minutes" to "${remainingMinutes(route)}"), null)
-        else offerRest(ld, s.car.gear, route, now, x.driveFrom, p) ?: return Guidance(HandoffKind.NO_REST, null)
+    val pick = if (handoff && nearDestination(route, p)) {
+        Line(Sid.S15, mapOf("minutes" to "${remainingMinutes(route)}"), null)
+    } else {
+        offerRest(ld, s.car.gear, route, now, x.driveFrom, p) ?: return Guidance(HandoffKind.NO_REST, null)
+    }
     val kind = kindOf(pick.sid)
+
     // 그 줄 자리에 지금 안내(문장·쉼터·거리·분). 진행 중이거나 이미 넣은 쉼터는 묻지 않는다(막힘)
     fun fresh(l: Line) = l.copy(sid = pick.sid, askRestId = pick.askRestId, vars = pick.vars).takeIf { it.askRestId == null || canAddWaypoint(it.askRestId) }
     val sameOld = old != null && old.sid == pick.sid && old.askRestId == pick.askRestId
     val o = if (sameOld) null else overlap(pick, old)
     // 10분 금지는 세 경우(같은 안내·겹친 줄·새 줄) 모두 고른 줄에 여기서 한 번 본다. 다시 쓰는 줄(old·겹친 o)은
     // 큐에 있어도 막지 않는다(그 줄 자리를 쓴다). 경로를 기다리면(같은 안내 제외) 자리만 잡고 금지는 꺼낼 때 본다
-    val allowed = pick.sid == Sid.S15 || (routePending() && !sameOld) ||
+    val allowed = pick.sid == Sid.S15 ||
+        (routePending() && !sameOld) ||
         !offerBanned(x.spokenAt, s.speech.queue, x.id, pick.sid, now, p, except = listOf(old, o))
     if (sameOld) return Guidance(kind, fresh(old)?.takeIf { allowed }, old)
     // 겹치는 줄이 큐에 있으면 그 자리를 쓴다. 인계·새 제안 때 같은 쉼터 줄은 그대로 넘겨받고(말하는 줄이면 그 줄을 그대로 둔다),
@@ -116,7 +132,8 @@ private fun Tx.handoffGuidance(old: Line? = null, handoff: Boolean = true, longD
 internal fun Tx.overlap(pick: Line, except: Line? = null): Line? {
     val sq = s.speech
     val mine = sq.queue.filterIndexed { i, it ->
-        it !== except && (it.sessionId == null || it.sessionId == ses?.id) &&
+        it !== except &&
+            (it.sessionId == null || it.sessionId == ses?.id) &&
             !(i == 0 && sq.speaking != null && it.askRestId != pick.askRestId)
     }
     return mine.firstOrNull { pick.askRestId != null && it.askRestId == pick.askRestId } ?: mine.firstOrNull { it.sid == pick.sid }
@@ -133,8 +150,8 @@ private fun Tx.place(g: Guidance, from: List<Line>, mark: Boolean = false): Line
     val m = l.copy(handoff = mark || l.handoff || from.any { it.handoff }, longDrive = l.longDrive || from.any { it.longDrive })
     val slot = g.slot
     val inQueue = slot != null && s.speech.queue.any { it === slot }
-    if (inQueue && m.sid == slot!!.sid) return replaceLine(slot, m)   // 같은 질문 갱신: 세션 문맥을 지킨다
-    if (inQueue) removeLine(slot!!)
+    if (inQueue && m.sid == slot.sid) return replaceLine(slot, m) // 같은 질문 갱신: 세션 문맥을 지킨다
+    if (inQueue) removeLine(slot)
     if (!say(m.copy(queuedAt = if (inQueue) null else m.queuedAt))) return null
     offered = true
     return s.speech.queue.last()
@@ -160,33 +177,52 @@ internal fun Tx.flushLedgers() {
  */
 internal fun Tx.settleLedger(a: HandoffLedger, spoken: Boolean) {
     dropLedger(a)
-    if (a.alert && s.otherGuardians > 0)   // 낼 때 받는 보호자를 다시 본다
+    if (a.alert && s.otherGuardians > 0) {
+        // 낼 때 받는 보호자를 다시 본다
         out += SendToPhone("handoff_alert", handoffBody(a.kind, if (spoken) a.restName else null, a.minutes, a, plain = !spoken))
-    a.settle(spoken)?.let(::rec)   // 열린 에피소드의 종류는 ledgerKind가 장부와 함께 써 왔다(뒤 SaveEpisode가 확정 종류를 되돌리지 않는다)
-    reportIfSettled(a.sessionId)   // 뒷창 되돌림 대기가 남았으면 그것이 끝날 때
+    }
+    a.settle(spoken)?.let(::rec) // 열린 에피소드의 종류는 ledgerKind가 장부와 함께 써 왔다(뒤 SaveEpisode가 확정 종류를 되돌리지 않는다)
+    reportIfSettled(a.sessionId) // 뒷창 되돌림 대기가 남았으면 그것이 끝날 때
 }
 
 internal fun Tx.handoffBody(
-    kind: HandoffKind, restName: String?, minutes: Int?, a: HandoffLedger? = null, plain: Boolean = false, cause: HandoffCause? = null,
+    kind: HandoffKind,
+    restName: String?,
+    minutes: Int?,
+    a: HandoffLedger? = null,
+    plain: Boolean = false,
+    cause: HandoffCause? = null
 ): JsonObject {
-    val cap = (cause ?: a?.cause) == HandoffCause.SESSION_CAP   // 상한 인계는 울음 지속을 단정하지 않는다
-    val (wire, text) = when (kind) {   // 인계 종류별 문장
-        HandoffKind.WAYPOINT_OFFER -> "rest_offer" to
-            if (cap) (if (restName != null) "달래기 시간이 끝나 ${restName}에 들르자고 운전자에게 제안했어요." else "달래기 시간이 끝났어요. 아기를 살펴봐 주세요.")
-            else if (restName != null) "아기가 계속 울어서 ${restName}에 들르자고 운전자에게 제안했어요."
-            else "아기가 계속 울어요."
+    val cap = (cause ?: a?.cause) == HandoffCause.SESSION_CAP // 상한 인계는 울음 지속을 단정하지 않는다
+    val (wire, text) = when (kind) { // 인계 종류별 문장
+        HandoffKind.WAYPOINT_OFFER ->
+            "rest_offer" to
+                if (cap) {
+                    (if (restName != null) "달래기 시간이 끝나 ${restName}에 들르자고 운전자에게 제안했어요." else "달래기 시간이 끝났어요. 아기를 살펴봐 주세요.")
+                } else if (restName != null) {
+                    "아기가 계속 울어서 ${restName}에 들르자고 운전자에게 제안했어요."
+                } else {
+                    "아기가 계속 울어요."
+                }
         HandoffKind.ARRIVAL_NOTICE -> "arrival_notice" to if (cap) "달래기 시간이 끝났어요. ${minutes}분 뒤 도착해요." else "아기가 계속 울어요. ${minutes}분 뒤 도착해요."
-        HandoffKind.NO_REST -> "no_rest" to
-            if (cap) (if (plain) "달래기 시간이 끝났어요. 아기를 살펴봐 주세요." else "달래기 시간이 끝나 안전한 곳에 세우도록 안내했어요.")
-            else if (plain) "아기가 계속 울어요."
-            else "아기가 계속 울어요. 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요."
+        HandoffKind.NO_REST ->
+            "no_rest" to
+                if (cap) {
+                    (if (plain) "달래기 시간이 끝났어요. 아기를 살펴봐 주세요." else "달래기 시간이 끝나 안전한 곳에 세우도록 안내했어요.")
+                } else if (plain) {
+                    "아기가 계속 울어요."
+                } else {
+                    "아기가 계속 울어요. 경유지로 넣을 수 있는 가까운 쉼터를 찾지 못해 안전한 곳에 세우도록 안내했어요."
+                }
         HandoffKind.PARKED -> "parked" to if (cause == HandoffCause.SESSION_CAP) "차가 선 채로 달래기 시간이 끝났어요. 아기를 살펴봐 주세요." else "차가 선 채로 아기가 계속 울어요."
     }
     return buildJsonObject {
-        put("text", text); put("kind", wire)
+        put("text", text)
+        put("kind", wire)
         put("rest_name", if (kind == HandoffKind.WAYPOINT_OFFER) restName else null)
         put("minutes_to_arrival", if (kind == HandoffKind.ARRIVAL_NOTICE) minutes else null)
-        put("occurred_at", a?.occurredAt ?: now); put("session_id", a?.sessionId ?: ses!!.id)
+        put("occurred_at", a?.occurredAt ?: now)
+        put("session_id", a?.sessionId ?: ses!!.id)
         put("episode_id", if (a != null) a.episodeId else ses!!.episode?.id)
     }
 }
@@ -207,17 +243,17 @@ internal fun Tx.restartHeld(from: Long) = mapLines { l -> if (l.queuedAt == null
 internal fun Tx.longDrive() {
     val x = ses ?: return
     val from = x.driveFrom ?: return
-    if (routePending()) return   // 경로(목적지·쉼터 목록)가 정해질 때까지 기다린다
-    if (!s.car.micRunning) return   // 마이크가 꺼져 있으면 쉼터 질문을 들을 수 없다(기회를 쓰지 않고 Tick마다 다시 본다)
+    if (routePending()) return // 경로(목적지·쉼터 목록)가 정해질 때까지 기다린다
+    if (!s.car.micRunning) return // 마이크가 꺼져 있으면 쉼터 질문을 들을 수 없다(기회를 쓰지 않고 Tick마다 다시 본다)
     if (offered || x.longDriveOffered || gearP || suspended || s.car.inCall || now - from < p.longDriveMs) return
-    if (x.play?.let { it.startedAt == null } == true) return   // 시작 결과(수유 분기·시도 알림)가 먼저다(3-P)
-    if (s.speech.queue.any { it.longDrive }) return          // 이미 큐에 있거나 말하는 중(큐 맨 앞에 남아 있다)
-    offer(true)                                              // longDriveOffered는 speechDone에서 말한 뒤에만 선다
+    if (x.play?.let { it.startedAt == null } == true) return // 시작 결과(수유 분기·시도 알림)가 먼저다(3-P)
+    if (s.speech.queue.any { it.longDrive }) return // 이미 큐에 있거나 말하는 중(큐 맨 앞에 남아 있다)
+    offer(true) // longDriveOffered는 speechDone에서 말한 뒤에만 선다
 }
 
 internal fun Tx.answer(e: Answer) {
     val pa = s.waitingFor(e) ?: return
-    val i = pa.restLogIndex                                                                     // 질문을 낼 때 적은 기록 줄(지금 기록을 다시 찾지 않는다)
+    val i = pa.restLogIndex // 질문을 낼 때 적은 기록 줄(지금 기록을 다시 찾지 않는다)
     dropAsk()
     // 그 쉼터를 다시 묻지 않는다. 큐에 남은 같은 쉼터 줄은 말하지 않고 버린다(말하는 맨 앞 줄은 둔다. 묶인 인계 알림은 Step 끝 flush가 정리).
     // 버린 줄이 장시간 줄이면 같은 쉼터를 물었으니 longDriveOffered만 세운다(아니면 장시간 제안이 같은 쉼터로 S11을 다시 묻는다).
@@ -227,12 +263,16 @@ internal fun Tx.answer(e: Answer) {
     if (same.any { it.longDrive }) offers { copy(longDriveOffered = true) }
     dropQueued { it.askRestId == pa.restId }
     setLog(i) { copy(answer = e.answer) }
-    if (e.answer == YesNo.YES && gearAllows(pa.sid)) {                                          // 꺼낼 때 valid와 같은 기어 규칙
-        if (restOf(pa.restId) == null) return ruleSay(Sid.S19)   // 지금 경로에 없는 쉼터(옛 경로에서 물은 질문)는 넣지 않는다
+    if (e.answer == YesNo.YES && gearAllows(pa.sid)) { // 꺼낼 때 valid와 같은 기어 규칙
+        if (restOf(pa.restId) == null) return ruleSay(Sid.S19) // 지금 경로에 없는 쉼터(옛 경로에서 물은 질문)는 넣지 않는다
         // 질문 당시 에피소드(출발 제안은 null)로 기록한다. 경로 기다림 중이면 목록이 비어 위에서 S19(지난 경로 질문일 수 있어 넣지 않는 쪽)
-        if (canAddWaypoint(pa.restId)) sendWaypoint(pa.restId, pa.hasNursingRoom, false, i, pa.episodeId)
-        else if (pa.restId in ses!!.addedRestIds) setLog(i) { copy(waypointOk = true) }         // 이미 넣은 쉼터(지금 addable=false여도 이쪽이 먼저)
-        else if (restOf(pa.restId)?.addable == false) return ruleSay(Sid.S19)                   // 경로가 바뀌어 이제 넣을 수 없는 쉼터
+        if (canAddWaypoint(pa.restId)) {
+            sendWaypoint(pa.restId, pa.hasNursingRoom, false, i, pa.episodeId)
+        } else if (pa.restId in ses!!.addedRestIds) {
+            setLog(i) { copy(waypointOk = true) } // 이미 넣은 쉼터(지금 addable=false여도 이쪽이 먼저)
+        } else if (restOf(pa.restId)?.addable == false) {
+            return ruleSay(Sid.S19) // 경로가 바뀌어 이제 넣을 수 없는 쉼터
+        }
     }
 }
 
@@ -241,22 +281,22 @@ internal fun Tx.sendWaypoint(restId: String, nursing: Boolean, fromQa: Boolean, 
     val c = newId()
     out += AddWaypoint(c, restId)
     val x = ses ?: return
-    val log = if (fromQa) logRest(Sid.QA, restId) else logIndex          // 질문 답 요청은 자기 기록 줄을 새로 만든다(Record)
+    val log = if (fromQa) logRest(Sid.QA, restId) else logIndex // 질문 답 요청은 자기 기록 줄을 새로 만든다(Record)
     // 결과가 쓸 문맥은 여기서 다 잡는다: 기록 줄·에피소드·쉼터 이름(결과가 올 때 목록이 비어 있을 수 있다)
     offers { copy(waypointPending = WaypointPending(c, restId, x.id, episodeId, fromQa, log, restOf(restId)?.name)) }
-    if (nursing) nursingRequested(restId)                                 // Feeding이 시동 단위로 기억한다
+    if (nursing) nursingRequested(restId) // Feeding이 시동 단위로 기억한다
 }
 
 internal fun Tx.waypoint(e: WaypointResult) {
     val x = ses ?: return
     val w = s.waitingFor(e) ?: return
     val mine = s.ign.nursingStop?.restId == w.restId
-    setLog(w.restLogIndex) { copy(waypointOk = e.ok) }                                       // 그 요청의 줄에만
+    setLog(w.restLogIndex) { copy(waypointOk = e.ok) } // 그 요청의 줄에만
     if (e.ok) {
         offers { copy(waypointPending = null, addedRestIds = addedRestIds + w.restId) }
         if (mine) nursingAdded()
-        if (w.episodeId != null && x.episode?.id == w.episodeId) markWaypointAdded()   // 요청 당시 에피소드가 없으면(출발 제안) 에피소드에 붙이지 않는다
-        say(Line(Sid.S09, mapOf("restName" to (w.restName ?: w.restId)), null, qaAnswer = w.fromQa))   // 요청 때 잡은 이름
+        if (w.episodeId != null && x.episode?.id == w.episodeId) markWaypointAdded() // 요청 당시 에피소드가 없으면(출발 제안) 에피소드에 붙이지 않는다
+        say(Line(Sid.S09, mapOf("restName" to (w.restName ?: w.restId)), null, qaAnswer = w.fromQa)) // 요청 때 잡은 이름
     } else {
         dropWaypoint()
         if (mine) dropNursing()
@@ -264,12 +304,13 @@ internal fun Tx.waypoint(e: WaypointResult) {
     }
 }
 
-internal fun Tx.addWaypoint(restId: String) {                                                              // 질문 답 도구로 경유지를 넣는다
+internal fun Tx.addWaypoint(restId: String) { // 질문 답 도구로 경유지를 넣는다
     val x = ses
     val rest = restOf(restId)
-    markRuleSaid()                                                                              // 질문 답 도구면 LLM 글을 말하지 않는다
-    if (x == null || gearP || nearDestination(s.car.route, p) || rest == null || !canAddWaypoint(restId))
+    markRuleSaid() // 질문 답 도구면 LLM 글을 말하지 않는다
+    if (x == null || gearP || nearDestination(s.car.route, p) || rest == null || !canAddWaypoint(restId)) {
         return ruleSay(Sid.S19)
+    }
     sendWaypoint(restId, rest.hasNursingRoom, qaTool, null, x.episode?.id)
 }
 
@@ -285,14 +326,20 @@ internal fun Tx.rebind(l: Line?, kind: HandoffKind) {
  */
 internal fun Tx.ledgerKind(a: HandoffLedger, kind: HandoffKind, f: HandoffLedger.() -> HandoffLedger = { this }) {
     ledger(a) { f().copy(kind = kind) }
-    if (a.episodeId != null && a.episodeId == ses?.episode?.id && ses?.episode?.handoff?.kind != kind) { markHandoffKind(kind); saveEpisode() }
+    if (a.episodeId != null && a.episodeId == ses?.episode?.id && ses?.episode?.handoff?.kind != kind) {
+        markHandoffKind(kind)
+        saveEpisode()
+    }
 }
 
 /** 인계·쉼터 제안 줄을 지금 경로로 다시 고른다. 같은 안내면 값만 갱신하고, 다르면 바꾸고(넣기는 place 규칙), 막히면 버린다. */
 internal fun Tx.repickLine(l: Line) {
     val g = handoffGuidance(l, handoff = guide(l))
-    if (g.slot === l && g.line != null) { replaceLine(l, g.line); return }
+    if (g.slot === l && g.line != null) {
+        replaceLine(l, g.line)
+        return
+    }
     removeLine(l)
     val placed = place(g, listOf(l))
-    if (guide(l) || placed?.let(::guide) == true) rebind(placed, g.kind)   // 인계가 아닌 줄은 알림 장부가 없다. 인계 줄 자리를 넘겨받았으면 그 장부를 맞춘다
+    if (guide(l) || placed?.let(::guide) == true) rebind(placed, g.kind) // 인계가 아닌 줄은 알림 장부가 없다. 인계 줄 자리를 넘겨받았으면 그 장부를 맞춘다
 }

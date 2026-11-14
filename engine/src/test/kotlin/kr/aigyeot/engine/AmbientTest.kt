@@ -21,26 +21,36 @@ class AmbientTest {
         ev(ControlResult(t, cmd, kind, null, ok, before, after))
     private fun Sim.dimId() = all<DimAmbient>().last().cmdId
     private fun Sim.restoreId() = all<RestoreAmbient>().last().cmdId
+
     /** 낮춤 결과 둘(바꾸고 확인됨). 기본은 밝기 70 → 20, 색 흰색 → 어두운 파랑. */
     private fun Sim.dimOk(): Sim {
         val c = dimId()
-        res(c, B, true, 70.0, 20.0); res(c, C, true, 0xFFFFFF.toDouble(), 0x3050A0.toDouble())
+        res(c, B, true, 70.0, 20.0)
+        res(c, C, true, 0xFFFFFF.toDouble(), 0x3050A0.toDouble())
         return this
     }
     private fun Sim.restoreResults(ok: Boolean = true): Sim {
         val c = restoreId()
-        res(c, B, ok, 20.0, 70.0); res(c, C, ok, 0x3050A0.toDouble(), 0xFFFFFF.toDouble())
+        res(c, B, ok, 20.0, 70.0)
+        res(c, C, ok, 0x3050A0.toDouble(), 0xFFFFFF.toDouble())
         return this
     }
     private fun Sim.dimmedAttempt() = attempt1().dimOk()
-    private fun noSpeechOrNotice(cmds: List<Command>) =
-        assertTrue(cmds.none { it is Speak || it is Ask || it is ShowNotice }, "$cmds")
+    private fun noSpeechOrNotice(cmds: List<Command>) = assertTrue(cmds.none { it is Speak || it is Ask || it is ShowNotice }, "$cmds")
     private fun Sim.setAmbient(a: Ambient?) = apply { s = s.copy(ign = s.ign.copy(ambient = a)) }
 
     @Test fun ambient_snapshotRoundTrip_everyState() {
-        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }   // Store.SnapshotJson과 같은 설정
+        val json = kotlinx.serialization.json.Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        } // Store.SnapshotJson과 같은 설정
         val base = session().dimmedAttempt().s
-        for (a in listOf<Ambient?>(null, Ambient.Dimming("s", "c", AmbientBack(BRIGHT, null), setOf(C)), Ambient.Dimmed("s", BACK), Ambient.Restoring("s", "c", BACK, setOf(B, C)))) {
+        for (a in listOf<Ambient?>(
+            null,
+            Ambient.Dimming("s", "c", AmbientBack(BRIGHT, null), setOf(C)),
+            Ambient.Dimmed("s", BACK),
+            Ambient.Restoring("s", "c", BACK, setOf(B, C))
+        )) {
             val s = base.copy(ign = base.ign.copy(ambient = a))
             assertEquals(s, json.decodeFromString<EngineState>(json.encodeToString(s)), "$a")
         }
@@ -51,7 +61,8 @@ class AmbientTest {
         assertTrue(sim.all<DimAmbient>().isEmpty(), "시작 대기는 HOLD")
         sim.started()
         val d = sim.step<DimAmbient>().single()
-        assertEquals(P.ambientDimLevel, d.level); assertEquals(P.ambientDimColor, d.color)
+        assertEquals(P.ambientDimLevel, d.level)
+        assertEquals(P.ambientDimColor, d.color)
         assertEquals(Ambient.Dimming(sim.ses.id, d.cmdId, AmbientBack(), setOf(B, C)), sim.amb())
         assertTrue(sim.cmds.indexOfLast { it is DimAmbient } > sim.cmds.indexOfFirst { it is SaveEpisode }, "그 Step의 다른 할 일 뒤")
         sim.tick(1_000).tick(1_000)
@@ -60,20 +71,24 @@ class AmbientTest {
 
     @Test fun attempt1PendingOrRejected_noAmbient() {
         val sim = session().alarm()
-        assertNull(sim.amb()); assertTrue(sim.all<DimAmbient>().isEmpty())
+        assertNull(sim.amb())
+        assertTrue(sim.all<DimAmbient>().isEmpty())
         sim.ev(PlaybackRejected(sim.t, sim.play().id, RejectReason.NO_REAR_OUTPUT))
-        assertNull(sim.amb()); assertTrue(sim.all<DimAmbient>().isEmpty() && sim.all<RestoreAmbient>().isEmpty())
-        sim.alarm(60_000)   // 경보마다 재생을 새로 내도 조명은 바뀌지 않는다
+        assertNull(sim.amb())
+        assertTrue(sim.all<DimAmbient>().isEmpty() && sim.all<RestoreAmbient>().isEmpty())
+        sim.alarm(60_000) // 경보마다 재생을 새로 내도 조명은 바뀌지 않는다
         assertTrue(sim.all<DimAmbient>().isEmpty())
     }
 
     @Test fun pendingStart_holdsLighting() {
-        val sim = session().dimmedAttempt().toGap().recry()   // 2차 시작 대기
+        val sim = session().dimmedAttempt().toGap().recry() // 2차 시작 대기
         assertNull(sim.play().startedAt)
         assertEquals(Ambient.Dimmed(sim.ses.id, BACK), sim.amb())
-        assertTrue(sim.all<RestoreAmbient>().isEmpty()); assertEquals(1, sim.all<DimAmbient>().size)
+        assertTrue(sim.all<RestoreAmbient>().isEmpty())
+        assertEquals(1, sim.all<DimAmbient>().size)
         sim.started()
-        assertEquals(1, sim.all<DimAmbient>().size); assertTrue(sim.all<RestoreAmbient>().isEmpty())
+        assertEquals(1, sim.all<DimAmbient>().size)
+        assertTrue(sim.all<RestoreAmbient>().isEmpty())
     }
 
     @Test fun requestFromListening_dimsOnStarted() {
@@ -92,11 +107,12 @@ class AmbientTest {
     }
 
     @Test fun wholeAutoCycle_singleDim() {
-        val sim = session().attempt2()   // 1차 → GAP → 2차 시작
+        val sim = session().attempt2() // 1차 → GAP → 2차 시작
         sim.dimOk()
-        sim.toGap().closeQuiet()          // GAP → CONFIRM
+        sim.toGap().closeQuiet() // GAP → CONFIRM
         assertEquals(Phase.CONFIRM, sim.ses.phase)
-        assertEquals(1, sim.all<DimAmbient>().size); assertTrue(sim.all<RestoreAmbient>().isEmpty())
+        assertEquals(1, sim.all<DimAmbient>().size)
+        assertTrue(sim.all<RestoreAmbient>().isEmpty())
         assertTrue(sim.amb() is Ambient.Dimmed)
     }
 
@@ -120,8 +136,12 @@ class AmbientTest {
 
     @Test fun waitPaths_restore() {
         val stops: Map<String, (Sim) -> Event> = mapOf(
-            "그만" to { DriverStop(it.t, Via.VOICE) }, "P" to { GearChanged(it.t, Gear.P) }, "포커스 상실" to { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
-            "재생 오류" to { PlaybackEnded(it.t, it.play().id, EndReason.ERROR) }, "통화" to { CallMode(it.t, true) }, "Suspend" to { Suspend(it.t) },
+            "그만" to { DriverStop(it.t, Via.VOICE) },
+            "P" to { GearChanged(it.t, Gear.P) },
+            "포커스 상실" to { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
+            "재생 오류" to { PlaybackEnded(it.t, it.play().id, EndReason.ERROR) },
+            "통화" to { CallMode(it.t, true) },
+            "Suspend" to { Suspend(it.t) }
         )
         for ((name, stop) in stops) {
             val sim = session().dimmedAttempt()
@@ -133,7 +153,7 @@ class AmbientTest {
     }
 
     @Test fun requestPlayEnds_restores() {
-        val end = session().ev(SwitchSound(T0, LL)).started().dimOk().ev(Tick(T0 + 56_000))   // 시간 끝
+        val end = session().ev(SwitchSound(T0, LL)).started().dimOk().ev(Tick(T0 + 56_000)) // 시간 끝
         assertNull(end.ses.play)
         assertEquals(1, end.step<RestoreAmbient>().size)
         val stop = session().ev(SwitchSound(T0, LL)).started().dimOk().ev(DriverStop(T0 + 1_000, Via.VOICE))
@@ -157,18 +177,19 @@ class AmbientTest {
     @Test fun nothingConfirmed_ledgerRestoreOnly() {
         val sim = session().attempt1()
         val c = sim.dimId()
-        sim.res(c, B, false, 20.0, 20.0).res(c, C, false, 0x3050A0.toDouble(), 0x3050A0.toDouble())   // 이미 낮음·같은 색
+        sim.res(c, B, false, 20.0, 20.0).res(c, C, false, 0x3050A0.toDouble(), 0x3050A0.toDouble()) // 이미 낮음·같은 색
         assertEquals(Ambient.Dimmed(sim.ses.id, AmbientBack()), sim.amb())
         assertFalse(sim.s.ambientDimmed)
         sim.toConfirm().closeQuiet()
-        assertTrue(sim.all<RestoreAmbient>().isEmpty()); assertNull(sim.amb())
+        assertTrue(sim.all<RestoreAmbient>().isEmpty())
+        assertNull(sim.amb())
         assertEquals(1, sim.step<RestoreAmbientLedger>().size)
     }
 
     @Test fun unconfirmedKind_alsoLedgerRestore() {
         val sim = session().attempt1()
         val c = sim.dimId()
-        sim.res(c, B, true, 70.0, 20.0).res(c, C, false, null, null)   // 색은 쓰고도 확인 못 함(ok=false)
+        sim.res(c, B, true, 70.0, 20.0).res(c, C, false, null, null) // 색은 쓰고도 확인 못 함(ok=false)
         sim.toConfirm().closeQuiet()
         val r = sim.step<RestoreAmbient>().single()
         assertEquals(RestoreAmbient(r.cmdId, BRIGHT, null), r)
@@ -183,7 +204,8 @@ class AmbientTest {
         val id = sim.ses.id
         sim.setAmbient(Ambient.Dimmed(id, AmbientBack(BRIGHT, null)))
         sim.ev(RearDoor(sim.t, Side.LEFT, true))
-        assertEquals(1, sim.step<RestoreAmbient>().size); assertEquals(1, sim.step<RestoreAmbientLedger>().size)
+        assertEquals(1, sim.step<RestoreAmbient>().size)
+        assertEquals(1, sim.step<RestoreAmbientLedger>().size)
         assertTrue(sim.step<RestoreAmbientLedger>().single().cmdId.startsWith("$id-"))
     }
 
@@ -201,7 +223,7 @@ class AmbientTest {
     @Test fun failedOrSkippedKind_notRestored() {
         val sim = session().attempt1()
         val c = sim.dimId()
-        sim.res(c, B, true, 70.0, 20.0).res(c, C, false, 0xFFFFFF.toDouble(), 0xFFFFFF.toDouble())   // 색은 쓰지 않았다(before = after = 읽은 값, ok = false)
+        sim.res(c, B, true, 70.0, 20.0).res(c, C, false, 0xFFFFFF.toDouble(), 0xFFFFFF.toDouble()) // 색은 쓰지 않았다(before = after = 읽은 값, ok = false)
         assertEquals(Ambient.Dimmed(sim.ses.id, AmbientBack(brightness = BRIGHT)), sim.amb())
         assertTrue(sim.s.ambientDimmed)
         sim.toConfirm().closeQuiet()
@@ -231,7 +253,8 @@ class AmbientTest {
 
     @Test fun restoreFailed_notRetried() {
         val sim = session().dimmedAttempt().toConfirm().closeQuiet().restoreResults(ok = false)
-        assertNull(sim.amb()); assertEquals(1, sim.all<RestoreAmbient>().size)
+        assertNull(sim.amb())
+        assertEquals(1, sim.all<RestoreAmbient>().size)
         sim.tick(1_000)
         assertEquals(1, sim.all<RestoreAmbient>().size)
     }
@@ -243,12 +266,12 @@ class AmbientTest {
         assertEquals(before, sim.amb())
         sim.dimOk().toConfirm().closeQuiet()
         val restoring = sim.amb()
-        sim.res(sim.dimId(), B, true, 70.0, 20.0)   // 지난 낮춤의 결과가 되돌림 중에 늦게 와도 그대로
+        sim.res(sim.dimId(), B, true, 70.0, 20.0) // 지난 낮춤의 결과가 되돌림 중에 늦게 와도 그대로
         assertEquals(restoring, sim.amb())
     }
 
     @Test fun dimWaitsForRestoreResult() {
-        val sim = session().dimmedAttempt().toConfirm().closeQuiet()   // Restoring
+        val sim = session().dimmedAttempt().toConfirm().closeQuiet() // Restoring
         sim.alarm(MIN).started()
         assertEquals(1, sim.all<DimAmbient>().size, "되돌림 결과 전에는 낮추지 않는다(처음 한 번뿐)")
         assertTrue(sim.amb() is Ambient.Restoring)
@@ -267,10 +290,11 @@ class AmbientTest {
 
     @Test fun switchWhilePlaying_noFlicker() {
         val sim = session().ev(SwitchSound(T0, LL)).started().dimOk().tick(10_000)
-        sim.ev(SwitchSound(sim.t, WN))   // 교체(시작 대기)
+        sim.ev(SwitchSound(sim.t, WN)) // 교체(시작 대기)
         assertTrue(sim.all<RestoreAmbient>().isEmpty())
         sim.started()
-        assertTrue(sim.all<RestoreAmbient>().isEmpty()); assertEquals(1, sim.all<DimAmbient>().size)
+        assertTrue(sim.all<RestoreAmbient>().isEmpty())
+        assertEquals(1, sim.all<DimAmbient>().size)
         assertTrue(sim.amb() is Ambient.Dimmed)
     }
 
@@ -278,7 +302,7 @@ class AmbientTest {
         // (가) 되돌림 결과를 기다리는 중 세션이 닫힌다
         val a = session().dimmedAttempt()
         val id = a.ses.id
-        a.gear(Gear.P, MIN)   // WAIT → Restoring
+        a.gear(Gear.P, MIN) // WAIT → Restoring
         assertEquals(1, a.all<RestoreAmbient>().size)
         a.ev(RearDoor(a.t, Side.LEFT, true))
         assertNull(a.s.session)
@@ -293,7 +317,8 @@ class AmbientTest {
         val c = b.dimId()
         b.gear(Gear.P, MIN).ev(RearDoor(b.t, Side.LEFT, true))
         assertTrue(b.all<CloseSession>().isEmpty())
-        b.res(c, B, true, 70.0, 20.0); b.res(c, C, true, 0xFFFFFF.toDouble(), 0x3050A0.toDouble())
+        b.res(c, B, true, 70.0, 20.0)
+        b.res(c, C, true, 0xFFFFFF.toDouble(), 0x3050A0.toDouble())
         assertTrue(b.all<CloseSession>().isEmpty(), "결과가 오면 되돌림을 내고 그 결과를 또 기다린다")
         assertEquals(1, b.all<RestoreAmbient>().size)
         b.restoreResults()
@@ -311,7 +336,7 @@ class AmbientTest {
 
     @Test fun bootWhileDimming_dropped() {
         val sim = session().attempt1()
-        sim.ev(PlaybackEnded(sim.t, sim.play().id, EndReason.ERROR))   // 호스트가 복원 ③ 앞에서 넣는 사실 사건
+        sim.ev(PlaybackEnded(sim.t, sim.play().id, EndReason.ERROR)) // 호스트가 복원 ③ 앞에서 넣는 사실 사건
         assertTrue(sim.amb() is Ambient.Dimming)
         sim.clear().ev(Boot(sim.t, Gear.D, 10))
         assertNull(sim.amb())
@@ -326,7 +351,7 @@ class AmbientTest {
         assertNotEquals(old, r.cmdId)
         assertEquals(RestoreAmbient(r.cmdId, BRIGHT, COLOR), r)
         assertEquals(Ambient.Restoring(sim.ses.id, r.cmdId, BACK, setOf(B, C)), sim.amb())
-        sim.res(old, B, true, 20.0, 70.0)   // 지난 결과는 오지 않지만 오더라도 버린다
+        sim.res(old, B, true, 20.0, 70.0) // 지난 결과는 오지 않지만 오더라도 버린다
         assertEquals(setOf(B, C), (sim.amb() as Ambient.Restoring).pending)
     }
 
@@ -345,7 +370,7 @@ class AmbientTest {
     @Test fun roomClosedSession_restores() {
         val sim = session().dimmedAttempt()
         val eng = Engine()
-        val st = eng.restoreFromRoom(sim.s, facts(ended = true, history = sim.s.history), sim.t + MIN)   // ②(a): IDLE
+        val st = eng.restoreFromRoom(sim.s, facts(ended = true, history = sim.s.history), sim.t + MIN) // ②(a): IDLE
         assertNull(st.session)
         assertTrue(st.ign.ambient is Ambient.Dimmed)
         val boot = eng.step(st, Boot(sim.t + MIN, Gear.D, 10))
@@ -371,7 +396,8 @@ class AmbientTest {
         // Restoring → Dimmed: 내지 않는다(되돌림은 판단 코어의 RestoreAmbient가 한다)
         val rs = session().dimmedAttempt().toConfirm().closeQuiet()
         rs.clear().ev(Boot(rs.t, Gear.D, 10))
-        assertTrue(rs.all<RestoreAmbientLedger>().isEmpty()); assertEquals(1, rs.all<RestoreAmbient>().size)
+        assertTrue(rs.all<RestoreAmbientLedger>().isEmpty())
+        assertEquals(1, rs.all<RestoreAmbient>().size)
         // ② Dimming(되돌릴 값을 잃음): 한 번 낸다
         val dimming = session().attempt1()
         dimming.ev(PlaybackEnded(dimming.t, dimming.play().id, EndReason.ERROR))
@@ -408,7 +434,7 @@ class AmbientTest {
         assertEquals(1, st.realStep.commands.filterIsInstance<RestoreAmbientLedger>().size)
         assertTrue(st.realStep.commands.none { it is RestoreAmbient })
         assertNull(st.realStep.state.ign.ambient)
-        val late = eng.step(st.scene, ControlResult(real.t + 2_000, c, B, null, true, 70.0, 20.0))   // 지난 cmdId 결과는 장면 상태에서 무시된다
+        val late = eng.step(st.scene, ControlResult(real.t + 2_000, c, B, null, true, 70.0, 20.0)) // 지난 cmdId 결과는 장면 상태에서 무시된다
         assertNull(late.state.ign.ambient)
         // (b) 칸 없음은 장면 시작마다 명령을 만들지 않는다
         val none = session()
@@ -433,14 +459,21 @@ class AmbientTest {
         assertEquals(RestoreAmbient(r.cmdId, BRIGHT, COLOR), r)
         assertTrue(r.cmdId.startsWith("${sim.ses.id}-"))
         val dimming = session().attempt1()
-        Engine().sceneEnd(dimming.s).commands.let { c ->   // Dimming은 장부 되돌림 명령으로 실행기의 낮춤 작업을 버리게 한다
-            assertEquals(1, c.filterIsInstance<RestoreAmbientLedger>().size); assertTrue(c.none { it is RestoreAmbient })
+        Engine().sceneEnd(dimming.s).commands.let { c ->
+            // Dimming은 장부 되돌림 명령으로 실행기의 낮춤 작업을 버리게 한다
+            assertEquals(1, c.filterIsInstance<RestoreAmbientLedger>().size)
+            assertTrue(c.none { it is RestoreAmbient })
         }
-        val none = session().attempt1().also { val c = it.dimId(); it.res(c, B, false, 20.0, 20.0).res(c, C, false, 1.0, 1.0) }
-        Engine().sceneEnd(none.s).commands.let { c ->   // back이 비어도(확인 못 한 종류) 장부 되돌림은 낸다
-            assertTrue(c.none { it is RestoreAmbient }, "되돌릴 확인된 값은 없다"); assertEquals(1, c.filterIsInstance<RestoreAmbientLedger>().size)
+        val none = session().attempt1().also {
+            val c = it.dimId()
+            it.res(c, B, false, 20.0, 20.0).res(c, C, false, 1.0, 1.0)
         }
-        val restoring = session().dimmedAttempt().toConfirm().closeQuiet()   // Restoring
+        Engine().sceneEnd(none.s).commands.let { c ->
+            // back이 비어도(확인 못 한 종류) 장부 되돌림은 낸다
+            assertTrue(c.none { it is RestoreAmbient }, "되돌릴 확인된 값은 없다")
+            assertEquals(1, c.filterIsInstance<RestoreAmbientLedger>().size)
+        }
+        val restoring = session().dimmedAttempt().toConfirm().closeQuiet() // Restoring
         assertTrue(Engine().sceneEnd(restoring.s).commands.none { it is RestoreAmbient || it is RestoreAmbientLedger }, "Restoring은 이미 낸 명령이 끝난다")
         assertTrue(Engine().sceneEnd(sim.s).commands.none { it is RestoreAmbientLedger }, "back이 완전한 Dimmed는 장부를 부르지 않는다")
     }
@@ -448,7 +481,7 @@ class AmbientTest {
     @Test fun sceneEnd_unconfirmedKind_ledgerRestore() {
         val sim = session().attempt1()
         val c = sim.dimId()
-        sim.res(c, B, true, 70.0, 20.0).res(c, C, false, null, null)   // 색은 확인 못 함
+        sim.res(c, B, true, 70.0, 20.0).res(c, C, false, null, null) // 색은 확인 못 함
         val end = Engine().sceneEnd(sim.s).commands
         assertEquals(RestoreAmbient(end.filterIsInstance<RestoreAmbient>().single().cmdId, BRIGHT, null), end.filterIsInstance<RestoreAmbient>().single())
         assertTrue(end.indexOfFirst { it is RestoreAmbient } < end.indexOfFirst { it is RestoreAmbientLedger }, "되돌림 뒤에 장부")
@@ -462,7 +495,7 @@ class AmbientTest {
         val start = eng.sceneStart(real.s, EngineState.fresh(1, profile(), listOf(WN), emptyList(), null, 1), real.t + 1_000)
         assertTrue(start.realStep.state.ign.ambient is Ambient.Restoring)
         assertNull(start.scene.ign.ambient, "장면 상태는 새로 시작한다")
-        val sceneSim = session()           // 장면 상태 자리(장면 setup이 만든 세션): 거기서 달래기가 시작돼 낮춤이 결과 전(Dimming)이다
+        val sceneSim = session() // 장면 상태 자리(장면 setup이 만든 세션): 거기서 달래기가 시작돼 낮춤이 결과 전(Dimming)이다
         sceneSim.attempt1()
         assertTrue(sceneSim.amb() is Ambient.Dimming)
         val end = eng.sceneEnd(sceneSim.s)
@@ -486,8 +519,10 @@ class AmbientTest {
         val sim = session().attempt1()
         val c = sim.dimId()
         val steps = mutableListOf<List<Command>>()
-        sim.res(c, B, false, null, null); steps += sim.cmds   // 둘 다 실패해도 알림 없음
-        sim.res(c, C, false, null, null); steps += sim.cmds
+        sim.res(c, B, false, null, null)
+        steps += sim.cmds // 둘 다 실패해도 알림 없음
+        sim.res(c, C, false, null, null)
+        steps += sim.cmds
         for (cmds in steps) noSpeechOrNotice(cmds)
         assertTrue(sim.all<ShowNotice>().none { it.kind == Notice.SAFETY_CONTROL_FAILED })
         val a = session().dimmedAttempt().toConfirm().closeQuiet()

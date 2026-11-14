@@ -25,7 +25,8 @@ object TimeText {
 
     /** 시간 구간 "오후 1:10–1:52"(같은 오전/오후면 뒤쪽 접두를 뺀다). */
     fun range(from: Long, to: Long): String {
-        val a = clock(from); val b = clock(to)
+        val a = clock(from)
+        val b = clock(to)
         return if (a.take(2) == b.take(2)) "$a–${b.drop(3)}" else "$a–$b"
     }
 
@@ -37,7 +38,9 @@ object TimeText {
     /** 길이 "3분 12초"·"42분"·"1시간 21분". [seconds]면 1분 미만은 초까지. */
     fun duration(ms: Long, seconds: Boolean = false): String {
         val s = (ms / 1000).coerceAtLeast(0)
-        val h = s / 3600; val m = (s % 3600) / 60; val r = s % 60
+        val h = s / 3600
+        val m = (s % 3600) / 60
+        val r = s % 60
         return when {
             h > 0 -> if (m > 0) "${h}시간 ${m}분" else "${h}시간"
             m > 0 -> if (seconds && r > 0) "${m}분 ${r}초" else "${m}분"

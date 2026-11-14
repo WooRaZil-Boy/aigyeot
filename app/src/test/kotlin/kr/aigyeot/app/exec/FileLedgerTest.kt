@@ -1,12 +1,12 @@
 package kr.aigyeot.app.exec
 
-import kr.aigyeot.engine.AmbientValue
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kr.aigyeot.engine.AmbientValue
 
 // 낮춤 장부 파일(ambient_ledger): 프로세스가 죽어도 남고, 임시 파일을 남기지 않으며, 깨진 파일은 빈 장부다
 class FileLedgerTest {
@@ -19,7 +19,8 @@ class FileLedgerTest {
         assertEquals(e, FileLedger(file).read())
         assertFalse(File(dir, "ambient_ledger.json.tmp").exists(), "임시 파일을 남기지 않는다")
         FileLedger(file).write(null)
-        assertNull(FileLedger(file).read()); assertFalse(file.exists())
+        assertNull(FileLedger(file).read())
+        assertFalse(file.exists())
     }
 
     @Test fun `깨진 파일은 빈 장부로 읽는다`() {

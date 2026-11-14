@@ -1,17 +1,18 @@
 package kr.aigyeot.app.detect
 
+import kotlin.math.exp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kr.aigyeot.engine.Params
-import kotlin.math.exp
 
 // 감지 상수. YAMNet 창은 0.975초 = 15600표본이다.
 object Detect {
     const val SAMPLE_RATE = 16_000
     const val WINDOW_SAMPLES = 15_600
+
     /** 창 한 걸음은 판단 코어 Params.yamnetHopMs 하나(15600표본 ÷ 16 kHz). */
     val WINDOW_MS: Long = Params().yamnetHopMs
     const val SEGMENT_WINDOWS = 3
@@ -22,7 +23,9 @@ object Detect {
 // 울음 판별층: 고른 24개 YAMNet 클래스 점수의 3창 평균(24) + 최대(24) → 로지스틱(rt_train.py와 같은 식).
 // 경보 문턱은 판단 코어 Params.alarmThreshold 하나다(SegmentTracker). 판별층 JSON의 "threshold"는 학습 기록이며 시험이 그 값과 같은지 본다
 class CryHead(val classes: IntArray, val w: DoubleArray, val bias: Double) {
-    init { require(w.size == classes.size * 2) { "가중치는 클래스 수의 2배여야 한다" } }
+    init {
+        require(w.size == classes.size * 2) { "가중치는 클래스 수의 2배여야 한다" }
+    }
 
     /** [seg]는 3창(각 521 점수). 확률(0~1)을 돌려준다. */
     fun prob(seg: List<FloatArray>): Double {
@@ -31,7 +34,11 @@ class CryHead(val classes: IntArray, val w: DoubleArray, val bias: Double) {
         for (k in classes.indices) {
             var sum = 0.0
             var max = Double.NEGATIVE_INFINITY
-            for (s in seg) { val v = s[classes[k]].toDouble(); sum += v; if (v > max) max = v }
+            for (s in seg) {
+                val v = s[classes[k]].toDouble()
+                sum += v
+                if (v > max) max = v
+            }
             z += w[k] * sum / seg.size + w[classes.size + k] * max
         }
         return 1 / (1 + exp(-z))
@@ -46,7 +53,7 @@ class CryHead(val classes: IntArray, val w: DoubleArray, val bias: Double) {
             return CryHead(
                 IntArray(cl.size) { cl[it].jsonPrimitive.content.toInt() },
                 DoubleArray(w.size) { w[it].jsonPrimitive.content.toDouble() },
-                o.getValue("bias").jsonPrimitive.content.toDouble(),
+                o.getValue("bias").jsonPrimitive.content.toDouble()
             )
         }
 

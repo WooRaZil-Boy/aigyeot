@@ -35,14 +35,12 @@ sealed interface ProfileState {
 }
 
 /** 앱 전체 화면이 같이 쓰는 것: 프로필(첫 설정 여부)과, 화면 밖(알림·액티비티)에서도 보내는 사건. 사건은 [events](실제 입구) 하나로 보낸다. */
-class AppViewModel(
-    private val store: Store, private val events: EventSink, private val appContext: Context, private val noRearOutput: () -> Boolean,
-) : ViewModel() {
+class AppViewModel(private val store: Store, private val events: EventSink, private val appContext: Context, noRearOutput: () -> Boolean) : ViewModel() {
     val profile: StateFlow<ProfileState> = store.profileFlow().map<ChildProfileEntity?, ProfileState> { ProfileState.Loaded(it, noRearOutput()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileState.Loading)
 
     /** 보호자 동의(첫 설정 저장) 전에는 어느 경로로도 마이크를 켜지 않는다. 프로필은 동의해야 저장된다 */
-    suspend fun hasConsent(): Boolean = store.profileFlow().first() != null   // 읽기가 실패해도 다시 읽어 마이크 시작이 빠지지 않게(Store.profileFlow)
+    suspend fun hasConsent(): Boolean = store.profileFlow().first() != null // 읽기가 실패해도 다시 읽어 마이크 시작이 빠지지 않게(Store.profileFlow)
 
     fun saveProfile(p: ChildProfileEntity) {
         viewModelScope.launch {

@@ -1,5 +1,7 @@
 package kr.aigyeot.phone.domain.model
 
+import java.io.File
+import java.time.ZoneId
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -20,9 +22,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import java.time.ZoneId
-import java.time.ZoneOffset
 
 /** 폰 메시지 처리·상태 로직. 예제는 shared/의 메시지 JSON을 그대로 쓴다. */
 class PhoneStateTest {
@@ -31,8 +30,7 @@ class PhoneStateTest {
     private val guardian = owner.copy(role = Role.GUARDIAN)
 
     /** 받은 봉투는 데이터 층의 바꾸기([inbound])를 거쳐 적용한다(앱과 같은 길). */
-    private fun PhoneState.receive(env: Envelope, now: Long, live: Boolean, newId: () -> String = { ulid(now) }) =
-        receive(env.inbound, now, live, newId)
+    private fun PhoneState.receive(env: Envelope, now: Long, live: Boolean, newId: () -> String = { ulid(now) }) = receive(env.inbound, now, live, newId)
 
     /** 중계가 전달한 모양으로(seq·car를 채워서). 보내는 쪽 예제에는 car가 없다. */
     private fun Envelope.withSeq(seq: Long, id: String = ulid()) = copy(seq = seq, id = id, car = owner.carId)
@@ -55,7 +53,14 @@ class PhoneStateTest {
         val newer = fixture("feeding_state") // seq 413, last_feeding_start 08:12:21+09:00
         val s = pressed.receive(newer, now, live = true).state
         assertTrue(s.feedings.single().reflected)
-        val older = newer.copy(id = ulid(), seq = 400, body = buildJsonObject { put("last_feeding_start", null as String?); put("window_start_expected", null as String?) })
+        val older = newer.copy(
+            id = ulid(),
+            seq = 400,
+            body = buildJsonObject {
+                put("last_feeding_start", null as String?)
+                put("window_start_expected", null as String?)
+            }
+        )
         assertEquals(413L, s.receive(older, now, live = true).state.feeding?.seq)
     }
 
@@ -122,7 +127,12 @@ class PhoneStateTest {
         val threeAccepted = accepted.addSong("s_B", "b", 1.0, "b.m4a", now).addSong("s_C", "c", 1.0, "c.m4a", now)
         assertTrue(threeAccepted.songsFull(threeAccepted.replaceable("s_OLD")))
         // 업로드에 실패한 곡(오류 표시)도 바꿀 수 있다.
-        assertEquals("s_OLD", owner.addSong("s_OLD", "옛 노래", 30.0, "s_OLD.m4a", now).let { s -> s.copy(songs = s.songs.map { it.copy(error = "x") }) }.replaceable("s_OLD"))
+        assertEquals(
+            "s_OLD",
+            owner.addSong("s_OLD", "옛 노래", 30.0, "s_OLD.m4a", now).let { s ->
+                s.copy(songs = s.songs.map { it.copy(error = "x") })
+            }.replaceable("s_OLD")
+        )
         // 바꿀 곡이 없으면(새로 녹음) 더하기만 한다.
         assertEquals(listOf("song_added", "song_added"), one.replacedSong(null, "s_NEW", "새 노래", 40.0, "s_NEW.m4a", now + 1).outbox.map { it.envelope.type })
     }
@@ -152,9 +162,13 @@ class PhoneStateTest {
         val chose = s1.selectSong(a, now)
         val other = accepted.withSeq(600).copy(
             body = buildJsonObject {
-                put("song_id", a); put("name", "나비야"); put("status", "accepted"); put("reason", null as String?)
-                put("duration_s", 94.5); put("candidate", false)
-            },
+                put("song_id", a)
+                put("name", "나비야")
+                put("status", "accepted")
+                put("reason", null as String?)
+                put("duration_s", 94.5)
+                put("candidate", false)
+            }
         )
         assertFalse(chose.receive(other, now, live = true).state.songs.single { it.songId == a }.candidate)
         // guardian은 보내지 않는다
@@ -170,9 +184,16 @@ class PhoneStateTest {
 
     @Test
     fun `앞 곡 승인 상태가 와도 목록 순서는 그대로이고 새 곡은 끝에 붙는다`() {
-        fun status(id: String, seq: Long, st: String = "accepted") = fixture("song_status").withSeq(seq).copy(body = buildJsonObject {
-            put("song_id", id); put("name", id); put("status", st); put("reason", null as String?); put("duration_s", 30.0); put("candidate", false)
-        })
+        fun status(id: String, seq: Long, st: String = "accepted") = fixture("song_status").withSeq(seq).copy(
+            body = buildJsonObject {
+                put("song_id", id)
+                put("name", id)
+                put("status", st)
+                put("reason", null as String?)
+                put("duration_s", 30.0)
+                put("candidate", false)
+            }
+        )
         val three = owner.addSong("s_A", "A", 30.0, "a.m4a", now).addSong("s_B", "B", 30.0, "b.m4a", now).addSong("s_C", "C", 30.0, "c.m4a", now)
         // A 승인이 와도 A는 제자리(끝으로 옮기면 열린 행·메뉴가 다른 곡에 붙는다). 상태만 바뀐다.
         val acc = three.receive(status("s_A", 700), now, live = true).state
@@ -294,9 +315,9 @@ class PhoneStateTest {
                 "수유 기록을 차로 보내지 못했어요",
                 "노래 지우기를 차로 보내지 못했어요. 차에는 그 노래가 남아 있을 수 있어요.",
                 "실험에 쓸 노래 선택을 차로 보내지 못했어요",
-                "돌봄 기록 요약을 차로 보내지 못했어요",
+                "돌봄 기록 요약을 차로 보내지 못했어요"
             ),
-            lines,
+            lines
         )
         // 띠에 떠 있는 안내(다른 버림·저장 실패)는 덮지 않고 줄을 바꿔 더한다.
         val one = withDropNotices(SAVE_FAILED, listOf("feeding_started"))
@@ -377,8 +398,18 @@ class PhoneStateTest {
         assertEquals(OutboxPayload.CareSummary(summary.body, tried = true), marked.outbox.single().payload)
         assertEquals("care_summary", marked.outbox.single().type)
         assertEquals(marked.outbox, marked.afterSend(summary, SendResult.Offline, now).outbox.map { it.copy(attempts = 0, nextTryAt = 0, networkWait = false) })
-        assertEquals(queued.outbox, marked.afterSend(summary, SendResult.Failed(429, "rate_limited", 5), now).outbox.map { it.copy(attempts = 0, nextTryAt = 0) })
-        assertEquals(queued.outbox, marked.afterSend(summary, SendResult.Unreached, now).outbox.map { it.copy(attempts = 0, nextTryAt = 0, networkWait = false) })
+        assertEquals(
+            queued.outbox,
+            marked.afterSend(summary, SendResult.Failed(429, "rate_limited", 5), now).outbox.map {
+                it.copy(attempts = 0, nextTryAt = 0)
+            }
+        )
+        assertEquals(
+            queued.outbox,
+            marked.afterSend(summary, SendResult.Unreached, now).outbox.map {
+                it.copy(attempts = 0, nextTryAt = 0, networkWait = false)
+            }
+        )
         assertTrue(marked.afterSend(summary, SendResult.Sent(summary.body), now).outbox.isEmpty())
     }
 
@@ -462,7 +493,10 @@ class PhoneStateTest {
         val expired = t.pruned(now + 8 * DAY)
         assertNotNull(expired.feedings.single().failed)
         val at = expired.feedings.single().at
-        val body = buildJsonObject { put("last_feeding_start", at); put("window_start_expected", null as String?) }
+        val body = buildJsonObject {
+            put("last_feeding_start", at)
+            put("window_start_expected", null as String?)
+        }
         val env = fixture("feeding_state").copy(body = body).withSeq(99)
         val r = expired.receive(env, now + 8 * DAY, live = false).state
         assertTrue(r.feedings.single().reflected)
@@ -473,7 +507,15 @@ class PhoneStateTest {
     fun `만료 뒤 반영 상태를 받으면 곡 실패 표시가 지워진다`() {
         val expired = owner.addSong("s_1", "a", 30.0, "s_1.m4a", now).pruned(now + 8 * DAY)
         assertNotNull(expired.songs.single().error)
-        val body = buildJsonObject { put("song_id", "s_1"); put("name", "a"); put("status", "accepted"); put("reason", null as String?); put("duration_s", 30.0); put("candidate", true) }
+        val body =
+            buildJsonObject {
+                put("song_id", "s_1")
+                put("name", "a")
+                put("status", "accepted")
+                put("reason", null as String?)
+                put("duration_s", 30.0)
+                put("candidate", true)
+            }
         val env = fixture("song_status").copy(body = body).withSeq(99)
         val r = expired.receive(env, now + 8 * DAY, live = false).state
         assertEquals(SongPhase.ACCEPTED, r.songs.single().phase)
@@ -530,7 +572,10 @@ class PhoneStateTest {
         store.save(s)
         assertEquals(s, store.load())
         // 이름을 바꿀 자리가 비어 있지 않은 폴더면 실패를 알려야 한다(AtomicFile은 기록만 하고 돌아올 수 있다).
-        val blocked = File(dir, "blocked.json").apply { mkdirs(); File(this, "x").writeText("x") }
+        val blocked = File(dir, "blocked.json").apply {
+            mkdirs()
+            File(this, "x").writeText("x")
+        }
         val failing = kr.aigyeot.phone.data.StateStore(blocked)
         assertTrue(runCatching { failing.save(s) }.isFailure)
         dir.deleteRecursively()
@@ -544,7 +589,7 @@ class PhoneStateTest {
         f.writeText(
             """{"car_id":"c_7F3AK2N9X0Q4M8T1V6B5R3H2CD","my_device_id":"d_5KQ2M8T1V6B5R3H2CD7F3AK2N9","role":"owner",""" +
                 """"songs":[{"song_id":"01JC90A0Q4M8T1V6B5R3H2CD7F","name":"나비야","file":"a.m4a","phase":"ACCEPTED"}],""" +
-                """"feedings":[{"msg_id":"01JC8Y2K6N3T5Q9W0ZB4H7X2DM","at":"2026-11-05T08:12:21+09:00"}],"future_field":1}""",
+                """"feedings":[{"msg_id":"01JC8Y2K6N3T5Q9W0ZB4H7X2DM","at":"2026-11-05T08:12:21+09:00"}],"future_field":1}"""
         )
         val old = kr.aigyeot.phone.data.StateStore(f).load()
         assertEquals(Role.OWNER, old.role)
@@ -569,7 +614,10 @@ class PhoneStateTest {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         val f = File(dir, "phone_state.json").apply { writeText("깨짐") }
         // 백업 자리에 비어 있지 않은 폴더가 있으면 옮기기·복사가 모두 실패한다
-        File(dir, "phone_state.json.corrupt").apply { mkdirs(); File(this, "x").writeText("x") }
+        File(dir, "phone_state.json.corrupt").apply {
+            mkdirs()
+            File(this, "x").writeText("x")
+        }
         val store = kr.aigyeot.phone.data.StateStore(f)
         assertEquals(PhoneState(), store.load())
         assertTrue(store.unsafe)
@@ -629,7 +677,15 @@ class PhoneStateTest {
         assertFalse(merged.devices.single().online) // 차 행은 늘 목록 값
         // 끊긴 기기의 늦은 paired도 되살리지 않는다
         val latePaired = fixture("paired").withSeq(150).let { e ->
-            e.copy(body = buildJsonObject { put("device_id", g); put("role", "guardian"); put("platform", "ios"); put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", true) })
+            e.copy(
+                body = buildJsonObject {
+                    put("device_id", g)
+                    put("role", "guardian")
+                    put("platform", "ios")
+                    put("paired_at", "2026-11-05T09:01:44Z")
+                    put("handoff_alerts", true)
+                }
+            )
         }
         assertEquals(listOf(Role.CAR), merged.receive(latePaired, now, live = true).state.devices.map { it.role })
 
@@ -638,9 +694,12 @@ class PhoneStateTest {
             id = ulid(),
             seq = 105,
             body = buildJsonObject {
-                put("device_id", g); put("role", "guardian"); put("platform", "ios")
-                put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", false)
-            },
+                put("device_id", g)
+                put("role", "guardian")
+                put("platform", "ios")
+                put("paired_at", "2026-11-05T09:01:44Z")
+                put("handoff_alerts", false)
+            }
         )
         val fresh = owner.mergeDevices(90, listOf(car)).receive(offAlerts, now, live = true).state
         assertEquals(false, fresh.mergeDevices(100, listOf(car, guardianRow)).devices.single { it.deviceId == g }.handoffAlerts)
@@ -659,9 +718,12 @@ class PhoneStateTest {
                 id = ulid(),
                 seq = seq,
                 body = buildJsonObject {
-                    put("device_id", newG); put("role", "guardian"); put("platform", "ios")
-                    put("paired_at", "2026-11-05T09:01:44Z"); put("handoff_alerts", true)
-                },
+                    put("device_id", newG)
+                    put("role", "guardian")
+                    put("platform", "ios")
+                    put("paired_at", "2026-11-05T09:01:44Z")
+                    put("handoff_alerts", true)
+                }
             )
         }
         assertFalse(at200.receive(pairedAt(150), now, live = true).state.devices.any { it.deviceId == newG })
@@ -719,6 +781,7 @@ class PhoneStateTest {
 
     private val seoul = ZoneId.of("Asia/Seoul")
     private val care1 = CareFile(migratedFeedings = true).start(CareKind.FEED, now - 60 * MINUTE, seoul.id).file
+
     // 오늘 값은 없지만 기록에서 온 값(마지막 기저귀 시각)이 있는 폰: 날이 바뀌어도 내용이 같다. 빈 요약은 처음에 보내지 않는다.
     private val oldOnly = CareFile(sleepDiaperEnabled = true, migratedFeedings = true).start(CareKind.DIAPER, now - 10 * DAY, seoul.id).file
 
@@ -833,7 +896,9 @@ class PhoneStateTest {
         val stuck = sent.reconciledCareSummary(care1, now - MINUTE, seoul)
         val freed = stuck.reconciledCareSummary(care1, now + 5 * MINUTE, seoul)
         assertEquals(rfc3339(now + 5 * MINUTE, seoul), freed.outbox.single().envelope.body["as_of"]?.jsonPrimitive?.content)
-        val caught = backSent.reconciledCareSummary(care1, now + 10_000, seoul).let { it.afterSend(it.outbox.single(), SendResult.Sent(buildJsonObject { }), now) }
+        val caught = backSent.reconciledCareSummary(care1, now + 10_000, seoul).let {
+            it.afterSend(it.outbox.single(), SendResult.Sent(buildJsonObject { }), now)
+        }
         assertEquals(caught, caught.reconciledCareSummary(care1, now + 20_000, seoul))
         // 폰 시계가 중계보다 5분 넘게 앞서 보냈으면 차가 미래 요약으로 버렸을 수 있어 표시를 지운다.
         assertNull(a.afterSend(s1, SendResult.Sent(buildJsonObject { }), now, aheadMs = 6 * MINUTE).lastSentCareSummary)
@@ -905,7 +970,15 @@ class PhoneStateTest {
     @Test
     fun `늦게 온 기기 목록은 그사이 받은 차의 연결을 덮지 않는다`() {
         // 실시간으로 받은 차의 봉투는 그 자리에서 차 행을 켠다. 그 전에 요청한 목록이 늦게 와 '꺼짐'으로 되돌리면 안 된다.
-        val car = DeviceInfo(deviceId = "d_CAR", role = Role.CAR, platform = Platform.PLEOS, pairedAt = rfc3339(now - DAY), lastSeenAt = rfc3339(now - HOUR), online = false)
+        val car =
+            DeviceInfo(
+                deviceId = "d_CAR",
+                role = Role.CAR,
+                platform = Platform.PLEOS,
+                pairedAt = rfc3339(now - DAY),
+                lastSeenAt = rfc3339(now - HOUR),
+                online = false
+            )
         val stale = owner.mergeDevices(5, listOf(car))
         assertFalse(stale.devices.single().online)
         val kept = owner.mergeDevices(5, listOf(car), carLiveAt = now - 1_000)
@@ -973,7 +1046,18 @@ class PhoneStateTest {
         // '보내 봄'은 보내기 전에 저장된다: 응답 전에 죽어 `sending`이 사라져도 바꾸지 않는다.
         val marked = a.markSentOnce(s1.envelope.id)
         val reread = ProtocolJson.decodeFromString(PhoneState.serializer(), ProtocolJson.encodeToString(PhoneState.serializer(), marked))
-        assertEquals(listOf(s1.envelope.id, "care_summary"), reread.reconciledCareSummary(care2, now, seoul).outbox.mapIndexed { i, it -> if (i == 0) it.envelope.id else it.envelope.type })
+        assertEquals(
+            listOf(s1.envelope.id, "care_summary"),
+            reread.reconciledCareSummary(care2, now, seoul).outbox.mapIndexed { i, it ->
+                if (i ==
+                    0
+                ) {
+                    it.envelope.id
+                } else {
+                    it.envelope.type
+                }
+            }
+        )
         // 앞 요약을 버려도(영구 실패) 뒤에 남은 요약이 있으면 보낸 표시는 그것을 가리키므로 둔다.
         val both = marked.reconciledCareSummary(care2, now, seoul)
         val dropped = both.afterSend(both.outbox.first(), SendResult.Failed(400, "bad_request"), now)
@@ -1029,6 +1113,11 @@ class PhoneStateTest {
         val fresh = PhoneState.paired("c_NEW", "d_NEW", Role.OWNER, now).keepingClear(old, migrating = true)
         assertNull(fresh.markedMigratedFeedings().lastSentFeedingAt)
         val migrated = CareFile().migrated(fresh.feedings + fresh.migrationFeedings, seoul.id)
-        assertEquals(listOf("feeding_started"), types(fresh.markedMigratedFeedings().reconciled(migrated, now + MINUTE, seoul)).filter { it == "feeding_started" })
+        assertEquals(
+            listOf("feeding_started"),
+            types(fresh.markedMigratedFeedings().reconciled(migrated, now + MINUTE, seoul)).filter {
+                it == "feeding_started"
+            }
+        )
     }
 }

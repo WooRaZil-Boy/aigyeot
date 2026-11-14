@@ -12,8 +12,7 @@ fun exportFileName(now: Long, zone: ZoneId): String =
     "aigyeot-care-${java.time.format.DateTimeFormatter.BASIC_ISO_DATE.format(Instant.ofEpochMilli(now).atZone(zone).toLocalDate())}.csv"
 
 /** RFC 4180: 쉼표·따옴표·줄바꿈이 있으면 따옴표로 감싸고 안의 따옴표는 두 번 쓴다. */
-private fun csvField(s: String): String =
-    if (s.any { it == ',' || it == '"' || it == '\r' || it == '\n' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
+private fun csvField(s: String): String = if (s.any { it == ',' || it == '"' || it == '\r' || it == '\n' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
 
 /**
  * 지우지 않은 손 기록을 시작 시각 순으로. UTF-8 BOM, 줄바꿈 CRLF, 첫 줄은 [CSV_HEADER].
@@ -30,8 +29,8 @@ fun CareFile.toCsv(fallback: ZoneId): String {
             e.feedSide?.name ?: "",
             e.amountMl?.toString() ?: "",
             e.diaper?.name ?: "",
-            e.note?.let(::csvField) ?: "",
+            e.note?.let(::csvField) ?: ""
         ).joinToString(",")
     }
-    return "﻿" + (listOf(CSV_HEADER) + rows).joinToString("\r\n") + "\r\n"
+    return "\uFEFF" + (listOf(CSV_HEADER) + rows).joinToString("\r\n") + "\r\n"
 }

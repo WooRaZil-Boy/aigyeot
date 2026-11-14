@@ -1,5 +1,7 @@
 package kr.aigyeot.phone.presentation
 
+import java.time.Instant
+import java.time.LocalDate
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
@@ -14,7 +16,6 @@ import kr.aigyeot.phone.domain.model.reportRowSub
 import kr.aigyeot.phone.fixture
 import kr.aigyeot.shared.CarAction
 import kr.aigyeot.shared.CarActionKind
-import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.HandoffKind
@@ -30,9 +31,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import java.time.Instant
-import java.time.LocalDate
 
 /** 차트 값: 기록·리포트에서 그릴 때 계산한 값이 규칙대로다. */
 class ChartDataTest {
@@ -103,8 +101,8 @@ class ChartDataTest {
                 ev(CareKind.FEED, at(3, 15), at(3, 35)),
                 ev(CareKind.FEED, at(14, 0)), // 진행 중: 지금까지
                 ev(CareKind.FEED, at(9, 0), at(9, 20), deleted = true), // 지운 것은 뺀다
-                ev(CareKind.DIAPER, at(12, 58)),
-            ),
+                ev(CareKind.DIAPER, at(12, 58))
+            )
         )
         val d = dayChart(care, emptyList(), today, now, zone, showCar = false)
         assertEquals(listOf(LaneKind.SLEEP, LaneKind.FEED, LaneKind.DIAPER), d.lanes.map { it.kind })
@@ -124,8 +122,8 @@ class ChartDataTest {
             sleepDiaperEnabled = true,
             events = listOf(
                 ev(CareKind.SLEEP, at(23, 0, today.minusDays(1)), at(0, 0)),
-                CareEvent("u", CareKind.FEED, at(5, 0), endUnknown = true, zone = zone.id, createdAt = 0, updatedAt = 0),
-            ),
+                CareEvent("u", CareKind.FEED, at(5, 0), endUnknown = true, zone = zone.id, createdAt = 0, updatedAt = 0)
+            )
         )
         val e2 = dayChart(edge, emptyList(), today, now, zone, showCar = false)
         assertTrue(e2.lanes[0].spans.isEmpty())
@@ -152,7 +150,13 @@ class ChartDataTest {
         assertEquals("탑승 13:10–13:52 · 41분", oddCar.spans.single().tip)
         assertEquals("탑승 41분", oddCar.sub)
         val feed = CareEvent("f", CareKind.FEED, at(13, 10) + 50_000, endAt = at(13, 52) + 10_000, zone = zone.id, createdAt = now, updatedAt = now)
-        assertEquals("수유 13:10–13:52 · 41분", dayChart(CareFile(events = listOf(feed)), emptyList(), today, now, zone, showCar = false).lanes.first { it.kind == LaneKind.FEED }.spans.single().tip)
+        assertEquals(
+            "수유 13:10–13:52 · 41분",
+            dayChart(CareFile(events = listOf(feed)), emptyList(), today, now, zone, showCar = false).lanes.first {
+                it.kind ==
+                    LaneKind.FEED
+            }.spans.single().tip
+        )
         // 다른 날이면 지금 선이 없다.
         assertNull(dayChart(CareFile(), emptyList(), today.minusDays(1), now, zone, showCar = false).nowMin)
     }
@@ -201,7 +205,7 @@ class ChartDataTest {
         // 하루 띠 '차에서' 줄: 탑승 칸(0~200) 안에 울음 마름모(100±6). 칸을 먼저 넣어도 마름모를 누르면 마름모다(iOS와 같은 규칙).
         val hits = listOf(
             Hit(androidx.compose.ui.geometry.Rect(0f, 0f, 200f, 20f), "탑승"),
-            Hit(androidx.compose.ui.geometry.Rect(94f, 0f, 106f, 20f), "차에서 울음", point = true),
+            Hit(androidx.compose.ui.geometry.Rect(94f, 0f, 106f, 20f), "차에서 울음", point = true)
         )
         assertEquals(1, pickHit(hits, androidx.compose.ui.geometry.Offset(100f, 10f), reach = 24f))
         // 칸 안이지만 마름모에서 닿는 범위 밖이면 칸.
@@ -231,7 +235,7 @@ class ChartDataTest {
         // 차·두 앱 같은 글자: 결과는 명사형, 뺀 이유는 열거 이름을 보이지 않는다. 줄은 '이름 · 값' 두 칸(콜론 없음).
         assertEquals(
             listOf("그침", "계속 울음", "판정하지 못함", "1차 시도 없음"),
-            listOf(EpisodeResult.SUCCESS, EpisodeResult.FAILURE, EpisodeResult.UNDETERMINED, null).map { kr.aigyeot.phone.domain.model.resultText(it) },
+            listOf(EpisodeResult.SUCCESS, EpisodeResult.FAILURE, EpisodeResult.UNDETERMINED, null).map { kr.aigyeot.phone.domain.model.resultText(it) }
         )
         val reasons = kr.aigyeot.shared.ExcludedReason.entries.associateWith { kr.aigyeot.phone.domain.model.excludedText(it) }
         assertEquals("마이크 오류", reasons[kr.aigyeot.shared.ExcludedReason.MIC_ERROR])
@@ -245,7 +249,7 @@ class ChartDataTest {
             recried = true,
             second = null,
             stop = null,
-            totalCryS = 75,
+            totalCryS = 75
         )
         val names = (episodeSoundLines(emptyList(), e) + episodeResultLines(emptyList(), e)).map { it.first }
         assertEquals(listOf("감지까지", "소리", "재생", "결과", "성적에서 뺌", "다시 울음", "울음 시간"), names)
@@ -256,7 +260,10 @@ class ChartDataTest {
         assertEquals(
             "재생 없음",
             episodeSoundLines(emptyList(), e.copy(trigger = EpisodeTrigger.SWITCH_SOUND, sound = null))
-                .let { l -> assertTrue(l.none { it.first == "감지까지" }); l.first { it.first == "소리" }.second },
+                .let { l ->
+                    assertTrue(l.none { it.first == "감지까지" })
+                    l.first { it.first == "소리" }.second
+                }
         )
     }
 
@@ -264,14 +271,17 @@ class ChartDataTest {
     fun `하루 띠는 같은 분 안에 끝난 기록에도 길이를 붙인다`() {
         // 12:00:10~12:00:50 잠: 분 칸은 12:00–12:00이어도 기록 시각 차이(40초)가 있으니 기록 목록과 같은 "1분 미만"을 붙인다.
         val e = CareEvent("s", CareKind.SLEEP, at(12, 0) + 10_000, endAt = at(12, 0) + 50_000, zone = zone.id, createdAt = now, updatedAt = now)
-        val tip = dayChart(CareFile(sleepDiaperEnabled = true, events = listOf(e)), emptyList(), today, now, zone, showCar = false).lanes.first { it.kind == LaneKind.SLEEP }.spans.single().tip
+        val tip = dayChart(CareFile(sleepDiaperEnabled = true, events = listOf(e)), emptyList(), today, now, zone, showCar = false).lanes.first {
+            it.kind ==
+                LaneKind.SLEEP
+        }.spans.single().tip
         assertEquals("잠 12:00–12:00 · 1분 미만", tip)
         // 시작과 끝이 같은 기록은 길이를 붙이지 않는다.
         val zero = e.copy(endAt = e.startAt)
         assertEquals(
             "잠 12:00–12:00",
             dayChart(CareFile(sleepDiaperEnabled = true, events = listOf(zero)), emptyList(), today, now, zone, showCar = false)
-                .lanes.first { it.kind == LaneKind.SLEEP }.spans.single().tip,
+                .lanes.first { it.kind == LaneKind.SLEEP }.spans.single().tip
         )
     }
 
@@ -283,8 +293,8 @@ class ChartDataTest {
             startedAt = iso(t0),
             plays = listOf(
                 PlayEntry(PlayPurpose.AUTO_FIRST, SoundMethod.LULLABY, null, iso(t0 + 2000), iso(t0 + 20_000), 18),
-                PlayEntry(PlayPurpose.REQUEST, SoundMethod.WHITE_NOISE, null, iso(t0 + 140_000), iso(t0 + 170_000), 30),
-            ),
+                PlayEntry(PlayPurpose.REQUEST, SoundMethod.WHITE_NOISE, null, iso(t0 + 140_000), iso(t0 + 170_000), 30)
+            )
         )
         val b = episodeBand(e, emptyList())
         assertEquals("120초", b.gaps.single().tip)
@@ -297,17 +307,20 @@ class ChartDataTest {
         val base = report().timeline.first()
         val t0 = at(13, 24)
         val e = base.copy(
-            startedAt = iso(t0), recried = true, result = EpisodeResult.SUCCESS,
+            startedAt = iso(t0),
+            recried = true,
+            result = EpisodeResult.SUCCESS,
             plays = listOf(
                 PlayEntry(PlayPurpose.AUTO_FIRST, SoundMethod.LULLABY, null, iso(t0 + 2000), iso(t0 + 58_000), 56),
-                PlayEntry(PlayPurpose.AUTO_SECOND, SoundMethod.WHITE_NOISE, null, iso(t0 + 66_000), iso(t0 + 122_000), 56),
-            ),
+                PlayEntry(PlayPurpose.AUTO_SECOND, SoundMethod.WHITE_NOISE, null, iso(t0 + 66_000), iso(t0 + 122_000), 56)
+            )
         )
         val b = episodeBand(e, emptyList())
         assertEquals(listOf(EpisodeSeg(2, 58, "자장가", 56), EpisodeSeg(66, 122, "백색소음", 56)), b.sounds)
         assertEquals(listOf(EpisodeSeg(58, 66, null)), b.gaps)
         // 툴팁·설명의 길이는 차가 보낸 play_s 그대로(00.200~10.800 재생은 칸이 0~10초여도 11초, 리포트 상세 글·iOS·차와 같다). 재생 사이 칸은 칸 길이.
-        val frac = episodeBand(e.copy(plays = listOf(PlayEntry(PlayPurpose.AUTO_FIRST, SoundMethod.LULLABY, null, iso(t0 + 200), iso(t0 + 10_800), 11))), emptyList())
+        val frac =
+            episodeBand(e.copy(plays = listOf(PlayEntry(PlayPurpose.AUTO_FIRST, SoundMethod.LULLABY, null, iso(t0 + 200), iso(t0 + 10_800), 11))), emptyList())
         assertEquals(0 to 10, frac.sounds.single().let { it.from to it.to })
         assertEquals(11, frac.sounds.single().seconds)
         assertEquals(8, b.gaps.single().seconds)
@@ -319,7 +332,15 @@ class ChartDataTest {
         val req = e.copy(plays = e.plays.mapIndexed { i, p -> if (i == 1) p.copy(purpose = PlayPurpose.REQUEST) else p })
         assertTrue(episodeBand(req, emptyList()).marks.none { it.label == "다시 울음" })
         // 쉼터 제안은 운전자에게 실제로 물었을 때만, 소리 바꾸기 요청은 '감지'가 아니다.
-        val stop = StopInfo(handoff = true, reason = StopReason.ATTEMPT_LIMIT, mode = HandoffKind.REST_OFFER, restName = null, waypointAdded = false, guardianNotified = false)
+        val stop =
+            StopInfo(
+                handoff = true,
+                reason = StopReason.ATTEMPT_LIMIT,
+                mode = HandoffKind.REST_OFFER,
+                restName = null,
+                waypointAdded = false,
+                guardianNotified = false
+            )
         assertTrue("쉼터 제안" in episodeBand(e.copy(stop = stop), emptyList()).outcomes)
         assertTrue("쉼터 제안" !in episodeBand(e.copy(stop = stop.copy(toldDriver = false)), emptyList()).outcomes)
         assertEquals("소리 바꾸기 요청", episodeBand(e.copy(trigger = EpisodeTrigger.SWITCH_SOUND), emptyList()).marks.first().label)
@@ -327,7 +348,12 @@ class ChartDataTest {
 
     @Test
     fun `리포트 숫자 줄은 감지 평균·울음 합·한 일 종류 수다`() {
-        val r = report().let { b -> b.copy(carActions = b.carActions + CarAction(CarActionKind.REAR_PLAYBACK, 1, 10) + CarAction(CarActionKind.WAYPOINT_ADDED, 0, null)) }
+        val r = report().let { b ->
+            b.copy(
+                carActions =
+                b.carActions + CarAction(CarActionKind.REAR_PLAYBACK, 1, 10) + CarAction(CarActionKind.WAYPOINT_ADDED, 0, null)
+            )
+        }
         val k = reportKpis(r)
         assertEquals(2.4, k.detectS!!, 1e-9)
         assertEquals(61, k.cryS)
@@ -385,14 +411,29 @@ class ChartDataTest {
         fun feed(id: String, t: Long, deleted: Boolean = false) =
             CareEvent(id, CareKind.FEED, t, endAt = t + 10 * MINUTE, zone = APP_ZONE.id, createdAt = t, updatedAt = t, deletedAt = if (deleted) t else null)
         val base = now - 20 * HOUR
-        val file = CareFile(events = listOf(feed("a", base), feed("b", base + 11 * HOUR), feed("x", base + 12 * HOUR, deleted = true), feed("c", base + 14 * HOUR), feed("f", now + MINUTE)))
+        val file = CareFile(
+            events = listOf(
+                feed("a", base),
+                feed("b", base + 11 * HOUR),
+                feed("x", base + 12 * HOUR, deleted = true),
+                feed(
+                    "c",
+                    base + 14 * HOUR
+                ),
+                feed("f", now + MINUTE)
+            )
+        )
         assertEquals(listOf(FeedGap(base + 14 * HOUR, 3 * HOUR)), CareStats.feedGaps(CareStats.feedStarts(file.events, until = now)))
         assertNull(CareStats.usualGap(List(4) { HOUR }))
         assertEquals(HOUR, CareStats.usualGap(List(5) { HOUR }))
         // 울음 경보 에피소드만 센다. 소리 바꾸기 요청이 섞여도 리포트 줄·패턴·7일 막대가 같은 수다.
         val r = report().let { b ->
-            b.copy(startedAt = iso(at(9, 0)), endedAt = iso(at(9, 40)), timeline = b.timeline.map { it.copy(startedAt = iso(at(9, 10))) } +
-                b.timeline.first().copy(episodeId = "sw", trigger = EpisodeTrigger.SWITCH_SOUND, startedAt = iso(at(9, 20))))
+            b.copy(
+                startedAt = iso(at(9, 0)),
+                endedAt = iso(at(9, 40)),
+                timeline = b.timeline.map { it.copy(startedAt = iso(at(9, 10))) } +
+                    b.timeline.first().copy(episodeId = "sw", trigger = EpisodeTrigger.SWITCH_SOUND, startedAt = iso(at(9, 20)))
+            )
         }
         val cries = CareStats.cryAlarms(listOf(r)).size
         assertEquals(1, cries)
@@ -409,7 +450,7 @@ class ChartDataTest {
     fun `방법 성적 순서는 판정할 수 있는 것 먼저 그친 비율 순 같으면 받은 순`() {
         fun m(label: String, ok: Int, n: Int) = MethodStat(SoundMethod.WHITE_NOISE, label, ok, n)
         val order = CareStats.methodOrder(
-            listOf(m("두 번", 2, 2), m("반", 2, 4), m("셋 다", 3, 3), m("넘침", 4, 3), m("음수", -1, 3), m("모두", 4, 4)),
+            listOf(m("두 번", 2, 2), m("반", 2, 4), m("셋 다", 3, 3), m("넘침", 4, 3), m("음수", -1, 3), m("모두", 4, 4))
         )
         // 3회 경계: 2회는 100%여도 뒤. 넘침(4/3)은 3/3으로 묶여 셋 다·모두와 같은 비율이라 받은 순, 음수는 0으로 묶여 맨 뒤(판정 가능 안에서).
         assertEquals(listOf("셋 다", "넘침", "모두", "반", "음수", "두 번"), order.map { it.value.label })

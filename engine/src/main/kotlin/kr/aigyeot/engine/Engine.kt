@@ -28,8 +28,19 @@ class Engine(private val p: Params = Params()) {
      */
     fun sceneStart(real: EngineState, scene: EngineState, at: Long): SceneStart {
         val t0 = maxOf(at, real.now)
-        val t = Tx(p, real).apply { clock(t0); lifecycle(Life.SCENE_START); flushLedgers(); syncAmbient() }
-        return SceneStart(Step(t.s, t.out.toList(), t.wakeAt()), Tx(p, scene).apply { clock(t0); intoScene(real) }.s)
+        val t = Tx(p, real).apply {
+            clock(t0)
+            lifecycle(Life.SCENE_START)
+            flushLedgers()
+            syncAmbient()
+        }
+        return SceneStart(
+            Step(t.s, t.out.toList(), t.wakeAt()),
+            Tx(p, scene).apply {
+                clock(t0)
+                intoScene(real)
+            }.s
+        )
     }
 
     /**
@@ -45,7 +56,10 @@ class Engine(private val p: Params = Params()) {
     /** 시험용(복원 ③의 한 행): 말하던 줄을 말하지 않은 것으로 버린다. 앱은 [afterRestore]를 쓴다. */
     internal fun dropSpeaking(state: EngineState, at: Long): EngineState {
         state.speech.speaking ?: return state
-        return Tx(p, state).apply { clock(maxOf(at, state.now)); endSpeaking() }.s
+        return Tx(p, state).apply {
+            clock(maxOf(at, state.now))
+            endSpeaking()
+        }.s
     }
 
     /**
@@ -55,17 +69,26 @@ class Engine(private val p: Params = Params()) {
      */
     fun restoreFromRoom(state: EngineState, room: RoomFacts, now: Long): EngineState {
         val t = maxOf(now, state.now)
-        return Tx(p, state).apply { clock(t); fromRoom(room); clock(state.now) }.s
+        return Tx(p, state).apply {
+            clock(t)
+            fromRoom(room)
+            clock(state.now)
+        }.s
     }
 
     /** 시험용: 입력이 돌아온 것처럼 판정 창을 지금부터 다시 잰다. GAP·CONFIRM이 아니면 그대로. 앱은 [afterRestore]를 쓴다. */
-    internal fun reopenWindow(state: EngineState, at: Long): EngineState = Tx(p, state).apply { clock(at); reopenWindow(); clock(state.now) }.s
+    internal fun reopenWindow(state: EngineState, at: Long): EngineState = Tx(p, state).apply {
+        clock(at)
+        reopenWindow()
+        clock(state.now)
+    }.s
 }
 
 data class Step(
-    val state: EngineState,        // 새 상태
-    val commands: List<Command>,   // 할 일. 이 순서대로 실행한다
-    val wakeAt: Long?,             // 이 시각까지 Tick이 와야 한다. null이면 기다릴 시간 전이가 없다
+    val state: EngineState, // 새 상태
+    val commands: List<Command>, // 할 일. 이 순서대로 실행한다
+    // 이 시각까지 Tick이 와야 한다. null이면 기다릴 시간 전이가 없다
+    val wakeAt: Long?
 )
 
 /** [Engine.sceneStart]의 결과. realStep은 실제 상태에서 실행할 Step, scene은 장면 첫 상태. */
@@ -76,8 +99,12 @@ data class SceneEnd(val commands: List<Command>, val settle: List<HandoffLedger>
 
 // 처음 상태. 저장해 둔 스냅숏이 있으면 호스트가 그것을 쓴다.
 fun EngineState.Companion.fresh(
-    seed: Long, profile: Profile?, methods: List<Method>,
-    history: List<FirstTry>, feedingStart: Long?, otherGuardians: Int,
+    seed: Long,
+    profile: Profile?,
+    methods: List<Method>,
+    history: List<FirstTry>,
+    feedingStart: Long?,
+    otherGuardians: Int
 ): EngineState = EngineState(
     now = 0, rng = seed, seq = 0, profile = profile, methodsNext = methods, history = history,
     feedingStart = feedingStart, otherGuardians = otherGuardians,
@@ -85,7 +112,7 @@ fun EngineState.Companion.fresh(
     ign = Ignition(false, false, false, emptyList(), null, 0),
     session = null,
     speech = SpeechQueue(null, null, emptyList()),
-    steer = SteerState(null, null, null, null, 0, null),
+    steer = SteerState(null, null, null, null, 0, null)
 )
 
 /** 앱 기본 음원(백색소음·뱃속 소리)과 자장가. 세션 기본값·store 후보 목록·홈 화면이 같이 쓴다. */

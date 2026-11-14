@@ -98,8 +98,7 @@ private fun IntroPlan.moreDelayMs() = textDelayMs + Motion.RISE_STAGGER_MS * 6
  * 첫 안내의 누를 것이 누름을 받는가: 안무가 정해졌고([decided]) 그것이 나타나기 시작한 뒤([startMs], 안무가 없으면 null = 처음부터).
  * 그림 층 투명도는 입력을 막지 않아, 빈 화면을 누르면 보이지 않는 '먼저 기록만 쓸게요'(받은 연결 코드를 버림)·'자세히 보기'가 눌렸다.
  */
-internal fun introLive(decided: Boolean, startMs: Int?, clockMs: Float): Boolean =
-    decided && (startMs == null || clockMs >= startMs)
+internal fun introLive(decided: Boolean, startMs: Int?, clockMs: Float): Boolean = decided && (startMs == null || clockMs >= startMs)
 
 /**
  * 시계 [clock](ms)에서 [startMs]부터 [ms] 동안 아래 [rise]에서 올라오며 나타난다(곡선 [curve], API 31+면 블러 [blur] → 0).
@@ -111,18 +110,19 @@ private fun Modifier.introRise(
     rise: androidx.compose.ui.unit.Dp,
     ms: Int = Motion.enter.ms,
     blur: androidx.compose.ui.unit.Dp = 6.dp,
-    curve: Curve = Motion.enter,
-): Modifier =
-    graphicsLayer {
-        val t = clock() ?: return@graphicsLayer
-        val k = curve.easing.transform(((t - startMs) / ms).coerceIn(0f, 1f))
-        alpha = k
-        translationY = (1f - k) * rise.toPx()
-        renderEffect = if (Build.VERSION.SDK_INT >= 31 && k < 1f && blur > 0.dp) {
-            val r = (1f - k) * blur.toPx()
-            if (r > 0.5f) androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Decal) else null
-        } else null
+    curve: Curve = Motion.enter
+): Modifier = graphicsLayer {
+    val t = clock() ?: return@graphicsLayer
+    val k = curve.easing.transform(((t - startMs) / ms).coerceIn(0f, 1f))
+    alpha = k
+    translationY = (1f - k) * rise.toPx()
+    renderEffect = if (Build.VERSION.SDK_INT >= 31 && k < 1f && blur > 0.dp) {
+        val r = (1f - k) * blur.toPx()
+        if (r > 0.5f) androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Decal) else null
+    } else {
+        null
     }
+}
 
 /**
  * 첫 실행: 무엇이 오가는지 한 화면. 위 무대(정지 차 그림, 남는 높이만큼·120 미만이면 숨김) → 머리 이름 →
@@ -163,7 +163,7 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
             got?.let {
                 clock.animateTo(
                     it.endMs().toFloat(),
-                    androidx.compose.animation.core.tween(it.endMs(), easing = androidx.compose.animation.core.LinearEasing),
+                    androidx.compose.animation.core.tween(it.endMs(), easing = androidx.compose.animation.core.LinearEasing)
                 )
             }
         }
@@ -174,8 +174,11 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
         val text = plan?.textDelayMs ?: 0
         Column(Modifier.fillMaxSize().graphicsLayer { alpha = if (decided) 1f else 0f }) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                if (stage != null) IntroStage(stage.dp, animate = plan?.car == true, clock = run)
-                else Spacer(Modifier.windowInsetsPadding(WindowInsets.statusBars).height(8.dp))
+                if (stage != null) {
+                    IntroStage(stage.dp, animate = plan?.car == true, clock = run)
+                } else {
+                    Spacer(Modifier.windowInsetsPadding(WindowInsets.statusBars).height(8.dp))
+                }
                 Column(Modifier.padding(horizontal = 20.dp).onSizeChanged { textH = it.height }) {
                     Row(Modifier.padding(top = 6.dp).introRise(run, text, 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         AppMark(24.dp, 7.dp)
@@ -185,12 +188,13 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
                     Text(
                         IntroText.LEAD,
                         Modifier.padding(top = 10.dp).introRise(run, text + Motion.RISE_STAGGER_MS, 12.dp, ms = 500, blur = 0.dp).semantics { heading() },
-                        style = Type.display.copy(lineBreak = androidx.compose.ui.text.style.LineBreak.Heading), color = p.textPrimary,
+                        style = Type.display.copy(lineBreak = androidx.compose.ui.text.style.LineBreak.Heading),
+                        color = p.textPrimary
                     ) // intro.lead
                     // 정보 줄 넷(intro.short.*): 묶음 읽기 이름 '오가는 정보', 줄마다 한 요소.
                     Column(
                         Modifier.padding(top = 28.dp).semantics { contentDescription = IntroText.SHEET_TITLE },
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         val icons = listOf(R.drawable.ic_link, R.drawable.ic_x, R.drawable.ic_shield_check, R.drawable.ic_sparkles)
                         IntroText.SHORT.forEachIndexed { i, (title, sub) ->
@@ -205,7 +209,7 @@ fun IntroScreen(onConnect: () -> Unit, onRecordsOnly: () -> Unit) {
                                 contentDescription = IntroText.MORE_A11Y
                                 role = androidx.compose.ui.semantics.Role.Button
                             }.padding(end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(IntroText.MORE, style = Type.quickLabel.copy(fontSize = 14.sp, lineHeight = 20.sp), color = p.textSecondary)
                         AIcon(R.drawable.ic_chevron_right, Modifier.padding(start = 2.dp).size(16.dp), p.textSecondary)
@@ -231,7 +235,12 @@ private fun IntroStage(height: androidx.compose.ui.unit.Dp, animate: Boolean, cl
     val glow = androidx.compose.ui.graphics.lerp(p.stage, p.surface, 0.7f)
     // 차 가로 위치는 스프링이라 시계가 아니라 제 Animatable로 간다(넘침 없는 spring.smooth). 안무가 정해지기 전 장은 화면 전체가 비어 있다.
     val x = remember { androidx.compose.animation.core.Animatable(0f) }
-    LaunchedEffect(animate) { if (animate) { x.snapTo(48f); x.animateTo(0f, Springs.smooth.spec()) } }
+    LaunchedEffect(animate) {
+        if (animate) {
+            x.snapTo(48f)
+            x.animateTo(0f, Springs.smooth.spec())
+        }
+    }
     Box(
         Modifier.fillMaxWidth().height(height).drawBehind {
             val t = if (animate) clock() else null
@@ -240,16 +249,17 @@ private fun IntroStage(height: androidx.compose.ui.unit.Dp, animate: Boolean, cl
             val rx = size.width * 0.72f
             val ry = size.height * 0.40f
             scale(rx / ry, 1f, pivot = c) { drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = glow.alpha * a), glow.copy(alpha = 0f)), c, ry), ry, c) }
-        },
+        }
     ) {
         androidx.compose.foundation.Image(
-            painterResource(R.drawable.intro_car), null,
+            painterResource(R.drawable.intro_car),
+            null,
             Modifier.fillMaxSize().padding(top = 40.dp).graphicsLayer {
                 val t = if (animate) clock() else null
                 alpha = if (t == null) 1f else Motion.base.easing.transform((t / Motion.base.ms).coerceIn(0f, 1f))
                 translationX = x.value.dp.toPx()
             },
-            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit
         )
     }
 }
@@ -264,11 +274,11 @@ private fun IntroBar(modifier: Modifier, live: Boolean, onConnect: () -> Unit, o
                 drawRect(
                     Brush.verticalGradient(listOf(p.bg.copy(alpha = 0f), p.bg), startY = -24.dp.toPx(), endY = 0f),
                     topLeft = androidx.compose.ui.geometry.Offset(0f, -24.dp.toPx()),
-                    size = androidx.compose.ui.geometry.Size(size.width, 24.dp.toPx()),
+                    size = androidx.compose.ui.geometry.Size(size.width, 24.dp.toPx())
                 )
             }
             .background(p.bg).windowInsetsPadding(WindowInsets.navigationBars).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         // 띠가 나타나기 전(투명)에는 꺼 둔다. 켜지는 순간 띠는 아직 투명이라 꺼진 모양은 보이지 않는다.
         Btn(IntroText.CONNECT, onConnect, enabled = live) // intro.connect
@@ -287,7 +297,7 @@ private fun IntroSheet(onClose: () -> Unit) {
         sheetState = state,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = p.surface,
-        dragHandle = { Box(Modifier.padding(vertical = 10.dp).size(36.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(p.textTertiary.copy(alpha = 0.4f))) },
+        dragHandle = { Box(Modifier.padding(vertical = 10.dp).size(36.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(p.textTertiary.copy(alpha = 0.4f))) }
     ) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 22.dp)) {
             Text(IntroText.SHEET_TITLE, Modifier.padding(bottom = 6.dp).semantics { heading() }, style = Type.title, color = p.textPrimary)

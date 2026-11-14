@@ -2,6 +2,7 @@ package kr.aigyeot.phone.presentation
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +21,6 @@ import kr.aigyeot.phone.domain.usecase.KeepConnected
 import kr.aigyeot.phone.domain.usecase.RecordSong
 import kr.aigyeot.phone.domain.usecase.RemoveSong
 import kr.aigyeot.phone.domain.usecase.SelectSong
-import java.io.File
 
 /** 녹음 시트의 녹음 상태. 녹음 중이면서 끝난 녹음이 있는 조합은 없다. */
 sealed interface Take {
@@ -47,7 +47,7 @@ data class SheetUiState(
     val take: Take,
     val send: SongSend?,
     val startError: String?,
-    val sendError: String?,
+    val sendError: String?
 ) {
     /** 보내는 동안 그 원본을 바꾸는 녹음·다시 보내기는 막는다. */
     val sending get() = send == SongSend.Sending
@@ -68,7 +68,7 @@ class SongsViewModel(
     private val clock: Clock,
     /** 시트 상태를 화면 저장 상태에 둔다(옛 rememberSaveable과 같다): 시스템이 화면만 없앤 뒤 돌아와도 끝낸 녹음·보내기를 이어받는다. */
     private val saved: SavedStateHandle,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     val ui: StateFlow<SongsUiState> = derive(state.state, connection.status) { songsUi(state.state.value, connection.status.value.online) }
 
@@ -172,7 +172,7 @@ class SongsViewModel(
                     it.copy(
                         take = if (ok) Take.Recording(at) else Take.Idle(),
                         sendError = null,
-                        startError = if (ok) null else "녹음을 시작하지 못했어요. 다른 앱이 마이크를 쓰고 있으면 닫고 다시 눌러 주세요.",
+                        startError = if (ok) null else "녹음을 시작하지 못했어요. 다른 앱이 마이크를 쓰고 있으면 닫고 다시 눌러 주세요."
                     )
                 }
             }

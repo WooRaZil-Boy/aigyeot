@@ -13,8 +13,11 @@ class CalcTest {
         val m = Method(MethodKind.WHITE_NOISE)
         val since = Params().statSince(now)
         val h = listOf(FirstTry(since - 1, m, true), FirstTry(since, m, true), FirstTry(since + 1, m, false), FirstTry(now, Method(MethodKind.WOMB), true))
-        assertEquals(listOf(m to (1 to 2), Method(MethodKind.WOMB) to (1 to 1), Method(MethodKind.LULLABY) to (0 to 0)),
-            methodStats(h, listOf(m, Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), now), "28일 바로 전은 빠지고 경계 시각은 든다")
+        assertEquals(
+            listOf(m to (1 to 2), Method(MethodKind.WOMB) to (1 to 1), Method(MethodKind.LULLABY) to (0 to 0)),
+            methodStats(h, listOf(m, Method(MethodKind.WOMB), Method(MethodKind.LULLABY)), now),
+            "28일 바로 전은 빠지고 경계 시각은 든다"
+        )
     }
 
     @Test fun sessionIdOf_fromCmdId() {
@@ -35,8 +38,12 @@ class CalcTest {
         assertEquals(0.7938915127288727, x1, 1e-12)
         var r = 99L
         var sum = 0.0
-        repeat(4_000) { val (n, x) = sampleBeta(3, 1, r); r = n; sum += x }
-        assertEquals(0.75, sum / 4_000, 0.02)   // Beta(3, 1) 평균 = 3/4
+        repeat(4_000) {
+            val (n, x) = sampleBeta(3, 1, r)
+            r = n
+            sum += x
+        }
+        assertEquals(0.75, sum / 4_000, 0.02) // Beta(3, 1) 평균 = 3/4
     }
 
     @Test fun thompson_fixedSeedSameSequence() {
@@ -49,14 +56,14 @@ class CalcTest {
             return List(20) { pickFirst(ms, h, rr).also { rr = it.rng }.method }
         }
         assertEquals(seq(2026), seq(2026))
-        assertTrue(seq(2026).toSet().size > 1)              // 고정 음원이 아니다
+        assertTrue(seq(2026).toSet().size > 1) // 고정 음원이 아니다
     }
 
     @Test fun pickFirst_roundRobinInFirstOrder() {
         assertEquals(WN, pickFirst(listOf(SONG, LL, WN), emptyList(), 1).method)
         val h = listOf(FirstTry(1, WN, true), FirstTry(2, WN, false), FirstTry(3, LL, true))
         assertEquals(LL, pickFirst(listOf(WN, LL), h, 1).method)
-        assertEquals(SONG, pickFirst(listOf(WN, LL, SONG), h, 1).method)   // 가장 적은 것
+        assertEquals(SONG, pickFirst(listOf(WN, LL, SONG), h, 1).method) // 가장 적은 것
         // 새 곡(다른 songId)은 0부터 센다
         assertEquals(SONG, pickFirst(listOf(WN, LL, SONG), h + FirstTry(4, LL, true) + List(2) { FirstTry(5, Method(MethodKind.SONG, "old"), true) }, 1).method)
     }
@@ -69,7 +76,7 @@ class CalcTest {
     }
 
     @Test fun pickFirst_roundRobinFourMethods() {
-        val ms = listOf(SONG, LL, WB, WN)   // 받은 순서와 무관하게 처음 순서로
+        val ms = listOf(SONG, LL, WB, WN) // 받은 순서와 무관하게 처음 순서로
         var h = emptyList<FirstTry>()
         val order = List(8) { i -> pickFirst(ms, h, 1).method.also { h = h + FirstTry(i.toLong(), it, true) } }
         assertEquals(listOf(WN, WB, LL, SONG, WN, WB, LL, SONG), order)
@@ -85,9 +92,9 @@ class CalcTest {
     @Test fun best_tieOrderIncludesWomb() {
         val ms = listOf(LL, WB, WN, SONG)
         assertEquals(WN, best(ms, emptyList()))
-        assertEquals(WB, best(ms, emptyList(), except = WN))                     // 2차 '다른 음원'이 뱃속 소리를 고른다
+        assertEquals(WB, best(ms, emptyList(), except = WN)) // 2차 '다른 음원'이 뱃속 소리를 고른다
         val h = listOf(FirstTry(1, WN, false), FirstTry(2, WB, true), FirstTry(3, LL, true))
-        assertEquals(WB, best(ms, h))                                           // 성적 같으면 처음 순서(뱃속 소리 먼저)
+        assertEquals(WB, best(ms, h)) // 성적 같으면 처음 순서(뱃속 소리 먼저)
         assertEquals(LL, best(ms, h, except = WB))
         assertEquals(WB, best(listOf(WN, WB), h, except = WN))
     }
@@ -106,7 +113,7 @@ class CalcTest {
         assertEquals(Sid.S08, offerRest(false, Gear.D, r, 0, null)!!.sid)
         assertEquals(Sid.S11, offerRest(true, Gear.D, r, 0, null)!!.sid)
         assertEquals(Sid.S10, offerRest(false, Gear.D, null, 0, null)!!.sid)
-        assertTrue(offerBanned(mapOf(Sid.S08 to 0L), emptyList(), "s", Sid.S08, 9 * MIN))   // 10분 금지는 offerBanned
+        assertTrue(offerBanned(mapOf(Sid.S08 to 0L), emptyList(), "s", Sid.S08, 9 * MIN)) // 10분 금지는 offerBanned
         assertNull(offerRest(false, Gear.D, RouteView(0, true, 600, r.rests), 0, null))
     }
 
@@ -136,6 +143,6 @@ class CalcTest {
         fun banned(spoken: Map<Sid, Long>, now: Long) = offerBanned(spoken, emptyList(), "s", Sid.S07, now)
         assertTrue(banned(mapOf(Sid.S07_DEPART to 0L), 9 * MIN))
         assertFalse(banned(mapOf(Sid.S07_DEPART to 0L), 10 * MIN))
-        assertTrue(banned(mapOf(Sid.S07 to 0L, Sid.S07_DEPART to 5 * MIN), 14 * MIN))   // 늦은 쪽 기준
+        assertTrue(banned(mapOf(Sid.S07 to 0L, Sid.S07_DEPART to 5 * MIN), 14 * MIN)) // 늦은 쪽 기준
     }
 }

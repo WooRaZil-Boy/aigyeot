@@ -18,12 +18,19 @@ internal class PcmTap(private val ex: ExecThread) : MicTap {
             val k = keepTail(n, openedAt, SystemClock.elapsedRealtime())
             if (k > 0) {
                 val b = ByteArray(k * 2)
-                for (i in 0 until k) { val s = pcm[n - k + i].toInt(); b[2 * i] = s.toByte(); b[2 * i + 1] = (s shr 8).toByte() }
+                for (i in 0 until k) {
+                    val s = pcm[n - k + i].toInt()
+                    b[2 * i] = s.toByte()
+                    b[2 * i + 1] = (s shr 8).toByte()
+                }
                 ex.post { sink(b) }
             }
         }
         tap = t
         MicService.pcmTap = t
     }
-    override fun close() { if (MicService.pcmTap === tap) MicService.pcmTap = null; tap = null }
+    override fun close() {
+        if (MicService.pcmTap === tap) MicService.pcmTap = null
+        tap = null
+    }
 }

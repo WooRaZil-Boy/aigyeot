@@ -53,6 +53,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.abs
+import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kr.aigyeot.phone.R
 import kr.aigyeot.phone.domain.model.SONGS_FULL
@@ -60,8 +62,6 @@ import kr.aigyeot.phone.domain.model.SongEntry
 import kr.aigyeot.phone.domain.model.SongPhase
 import kr.aigyeot.phone.domain.model.replaceable
 import kr.aigyeot.phone.domain.model.songStatusText
-import kotlin.math.abs
-import kotlin.math.sin
 
 // 우리 노래(owner): 차 탭 '우리 노래' 블록과 노래 녹음 화면(위 녹음, 아래 목록).
 
@@ -81,39 +81,63 @@ fun SongsBlock(onRecord: ((replacing: String?) -> Unit)?, vm: SongsViewModel = a
         if (!vm.play(e)) android.widget.Toast.makeText(context, "녹음 파일을 읽지 못했어요.", android.widget.Toast.LENGTH_SHORT).show()
     }
     // 녹음 화면은 머리 없이 목록만 둔다(위 막대 제목이 '우리 노래'). 아직 곡이 없으면 위 안내가 대신한다.
-    if (!header && songs.isEmpty()) { FootNote("차에서는 다음 주행부터 써요"); return }
+    if (!header && songs.isEmpty()) {
+        FootNote("차에서는 다음 주행부터 써요")
+        return
+    }
     // car.section.songs
     ListBlock(
         if (header) "우리 노래" else null,
         if (header && onRecord != null && !ui.full) "녹음하기" else null,
-        onRecord?.let { { it(null) } },
+        onRecord?.let { { it(null) } }
     ) {
         if (songs.isEmpty()) Text("아직 노래가 없어요. 평소 불러 주던 노래를 녹음해 보세요", Modifier.padding(bottom = 14.dp), style = Type.body, color = p.textTertiary)
         // 행 상태(메뉴 열림)는 곡 id에 묶는다: 곡 상태가 바뀌거나 다른 폰이 곡을 지워 자리가 달라져도 열린 메뉴가 다른 곡으로 옮겨 가지 않는다.
-        for (e in songs) key(e.songId) {
-            var menu by remember { mutableStateOf(false) }
-            Box {
-                ListRow(
-                    e.name ?: "지운 노래",
-                    songStatusText(e, ui.online, e.songId in ui.selecting),
-                    icon = R.drawable.ic_song,
-                    onClick = { menu = true }.takeIf { !recording }, // 녹음하는 동안은 목록을 만지지 않는다
-                    trailing = {
-                        when {
-                            e.candidate -> AIcon(R.drawable.ic_circle_check, Modifier.size(22.dp).semantics { contentDescription = "실험에 쓰는 노래" }, p.accent)
-                            e.file != null && !recording -> Box(
-                                Modifier.size(40.dp).clip(CircleShape).pressable { play(e) }.semantics { contentDescription = "듣기" },
-                                contentAlignment = Alignment.Center,
-                            ) { AIcon(R.drawable.ic_play, Modifier.size(20.dp), p.textTertiary) }
+        for (e in songs) {
+            key(e.songId) {
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    ListRow(
+                        e.name ?: "지운 노래",
+                        songStatusText(e, ui.online, e.songId in ui.selecting),
+                        icon = R.drawable.ic_song,
+                        onClick = { menu = true }.takeIf { !recording }, // 녹음하는 동안은 목록을 만지지 않는다
+                        trailing = {
+                            when {
+                                e.candidate -> AIcon(R.drawable.ic_circle_check, Modifier.size(22.dp).semantics { contentDescription = "실험에 쓰는 노래" }, p.accent)
+                                e.file != null && !recording -> Box(
+                                    Modifier.size(40.dp).clip(CircleShape).pressable { play(e) }.semantics { contentDescription = "듣기" },
+                                    contentAlignment = Alignment.Center
+                                ) { AIcon(R.drawable.ic_play, Modifier.size(20.dp), p.textTertiary) }
+                            }
                         }
-                    },
-                )
-                DropdownMenu(menu, { menu = false }, shape = Radius.control, containerColor = p.surface) {
-                    if (e.file != null) DropdownMenuItem({ Text("듣기") }, { menu = false; play(e) })
-                    if (e.phase == SongPhase.ACCEPTED && !e.candidate) DropdownMenuItem({ Text("실험에 쓰기") }, { menu = false; vm.select(e.songId) })
-                    // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다('노래 거절', iOS와 같음).
-                    if (e.replaceable && onRecord != null) DropdownMenuItem({ Text("다시 녹음하기") }, { menu = false; vm.stopPlaying(); onRecord(e.songId) })
-                    DropdownMenuItem({ Text("지우기", color = p.danger) }, { menu = false; vm.remove(e.songId) })
+                    )
+                    DropdownMenu(menu, { menu = false }, shape = Radius.control, containerColor = p.surface) {
+                        if (e.file != null) {
+                            DropdownMenuItem({ Text("듣기") }, {
+                                menu = false
+                                play(e)
+                            })
+                        }
+                        if (e.phase == SongPhase.ACCEPTED && !e.candidate) {
+                            DropdownMenuItem({ Text("실험에 쓰기") }, {
+                                menu = false
+                                vm.select(e.songId)
+                            })
+                        }
+                        // 거절·실패한 곡은 그 자리에서 다시 녹음해 바꾼다('노래 거절', iOS와 같음).
+                        if (e.replaceable && onRecord != null) {
+                            DropdownMenuItem({ Text("다시 녹음하기") }, {
+                                menu = false
+                                vm.stopPlaying()
+                                onRecord(e.songId)
+                            })
+                        }
+                        DropdownMenuItem({ Text("지우기", color = p.danger) }, {
+                            menu = false
+                            vm.remove(e.songId)
+                        })
+                    }
                 }
             }
         }
@@ -145,7 +169,10 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
     }
     var denied by remember { mutableStateOf(false) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it; denied = !it }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        granted = it
+        denied = !it
+    }
     LaunchedEffect(Unit) { if (!granted) ask.launch(Manifest.permission.RECORD_AUDIO) }
     // 설정에서 권한을 켜고 돌아왔을 때
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -214,7 +241,7 @@ private fun Recorder(vm: SongsViewModel, replacing: String?, online: Boolean, on
                     label = { Text("노래 이름(30자까지)") },
                     singleLine = true,
                     shape = Radius.field,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
                 )
                 s.sendError?.let { Text(it, style = Type.caption, color = p.danger) }
                 Btn(if (s.sending) "보내는 중" else "차로 보내기", { vm.send(name.trim(), replacing) }, enabled = name.isNotBlank() && !s.sending, big = true)
@@ -251,7 +278,7 @@ private fun Wave(live: Boolean) {
                 p.accentInk.copy(alpha = if (live) 1f else 0.45f),
                 Offset(x0 + i * (bw + gap), (size.height - h) / 2),
                 Size(bw, h),
-                CornerRadius(bw / 2),
+                CornerRadius(bw / 2)
             )
         }
     }
@@ -268,6 +295,6 @@ private fun RecButton(recording: Boolean, enabled: Boolean, onClick: () -> Unit)
     Box(
         Modifier.size(84.dp).clip(CircleShape).background(lerpColor(p.surface, p.danger, 0.14f))
             .pressable(enabled = enabled, onClick = onClick).semantics { contentDescription = if (recording) "녹음 멈추기" else "녹음하기" },
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) { Box(Modifier.size(side).clip(RoundedCornerShape(corner)).background(p.danger)) }
 }

@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.data
 
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -8,17 +9,12 @@ import kr.aigyeot.phone.domain.model.songFiles
 import kr.aigyeot.phone.domain.model.ulid
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
 import kr.aigyeot.phone.domain.repository.SongFileStore
-import java.io.File
 
 /**
  * 녹음 파일(`files/songs/`)과 임시 녹음(`cache/recording-*`). 파일 잠금은 새 녹음의 이동·상태 커밋과 파일 정리를 줄 세워,
  * 정리가 읽은 목록보다 늦게 저장된 새 녹음을 지우지 않게 한다. 잡는 순서는 파일 잠금 → 상태 잠금뿐이다.
  */
-class AppSongFileStore(
-    private val songsDir: File,
-    private val cacheDir: File,
-    private val state: PhoneStateRepository,
-) : SongFileStore {
+class AppSongFileStore(private val songsDir: File, private val cacheDir: File, private val state: PhoneStateRepository) : SongFileStore {
     private val lock = Mutex()
 
     init {

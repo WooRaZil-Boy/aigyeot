@@ -2,12 +2,12 @@ package kr.aigyeot.app.exec
 
 import ai.pleos.playground.navi.constants.TurnType
 import ai.pleos.playground.navi.data.TBTInfo
-import kr.aigyeot.engine.RestKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kr.aigyeot.engine.RestKind
 
 // 수유실 여부는 공공데이터로 정하는 규칙과 이름 맞추기, 경유지 좌표 고르기(반대쪽 휴게소에 넣지 않기)
 class RestAreasTest {
@@ -44,10 +44,12 @@ class RestAreasTest {
     }
 
     @Test fun feedsAddable_sameAsPlaceable() {
-        val got = restsOf(listOf(
-            TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "여주휴게소"),
-            TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "덕평휴게소"),
-        )) { true }
+        val got = restsOf(
+            listOf(
+                TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "여주휴게소"),
+                TBTInfo(TurnType.TURN_ENTER_SERVICEAREA, 1_000.0, "덕평휴게소")
+            )
+        ) { true }
         assertEquals(listOf(false, true), got.map { it.addable })
     }
 
@@ -85,11 +87,13 @@ class RestAreasTest {
     }
 
     @Test fun `한자리의 양쪽이나 굽은 길은 방향 근거가 없어 넣지 않는다`() {
-        val rows = RestAreas.parse("""
+        val rows = RestAreas.parse(
+            """
             휴게소명,도로노선명,도로노선방향,위도,경도,수유실유무
             가나(서울),가나선,상행,37.0,127.0005,Y
             가나(부산),가나선,하행,37.0,126.9995,Y
-        """.trimIndent())
+            """.trimIndent()
+        )
         assertNull(RestAreas.place("가나휴게소", 11.5, Here(36.9, 127.0), rows))
         assertNull(RestAreas.place("가나휴게소", 15.0, Here(37.1, 127.0), rows), "굽은 길로 마지막이 북행인 서울 방향까지 15km")
         assertEquals("가나(서울)", RestAreas.place("가나휴게소(서울방향)", 15.0, Here(37.1, 127.0), rows)?.name, "방향이 적혔으면 그 줄")
@@ -122,7 +126,7 @@ class RestAreasTest {
         assertTrue(waypointPresent(listOf(yeong.lat to yeong.lon), yeong), "영암 요청에 영암(=순천) 좌표")
         assertTrue(waypointPresent(listOf(sun.lat to sun.lon), sun))
         assertTrue(waypointPresent(listOf(yeong.lat + 0.00018 to yeong.lon), yeong), "20m 어긋나도")
-        val near = Here(yeong.lat + 0.1, yeong.lon)               // 곧은 거리 약 11km
+        val near = Here(yeong.lat + 0.1, yeong.lon) // 곧은 거리 약 11km
         assertTrue(RestAreas.place("보성녹차휴게소", 11.0, near) != null, "좌표가 같아 어느 줄이든 같은 점이라 고른다")
         assertNull(RestAreas.place("안성휴게소", 13.5, Here(37.13, 127.12)), "7km 떨어진 쌍은 여전히 넣지 않는다")
     }

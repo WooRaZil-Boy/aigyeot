@@ -1,12 +1,12 @@
 package kr.aigyeot.phone.presentation
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /** 3D 준비 표시와 첫 안내 등장 안무. 시각은 무대를 붙인 때부터 ms. */
 class StageTest {
@@ -34,7 +34,6 @@ class StageTest {
         assertTrue((4_300L..5_000L step 10).all { m[it] == StageMark.HIDDEN })
         // 첫 그림이 없으면 계속 고리(기다리는 시간 상한은 두지 않는다)
         assertEquals(StageMark.RING, stageMark(60_000, null, null, reduced = false))
-
     }
 
     @Test

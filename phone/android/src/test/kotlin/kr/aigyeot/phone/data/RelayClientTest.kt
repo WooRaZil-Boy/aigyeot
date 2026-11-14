@@ -1,5 +1,11 @@
 package kr.aigyeot.phone.data
 
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -10,7 +16,6 @@ import kr.aigyeot.phone.domain.model.InboundMessage
 import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.phone.fixture
 import kr.aigyeot.phone.sharedFile
-import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.HandoffAlertBody
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
@@ -20,14 +25,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import java.net.InetAddress
-import java.net.ServerSocket
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import kotlin.concurrent.thread
 
+// 한 줄짜리 HTTP 응답 문자열 리터럴 때문에 줄 길이 검사를 이 클래스에서 끈다.
+@Suppress("ktlint:standard:max-line-length")
 class RelayClientTest {
     private val release = CountDownLatch(1)
     private val server = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
@@ -53,10 +53,15 @@ class RelayClientTest {
                             it.getOutputStream().write("$head\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"x".toByteArray())
                             return@use
                         }
-                        val status = when (auth) { "forbidden" -> 403; "down" -> 503; "badbody" -> 200; else -> 401 }
+                        val status = when (auth) {
+                            "forbidden" -> 403
+                            "down" -> 503
+                            "badbody" -> 200
+                            else -> 401
+                        }
                         val body = if (auth == "badbody") """{"x":1}""" else """{"error":{"code":"x","message":"x"}}"""
                         it.getOutputStream().write(
-                            "HTTP/1.1 $status X\r\nContent-Type: application/json\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n$body".toByteArray(),
+                            "HTTP/1.1 $status X\r\nContent-Type: application/json\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n$body".toByteArray()
                         )
                     }
                 }
@@ -98,7 +103,11 @@ class RelayClientTest {
         }
         assertEquals(listOf("cut409" to false, "cut422" to false), seen.map { it.first to it.third })
         // 네트워크 실패도 닿지 않음이다. 토큰이 없는 요청(연결하기)은 알리지 않는다.
-        val dead = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).let { val p = it.localPort; it.close(); p }
+        val dead = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).let {
+            val p = it.localPort
+            it.close()
+            p
+        }
         val off = CopyOnWriteArrayList<Boolean>()
         val gone = OkHttpRelayClient("http://127.0.0.1:$dead", "test", onObserved = { _, _, up -> off += up })
         runBlocking {
@@ -139,7 +148,7 @@ class RelayClientTest {
             "feeding_state" to InboundMessage.FeedingState::class,
             "song_status" to InboundMessage.SongStatus::class,
             "report_summary" to InboundMessage.Report::class,
-            "handoff_alert" to InboundMessage.HandoffAlert::class,
+            "handoff_alert" to InboundMessage.HandoffAlert::class
         )
         for ((name, kind) in kinds) {
             val env = fixture(name)

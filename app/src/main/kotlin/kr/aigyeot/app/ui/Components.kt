@@ -66,14 +66,23 @@ const val PRESS_SCALE = 0.95f
  */
 @Composable
 fun Modifier.press(
-    enabled: Boolean = true, role: Role = Role.Button, label: String? = null,
-    shape: Shape? = null, bg: Color = Color.Transparent, pressedBg: Color? = null, decor: Modifier = Modifier, onClick: () -> Unit,
+    enabled: Boolean = true,
+    role: Role = Role.Button,
+    label: String? = null,
+    shape: Shape? = null,
+    bg: Color = Color.Transparent,
+    pressedBg: Color? = null,
+    decor: Modifier = Modifier,
+    onClick: () -> Unit
 ): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val m = Tokens.motion.getValue("press")
     val k by animateFloatAsState(if (pressed) PRESS_SCALE else 1f, tween(m.ms, easing = m.easing), label = "press")
-    var out = graphicsLayer { scaleX = k; scaleY = k }.then(decor)   // [decor](그림자 등)도 면과 함께 줄어든다(Pleos: 버튼 전체가 95%)
+    var out = graphicsLayer {
+        scaleX = k
+        scaleY = k
+    }.then(decor) // [decor](그림자 등)도 면과 함께 줄어든다(Pleos: 버튼 전체가 95%)
     if (shape != null) out = out.clip(shape)
     val fill = if (pressed && pressedBg != null) pressedBg else bg
     if (fill != Color.Transparent) out = out.background(fill)
@@ -86,34 +95,63 @@ fun LineIcon(id: Int, size: Dp, tint: Color = LocalContentColor.current, desc: S
     Icon(painterResource(id), desc, Modifier.size(size), tint = tint)
 
 enum class BtnKind { PLAIN, BRAND, FILL, DANGER }
-enum class BtnSize(val h: Dp, val r: Dp, val pad: Dp, val icon: Dp) { L(100.dp, CarRadius.l, 40.dp, 38.dp), M(80.dp, CarRadius.m, 30.dp, 32.dp),
-        S(64.dp, 20.dp, 24.dp, 28.dp) }
+enum class BtnSize(val h: Dp, val r: Dp, val pad: Dp, val icon: Dp) {
+    L(100.dp, CarRadius.l, 40.dp, 38.dp),
+    M(80.dp, CarRadius.m, 30.dp, 32.dp),
+    S(64.dp, 20.dp, 24.dp, 28.dp)
+}
 
 /** 버튼(Pleos Large·Medium·Small). 그림자·빛 없음. 영웅 버튼(BRAND)은 화면에 하나만. */
 @Composable
 fun CarButton(
-    text: String, modifier: Modifier = Modifier, kind: BtnKind = BtnKind.PLAIN, size: BtnSize = BtnSize.L,
-    icon: Int? = null, enabled: Boolean = true, onClick: () -> Unit,
+    text: String,
+    modifier: Modifier = Modifier,
+    kind: BtnKind = BtnKind.PLAIN,
+    size: BtnSize = BtnSize.L,
+    icon: Int? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit
 ) {
     val p = LocalPalette.current
     val (bg, fg) = when (kind) {
         BtnKind.PLAIN -> p.ink(6) to p.textPrimary
         BtnKind.BRAND -> p.accent to p.onAccent
         BtnKind.FILL -> p.fill to p.onFill
-        BtnKind.DANGER -> p.surface to p.danger   // 위험 버튼은 먹색 6% 면이지만 그 위 danger 글자는 4.07:1이라 흰 면(5.04:1)에 둔다
+        BtnKind.DANGER -> p.surface to p.danger // 위험 버튼은 먹색 6% 면이지만 그 위 danger 글자는 4.07:1이라 흰 면(5.04:1)에 둔다
     }
     // 누름 면(먹색 11%, 브랜드 버튼은 브랜드 86% + 먹색)
     // 브랜드는 라이트·다크 모두 어둡게 눌러 흰 글자 대비 4.5:1 이상을 지킨다(다크의 먹색은 밝아 대비가 떨어진다)
-    val pressedBg = when (kind) { BtnKind.BRAND -> lerp(p.accent, Color.Black, 0.14f); BtnKind.FILL -> lerp(p.fill, p.onFill,
-            0.12f); BtnKind.DANGER -> p.surface; else -> p.ink(11) }
-    val style = when (size) { BtnSize.L -> CarType.titleS; BtnSize.M -> CarType.label.copy(fontSize = 28.sp,
-            fontWeight = FontWeight(600)); BtnSize.S -> CarType.label.copy(fontSize = CarType.bodyS.fontSize, fontWeight = FontWeight(600)) }
+    val pressedBg = when (kind) {
+        BtnKind.BRAND -> lerp(p.accent, Color.Black, 0.14f)
+        BtnKind.FILL -> lerp(
+            p.fill,
+            p.onFill,
+            0.12f
+        )
+        BtnKind.DANGER -> p.surface
+        else -> p.ink(11)
+    }
+    val style = when (size) {
+        BtnSize.L -> CarType.titleS
+        BtnSize.M -> CarType.label.copy(
+            fontSize = 28.sp,
+            fontWeight = FontWeight(600)
+        )
+        BtnSize.S -> CarType.label.copy(fontSize = CarType.bodyS.fontSize, fontWeight = FontWeight(600))
+    }
     val a = if (enabled) 1f else 0.38f
     Row(
-        modifier.heightIn(min = size.h).press(enabled, label = text, shape = RoundedCornerShape(size.r), bg = bg.copy(alpha = bg.alpha * a),
-                pressedBg = pressedBg, onClick = onClick)
+        modifier.heightIn(min = size.h).press(
+            enabled,
+            label = text,
+            shape = RoundedCornerShape(size.r),
+            bg = bg.copy(alpha = bg.alpha * a),
+            pressedBg = pressedBg,
+            onClick = onClick
+        )
             .padding(horizontal = size.pad),
-        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) LineIcon(icon, size.icon, fg.copy(alpha = a))
         Text(text, style = style, color = fg.copy(alpha = a), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -136,7 +174,7 @@ fun Page(title: String, onBack: (() -> Unit)?, content: @Composable ColumnScope.
     Header(title, onBack)
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 44.dp, end = 44.dp, top = 32.dp, bottom = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(Modifier.widthIn(max = 1200.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) { content() }
     }
@@ -149,12 +187,24 @@ fun Header(title: String, onBack: (() -> Unit)?, actions: @Composable () -> Unit
     Column {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 112.dp).background(p.surface).padding(start = if (onBack != null) 28.dp else 44.dp, end = 32.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            if (onBack != null) Box(Modifier.size(80.dp).press(label = "뒤로", shape = RoundedCornerShape(CarRadius.m), pressedBg = p.ink(8),
-                    onClick = onBack), Alignment.Center) {
-                LineIcon(R.drawable.ic_chevron_left, 48.dp, p.textPrimary, "뒤로")
-            } else AppMark(60.dp)
+            if (onBack != null) {
+                Box(
+                    Modifier.size(80.dp).press(
+                        label = "뒤로",
+                        shape = RoundedCornerShape(CarRadius.m),
+                        pressedBg = p.ink(8),
+                        onClick = onBack
+                    ),
+                    Alignment.Center
+                ) {
+                    LineIcon(R.drawable.ic_chevron_left, 48.dp, p.textPrimary, "뒤로")
+                }
+            } else {
+                AppMark(60.dp)
+            }
             Text(title, style = CarType.titleL, color = p.textPrimary, maxLines = 1, modifier = Modifier.weight(1f))
             actions()
         }
@@ -166,33 +216,52 @@ fun Header(title: String, onBack: (() -> Unit)?, actions: @Composable () -> Unit
 @Composable
 fun AppMark(size: Dp) {
     val shape = RoundedCornerShape(size * 0.3f)
-    Icon(painterResource(R.drawable.ic_app_mark), "아이곁", Modifier.size(size).clip(shape).border(1.dp, Color.Black.copy(alpha = 0.1f), shape),
-            tint = Color.Unspecified)
+    Icon(
+        painterResource(R.drawable.ic_app_mark),
+        "아이곁",
+        Modifier.size(size).clip(shape).border(1.dp, Color.Black.copy(alpha = 0.1f), shape),
+        tint = Color.Unspecified
+    )
 }
 
 /** 머리 오른쪽 아이콘 버튼(80). */
 @Composable
 fun IconBtn(icon: Int, desc: String, enabled: Boolean = true, onClick: () -> Unit) {
     val p = LocalPalette.current
-    Box(Modifier.size(80.dp).press(enabled, label = desc, shape = RoundedCornerShape(CarRadius.m), bg = p.ink(5), pressedBg = p.ink(11),
-            onClick = onClick), Alignment.Center) {
+    Box(
+        Modifier.size(80.dp).press(
+            enabled,
+            label = desc,
+            shape = RoundedCornerShape(CarRadius.m),
+            bg = p.ink(5),
+            pressedBg = p.ink(11),
+            onClick = onClick
+        ),
+        Alignment.Center
+    ) {
         LineIcon(icon, 40.dp, p.textPrimary, desc)
     }
 }
 
-
 /** 한 메시지는 3줄 이하(Pleos 가독성). */
 @Composable
-fun Body(text: String, color: Color = Color.Unspecified) =
-    Text(text, style = CarType.bodyS, color = if (color == Color.Unspecified) LocalPalette.current.textSecondary else color, maxLines = 3,
-            overflow = TextOverflow.Ellipsis)
+fun Body(text: String, color: Color = Color.Unspecified) = Text(
+    text,
+    style = CarType.bodyS,
+    color = if (color == Color.Unspecified) LocalPalette.current.textSecondary else color,
+    maxLines = 3,
+    overflow = TextOverflow.Ellipsis
+)
 
 // ── 정차 화면 공용 부품 ──
 
 /** 구획 제목(titleS, 아래 18). [small]은 옆 작은 글자. */
 @Composable
-fun Sect(text: String, small: String? = null, modifier: Modifier = Modifier) = Row(modifier.padding(bottom = 18.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+fun Sect(text: String, small: String? = null, modifier: Modifier = Modifier) = Row(
+    modifier.padding(bottom = 18.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(12.dp)
+) {
     Text(text, style = CarType.titleS, color = LocalPalette.current.textPrimary)
     if (small != null) Text(small, style = CarType.label, color = LocalPalette.current.textTertiary)
 }
@@ -200,27 +269,63 @@ fun Sect(text: String, small: String? = null, modifier: Modifier = Modifier) = R
 /** 목록 행(높이 100 이상, 모서리 28, 아이콘 36 흐림, 제목 30/38·500, 부가 label 흐림). [selected]면 옅은 먹색 면. */
 @Composable
 fun ListRow(
-    title: String, sub: String? = null, icon: Int? = null, selected: Boolean = false, enabled: Boolean = true,
-    onClick: (() -> Unit)? = null, toggled: Boolean? = null, trailing: @Composable () -> Unit = {},
+    title: String,
+    sub: String? = null,
+    icon: Int? = null,
+    selected: Boolean = false,
+    enabled: Boolean = true,
+    onClick: (() -> Unit)? = null,
+    toggled: Boolean? = null,
+    trailing: @Composable () -> Unit = {}
 ) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(28.dp)
     val bg = if (selected) p.ink(6) else Color.Transparent
     val base = Modifier.fillMaxWidth().heightIn(min = 100.dp)
     Row(
-        (if (onClick != null) base.press(enabled, if (toggled != null) Role.Switch else Role.Button, title, shape, bg, p.ink(8),
-                onClick = onClick) else base.clip(shape).background(bg))
+        (
+            if (onClick != null) {
+                base.press(
+                    enabled,
+                    if (toggled != null) Role.Switch else Role.Button,
+                    title,
+                    shape,
+                    bg,
+                    p.ink(8),
+                    onClick = onClick
+                )
+            } else {
+                base.clip(shape).background(bg)
+            }
+            )
             // 켜짐·고름 상태를 접근성에 알린다
-            .semantics(mergeDescendants = true) { if (toggled != null) toggleableState = ToggleableState(toggled); if (selected) this.selected = true }
+            .semantics(mergeDescendants = true) {
+                if (toggled != null) toggleableState = ToggleableState(toggled)
+                if (selected) this.selected = true
+            }
             .padding(horizontal = 28.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(22.dp)
     ) {
         if (icon != null) LineIcon(icon, 36.dp, p.textTertiary)
         Column(Modifier.weight(1f)) {
-            Text(title, style = CarType.bodyL.copy(fontWeight = FontWeight(500), lineHeight = 38.sp),
-                    color = if (enabled) p.textPrimary else p.textTertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (sub != null) Text(sub, style = CarType.label, color = p.textTertiary, modifier = Modifier.padding(top = 4.dp), maxLines = 2,
-                    overflow = TextOverflow.Ellipsis)
+            Text(
+                title,
+                style = CarType.bodyL.copy(fontWeight = FontWeight(500), lineHeight = 38.sp),
+                color = if (enabled) p.textPrimary else p.textTertiary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (sub != null) {
+                Text(
+                    sub,
+                    style = CarType.label,
+                    color = p.textTertiary,
+                    modifier = Modifier.padding(top = 4.dp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         trailing()
     }
@@ -250,8 +355,14 @@ fun SwitchRow(title: String, sub: String?, on: Boolean, icon: Int? = null, set: 
 fun CheckBox(on: Boolean) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(12.dp)
-    Box(Modifier.size(48.dp).clip(shape).background(if (on) p.accent else Color.Transparent).border(3.dp, if (on) p.accent else p.textTertiary,
-            shape), Alignment.Center) {
+    Box(
+        Modifier.size(48.dp).clip(shape).background(if (on) p.accent else Color.Transparent).border(
+            3.dp,
+            if (on) p.accent else p.textTertiary,
+            shape
+        ),
+        Alignment.Center
+    ) {
         if (on) LineIcon(R.drawable.ic_check, 32.dp, p.onAccent)
     }
 }
@@ -268,17 +379,32 @@ fun <T> Segmented(items: List<Pair<T, String>>, selected: T, modifier: Modifier 
             // 고른 칸 면·그림자는 fast(150ms)로 바뀐다(그림자 0 7 28 .14 + 0 2 2 .06)
             val selState = animateFloatAsState(if (on) 1f else 0f, tween(fast.ms, easing = fast.easing), label = "seg")
             val sel = selState.value
-            val selK = remember(selState) { { selState.value } }   // 그릴 때 읽는다(전환 중에도 그림자 캐시를 다시 만들지 않게)
+            val selK = remember(selState) { { selState.value } } // 그릴 때 읽는다(전환 중에도 그림자 캐시를 다시 만들지 않게)
             val face = if (p.isDark) Color(0xFF3A3F46) else p.surface
             val shadow = remember(selK) { Modifier.cssShadow(RoundedCornerShape(26.dp), selK, CssShadow(7.dp, 28.dp, 0.14f), CssShadow(2.dp, 2.dp, 0.06f)) }
             Box(
                 Modifier.weight(1f).heightIn(min = 88.dp)
-                    .press(label = label, role = Role.RadioButton, shape = RoundedCornerShape(26.dp), bg = face.copy(alpha = face.alpha * sel),
-                            decor = shadow) { onSelect(k) }
+                    .press(
+                        label = label,
+                        role = Role.RadioButton,
+                        shape = RoundedCornerShape(26.dp),
+                        bg = face.copy(alpha = face.alpha * sel),
+                        decor = shadow
+                    ) { onSelect(k) }
                     .semantics { this.selected = on },
-                Alignment.Center,
-            ) { Text(label, style = CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(700)), color = lerp(p.textSecondary, p.textPrimary,
-                    sel), maxLines = 1) }
+                Alignment.Center
+            ) {
+                Text(
+                    label,
+                    style = CarType.label.copy(fontSize = 28.sp, fontWeight = FontWeight(700)),
+                    color = lerp(
+                        p.textSecondary,
+                        p.textPrimary,
+                        sel
+                    ),
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -288,11 +414,19 @@ fun <T> Segmented(items: List<Pair<T, String>>, selected: T, modifier: Modifier 
 fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, onMinus: () -> Unit, onPlus: () -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(CarRadius.l)
-    Row(modifier.fillMaxWidth().heightIn(min = 100.dp).clip(shape).background(p.surface).border(2.dp, p.line, shape),
-            verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 100.dp).clip(shape).background(p.surface).border(2.dp, p.line, shape),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         StepKey(R.drawable.ic_minus, "줄이기", minusEnabled, onMinus)
-        Text(text, style = CarType.titleM, color = p.textPrimary, modifier = Modifier.weight(1f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1)
+        Text(
+            text,
+            style = CarType.titleM,
+            color = p.textPrimary,
+            modifier = Modifier.weight(1f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 1
+        )
         StepKey(R.drawable.ic_plus, "늘리기", plusEnabled, onPlus)
     }
 }
@@ -301,31 +435,46 @@ fun Stepper(text: String, modifier: Modifier = Modifier, minusEnabled: Boolean =
 @Composable
 private fun StepKey(icon: Int, label: String, enabled: Boolean, onClick: () -> Unit) {
     val p = LocalPalette.current
-    Box(Modifier.size(100.dp).press(enabled, label = label, shape = RoundedCornerShape(CarRadius.l), pressedBg = p.ink(8), onClick = onClick),
-            Alignment.Center) {
+    Box(
+        Modifier.size(100.dp).press(enabled, label = label, shape = RoundedCornerShape(CarRadius.l), pressedBg = p.ink(8), onClick = onClick),
+        Alignment.Center
+    ) {
         LineIcon(icon, 40.dp, p.textPrimary.copy(alpha = if (enabled) 1f else 0.38f), label)
     }
 }
 
 /** 입력칸 위 작은 이름(label 600 흐림, 위 22 아래 10). */
 @Composable
-fun FieldLabel(text: String) = Text(text, style = CarType.label.copy(fontWeight = FontWeight(600)), color = LocalPalette.current.textTertiary,
-        modifier = Modifier.padding(top = 22.dp, bottom = 10.dp))
+fun FieldLabel(text: String) = Text(
+    text,
+    style = CarType.label.copy(fontWeight = FontWeight(600)),
+    color = LocalPalette.current.textTertiary,
+    modifier = Modifier.padding(top = 22.dp, bottom = 10.dp)
+)
 
 /** 도움말(label 흐림). */
 @Composable
-fun Note(text: String, modifier: Modifier = Modifier) = Text(text, style = CarType.label, color = LocalPalette.current.textTertiary,
-        modifier = modifier.padding(top = 10.dp))
+fun Note(text: String, modifier: Modifier = Modifier) = Text(
+    text,
+    style = CarType.label,
+    color = LocalPalette.current.textTertiary,
+    modifier = modifier.padding(top = 10.dp)
+)
 
 /** 알약(높이 56, 반경 28, label 600). [live]면 앞에 파란 점. */
 @Composable
 fun Pill(text: String, icon: Int? = null, live: Boolean = false) {
     val p = LocalPalette.current
-    Row(Modifier.heightIn(min = 56.dp).clip(RoundedCornerShape(28.dp)).background(p.surfaceRaised).padding(horizontal = 22.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (live) Box(Modifier.size(24.dp), Alignment.Center) {
-            Box(Modifier.size(24.dp).clip(RoundedCornerShape(percent = 50)).background(p.accent.copy(alpha = 0.22f)))
-            Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(p.accent))
+    Row(
+        Modifier.heightIn(min = 56.dp).clip(RoundedCornerShape(28.dp)).background(p.surfaceRaised).padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (live) {
+            Box(Modifier.size(24.dp), Alignment.Center) {
+                Box(Modifier.size(24.dp).clip(RoundedCornerShape(percent = 50)).background(p.accent.copy(alpha = 0.22f)))
+                Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(p.accent))
+            }
         }
         if (icon != null) LineIcon(icon, 28.dp, p.textSecondary)
         Text(text, style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.textSecondary, maxLines = 1)
@@ -340,8 +489,13 @@ fun Pill(text: String, icon: Int? = null, live: Boolean = false) {
  */
 @Composable
 fun Popup(
-    title: String, body: String?, confirm: String, dismiss: String?, onConfirm: () -> Unit, onDismiss: () -> Unit,
-    content: (@Composable ColumnScope.() -> Unit)? = null,
+    title: String,
+    body: String?,
+    confirm: String,
+    dismiss: String?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    content: (@Composable ColumnScope.() -> Unit)? = null
 ) {
     val p = LocalPalette.current
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
@@ -351,12 +505,22 @@ fun Popup(
         val still = reducedMotion()
         val k = remember { Animatable(if (still) 1f else 0f) }
         LaunchedEffect(Unit) { k.animateTo(1f, tween(e.ms, easing = e.easing)) }
-        Column(Modifier.graphicsLayer { alpha = k.value; val s = 0.96f + 0.04f * k.value; scaleX = s; scaleY = s }
-            .widthIn(max = 808.dp).fillMaxWidth().clip(RoundedCornerShape(48.dp)).background(p.surface).padding(48.dp)
-            .semantics { paneTitle = title }) {
-            Text(title, style = CarType.titleL.copy(fontWeight = FontWeight(700)), color = p.textPrimary)   // 제목 700 40/52
+        Column(
+            Modifier.graphicsLayer {
+                alpha = k.value
+                val s = 0.96f + 0.04f * k.value
+                scaleX = s
+                scaleY = s
+            }
+                .widthIn(max = 808.dp).fillMaxWidth().clip(RoundedCornerShape(48.dp)).background(p.surface).padding(48.dp)
+                .semantics { paneTitle = title }
+        ) {
+            Text(title, style = CarType.titleL.copy(fontWeight = FontWeight(700)), color = p.textPrimary) // 제목 700 40/52
             if (body != null) Text(body, style = CarType.bodyL, color = p.textSecondary, modifier = Modifier.padding(top = 16.dp))
-            if (content != null) { Spacer(Modifier.height(if (body != null) 36.dp else 32.dp)); content() }
+            if (content != null) {
+                Spacer(Modifier.height(if (body != null) 36.dp else 32.dp))
+                content()
+            }
             Row(Modifier.padding(top = 36.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 CarButton(confirm, Modifier.weight(1f), BtnKind.FILL, onClick = onConfirm)
                 if (dismiss != null) CarButton(dismiss, Modifier.weight(1f), onClick = onDismiss)
@@ -378,7 +542,12 @@ fun Modifier.cssShadow(shape: Shape, k: () -> Float, vararg layers: CssShadow): 
             is androidx.compose.ui.graphics.Outline.Generic -> addPath(outline.path)
         }
     }.asAndroidPath()
-    val paints = layers.map { androidx.compose.ui.graphics.Paint().asFrameworkPaint().apply { isAntiAlias = true; color = android.graphics.Color.TRANSPARENT } }
+    val paints = layers.map {
+        androidx.compose.ui.graphics.Paint().asFrameworkPaint().apply {
+            isAntiAlias = true
+            color = android.graphics.Color.TRANSPARENT
+        }
+    }
     val radii = layers.map { ((it.blur.toPx() / 2f - 0.5f) / 0.57735f).coerceAtLeast(0.1f) }
     val dys = layers.map { it.dy.toPx() }
     onDrawBehind {

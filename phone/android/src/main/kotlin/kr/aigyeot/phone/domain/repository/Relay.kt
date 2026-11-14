@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.repository
 
+import java.io.File
 import kr.aigyeot.phone.domain.model.Inbound
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
@@ -9,7 +10,6 @@ import kr.aigyeot.shared.PatchDeviceRequest
 import kr.aigyeot.shared.PatchDeviceResponse
 import kr.aigyeot.shared.SendMessageResponse
 import kr.aigyeot.shared.UploadSongResponse
-import java.io.File
 
 /** 중계 요청 결과. 네트워크 실패는 둘로 나눈다: 보냈을 수 있음([Offline]), 닿지 않은 것이 확실함([Unreached]). */
 sealed interface RelayResult<out T> {

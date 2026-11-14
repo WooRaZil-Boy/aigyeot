@@ -100,7 +100,10 @@ private sealed interface SceneLoad {
  */
 @Composable
 fun CarStage(modifier: Modifier, preset: CarPreset) {
-    if (LocalInspectionMode.current) { Box(modifier); return }
+    if (LocalInspectionMode.current) {
+        Box(modifier)
+        return
+    }
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
     val context = LocalContext.current
@@ -154,11 +157,20 @@ fun CarStage(modifier: Modifier, preset: CarPreset) {
                 modifier = Modifier.fillMaxSize().pointerInput(reduced) {
                     detectHorizontalDragGestures(
                         onDragEnd = { view?.release() },
-                        onDragCancel = { view?.release() },
-                    ) { change, dx -> change.consume(); view?.drag(dx) }
+                        onDragCancel = { view?.release() }
+                    ) { change, dx ->
+                        change.consume()
+                        view?.drag(dx)
+                    }
                 },
-                update = { it.dark = p.dark; it.reduced = reduced },
-                onRelease = { it.destroy(); view = null },
+                update = {
+                    it.dark = p.dark
+                    it.reduced = reduced
+                },
+                onRelease = {
+                    it.destroy()
+                    view = null
+                }
             )
         }
         StageMarkView(mark, reduced, Modifier.align(Alignment.Center))
@@ -167,13 +179,15 @@ fun CarStage(modifier: Modifier, preset: CarPreset) {
             Box(
                 Modifier.size(40.dp).clip(CircleShape).background(p.tonal)
                     .pressable { view?.reset(animate = !reduced) }.semantics { contentDescription = "처음 자리로" },
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) { AIcon(R.drawable.ic_locate_fixed, Modifier.size(20.dp), p.textSecondary) }
         }
-        if (!moved) Box(
-            Modifier.align(Alignment.BottomEnd).padding(12.dp).size(26.dp).clip(CircleShape).graphicsLayer { alpha = 0.7f },
-            contentAlignment = Alignment.Center,
-        ) { AIcon(R.drawable.ic_rotate_3d, Modifier.size(16.dp), p.textTertiary) }
+        if (!moved) {
+            Box(
+                Modifier.align(Alignment.BottomEnd).padding(12.dp).size(26.dp).clip(CircleShape).graphicsLayer { alpha = 0.7f },
+                contentAlignment = Alignment.Center
+            ) { AIcon(R.drawable.ic_rotate_3d, Modifier.size(16.dp), p.textTertiary) }
+        }
     }
 }
 
@@ -197,7 +211,12 @@ private fun StageMarkView(mark: StageMark, reduced: Boolean, modifier: Modifier)
                     delay(1000L / RING_FPS)
                 }
             }
-            Canvas(Modifier.size(28.dp).semantics { contentDescription = STAGE_LOADING; progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }) {
+            Canvas(
+                Modifier.size(28.dp).semantics {
+                    contentDescription = STAGE_LOADING
+                    progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                }
+            ) {
                 val w = 2.5.dp.toPx()
                 val inset = w / 2
                 val arcSize = Size(size.width - w, size.height - w)
@@ -215,7 +234,7 @@ private fun StageMarkView(mark: StageMark, reduced: Boolean, modifier: Modifier)
                         contentDescription = STAGE_LOADING
                         progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
                     }
-                },
+                }
             ) {
                 AIcon(R.drawable.ic_car_front, Modifier.size(28.dp), p.textTertiary.copy(alpha = 0.5f))
             }

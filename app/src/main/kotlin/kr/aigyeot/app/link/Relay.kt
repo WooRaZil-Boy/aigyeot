@@ -41,8 +41,8 @@ import okhttp3.WebSocketListener
 
 /** 중계 주소. 한 곳에만 둔다. release는 배포한 중계, 폰 두 앱과 같은 글자. */
 internal object RelayAddress {
-    const val DEBUG = "http://10.0.2.2:8787"   // 에뮬레이터에서 맥의 wrangler dev
-    const val RELEASE = "https://aigyeot-relay.byuncorry.workers.dev"   // HTTPS·WSS만
+    const val DEBUG = "http://10.0.2.2:8787" // 에뮬레이터에서 맥의 wrangler dev
+    const val RELEASE = "https://aigyeot-relay.byuncorry.workers.dev" // HTTPS·WSS만
     fun of(ctx: Context) = if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) DEBUG else RELEASE
 }
 
@@ -62,6 +62,7 @@ interface RelaySocket {
 interface SocketEvents {
     fun onOpen()
     fun onText(text: String)
+
     /** 닫힘. 정상 닫기는 닫기 코드, 업그레이드 실패는 HTTP 코드, 네트워크 오류는 -1. */
     fun onClosed(code: Int)
 }
@@ -76,8 +77,10 @@ interface Relay {
     suspend fun send(token: String, env: Envelope): Res<SendMessageResponse>
     suspend fun inbox(token: String, afterSeq: Long): Res<InboxResponse>
     suspend fun ack(token: String, ids: List<String>): Res<Unit>
+
     /** 노래 파일을 [dest]에 쓴다. 값은 받은 바이트 수. [maxBytes]를 넘으면 maxBytes + 1에서 멈춘다. */
     suspend fun song(token: String, songId: String, dest: File, maxBytes: Long): Res<Long>
+
     /**
      * [id]는 보낼 함 records_clear 항목 id: 다시 보내도 같아서 중계가 두 번째를 건너뛴다.
      * [dropIds]는 1,000개 이하, 지우기 때 보낼 함에서 뺀 report_summary·handoff_alert id:
@@ -106,19 +109,18 @@ internal fun parseInbox(text: String): InboxResponse {
 }
 
 /** 봉투 하나. 못 읽으면 seq만 남긴 v = 0 'unreadable'(id가 없으면 빈 id). seq도 없으면 null. 받은 함과 소켓이 같이 쓴다. */
-internal fun parseEnvelope(e: JsonElement): Envelope? =
-    runCatching { ProtocolJson.decodeFromJsonElement(Envelope.serializer(), e) }.getOrNull() ?: run {
-        val o = e as? JsonObject ?: return@run null
-        val id = (o["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-        val seq = (o["seq"] as? JsonPrimitive)?.longOrNull
-        if (id == null && seq == null) return@run null
-        Envelope(v = 0, id = id ?: "", seq = seq, type = "unreadable", ts = "", body = JsonObject(emptyMap()))
-    }
+internal fun parseEnvelope(e: JsonElement): Envelope? = runCatching { ProtocolJson.decodeFromJsonElement(Envelope.serializer(), e) }.getOrNull() ?: run {
+    val o = e as? JsonObject ?: return@run null
+    val id = (o["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    val seq = (o["seq"] as? JsonPrimitive)?.longOrNull
+    if (id == null && seq == null) return@run null
+    Envelope(v = 0, id = id ?: "", seq = seq, type = "unreadable", ts = "", body = JsonObject(emptyMap()))
+}
 
 /** OkHttp 구현. 토큰은 Authorization 헤더로만 보내고, 본문·토큰은 로그에 남기지 않는다. */
 internal class OkRelay(private val baseUrl: String, private val http: OkHttpClient = OkHttpClient()) : Relay {
     private val jsonType = "application/json; charset=utf-8".toMediaType()
-    private val llmHttp = http.newBuilder().callTimeout(10, TimeUnit.SECONDS).build()   // HTTP 타임아웃 10초
+    private val llmHttp = http.newBuilder().callTimeout(10, TimeUnit.SECONDS).build() // HTTP 타임아웃 10초
 
     private fun <T> encode(s: KSerializer<T>, v: T): RequestBody = ProtocolJson.encodeToString(s, v).toRequestBody(jsonType)
     private fun <T> parse(s: KSerializer<T>): (Response) -> T = { ProtocolJson.decodeFromString(s, it.body.string()) }
@@ -127,29 +129,34 @@ internal class OkRelay(private val baseUrl: String, private val http: OkHttpClie
     private fun req(path: String, token: String?) = Request.Builder().url(baseUrl + path).header("X-Client", "pleos/$APP_VERSION")
         .apply { if (token != null) header("Authorization", "Bearer $token") }
 
-    private suspend fun <T> exec(build: () -> Request, read: (Response) -> T, client: OkHttpClient = http): Res<T> =
-        withContext(Dispatchers.IO) {
-            try {
-                client.newCall(build()).execute().use { res ->
-                    if (res.isSuccessful) {
-                        // 본문을 못 읽는 것은 오프라인이 아니다(다시 보내도 같다). SerializationException은 IllegalArgumentException의 하위라 먼저 잡는다
-                        try { Res.Ok(res.code, read(res)) } catch (e: SerializationException) { Res.Err(res.code, "bad_response", null) }
-                    } else Res.Err(
+    private suspend fun <T> exec(build: () -> Request, read: (Response) -> T, client: OkHttpClient = http): Res<T> = withContext(Dispatchers.IO) {
+        try {
+            client.newCall(build()).execute().use { res ->
+                if (res.isSuccessful) {
+                    // 본문을 못 읽는 것은 오프라인이 아니다(다시 보내도 같다). SerializationException은 IllegalArgumentException의 하위라 먼저 잡는다
+                    try {
+                        Res.Ok(res.code, read(res))
+                    } catch (e: SerializationException) {
+                        Res.Err(res.code, "bad_response", null)
+                    }
+                } else {
+                    Res.Err(
                         res.code,
                         runCatching { ProtocolJson.decodeFromString(ErrorResponse.serializer(), res.body.string()).error.code }.getOrNull(),
-                        res.header("Retry-After")?.toLongOrNull(),
+                        res.header("Retry-After")?.toLongOrNull()
                     )
                 }
-            } catch (e: IOException) {
-                Res.Offline
-            } catch (e: IllegalArgumentException) {
-                Res.Offline   // 주소가 비었거나(release 미정) 틀림
             }
+        } catch (e: IOException) {
+            Res.Offline
+        } catch (e: IllegalArgumentException) {
+            Res.Offline // 주소가 비었거나(release 미정) 틀림
         }
+    }
 
     override suspend fun registerCar() = exec(
         { req("/v1/cars", null).post(encode(RegisterCarRequest.serializer(), RegisterCarRequest(Platform.PLEOS, APP_VERSION))).build() },
-        parse(RegisterCarResponse.serializer()),
+        parse(RegisterCarResponse.serializer())
     )
 
     override suspend fun pairCode(token: String) =
@@ -159,8 +166,7 @@ internal class OkRelay(private val baseUrl: String, private val http: OkHttpClie
 
     override suspend fun devices(token: String) = exec({ req("/v1/devices", token).get().build() }, parse(DevicesResponse.serializer()))
 
-    override suspend fun deleteDevice(token: String, deviceId: String) =
-        exec({ req("/v1/devices/$deviceId", token).delete().build() }, nothing)
+    override suspend fun deleteDevice(token: String, deviceId: String) = exec({ req("/v1/devices/$deviceId", token).delete().build() }, nothing)
 
     override suspend fun send(token: String, env: Envelope) =
         exec({ req("/v1/messages", token).post(encode(Envelope.serializer(), env)).build() }, parse(SendMessageResponse.serializer()))
@@ -170,7 +176,7 @@ internal class OkRelay(private val baseUrl: String, private val http: OkHttpClie
 
     override suspend fun ack(token: String, ids: List<String>) = exec(
         { req("/v1/ack", token).post(encode(Envelope.serializer(), ackEnvelope(ids, System.currentTimeMillis()))).build() },
-        nothing,
+        nothing
     )
 
     override suspend fun song(token: String, songId: String, dest: File, maxBytes: Long) = exec(
@@ -189,41 +195,49 @@ internal class OkRelay(private val baseUrl: String, private val http: OkHttpClie
                 }
             }
             minOf(n, maxBytes + 1)
-        },
+        }
     )
 
-    override suspend fun deleteRecords(token: String, id: String, dropIds: List<String>) =
-        exec({ req("/v1/records?id=$id", token)
-            .delete(buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString().toRequestBody(jsonType)).build() }, nothing)
+    override suspend fun deleteRecords(token: String, id: String, dropIds: List<String>) = exec({
+        req("/v1/records?id=$id", token)
+            .delete(buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString().toRequestBody(jsonType)).build()
+    }, nothing)
 
     override suspend fun llm(token: String, req: LlmRequest) = exec(
         { req("/v1/llm", token).post(encode(LlmRequest.serializer(), req)).build() },
         parse(LlmResponse.serializer()),
-        llmHttp,
+        llmHttp
     )
 
     /** `GET /v1/ws`. OkHttp `pingInterval`은 쓰지 않는다(글자 ping으로 통일). */
     override fun socket(token: String, events: SocketEvents): RelaySocket {
-        val url = baseUrl.replaceFirst("http", "ws") + "/v1/ws"   // http→ws, https→wss
+        val url = baseUrl.replaceFirst("http", "ws") + "/v1/ws" // http→ws, https→wss
         val ws = try {
-            http.newWebSocket(req("/v1/ws", token).url(url).build(), object : WebSocketListener() {
-                override fun onOpen(webSocket: WebSocket, response: Response) = events.onOpen()
-                override fun onMessage(webSocket: WebSocket, text: String) = events.onText(text)
-                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                    webSocket.close(code, null)
-                    events.onClosed(code)
+            http.newWebSocket(
+                req("/v1/ws", token).url(url).build(),
+                object : WebSocketListener() {
+                    override fun onOpen(webSocket: WebSocket, response: Response) = events.onOpen()
+                    override fun onMessage(webSocket: WebSocket, text: String) = events.onText(text)
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                        webSocket.close(code, null)
+                        events.onClosed(code)
+                    }
+                    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = events.onClosed(response?.code ?: -1)
                 }
-                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = events.onClosed(response?.code ?: -1)
-            })
+            )
         } catch (e: IllegalArgumentException) {
-            events.onClosed(-1)   // 주소가 비었음
+            events.onClosed(-1) // 주소가 비었음
             null
         }
         return object : RelaySocket {
             override fun send(text: String) = ws?.send(text) ?: false
-            override fun cancel() { ws?.cancel() }
+            override fun cancel() {
+                ws?.cancel()
+            }
         }
     }
 
-    companion object { const val APP_VERSION = "0.1" }
+    companion object {
+        const val APP_VERSION = "0.1"
+    }
 }

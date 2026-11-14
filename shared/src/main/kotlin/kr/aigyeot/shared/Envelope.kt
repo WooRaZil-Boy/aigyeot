@@ -7,18 +7,30 @@ import kotlinx.serialization.json.JsonObject
 /** 역할. `relay`는 중계가 만든 메시지의 보낸 쪽. */
 @Serializable
 enum class Role {
-    @SerialName("car") CAR,
-    @SerialName("owner") OWNER,
-    @SerialName("guardian") GUARDIAN,
-    @SerialName("relay") RELAY,
+    @SerialName("car")
+    CAR,
+
+    @SerialName("owner")
+    OWNER,
+
+    @SerialName("guardian")
+    GUARDIAN,
+
+    @SerialName("relay")
+    RELAY
 }
 
 /** 플랫폼. */
 @Serializable
 enum class Platform {
-    @SerialName("pleos") PLEOS,
-    @SerialName("android") ANDROID,
-    @SerialName("ios") IOS,
+    @SerialName("pleos")
+    PLEOS,
+
+    @SerialName("android")
+    ANDROID,
+
+    @SerialName("ios")
+    IOS
 }
 
 /** 봉투의 `from`. 중계가 만든 메시지는 `device`가 `null`. */
@@ -40,5 +52,5 @@ data class Envelope(
     val to: String? = null,
     val from: Sender? = null,
     val ts: String,
-    val body: JsonObject,
+    val body: JsonObject
 )

@@ -1,5 +1,9 @@
 package kr.aigyeot.phone.data
 
+import java.io.File
+import java.io.IOException
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
@@ -46,10 +50,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import java.io.File
-import java.io.IOException
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 /** 중계 HTTP API·WebSocket. 토큰은 `Authorization` 헤더로만 보낸다. 본문·토큰은 로그에 남기지 않는다. */
 class OkHttpRelayClient(
@@ -59,8 +59,9 @@ class OkHttpRelayClient(
     /** 토큰을 실은 요청이 401을 받으면 그 토큰으로 바로 부른다(IO 스레드). 부른 쪽이 취소돼도 불린다. */
     private val onUnauthorized: (token: String) -> Unit = {},
     /** 토큰을 실은 요청이 끝날 때마다 중계에 닿았는지(IO 스레드). `ticket`은 요청을 시작한 순번이다. */
-    private val onObserved: (token: String, ticket: Long, up: Boolean) -> Unit = { _, _, _ -> },
-) : RelayClient, RelaySocket {
+    private val onObserved: (token: String, ticket: Long, up: Boolean) -> Unit = { _, _, _ -> }
+) : RelayClient,
+    RelaySocket {
     /** 중계 `Date` 헤더 − 폰 시계(ms). 2분 넘게 다르면 홈에 경고한다. */
     @Volatile
     override var clockSkewMs: Long? = null
@@ -142,14 +143,14 @@ class OkHttpRelayClient(
     override suspend fun pair(code: String, pushToken: String?, installId: String) = exec(
         request("/v1/pair", null).header("X-Install-Id", installId)
             .post(encode(PairRequest.serializer(), PairRequest(code, Platform.ANDROID, pushToken, appVersion))).build(),
-        parse(PairResponse.serializer()),
+        parse(PairResponse.serializer())
     )
 
     override suspend fun devices(token: String) = exec(request("/v1/devices", token).get().build(), parse(DevicesResponse.serializer()))
 
     override suspend fun patchMe(token: String, body: PatchDeviceRequest) = exec(
         request("/v1/devices/me", token).patch(encode(PatchDeviceRequest.serializer(), body)).build(),
-        parse(PatchDeviceResponse.serializer()),
+        parse(PatchDeviceResponse.serializer())
     )
 
     override suspend fun deleteMe(token: String) = exec(request("/v1/devices/me", token).delete().build(), nothing)
@@ -158,27 +159,26 @@ class OkHttpRelayClient(
         request("/v1/invites", token)
             .post(encode(Envelope.serializer(), envelope("invite_created", buildJsonObject {}, System.currentTimeMillis())))
             .build(),
-        parse(InviteResponse.serializer()),
+        parse(InviteResponse.serializer())
     )
 
     override suspend fun send(token: String, env: Envelope) = exec(
         request("/v1/messages", token).post(encode(Envelope.serializer(), env)).build(),
-        parse(SendMessageResponse.serializer()),
+        parse(SendMessageResponse.serializer())
     )
 
-    override suspend fun inbox(token: String, afterSeq: Long) =
-        exec(request("/v1/inbox?after_seq=$afterSeq&limit=100", token).get().build()) { text ->
-            parse(InboxResponse.serializer())(text).let { r -> InboxPage(r.messages.map { it.inbound }, r.more) }
-        }
+    override suspend fun inbox(token: String, afterSeq: Long) = exec(request("/v1/inbox?after_seq=$afterSeq&limit=100", token).get().build()) { text ->
+        parse(InboxResponse.serializer())(text).let { r -> InboxPage(r.messages.map { it.inbound }, r.more) }
+    }
 
     override suspend fun ack(token: String, ids: List<String>) = exec(
         request("/v1/ack", token).post(encode(Envelope.serializer(), ackEnvelope(ids))).build(),
-        nothing,
+        nothing
     )
 
     override suspend fun putSong(token: String, songId: String, file: File) = exec(
         request("/v1/songs/$songId", token).put(file.asRequestBody("audio/mp4".toMediaType())).build(),
-        parse(UploadSongResponse.serializer()),
+        parse(UploadSongResponse.serializer())
     )
 
     /** `GET /v1/ws`. 업그레이드 요청에 Authorization 헤더를 싣는다. OkHttp `pingInterval`은 쓰지 않는다. */
@@ -193,7 +193,7 @@ class OkHttpRelayClient(
                     listener.onClosing(code)
                 }
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = listener.onFailure(response?.code)
-            },
+            }
         )
         return object : SocketHandle {
             override fun send(text: String) = ws.send(text)
@@ -212,7 +212,7 @@ class OkHttpRelayClient(
         fun ackEnvelope(ids: List<String>) = envelope(
             "ack",
             buildJsonObject { put("ids", JsonArray(ids.map { JsonPrimitive(it) })) },
-            System.currentTimeMillis(),
+            System.currentTimeMillis()
         )
     }
 }

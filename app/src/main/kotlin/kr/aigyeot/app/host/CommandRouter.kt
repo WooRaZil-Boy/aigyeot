@@ -43,10 +43,10 @@ internal class CommandRouter(
     private val p: Params,
     private val targets: () -> Targets,
     private val inScene: () -> Boolean,
-    private val fatal: (Throwable) -> Unit,
+    private val fatal: (Throwable) -> Unit
 ) {
-    private var lastSnapshotAt = 0L                    // 0이면 첫 변화에서 저장(MIN_VALUE는 빼기에서 넘친다)
-    private var dirty = false                          // 묶음 저장을 건너뛴 변경이 있다
+    private var lastSnapshotAt = 0L // 0이면 첫 변화에서 저장(MIN_VALUE는 빼기에서 넘친다)
+    private var dirty = false // 묶음 저장을 건너뛴 변경이 있다
 
     /** 할 일을 순서대로 '받는 곳'에 넘긴다(Wiring.route). store 몫은 이 스레드에서 바로 쓴다. */
     fun dispatch(old: EngineState, step: Step) {
@@ -55,10 +55,20 @@ internal class CommandRouter(
         var saved = false
         // 인계 알림의 보낼 함 넣기, 그 Step의 store 쓰기, 그 Step의 스냅숏(바로 저장이면)을 한 Room 트랜잭션으로. 묶음의 첫 할 일 자리에서 한 번에 한다
         val alerts = cmds.filterIsInstance<SendToPhone>().filter { it.type == "handoff_alert" }
-        val writes0 = cmds.filter { it is SaveSession || it is SaveEpisode || it is SettleHandoff
-            || it is SavePlay || it is LogAlarm || it is SaveSteerWindow || (it is SaveFeedingStart && !inScene()) }
-        val tied = if (alerts.isEmpty() && (clearing || writes0.isEmpty())) emptyList()
-            else alerts + writes0 + cmds.filter { it is SaveSnapshot && !clearing && !inScene() }
+        val writes0 = cmds.filter {
+            it is SaveSession ||
+                it is SaveEpisode ||
+                it is SettleHandoff ||
+                it is SavePlay ||
+                it is LogAlarm ||
+                it is SaveSteerWindow ||
+                (it is SaveFeedingStart && !inScene())
+        }
+        val tied = if (alerts.isEmpty() && (clearing || writes0.isEmpty())) {
+            emptyList()
+        } else {
+            alerts + writes0 + cmds.filter { it is SaveSnapshot && !clearing && !inScene() }
+        }
         var tiedDone = false
         var snapDecided = false
         fun commitTied() {
@@ -69,9 +79,16 @@ internal class CommandRouter(
             val writes = tied.filter { it !is SendToPhone && it !is SaveSnapshot } + listOfNotNull(snap)
             // 묶음이 실패하면 예외를 다시 던져 프로세스를 끝낸다(나머지 할 일·스냅숏을 실행하지 않는다). 다시 켜지면 앞 스냅숏 복원
             // 인계 묶음은 store 쓰기 먼저, 보낼 함 넣기 나중(같은 Step에서 생긴 에피소드 행에도 link가 guardian_notified를 붙인다)
-            if (alerts.isEmpty()) mustSave("Step 저장 묶음 트랜잭션") { store.applyAllTx(writes) }
-            else mustSave("인계 묶음 트랜잭션") { targets().linkNow(alerts) { store.applyAll(writes) } }
-            if (snap != null) { lastSnapshotAt = clock(); dirty = false; saved = true }
+            if (alerts.isEmpty()) {
+                mustSave("Step 저장 묶음 트랜잭션") { store.applyAllTx(writes) }
+            } else {
+                mustSave("인계 묶음 트랜잭션") { targets().linkNow(alerts) { store.applyAll(writes) } }
+            }
+            if (snap != null) {
+                lastSnapshotAt = clock()
+                dirty = false
+                saved = true
+            }
         }
         // 이 Step이 speaking을 바꾸면 Speak·Ask를 넘기기 전에 스냅숏을 저장한다(그 사이 죽어도 복원에 말하지 않은 질문이 남지 않게)
         val speechChanged = old.speech.speaking != step.state.speech.speaking && !inScene() && !clearing
@@ -80,9 +97,9 @@ internal class CommandRouter(
             try {
                 if (speechChanged && !preSaved && (c is Speak || c is Ask)) {
                     preSaved = true
-                    if (tied.isNotEmpty() && !tiedDone) commitTied()   // 인계 묶음이 있으면 트랜잭션(알림·에피소드·스냅숏)을 먼저 한다
-                    if (!saved) {   // 저장 실패도 그 Step을 끊고 프로세스를 끝낸다(말하지 않은 speaking을 남기고 이어 가지 않는다)
-                        snapshot(cmds.filterIsInstance<SaveSnapshot>().lastOrNull()?.state ?: step.state)   // 실패하면 snapshot()이 die
+                    if (tied.isNotEmpty() && !tiedDone) commitTied() // 인계 묶음이 있으면 트랜잭션(알림·에피소드·스냅숏)을 먼저 한다
+                    if (!saved) { // 저장 실패도 그 Step을 끊고 프로세스를 끝낸다(말하지 않은 speaking을 남기고 이어 가지 않는다)
+                        snapshot(cmds.filterIsInstance<SaveSnapshot>().lastOrNull()?.state ?: step.state) // 실패하면 snapshot()이 die
                         saved = true
                     }
                 }
@@ -98,18 +115,28 @@ internal class CommandRouter(
                         // 같은 Step의 DeleteRecords·SaveSnapshot·DeleteRelayRecords를 한 트랜잭션으로
                         c is DeleteRecords -> {
                             mustSave("기록 지우기 트랜잭션") { store.clearRecords(cmds.filterIsInstance<SaveSnapshot>().lastOrNull()?.state ?: step.state) }
-                            lastSnapshotAt = clock(); dirty = false; saved = true
+                            lastSnapshotAt = clock()
+                            dirty = false
+                            saved = true
                         }
-                        c is DeleteRelayRecords -> {}   // 중계 삭제는 store.clearRecords가 보낼 함에 넣었다
-                        c is SaveSnapshot -> if (!clearing) { if (!inScene()) snapshot(c.state); saved = true }
+                        c is DeleteRelayRecords -> {} // 중계 삭제는 store.clearRecords가 보낼 함에 넣었다
+                        c is SaveSnapshot -> if (!clearing) {
+                            if (!inScene()) snapshot(c.state)
+                            saved = true
+                        }
                         // 리포트 만들기(CloseSession)도 같다. 세션 종료 저장이 커밋된 뒤 따로 하고 실패하면 report_pending가 남아 다음 시작에 재개된다(purgeOld는 store.handle 안)
                         // 맥락 기록은 부수 일이라 묶음 밖이다. 에피소드 행이 커밋된 뒤 쓰고, 실패해도 바깥 catch가 로그만 남긴다
-                        c is CaptureContext || c is CloseSession -> { if (tied.isNotEmpty() && !tiedDone) commitTied(); store.handle(c) }
-                        c is SaveFeedingStart && inScene() -> {}   // 장면은 실제 마지막 수유를 바꾸지 않는다
+                        c is CaptureContext || c is CloseSession -> {
+                            if (tied.isNotEmpty() && !tiedDone) commitTied()
+                            store.handle(c)
+                        }
+                        c is SaveFeedingStart && inScene() -> {} // 장면은 실제 마지막 수유를 바꾸지 않는다
                         else -> store.handle(c)
                     }
                 }
-            } catch (x: Exception) { Log.e(TAG, "할 일 실패: $c", x) }
+            } catch (x: Exception) {
+                Log.e(TAG, "할 일 실패: $c", x)
+            }
         }
         // 그 Step의 저장 뒤 같은 쓰기 줄에 스냅숏. 장면 중에는 실제 스냅숏을 덮지 않는다
         if (!saved && !snapDecided && !inScene() && needsSnapshot(old, step)) snapshot(step.state)
@@ -130,13 +157,19 @@ internal class CommandRouter(
     private class TiedTxFailure(cause: Throwable) : Error(cause)
 
     /** 필수 저장은 [retrying] 뒤에도 실패하면 그 Step을 끊고 프로세스를 끝낸다. */
-    private fun <T> mustSave(what: String, block: () -> T): T =
-        try { retrying(what, block) } catch (x: Exception) { Log.e(TAG, "$what 실패: 프로세스를 끝낸다", x); fatal(TiedTxFailure(x)); throw TiedTxFailure(x) }
+    private fun <T> mustSave(what: String, block: () -> T): T = try {
+        retrying(what, block)
+    } catch (x: Exception) {
+        Log.e(TAG, "$what 실패: 프로세스를 끝낸다", x)
+        fatal(TiedTxFailure(x))
+        throw TiedTxFailure(x)
+    }
 
     /** 단독 스냅숏 저장. 실패는 프로세스를 끝낸다(예외가 scheduleTick까지 빠져 예약이 끊긴 채 이어 가지 않는다). */
     fun snapshot(s: EngineState) {
         mustSave("스냅숏 저장") { store.saveSnapshot(s) }
-        lastSnapshotAt = clock(); dirty = false
+        lastSnapshotAt = clock()
+        dirty = false
     }
 
     /** (a) 바로 저장 / (b) 30초 묶음 / Tick으로 now만 바뀐 Step은 저장하지 않음. */
@@ -144,7 +177,7 @@ internal class CommandRouter(
         val n = step.state
         if (step.commands.any { it::class in IMMEDIATE }) return true
         if (snapshotKey(old) != snapshotKey(n)) return true
-        if (old.copy(now = n.now) != n) dirty = true   // 건너뛴 변경은 그 뒤 Tick만 와도 30초 안에 저장한다
+        if (old.copy(now = n.now) != n) dirty = true // 건너뛴 변경은 그 뒤 Tick만 와도 30초 안에 저장한다
         return dirty && clock() - lastSnapshotAt >= p.snapshotIntervalMs
     }
 
@@ -155,7 +188,7 @@ internal class CommandRouter(
         val IMMEDIATE = setOf(
             SaveSession::class, SaveEpisode::class, SettleHandoff::class, SavePlay::class, SaveSteerWindow::class, SaveFeedingStart::class,
             LogAlarm::class, CloseSession::class, DeleteRecords::class, SetWindowLock::class, StartPlayback::class, StopPlayback::class,
-            Speak::class, Ask::class,   // 말하기 시작
+            Speak::class, Ask::class // 말하기 시작
         )
     }
 }
@@ -169,7 +202,21 @@ private val NO_CAR = CarView(null, null, emptySet(), false, false, null, null, n
  * `ign.doorOpenedSinceP`(뒷문), WAIT·HANDOFF 조용함 누적 `quietMs`(사건마다 는다).
  */
 internal fun snapshotKey(s: EngineState): EngineState = s.copy(
-    now = 0, steer = NO_STEER, car = NO_CAR.copy(pauses = s.car.pauses), ign = s.ign.copy(doorOpenedSinceP = false),
+    now = 0,
+    steer = NO_STEER,
+    car = NO_CAR.copy(pauses = s.car.pauses),
+    ign = s.ign.copy(doorOpenedSinceP = false),
     session = s.session?.let { x ->
-        x.copy(stage = x.stage.let { st -> if (st is Stage.Wait) st.copy(quietMs = 0) else if (st is Stage.Handoff) st.copy(quietMs = 0) else st }) },
+        x.copy(
+            stage = x.stage.let { st ->
+                if (st is Stage.Wait) {
+                    st.copy(quietMs = 0)
+                } else if (st is Stage.Handoff) {
+                    st.copy(quietMs = 0)
+                } else {
+                    st
+                }
+            }
+        )
+    }
 )

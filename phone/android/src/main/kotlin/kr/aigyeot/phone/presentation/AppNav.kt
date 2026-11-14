@@ -77,23 +77,34 @@ import kr.aigyeot.shared.Role
 @Serializable
 sealed interface Route {
     @Serializable data object Intro : Route
+
     @Serializable data object Connect : Route
+
     @Serializable data class Confirm(val code: String) : Route
 
     /** `role`은 [Role] 이름. */
     @Serializable data class Done(val role: String) : Route
+
     @Serializable data object Gone : Route
 
     /** 탭: 연결 안 됨·owner·guardian이 같은 경로를 쓰고 탭 모양만 다르다. */
     @Serializable data object Home : Route
+
     @Serializable data class Timer(val id: String) : Route
+
     @Serializable data object About : Route
+
     @Serializable data class License(val index: Int) : Route
+
     /** 노래 녹음. `replacing`은 다시 녹음해 바꿀 곡('노래 거절'). */
     @Serializable data class Record(val replacing: String? = null) : Route
+
     @Serializable data object Reports : Route
+
     @Serializable data class Report(val id: String) : Route
+
     @Serializable data object Guardians : Route
+
     @Serializable data class Alert(val id: String) : Route
 }
 
@@ -159,7 +170,7 @@ fun AppRoot(app: AppViewModel) {
             text = { Text("이 휴대폰의 연결 정보를 읽지 못했어요. 돌봄 기록은 그대로 남아요. 전에 연결했던 이 휴대폰은 차 화면에서 지워 주세요.") },
             confirmButton = { TextButton(onClick = { app.resetAndPair(r.code) }) { Text("지우고 연결하기") } },
             dismissButton = { TextButton(onClick = app::clearPairRun) { Text("닫기") } },
-            shape = Radius.dialog,
+            shape = Radius.dialog
         )
     }
     // 사용자 끊기: 설정에서 끊기가 끝나면, 그사이 다른 화면을 열었어도 탭으로 돌아간다. 이력에 탭이 없으면 새로 간다. 오늘 탭 고르기는 CareTabs가 한다.
@@ -201,92 +212,121 @@ fun AppRoot(app: AppViewModel) {
     val reduced = LocalReducedMotion.current
     // 아래 시스템 막대·자판 자리는 화면마다 맡는다(탭 막대는 흰 막대가 그 자리까지 깔린다).
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
-      // 진행 중 판 → 타이머 고리 공유 요소(spring.smooth). 화면 교체는 base 220 페이드, 동작 줄이기면 바로.
-      SharedTransitionLayout {
-       CompositionLocalProvider(LocalSharedScope provides this) {
-        NavHost(
-            nav,
-            startDestination = start,
-            enterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.base.spec()) },
-            exitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.exit.spec()) },
-            popEnterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.base.spec()) },
-            popExitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.exit.spec()) },
-        ) {
-            composable<Route.Intro> {
-                IntroScreen(
-                    onConnect = { introCode?.let { c -> introCode = null; nav.navigate(Route.Confirm(c)) } ?: nav.navigate(Route.Connect) },
-                    onRecordsOnly = { introCode = null; app.chooseRecordsOnly(); nav.reset(Route.Home) },
-                )
-            }
-            composable<Route.Connect> {
-                // 탭(연결 안 됨)에서 열었으면 '취소'로 돌아간다. 첫 실행 흐름에서는 소개로 돌아가는 뒤로 가기만 있다.
-                val fromTabs = nav.previousBackStackEntry?.destination?.hasRoute<Route.Home>() == true
-                ConnectScreen(
-                    onCode = { code -> nav.navigate(Route.Confirm(code)) },
-                    onPaired = { role -> nav.reset(Route.Done(role.name)) },
-                    onCancel = if (fromTabs) ({ nav.popBackStack() }) else null,
-                )
-            }
-            composable<Route.Confirm> { e ->
-                ConfirmScreen(
-                    e.toRoute<Route.Confirm>().code,
-                    onDone = { role -> nav.reset(Route.Done(role.name)) },
-                    onRetry = {
-                        app.clearPairRun()
-                        // 밑에 연결 화면이 있으면 그리로 돌아간다(탭에서 열었으면 '취소'가 남는다). 링크로 바로 왔으면 확인 화면을 바꾼다.
-                        if (!nav.popBackStack<Route.Connect>(inclusive = false)) nav.navigate(Route.Connect) { popUpTo(e.destination.id) { inclusive = true } }
-                    },
-                )
-            }
-            composable<Route.Done> { e ->
-                val role = if (e.toRoute<Route.Done>().role == Role.GUARDIAN.name) Role.GUARDIAN else Role.OWNER
-                DoneScreen(role) { if (app.pairDoneShown()) nav.reset(Route.Home) else toast(SAVE_FAILED) }
-            }
-            // 강제 끊김: 차·중계 쪽에서 끊김. 다시 연결하거나 탭(연결 안 됨)에서 기록을 계속 쓴다.
-            composable<Route.Gone> {
-                // 고른 결과를 저장하지 못했으면 이 화면에 남고 알린다(다음 실행에 같은 선택을 다시 묻지 않게 다시 누르게).
-                val recordsOnly = { if (app.acknowledgeGone(recordsOnly = true)) nav.reset(Route.Home) else toast(SAVE_FAILED) }
-                BackHandler { recordsOnly() } // 이력이 끊김 화면 하나라 그냥 두면 앱이 끝난다
-                GoneScreen(
-                    onReconnect = { if (app.acknowledgeGone()) nav.reset(Route.Connect) else toast(SAVE_FAILED) },
-                    onRecordsOnly = recordsOnly,
-                )
-            }
-            composable<Route.Home> { NavScope(this) { CareTabs(go = { nav.navigate(it) }, tab = homeTab, onTab = { homeTab = it }) } }
-            composable<Route.Timer> { NavScope(this) { TimerScreen(onBack = { nav.popBackStack() }) } }
-            composable<Route.About> { AboutScreen({ nav.popBackStack() }) { nav.navigate(Route.License(it)) } }
-            composable<Route.License> { e -> LicenseScreen(e.toRoute<Route.License>().index) { nav.popBackStack() } }
-            // 노래·리포트: 탭 밖 화면이지만 아래 탭 막대가 있다(노래·리포트는 '차', guardian 리포트는 '오늘').
-            composable<Route.Record> { e ->
-                WithTabs(guardian, HomeTab.CAR, ::toTab) { RecordScreen(e.toRoute<Route.Record>().replacing, onBack = { nav.popBackStack() }) }
-            }
-            composable<Route.Reports> {
-                WithTabs(guardian, if (guardian) HomeTab.TODAY else HomeTab.CAR, ::toTab) {
-                    ReportsScreen(onBack = { nav.popBackStack() }, open = { nav.navigate(Route.Report(it)) })
+        // 진행 중 판 → 타이머 고리 공유 요소(spring.smooth). 화면 교체는 base 220 페이드, 동작 줄이기면 바로.
+        SharedTransitionLayout {
+            CompositionLocalProvider(LocalSharedScope provides this) {
+                NavHost(
+                    nav,
+                    startDestination = start,
+                    enterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.base.spec()) },
+                    exitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.exit.spec()) },
+                    popEnterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.base.spec()) },
+                    popExitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.exit.spec()) }
+                ) {
+                    composable<Route.Intro> {
+                        IntroScreen(
+                            onConnect = {
+                                introCode?.let { c ->
+                                    introCode = null
+                                    nav.navigate(Route.Confirm(c))
+                                } ?: nav.navigate(Route.Connect)
+                            },
+                            onRecordsOnly = {
+                                introCode = null
+                                app.chooseRecordsOnly()
+                                nav.reset(Route.Home)
+                            }
+                        )
+                    }
+                    composable<Route.Connect> {
+                        // 탭(연결 안 됨)에서 열었으면 '취소'로 돌아간다. 첫 실행 흐름에서는 소개로 돌아가는 뒤로 가기만 있다.
+                        val fromTabs = nav.previousBackStackEntry?.destination?.hasRoute<Route.Home>() == true
+                        ConnectScreen(
+                            onCode = { code -> nav.navigate(Route.Confirm(code)) },
+                            onPaired = { role -> nav.reset(Route.Done(role.name)) },
+                            onCancel = if (fromTabs) ({ nav.popBackStack() }) else null
+                        )
+                    }
+                    composable<Route.Confirm> { e ->
+                        ConfirmScreen(
+                            e.toRoute<Route.Confirm>().code,
+                            onDone = { role -> nav.reset(Route.Done(role.name)) },
+                            onRetry = {
+                                app.clearPairRun()
+                                // 밑에 연결 화면이 있으면 그리로 돌아간다(탭에서 열었으면 '취소'가 남는다). 링크로 바로 왔으면 확인 화면을 바꾼다.
+                                if (!nav.popBackStack<Route.Connect>(inclusive = false)) {
+                                    nav.navigate(Route.Connect) {
+                                        popUpTo(e.destination.id) {
+                                            inclusive =
+                                                true
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    composable<Route.Done> { e ->
+                        val role = if (e.toRoute<Route.Done>().role == Role.GUARDIAN.name) Role.GUARDIAN else Role.OWNER
+                        DoneScreen(role) { if (app.pairDoneShown()) nav.reset(Route.Home) else toast(SAVE_FAILED) }
+                    }
+                    // 강제 끊김: 차·중계 쪽에서 끊김. 다시 연결하거나 탭(연결 안 됨)에서 기록을 계속 쓴다.
+                    composable<Route.Gone> {
+                        // 고른 결과를 저장하지 못했으면 이 화면에 남고 알린다(다음 실행에 같은 선택을 다시 묻지 않게 다시 누르게).
+                        val recordsOnly = { if (app.acknowledgeGone(recordsOnly = true)) nav.reset(Route.Home) else toast(SAVE_FAILED) }
+                        BackHandler { recordsOnly() } // 이력이 끊김 화면 하나라 그냥 두면 앱이 끝난다
+                        GoneScreen(
+                            onReconnect = { if (app.acknowledgeGone()) nav.reset(Route.Connect) else toast(SAVE_FAILED) },
+                            onRecordsOnly = recordsOnly
+                        )
+                    }
+                    composable<Route.Home> { NavScope(this) { CareTabs(go = { nav.navigate(it) }, tab = homeTab, onTab = { homeTab = it }) } }
+                    composable<Route.Timer> { NavScope(this) { TimerScreen(onBack = { nav.popBackStack() }) } }
+                    composable<Route.About> { AboutScreen({ nav.popBackStack() }) { nav.navigate(Route.License(it)) } }
+                    composable<Route.License> { e -> LicenseScreen(e.toRoute<Route.License>().index) { nav.popBackStack() } }
+                    // 노래·리포트: 탭 밖 화면이지만 아래 탭 막대가 있다(노래·리포트는 '차', guardian 리포트는 '오늘').
+                    composable<Route.Record> { e ->
+                        WithTabs(guardian, HomeTab.CAR, ::toTab) { RecordScreen(e.toRoute<Route.Record>().replacing, onBack = { nav.popBackStack() }) }
+                    }
+                    composable<Route.Reports> {
+                        WithTabs(guardian, if (guardian) HomeTab.TODAY else HomeTab.CAR, ::toTab) {
+                            ReportsScreen(onBack = { nav.popBackStack() }, open = { nav.navigate(Route.Report(it)) })
+                        }
+                    }
+                    composable<Route.Report> {
+                        WithTabs(guardian, if (guardian) HomeTab.TODAY else HomeTab.CAR, ::toTab) { ReportDetailScreen(onBack = { nav.popBackStack() }) }
+                    }
+                    composable<Route.Guardians> { GuardiansScreen(onBack = { nav.popBackStack() }) }
+                    composable<Route.Alert> { AlertScreen(onBack = { nav.popBackStack() }) }
                 }
             }
-            composable<Route.Report> {
-                WithTabs(guardian, if (guardian) HomeTab.TODAY else HomeTab.CAR, ::toTab) { ReportDetailScreen(onBack = { nav.popBackStack() }) }
-            }
-            composable<Route.Guardians> { GuardiansScreen(onBack = { nav.popBackStack() }) }
-            composable<Route.Alert> { AlertScreen(onBack = { nav.popBackStack() }) }
         }
-       }
-      }
         // 앱 안 배너: 앞에 있을 때 온 인계 알림. 시스템 알림은 띄우지 않는다. 8초 뒤 저절로 닫히고(AppViewModel),
         // 글은 3줄에서 자른다(전문은 인계 알림 목록). 위에서 떨어지듯 들어온다(spring bouncy).
         AnimatedVisibility(
             visible = ui.banner != null,
             modifier = Modifier.align(Alignment.TopCenter),
             // 배너 모션: 위 140%에서 0.96배·투명으로 spring.bouncy, 나갈 때 위로 260ms motion.exit 곡선(iOS와 같음).
-            enter = if (reduced) EnterTransition.None else slideInVertically(Springs.bouncy.spec()) { -(it * 1.4f).toInt() } +
-                scaleIn(Springs.bouncy.spec(), initialScale = 0.96f, transformOrigin = TransformOrigin(0.5f, 0f)) + fadeIn(Springs.bouncy.spec()),
-            exit = if (reduced) ExitTransition.None else slideOutVertically(Motion.bannerOut.spec()) { -(it * 1.4f).toInt() } +
-                fadeOut(Motion.bannerOut.spec()),
+            enter = if (reduced) {
+                EnterTransition.None
+            } else {
+                slideInVertically(Springs.bouncy.spec()) { -(it * 1.4f).toInt() } +
+                    scaleIn(Springs.bouncy.spec(), initialScale = 0.96f, transformOrigin = TransformOrigin(0.5f, 0f)) + fadeIn(Springs.bouncy.spec())
+            },
+            exit = if (reduced) {
+                ExitTransition.None
+            } else {
+                slideOutVertically(Motion.bannerOut.spec()) { -(it * 1.4f).toInt() } +
+                    fadeOut(Motion.bannerOut.spec())
+            }
         ) {
             var last by remember { mutableStateOf(ui.banner) }
             ui.banner?.let { last = it }
-            last?.let { b -> HandoffBanner(b.text, onOpen = { app.dismissBanner(); nav.navigate(Route.Alert(b.alertId)) }, onClose = app::dismissBanner) }
+            last?.let { b ->
+                HandoffBanner(b.text, onOpen = {
+                    app.dismissBanner()
+                    nav.navigate(Route.Alert(b.alertId))
+                }, onClose = app::dismissBanner)
+            }
         }
     }
 }
@@ -304,7 +344,7 @@ private fun HandoffBanner(text: String, onOpen: () -> Unit, onClose: () -> Unit)
         Modifier.fillMaxWidth().padding(8.dp)
             .shadow(16.dp, BannerShape, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
             .clip(BannerShape).background(p.surface).padding(horizontal = 16.dp, vertical = 14.dp)
-            .semantics { liveRegion = LiveRegionMode.Polite },
+            .semantics { liveRegion = LiveRegionMode.Polite }
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(22.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
@@ -327,6 +367,6 @@ private fun BannerAction(text: String, onClick: () -> Unit) {
     Box(
         Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(18.dp)).background(p.textPrimary.copy(alpha = 0.07f))
             .pressable(onClick = onClick).padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) { Text(text, style = Type.bannerAction, color = p.textPrimary) }
 }

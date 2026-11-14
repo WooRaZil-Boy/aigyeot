@@ -1,6 +1,5 @@
 package kr.aigyeot.phone.domain.model
 
-import kotlinx.serialization.json.JsonObject
 import kr.aigyeot.shared.DeviceInfo
 import kr.aigyeot.shared.FeedingStateBody
 import kr.aigyeot.shared.HandoffAlertBody
@@ -69,7 +68,7 @@ fun PhoneState.receive(m: Inbound, now: Long, live: Boolean, newId: () -> String
                     unseenDrops = unseenDrops - nowReflected.toSet() - droppedFeedingAt.filterValues { it == last }.keys,
                     droppedFeedingAt = droppedFeedingAt - nowReflected.toSet() - droppedFeedingAt.filterValues { it == last }.keys,
                     // 보낼 함의 같은 수유(응답을 잃어 다시 보내는 중)에도 적는다: 기록 줄이 사라져도 반영을 안다.
-                    outbox = outbox.map { if (it.isFeeding && (it.id in nowReflected || (last != null && it.feedingAt == last))) it.markReflected() else it },
+                    outbox = outbox.map { if (it.isFeeding && (it.id in nowReflected || (last != null && it.feedingAt == last))) it.markReflected() else it }
                 )
             }
         }
@@ -88,19 +87,23 @@ fun PhoneState.receive(m: Inbound, now: Long, live: Boolean, newId: () -> String
             }
         }
         // 적용한 목록의 snapshot_seq 이하인 연결 변경은 이미 목록에 들어 있다. 다시 적용하지 않는다.
-        is InboundMessage.Paired -> if (seq > (devicesSnapshotSeq ?: -1)) msg.body.let { b ->
-            val mark = deviceMarks[b.deviceId]
-            // 끊긴 기기는 되살리지 않고, 이미 적용한 것보다 작은 seq는 버린다.
-            if (mark == null || (!mark.removed && seq > mark.seq)) {
-                val role = if (b.role == PhoneRole.OWNER) Role.OWNER else Role.GUARDIAN
-                val platform = if (b.platform == PhonePlatform.IOS) Platform.IOS else Platform.ANDROID
-                val d = DeviceInfo(b.deviceId, role, platform, b.pairedAt, null, false, b.handoffAlerts)
-                s = s.copy(devices = devices.filter { it.deviceId != b.deviceId } + d, deviceMarks = deviceMarks + (b.deviceId to DeviceMark(seq)))
+        is InboundMessage.Paired -> if (seq > (devicesSnapshotSeq ?: -1)) {
+            msg.body.let { b ->
+                val mark = deviceMarks[b.deviceId]
+                // 끊긴 기기는 되살리지 않고, 이미 적용한 것보다 작은 seq는 버린다.
+                if (mark == null || (!mark.removed && seq > mark.seq)) {
+                    val role = if (b.role == PhoneRole.OWNER) Role.OWNER else Role.GUARDIAN
+                    val platform = if (b.platform == PhonePlatform.IOS) Platform.IOS else Platform.ANDROID
+                    val d = DeviceInfo(b.deviceId, role, platform, b.pairedAt, null, false, b.handoffAlerts)
+                    s = s.copy(devices = devices.filter { it.deviceId != b.deviceId } + d, deviceMarks = deviceMarks + (b.deviceId to DeviceMark(seq)))
+                }
             }
         }
-        is InboundMessage.Unpaired -> if (seq > (devicesSnapshotSeq ?: -1)) msg.body.let { b ->
-            val mark = DeviceMark(maxOf(seq, deviceMarks[b.deviceId]?.seq ?: 0), removed = true)
-            s = s.copy(devices = devices.filter { it.deviceId != b.deviceId }, deviceMarks = deviceMarks + (b.deviceId to mark))
+        is InboundMessage.Unpaired -> if (seq > (devicesSnapshotSeq ?: -1)) {
+            msg.body.let { b ->
+                val mark = DeviceMark(maxOf(seq, deviceMarks[b.deviceId]?.seq ?: 0), removed = true)
+                s = s.copy(devices = devices.filter { it.deviceId != b.deviceId }, deviceMarks = deviceMarks + (b.deviceId to mark))
+            }
         }
         InboundMessage.Ignored -> Unit
     }
@@ -130,7 +133,7 @@ private fun PhoneState.applySongStatus(b: SongStatusBody, seq: Long, now: Long, 
         // 거절된 곡은 자리를 비우려고 같은 곡 id로 song_removed를 보낸다(오프라인이면 보낼 함).
         s = s.copy(
             songs = s.songs.map { if (it.songId == b.songId) it.copy(removedByMe = true) else it },
-            outbox = s.outbox + outboxItem(OutboxPayload.Message("song_removed", songRef(b.songId)), now, newId()),
+            outbox = s.outbox + outboxItem(OutboxPayload.Message("song_removed", songRef(b.songId)), now, newId())
         )
     }
     return s

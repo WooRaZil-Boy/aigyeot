@@ -4,13 +4,18 @@ package kr.aigyeot.engine
 // Tx 확장 함수는 지금 Step의 상태(s·now·p)를 읽기만 한다. 나머지는 앱·시험·장면도 쓰는 공개 규칙이다.
 
 internal val AUTO_PHASES = setOf(Phase.ATTEMPT, Phase.GAP, Phase.CONFIRM)
+
 /** 쉼터 제안 문장. 휴식 기록에 남기고, 장면 측정은 이 문장의 '응'을 운전자 조작에서 뺀다. */
 val OFFER_SIDS = setOf(Sid.S07, Sid.S07_DEPART, Sid.S08, Sid.S10, Sid.S11)
-internal val OTHER_OFFERS = setOf(Sid.S07, Sid.S08, Sid.S10, Sid.S11)   // 쉼터 제안 문장. 큐에 있거나 말하는 중이거나 10분(offerRepeatMs) 안에 냈으면 출발 제안을 미룬다. 꺼낼 때 다시 고른다
-internal val HOLDABLE = setOf(Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S10, Sid.S11)   // 운전이 바쁘면 미루는 급하지 않은 문장
+internal val OTHER_OFFERS = setOf(Sid.S07, Sid.S08, Sid.S10, Sid.S11) // 쉼터 제안 문장. 큐에 있거나 말하는 중이거나 10분(offerRepeatMs) 안에 냈으면 출발 제안을 미룬다. 꺼낼 때 다시 고른다
+internal val HOLDABLE = setOf(Sid.S06, Sid.S07, Sid.S07_DEPART, Sid.S10, Sid.S11) // 운전이 바쁘면 미루는 급하지 않은 문장
 
 /** 인계 줄이 알리는 인계 종류. */
-internal fun kindOf(sid: Sid) = when (sid) { Sid.S15 -> HandoffKind.ARRIVAL_NOTICE; Sid.S10 -> HandoffKind.NO_REST; else -> HandoffKind.WAYPOINT_OFFER }
+internal fun kindOf(sid: Sid) = when (sid) {
+    Sid.S15 -> HandoffKind.ARRIVAL_NOTICE
+    Sid.S10 -> HandoffKind.NO_REST
+    else -> HandoffKind.WAYPOINT_OFFER
+}
 
 internal fun Method?.isSong() = this?.kind.let { it == MethodKind.LULLABY || it == MethodKind.SONG }
 
@@ -57,7 +62,7 @@ data class CryView(val unavailable: Boolean, val confirming: Boolean, val runFro
 fun EngineState.cryView(now: Long, p: Params = Params()): CryView {
     val x = session
     val unavailable = x == null || !hears()
-    val confirming = !unavailable && (x!!.phase == Phase.GAP || x.phase == Phase.CONFIRM)
+    val confirming = !unavailable && (x.phase == Phase.GAP || x.phase == Phase.CONFIRM)
     return CryView(unavailable, confirming, x?.alarmRun?.takeIf { !unavailable && !confirming && alarmContinues(it.last, now, p) }?.from)
 }
 
@@ -172,7 +177,7 @@ internal fun Tx.driveBusy() = s.steer.driveBusyAt?.let { now - it < p.holdStable
 
 /** 꺼낼 때 S06·출발 제안을 지금 수유·경로로 다시 고른다(바뀌었으면 null = 버림). 다른 쉼터 제안은 drain의 다시 고르기가 맡는다. */
 internal fun Tx.refreshed(l: Line): Line? {
-    if (l.sid == Sid.S06) return s06Vars()?.let { l.copy(vars = l.vars + it) }   // 수유 창이 아니면 버림(s06Said는 말할 때만 선다)
+    if (l.sid == Sid.S06) return s06Vars()?.let { l.copy(vars = l.vars + it) } // 수유 창이 아니면 버림(s06Said는 말할 때만 선다)
     if (l.sid != Sid.S07_DEPART) return l
     val rest = pickDepartRest(s.car.route, s.feedingStart, s.profile?.feedingIntervalMin, now, p.departLeadMin)
     if (rest == null || rest.id != l.askRestId) return null
@@ -183,15 +188,17 @@ internal fun Tx.refreshed(l: Line): Line? {
 internal fun Tx.heldForRoute(l: Line, waiting: Boolean) = waiting && (l.sid == Sid.S07_DEPART || l.sid == Sid.S10 || l.sid == Sid.S15 || l.askRestId != null)
 
 /** 질문 문장의 기어 조건. 꺼낼 때 valid와 답 처리 직전이 같은 함수 하나를 쓴다. */
-internal fun Tx.gearAllows(sid: Sid) =
-    if (sid == Sid.S07_DEPART) s.car.gear == null || s.car.gear == Gear.D   // 기어를 모르면 버리지 않고 보류(drain이 건너뜀)
-    else !gearP
+internal fun Tx.gearAllows(sid: Sid) = if (sid == Sid.S07_DEPART) {
+    s.car.gear == null || s.car.gear == Gear.D // 기어를 모르면 버리지 않고 보류(drain이 건너뜀)
+} else {
+    !gearP
+}
 
 /** 꺼낼 때 문장이 아직 맞는지 다시 본다. */
 internal fun Tx.valid(l: Line) = when (l.sid) {
-    Sid.S02, Sid.S03, Sid.S04 -> l.playId != null && ses?.play?.id == l.playId   // '그 재생'이 계속될 때만
+    Sid.S02, Sid.S03, Sid.S04 -> l.playId != null && ses?.play?.id == l.playId // '그 재생'이 계속될 때만
     Sid.S07_DEPART -> gearAllows(l.sid) &&
-         (l.askRestId == null || canAddWaypoint(l.askRestId))   // 후진·중립에서는 말하지 않고 버린다
+        (l.askRestId == null || canAddWaypoint(l.askRestId)) // 후진·중립에서는 말하지 않고 버린다
     // 쉼터 제안·인계 줄의 경로 판단은 drain의 다시 고르기
     Sid.S06, Sid.S07, Sid.S08, Sid.S10, Sid.S11, Sid.S15 -> gearAllows(l.sid) && (l.askRestId == null || canAddWaypoint(l.askRestId))
     else -> true
@@ -205,6 +212,6 @@ internal enum class AmbientGoal { DIM, NORMAL, HOLD }
 /** 지금 상태에서 계산한 앰비언트 목표(칸에 두지 않는다). 읽는 곳은 [syncAmbient] 하나. */
 internal fun EngineState.ambientGoal(): AmbientGoal {
     val x = session ?: return AmbientGoal.NORMAL
-    x.play?.let { return if (it.startedAt == null) AmbientGoal.HOLD else AmbientGoal.DIM }   // 시작 대기는 HOLD, 시작된 자동·요청 재생은 DIM
+    x.play?.let { return if (it.startedAt == null) AmbientGoal.HOLD else AmbientGoal.DIM } // 시작 대기는 HOLD, 시작된 자동·요청 재생은 DIM
     return if (x.phase in setOf(Phase.GAP, Phase.CONFIRM) && x.episode != null) AmbientGoal.DIM else AmbientGoal.NORMAL
 }

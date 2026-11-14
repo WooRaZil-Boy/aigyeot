@@ -24,7 +24,7 @@ class PauseAndComfortCarryOverTest {
         assertEquals(MicPath.HOME_BUTTON, sim.all<SaveSession>().last().record.micPath)
         sim.ev(MicService(sim.t, false, null))
         assertEquals(null, sim.s.car.micPath)
-        sim.clear().gear(Gear.P).ev(RearDoor(sim.t, Side.LEFT, true))   // 세션 닫힘
+        sim.clear().gear(Gear.P).ev(RearDoor(sim.t, Side.LEFT, true)) // 세션 닫힘
         assertEquals(MicPath.HOME_BUTTON, sim.all<SaveSession>().last().record.micPath)
     }
 
@@ -32,7 +32,7 @@ class PauseAndComfortCarryOverTest {
         val sim = idle().ev(InputLost(T0, PauseReason.SILENCED)).doorCycle().gear(Gear.D)
         assertEquals(setOf(PauseReason.SILENCED), sim.s.car.pauses)
         sim.alarm()
-        assertTrue(sim.step<StartPlayback>().isEmpty())      // 판정 멈춤 중
+        assertTrue(sim.step<StartPlayback>().isEmpty()) // 판정 멈춤 중
         sim.ev(InputRestored(sim.t, PauseReason.SILENCED))
         assertTrue(sim.s.car.pauses.isEmpty())
     }
@@ -52,7 +52,7 @@ class PauseAndComfortCarryOverTest {
         assertEquals(WN, sim.step<StartPlayback>().single().method)
         sim.ev(CabinTemp(sim.t, 20.0)).started()
         assertEquals(SecondAction.COMFORT, sim.ep.second!!.action)
-        assertTrue(Sid.S04 !in sim.sids() && Sid.S03 !in sim.sids())   // S04는 결과가 온 뒤
+        assertTrue(Sid.S04 !in sim.sids() && Sid.S03 !in sim.sids()) // S04는 결과가 온 뒤
         assertTrue(sim.step<LowerHvac>().size == 1)
     }
 
@@ -116,7 +116,7 @@ class WaypointRecoveryTest {
         assertEquals(null, sim.ses.waypointPending)
         assertEquals(null, sim.ses.restLog[0].waypointOk)
         sim.ev(Tick(T0 + 120 * MIN))
-        assertEquals(Sid.S11, sim.step<Ask>().single().sid)    // 같은 쉼터를 다시 제안할 수 있다
+        assertEquals(Sid.S11, sim.step<Ask>().single().sid) // 같은 쉼터를 다시 제안할 수 있다
     }
 
     @Test fun resumeKeepsWaypointPending() {
@@ -147,13 +147,13 @@ class LostWindowLockTest {
 
     @Test fun bootDropsLostWindowLocks_nextSessionLocks() {
         val sim = session(prof = profile(sibling = true))
-        sim.step<SetWindowLock>().single()                       // 결과는 오지 않는다
-        sim.ev(Boot(sim.t + MIN, Gear.D, 10))                    // 지난 명령은 버리고 A의 두 영역을 다시 보낸다
+        sim.step<SetWindowLock>().single() // 결과는 오지 않는다
+        sim.ev(Boot(sim.t + MIN, Gear.D, 10)) // 지난 명령은 버리고 A의 두 영역을 다시 보낸다
         sim.step<SetWindowLock>().forEach { c -> c.values.keys.forEach { result(sim, c, it) } }
         sim.clear()
-        sim.gear(Gear.P, MIN)                                     // A 닫힘
+        sim.gear(Gear.P, MIN) // A 닫힘
         sim.all<SetWindowLock>().forEach { c -> c.values.keys.forEach { result(sim, c, it, 1.0) } }
-        sim.clear().doorCycle().gear(Gear.D)                      // B 열림
+        sim.clear().doorCycle().gear(Gear.D) // B 열림
         val b = sim.all<SetWindowLock>().flatMap { it.values.keys }
         assertEquals(setOf(L, R), b.toSet())
         assertEquals(2, b.size)
@@ -251,7 +251,7 @@ class OfferDupSidTest {
         val sim = session().ev(Tick(T0 + 119 * MIN + 30_000)).attempt1()
         sim.ev(Tick(T0 + 120 * MIN))
         assertEquals(1, sim.s.speech.queue.count { it.sid == Sid.S10 })
-        sim.toGap().recry().started().toGap().recry()           // 인계: 쉼터 없음 S10
+        sim.toGap().recry().started().toGap().recry() // 인계: 쉼터 없음 S10
         assertEquals(Phase.HANDOFF, sim.ses.phase)
         assertEquals(1, sim.s.speech.queue.count { it.sid == Sid.S10 })
         sim.flush()
@@ -269,8 +269,7 @@ class OutputRouteTest {
 
     @Test fun rearPlayback_rearZone() = assertEquals(OutputRoute.REAR_ZONE, route(session().attempt1()))
 
-    @Test fun frontFallback_defaultFallback() =
-        assertEquals(OutputRoute.DEFAULT_FALLBACK, route(session().alarm().started(fallback = true)))
+    @Test fun frontFallback_defaultFallback() = assertEquals(OutputRoute.DEFAULT_FALLBACK, route(session().alarm().started(fallback = true)))
 
     @Test fun longDriveWaitsForRouteAfterRestore() {
         fun restored(): Sim {

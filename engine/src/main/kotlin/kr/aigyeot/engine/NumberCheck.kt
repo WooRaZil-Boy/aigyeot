@@ -11,21 +11,31 @@ package kr.aigyeot.engine
  */
 fun noDigits(text: String): Boolean {
     val t = readable(text)
-    return t.none(Char::isDigit) && !KOREAN_COUNT.containsMatchIn(t) && !SINO_COUNT.containsMatchIn(t) &&
-        !SINO_MULTI_COUNT.containsMatchIn(t) && !SINO_DEGREE.containsMatchIn(t) && !ZERO_COUNT.containsMatchIn(t) &&
-        !APPROX_COUNT.containsMatchIn(t) && !ORDINAL_COUNT.containsMatchIn(t) && !HALF_COUNT.containsMatchIn(t) &&
+    return t.none(Char::isDigit) &&
+        !KOREAN_COUNT.containsMatchIn(t) &&
+        !SINO_COUNT.containsMatchIn(t) &&
+        !SINO_MULTI_COUNT.containsMatchIn(t) &&
+        !SINO_DEGREE.containsMatchIn(t) &&
+        !ZERO_COUNT.containsMatchIn(t) &&
+        !APPROX_COUNT.containsMatchIn(t) &&
+        !ORDINAL_COUNT.containsMatchIn(t) &&
+        !HALF_COUNT.containsMatchIn(t) &&
         !PERIOD_WORD.containsMatchIn(t)
 }
 
 // 단위 목록은 하나다. 모든 수사 꼴(고유어·한자어·어림수·서수·영/공·배)이 같이 쓴다. 띄어 쓴 꼴은 전부, 붙여 쓴 꼴은 낱말과 안 겹치는 것만
 // ("이해"·"오시"·"이곳"·"일명"·"세월"은 붙이면 낱말). 단위 '도'는 띄어 쓴 경우만. "배고파"·"배려"는 '배'로 안 본다
 private const val UNIT_SPACED = "(?:번째|시간|주일|개월|차례|마리|가지|군데|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|프로|초|분|시|일|날|주|달|월|년|해|살|세|돌|번|회|개|명|곳|배(?!고|려))"
+
 // 고유어 수 뒤 붙임: 낱말과 겹치는 일(세일·네일·한일)·월·해(그만해)·세(한세상)·도(한도)만 뺀다
 private const val UNIT_ATTACHED = "(?:번째|시간|주일|개월|차례|마리|가지|군데|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|프로|초|분|시|날|주|달|년|살|돌|번|회|개|명|곳|배(?!고|려))"
+
 // 한 음절 한자어 수 뒤 붙임: 시·날·세·해·돌·명·곳·마리·가지·군데·차례는 "오시"·"이날"·"이세"·"이해"·"일명"·"이곳" 같은 낱말과 겹쳐 뺀다
 private const val UNIT_ATTACHED_SINO = "(?:번째|시간|주일|개월|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|프로|초|분|일|월|년|주|달|살|번|회|개|배(?!고|려))"
+
 // 두 음절 이상(·수 붙음) 한자어 수 뒤 붙임: 낱말 겹침이 드물어 더 넓게 본다. 시("오십시오")·해("이사해요")·가지("오이가지")만 뺀다
 private const val UNIT_ATTACHED_SINO_MULTI = "(?:번째|시간|주일|개월|차례|마리|군데|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|프로|초|분|일|월|년|주|달|날|살|세|돌|번|회|개|명|곳|배(?!고|려))"
+
 // 한 음절 고유어 수는 앞이 한글이면 낱말의 끝이라 안 본다("하지만 주변"의 만 주, "편안한 곳"의 한 곳)
 // 단 '몇'·'총'은 수를 꾸미는 말이라 앞에 있어도 본다("몇천 명"·"총두 번"). '약'·'단'·'매'는 더하지 않는다("약한 곳"·"간단한 곳"·"애매한 곳")
 // 복합 꼴에서 '만한'은 낱말이라 수로 보지 않는다("갈 만한 곳"·"볼만한", 만+한 = 10001을 고유어로 쓰지 않는다). "백한 번"은 그대로 수
@@ -35,23 +45,29 @@ private const val NATIVE =
         "|(?:백|천|만)(?:열|쉰)|$NOT_WORD_END(?:열|쉰|둘|셋|넷|한|두|세|네|석|넉|천|만)" +
         "|스물|서른|마흔|예순|일흔|여든|아흔|하나|다섯|여섯|일곱|여덟|아홉|스무)"
 private const val SINO = "[일이삼사오육칠팔구십백천만]"
-private val KOREAN_COUNT = Regex("${NATIVE}여?(?:\\s*$UNIT_ATTACHED|\\s+$UNIT_SPACED|\\s+도)")   // "만여 명"·"서른여 명"
+private val KOREAN_COUNT = Regex("${NATIVE}여?(?:\\s*$UNIT_ATTACHED|\\s+$UNIT_SPACED|\\s+도)") // "만여 명"·"서른여 명"
+
 // 수사 앞이 한글이면 낱말의 일부라 안 본다("백색소음이 도움"의 '이'·"아이 배"). 수십·수백은 '수'를 허용, 십여 분의 '여'를 허용
 // 앞이 한글이면 안 보는 예외는 한 음절 수(이·일·오·만…)에만. 두 음절 이상("약삼십 분"의 삼십)은 앞이 한글이어도 본다
 // '몇'·'총' 뒤는 본다(NOT_WORD_END, "몇십 분"·"몇백 미터")
 private val SINO_COUNT = Regex("$NOT_WORD_END${SINO}여?(?:\\s*$UNIT_ATTACHED_SINO|\\s+$UNIT_SPACED|\\s+도)")
 private val SINO_MULTI_COUNT = Regex("(?:수$SINO|$SINO{2,})여?(?:\\s*$UNIT_ATTACHED_SINO_MULTI|\\s+$UNIT_SPACED|\\s+도)")
+
 // 한자어 수(한 음절 포함)는 '도'를 붙여 써도 숫자("십도"·"오도"). "한도"·"정도"는 한자어 수가 아니라 통과
 private val SINO_DEGREE = Regex("$SINO+도")
+
 // 어림수("서너 분"·"세네 번"·"너덧 번")와 서수("첫 번째"·"둘째 날"). 서수는 뒤에 단위가 올 때만
 private val APPROX_COUNT = Regex("(?:한두|두세|세네|서너|너덧|너댓|네댓|대여섯|예닐곱|일여덟|여닐곱)(?:\\s*$UNIT_SPACED|\\s+도)")
+
 // '반'도 같은 단위 목록을 쓴다. 띄어 쓴 꼴은 전부("반 초"·"반 리터"·"반 배"). 붙여 쓴 꼴은 낱말과 겹치는 단위만 뺀다:
 // 시(반시계)·주(반주)·달(반달)·월(반월)·해(반해서)·세(반세기)·분(반분하다)·돌(반돌)·날(반날)·곳·명·살·회(반회전)·프로(반프로)·도. 반찬·반드시·반가워·반대·반응은 단위가 아니라 통과
 private const val UNIT_ATTACHED_HALF = "(?:번째|시간|주일|개월|차례|마리|가지|군데|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|초|일|년|번|개|배(?!고|려))"
 private val HALF_COUNT = Regex("반(?:\\s+(?:$UNIT_SPACED|도)|$UNIT_ATTACHED_HALF)")
 private val ORDINAL_COUNT = Regex("(?:첫째|첫|둘째|셋째|넷째|다섯째|여섯째|일곱째|여덟째|아홉째|열째)\\s*$UNIT_SPACED")
+
 // 기간 낱말. "하루하루"·"보름달"은 걸려도 정해진 문장으로 가서 안전 쪽
 private val PERIOD_WORD = Regex("하루|이틀|사흘|나흘|닷새|엿새|이레|여드레|아흐레|열흘|보름")
+
 // 영·공은 낱말("공개"·"영주")과 겹쳐 뒤에 단위가 띄어 올 때만 본다("영 분"). 붙여 쓴 꼴은 "공개"·"영주"·"공시"와 안 겹치는 단위만
 // 붙여 쓴 꼴도 단위를 본다. 낱말과 겹치는 단위는 뺀다: 시(공시·영시)·주(공주·영주)·달(영달)·개(공개)·회(공회전)·배(사람 이름 영배)·프로(공프로그램 꼴)
 private const val UNIT_ATTACHED_ZERO = "(?:번째|시간|개월|차례|마리|가지|군데|곳|킬로|키로|미터|센티|밀리|리터|그램|칼로리|퍼센트|초|분|년|살|날|번)"
@@ -62,17 +78,16 @@ private val ZERO_COUNT = Regex("(?:영|공)(?:\\s+(?:$UNIT_SPACED|도)|$UNIT_ATT
  * 서식 문자(Cf: U+200B·U+2060·U+FEFF 등)와 모든 공백·줄 구분자(Zs·Zl·Zp·탭·개행)를 공백 하나로.
  * Cf를 지우지 않고 공백으로 바꾼다: 지우면 "잠\u200B시간"이 "잠시간"이 되어 일반 공백 "잠 시간"과 달라진다.
  */
-fun readable(s: String): String =
-    java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC)
-        .codePoints().toArray().joinToString("") { cp ->
-            when {
-                Character.isDigit(cp) -> "${Character.digit(cp, 10)}"
-                cp == 0x066B -> "."
-                cp == 0x066C -> ","
-                Character.getType(cp) == Character.FORMAT.toInt() || Character.isWhitespace(cp) || Character.isSpaceChar(cp) -> " "
-                else -> String(Character.toChars(cp))
-            }
+fun readable(s: String): String = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC)
+    .codePoints().toArray().joinToString("") { cp ->
+        when {
+            Character.isDigit(cp) -> "${Character.digit(cp, 10)}"
+            cp == 0x066B -> "."
+            cp == 0x066C -> ","
+            Character.getType(cp) == Character.FORMAT.toInt() || Character.isWhitespace(cp) || Character.isSpaceChar(cp) -> " "
+            else -> String(Character.toChars(cp))
         }
+    }
 
 /**
  * 상태 단정 검사. 답 글이 관찰하지 않은 아이 상태(잠·깸·배고픔·아픔·안전·숨)나
@@ -99,7 +114,7 @@ fun noLeak(text: String): Boolean {
 private val LEAK_CHARS = Regex(
     "[A-Za-z]{2,}" +
         "|[\\p{L}&&[^A-Za-z\\uAC00-\\uD7A3\\u1100-\\u11FF\\u3130-\\u318F\\uA960-\\uA97F\\uD7B0-\\uD7FF\\uFFA0-\\uFFDC]]" +
-        "|[\\[\\](){}<>]",
+        "|[\\[\\](){}<>]"
 )
 
 /** 설계값(공백 없는 꼴). 프롬프트의 내부 낱말(주제·도구·상태값·정해진 문장)과 추론 투 낱말. 바꾸면 NumberCheckTest를 함께 고친다. */
@@ -107,21 +122,21 @@ internal val LEAK_WORDS = listOf("주제", "도구", "호출", "상태값", "문
 
 /** 설계값(공백 없는 꼴). 바꾸면 NumberCheckTest를 함께 고친다. */
 internal val STATE_CLAIMS = listOf(
-    "잠들", "자고있", "자는중", "잘자", "푹자",         // 잠
-    "깼", "깨어",                                      // 깸
-    "배고프", "배고파", "배고픈", "졸려", "졸린",                            // 배고픔
-    "아파", "아픈", "열이",                            // 아픔
-    "안전해", "안전합", "안전하게", "괜찮아", "괜찮습",   // 안전·괜찮음
-    "숨을", "숨쉬", "호흡",                            // 숨
-    "때문에울", "해서울어요",                          // 원인 단정
+    "잠들", "자고있", "자는중", "잘자", "푹자", // 잠
+    "깼", "깨어", // 깸
+    "배고프", "배고파", "배고픈", "졸려", "졸린", // 배고픔
+    "아파", "아픈", "열이", // 아픔
+    "안전해", "안전합", "안전하게", "괜찮아", "괜찮습", // 안전·괜찮음
+    "숨을", "숨쉬", "호흡", // 숨
+    "때문에울", "해서울어요", // 원인 단정
     // 사실 주제 단정: 분류가 사실 질문을 놓쳐도 LLM 글이 사실을 말하지 못하게 하는 안전망('잠들'은 위에 있다)
-    "울고있", "울지않", "울음이들려", "울음이들리", "울음소리가들", "그쳤어", "그쳤습", "그쳤고", "울었어", "울었습", "울었고",   // 울음
-    "먹었어", "먹었습", "먹었고", "먹였어", "먹였습", "먹였고", "먹은기록", "수유했",             // 수유
-    "잤어", "잤습", "잤고", "자요", "자네요",                                            // 잠
-    "갈았", "기저귀를갈",                               // 기저귀
-    "더워요", "추워요", "덥습", "춥습", "온도가",         // 온도
+    "울고있", "울지않", "울음이들려", "울음이들리", "울음소리가들", "그쳤어", "그쳤습", "그쳤고", "울었어", "울었습", "울었고", // 울음
+    "먹었어", "먹었습", "먹었고", "먹였어", "먹였습", "먹였고", "먹은기록", "수유했", // 수유
+    "잤어", "잤습", "잤고", "자요", "자네요", // 잠
+    "갈았", "기저귀를갈", // 기저귀
+    "더워요", "추워요", "덥습", "춥습", "온도가", // 온도
     "휴게소가있", "휴게소가없", "수유실이있", "수유실이없", // 쉼터
-    "잘통했", "효과가있었", "효과가없었",                 // 소리 성적
+    "잘통했", "효과가있었", "효과가없었" // 소리 성적
 )
 
 // 소수점(숫자 사이 마침표)은 문장 끝이 아니다

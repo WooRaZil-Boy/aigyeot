@@ -70,7 +70,7 @@ fun buildReport(dao: StoreDao, sessionId: String, now: Long, p: Params = Params(
     val s = dao.session(sessionId) ?: return null
     val endedAt = s.endedAt ?: return null
     val episodes = dao.episodes(sessionId)
-    val settled = finalizing || handoffSettled(episodes)   // 확정 전(인계 TTS 도중)에는 toldDriver가 null인 안내를 세지 않는다
+    val settled = finalizing || handoffSettled(episodes) // 확정 전(인계 TTS 도중)에는 toldDriver가 null인 안내를 세지 않는다
     val plays = dao.plays(sessionId)
     val songName = { id: String? -> id?.let { dao.song(it)?.name } }
     val timeline = episodes.map { timeline(it, plays.filter { pl -> pl.episodeId == it.id }, songName) }
@@ -84,13 +84,16 @@ fun buildReport(dao: StoreDao, sessionId: String, now: Long, p: Params = Params(
             else -> OutputRoute.NO_PLAYBACK
         },
         timeline = timeline, preCryContext = context,
-        steering = steering(windows.map { it.toRecord() }, dao.baselineWindows(s.driverUserId).map { it.toRecord() },
-            responseStartAt(episodes.mapNotNull { it.alarmAt } + listOfNotNull(dao.firstAlarmLogAt(sessionId)), plays.mapNotNull { it.startedAt })),
+        steering = steering(
+            windows.map { it.toRecord() },
+            dao.baselineWindows(s.driverUserId).map { it.toRecord() },
+            responseStartAt(episodes.mapNotNull { it.alarmAt } + listOfNotNull(dao.firstAlarmLogAt(sessionId)), plays.mapNotNull { it.startedAt })
+        ),
         carActions = carActions(s.outputRoute, plays, episodes, settled, s.restLog, dao.controls(sessionId).filter { it.ok }),
         controls = dao.controls(sessionId).groupBy { it.api to it.target }.map { (k, rows) ->
             ControlRecord(k.first, k.second, rows.size, rows.count { it.ok }, rows.count { !it.ok }, rows.sumOf { it.retries })
         },
-        methodStats = methodStats(dao, now, p, songName),
+        methodStats = methodStats(dao, now, p, songName)
     )
     return truncate(full)
 }
@@ -138,38 +141,58 @@ private val EXCLUDED = mapOf(
     "SESSION_CAP" to ExcludedReason.SESSION_CAP, "FEEDING_WINDOW" to ExcludedReason.FEEDING_WINDOW,
     "MIC_ERROR" to ExcludedReason.MIC_ERROR, "DETECTOR_TIMEOUT" to ExcludedReason.DETECTOR_TIMEOUT,
     "SILENCED" to ExcludedReason.INPUT_SILENCED, "FOCUS_LOSS" to ExcludedReason.FOCUS_LOSS,
-    "SUSPEND" to ExcludedReason.SUSPEND, "SESSION_END" to ExcludedReason.SESSION_END,
+    "SUSPEND" to ExcludedReason.SUSPEND, "SESSION_END" to ExcludedReason.SESSION_END
 )
 
 /** 울음 횟수의 규칙 하나. 울음 경보로 연 에피소드만 '울음'이다(소리 바꾸기 요청·기록만 한 경보·판정 창의 다시 울음은 아니다). 리포트 timeline의 cry_alarm과 홈 '오늘 하루'가 같이 쓴다. */
 internal fun isCryAlarm(e: EpisodeEntity) = e.trigger == "ALARM"
 
 internal fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (String?) -> String?): TimelineEpisode {
-    val started = plays.filter { it.startedAt != null }.sortedBy { it.startedAt }   // 시작하지 못한 재생은 plays에 넣지 않는다
+    val started = plays.filter { it.startedAt != null }.sortedBy { it.startedAt } // 시작하지 못한 재생은 plays에 넣지 않는다
     val entries = started.map {
-        PlayEntry(PlayPurpose.valueOf(it.purpose), soundMethod(kind(it.method)),
-            it.songId, iso(it.startedAt!!), iso(it.endedAt), (it.playedMs / 1000.0).roundToInt())
+        PlayEntry(
+            PlayPurpose.valueOf(it.purpose),
+            soundMethod(kind(it.method)),
+            it.songId,
+            iso(it.startedAt!!),
+            iso(it.endedAt),
+            (it.playedMs / 1000.0).roundToInt()
+        )
     }
     val second = e.secondAction?.let { a ->
         val pl = started.firstOrNull { it.purpose == "AUTO_SECOND" }
         SecondAttempt(
-            when (a) { "COMFORT" -> SecondAction.COMFORT_COOL; "FEEDING" -> SecondAction.FEEDING_WINDOW; else -> SecondAction.OTHER_SOUND },
+            when (a) {
+                "COMFORT" -> SecondAction.COMFORT_COOL
+                "FEEDING" -> SecondAction.FEEDING_WINDOW
+                else -> SecondAction.OTHER_SOUND
+            },
             pl?.let { sound(it.method, it.songId, songName) } ?: e.secondMethod?.let { sound(it, e.secondSongId, songName) },
-            result(e.secondResult),
+            result(e.secondResult)
         )
     }
-    val stop = if (e.handoffCause != null && e.handoffKind != null) StopInfo(
-        handoff = true,
-        reason = when (e.handoffCause) { "SESSION_CAP" -> StopReason.SESSION_CAP; "NO_SOUND" -> StopReason.NO_SOUND; else -> StopReason.ATTEMPT_LIMIT },
-        mode = when (e.handoffKind) {
-            "WAYPOINT_OFFER" -> HandoffKind.REST_OFFER
-            "ARRIVAL_NOTICE" -> HandoffKind.ARRIVAL_NOTICE
-            "NO_REST" -> HandoffKind.NO_REST
-            else -> HandoffKind.PARKED
-        },
-        restName = e.handoffRestName,
-        waypointAdded = e.waypointAdded, guardianNotified = e.guardianNotified, toldDriver = e.handoffToldDriver,
-    ) else null
+    val stop = if (e.handoffCause != null && e.handoffKind != null) {
+        StopInfo(
+            handoff = true,
+            reason = when (e.handoffCause) {
+                "SESSION_CAP" -> StopReason.SESSION_CAP
+                "NO_SOUND" -> StopReason.NO_SOUND
+                else -> StopReason.ATTEMPT_LIMIT
+            },
+            mode = when (e.handoffKind) {
+                "WAYPOINT_OFFER" -> HandoffKind.REST_OFFER
+                "ARRIVAL_NOTICE" -> HandoffKind.ARRIVAL_NOTICE
+                "NO_REST" -> HandoffKind.NO_REST
+                else -> HandoffKind.PARKED
+            },
+            restName = e.handoffRestName,
+            waypointAdded = e.waypointAdded,
+            guardianNotified = e.guardianNotified,
+            toldDriver = e.handoffToldDriver
+        )
+    } else {
+        null
+    }
     return TimelineEpisode(
         episodeId = e.id,
         trigger = if (isCryAlarm(e)) EpisodeTrigger.CRY_ALARM else EpisodeTrigger.SWITCH_SOUND,
@@ -181,7 +204,7 @@ internal fun timeline(e: EpisodeEntity, plays: List<PlayLogEntity>, songName: (S
         result = result(e.firstResult),
         excludedReason = e.firstUnjudged?.let { EXCLUDED[it] },
         recried = e.recried, second = second, stop = stop,
-        totalCryS = (e.cryMs / 1000.0).roundToInt(),
+        totalCryS = (e.cryMs / 1000.0).roundToInt()
     )
 }
 
@@ -197,8 +220,8 @@ internal fun preCry(episodeId: String, alarm: Long, rows: List<ContextSample>, p
         steeringReversals = reversals(w.map { it.steeringDeg }, p.steerReversalDeg),
         turnSignalUsed = w.any { it.turnSignal != TurnSignal.NONE },
         gear = Gear.valueOf(atAlarm.gear.name),
-        cabinTempC = atAlarm.cabinC, windowOpen = null,   // 창 위치를 읽는 API 미확인
-        playing = atAlarm.playback != null,
+        cabinTempC = atAlarm.cabinC, windowOpen = null, // 창 위치를 읽는 API 미확인
+        playing = atAlarm.playback != null
     )
 }
 
@@ -208,12 +231,21 @@ internal fun round1(v: Double): Double = BigDecimal(v.toString()).setScale(1, Ro
 /** 큰 조향 반전 수: 마지막 극값에서 [deg] 이상 반대로 움직이면 한 번(1초 표본, 문턱만 쓴 근사). */
 internal fun reversals(angles: List<Double>, deg: Double): Int {
     var ext = angles.firstOrNull() ?: return 0
-    var dir = 0.0   // 0 = 아직 방향 모름
+    var dir = 0.0 // 0 = 아직 방향 모름
     var n = 0
-    for (a in angles.drop(1)) when {
-        dir == 0.0 -> if (abs(a - ext) >= deg) { dir = Math.signum(a - ext); ext = a }
-        (a - ext) * dir > 0 -> ext = a                              // 같은 방향으로 더 감: 극값을 옮긴다
-        abs(a - ext) >= deg -> { n++; dir = -dir; ext = a }         // 극값에서 문턱 이상 되돌아옴
+    for (a in angles.drop(1)) {
+        when {
+            dir == 0.0 -> if (abs(a - ext) >= deg) {
+                dir = Math.signum(a - ext)
+                ext = a
+            }
+            (a - ext) * dir > 0 -> ext = a // 같은 방향으로 더 감: 극값을 옮긴다
+            abs(a - ext) >= deg -> {
+                n++
+                dir = -dir
+                ext = a
+            } // 극값에서 문턱 이상 되돌아옴
+        }
     }
     return n
 }
@@ -232,9 +264,20 @@ internal fun steering(session: List<SteerWindowRecord>, baseline: List<SteerWind
     }
     val cry = session.filter { it.role() == SteerRole.CRY }
     // NO_CRY는 창이 있고 모든 창을 관측했고 어느 창에도 울음이 없을 때만(제외는 관측과 별개). 관측 못 한 창이 하나라도 있으면(마이크 꺼짐·나중에 켬), 울음 창이 있었지만 모두 제외됐으면 비교할 창 없음
-    if (cry.isEmpty()) return Steering(false, null, null, null, null,
-        if (session.isNotEmpty() && session.all { it.observed && !it.cryPresent })
-            SteeringUnavailableReason.NO_CRY else SteeringUnavailableReason.NO_COMPARABLE_WINDOW)
+    if (cry.isEmpty()) {
+        return Steering(
+            false,
+            null,
+            null,
+            null,
+            null,
+            if (session.isNotEmpty() && session.all { it.observed && !it.cryPresent }) {
+                SteeringUnavailableReason.NO_CRY
+            } else {
+                SteeringUnavailableReason.NO_COMPARABLE_WINDOW
+            }
+        )
+    }
     // 같은 속도대 비교: 평소 창이 있는 속도대의 울음 창만 쓴다
     val baseBands = baseline.map { it.speedBand }.toSet()
     val comparable = cry.filter { it.speedBand in baseBands }
@@ -249,9 +292,14 @@ internal fun steering(session: List<SteerWindowRecord>, baseline: List<SteerWind
     val baselinePerMin = comparable.map { stat.getValue(it.speedBand).first }.average()
     val during = comparable.map { it.reversals.toDouble() }.average()
     // 대응 뒤 = 조용한 창 중 첫 울음 창보다 뒤이고 대응 시작 시각(responseAt, play_log 기준) 이후, 울음 창과 같은 속도대. 대응이 없었으면(null) 없음
-    val firstCry = cry.minOf { it.startAt }   // 기준선 없는 속도대의 울음 창도 포함(comparable만 보면 첫 울음이 늦어 '대응 뒤'가 줄어든다)
-    val after = session.filter { responseAt != null && it.role() == SteerRole.QUIET
-        && it.startAt > firstCry && it.startAt >= responseAt && it.speedBand in bands }
+    val firstCry = cry.minOf { it.startAt } // 기준선 없는 속도대의 울음 창도 포함(comparable만 보면 첫 울음이 늦어 '대응 뒤'가 줄어든다)
+    val after = session.filter {
+        responseAt != null &&
+            it.role() == SteerRole.QUIET &&
+            it.startAt > firstCry &&
+            it.startAt >= responseAt &&
+            it.speedBand in bands
+    }
         // 속도대가 섞이면 음수가 될 수 있어 0 아래로 내리지 않는다
         .map { it.reversals - stat.getValue(it.speedBand).first }.takeIf { it.isNotEmpty() }?.average()?.plus(baselinePerMin)?.coerceAtLeast(0.0)
     val z = comparable.filter { stat.getValue(it.speedBand).second > 0 }
@@ -270,26 +318,35 @@ private fun carActions(
     eps: List<EpisodeEntity>,
     settled: Boolean,
     restLog: String,
-    controls: List<ControlLogEntity>,
+    controls: List<ControlLogEntity>
 ): List<CarAction> {
     val played = plays.filter { it.startedAt != null }
     val waypoints = runCatching { Json.decodeFromString<List<RestLogEntry>>(restLog) }.getOrDefault(emptyList()).count { it.waypointOk == true }
     fun ctl(a: ControlAct) = controls.count { it.act == a }
     return listOf(
-        CarAction(if (route == "DEFAULT_FALLBACK") CarActionKind.DEFAULT_ZONE_PLAYBACK else CarActionKind.REAR_PLAYBACK,
-            played.size, (played.sumOf { it.playedMs } / 1000.0).roundToInt()),
+        CarAction(
+            if (route == "DEFAULT_FALLBACK") CarActionKind.DEFAULT_ZONE_PLAYBACK else CarActionKind.REAR_PLAYBACK,
+            played.size,
+            (played.sumOf { it.playedMs } / 1000.0).roundToInt()
+        ),
         CarAction(CarActionKind.SEAT_HEATER_OFF, ctl(ControlAct.SEAT_HEAT_OFF), null),
         // 잠금에 성공한 뒷창 수. 같은 창의 되돌림·다시 잠금 줄이 두 번째 '목표 참' 줄이라 영역으로 중복 없이 센다
-        CarAction(CarActionKind.REAR_WINDOW_LOCK,
-            controls.filter { it.act == ControlAct.WINDOW_LOCK }.map { it.target }.distinct().size, null),
+        CarAction(
+            CarActionKind.REAR_WINDOW_LOCK,
+            controls.filter { it.act == ControlAct.WINDOW_LOCK }.map { it.target }.distinct().size,
+            null
+        ),
         CarAction(CarActionKind.CABIN_COOL, ctl(ControlAct.CABIN_COOL), null),
         CarAction(CarActionKind.READING_LIGHT_OFF, ctl(ControlAct.READING_LIGHT_OFF), null),
         // 조명 낮춤: 낮춤에 성공한 DimAmbient 수. 한 명령의 밝기·색 두 줄은 cmd_id로 한 번, 되돌림(restore:) 줄은 세지 않는다
-        CarAction(CarActionKind.AMBIENT_DIM,
-            controls.filter { it.act == ControlAct.AMBIENT_DIM }.mapNotNull { it.cmdId }.distinct().size, null),
+        CarAction(
+            CarActionKind.AMBIENT_DIM,
+            controls.filter { it.act == ControlAct.AMBIENT_DIM }.mapNotNull { it.cmdId }.distinct().size,
+            null
+        ),
         CarAction(CarActionKind.WAYPOINT_ADDED, waypoints, null),
         CarAction(CarActionKind.ARRIVAL_NOTICE, eps.count { it.handoffKind == "ARRIVAL_NOTICE" && toldShown(it.handoffToldDriver, settled) }, null),
-        CarAction(CarActionKind.GUARDIAN_ALERT, eps.count { it.guardianNotified && settled }, null),   // 확정 전에는 알림이 나갔는지 모른다
+        CarAction(CarActionKind.GUARDIAN_ALERT, eps.count { it.guardianNotified && settled }, null) // 확정 전에는 알림이 나갔는지 모른다
     ).filter { it.count > 0 }
 }
 

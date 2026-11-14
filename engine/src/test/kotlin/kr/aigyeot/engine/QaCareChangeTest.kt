@@ -11,13 +11,20 @@ class CareChangeDuringQaTest {
 
     private fun withQa(sim: Sim, c: CareView?) {
         val qaLine = Line(Sid.QA, mapOf("text" to "답"), null, qaAnswer = true)
-        sim.s = sim.s.copy(care = c, careSeq = 1, speech = sim.s.speech.copy(speaking = "u1",
-            queue = listOf(qaLine.copy(vars = mapOf("text" to "말하는 줄")), qaLine, Line(Sid.S12, emptyMap(), null)),
-            qa = QaWindow("l1", QaStep.THINKING, T0 + 10_000, false)))
+        sim.s = sim.s.copy(
+            care = c,
+            careSeq = 1,
+            speech = sim.s.speech.copy(
+                speaking = "u1",
+                queue = listOf(qaLine.copy(vars = mapOf("text" to "말하는 줄")), qaLine, Line(Sid.S12, emptyMap(), null)),
+                qa = QaWindow("l1", QaStep.THINKING, T0 + 10_000, false)
+            )
+        )
     }
 
     @Test fun newCareSummaryDuringQa_dropsOldAnswer() {
-        val sim = idle(); withQa(sim, care(T0 + 1_000))
+        val sim = idle()
+        withQa(sim, care(T0 + 1_000))
         sim.ev(CareSummary(T0 + 500, care(T0 + 2_000, 2), 2))
         assertEquals(true, sim.s.speech.qa?.careStale, "질문 창은 두고 지난 요약 표시")
         assertEquals(listOf("말하는 줄", null), sim.s.speech.queue.map { it.vars["text"] }, "말하는 줄은 두고 말하지 않은 질문 답 줄은 뺀다")
@@ -46,7 +53,7 @@ class CareChangeDuringQaTest {
     @Test fun careChange_textOnlyReplyDropped() {
         val (sim, id) = thinking()
         sim.ev(CareSummary(sim.t + 10, care(sim.t + 5, 2), 2))
-        sim.ev(QaReply(sim.t, id, "지난 요약으로 만든 답", llm = true))   // LLM 글만 버린다(대체 글이 없으면 말하지 않는다)
+        sim.ev(QaReply(sim.t, id, "지난 요약으로 만든 답", llm = true)) // LLM 글만 버린다(대체 글이 없으면 말하지 않는다)
         assertTrue(sim.s.speech.queue.none { it.sid == Sid.QA } && sim.cmds.none { it is Speak }, "도구 없이 글만 와도 말하지 않는다")
     }
 
@@ -54,7 +61,7 @@ class CareChangeDuringQaTest {
         val sim = session().handoff().flush().gear(Gear.P, MIN)
         sim.ev(AskButton(sim.t))
         val id = sim.s.speech.qa!!.listenId
-        sim.ev(CareSummary(sim.t + 10, care(sim.t + 5, 2), 2))   // 듣는 중에 요약이 바뀐다: 그 질문은 아직 요약을 보내지 않았다
+        sim.ev(CareSummary(sim.t + 10, care(sim.t + 5, 2), 2)) // 듣는 중에 요약이 바뀐다: 그 질문은 아직 요약을 보내지 않았다
         assertEquals(false, sim.s.speech.qa?.careStale)
         sim.ev(Heard(sim.t, id, "오늘 몇 번 먹었어"))
         sim.ev(QaReply(sim.t, id, "새 요약으로 만든 답"))
@@ -93,8 +100,22 @@ class CareChangeDuringQaTest {
     }
 
     @Test fun dropQa_keepsNonCareQueuedAnswer() {
-        val sim = idle(); withQa(sim, care(T0 + 1_000))
-        sim.s = sim.s.copy(speech = sim.s.speech.copy(queue = sim.s.speech.queue.map { if (it.sid == Sid.QA && it.vars["text"] == "답") it.copy(careUsed = false) else it }))
+        val sim = idle()
+        withQa(sim, care(T0 + 1_000))
+        sim.s =
+            sim.s.copy(
+                speech = sim.s.speech.copy(
+                    queue = sim.s.speech.queue.map {
+                        if (it.sid == Sid.QA &&
+                            it.vars["text"] == "답"
+                        ) {
+                            it.copy(careUsed = false)
+                        } else {
+                            it
+                        }
+                    }
+                )
+            )
         sim.ev(CareSummary(T0 + 500, care(T0 + 2_000, 2), 2))
         assertEquals(listOf("말하는 줄", "답", null), sim.s.speech.queue.map { it.vars["text"] }, "돌봄 값을 쓰지 않은 줄은 남긴다")
     }
@@ -106,9 +127,12 @@ class CareChangeDuringQaTest {
     }
 
     @Test fun sameCareSummary_keepsQa() {
-        val sim = idle(); val c = care(T0 + 1_000); withQa(sim, c)
-        sim.ev(CareSummary(T0 + 500, c, 2))   // 같은 내용(seq만 새것): care가 바뀌지 않는다
-        assertTrue(sim.s.speech.qa != null); assertEquals(3, sim.s.speech.queue.size)
+        val sim = idle()
+        val c = care(T0 + 1_000)
+        withQa(sim, c)
+        sim.ev(CareSummary(T0 + 500, c, 2)) // 같은 내용(seq만 새것): care가 바뀌지 않는다
+        assertTrue(sim.s.speech.qa != null)
+        assertEquals(3, sim.s.speech.queue.size)
     }
 
     @Test fun callCancelsSpeakingDepartOffer_doesNotBlockS07() {
@@ -124,25 +148,40 @@ class CareChangeDuringQaTest {
     // ---- 도구 결과 안내(qaAnswer, Sid.QA 아님)는 두고 LLM 답(Sid.QA)만 뺀다 ----
     private fun withToolResult(sim: Sim) {
         val tool = Line(Sid.S09, mapOf("restName" to "n 휴게소"), null, qaAnswer = true)
-        sim.s = sim.s.copy(care = care(T0 + 1_000), careSeq = 1, speech = sim.s.speech.copy(speaking = "u1",
-            queue = listOf(Line(Sid.S12, emptyMap(), null), Line(Sid.S12, emptyMap(), null).copy(sid = Sid.QA, vars = mapOf("text" to "답"), qaAnswer = true), tool),
-            qa = QaWindow("l1", QaStep.THINKING, T0 + 10_000, false)))
+        sim.s = sim.s.copy(
+            care = care(T0 + 1_000),
+            careSeq = 1,
+            speech = sim.s.speech.copy(
+                speaking = "u1",
+                queue = listOf(
+                    Line(Sid.S12, emptyMap(), null),
+                    Line(Sid.S12, emptyMap(), null).copy(sid = Sid.QA, vars = mapOf("text" to "답"), qaAnswer = true),
+                    tool
+                ),
+                qa = QaWindow("l1", QaStep.THINKING, T0 + 10_000, false)
+            )
+        )
     }
     private fun Sim.sidsInQueue() = s.speech.queue.map { it.sid }
 
     @Test fun dropQaKeepsToolResultLine_careSummary() {
-        val sim = idle(); withToolResult(sim)
+        val sim = idle()
+        withToolResult(sim)
         sim.ev(CareSummary(T0 + 500, care(T0 + 2_000, 2), 2))
         assertEquals(listOf(Sid.S12, Sid.S09), sim.sidsInQueue())
     }
+
     @Test fun dropQaKeepsToolResultLine_careCleared() {
-        val sim = idle(); withToolResult(sim)
+        val sim = idle()
+        withToolResult(sim)
         sim.ev(CareCleared(T0 + 1_000))
         assertEquals(listOf(Sid.S12, Sid.S09), sim.sidsInQueue())
     }
+
     @Test fun dropQaKeepsToolResultLine_clearRecords() {
-        val sim = idle(); withToolResult(sim)
+        val sim = idle()
+        withToolResult(sim)
         sim.ev(ClearRecords(T0 + 1_000))
-        assertEquals(listOf(Sid.S12, Sid.S09), sim.sidsInQueue())   // 기록 지우기도 이미 실행한 도구의 결과 안내는 둔다
+        assertEquals(listOf(Sid.S12, Sid.S09), sim.sidsInQueue()) // 기록 지우기도 이미 실행한 도구의 결과 안내는 둔다
     }
 }

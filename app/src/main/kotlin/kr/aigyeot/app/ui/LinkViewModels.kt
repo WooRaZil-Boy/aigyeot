@@ -34,8 +34,9 @@ internal fun songRows(songs: List<SongEntity>, selection: SongSelectionEntity?, 
     val third = methods.firstOrNull { it.kind == MethodKind.SONG }?.songId
     return songs.map { s ->
         SongRow(
-            s.id, (s.name ?: "이름 없는 노래") + (s.durationS?.let { " · ${it.toInt()}초" } ?: "") + if (s.id == third) " · 실험에 쓰는 노래" else "",
-            s.id == selection?.songId,
+            s.id,
+            (s.name ?: "이름 없는 노래") + (s.durationS?.let { " · ${it.toInt()}초" } ?: "") + if (s.id == third) " · 실험에 쓰는 노래" else "",
+            s.id == selection?.songId
         )
     }
 }
@@ -52,10 +53,13 @@ internal fun phoneLines(ph: LinkedPhone): Pair<String, String?> =
     (if (ph.role == "owner") "함께 타는 보호자" else "다른 보호자") to ph.lastSeenAt?.let { "마지막 연락 ${TimeText.date(it)} ${TimeText.clock(it)}" }
 
 /** 연결 화면: 열면 코드를 받고 닫으면 지우는 일은 화면의 열림·닫힘이 부른다. 남은 시간은 코드가 있는 동안 1초마다 갱신. */
-class ConnectViewModel(private val link: Link, private val clock: () -> Long) : ViewModel() {
+class ConnectViewModel(private val link: Link, clock: () -> Long) : ViewModel() {
     val uiState: StateFlow<ConnectUiState> = link.status.transformLatest { st ->
         emit(connectUiState(st, clock()))
-        while (st.pairExpiresAt != null) { delay(1_000); emit(connectUiState(st, clock())) }
+        while (st.pairExpiresAt != null) {
+            delay(1_000)
+            emit(connectUiState(st, clock()))
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), connectUiState(link.status.value, clock()))
 
     fun open() = link.openPairing()

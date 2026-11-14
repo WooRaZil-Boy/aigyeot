@@ -59,7 +59,6 @@ import kr.aigyeot.shared.Role
 
 // 연결 흐름. 첫 안내(차 연결)와 같은 결로 나머지 단계도 흰 블록 + 큰 버튼.
 
-
 /** 429 잠금 글([text]: 잠금이 없거나 풀렸으면 null)과 이 화면에서 본 그 잠금의 첫 글([atStart], 한 번만 알리는 데 쓴다, [pairErrorLive]). */
 private class PairWait(val text: String?, val atStart: String?)
 
@@ -127,7 +126,10 @@ fun ConnectScreen(onCode: (String) -> Unit, onPaired: (Role) -> Unit, onCancel: 
             TypedAction.BAD_FORMAT -> error = "6자리 숫자 또는 초대 코드를 넣어 주세요"
             TypedAction.IGNORE -> {}
             TypedAction.CONFIRM_REPLACE -> onCode(code!!)
-            TypedAction.PAIR -> { typed = code; vm.start(code!!) }
+            TypedAction.PAIR -> {
+                typed = code
+                vm.start(code!!)
+            }
         }
     }
     val mineError = pairErrorShown(mine, wait.text) // 429 글은 잠금이 풀리면 걷힌다
@@ -150,12 +152,16 @@ fun ConnectScreen(onCode: (String) -> Unit, onPaired: (Role) -> Unit, onCancel: 
                         .addOnSuccessListener { b ->
                             val code = b.rawValue?.let { codeFromLink(it) ?: normalizeCode(it) }
                             // 스캔 중에 직접 친 코드의 요청이 시작됐을 수 있다. 끝난 결과를 받을 화면이 사라지지 않게 간다.
-                            if (code == null) error = "올바른 연결 링크가 아니에요"
-                            else if (!vm.canTakeLink()) android.widget.Toast.makeText(context, PAIR_BUSY, android.widget.Toast.LENGTH_SHORT).show()
-                            else if (needsConfirm(CodeSource.QR)) onCode(code)
+                            if (code == null) {
+                                error = "올바른 연결 링크가 아니에요"
+                            } else if (!vm.canTakeLink()) {
+                                android.widget.Toast.makeText(context, PAIR_BUSY, android.widget.Toast.LENGTH_SHORT).show()
+                            } else if (needsConfirm(CodeSource.QR)) {
+                                onCode(code)
+                            }
                         }
                         .addOnFailureListener { error = "QR을 찍지 못했어요. 코드를 넣어 주세요." }
-                },
+                }
             )
         }
         Block {
@@ -177,7 +183,7 @@ fun ConnectScreen(onCode: (String) -> Unit, onPaired: (Role) -> Unit, onCancel: 
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                 shape = Radius.field,
                 colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = p.textTertiary.copy(alpha = 0.4f)),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
             if (busy) Checking()
             // 잠긴 동안 칸 아래 글이 남은 시간이 아니면(QR 실패 글이 덮었거나, 고쳐서 걷혔거나, QR로 시작한 연결) 남은 시간을 한 줄 더 보인다.
@@ -213,7 +219,7 @@ fun ConfirmScreen(code: String, onDone: (Role) -> Unit, onRetry: () -> Unit, vm:
     }
     // 429 뒤에는 Retry-After(없으면 10초)까지 연결 버튼을 잠근다. 직접 입력 길과 같은 값이다.
     val wait = rememberPairWait(ui.lockedUntil)
-    val shown =if (isInviteCode(code)) "${code.take(5)}-${code.drop(5)}" else code
+    val shown = if (isInviteCode(code)) "${code.take(5)}-${code.drop(5)}" else code
     val p = Tokens.colors
     BackPage("확인", onBack = null) {
         Block {
@@ -230,9 +236,12 @@ fun ConfirmScreen(code: String, onDone: (Role) -> Unit, onRetry: () -> Unit, vm:
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Btn(
                 if (replacing) "끊고 연결하기" else "연결하기",
-                { switching = ui.connected; vm.start(code) },
+                {
+                    switching = ui.connected
+                    vm.start(code)
+                },
                 enabled = !busy && wait.text == null,
-                big = true,
+                big = true
             )
             Btn("코드 다시 넣기", onRetry, kind = BtnKind.TONAL, enabled = !busy)
         }

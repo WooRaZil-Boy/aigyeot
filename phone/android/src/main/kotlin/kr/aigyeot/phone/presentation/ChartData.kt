@@ -1,5 +1,9 @@
 package kr.aigyeot.phone.presentation
 
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Locale
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
@@ -23,10 +27,6 @@ import kr.aigyeot.shared.HandoffKind
 import kr.aigyeot.shared.PlayPurpose
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.TimelineEpisode
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Locale
 
 // 차트에 넣는 값. 저장하지 않고 그릴 때 기록·리포트에서 계산한다.
 // 순수 함수라 JUnit으로 본다(ChartDataTest).
@@ -68,6 +68,7 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
     val (from, to) = dayBounds(day, zone)
     val live = care.events.filter { it.deletedAt == null }
     fun end(e: CareEvent) = e.endAt ?: if (e.isOngoing) now else e.startAt
+
     // 그날과 실제로 겹치는 구간만(자정에 끝난 어제 잠은 빼고), 길이 없는 점(끝 모름)은 그날 시작한 것만.
     fun inDay(start: Long, stop: Long) = start < to && (stop > from || (stop == start && start >= from))
     fun overlapping(kind: CareKind) = live.filter { it.kind == kind && inDay(it.startAt, end(it)) }.sortedBy { it.startAt }
@@ -75,8 +76,9 @@ fun dayChart(care: CareFile, reports: Collection<ReportSummaryBody>, day: LocalD
         val a = minuteIn(maxOf(e.startAt, from), from)
         val b = minuteIn(minOf(end(e), to), from)
         // 끝 시각 모름은 끝을 만들지 않는다(log.row.feedUnknown과 같은 말).
-        if (e.endAt == null && !e.isOngoing) DaySpan(a, a, "$name ${hhmm(a)} · 끝 시각 모름")
-        // 길이 글은 그날에 든 기록 시각의 차이(분으로 내린 그림 좌표의 차이가 아니다: 기록 목록·잠 합계와 같은 값).
+        if (e.endAt == null && !e.isOngoing) {
+            DaySpan(a, a, "$name ${hhmm(a)} · 끝 시각 모름")
+        } // 길이 글은 그날에 든 기록 시각의 차이(분으로 내린 그림 좌표의 차이가 아니다: 기록 목록·잠 합계와 같은 값).
         // 붙일지도 그 차이로 정한다: 같은 분 안에 끝난 기록도 길이가 있다(1분 미만이면 기록 목록과 같은 "1분 미만").
         else {
             val ms = minOf(end(e), to) - maxOf(e.startAt, from)
@@ -146,6 +148,7 @@ data class IntervalWeek(val bars: List<WeekBar>, val usualMs: Long?) {
 fun intervalWeek(care: CareFile, now: Long, zone: ZoneId): IntervalWeek {
     val days = CareStats.lastDays(PATTERN_DAYS, now, zone)
     val today = days.last()
+
     // 간격은 뒤 수유가 시작한 날에 넣는다.
     fun dayOf(g: FeedGap) = Instant.ofEpochMilli(g.end).atZone(zone).toLocalDate()
     val gaps = CareStats.feedGaps(CareStats.feedStarts(care.events, until = now))
@@ -208,7 +211,7 @@ data class EpisodeBand(
     val marks: List<EpisodeMarkAt>,
     val startAt: Long?,
     val outcomes: List<String> = emptyList(),
-    val head: String = "울음",
+    val head: String = "울음"
 ) {
     /** 화면 읽기 한 줄: 머리([episodeHead], trigger로 정함) + 재생·표시·결과. 소리 바꾸기 요청 에피소드를 '울음'으로 읽지 않는다. */
     val summary: String get() = "$head: " + (sounds.map { it.tip } + marks.map { it.label } + outcomes).joinToString(", ")
@@ -218,6 +221,7 @@ data class EpisodeBand(
      * '듣기 틈'이라 단정하지 않는다(차 리포트 soundTip과 같은 규칙).
      */
     val gaps: List<EpisodeSeg> get() = sounds.zipWithNext { x, y -> if (y.from > x.to) EpisodeSeg(x.to, y.from, null) else null }.filterNotNull()
+
     /** 축 길이(초): 마지막 재생 끝, 적어도 1(소리 구간에서 계산). */
     val totalS: Int get() = maxOf(sounds.maxOfOrNull { it.to } ?: 0, 1)
 }
@@ -250,9 +254,12 @@ fun episodeBand(e: TimelineEpisode, songs: List<SongEntry>): EpisodeBand {
         add(
             EpisodeMarkAt(
                 0,
-                if (e.trigger != EpisodeTrigger.CRY_ALARM) triggerText(e.trigger)
-                else e.alarmLatencyS?.let { "감지 ${String.format(Locale.ROOT, "%.1f", it)}초" } ?: "감지",
-            ),
+                if (e.trigger != EpisodeTrigger.CRY_ALARM) {
+                    triggerText(e.trigger)
+                } else {
+                    e.alarmLatencyS?.let { "감지 ${String.format(Locale.ROOT, "%.1f", it)}초" } ?: "감지"
+                }
+            )
         )
         // 다시 울음: 그 때문에 시작한 자동 2차 재생의 시작(운전자 요청 재생은 다시 울음이 아니다). 없으면 표시하지 않는다.
         if (e.recried) timed.firstOrNull { it.first.purpose == PlayPurpose.AUTO_SECOND }?.let { add(EpisodeMarkAt(it.second.from, "다시 울음")) }
@@ -273,7 +280,7 @@ fun reportKpis(b: ReportSummaryBody): ReportKpis {
     return ReportKpis(
         if (lat.isEmpty()) null else lat.average(),
         b.timeline.sumOf { it.totalCryS },
-        b.carActions.filter { it.count > 0 }.map { it.action }.distinct().size,
+        b.carActions.filter { it.count > 0 }.map { it.action }.distinct().size
     )
 }
 
@@ -314,7 +321,7 @@ fun feedTrend(care: CareFile, now: Long, zone: ZoneId): String? {
     val days = CareStats.lastDays(PATTERN_DAYS, now, zone)
     val now7 = CareStats.perRecordedDay(CareStats.countPerDay(care.events, CareKind.FEED, days, zone)) ?: return null
     val prev7 = CareStats.perRecordedDay(
-        CareStats.countPerDay(care.events, CareKind.FEED, days.map { it.minusDays(PATTERN_DAYS.toLong()) }, zone),
+        CareStats.countPerDay(care.events, CareKind.FEED, days.map { it.minusDays(PATTERN_DAYS.toLong()) }, zone)
     ) ?: return null
     val d = now7 - prev7 // 평균끼리 뺀 뒤 마지막에만 반올림한다
     val n = String.format(Locale.ROOT, "%.1f", kotlin.math.abs(d))

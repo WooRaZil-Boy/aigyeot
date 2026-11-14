@@ -1,16 +1,18 @@
 package kr.aigyeot.app.ui
 
-import kotlinx.serialization.json.jsonObject
-import kr.aigyeot.shared.ProtocolJson
-import kr.aigyeot.shared.ReportSummaryBody
 import java.io.File
 import java.time.ZoneId
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.serialization.json.jsonObject
+import kr.aigyeot.shared.ProtocolJson
+import kr.aigyeot.shared.ReportSummaryBody
 
 /** 공용 JSON 예제(report_summary*)가 차 리포트 화면 값(숫자 줄·띠·자세히·차가 한 일·조향·방법별)으로 어떻게 바뀌는지 고정한다. */
 class ReportViewGoldenTest {
-    @BeforeTest fun zone() { TimeText.zone = ZoneId.of("Asia/Seoul") }
+    @BeforeTest fun zone() {
+        TimeText.zone = ZoneId.of("Asia/Seoul")
+    }
 
     private fun dump(name: String): String {
         val raw = File("../shared/src/test/resources/protocol/$name.json").readText()

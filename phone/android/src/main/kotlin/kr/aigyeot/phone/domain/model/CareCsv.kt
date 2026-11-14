@@ -48,12 +48,11 @@ object CareCsv {
      * 헤더로 형식을 정하고(모르면 UNKNOWN, 줄은 읽지 않는다) 줄마다 기록으로 바꾼다.
      * `profile`은 고른 아이(Nara 이름이 둘 이상일 때만 본다). 둘 이상인데 null이면 아직 고르기 전이라 줄은 비고 건너뛴 수는 0이다.
      */
-    fun parse(text: String, existing: CareFile, now: Long, profile: String? = null): ImportDraft =
-        try {
-            parseRecords(records(text.removePrefix(BOM)), existing, now, profile)
-        } catch (_: Malformed) {
-            ImportDraft(ImportFormat.UNKNOWN, emptyList(), emptyList(), ImportSkipped()) // import.unreadable
-        }
+    fun parse(text: String, existing: CareFile, now: Long, profile: String? = null): ImportDraft = try {
+        parseRecords(records(text.removePrefix(BOM)), existing, now, profile)
+    } catch (_: Malformed) {
+        ImportDraft(ImportFormat.UNKNOWN, emptyList(), emptyList(), ImportSkipped()) // import.unreadable
+    }
 
     /** 헤더(첫 레코드)만 읽고 형식을 정한다. 모르는 형식이면 나머지는 읽지 않는다. 줄은 한 레코드씩 본다(파일 전체를 칸으로 펼치지 않는다). */
     private fun parseRecords(records: Sequence<List<String>>, existing: CareFile, now: Long, profile: String?): ImportDraft {
@@ -85,19 +84,25 @@ object CareCsv {
                 seen.duplicate(e) -> Skip.DUPLICATE
                 else -> null
             }
-            if (skip != null) skips[skip.ordinal]++ else { rows += e!!; seen.take(e) }
+            if (skip != null) {
+                skips[skip.ordinal]++
+            } else {
+                rows += e!!
+                seen.take(e)
+            }
         }
         val skipped = ImportSkipped(
             skips[Skip.UNSUPPORTED.ordinal],
             skips[Skip.UNREADABLE.ordinal],
             skips[Skip.FUTURE.ordinal],
             skips[Skip.OLD.ordinal],
-            skips[Skip.DUPLICATE.ordinal],
+            skips[Skip.DUPLICATE.ordinal]
         )
         return ImportDraft(format, profiles, rows.sortedBy { it.startAt }, skipped)
     }
 
-    private const val BOM = "﻿"
+    // BOM은 눈에 보이지 않아 서식 도구가 지우므로 글자 그대로 쓰지 않고 이스케이프로 쓴다.
+    private const val BOM = "\uFEFF"
 
     private fun formatOf(header: List<String>): ImportFormat = when {
         header.isNotEmpty() && header == CSV_HEADER.split(',') -> ImportFormat.AIGYEOT
@@ -114,6 +119,8 @@ object CareCsv {
      * 한 레코드씩 내준다(다시 돌면 처음부터 다시 읽는다). 이럴 때는 [Malformed]로 파일째 읽지 않는다:
      * 따옴표가 닫히지 않은 채 끝나면(뒤 기록들을 한 칸(메모)으로 삼키지 않게), 한 레코드의 칸이 상한을 넘으면(5MB 안 한 줄 수백만 칸으로 메모리를 다 쓰지 않게).
      */
+    // 행이 끝날 때마다 새 목록으로 바꿔 끼우므로 var가 필요하다.
+    @Suppress("DoubleMutabilityForCollection")
     private fun records(text: String): Sequence<List<String>> = sequence {
         var row = mutableListOf<String>()
         val cell = StringBuilder()
@@ -127,7 +134,10 @@ object CareCsv {
         while (i < text.length) {
             val c = text[i]
             when {
-                quoted && c == '"' && text.getOrNull(i + 1) == '"' -> { cell.append('"'); i++ }
+                quoted && c == '"' && text.getOrNull(i + 1) == '"' -> {
+                    cell.append('"')
+                    i++
+                }
                 quoted && c == '"' -> quoted = false
                 quoted -> cell.append(c)
                 c == '"' -> quoted = true
@@ -159,15 +169,8 @@ object CareCsv {
 
     private enum class Skip : Read { UNSUPPORTED, UNREADABLE, FUTURE, OLD, DUPLICATE }
 
-    private class Got(
-        val kind: CareKind,
-        val start: Long,
-        val end: Long?,
-        val side: FeedSide?,
-        val amount: Int?,
-        val diaper: Diaper?,
-        val note: String,
-    ) : Read {
+    private class Got(val kind: CareKind, val start: Long, val end: Long?, val side: FeedSide?, val amount: Int?, val diaper: Diaper?, val note: String) :
+        Read {
         /**
          * 끝이 비었거나 시작보다 이르거나 최대 길이를 넘거나 지금 + 1분보다 늦으면(미래 시각 금지) 끝 모름.
          * 진행 중은 만들지 않는다. 수유·잠 말고는 끝이 없다.
@@ -188,7 +191,7 @@ object CareCsv {
                 note = note.takeIf { it.isNotBlank() }?.let(::clipNote),
                 source = CareSource.IMPORT,
                 createdAt = now,
-                updatedAt = now,
+                updatedAt = now
             )
         }
     }
@@ -316,8 +319,7 @@ object CareCsv {
     }
 
     /** 메모 200자(코드 포인트)에서 자른다. */
-    private fun clipNote(s: String): String =
-        if (s.codePointCount(0, s.length) <= NOTE_MAX) s else s.substring(0, s.offsetByCodePoints(0, NOTE_MAX))
+    private fun clipNote(s: String): String = if (s.codePointCount(0, s.length) <= NOTE_MAX) s else s.substring(0, s.offsetByCodePoints(0, NOTE_MAX))
 }
 
 /** id: "imp-" + SHA-256("kind|startAt|endAt|feedSide|amountMl", null은 빈 글자, 시각은 epoch ms) 16진수 앞 16글자. 다시 가져와도 겹치지 않는다. */
@@ -381,7 +383,7 @@ data class ImportPreview(
     val skipTitle: String?,
     val skips: List<String>,
     val note: String?,
-    val buttons: List<String>,
+    val buttons: List<String>
 )
 
 fun importPreview(d: ImportDraft, now: Long, zone: ZoneId): ImportPreview {
@@ -396,7 +398,7 @@ fun importPreview(d: ImportDraft, now: Long, zone: ZoneId): ImportPreview {
         s.old to "14일보다 오래된 기록",
         s.future to "앞으로의 시각",
         s.unreadable to "읽을 수 없는 줄",
-        s.unsupported to "가져오지 않는 종류",
+        s.unsupported to "가져오지 않는 종류"
     ).filter { it.first > 0 }.map { (n, what) -> "$what ${n}건" }
     return ImportPreview(
         title = "기록 ${d.rows.size}건을 가져올게요",
@@ -404,7 +406,7 @@ fun importPreview(d: ImportDraft, now: Long, zone: ZoneId): ImportPreview {
         skipTitle = "가져오지 않는 것".takeIf { skips.isNotEmpty() },
         skips = skips,
         note = "시각은 한국 시간으로 읽어요",
-        buttons = listOf("가져오기", "취소"),
+        buttons = listOf("가져오기", "취소")
     )
 }
 

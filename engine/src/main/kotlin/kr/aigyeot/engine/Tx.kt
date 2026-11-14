@@ -7,19 +7,24 @@ package kr.aigyeot.engine
 /** step 한 번의 작업 공간. 상태는 불변 객체라 copy로 바꿔 끼운다. */
 internal class Tx(val p: Params, var s: EngineState) {
     val out = mutableListOf<Command>()
-    var offered = false     // 이 Step에 인계·쉼터 제안을 했다
-    var qaTool = false      // 질문 답의 도구 사건(또는 그 결과)을 처리하는 중
-    var snapshot = false    // Suspend·기록 지우기: 마지막에 SaveSnapshot
+    var offered = false // 이 Step에 인계·쉼터 제안을 했다
+    var qaTool = false // 질문 답의 도구 사건(또는 그 결과)을 처리하는 중
+    var snapshot = false // Suspend·기록 지우기: 마지막에 SaveSnapshot
 
     val now get() = s.now
     val ses get() = s.session
+
     /** 세션 잎 칸을 고치는 통로. 어느 잎 칸을 고칠 수 있는지는 소유 표가 정하고 OwnershipTest가 본다. 세션이 없으면 그대로. */
-    fun ses(f: SessionState.() -> SessionState) { s.session?.let { s = s.copy(session = it.f()) } }
+    fun ses(f: SessionState.() -> SessionState) {
+        s.session?.let { s = s.copy(session = it.f()) }
+    }
     val gearP get() = s.car.gear == Gear.P
     val suspended get() = s.ign.suspendedAt != null
 
     /** now를 쓰는 유일한 함수. 라우터 advance(시간 흐름)와 Engine 입구(사건 밖 값 맞추기)가 부른다. */
-    fun clock(t: Long) { s = s.copy(now = t) }
+    fun clock(t: Long) {
+        s = s.copy(now = t)
+    }
 
     /** [owner]는 이 명령을 내는 세션(지난 세션 몫의 명령은 그 세션 id, control_log가 id 앞부분으로 기록 세션을 정한다). 기본은 지금 세션. */
     fun newId(owner: String? = ses?.id): String {

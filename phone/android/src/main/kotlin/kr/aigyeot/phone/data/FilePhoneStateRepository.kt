@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.data
 
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,6 @@ import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.CredentialRepository
 import kr.aigyeot.phone.domain.repository.Logger
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
-import java.io.File
 
 /**
  * `phone_state.json`과 지금 자격(연결 세대)의 원본. 만들 때 자격을 읽고, 상태가 그 차 것이 아니면 그 차의 빈 상태로 복구한다.
@@ -33,7 +33,7 @@ class FilePhoneStateRepository(
     /** commit·commitLocal의 저장 실패(U·W·R 범주): 띠로 알린다. */
     private val onSaveFailed: () -> Unit,
     /** 앞 프로세스가 강제 끊김을 정리한 뒤 GONE 화면에서 고르기 전에 죽었으면 그 기기 id(재시작 복구 기록). */
-    goneCleanupPending: String?,
+    goneCleanupPending: String?
 ) : PhoneStateRepository {
     private val store = StateStore(file)
 
@@ -45,7 +45,7 @@ class FilePhoneStateRepository(
     private val _connection = MutableStateFlow(
         credsRead.getOrNull()?.let { Connection.Paired(it) }
             ?: goneCleanupPending?.takeIf { credsRead.isSuccess }?.let { Connection.Gone(it) }
-            ?: Connection.None,
+            ?: Connection.None
     )
     override val connection: StateFlow<Connection> = _connection.asStateFlow()
 

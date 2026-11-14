@@ -12,6 +12,7 @@ import javax.crypto.spec.GCMParameterSpec
 /** 차 토큰을 감싸고 푼다(relay_credential.token_encrypted). */
 interface TokenCipher {
     fun seal(plain: String): String
+
     /** 풀지 못하면(키가 없어짐·다른 기기로 복원) 예외. link는 차 토큰 무효로 처리한다. */
     fun open(sealed: String): String
 }
@@ -26,7 +27,7 @@ internal class KeystoreCipher(private val alias: String = "aigyeot_relay_token")
                 KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .build(),
+                    .build()
             )
         }.generateKey()
     }

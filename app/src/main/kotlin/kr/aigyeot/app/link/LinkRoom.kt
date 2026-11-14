@@ -71,13 +71,13 @@ internal class Applied {
     val deleteFiles = mutableListOf<String>()
     var download = false
     var outbox = false
-    var phones = false            // 연결 표가 실제로 바뀜: 마지막 폰 확인을 다시 부른다
-    var status = false            // 마지막 접속 시각 등 화면 상태만 새로 고침
-    var newOwner = false          // 연결 코드로 붙은 새 owner(연결 화면이 열려 있으면 새 코드)
+    var phones = false // 연결 표가 실제로 바뀜: 마지막 폰 확인을 다시 부른다
+    var status = false // 마지막 접속 시각 등 화면 상태만 새로 고침
+    var newOwner = false // 연결 코드로 붙은 새 owner(연결 화면이 열려 있으면 새 코드)
     var justPaired: String? = null
-    var care: CareView? = null    // care_summary 요약. 지금 값보다 늦은지는 커밋 뒤 link가 든 실제 최신 요약과 견준다
-    var careSeq: Long? = null     // 그 메시지의 중계 seq
-    var careCleared = false       // 요약을 보낸 owner가 연결에서 빠져 Room 행을 지웠다: 커밋 뒤 실제 값을 비우고 CareCleared
+    var care: CareView? = null // care_summary 요약. 지금 값보다 늦은지는 커밋 뒤 link가 든 실제 최신 요약과 견준다
+    var careSeq: Long? = null // 그 메시지의 중계 seq
+    var careCleared = false // 요약을 보낸 owner가 연결에서 빠져 Room 행을 지웠다: 커밋 뒤 실제 값을 비우고 CareCleared
 }
 
 /** 받기·보낼 함 넣기를 Room 트랜잭션 안에서 한다. 네트워크는 부르지 않는다. */
@@ -104,6 +104,7 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
     private class BadBody : Exception()
 
     private fun <T> Envelope.decode(s: KSerializer<T>): T = runCatching { ProtocolJson.decodeFromJsonElement(s, body) }.getOrElse { throw BadBody() }
+
     /** 시각을 읽지 못하거나 정수가 음수이거나, 끔인데 잠·기저귀 칸에 값이 있으면 버린다. */
     private fun careView(b: CareSummaryBody, now: Long): CareView {
         fun at(s: String?) = s?.let { instantOf(it) ?: throw BadBody() }
@@ -112,31 +113,44 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
         val sd = listOf(b.lastSleepStartAt, b.lastSleepEndAt, b.sleepingSince, b.todaySleepMin, b.nightWakeups, b.lastDiaperAt, b.todayDiaperCount)
         if (!b.sleepDiaperEnabled && sd.any { it != null }) throw BadBody()
         val asOf = at(b.asOf) ?: throw BadBody()
-        if (asOf > now + CLOCK_SKEW_MS) throw BadBody()   // 폰 시계가 앞선 요약은 시계를 고친 뒤 새 요약을 막는다
+        if (asOf > now + CLOCK_SKEW_MS) throw BadBody() // 폰 시계가 앞선 요약은 시계를 고친 뒤 새 요약을 막는다
         return CareView(
             asOf, b.sleepDiaperEnabled, at(b.lastSleepStartAt), at(b.lastSleepEndAt), at(b.sleepingSince),
-            b.todaySleepMin, b.nightWakeups, at(b.lastDiaperAt), b.todayDiaperCount, b.todayFeedCount, b.zone,
+            b.todaySleepMin, b.nightWakeups, at(b.lastDiaperAt), b.todayDiaperCount, b.todayFeedCount, b.zone
         )
     }
     private fun songId(id: String) = id.takeIf(::isUlid) ?: throw BadBody()
 
     private fun apply(env: Envelope, seq: Long, now: Long, out: Applied, carId: String?) {
         when (env.type) {
-            "feeding_started" -> feedingStarted(instantOf(env.decode(FeedingStartedBody.serializer()).at) ?: throw BadBody(),
-                FeedingFrom.PHONE, env.id, now, out)
+            "feeding_started" -> feedingStarted(
+                instantOf(env.decode(FeedingStartedBody.serializer()).at) ?: throw BadBody(),
+                FeedingFrom.PHONE,
+                env.id,
+                now,
+                out
+            )
             "song_added" -> {
                 val b = env.decode(SongAddedBody.serializer())
                 val id = songId(b.songId)
-                if (dao.song(id) != null) return                                       // 지운 곡은 되살리지 않는다. 같은 곡을 다시 추가해도 바꿀 것이 없다
+                if (dao.song(id) != null) return // 지운 곡은 되살리지 않는다. 같은 곡을 다시 추가해도 바꿀 것이 없다
                 // 3곡 판정: 추가 순번이 더 작고 아직 지워지지 않은(지움 순번이 없거나 더 큰) 곡
                 val holders = dao.songs().count { s -> s.addedSeq.let { it != null && it < seq } && (s.status != DELETED || s.lastSeq > seq) }
                 if (holders >= params.songMaxCount) {
-                    dao.putSong(SongEntity(id, b.name.let { it.substring(0, it.offsetByCodePoints(0, minOf(30, it.codePointCount(0, it.length)))) },
-                        null, "AAC", null, null, null, REJECTED, "limit_reached", seq, seq))
+                    dao.putSong(
+                        SongEntity(
+                            id, b.name.let { it.substring(0, it.offsetByCodePoints(0, minOf(30, it.codePointCount(0, it.length)))) },
+                            null, "AAC", null, null, null, REJECTED, "limit_reached", seq, seq
+                        )
+                    )
                     statuses(listOf(id), now, out)
                 } else {
-                    dao.putSong(SongEntity(id, b.name.let { it.substring(0, it.offsetByCodePoints(0, minOf(30, it.codePointCount(0, it.length)))) },
-                        null, "AAC", b.durationS, null, null, PENDING, null, seq, seq))
+                    dao.putSong(
+                        SongEntity(
+                            id, b.name.let { it.substring(0, it.offsetByCodePoints(0, minOf(30, it.codePointCount(0, it.length)))) },
+                            null, "AAC", b.durationS, null, null, PENDING, null, seq, seq
+                        )
+                    )
                     dao.putDownload(SongDownloadEntity(id, seq, 0, 0))
                     out.download = true
                 }
@@ -148,22 +162,23 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
                 val before = candidate()
                 dao.putSong(
                     old?.copy(status = DELETED, lastSeq = seq, normalizedPath = null)
-                        ?: SongEntity(id, null, null, "AAC", null, null, null, DELETED, null, null, seq),
+                        ?: SongEntity(id, null, null, "AAC", null, null, null, DELETED, null, null, seq)
                 )
                 dao.deleteDownload(id)
                 old?.normalizedPath?.let { out.deleteFiles += it }
                 statuses(listOf(id) + moved(before), now, out)
             }
-            "care_summary" -> {   // 적용하는 요약은 처리 완료와 같은 트랜잭션에 한 행으로 둔다
+            "care_summary" -> { // 적용하는 요약은 처리 완료와 같은 트랜잭션에 한 행으로 둔다
                 val c = careView(env.decode(CareSummaryBody.serializer()), now)
                 val sender = env.from?.device
-                if (!c.freshAt(now)) return   // 24시간 넘게 지난 요약은 질문 답이 쓰지 않는다. 처리 완료·ack만 하고 최신 요약을 덮지 않는다
+                if (!c.freshAt(now)) return // 24시간 넘게 지난 요약은 질문 답이 쓰지 않는다. 처리 완료·ack만 하고 최신 요약을 덮지 않는다
                 // 기준은 Room 행이다: 메모리 값·스냅숏은 복원 전에 옛 것일 수 있다. 끊긴 기기의 늦은 요약은 받지 않는다
                 val row = dao.careApplied()
                 val old = row?.let { r -> runCatching { SnapshotJson.decodeFromString(CareView.serializer(), r.summaryJson) }.getOrNull() }
                 if ((sender == null || dao.mark(sender)?.unpaired != true) && (old == null || careReplaces(old, row.seq, c, seq, row.carId, carId))) {
                     dao.putCareApplied(CareAppliedEntity(1, carId, seq, SnapshotJson.encodeToString(CareView.serializer(), c), sender))
-                    out.care = c; out.careSeq = seq
+                    out.care = c
+                    out.careSeq = seq
                 }
             }
             "song_selected" -> select(songId(env.decode(SongRefBody.serializer()).songId), seq, now, out)
@@ -174,14 +189,21 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
                 val old = dao.phoneLink(b.deviceId)
                 dao.putPhoneLink(
                     PhoneLinkEntity(
-                        b.deviceId, b.platform.name.lowercase(), b.role.name.lowercase(),
-                        instantOf(b.pairedAt) ?: now, old?.lastSeenAt, b.handoffAlerts,
-                    ),
+                        b.deviceId,
+                        b.platform.name.lowercase(),
+                        b.role.name.lowercase(),
+                        instantOf(b.pairedAt) ?: now,
+                        old?.lastSeenAt,
+                        b.handoffAlerts
+                    )
                 )
                 dao.putMark(PhoneLinkMarkEntity(b.deviceId, seq, false, now))
                 if (old == null) {
-                    out.justPaired = b.deviceId                                        // 새 행이면 "연결됐어요"
-                    if (b.role == PhoneRole.OWNER) { out.newOwner = true; fullState(null, now, out) }
+                    out.justPaired = b.deviceId // 새 행이면 "연결됐어요"
+                    if (b.role == PhoneRole.OWNER) {
+                        out.newOwner = true
+                        fullState(null, now, out)
+                    }
                 }
                 linkChanged(now, out)
             }
@@ -191,7 +213,7 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
             }
             "state_request" -> {
                 val from = env.from
-                if (from?.role == Role.OWNER && from.device != null) fullState(from.device, now, out)   // guardian은 답하지 않는다
+                if (from?.role == Role.OWNER && from.device != null) fullState(from.device, now, out) // guardian은 답하지 않는다
             }
         }
     }
@@ -219,7 +241,8 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
     private fun clearCareOf(deviceId: String?, out: Applied) {
         val row = dao.careApplied() ?: return
         if (deviceId != null && row.senderDevice != deviceId) return
-        dao.clearCareApplied(); out.careCleared = true
+        dao.clearCareApplied()
+        out.careCleared = true
     }
 
     /** song_selected(폰이 보낸 것, 차가 보내고 받은 seq): 기록된 seq보다 클 때만. 부모 노래 후보가 바뀌면 두 곡의 song_status. */
@@ -255,7 +278,7 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
     fun enqueue(type: String, body: JsonObject?, now: Long, out: Applied?, to: String? = null) {
         val make = when {
             type == "song_selected" || type == "records_clear" || to != null -> true
-            type == "handoff_alert" -> dao.otherGuardians() > 0   // 받을 다른 보호자가 있어야 만든다
+            type == "handoff_alert" -> dao.otherGuardians() > 0 // 받을 다른 보호자가 있어야 만든다
             else -> dao.phoneCount() > 0
         }
         if (!make) return
@@ -311,8 +334,11 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
         if (s == null || s.status != PENDING || s.lastSeq > d.addedSeq) return@tx false
         val before = candidate()
         dao.putSong(
-            if (reason == null) s.copy(status = ACTIVE, normalizedPath = path, durationS = durationS ?: s.durationS, receivedAt = now)
-            else s.copy(status = REJECTED, rejectReason = reason, receivedAt = now),
+            if (reason == null) {
+                s.copy(status = ACTIVE, normalizedPath = path, durationS = durationS ?: s.durationS, receivedAt = now)
+            } else {
+                s.copy(status = REJECTED, rejectReason = reason, receivedAt = now)
+            }
         )
         statuses(listOf(d.songId) + moved(before), now, out)
         reason == null
@@ -332,15 +358,22 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
             val seen = instantOf(d.lastSeenAt) ?: old?.lastSeenAt
             if (mark == null || mark.lastSeq < snap) {
                 val e = PhoneLinkEntity(
-                    d.deviceId, d.platform.name.lowercase(), d.role.name.lowercase(),
-                    instantOf(d.pairedAt) ?: now, seen, d.handoffAlerts ?: false,
+                    d.deviceId,
+                    d.platform.name.lowercase(),
+                    d.role.name.lowercase(),
+                    instantOf(d.pairedAt) ?: now,
+                    seen,
+                    d.handoffAlerts ?: false
                 )
                 if (old == null || old.copy(lastSeenAt = seen) != e) changed = true
                 dao.putPhoneLink(e)
                 dao.putMark(PhoneLinkMarkEntity(d.deviceId, snap, false, now))
                 // "연결됐어요"는 띄우지 않는다. 대조가 실시간 paired보다 먼저 새 owner를 만들면 그 paired는 낡은 것이 되므로
                 // 연결 화면이 열려 있으면 여기서도 새 코드를 받는다
-                if (old == null && d.role == Role.OWNER) { fullState(null, now, out); out.newOwner = true }
+                if (old == null && d.role == Role.OWNER) {
+                    fullState(null, now, out)
+                    out.newOwner = true
+                }
             } else if (old != null && seen != null) {
                 dao.setLastSeen(d.deviceId, seen)
             }
@@ -372,12 +405,18 @@ internal class LinkRoom(private val db: AppDatabase, private val params: Params 
         dao.clearMarks()
         dao.clearProcessed()
         dao.clearDownloads()
-        clearCareOf(null, out)   // 옛 방의 폰이 보낸 요약
+        clearCareOf(null, out) // 옛 방의 폰이 보낸 요약
         val songs = dao.songs()
         dao.deleteInactiveSongs()
         val active = songs.filter { it.status == ACTIVE }.sortedBy { it.addedSeq ?: Long.MIN_VALUE }
-        active.forEachIndexed { i, s -> val n = (i - active.size).toLong(); dao.putSong(s.copy(addedSeq = n, lastSeq = n)) }
-        dao.selection()?.let { dao.clearSelection(); dao.insertSelection(it.copy(seq = 0)) }
+        active.forEachIndexed { i, s ->
+            val n = (i - active.size).toLong()
+            dao.putSong(s.copy(addedSeq = n, lastSeq = n))
+        }
+        dao.selection()?.let {
+            dao.clearSelection()
+            dao.insertSelection(it.copy(seq = 0))
+        }
         linkChanged(now, out)
         songs.filter { it.status != ACTIVE }.map { it.id }
     }

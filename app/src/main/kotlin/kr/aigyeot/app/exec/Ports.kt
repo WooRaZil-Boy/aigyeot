@@ -9,15 +9,19 @@ import kr.aigyeot.engine.RestCandidate
 // Pleos·안드로이드 API를 감싼 얇은 경계. 실제는 Android.kt, 시험은 가짜. 콜백은 모두 Exec의 잠금 안에서 불린다.
 
 /** 시간 예약. 돌려준 함수를 부르면 취소된다. */
-internal fun interface Sched { fun after(ms: Long, task: () -> Unit): () -> Unit }
+internal fun interface Sched {
+    fun after(ms: Long, task: () -> Unit): () -> Unit
+}
 
 /** 재생(AudioManager·AudioTrack·MediaPlayer). 재생은 한 번에 하나다. */
 internal interface AudioPort {
     /** getDevices(OUTPUTS)에 bus100_audio_zone_1이 있는가. */
     fun hasRearOutput(): Boolean
+
     /** USAGE_MEDIA 포커스 요청(동기). 거절이면 false. 바뀌면 [onChange]. */
     fun requestFocus(onChange: (FocusChange) -> Unit): Boolean
     fun abandonFocus()
+
     /** 음원을 연다. 못 열면 null. [rear]면 뒷좌석 존에 setPreferredDevice. 재생 중 경로가 바뀌면 [onRouted], 오류면 [onError]. */
     fun open(method: Method, rear: Boolean, onRouted: (String?) -> Unit, onError: () -> Unit): Track?
 }
@@ -25,8 +29,10 @@ internal interface AudioPort {
 internal interface Track {
     /** 소리 없이 시작해 경로를 정하고 getRoutedDevice 주소를 돌려준다(모르면 null). 이득은 그 뒤 [gain]으로 처음 정한다. */
     fun start(): String?
+
     /** getRoutedDevice 주소를 한 번 읽는다(아직 모르면 null). */
     fun routed(): String?
+
     /** 트랙 이득(0~1). 시스템 볼륨은 건드리지 않는다. [start] 뒤에 처음 불린다. */
     fun gain(g: Float)
     fun pause()
@@ -59,6 +65,7 @@ internal interface MicTap {
 internal interface ControlPort {
     fun read(kind: ControlKind, area: Area, cb: (Double?) -> Unit)
     fun write(kind: ControlKind, area: Area, value: Double, ack: (Boolean) -> Unit)
+
     /** 공조 설정 온도 최솟값(차가 알려 주는 범위). 못 읽으면 null — [Controls]가 `Params.hvacMinC`를 쓴다. */
     fun minTemp(area: Area, cb: (Double?) -> Unit) = cb(null)
 }
@@ -67,6 +74,7 @@ internal interface ControlPort {
 internal interface NaviPort {
     /** [rest]는 판단 코어 경로 상태의 그 쉼터(이름·남은 거리, 좌표 찾기에 쓴다). 모르면 null. */
     fun addWaypoint(restId: String, rest: RestCandidate?, done: (ok: Boolean, note: String) -> Unit)
+
     /** 요청을 닫았다(성공·실패·시간 초과·대체). 위치 대기·결과 대기·대조 대상을 모두 비워 늦은 응답이 경유지를 더하거나 결과가 되지 않게 한다. */
     fun cancelWaypoint()
 }

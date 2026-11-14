@@ -1,5 +1,7 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -18,8 +20,6 @@ import kr.aigyeot.phone.domain.repository.RelayClient
 import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.phone.domain.repository.SongFileStore
 import kr.aigyeot.phone.domain.state.Notices
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 받기: 받은 봉투를 저장한 뒤에만 ack한다. 저장하지 못하면 ack하지 않는다(중계가 다시 준다).
@@ -32,7 +32,7 @@ class SyncInbox(
     private val notices: Notices,
     private val songs: SongFileStore,
     private val clock: Clock,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     /** 받은 함 동기화 결과. DONE은 모든 쪽을 받아 저장까지 끝난 것뿐이다. */
     enum class Sync { DONE, FAILED, LOST }
@@ -82,7 +82,12 @@ class SyncInbox(
         val finishedBefore = finished
         return gate.withLock {
             last?.takeIf { it.c == c && if (fresh) it.number > startedBefore else finished != finishedBefore }?.sync
-                ?: (++started).let { n -> pull(c).also { last = Pulled(c, it, n); finished++ } }
+                ?: (++started).let { n ->
+                    pull(c).also {
+                        last = Pulled(c, it, n)
+                        finished++
+                    }
+                }
         }
     }
 

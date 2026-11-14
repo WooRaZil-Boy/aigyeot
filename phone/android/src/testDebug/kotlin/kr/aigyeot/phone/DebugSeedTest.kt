@@ -1,5 +1,7 @@
 package kr.aigyeot.phone
 
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.CareKind
 import kr.aigyeot.phone.domain.model.FeedSide
@@ -15,8 +17,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 class DebugSeedTest {
     private val seoul = ZoneId.of("Asia/Seoul")
@@ -49,9 +49,11 @@ class DebugSeedTest {
                 assertFalse(e.endAt == null && e.kind != CareKind.DIAPER && e.kind != CareKind.NOTE)
             }
             // 종류가 달라도 시각이 겹치지 않는다(이른 시드에서 어제 잠이 오늘 장면 수유와 겹치지 않게). 경계에 닿는 것은 괜찮다.
-            for (x in f.events) for (y in f.events) {
-                if (x === y) continue
-                assertFalse("$half ${x.kind}·${y.kind} ${x.startAt}", x.startAt < (y.endAt ?: y.startAt) && y.startAt < (x.endAt ?: x.startAt))
+            for (x in f.events) {
+                for (y in f.events) {
+                    if (x === y) continue
+                    assertFalse("$half ${x.kind}·${y.kind} ${x.startAt}", x.startAt < (y.endAt ?: y.startAt) && y.startAt < (x.endAt ?: x.startAt))
+                }
             }
             assertEquals(t - 120 * MINUTE, f.lastFeedStart())
             assertEquals(t - 60 * MINUTE, f.events.filter { it.kind == CareKind.DIAPER }.maxOf { it.startAt })

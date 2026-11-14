@@ -22,13 +22,15 @@ class ReconcileCareSummary(
     private val care: CareRepository,
     private val outbox: SendOutbox,
     private val notices: Notices,
-    private val clock: Clock,
+    private val clock: Clock
 ) {
     /** 수유와 요약. `c`는 계기가 시작할 때 잡은 자격이다. */
     suspend fun feedingAndSummary(c: Credentials) {
         if (state.commit(c) { it.reconciled(care.care.value.forCar(notices.undo.value), clock.now(), APP_ZONE, outbox.sending) } &&
             state.state.value.outbox.isNotEmpty()
-        ) outbox.pump()
+        ) {
+            outbox.pump()
+        }
     }
 
     /** 요약만(기록 지우기를 마친 뒤). 지우기를 아직 못 마쳤으면 아무것도 넣지 않는다. */
@@ -36,6 +38,8 @@ class ReconcileCareSummary(
         val c = state.creds ?: return
         if (state.commit(c) { it.reconciledSummary(care.care.value.forCar(notices.undo.value), clock.now(), APP_ZONE, outbox.sending) } &&
             state.state.value.outbox.isNotEmpty()
-        ) outbox.pump()
+        ) {
+            outbox.pump()
+        }
     }
 }

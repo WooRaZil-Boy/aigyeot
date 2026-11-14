@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,7 +33,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /** 유스케이스 동작(가짜 중계·prefs·Keystore, 진짜 파일). 각 유스케이스가 화면 없이 기대한 상태 변화를 내는지 본다. */
 class UseCaseTest {
@@ -198,7 +198,10 @@ class UseCaseTest {
     @Test
     fun `429에 Retry-After가 없으면 60초 기다린다 - 결과를 저장하지 못한 메시지와 상태 요청도`() = kitTest {
         // 메시지 POST: 결과 저장이 실패해도 메모리 기다림이 60초(iOS `rateLimitDefault`).
-        relay.sendResult = { File(dir, "phone_state.json.new").mkdirs(); RelayResult.Err(429, "rate_limited", null) }
+        relay.sendResult = {
+            File(dir, "phone_state.json.new").mkdirs()
+            RelayResult.Err(429, "rate_limited", null)
+        }
         selectSong("s1")
         until("메모리 기다림") { outbox.holdUntil(now) != null }
         assertEquals(now + 60_000, outbox.holdUntil(now))
@@ -218,7 +221,8 @@ class UseCaseTest {
     fun `받은 함은 앞 쪽 마지막 seq 뒤를 이어 받는다`() = kitTest {
         val first = envelope("feeding_state", feedingState("2025-11-05T08:00:00+09:00"), "01JXRECV000000000000000003", seq = 5)
         val next = envelope("feeding_state", feedingState("2025-11-05T09:00:00+09:00"), "01JXRECV000000000000000004", seq = 7)
-        relay.inboxResult = { after -> RelayResult.Ok(200, if (after == 0L) InboxResponse(listOf(first), more = true) else InboxResponse(listOf(next), more = false)) }
+        relay.inboxResult =
+            { after -> RelayResult.Ok(200, if (after == 0L) InboxResponse(listOf(first), more = true) else InboxResponse(listOf(next), more = false)) }
         assertEquals(SyncInbox.Sync.DONE, inbox.sync(OWNER))
         assertEquals(listOf(0L, 5L), relay.inboxAfter)
         assertEquals(listOf(listOf(first.id), listOf(next.id)), relay.acked)
@@ -346,8 +350,7 @@ class UseCaseTest {
 
     // ---- 기록 가져오기: 저장은 RecordCare 입구 하나, 차 보내기는 다른 저장과 같은 계기 ----
 
-    private fun Kit.imported(vararg rows: String) =
-        CareCsv.parse((listOf(CSV_HEADER) + rows).joinToString("\r\n") + "\r\n", care.care.value, now).rows
+    private fun Kit.imported(vararg rows: String) = CareCsv.parse((listOf(CSV_HEADER) + rows).joinToString("\r\n") + "\r\n", care.care.value, now).rows
 
     @Test
     fun `가져오기 저장이 실패하면 아무것도 들어가지 않는다`() = kitTest(prepare = { File(it, "care.json.new").mkdirs() }) {
@@ -369,7 +372,7 @@ class UseCaseTest {
         val text = arrayOf(
             "FEED,${rfc3339(now - 3 * HOUR)},${rfc3339(now - 3 * HOUR + 600_000)},false,RIGHT,,,EXAMPLE",
             "SLEEP,${rfc3339(now - 6 * HOUR)},${rfc3339(now - 5 * HOUR)},false,,,,EXAMPLE",
-            "DIAPER,${rfc3339(now - 2 * HOUR)},,false,,,WET,",
+            "DIAPER,${rfc3339(now - 2 * HOUR)},,false,,,WET,"
         )
         val rows = imported(*text)
         assertTrue(recordCare.importRows(rows))
@@ -391,7 +394,7 @@ class UseCaseTest {
     private fun Kit.threeRows() = imported(
         "FEED,${rfc3339(now - 3 * HOUR)},${rfc3339(now - 3 * HOUR + 600_000)},false,RIGHT,,,EXAMPLE",
         "SLEEP,${rfc3339(now - 6 * HOUR)},${rfc3339(now - 5 * HOUR)},false,,,,EXAMPLE",
-        "DIAPER,${rfc3339(now - 2 * HOUR)},,false,,,WET,",
+        "DIAPER,${rfc3339(now - 2 * HOUR)},,false,,,WET,"
     )
 
     @Test
@@ -423,7 +426,11 @@ class UseCaseTest {
         lateinit var locked: File
         kitTest(prepare = { dir ->
             // 내보낸 CSV 사본('캐시')을 지울 수 없게 해 기록 지우기의 정리가 끝나지 않게 한다.
-            locked = File(dir, "export/locked").apply { mkdirs(); File(this, "x.csv").writeText("x"); setWritable(false) }
+            locked = File(dir, "export/locked").apply {
+                mkdirs()
+                File(this, "x.csv").writeText("x")
+                setWritable(false)
+            }
         }) {
             try {
                 val rows = threeRows()
@@ -442,7 +449,7 @@ class UseCaseTest {
     fun `가져온 더 늦은 수유는 owner일 때 차로 보낸다`() {
         fun Kit.rows() = imported(
             "FEED,${rfc3339(now - 30 * HOUR)},,true,LEFT,,,EXAMPLE 24시간 밖",
-            "FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE",
+            "FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE"
         )
         // 저장 직후가 아니라 되돌리기 띠가 끝난 뒤 한 번 보낸다.
         kitTest(undoMs = 1_000) {
@@ -509,7 +516,8 @@ class UseCaseTest {
 
     @Test
     fun `가져오기 띠가 다른 띠로 바뀌어 닫히면 바로 차로 보낸다`() = kitTest(undoMs = 60_000) {
-        val hand = CareEvent("01JXHAND000000000000000002", CareKind.NOTE, now - 5 * HOUR, zone = "Asia/Seoul", note = "EXAMPLE", createdAt = now, updatedAt = now)
+        val hand =
+            CareEvent("01JXHAND000000000000000002", CareKind.NOTE, now - 5 * HOUR, zone = "Asia/Seoul", note = "EXAMPLE", createdAt = now, updatedAt = now)
         assertTrue(recordCare.saveEvent(hand))
         assertTrue(recordCare.importRows(threeRows()))
         settle()
@@ -575,9 +583,9 @@ class UseCaseTest {
         assertTrue("$summaries", summaries.all { it.isEmptySummary() }) // 빈 요약만
     }
 
-    private fun kotlinx.serialization.json.JsonObject.isEmptySummary() =
-        (get("today_feed_count") as JsonPrimitive).content == "0" && (get("last_diaper_at") as? JsonPrimitive)?.contentOrNull == null &&
-            (get("last_sleep_start_at") as? JsonPrimitive)?.contentOrNull == null
+    private fun kotlinx.serialization.json.JsonObject.isEmptySummary() = (get("today_feed_count") as JsonPrimitive).content == "0" &&
+        (get("last_diaper_at") as? JsonPrimitive)?.contentOrNull == null &&
+        (get("last_sleep_start_at") as? JsonPrimitive)?.contentOrNull == null
 
     /** 보낸 요약의 '오늘 수유 수'. */
     private fun kr.aigyeot.shared.Envelope.feeds() = body["today_feed_count"]?.let { (it as JsonPrimitive).content.toInt() }
@@ -586,7 +594,16 @@ class UseCaseTest {
     fun `보낼 함에서 기다리던 요약을 띠 안에 다시 계산해도 가져온 줄은 빼고 되돌리면 끝까지 차로 가지 않는다`() = kitTest(undoMs = 1_000) {
         val ok = relay.sendResult
         relay.sendResult = { if (it.type == "care_summary") RelayResult.Unreached else ok(it) }
-        val hand = CareEvent("01JXHAND000000000000000003", CareKind.FEED, now - 2 * HOUR, now - 2 * HOUR + 600_000, zone = "Asia/Seoul", createdAt = now, updatedAt = now)
+        val hand =
+            CareEvent(
+                "01JXHAND000000000000000003",
+                CareKind.FEED,
+                now - 2 * HOUR,
+                now - 2 * HOUR + 600_000,
+                zone = "Asia/Seoul",
+                createdAt = now,
+                updatedAt = now
+            )
         assertTrue(recordCare.saveEvent(hand)) // 오늘 수유 1회 요약이 망 실패로 보낼 함에 남았다
         until("망 실패 기다림") { state.state.value.outbox.any { it.payload is OutboxPayload.CareSummary && it.networkWait } }
         assertTrue(recordCare.importRows(imported("FEED,${rfc3339(now - HOUR)},${rfc3339(now - HOUR + 600_000)},false,LEFT,,,EXAMPLE")))

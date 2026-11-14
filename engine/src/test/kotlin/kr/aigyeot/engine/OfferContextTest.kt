@@ -1,11 +1,11 @@
 package kr.aigyeot.engine
 
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.jsonPrimitive
 
 // 조향 창 observed(보지 못함) 칸. 답의 결과는 질문 당시 문맥(PendingAsk)으로 정한다
 class AskContextTest {
@@ -13,14 +13,15 @@ class AskContextTest {
         val sim = session()
         val w0 = sim.t
         fun v(at: Long) = sim.ev(VehicleSample(at, 60.0, false, 0.0, TurnSignal.NONE))
-        v(w0)                                     // 창 1
-        sim.tick(59_000).attempt1()               // 창 경계 직전에 자동 시도 재생 시작
-        v(w0 + 60_000)                            // 창 1 닫힘, 창 2 열림(재생 중)
-        sim.ev(CrySegment(w0 + 90_000, w0 + 87_000, w0 + 90_000, 0.9, false))   // 다음 창에도 울음이 이어지나 보지 않는 구간
-        v(w0 + 120_000)                           // 창 2 닫힘
+        v(w0) // 창 1
+        sim.tick(59_000).attempt1() // 창 경계 직전에 자동 시도 재생 시작
+        v(w0 + 60_000) // 창 1 닫힘, 창 2 열림(재생 중)
+        sim.ev(CrySegment(w0 + 90_000, w0 + 87_000, w0 + 90_000, 0.9, false)) // 다음 창에도 울음이 이어지나 보지 않는 구간
+        v(w0 + 120_000) // 창 2 닫힘
         val recs = sim.all<SaveSteerWindow>().map { it.record }
         assertEquals(2, recs.size)
-        assertFalse(recs[1].cryPresent); assertTrue(recs[1].playing)
+        assertFalse(recs[1].cryPresent)
+        assertTrue(recs[1].playing)
         assertFalse(recs[1].observed, "보지 못한 창은 울음 없음이 아니다")
         assertTrue(recs[0].observed, "창 1은 재생 시작 전까지 봤다")
     }
@@ -38,15 +39,22 @@ class AskContextTest {
         val w0 = sim.t
         fun v(at: Long) = sim.ev(VehicleSample(at, 60.0, false, 0.0, TurnSignal.NONE))
         v(w0)
-        var at = w0; var quiet = false
+        var at = w0
+        var quiet = false
         while (at < w0 + 8 * 60_000) {
-            at += 5_000; v(at)
-            if (at == w0 + 30_000) sim.ev(CrySegment(at, at - 3_000, at, 0.9, true)).started()   // 창 1 가운데쯤 울음 → 자동 시도 재생
-            if (!quiet && sim.s.session?.play != null && at >= w0 + 30_000 + P.attemptMs) { quiet = true; sim.toGap().closeQuiet() }   // 재생 끝 → 조용함
+            at += 5_000
+            v(at)
+            if (at == w0 + 30_000) sim.ev(CrySegment(at, at - 3_000, at, 0.9, true)).started() // 창 1 가운데쯤 울음 → 자동 시도 재생
+            if (!quiet && sim.s.session?.play != null && at >= w0 + 30_000 + P.attemptMs) {
+                quiet = true
+                sim.toGap().closeQuiet()
+            } // 재생 끝 → 조용함
         }
         val recs = sim.all<SaveSteerWindow>().map { it.record }
         val cry = recs.first { it.cryPresent }
-        assertEquals(w0, cry.startAt); assertTrue(cry.playing); assertFalse(cry.observed)
+        assertEquals(w0, cry.startAt)
+        assertTrue(cry.playing)
+        assertFalse(cry.observed)
         assertTrue(recs.any { it.startAt > cry.startAt && it.observed && !it.playing && !it.cryPresent }, "재생이 끝난 뒤 조용한 관측 창: $recs")
     }
 
@@ -63,13 +71,14 @@ class AskContextTest {
     @Test fun deferredDepartAsk_notAttachedToLaterEpisode() {
         val nurse = rest("n", 9.0, nursing = true)
         val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
-        sim.ev(VehicleSample(sim.t, 60.0, true, 0.0, TurnSignal.NONE))   // 브레이크: 바쁨
+        sim.ev(VehicleSample(sim.t, 60.0, true, 0.0, TurnSignal.NONE)) // 브레이크: 바쁨
         sim.route(nurse, dest = true, remainingSec = 9000, remainingKm = 150.0)
-        assertTrue(sim.all<Ask>().isEmpty()); assertFalse(sim.s.speech.queue.single { it.sid == Sid.S07_DEPART }.handoff)
+        assertTrue(sim.all<Ask>().isEmpty())
+        assertFalse(sim.s.speech.queue.single { it.sid == Sid.S07_DEPART }.handoff)
         sim.alarm(1_000).started()
         val epId = sim.ep.id
         sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))
-        sim.done(2_000).tick(P.speechGapMs)   // 앞 발화(S02)를 끝낸 뒤 미뤄진 제안이 나온다
+        sim.done(2_000).tick(P.speechGapMs) // 앞 발화(S02)를 끝낸 뒤 미뤄진 제안이 나온다
         val ask = sim.all<Ask>().single { it.sid == Sid.S07_DEPART }
         assertEquals(null, sim.ses.pendingAsk!!.episodeId)
         sim.ev(SpeechDone(sim.t + 1_000, sim.s.speech.speaking!!, true))
@@ -83,7 +92,7 @@ class AskContextTest {
 
     private fun heldOffer(): Sim {
         val sim = session().route(rest("n", 14.0, nursing = true))
-        sim.attempt2().toGap().ev(VehicleSample(sim.t, 60.0, true, 0.0, TurnSignal.NONE)).recry()   // 바쁨 중 인계: S07이 큐에서 미뤄짐
+        sim.attempt2().toGap().ev(VehicleSample(sim.t, 60.0, true, 0.0, TurnSignal.NONE)).recry() // 바쁨 중 인계: S07이 큐에서 미뤄짐
         assertTrue(sim.s.speech.queue.single { it.sid == Sid.S07 }.isHandoffOf(sim.ses.id), "인계 줄")
         return sim
     }
@@ -111,14 +120,13 @@ class AskContextTest {
         assertTrue(offers.isNotEmpty() && offers.all { it.isHandoffOf(sim.ses.id) }, "인계 줄 그대로: $offers")
     }
 
-    private fun routeAt(sim: Sim, dt: Long, vararg rests: RestCandidate) =
-        sim.ev(RouteState(sim.t + dt, true, 9000, rests.toList(), 150.0))
+    private fun routeAt(sim: Sim, dt: Long, vararg rests: RestCandidate) = sim.ev(RouteState(sim.t + dt, true, 9000, rests.toList(), 150.0))
 
     /** 브레이크로 미뤄진 2시간 제안(S11)이 에피소드 밖에서 큐에 들고, 그 뒤 울음 에피소드가 열렸다. */
     private fun deferredLong(): Sim {
         val sim = session()
-        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(driveFrom = sim.t - 121 * MIN) })   // 2시간을 넘겼다
-        sim.ev(VehicleSample(sim.t, 60.0, true, 0.0, TurnSignal.NONE))   // 브레이크: 바쁨
+        sim.s = sim.s.copy(session = sim.ses.withOffers { copy(driveFrom = sim.t - 121 * MIN) }) // 2시간을 넘겼다
+        sim.ev(VehicleSample(sim.t, 60.0, true, 0.0, TurnSignal.NONE)) // 브레이크: 바쁨
         routeAt(sim, 100, rest("a", 12.0, nursing = true))
         val q = sim.s.speech.queue.singleOrNull { it.sid == Sid.S11 } ?: error("${sim.s.speech} ${sim.log.takeLast(4)}")
         assertFalse(q.handoff)
@@ -129,9 +137,9 @@ class AskContextTest {
     // 에피소드 밖에서 큐에 든 제안이 경로 갱신으로 바뀌어도 새 에피소드 문맥이 붙지 않는다
     @Test fun deferredAsk_routeUpdate_staysOutsideEpisode() {
         val sim = deferredLong()
-        routeAt(sim, 1_000, rest("a", 9.0, nursing = true))   // 같은 쉼터의 거리 갱신
+        routeAt(sim, 1_000, rest("a", 9.0, nursing = true)) // 같은 쉼터의 거리 갱신
         sim.ev(Tick(sim.s.steer.driveBusyAt!! + P.holdStableMs))
-        sim.done(2_000).tick(P.speechGapMs)   // 꺼낼 때 다시 고른다: 같은 S11을 m으로 갱신
+        sim.done(2_000).tick(P.speechGapMs) // 꺼낼 때 다시 고른다: 같은 S11을 m으로 갱신
         val ask = sim.all<Ask>().single { it.sid == Sid.S11 }
         assertEquals("a", sim.ses.pendingAsk!!.restId)
         assertEquals(null, sim.ses.pendingAsk!!.episodeId, "갱신해도 에피소드 밖 문맥")
@@ -161,25 +169,26 @@ class AskContextTest {
     }
 
     @Test fun departYesAfterCryStarts_notAttachedToHandoff() {
-
         val nurse = rest("n", 9.0, nursing = true)
         val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN)
         sim.route(nurse, dest = true, remainingSec = 9000, remainingKm = 150.0)
         val ask = sim.step<Ask>().single()
         assertEquals(Sid.S07_DEPART, ask.sid)
         assertEquals(null, sim.ses.pendingAsk!!.episodeId)
-        sim.ev(SpeechDone(sim.t + 1_000, sim.s.speech.speaking!!, true))   // 질문을 다 말함(듣는 중)
-        sim.alarm(1_000).started()                // 질문을 들은 뒤 '응' 전에 울음 → 첫 시도로 에피소드 열림
+        sim.ev(SpeechDone(sim.t + 1_000, sim.s.speech.speaking!!, true)) // 질문을 다 말함(듣는 중)
+        sim.alarm(1_000).started() // 질문을 들은 뒤 '응' 전에 울음 → 첫 시도로 에피소드 열림
         val epId = sim.ep.id
         sim.ev(Answer(sim.t + 500, ask.askId, YesNo.YES))
         val add = sim.step<AddWaypoint>().single()
         assertEquals(null, sim.ses.waypointPending!!.episodeId, "질문 당시 문맥(에피소드 없음)")
         sim.ev(WaypointResult(sim.t + 500, add.cmdId, "n", true))
-        assertFalse(sim.ep.waypointAdded); assertEquals(epId, sim.ep.id)
-        sim.toGap().recry().started().toGap().recry()   // 달래기 두 번 실패 → 인계
+        assertFalse(sim.ep.waypointAdded)
+        assertEquals(epId, sim.ep.id)
+        sim.toGap().recry().started().toGap().recry() // 달래기 두 번 실패 → 인계
         sim.flush()
         val rec = sim.all<SaveEpisode>().last().record
-        assertEquals(epId, rec.id); assertTrue(sim.ep.handoff != null, "인계까지 갔다")
+        assertEquals(epId, rec.id)
+        assertTrue(sim.ep.handoff != null, "인계까지 갔다")
         assertFalse(rec.waypointAdded, "인계 기록에 경유지 추가가 붙지 않는다")
         assertTrue(sim.ses.restLog.any { it.sid == Sid.S07_DEPART && it.waypointOk == true }, "세션 휴식 기록에는 남는다")
     }
@@ -258,13 +267,16 @@ class MicOffAskTest {
     private fun micOffDepart(): Sim {
         val sim = session(prof = profile(interval = 180), feedingStart = T0 - 120 * MIN, mic = false)
             .route(nurse, dest = true, remainingSec = 9000, remainingKm = 150.0)
-        assertFalse(sim.s.car.micRunning); assertEquals(Gear.D, sim.s.car.gear); assertTrue(sim.s.session != null)
+        assertFalse(sim.s.car.micRunning)
+        assertEquals(Gear.D, sim.s.car.gear)
+        assertTrue(sim.s.session != null)
         return sim
     }
 
     @Test fun departOffer_micOff_noAskAndNotChecked() {
         val sim = micOffDepart()
-        assertTrue(sim.all<Ask>().isEmpty()); assertTrue(Sid.S07_DEPART !in sim.sids())
+        assertTrue(sim.all<Ask>().isEmpty())
+        assertTrue(Sid.S07_DEPART !in sim.sids())
         assertFalse(sim.ses.departChecked)
     }
 
@@ -272,15 +284,17 @@ class MicOffAskTest {
         val sim = micOffDepart()
         sim.ev(MicService(sim.t + 1_000, true, MicPath.HOME_BUTTON))
         assertTrue(sim.s.car.micRunning)
-        assertTrue(Sid.S07_DEPART in sim.sids())   // S16·S17 뒤에 줄이 서 있거나 이미 물었다
+        assertTrue(Sid.S07_DEPART in sim.sids()) // S16·S17 뒤에 줄이 서 있거나 이미 물었다
         assertTrue(sim.ses.departChecked)
     }
 
     @Test fun longDrive_micOff_noOffer() {
         val sim = session(mic = false).route(rest("a", 12.0))
-        assertFalse(sim.s.car.micRunning); assertEquals(Gear.D, sim.s.car.gear)
+        assertFalse(sim.s.car.micRunning)
+        assertEquals(Gear.D, sim.s.car.gear)
         sim.ev(Tick(T0 + 121 * MIN))
-        assertTrue(Sid.S11 !in sim.sids()); assertTrue(sim.all<Ask>().none { it.sid == Sid.S11 })
+        assertTrue(Sid.S11 !in sim.sids())
+        assertTrue(sim.all<Ask>().none { it.sid == Sid.S11 })
         assertFalse(sim.ses.longDriveOffered)
         sim.ev(MicService(sim.t + 1_000, true, MicPath.HOME_BUTTON)).tick(1_000)
         assertTrue(Sid.S11 in sim.sids())
@@ -294,10 +308,10 @@ class OfferBanTest {
     @Test fun droppedOfferLeavesNoBan() {
         val sim = session(prof = profile(interval = 180), feedingStart = T0 - 150 * MIN).route(rest("n", 14.0, nursing = true)).alarm().started()
         val queuedAt = sim.s.speech.queue.single { it.sid == Sid.S07 }.queuedAt!!
-        sim.done().gear(Gear.P, 1_000)                                     // S02 뒤 갓길에 P(앞좌석, 뒷문 안 엶)
+        sim.done().gear(Gear.P, 1_000) // S02 뒤 갓길에 P(앞좌석, 뒷문 안 엶)
         assertTrue(sim.s.speech.queue.none { it.sid == Sid.S07 }, "전제: 말하지 않은 S07을 P로 버렸다")
         assertTrue(Sid.S07 !in sim.all<Ask>().map { it.sid })
-        sim.gear(Gear.D, 1_000).tick(P.resumeQuietMs)                       // 다시 D, 5분 조용해 에피소드 닫힘
+        sim.gear(Gear.D, 1_000).tick(P.resumeQuietMs) // 다시 D, 5분 조용해 에피소드 닫힘
         assertNull(sim.ses.episode)
         sim.handoff()
         assertTrue(sim.t - queuedAt < P.offerRepeatMs, "전제: 버린 S07을 넣은 지 10분 안의 인계")

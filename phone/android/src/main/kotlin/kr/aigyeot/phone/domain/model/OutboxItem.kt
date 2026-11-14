@@ -46,7 +46,7 @@ data class OutboxItem(
     val attempts: Int = 0,
     val nextTryAt: Long = 0,
     /** 지금 기다림이 망 실패(응답 없음·닿지 않음)에서 왔다. 망 복구·'다시 시도'·앞으로 오기 때 당긴다(iOS와 같은 칸). 중계가 준 기다림은 거짓. */
-    val networkWait: Boolean = false,
+    val networkWait: Boolean = false
 ) {
     /** 메시지 type·body(보낼 때 봉투에 싣는다). */
     val type: String
@@ -102,7 +102,7 @@ private class OutboxItemFile(
     val nextTryAt: Long = 0,
     val sentOnce: Boolean = false,
     val reflected: Boolean = false,
-    val networkWait: Boolean = false,
+    val networkWait: Boolean = false
 )
 
 /** 저장 키(평평함) ↔ 종류([OutboxPayload]). 노래 파일이 있으면 노래, type이 돌봄 요약이면 요약, 나머지는 메시지(iOS `OutboxItem.init`과 같은 판단). */
@@ -122,11 +122,13 @@ object OutboxItemSerializer : KSerializer<OutboxItem> {
                 nextTryAt = value.nextTryAt,
                 sentOnce = value.sentOnce,
                 reflected = value.reflected,
-                networkWait = value.networkWait,
-            ),
+                networkWait = value.networkWait
+            )
         )
     }
 
+    // env.body[..]는 JsonElement?라 JsonPrimitive로의 안전한 변환이 가능하다(타입 해석 오탐).
+    @Suppress("UnsafeCast")
     override fun deserialize(decoder: Decoder): OutboxItem {
         val f = decoder.decodeSerializableValue(OutboxItemFile.serializer())
         val env = f.envelope

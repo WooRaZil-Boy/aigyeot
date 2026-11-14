@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -21,7 +22,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * 수명 표 — 행 하나에 시험 하나. 사건: 연결 끊김(401·4001·사용자), 방 바뀜(새 연결), 기록 지우기, 앱 재시작.
@@ -31,7 +31,8 @@ class LifecycleTableTest {
     private val guardianPair = PairResponse("c_NEWCAR0000000000000000000000", "d_NEWPHONE00000000000000000", "tok-new", Role.GUARDIAN)
 
     /** 같은 폴더·표시로 다시 켠다. 범위는 이 Kit의 자식이라 시험이 끝나면 함께 닫힌다. */
-    private fun Kit.restart(): Kit = Kit(CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job])), dir, credentials.stored, marks.values)
+    private fun Kit.restart(): Kit =
+        Kit(CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job])), dir, credentials.stored, marks.values)
 
     /** 기록 지우기 한 번이 상태에 들어갈 때까지(지우기마다 상태 요청 세대가 오른다). */
     private suspend fun Kit.clearAndWait() {
@@ -49,7 +50,12 @@ class LifecycleTableTest {
         // 재시작: 파일에서 이어 보낸다.
         assertEquals(listOf("song_selected"), restart().state.state.value.outbox.map { it.envelope.type })
         // 기록 지우기: 녹음 파일이 필요한 노래 올리기만 뺀다.
-        state.commit(OWNER) { it.copy(outbox = it.outbox + outboxItem(OutboxPayload.Song("s1", songRef("s1"), uploaded = false, file = "x.m4a"), now, "01JXSONG00000000000000000A")) }
+        state.commit(OWNER) {
+            it.copy(
+                outbox =
+                it.outbox + outboxItem(OutboxPayload.Song("s1", songRef("s1"), uploaded = false, file = "x.m4a"), now, "01JXSONG00000000000000000A")
+            )
+        }
         clearAndWait()
         assertEquals(listOf("song_selected"), state.state.value.outbox.map { it.envelope.type })
         // 연결 끊김: 상태와 함께 사라진다.
@@ -87,11 +93,20 @@ class LifecycleTableTest {
 
     @Test
     fun `녹음 임시 파일 - 끊기·새 연결에 남고 기록 지우기는 누른 때까지만 지우고 재시작은 앞 프로세스 것을 지운다`() {
-        kitTest(prepare = { File(it, "cache").mkdirs(); File(it, "cache/recording-old.m4a").writeText("old") }) {
+        kitTest(prepare = {
+            File(it, "cache").mkdirs()
+            File(it, "cache/recording-old.m4a").writeText("old")
+        }) {
             lifecycle.start()
             until("앞 프로세스 녹음 지움") { !File(dir, "cache/recording-old.m4a").exists() }
-            val before = File(dir, "cache/recording-before.m4a").apply { writeText("b"); setLastModified(now - 1_000) }
-            val after = File(dir, "cache/recording-after.m4a").apply { writeText("a"); setLastModified(now + 60_000) }
+            val before = File(dir, "cache/recording-before.m4a").apply {
+                writeText("b")
+                setLastModified(now - 1_000)
+            }
+            val after = File(dir, "cache/recording-after.m4a").apply {
+                writeText("a")
+                setLastModified(now + 60_000)
+            }
             clearRecords()
             until("누른 때까지의 임시 녹음 지움") { !before.exists() }
             assertTrue(after.exists())

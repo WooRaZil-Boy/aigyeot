@@ -27,10 +27,10 @@ import kr.aigyeot.app.link.db.SongSelectionEntity
         AlarmLogEntity::class, ContextSampleEntity::class, ControlLogEntity::class, SteerWindowEntity::class,
         PhoneLinkEntity::class, SongEntity::class, EngineSnapshotEntity::class,
         RelayCredentialEntity::class, OutboxEntity::class, ProcessedMessageEntity::class,
-        SongDownloadEntity::class, SongSelectionEntity::class, PhoneLinkMarkEntity::class, CareAppliedEntity::class, SentIdEntity::class,
+        SongDownloadEntity::class, SongSelectionEntity::class, PhoneLinkMarkEntity::class, CareAppliedEntity::class, SentIdEntity::class
     ],
     version = 3,
-    exportSchema = false,
+    exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -56,20 +56,21 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL(BACKFILL_ENDED_TOLD)
         db.execSQL(
             "CREATE TABLE IF NOT EXISTS care_applied (id INTEGER NOT NULL, car_id TEXT, seq INTEGER NOT NULL, " +
-                "summary_json TEXT NOT NULL, sender_device TEXT, PRIMARY KEY(id))",
+                "summary_json TEXT NOT NULL, sender_device TEXT, PRIMARY KEY(id))"
         )
         db.execSQL("CREATE TABLE IF NOT EXISTS sent_id (id TEXT NOT NULL, sent_at INTEGER NOT NULL, PRIMARY KEY(id))")
-        db.execSQL("ALTER TABLE steer_window ADD COLUMN observed INTEGER NOT NULL DEFAULT 1")   // 옛 창은 관측한 것으로 본다
+        db.execSQL("ALTER TABLE steer_window ADD COLUMN observed INTEGER NOT NULL DEFAULT 1") // 옛 창은 관측한 것으로 본다
     }
 }
 
 /** 2→3(조명 낮춤): control_log.cmd_id만 더한다. 옛 줄은 null이라 앰비언트 리포트 수에 들지 않는다(앰비언트 줄이 없던 때). */
 val MIGRATION_2_3 = object : Migration(2, 3) {
-    override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE control_log ADD COLUMN cmd_id TEXT") }
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE control_log ADD COLUMN cmd_id TEXT")
+    }
 }
 
 /** 앱의 데이터베이스(aigyeot.db). 개발 중에는 버전이 바뀌면 지우고 다시 만든다. */
-fun AppDatabase.Companion.open(context: Context): AppDatabase =
-    Room.databaseBuilder(context, AppDatabase::class.java, "aigyeot.db")
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-        .fallbackToDestructiveMigration(dropAllTables = true).build()
+fun AppDatabase.Companion.open(context: Context): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "aigyeot.db")
+    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+    .fallbackToDestructiveMigration(dropAllTables = true).build()

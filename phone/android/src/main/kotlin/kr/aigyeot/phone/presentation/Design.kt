@@ -8,7 +8,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.MutableTransitionState
@@ -118,7 +117,9 @@ fun rememberReducedMotion(): Boolean {
     // 앱을 켠 채 시스템에서 바꿔도 따른다.
     DisposableEffect(Unit) {
         val obs = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) { reduced = read() }
+            override fun onChange(selfChange: Boolean) {
+                reduced = read()
+            }
         }
         context.contentResolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, obs)
         onDispose { context.contentResolver.unregisterContentObserver(obs) }
@@ -137,13 +138,16 @@ fun Modifier.pressable(
     scale: Float = 0.97f,
     role: Role = Role.Button,
     onLongClick: (() -> Unit)? = null,
-    onClick: () -> Unit,
+    onClick: () -> Unit
 ): Modifier = composed {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val reduced = LocalReducedMotion.current
     val s by animateFloatAsState(if (pressed && !reduced) scale else 1f, Motion.press.spec(), label = "press")
-    graphicsLayer { scaleX = s; scaleY = s }
+    graphicsLayer {
+        scaleX = s
+        scaleY = s
+    }
         .combinedClickable(source, null, enabled = enabled, role = role, onLongClick = onLongClick, onClick = onClick)
 }
 
@@ -175,7 +179,7 @@ fun BackPage(
     onBack: (() -> Unit)?,
     padContent: Boolean = true,
     trailing: @Composable RowScope.() -> Unit = {},
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     // 아래 시스템 막대·자판 자리(탭 밖 화면은 스스로 비운다).
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
@@ -192,12 +196,12 @@ fun TopBar(title: String, onBack: (() -> Unit)?, trailing: @Composable RowScope.
     val p = Tokens.colors
     Row(
         Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp).heightIn(min = 52.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         if (onBack != null) {
             Box(
                 Modifier.size(48.dp).clip(CircleShape).pressable(scale = 0.92f, onClick = onBack).semantics { contentDescription = "뒤로" },
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) { AIcon(R.drawable.ic_arrow_left, tint = p.textPrimary) }
             Spacer(Modifier.width(4.dp))
         } else {
@@ -213,7 +217,7 @@ fun LargeTitle(title: String) = Text(
     title,
     Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp).semantics { heading() },
     style = Type.display.copy(lineBreak = LineBreak.Heading),
-    color = Tokens.colors.textPrimary,
+    color = Tokens.colors.textPrimary
 )
 
 /** 큰 제목이 접힌 위 막대(22/28·600, 바탕색). */
@@ -241,7 +245,11 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? =
     val t = remember(key) { Animatable(if (reduced || shownFor == key || (!animateFirst && shownFor == null)) 1f else 0f) }
     LaunchedEffect(key, reduced) {
         shownFor = key
-        if (reduced) t.snapTo(1f) else if (t.value < 1f) t.animateTo(1f, tween(STAGGER_MS, easing = LinearEasing))
+        if (reduced) {
+            t.snapTo(1f)
+        } else if (t.value < 1f) {
+            t.animateTo(1f, tween(STAGGER_MS, easing = LinearEasing))
+        }
     }
     val rise = with(LocalDensity.current) { 16.dp.toPx() }
     val blurPx = with(LocalDensity.current) { 6.dp.toPx() }
@@ -249,6 +257,7 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? =
         val c = constraints.copy(minHeight = 0)
         val placeables = measurables.map { it.measure(c) }
         val g = gap.roundToPx()
+
         // 높이 0인 칸(접힌 진행 중 판)은 간격도 없고, 펼쳐지는 동안은 간격도 높이만큼만 자라 아래 블록이 끊기지 않고 비킨다.
         fun gapAfter(i: Int) = if (i == placeables.lastIndex) 0 else minOf(g, placeables[i].height)
         val h = placeables.indices.sumOf { placeables[it].height + gapAfter(it) }
@@ -258,18 +267,22 @@ fun StaggerColumn(modifier: Modifier = Modifier, gap: Dp = 12.dp, replay: Any? =
             placeables.forEachIndexed { i, pl ->
                 // 다 올라온 뒤에는 층 없이 놓는다: 칸마다 층이 남아 있으면 공유 요소 전환(타이머 → 진행 중 판) 동안 나가는 화면의
                 // 형제 칸이 겹쳐 그려졌다(녹화로 확인).
-                if (done) pl.place(0, y) else pl.placeWithLayer(0, y) {
-                    // i번째는 시작 지연 + i·간격 뒤 시작해 enter 시간에 걸쳐 올라온다(Motion.STAGGER_*).
-                    val start = (Motion.RISE_DELAY_MS + (i * Motion.RISE_STAGGER_MS).coerceAtMost(Motion.RISE_MAX_MS)).toFloat() / STAGGER_MS
-                    val raw = ((t.value - start) / (Motion.enter.ms.toFloat() / STAGGER_MS)).coerceIn(0f, 1f)
-                    val k = Motion.enter.easing.transform(raw)
-                    alpha = k
-                    translationY = (1f - k) * rise
-                    if (Build.VERSION.SDK_INT >= 31 && k < 1f) {
-                        val r = (1f - k) * blurPx
-                        renderEffect = if (r > 0.5f) BlurEffect(r, r, TileMode.Decal) else null
-                    } else {
-                        renderEffect = null
+                if (done) {
+                    pl.place(0, y)
+                } else {
+                    pl.placeWithLayer(0, y) {
+                        // i번째는 시작 지연 + i·간격 뒤 시작해 enter 시간에 걸쳐 올라온다(Motion.STAGGER_*).
+                        val start = (Motion.RISE_DELAY_MS + (i * Motion.RISE_STAGGER_MS).coerceAtMost(Motion.RISE_MAX_MS)).toFloat() / STAGGER_MS
+                        val raw = ((t.value - start) / (Motion.enter.ms.toFloat() / STAGGER_MS)).coerceIn(0f, 1f)
+                        val k = Motion.enter.easing.transform(raw)
+                        alpha = k
+                        translationY = (1f - k) * rise
+                        if (Build.VERSION.SDK_INT >= 31 && k < 1f) {
+                            val r = (1f - k) * blurPx
+                            renderEffect = if (r > 0.5f) BlurEffect(r, r, TileMode.Decal) else null
+                        } else {
+                            renderEffect = null
+                        }
                     }
                 }
                 y += pl.height + gapAfter(i)
@@ -288,7 +301,7 @@ fun Block(
     modifier: Modifier = Modifier,
     padding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 22.dp),
     onClick: (() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit
 ) {
     val base = modifier.fillMaxWidth().clip(Radius.large).background(Tokens.colors.surface)
     Column((if (onClick != null) base.pressable(scale = 0.98f, onClick = onClick) else base).padding(padding), content = content)
@@ -303,7 +316,7 @@ fun BlockHeader(title: String, link: String? = null, onLink: (() -> Unit)? = nul
         if (link != null && onLink != null) {
             Row(
                 Modifier.clip(Radius.small).pressable(onClick = onLink).heightIn(min = 32.dp).padding(start = 6.dp, end = 0.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(link, style = Type.meta, color = p.textTertiary)
                 AIcon(R.drawable.ic_chevron_right, Modifier.size(16.dp), p.textTertiary)
@@ -339,15 +352,15 @@ fun Label(text: String, modifier: Modifier = Modifier) = Text(text, modifier, st
 /** 목록 블록(.list: 안쪽 22/20/8). 머리가 있으면 그 아래에 64dp 행들. */
 @Composable
 fun ListBlock(title: String? = null, link: String? = null, onLink: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) =
-    Block(padding = PaddingValues(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 8.dp)) { // 목록 안쪽 여백 22/20/8(제목이 없어도 같다)
+    Block(padding = PaddingValues(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 8.dp)) {
+        // 목록 안쪽 여백 22/20/8(제목이 없어도 같다)
         if (title != null) BlockHeader(title, link, onLink)
         content()
     }
 
 /** 새로 생긴 판·줄이 들어오는 모양: 위 10에서 0.98배·투명으로 spring.smooth, 자리도 펼쳐져 아래가 함께 비킨다. */
-fun cardEnter(rise: Int): EnterTransition =
-    expandVertically(Springs.smooth.spec(), expandFrom = Alignment.Top) + fadeIn(Springs.smooth.spec()) +
-        slideInVertically(Springs.smooth.spec()) { -rise } + scaleIn(Springs.smooth.spec(), initialScale = 0.98f)
+fun cardEnter(rise: Int): EnterTransition = expandVertically(Springs.smooth.spec(), expandFrom = Alignment.Top) + fadeIn(Springs.smooth.spec()) +
+    slideInVertically(Springs.smooth.spec()) { -rise } + scaleIn(Springs.smooth.spec(), initialScale = 0.98f)
 
 /**
  * 화면이 떠 있는 동안 새로 들어온 판·줄(새 인계 알림, 새 리포트)만 [cardEnter]로 들어온다. 화면을 열 때 이미 있던 것([isNew] 거짓)은
@@ -381,14 +394,14 @@ fun ListRow(
     onClick: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? =
-        if (onClick != null) ({ AIcon(R.drawable.ic_chevron_right, Modifier.size(18.dp), Tokens.colors.textTertiary) }) else null,
+        if (onClick != null) ({ AIcon(R.drawable.ic_chevron_right, Modifier.size(18.dp), Tokens.colors.textTertiary) }) else null
 ) {
     val p = Tokens.colors
     val base = Modifier.fillMaxWidth().heightIn(min = 64.dp)
     Row(
         (if (onClick != null) base.clip(Radius.medium).pressable(scale = 0.98f, onClick = onClick) else base).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         when {
             leading != null -> leading()
@@ -426,7 +439,7 @@ fun SettingRow(
         checked != null -> ({ ToggleSwitch(checked, onChange = null, enabled = enabled) })
         onClick != null -> ({ AIcon(R.drawable.ic_chevron_right, Modifier.size(18.dp), Tokens.colors.textTertiary) })
         else -> null
-    },
+    }
 ) {
     val p = Tokens.colors
     val base = Modifier.fillMaxWidth().heightIn(min = 56.dp).graphicsLayer { alpha = if (enabled) 1f else 0.45f }
@@ -441,7 +454,7 @@ fun SettingRow(
     Row(
         act.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // 줄 아이콘은 흐린 색, 되돌릴 수 없는 줄만 빨강(surface 위 5.04·6.13:1)
@@ -474,7 +487,7 @@ fun InfoLine(@DrawableRes icon: Int, title: String, sub: String? = null, child: 
             Text(
                 title,
                 style = if (plain) Type.rowTitle.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium) else Type.rowTitle,
-                color = p.textPrimary,
+                color = p.textPrimary
             )
             sub?.let { Text(it, Modifier.padding(top = 2.dp), style = Type.rowSub, color = p.textTertiary) }
         }
@@ -489,11 +502,11 @@ fun ResultPage(@DrawableRes icon: Int, title: String, body: String, child: Boole
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
         ) {
             Box(
                 Modifier.padding(bottom = 8.dp).size(64.dp).clip(CircleShape).background(if (child) p.childSoft else p.accentSoft),
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) {
                 AIcon(icon, Modifier.size(32.dp), if (child) p.child else p.onAccentSoft)
             }
@@ -502,19 +515,19 @@ fun ResultPage(@DrawableRes icon: Int, title: String, body: String, child: Boole
                 Modifier.semantics { heading() },
                 style = Type.display,
                 color = p.textPrimary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Text(
                 body,
                 style = Type.lead.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
                 color = p.textSecondary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
         Column(
             Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 22.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            content = buttons,
+            content = buttons
         )
     }
 }
@@ -532,12 +545,12 @@ fun ToggleSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, enabled: Bool
             base.toggleable(checked, interactionSource = null, indication = null, enabled = enabled, role = Role.Switch, onValueChange = onChange)
         } else {
             base
-        },
+        }
     ) {
         Box(
             Modifier.padding(3.dp).offset(x = x).size(26.dp)
                 .drawBehind { drawCircle(Color.Black.copy(alpha = 0.2f), radius = size.minDimension / 2, center = center + Offset(0f, 2.dp.toPx())) }
-                .clip(CircleShape).background(Color.White),
+                .clip(CircleShape).background(Color.White)
         )
     }
 }
@@ -559,27 +572,27 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, mod
                                 Color.Black.copy(alpha = 0.06f),
                                 topLeft = Offset(0f, 2.dp.toPx()),
                                 size = size,
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(Radius.rInner.toPx()),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(Radius.rInner.toPx())
                             )
                         }
-                        .clip(Radius.inner).background(thumb),
+                        .clip(Radius.inner).background(thumb)
                 )
                 options.forEachIndexed { i, label ->
                     Box(
                         Modifier.heightIn(min = 40.dp).clip(Radius.inner)
                             .selectable(i == selected, interactionSource = null, indication = null, role = Role.Tab, onClick = { onSelect(i) }),
-                        contentAlignment = Alignment.Center,
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             label,
                             Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                             style = Type.chip,
                             color = if (i == selected) p.textPrimary else p.textSecondary,
-                            maxLines = 2,
+                            maxLines = 2
                         )
                     }
                 }
-            },
+            }
         ) { ms, c ->
             val n = options.size
             val w = c.maxWidth / n
@@ -608,7 +621,7 @@ fun Btn(
     kind: BtnKind = BtnKind.PRIMARY,
     @DrawableRes icon: Int? = null,
     big: Boolean = false,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     val p = Tokens.colors
     val (bg, fg) = when (kind) {
@@ -627,10 +640,21 @@ fun Btn(
             .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
             .pressable(enabled = enabled, scale = 0.98f, onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        icon?.let { AIcon(it, Modifier.size(20.dp), fg); Spacer(Modifier.width(8.dp)) }
-        Text(text, style = when { kind == BtnKind.TEXT -> Type.rowTitle; big -> Type.strongLarge; else -> Type.strong }, color = fg)
+        icon?.let {
+            AIcon(it, Modifier.size(20.dp), fg)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text,
+            style = when {
+                kind == BtnKind.TEXT -> Type.rowTitle
+                big -> Type.strongLarge
+                else -> Type.strong
+            },
+            color = fg
+        )
     }
 }
 
@@ -641,9 +665,12 @@ fun Badge(text: String, @DrawableRes icon: Int? = null, child: Boolean = false) 
     val (bg, fg) = if (child) p.childSoft to p.child else p.surfaceRaised to p.textSecondary
     Row(
         Modifier.heightIn(min = 24.dp).clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        icon?.let { AIcon(it, Modifier.size(14.dp), fg); Spacer(Modifier.width(4.dp)) }
+        icon?.let {
+            AIcon(it, Modifier.size(14.dp), fg)
+            Spacer(Modifier.width(4.dp))
+        }
         Text(text, style = Type.tag, color = fg)
     }
 }
@@ -655,14 +682,18 @@ data class Kpi(val label: String, val value: String, val sub: String? = null, va
 fun KpiRow(items: List<Kpi>, modifier: Modifier = Modifier) {
     val p = Tokens.colors
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        for (row in items.chunked(3)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (k in row) Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(k.label, style = Type.caption, color = p.textTertiary)
-                Text(k.value, style = Type.title.copy(fontFeatureSettings = "tnum"), color = p.textPrimary)
-                k.sub?.let { Text(it, style = Type.micro, color = p.textTertiary) }
-                k.note?.let { Text(it, style = Type.micro, color = p.textTertiary) }
+        for (row in items.chunked(3)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (k in row) {
+                    Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(k.label, style = Type.caption, color = p.textTertiary)
+                        Text(k.value, style = Type.title.copy(fontFeatureSettings = "tnum"), color = p.textPrimary)
+                        k.sub?.let { Text(it, style = Type.micro, color = p.textTertiary) }
+                        k.note?.let { Text(it, style = Type.micro, color = p.textTertiary) }
+                    }
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
-            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }
@@ -675,13 +706,13 @@ fun BandCard(text: String, action: String? = null, onAction: () -> Unit = {}) {
     Row(
         Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }.clip(Radius.control).background(p.surface).border(1.dp, p.line, Radius.control)
             .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp).heightIn(min = 48.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text, Modifier.weight(1f).padding(vertical = 6.dp), style = Type.meta, color = p.textSecondary)
         if (action != null) {
             Box(
                 Modifier.clip(Radius.inner).pressable(onClick = onAction).heightIn(min = 40.dp).padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) {
                 Text(action, style = Type.metaStrong, color = p.accentInk)
             }
@@ -706,7 +737,7 @@ fun LiveDot(color: Color, size: Dp = 10.dp) {
         Modifier.size(size).onScreen { shown = it }.drawBehind {
             if (ring < 1f) drawCircle(color.copy(alpha = 0.5f * (1f - ring)), radius = size.toPx() / 2 + ring * 12.dp.toPx())
             drawCircle(color)
-        },
+        }
     )
 }
 
@@ -734,14 +765,14 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
                                 (slideInVertically(Springs.roll.spec()) { it / 2 } + fadeIn(Motion.rollIn.spec())) togetherWith
                                     (slideOutVertically(Springs.roll.spec()) { -it / 2 } + fadeOut(Motion.rollOut.spec()))
                             },
-                            label = "roll",
+                            label = "roll"
                         ) { c -> Text(c.toString(), style = style, color = color) }
                     }
                 }
             }
             Text(text, style = style, color = color)
         },
-        modifier = modifier.clearAndSetSemantics { contentDescription = text },
+        modifier = modifier.clearAndSetSemantics { contentDescription = text }
     ) { measurables, constraints ->
         val row = measurables[0].measure(constraints.copy(minWidth = 0, maxWidth = Constraints.Infinity))
         if (row.width <= constraints.maxWidth) {
@@ -765,7 +796,7 @@ fun SwapText(
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
     textAlign: androidx.compose.ui.text.style.TextAlign? = null,
-    overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+    overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip
 ) {
     if (LocalReducedMotion.current) {
         Text(text, modifier, style = style, color = color, maxLines = maxLines, textAlign = textAlign, overflow = overflow)
@@ -776,7 +807,7 @@ fun SwapText(
         targetState = text,
         modifier = modifier,
         transitionSpec = { (slideInVertically(Springs.roll.spec()) { shift } + fadeIn(Motion.rollIn.spec())) togetherWith fadeOut(Motion.rollOut.spec()) },
-        label = "swap",
+        label = "swap"
     ) { t -> Text(t, style = style, color = color, maxLines = maxLines, textAlign = textAlign, overflow = overflow) }
 }
 
@@ -786,7 +817,7 @@ fun AppMark(size: Dp, corner: Dp) {
     Box(
         Modifier.size(size).clip(RoundedCornerShape(corner)).background(Color.White)
             .border(1.dp, Color.Black.copy(alpha = 0.1f), RoundedCornerShape(corner)),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         androidx.compose.foundation.Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(size * 1.5f))
     }
@@ -803,7 +834,7 @@ fun TopAction(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier.heightIn(min = 48.dp).clip(Radius.medium).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
             .pressable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) { Text(text, style = Type.rowTitle, color = p.accentInk) }
 }
 

@@ -10,10 +10,14 @@ class SegmentTracker(private val head: CryHead, private val p: Params = Params()
     private class Win(val scores: FloatArray, val endMs: Long)
     private val wins = ArrayDeque<Win>()
     private var emitted = false
-    private var loudRun = 0   // 문턱 이상 구간이 이어진 수
+    private var loudRun = 0 // 문턱 이상 구간이 이어진 수
 
     /** 이음이 끊길 때(입력 끊김) 부른다. 끊기기 전 창·앞 구간 확률은 버린다. */
-    fun reset() { wins.clear(); emitted = false; loudRun = 0 }
+    fun reset() {
+        wins.clear()
+        emitted = false
+        loudRun = 0
+    }
 
     /** 창 하나(끝 시각 [endMs])를 넣는다. 3창이 모이면 구간을 돌려준다. [at]은 사건 시각. */
     fun push(scores: FloatArray, endMs: Long, at: Long, injectedCryAt: Long? = null): CrySegment? {

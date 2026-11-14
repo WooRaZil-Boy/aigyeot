@@ -1,11 +1,11 @@
 package kr.aigyeot.phone.domain.model
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
 
 class CareDraftTest {
     private val zone = APP_ZONE
@@ -14,7 +14,10 @@ class CareDraftTest {
 
     @Test
     fun `시트 질문은 종류마다 정해진 글이다`() {
-        assertEquals(listOf("어떻게 먹였어요?", "언제 잤어요?", "어떤 기저귀였어요?", "무엇을 적을까요?"), listOf(CareKind.FEED, CareKind.SLEEP, CareKind.DIAPER, CareKind.NOTE).map(::sheetQuestion))
+        assertEquals(
+            listOf("어떻게 먹였어요?", "언제 잤어요?", "어떤 기저귀였어요?", "무엇을 적을까요?"),
+            listOf(CareKind.FEED, CareKind.SLEEP, CareKind.DIAPER, CareKind.NOTE).map(::sheetQuestion)
+        )
     }
 
     @Test
@@ -95,10 +98,12 @@ class CareDraftTest {
         // 큰 글자는 줄이지 않는다(두 줄까지)
         assertTrue(sleep.saveLabel(shorten = false).codePointCount(0, sleep.saveLabel(shorten = false).length) > SAVE_LABEL_MAX)
         // 줄인 글은 모두 22자 안이다(어떤 시각·고른 것이어도)
-        for (k in CareKind.entries) for (h in listOf(0, 11, 12, 23)) {
-            val t = onDate(today, h, 59, zone)
-            val x = CareDraft.new("s", k, day = null, now = t).toggleSide(FeedSide.BOTTLE).copy(amount = 400, diaper = Diaper.BOTH).saveLabel()
-            assertTrue(x, x.codePointCount(0, x.length) <= SAVE_LABEL_MAX)
+        for (k in CareKind.entries) {
+            for (h in listOf(0, 11, 12, 23)) {
+                val t = onDate(today, h, 59, zone)
+                val x = CareDraft.new("s", k, day = null, now = t).toggleSide(FeedSide.BOTTLE).copy(amount = 400, diaper = Diaper.BOTH).saveLabel()
+                assertTrue(x, x.codePointCount(0, x.length) <= SAVE_LABEL_MAX)
+            }
         }
     }
 
@@ -116,7 +121,7 @@ class CareDraftTest {
         // 나머지 값도 하나의 자리: 끝이 시작보다 이름·너무 김 → 끝, 양 → 양 칸, 메모 길이 → 메모
         assertEquals(
             listOf(SheetField.END, SheetField.END, SheetField.AMOUNT, SheetField.MEMO),
-            listOf(CareProblem.END_BEFORE_START, CareProblem.TOO_LONG, CareProblem.AMOUNT, CareProblem.NOTE_TOO_LONG).map { it.field() },
+            listOf(CareProblem.END_BEFORE_START, CareProblem.TOO_LONG, CareProblem.AMOUNT, CareProblem.NOTE_TOO_LONG).map { it.field() }
         )
     }
 
@@ -225,8 +230,10 @@ class CareDraftTest {
 
     @Test
     fun `고치기는 그 기록의 날에 시각만 바꾸고 종류에 맞지 않는 칸은 비운다`() {
-        val e = CareEvent("e", CareKind.FEED, onDate(today.minusDays(1), 23, 0, zone), endAt = onDate(today, 0, 20, zone), zone = zone.id,
-            feedSide = FeedSide.BOTTLE, amountMl = 120, createdAt = now, updatedAt = now)
+        val e = CareEvent(
+            "e", CareKind.FEED, onDate(today.minusDays(1), 23, 0, zone), endAt = onDate(today, 0, 20, zone), zone = zone.id,
+            feedSide = FeedSide.BOTTLE, amountMl = 120, createdAt = now, updatedAt = now
+        )
         val d = CareDraft.editing("s", e)
         assertFalse(d.showsAgoChips)
         assertEquals(onDate(today.minusDays(1), 22, 0, zone), d.setStart(22, 0, now).start)

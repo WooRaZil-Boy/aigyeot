@@ -33,7 +33,7 @@ class WipeLink(
     private val notices: Notices,
     private val link: LinkSwitch,
     private val scope: CoroutineScope,
-    private val log: Logger,
+    private val log: Logger
 ) {
     /** `c`가 아직 지금 자격일 때만 지운다. 부르는 쪽이 취소돼도(화면이 뒤로 가 연결 반복이 끝남) 앱 수명에서 끝까지 한다. */
     suspend operator fun invoke(c: Credentials): Boolean = scope.async { wipe(c) }.await()
@@ -53,12 +53,7 @@ class WipeLink(
 }
 
 /** 어느 요청이든 401, 소켓 닫기 4001("어디서든 → GONE"). 사용자 끊기 중이면 그 끊기에 맡긴다. */
-class LoseConnection(
-    private val state: PhoneStateRepository,
-    private val link: LinkSwitch,
-    private val wipe: WipeLink,
-    private val scope: CoroutineScope,
-) {
+class LoseConnection(private val state: PhoneStateRepository, private val link: LinkSwitch, private val wipe: WipeLink, private val scope: CoroutineScope) {
     /** HTTP 층이 401을 바로 넘긴다(부른 쪽이 취소돼 결과를 받지 못해도 잃지 않게). 그 토큰이 지금 자격일 때만 본다. */
     fun unauthorized(token: String) {
         scope.launch { state.creds?.takeIf { it.token == token }?.let { lost(it) } }
@@ -87,8 +82,11 @@ class LoseConnection(
                     link.goneCleanup(GoneCleanupEvent.UserLeft(c.deviceId))
                     link.afterUserDisconnect()
                     // 정리하는 사이 새 연결을 시작했으면(이미 실패로 끝났어도) 확인 화면이 결과를 맡는다: 탭으로 옮기지 않는다.
-                    if (gen == link.pairGen && !link.pairActive()) link.setDisconnectRun(DisconnectRun.Done)
-                    else if (!link.secretsLeft) link.leavingCleared()
+                    if (gen == link.pairGen && !link.pairActive()) {
+                        link.setDisconnectRun(DisconnectRun.Done)
+                    } else if (!link.secretsLeft) {
+                        link.leavingCleared()
+                    }
                 }
                 return
             }
@@ -134,7 +132,7 @@ class Disconnect(
     private val wipe: WipeLink,
     private val lose: LoseConnection,
     private val scope: CoroutineScope,
-    private val log: Logger,
+    private val log: Logger
 ) {
     val run = link.disconnectRun
 
@@ -163,7 +161,7 @@ class Disconnect(
                     error == null -> DisconnectRun.Done
                     state.creds == null -> null
                     else -> DisconnectRun.Failed(error)
-                },
+                }
             )
         }
     }
@@ -253,9 +251,11 @@ class Disconnect(
                 else -> link.leavingCleared()
             }
         }
-        if (c != null && link.leavingId() != c.deviceId) link.goneCleanupPending()?.let { id ->
-            // 앞 프로세스가 복구 표시를 적고 자격을 지우기 전에 죽었다: 그 강제 끊김 정리를 마친다. 다른 기기 것이면 그 뒤 새로 연결했다.
-            if (id == c.deviceId) later { lose.lost(c) } else link.goneCleanup(GoneCleanupEvent.Stale)
+        if (c != null && link.leavingId() != c.deviceId) {
+            link.goneCleanupPending()?.let { id ->
+                // 앞 프로세스가 복구 표시를 적고 자격을 지우기 전에 죽었다: 그 강제 끊김 정리를 마친다. 다른 기기 것이면 그 뒤 새로 연결했다.
+                if (id == c.deviceId) later { lose.lost(c) } else link.goneCleanup(GoneCleanupEvent.Stale)
+            }
         }
     }
 
@@ -271,7 +271,11 @@ class Disconnect(
         if (c.role != Role.OWNER) return // guardian은 GET /v1/devices가 403: 소켓이 붙거나(stillPaired) 401·4001이 오면 확인된다
         when (val r = relay.devices(c.token)) {
             is RelayResult.Ok -> stillPaired(c)
-            is RelayResult.Err -> if (r.status == 401) lose.lost(c) else if (r.status < 500) stillPaired(c)
+            is RelayResult.Err -> if (r.status == 401) {
+                lose.lost(c)
+            } else if (r.status < 500) {
+                stillPaired(c)
+            }
             RelayResult.Offline, RelayResult.Unreached -> Unit // 소켓이 붙으면 다시 확인된다
         }
     }

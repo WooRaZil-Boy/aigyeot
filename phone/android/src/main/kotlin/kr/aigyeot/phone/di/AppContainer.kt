@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.navigation.toRoute
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,7 +69,6 @@ import kr.aigyeot.phone.presentation.SongsViewModel
 import kr.aigyeot.phone.presentation.StatusViewModel
 import kr.aigyeot.phone.presentation.TimerViewModel
 import kr.aigyeot.phone.presentation.TodayViewModel
-import java.io.File
 
 /**
  * 앱 하나에 하나(수동 생성자 주입). 저장소·상태·유스케이스를 만들어 넘긴다. 앱 범위 코루틴은 [scope] 하나다(메인 흐름, 구조화된 동시성).
@@ -90,7 +90,7 @@ class AppContainer(app: Application) {
         clock,
         migrating = { !care.care.value.migratedFeedings },
         onSaveFailed = notices::saveFailed,
-        goneCleanupPending = marks.get(Mark.GONE_CLEANUP_PENDING),
+        goneCleanupPending = marks.get(Mark.GONE_CLEANUP_PENDING)
     )
 
     init {
@@ -108,7 +108,7 @@ class AppContainer(app: Application) {
         BuildConfig.RELAY_URL,
         BuildConfig.VERSION_NAME,
         onUnauthorized = { lose.unauthorized(it) },
-        onObserved = { token, ticket, up -> connection.observed(token, ticket, up) },
+        onObserved = { token, ticket, up -> connection.observed(token, ticket, up) }
     )
 
     private val wipe: WipeLink = WipeLink(state, care, credentials, songs, notices, link, scope, log)
@@ -120,15 +120,18 @@ class AppContainer(app: Application) {
     val connection: KeepConnected =
         KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, AndroidNetworkWatcher(app), visibility, clock, scope)
     private val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
+
     /** 되돌리기 띠 시간: 띠를 띄울 때 화면 읽기(TalkBack 등)와 시스템 권장 시간('조치를 취할 시간', API 29+)을 읽어 넘긴다. */
     private val undoBand: () -> Long = {
         val am = app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
         val recommended = if (am != null && android.os.Build.VERSION.SDK_INT >= 29) {
             am.getRecommendedTimeoutMillis(
                 UNDO_MS.toInt(),
-                android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT or android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS,
+                android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT or android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS
             ).toLong()
-        } else UNDO_MS
+        } else {
+            UNDO_MS
+        }
         undoBandMs(am?.isTouchExplorationEnabled == true, recommended)
     }
     val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, log, allowDebugSeed = BuildConfig.DEBUG, undoMs = undoBand)
@@ -141,7 +144,7 @@ class AppContainer(app: Application) {
     val setHandoffAlerts = SetHandoffAlerts(state, relay, lose)
     val lifecycle = AppLifecycle(
         state, care, songs, link, marks, visibility, connection, outbox, recordCare, disconnect,
-        OngoingNotice { CareNotify.update(app, it) }, scope,
+        OngoingNotice { CareNotify.update(app, it) }, scope
     )
 
     /** 화면마다 ViewModel을 만든다(생성자 주입). 경로 인자(기록·리포트·알림 id)는 Navigation이 넘긴 SavedStateHandle에서 꺼낸다. */
@@ -159,8 +162,13 @@ class AppContainer(app: Application) {
                 RecordsViewModel::class.java -> RecordsViewModel(state, care, recordCare, notices)
                 CarViewModel::class.java -> CarViewModel(state, connection)
                 SettingsViewModel::class.java -> SettingsViewModel(
-                    state, care, recordCare, clearRecords, disconnect, clock,
-                    { readDocument(app.contentResolver, it, CareCsv.MAX_BYTES + 1) },
+                    state,
+                    care,
+                    recordCare,
+                    clearRecords,
+                    disconnect,
+                    clock,
+                    { readDocument(app.contentResolver, it, CareCsv.MAX_BYTES + 1) }
                 )
                 SongsViewModel::class.java -> SongsViewModel(state, connection, recordSong, selectSong, removeSong, songs, Recorder(app), clock, handle())
                 ReportsViewModel::class.java -> ReportsViewModel(state)

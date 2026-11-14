@@ -1,14 +1,14 @@
 package kr.aigyeot.phone.domain.model
 
-import kotlinx.serialization.json.JsonObject
-import kr.aigyeot.shared.Envelope
-import kr.aigyeot.shared.Role
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlinx.serialization.json.JsonObject
+import kr.aigyeot.shared.Envelope
+import kr.aigyeot.shared.Role
 
 // 안드로이드 없이 JVM에서 시험하는 작은 도구들: id, 시각, 연결 코드.
 
@@ -40,10 +40,9 @@ fun isUlid(s: String) = ULID_RE.matches(s)
 val APP_ZONE: ZoneId = ZoneId.of("Asia/Seoul")
 
 /** RFC 3339(시차 포함, 초 단위). `OffsetDateTime.toString()`은 0초를 빼므로 쓰지 않는다. */
-fun rfc3339(now: Long, zone: ZoneId = APP_ZONE): String =
-    DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(
-        Instant.ofEpochMilli(now).atZone(zone).toOffsetDateTime().truncatedTo(ChronoUnit.SECONDS),
-    )
+fun rfc3339(now: Long, zone: ZoneId = APP_ZONE): String = DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(
+    Instant.ofEpochMilli(now).atZone(zone).toOffsetDateTime().truncatedTo(ChronoUnit.SECONDS)
+)
 
 /** RFC 3339 → epoch ms. 형식이 틀리면 null. 비교는 문자열이 아니라 순간으로 한다. */
 fun instantOf(s: String?): Long? = s?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
@@ -152,7 +151,7 @@ object IntroText {
         "차와 주고받아요" to "수유 시작 시각, 우리 노래, 수유·잠·기저귀 요약, 주행 리포트, 인계 알림이에요",
         "울음소리와 차 위치는 보내지 않아요" to "차 안 마이크 소리도 보내지 않아요",
         "아이곁 중계 서버를 거쳐요" to "인계 알림은 Google·Apple 알림 서버도 거쳐요",
-        "차에서 물으면 AI 서버를 써요" to "답을 만들려고 수유·잠·기저귀 숫자를 보내요",
+        "차에서 물으면 AI 서버를 써요" to "답을 만들려고 수유·잠·기저귀 숫자를 보내요"
     )
 
     /** intro.more: 글자 단추와 읽기 이름. */
@@ -168,7 +167,7 @@ object IntroText {
         "주고받는 것" to "수유 시작 시각, 우리 노래 녹음, 수유·잠·기저귀 기록 요약(시각·횟수·잠 시간), 주행 리포트, 인계 알림 문장",
         "보내지 않는 것" to "아기 울음 소리, 차 안 마이크 소리, 차의 위치",
         "거치는 서버" to "모두 아이곁 중계 서버를 거쳐 오가요. 인계 알림은 Google·Apple 알림 서버도 거쳐요.",
-        "AI 서버" to "차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요.",
+        "AI 서버" to "차에서 아기 상황을 물으면, 답을 만들려고 수유·잠·기저귀 숫자를 AI 서버로 보내요."
     )
 
     /** intro.connect·intro.recordOnly. */
@@ -184,5 +183,4 @@ const val INTRO_STAGE_MIN = 120
  * 첫 안내 무대 높이(dp): 창 높이 − 글 칸(머리 이름 위 ~ '자세히 보기' 아래) − 아래 단추 띠 − 32(흐림 24 + 여유 8), [max]를 넘지 않는다.
  * [INTRO_STAGE_MIN]보다 작으면 null(무대를 그리지 않는다): 무엇이 오가는지가 결정 단추보다 먼저 보여야 한다.
  */
-fun introStageHeight(window: Int, text: Int, bar: Int, max: Int = INTRO_STAGE_MAX): Int? =
-    minOf(window - text - bar - 32, max).takeIf { it >= INTRO_STAGE_MIN }
+fun introStageHeight(window: Int, text: Int, bar: Int, max: Int = INTRO_STAGE_MAX): Int? = minOf(window - text - bar - 32, max).takeIf { it >= INTRO_STAGE_MIN }

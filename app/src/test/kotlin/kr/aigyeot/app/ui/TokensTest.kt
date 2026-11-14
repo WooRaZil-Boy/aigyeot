@@ -1,5 +1,7 @@
 package kr.aigyeot.app.ui
 
+import java.io.File
+import kotlin.math.pow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.float
@@ -10,8 +12,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import kotlin.math.pow
 
 /** Tokens(손으로 옮긴 값)가 공용 사본 tokens.json과 같은지. 깨끗한 클론에서도 돌게 저장소 안 사본을 읽는다(시험 작업 폴더 = app/). */
 class TokensTest {
@@ -63,7 +63,13 @@ class TokensTest {
         }
         val s = json.getValue("spring").jsonObject.filterKeys { !it.startsWith("$") }
         assertEquals(s.keys, Tokens.spring.keys)
-        s.forEach { (k, v) -> assertEquals(k, v.jsonObject.getValue("damping").jsonPrimitive.float to v.jsonObject.getValue("stiffness").jsonPrimitive.float, Tokens.spring.getValue(k)) }
+        s.forEach { (k, v) ->
+            assertEquals(
+                k,
+                v.jsonObject.getValue("damping").jsonPrimitive.float to v.jsonObject.getValue("stiffness").jsonPrimitive.float,
+                Tokens.spring.getValue(k)
+            )
+        }
     }
 
     /** 대비표의 글자 짝이 라이트·다크 모두 4.5:1 이상. 투명 색은 그 바탕에 합성. */
@@ -72,12 +78,14 @@ class TokensTest {
             "textPrimary" to "bg", "textPrimary" to "surface", "textPrimary" to "surfaceRaised", "textSecondary" to "bg", "textSecondary" to "surface",
             "textSecondary" to "surfaceRaised", "textTertiary" to "bg", "textTertiary" to "surface", "textTertiary" to "stage", "accentInk" to "bg",
             "accentInk" to "surface", "onAccent" to "accent", "onAccentSoft" to "accentSoft", "child" to "bg", "child" to "surface", "child" to "childSoft",
-            "warning" to "surface", "danger" to "surface", "onFill" to "fill", "textPrimary" to "stage", "textSecondary" to "stage",
+            "warning" to "surface", "danger" to "surface", "onFill" to "fill", "textPrimary" to "stage", "textSecondary" to "stage"
         )
-        for ((fg, bg) in pairs) for (dark in listOf(false, true)) {
-            val pick = { n: String -> Tokens.color.getValue(n).let { if (dark) it.second else it.first } }
-            val c = contrast(pick(fg), pick(bg))
-            assertTrue("$fg/$bg ${if (dark) "다크" else "라이트"} $c", c >= 4.5)
+        for ((fg, bg) in pairs) {
+            for (dark in listOf(false, true)) {
+                val pick = { n: String -> Tokens.color.getValue(n).let { if (dark) it.second else it.first } }
+                val c = contrast(pick(fg), pick(bg))
+                assertTrue("$fg/$bg ${if (dark) "다크" else "라이트"} $c", c >= 4.5)
+            }
         }
     }
 

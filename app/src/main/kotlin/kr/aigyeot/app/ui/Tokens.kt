@@ -38,14 +38,14 @@ object Tokens {
         "cSleep" to (0xFF9B87F5L to 0xFF9580EEL),
         "cDiaper" to (0xFF8B95A1L to 0xFF6B7684L),
         "cNote" to (0xFF8B95A1L to 0xFF6B7684L),
-        "cCar" to (0xFFEB6834L to 0xFFD95926L),
+        "cCar" to (0xFFEB6834L to 0xFFD95926L)
     )
 
     /** 유리(차 위 칩·'처음 자리로' 단추만): 이름 → (라이트, 다크) rgba. */
     val glass: Map<String, Pair<Rgba, Rgba>> = mapOf(
         "fill" to (Rgba(255, 255, 255, 0.62f) to Rgba(30, 32, 36, 0.58f)),
         "rim" to (Rgba(255, 255, 255, 0.80f) to Rgba(255, 255, 255, 0.16f)),
-        "shade" to (Rgba(22, 24, 26, 0.08f) to Rgba(0, 0, 0, 0.40f)),
+        "shade" to (Rgba(22, 24, 26, 0.08f) to Rgba(0, 0, 0, 0.40f))
     )
 
     /** 차 글자(Connect-S, 1px = 1dp): 이름 → (크기, 줄 높이, 굵기). 24 미만은 없다. */
@@ -58,7 +58,7 @@ object Tokens {
         "bodyL" to Triple(30, 40, 400),
         "bodyS" to Triple(26, 36, 400),
         "label" to Triple(24, 30, 500),
-        "numeral" to Triple(72, 76, 600),
+        "numeral" to Triple(72, 76, 600)
     )
 
     /** 차 모서리 반경(dp). */
@@ -73,7 +73,7 @@ object Tokens {
         "exit" to Motion(180, floatArrayOf(0.4f, 0f, 1f, 1f)),
         "camera" to Motion(1100, floatArrayOf(0.65f, 0f, 0.35f, 1f)),
         "light" to Motion(900, floatArrayOf(0.4f, 0f, 0.2f, 1f)),
-        "ripple" to Motion(2400, floatArrayOf(0.2f, 0.6f, 0.35f, 1f)),
+        "ripple" to Motion(2400, floatArrayOf(0.2f, 0.6f, 0.35f, 1f))
     )
 
     /** 스프링: 이름 → (감쇠비, 강성). */
@@ -95,6 +95,7 @@ data class Rgba(val r: Int, val g: Int, val b: Int, val a: Float) {
 
 class Motion(val ms: Int, private val bezier: FloatArray?) {
     val curve: FloatArray? get() = bezier?.copyOf()
+
     /** 만들 때 한 번만 계산한다(무한 애니메이션이 매 프레임 읽는다). bezier는 밖에서 바뀌지 않는다(curve는 복사본). */
     val easing: Easing = bezier?.let { CubicBezierEasing(it[0], it[1], it[2], it[3]) } ?: LinearEasing
 }

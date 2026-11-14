@@ -38,7 +38,7 @@ class SessionLifecycleTest {
     @Test fun noProfile_staysIdle() {
         val sim = idle(prof = null).doorCycle().gear(Gear.D)
         assertNull(sim.s.session)
-        assertEquals(listOf<Command>(HideNotice(Notice.BABY_ABOARD), HideNotice(Notice.MIC_STOPPED)), sim.cmds)   // 출발 알림 내림만
+        assertEquals(listOf<Command>(HideNotice(Notice.BABY_ABOARD), HideNotice(Notice.MIC_STOPPED)), sim.cmds) // 출발 알림 내림만
     }
 
     @Test fun micOffAtOpen_saysS17Once() {
@@ -60,7 +60,7 @@ class SessionLifecycleTest {
         assertEquals(1, sim.step<ShowNotice>().size)
         sim.gear(Gear.D, MIN)
         assertEquals(1, sim.step<HideNotice>().count { it.kind == Notice.BABY_ABOARD })
-        assertEquals(listOf(Notice.BABY_ABOARD), sim.gear(Gear.P, MIN).step<ShowNotice>().map { it.kind })   // 두 번째 P에도 다시 뜬다
+        assertEquals(listOf(Notice.BABY_ABOARD), sim.gear(Gear.P, MIN).step<ShowNotice>().map { it.kind }) // 두 번째 P에도 다시 뜬다
     }
 
     @Test fun micOn_parkShowsNoNotice() {
@@ -82,9 +82,9 @@ class SessionLifecycleTest {
     }
 
     @Test fun sessionOpenedOrClosed_noOutOfSessionReshow() {
-        val sim = idle(mic = false).doorCycle().gear(Gear.D, MIN)   // 프로필 있음: 세션 열림 → boardNotice 꺼짐
+        val sim = idle(mic = false).doorCycle().gear(Gear.D, MIN) // 프로필 있음: 세션 열림 → boardNotice 꺼짐
         assertFalse(sim.s.ign.boardNotice)
-        sim.gear(Gear.P, MIN).ev(RearDoor(sim.t + 1, Side.LEFT, true))   // 세션 닫힘
+        sim.gear(Gear.P, MIN).ev(RearDoor(sim.t + 1, Side.LEFT, true)) // 세션 닫힘
         assertNull(sim.s.session)
         sim.ev(RearDoor(sim.t + 1, Side.LEFT, false)).clear()
         assertTrue(sim.gear(Gear.R, MIN).gear(Gear.P, MIN).all<ShowNotice>().isEmpty())
@@ -110,13 +110,14 @@ class SessionLifecycleTest {
 
     // 출발하면 '아기가 탔나요?' 알림을 내린다
     @Test fun leavePark_hidesBabyAboardNotice() {
-        val hide = listOf(HideNotice(Notice.BABY_ABOARD), HideNotice(Notice.MIC_STOPPED))   // 둘 다
-        assertEquals(hide, idle(mic = false).ev(GearChanged(T0 + MIN, Gear.D)).step<HideNotice>())            // P → D
-        assertEquals(hide, Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(GearChanged(T0, Gear.D)).step<HideNotice>())   // 앞 기어 모름 → D
-        assertEquals(hide, Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(Boot(T0, Gear.D, 10)).step<HideNotice>())   // Boot(D)
+        val hide = listOf(HideNotice(Notice.BABY_ABOARD), HideNotice(Notice.MIC_STOPPED)) // 둘 다
+        assertEquals(hide, idle(mic = false).ev(GearChanged(T0 + MIN, Gear.D)).step<HideNotice>()) // P → D
+        // 앞 기어 모름 → D
+        assertEquals(hide, Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(GearChanged(T0, Gear.D)).step<HideNotice>())
+        assertEquals(hide, Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(Boot(T0, Gear.D, 10)).step<HideNotice>()) // Boot(D)
         assertTrue(Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(Boot(T0, Gear.P, 10)).step<HideNotice>().isEmpty())
         assertTrue(Sim(EngineState.fresh(42, profile(), listOf(WN), emptyList(), null, 1)).ev(Boot(T0, null, 10)).step<HideNotice>().isEmpty())
-        assertTrue(idle(gear = Gear.D).ev(GearChanged(T0 + MIN, Gear.N)).step<HideNotice>().isEmpty())                  // D → N은 앞 기어가 P 아님
+        assertTrue(idle(gear = Gear.D).ev(GearChanged(T0 + MIN, Gear.N)).step<HideNotice>().isEmpty()) // D → N은 앞 기어가 P 아님
     }
 
     @Test fun doorClosedParkMicOff_saysS16() {
@@ -147,7 +148,8 @@ class SessionLifecycleTest {
     @Test fun seatHeatOnDuringSession_turnsOff() {
         val sim = session().ev(SeatHeat(T0, L, 1))
         val off = sim.step<SetSeatHeat>().single()
-        assertEquals(listOf(L), off.areas); assertEquals(0, off.level)
+        assertEquals(listOf(L), off.areas)
+        assertEquals(0, off.level)
         sim.ev(SeatHeat(T0, Area.ROW_1_LEFT, 1))
         assertTrue(sim.cmds.isEmpty())
     }
@@ -173,16 +175,16 @@ class SessionLifecycleTest {
         val lock = sim.step<SetWindowLock>().single()
         sim.gear(Gear.P, MIN).ev(RearDoor(sim.t, Side.LEFT, true))
         assertNull(sim.s.session)
-        assertTrue(sim.step<SetWindowLock>().isEmpty())   // 아직 받은 before가 없다
+        assertTrue(sim.step<SetWindowLock>().isEmpty()) // 아직 받은 before가 없다
         lockResult(sim, lock, L, 0.0)
         val restore = sim.step<SetWindowLock>().single()
         assertEquals(mapOf(L to false), restore.values)
-        lockResult(sim, lock, R, ok = false)               // 잠기지 않았으니 복원 없음
+        lockResult(sim, lock, R, ok = false) // 잠기지 않았으니 복원 없음
         assertTrue(sim.step<SetWindowLock>().isEmpty())
         assertEquals(mapOf(restore.cmdId to setOf(L)), sim.s.ign.windowLockPending.single().restoring)
     }
 
-    @Test fun restoreCmdId_belongsToLockingSession_inIdle() {   // 되돌림 명령 id는 잠근 세션 몫이다
+    @Test fun restoreCmdId_belongsToLockingSession_inIdle() { // 되돌림 명령 id는 잠근 세션 몫이다
         val sim = session(prof = profile(sibling = true))
         val idA = sim.ses.id
         val lock = sim.step<SetWindowLock>().single()
@@ -192,7 +194,7 @@ class SessionLifecycleTest {
         assertTrue(sim.step<SetWindowLock>().single().cmdId.startsWith("$idA-"))
     }
 
-    @Test fun restoreCmdId_belongsToLockingSession_whenNextSessionOpen() {   // 되돌림 명령 id는 잠근 세션 몫이다
+    @Test fun restoreCmdId_belongsToLockingSession_whenNextSessionOpen() { // 되돌림 명령 id는 잠근 세션 몫이다
         val sim = session(prof = profile(sibling = true))
         val idA = sim.ses.id
         val lock = sim.step<SetWindowLock>().single()
@@ -205,12 +207,12 @@ class SessionLifecycleTest {
     @Test fun restoreResult_releasesQueuedLockOfNextSession() {
         val sim = session(prof = profile(sibling = true))
         val lockA = sim.step<SetWindowLock>().single()
-        sim.gear(Gear.P, MIN).doorCycle().gear(Gear.D)            // A 닫힘 → B 열림
+        sim.gear(Gear.P, MIN).doorCycle().gear(Gear.D) // A 닫힘 → B 열림
         assertTrue(sim.step<SetWindowLock>().isEmpty())
         assertEquals(setOf(L, R), sim.s.ign.windowLockPending.last().queued)
-        lockResult(sim, lockA, L, 0.0)                             // A 복원
+        lockResult(sim, lockA, L, 0.0) // A 복원
         val restoreL = sim.step<SetWindowLock>().single()
-        lockResult(sim, restoreL, L)                               // 풀림 → B 왼쪽 잠금
+        lockResult(sim, restoreL, L) // 풀림 → B 왼쪽 잠금
         assertEquals(mapOf(L to true), sim.step<SetWindowLock>().single().values)
     }
 
@@ -219,16 +221,19 @@ class SessionLifecycleTest {
         val lockA = sim.step<SetWindowLock>().single()
         sim.gear(Gear.P, MIN).doorCycle().gear(Gear.D)
         sim.clear()
-        lockResult(sim, lockA, L, 0.0); lockResult(sim, lockA, R, 0.0)
+        lockResult(sim, lockA, L, 0.0)
+        lockResult(sim, lockA, R, 0.0)
         val (restA1, restA2) = sim.all<SetWindowLock>()
-        lockResult(sim, restA1, L); lockResult(sim, restA2, R)
+        lockResult(sim, restA1, L)
+        lockResult(sim, restA2, R)
         val locksB = sim.all<SetWindowLock>().drop(2)
         assertEquals(listOf(mapOf(L to true), mapOf(R to true)), locksB.map { it.values })
-        locksB.forEach { lockResult(sim, it, it.values.keys.single(), 0.0) }   // B가 읽은 before = A가 복원한 값
+        locksB.forEach { lockResult(sim, it, it.values.keys.single(), 0.0) } // B가 읽은 before = A가 복원한 값
         sim.gear(Gear.P, MIN).ev(RearDoor(sim.t, Side.RIGHT, true))
         val restB = sim.all<SetWindowLock>().last()
         assertEquals(mapOf(L to false, R to false), restB.values)
-        lockResult(sim, restB, L); lockResult(sim, restB, R)
+        lockResult(sim, restB, L)
+        lockResult(sim, restB, R)
         assertEquals(listOf(false, false, true, true, false), sim.all<SetWindowLock>().map { it.values.values.first() })
         assertTrue(sim.s.ign.windowLockPending.isEmpty())
     }
@@ -237,17 +242,21 @@ class SessionLifecycleTest {
         val sim = session(prof = profile(sibling = true))
         val lockA = sim.step<SetWindowLock>().single()
         sim.gear(Gear.P, MIN).doorCycle().gear(Gear.D)
-        lockResult(sim, lockA, L, 0.0); val restL = sim.step<SetWindowLock>().single()
-        lockResult(sim, lockA, R, 0.0); val restR = sim.step<SetWindowLock>().single()
-        lockResult(sim, restL, L); val lockBL = sim.step<SetWindowLock>().single()
-        lockResult(sim, restR, R); val lockBR = sim.step<SetWindowLock>().single()
+        lockResult(sim, lockA, L, 0.0)
+        val restL = sim.step<SetWindowLock>().single()
+        lockResult(sim, lockA, R, 0.0)
+        val restR = sim.step<SetWindowLock>().single()
+        lockResult(sim, restL, L)
+        val lockBL = sim.step<SetWindowLock>().single()
+        lockResult(sim, restR, R)
+        val lockBR = sim.step<SetWindowLock>().single()
         val b = sim.s.ign.windowLockPending.single()
         assertEquals(mapOf(lockBL.cmdId to setOf(L), lockBR.cmdId to setOf(R)), b.locking)
-        lockResult(sim, lockBR, R, 1.0)                            // 순서가 바뀌어 와도 각자 찾는다
+        lockResult(sim, lockBR, R, 1.0) // 순서가 바뀌어 와도 각자 찾는다
         assertEquals(mapOf(R to true), sim.ses.windowLockBefore)
-        sim.gear(Gear.P, MIN).ev(RearDoor(sim.t, Side.LEFT, true))  // 왼쪽 결과 전에 B 닫힘
+        sim.gear(Gear.P, MIN).ev(RearDoor(sim.t, Side.LEFT, true)) // 왼쪽 결과 전에 B 닫힘
         assertEquals(mapOf(R to true), sim.step<SetWindowLock>().single().values)
-        lockResult(sim, lockBL, L, 0.0)                             // 왼쪽 복원
+        lockResult(sim, lockBL, L, 0.0) // 왼쪽 복원
         assertEquals(mapOf(L to false), sim.step<SetWindowLock>().single().values)
     }
 
@@ -269,7 +278,8 @@ class SessionLifecycleTest {
         val sim = session(prof = profile(sibling = true))
         val id = sim.ses.id
         val lock = sim.step<SetWindowLock>().single()
-        lockResult(sim, lock, L, 0.0); lockResult(sim, lock, R, 0.0)
+        lockResult(sim, lock, L, 0.0)
+        lockResult(sim, lock, R, 0.0)
         sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true))
         assertNull(sim.s.session)
         return Triple(sim, id, sim.step<SetWindowLock>().single())
@@ -291,7 +301,7 @@ class SessionLifecycleTest {
         lockResult(sim, restore, L, ok = false)
         assertTrue(sim.step<CloseSession>().isEmpty())
         lockResult(sim, restore, R)
-        assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>())   // control_log 줄은 실행기가 결과보다 먼저 쓴다(Controls.finish)
+        assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>()) // control_log 줄은 실행기가 결과보다 먼저 쓴다(Controls.finish)
         assertEquals(1, sim.all<CloseSession>().size)
     }
 
@@ -299,12 +309,12 @@ class SessionLifecycleTest {
         val sim = session(prof = profile(sibling = true))
         val id = sim.ses.id
         val lock = sim.step<SetWindowLock>().single()
-        sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true))   // 잠금 결과 전에 닫힘
+        sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true)) // 잠금 결과 전에 닫힘
         assertTrue(sim.all<CloseSession>().isEmpty(), "잠금 결과 대기 중")
-        lockResult(sim, lock, L, 0.0)                                        // 되돌림
+        lockResult(sim, lock, L, 0.0) // 되돌림
         val restore = sim.step<SetWindowLock>().single()
         assertTrue(sim.all<CloseSession>().isEmpty())
-        lockResult(sim, lock, R, ok = false)                                 // 잠금 실패: 되돌림 결과가 남았다
+        lockResult(sim, lock, R, ok = false) // 잠금 실패: 되돌림 결과가 남았다
         assertTrue(sim.all<CloseSession>().isEmpty())
         lockResult(sim, restore, L)
         assertEquals(listOf(CloseSession(id)), sim.all<CloseSession>())
@@ -313,7 +323,8 @@ class SessionLifecycleTest {
     @Test fun report_immediateWhenNothingLocked() {
         val sim = session(prof = profile(sibling = true))
         val lock = sim.step<SetWindowLock>().single()
-        lockResult(sim, lock, L, ok = false); lockResult(sim, lock, R, ok = false)
+        lockResult(sim, lock, L, ok = false)
+        lockResult(sim, lock, R, ok = false)
         val id = sim.ses.id
         sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true))
         assertEquals(listOf(CloseSession(id)), sim.step<CloseSession>())
@@ -347,14 +358,15 @@ class SessionLifecycleTest {
         repeat(6) { sim.tick(10 * MIN) }
         assertNotNull(sim.s.session)
         assertTrue(sim.all<CloseSession>().isEmpty())
-        assertNull(sim.ses.driveFrom)   // 15분 초기화는 그대로
+        assertNull(sim.ses.driveFrom) // 15분 초기화는 그대로
     }
 
     @Test fun reportRestoresOnlyWindowLock() {
         val sim = idle(prof = profile(sibling = true)).ev(SeatHeat(T0, L, 2)).doorCycle().gear(Gear.D)
         val lock = sim.step<SetWindowLock>().single()
-        lockResult(sim, lock, L, 0.0); lockResult(sim, lock, R, 0.0)
-        sim.ev(CabinTemp(sim.t, 28.0)).attempt2()                 // 2차에서 공조 낮춤
+        lockResult(sim, lock, L, 0.0)
+        lockResult(sim, lock, R, 0.0)
+        sim.ev(CabinTemp(sim.t, 28.0)).attempt2() // 2차에서 공조 낮춤
         assertTrue(sim.all<LowerHvac>().isNotEmpty())
         sim.gear(Gear.P, MIN).clear().ev(RearDoor(sim.t, Side.LEFT, true))
         assertEquals(mapOf(L to false, R to false), sim.step<SetWindowLock>().single().values)
@@ -362,7 +374,7 @@ class SessionLifecycleTest {
     }
 
     @Test fun closeSession_afterEndedAtSaved() {
-        val sim = session().gear(Gear.P, MIN).attempt1()          // P에서 시작한 1차 재생 중
+        val sim = session().gear(Gear.P, MIN).attempt1() // P에서 시작한 1차 재생 중
         val from = sim.log.size
         sim.ev(RearDoor(sim.t + 10_000, Side.LEFT, true))
         assertTrue(sim.all<CloseSession>().isEmpty(), "낮춤 결과를 기다리는 동안은 리포트를 미룬다")

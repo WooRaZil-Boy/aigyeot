@@ -4,6 +4,14 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
@@ -15,14 +23,6 @@ import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.repository.CredentialRepository
 import kr.aigyeot.phone.domain.repository.Logger
 import kr.aigyeot.shared.ProtocolJson
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Android Keystore AES-GCM 키로 감싸 앱 전용 SharedPreferences에 둔다. 백업에서 뺀다(매니페스트).
@@ -48,7 +48,7 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                     .setKeySize(256)
-                    .build(),
+                    .build()
             )
         }.generateKey()
     }
@@ -87,8 +87,7 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
      * 연결 끊기·401에서 지우기를 디스크에 쓰지 못했다: 키를 지워 남은 암호문을 다시 못 읽게 한다.
      * 다음 실행의 [load]는 키가 없어 null(연결 없음)이 되고, 다음 연결은 새 키로 덮어쓴다.
      */
-    private fun revokeKey(): Boolean =
-        runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS) }.isSuccess
+    private fun revokeKey(): Boolean = runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS) }.isSuccess
 
     private companion object {
         const val ALIAS = "aigyeot_link"
@@ -98,9 +97,13 @@ class KeystoreCredentialRepository(context: Context) : CredentialRepository {
 }
 
 /** 폰 상태(`PhoneState`) 파일. */
+// 팩토리 함수라 클래스 이름처럼 대문자로 시작한다.
+@Suppress("ktlint:standard:function-naming", "FunctionNaming")
 fun StateStore(file: File) = FileStore(file, PhoneState.serializer(), ProtocolJson) { PhoneState() }
 
 /** 돌봄 기록(`care.json`). 키는 iOS와 같은 camelCase다. */
+// 팩토리 함수라 클래스 이름처럼 대문자로 시작한다.
+@Suppress("ktlint:standard:function-naming", "FunctionNaming")
 fun CareStore(file: File) = FileStore(file, CareFile.serializer(), CareJson) { CareFile() }
 
 /**

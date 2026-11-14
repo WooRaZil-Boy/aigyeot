@@ -7,7 +7,9 @@ import kotlin.math.roundToInt
 
 private val REAR = setOf(Area.ROW_2_LEFT, Area.ROW_2_RIGHT)
 
-private fun Tx.locks(l: List<WindowLockPending>) { s = s.copy(ign = s.ign.copy(windowLockPending = l)) }
+private fun Tx.locks(l: List<WindowLockPending>) {
+    s = s.copy(ign = s.ign.copy(windowLockPending = l))
+}
 private fun Tx.controls(f: ControlState.() -> ControlState) = ses { copy(controls = controls.f()) }
 
 // ---- 열선 ----
@@ -18,7 +20,9 @@ internal fun Tx.heatGuard(e: SeatHeat) {
 }
 
 /** 열선 끄기 실패. */
-internal fun Tx.heatResult(e: ControlResult) { if (!e.ok && ses != null) out += ShowNotice(Notice.SAFETY_CONTROL_FAILED) }
+internal fun Tx.heatResult(e: ControlResult) {
+    if (!e.ok && ses != null) out += ShowNotice(Notice.SAFETY_CONTROL_FAILED)
+}
 
 // ---- 쾌적 조정 ----
 
@@ -40,7 +44,7 @@ internal fun Tx.held(l: List<WindowLockPending>, skip: Int, area: Area) = l.with
 
 internal fun Tx.lockWindows() {
     val l = s.ign.windowLockPending
-    val busy = REAR.filter { a -> held(l, l.size, a) }.toSet()   // 새 항목은 맨 뒤
+    val busy = REAR.filter { a -> held(l, l.size, a) }.toSet() // 새 항목은 맨 뒤
     var w = WindowLockPending(ses!!.id, emptyMap(), busy, emptyMap())
     val send = REAR - busy
     if (send.isNotEmpty()) {
@@ -64,7 +68,7 @@ internal fun Tx.hvacResult(e: ControlResult) {
     val c = s.waitingFor(e) ?: return
     controls { copy(comfortPending = null) }
     val lowered = if (e.ok && e.before != null && e.after != null) e.before - e.after else return
-    if (!lowered.isFinite() || lowered <= 0.0) return   // 낮추지 못했거나 값이 이상하면 말하지 않는다
+    if (!lowered.isFinite() || lowered <= 0.0) return // 낮추지 못했거나 값이 이상하면 말하지 않는다
     if (ses?.play?.id != c.playId) return
     say(Line(Sid.S04, mapOf("tempC" to "${c.tempC.roundToInt()}", "loweredC" to fmtC(lowered)), null, playId = c.playId))
 }
@@ -74,23 +78,27 @@ private fun fmtC(v: Double) = if (v == v.toLong().toDouble()) v.toLong().toStrin
 /** 문맥은 낼 때 잡은 항목: cmdId로 그 항목의 locking·restoring 칸을 찾고 그 항목의 sessionId만 본다. */
 internal fun Tx.windowResult(e: ControlResult) {
     val l = s.ign.windowLockPending.toMutableList()
-    val area = e.area ?: return   // 뒷창 잠금 결과는 늘 영역이 있다(앰비언트 둘만 null)
+    val area = e.area ?: return // 뒷창 잠금 결과는 늘 영역이 있다(앰비언트 둘만 null)
     val i = l.indexOfFirst { area in it.locking[e.cmdId].orEmpty() }
     val j = l.indexOfFirst { area in it.restoring[e.cmdId].orEmpty() }
     if (i >= 0) {
         var w = l[i].copy(locking = l[i].locking.minus(e.cmdId, area))
         val before = e.before?.let { it != 0.0 }
         if (e.ok && before != null) {
-            if (w.sessionId == ses?.id) controls { copy(windowLockBefore = windowLockBefore.orEmpty() + (area to before)) }
-            else {
+            if (w.sessionId == ses?.id) {
+                controls { copy(windowLockBefore = windowLockBefore.orEmpty() + (area to before)) }
+            } else {
                 val c = newId(w.sessionId) // 잠금을 낸 세션 몫이다
                 out += SetWindowLock(c, mapOf(area to before))
                 w = w.copy(restoring = w.restoring + (c to setOf(area)))
             }
         }
         l[i] = w
-    } else if (j >= 0) l[j] = l[j].copy(restoring = l[j].restoring.minus(e.cmdId, area))
-    else return
+    } else if (j >= 0) {
+        l[j] = l[j].copy(restoring = l[j].restoring.minus(e.cmdId, area))
+    } else {
+        return
+    }
     locks(l)
     pumpLocks()
 }
@@ -98,29 +106,33 @@ internal fun Tx.windowResult(e: ControlResult) {
 /** 앞 항목이 놓은 영역의 대기 잠금을 영역마다 따로 보낸다. 세션이 닫혔으면 버린다. 빈 항목은 뺀다. */
 internal fun Tx.pumpLocks() {
     val l = s.ign.windowLockPending.toMutableList()
-    for (i in l.indices) for (a in l[i].queued) {
-        if (held(l, i, a)) continue
-        var w = l[i].copy(queued = l[i].queued - a)
-        if (w.sessionId == ses?.id) {
-            val c = newId()
-            out += SetWindowLock(c, mapOf(a to true))
-            w = w.copy(locking = w.locking + (c to setOf(a)))
+    for (i in l.indices) {
+        for (a in l[i].queued) {
+            if (held(l, i, a)) continue
+            var w = l[i].copy(queued = l[i].queued - a)
+            if (w.sessionId == ses?.id) {
+                val c = newId()
+                out += SetWindowLock(c, mapOf(a to true))
+                w = w.copy(locking = w.locking + (c to setOf(a)))
+            }
+            l[i] = w
         }
-        l[i] = w
     }
     val (keep, gone) = l.partition { it.locking.isNotEmpty() || it.queued.isNotEmpty() || it.restoring.isNotEmpty() }
     locks(keep)
-    gone.forEach { reportIfSettled(it.sessionId) }   // 빠진 항목의 닫힌 세션 리포트. 열린 세션이면 reportIfSettled가 거른다
+    gone.forEach { reportIfSettled(it.sessionId) } // 빠진 항목의 닫힌 세션 리포트. 열린 세션이면 reportIfSettled가 거른다
 }
 
 /** 새 프로세스에는 옛 SetWindowLock의 결과가 오지 않는다. 기다리던 잠금·복원을 버리고, 열린 세션이 잠그던 영역은 다시 보낸다. */
 internal fun Tx.dropLostLocks() {
     val l = s.ign.windowLockPending
     if (l.isEmpty()) return
-    locks(l.map { w ->
-        val relock = if (w.sessionId == ses?.id) w.locking.values.flatten() else emptyList()
-        w.copy(locking = emptyMap(), restoring = emptyMap(), queued = w.queued + relock)
-    })
+    locks(
+        l.map { w ->
+            val relock = if (w.sessionId == ses?.id) w.locking.values.flatten() else emptyList()
+            w.copy(locking = emptyMap(), restoring = emptyMap(), queued = w.queued + relock)
+        }
+    )
     pumpLocks()
 }
 
@@ -129,8 +141,11 @@ internal fun Tx.restoreWindows(sessionId: String) {
     val l = s.ign.windowLockPending.toMutableList()
     var i = l.indexOfFirst { it.sessionId == sessionId }
     if (i < 0 && before.isEmpty()) return
-    if (i < 0) { l += WindowLockPending(sessionId, emptyMap(), emptySet(), emptyMap()); i = l.lastIndex }
-    var w = l[i].copy(queued = emptySet())   // 보내지 않은 잠금은 잠그지 않았으므로 버린다
+    if (i < 0) {
+        l += WindowLockPending(sessionId, emptyMap(), emptySet(), emptyMap())
+        i = l.lastIndex
+    }
+    var w = l[i].copy(queued = emptySet()) // 보내지 않은 잠금은 잠그지 않았으므로 버린다
     if (before.isNotEmpty()) {
         val c = newId()
         out += SetWindowLock(c, before)
@@ -165,9 +180,10 @@ internal fun Tx.syncAmbient() {
             ambient(Ambient.Dimming(ses!!.id, c, AmbientBack(), AMBIENT_KINDS))
         }
         AmbientGoal.NORMAL -> if (a is Ambient.Dimmed) {
-            if (!a.back.any) ambient(null)
-            else {
-                val c = newId(a.sessionId)   // 낮춘 세션 몫
+            if (!a.back.any) {
+                ambient(null)
+            } else {
+                val c = newId(a.sessionId) // 낮춘 세션 몫
                 out += RestoreAmbient(c, a.back.brightness, a.back.color)
                 ambient(Ambient.Restoring(a.sessionId, c, a.back, backKinds(a.back)))
             }
@@ -195,7 +211,7 @@ internal fun Tx.ambientResult(e: ControlResult) {
         }
         is Ambient.Restoring -> {
             if (a.cmdId != e.cmdId || e.control !in a.pending) return
-            val left = a.pending - e.control   // ok와 상관없이 뺀다(다시 보내지 않는다. 뒷창 잠금 결과와 같다)
+            val left = a.pending - e.control // ok와 상관없이 뺀다(다시 보내지 않는다. 뒷창 잠금 결과와 같다)
             ambient(if (left.isEmpty()) null else a.copy(pending = left))
         }
         else -> {}
@@ -233,10 +249,10 @@ internal fun Tx.restoreAmbientAtSceneEnd() {
     when (val a = s.ign.ambient) {
         is Ambient.Dimmed -> {
             if (a.back.any) out += RestoreAmbient(newId(a.sessionId), a.back.brightness, a.back.color)
-            if (!a.back.complete) out += RestoreAmbientLedger(newId(a.sessionId))   // back이 비어도 낸다
+            if (!a.back.complete) out += RestoreAmbientLedger(newId(a.sessionId)) // back이 비어도 낸다
         }
         // 장면 끝은 장면 상태를 통째로 버린다. Dimming(결과 전)이면 실행기의 낮춤 작업이 살아 있을 수 있어, Boot와 같이 장부 되돌림 명령으로 그 작업을 버리게 한다
         is Ambient.Dimming -> out += RestoreAmbientLedger(newId())
-        else -> {}   // Restoring(이미 낸 명령이 끝난다)·칸 없음
+        else -> {} // Restoring(이미 낸 명령이 끝난다)·칸 없음
     }
 }

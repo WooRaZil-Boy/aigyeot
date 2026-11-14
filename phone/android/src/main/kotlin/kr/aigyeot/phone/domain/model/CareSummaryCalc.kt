@@ -1,9 +1,9 @@
 package kr.aigyeot.phone.domain.model
 
-import kr.aigyeot.shared.CareSummaryBody
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kr.aigyeot.shared.CareSummaryBody
 
 // ---- 돌봄 요약: 숫자와 시각만. 메모 글·기저귀 종류·젖병 양·수유 쪽·별명은 넣지 않는다 ----
 
@@ -35,7 +35,7 @@ fun careSummary(care: CareFile, asOf: Long, zone: ZoneId): CareSummaryBody {
         nightWakeups = ended.count { it.endAt!! >= at(today.minusDays(1), 22) && it.endAt < at(today, 6) },
         lastDiaperAt = t(diapers.maxOfOrNull { it.startAt }),
         todayDiaperCount = diapers.count { it.startAt >= midnight },
-        todayFeedCount = feeds,
+        todayFeedCount = feeds
     )
 }
 
@@ -44,8 +44,14 @@ fun careSummary(care: CareFile, asOf: Long, zone: ZoneId): CareSummaryBody {
  * 이 연결에서 요약을 넣은 적이 없으면 이런 요약은 보내지 않는다(같은 차의 다른 owner 폰 요약을 덮지 않게).
  */
 val CareSummaryBody.empty: Boolean
-    get() = todayFeedCount == 0 && lastSleepStartAt == null && lastSleepEndAt == null && sleepingSince == null && (todaySleepMin ?: 0) == 0 &&
-        (nightWakeups ?: 0) == 0 && lastDiaperAt == null && (todayDiaperCount ?: 0) == 0
+    get() = todayFeedCount == 0 &&
+        lastSleepStartAt == null &&
+        lastSleepEndAt == null &&
+        sleepingSince == null &&
+        (todaySleepMin ?: 0) == 0 &&
+        (nightWakeups ?: 0) == 0 &&
+        lastDiaperAt == null &&
+        (todayDiaperCount ?: 0) == 0
 
 /** 수유를 차로 보내는 계기. 앱은 이 넷에서만 [kr.aigyeot.phone.domain.usecase.RecordCare.syncToCar]를 부른다. */
 enum class FeedTrigger { APP_START, FOREGROUND, CARE_SAVED, PAIRED }

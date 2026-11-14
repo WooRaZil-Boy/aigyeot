@@ -89,7 +89,7 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
                     sub = if (busy) "끊고 있어요" else null,
                     destructive = true,
                     enabled = !busy,
-                    onClick = { confirm = "disconnect" },
+                    onClick = { confirm = "disconnect" }
                 )
             }
             SettingRow("이 휴대폰의 기록 지우기", R.drawable.ic_trash_2, danger = true, onClick = { confirm = "clear" }, trailing = null)
@@ -110,10 +110,15 @@ fun SettingsTab(go: (Route) -> Unit, vm: SettingsViewModel = appViewModel()) {
                 }) { Text(if (what == "clear") "지우기" else "끊기", color = Tokens.colors.danger) }
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("닫기") } },
-            shape = Radius.dialog,
+            shape = Radius.dialog
         )
     }
-    if (nicknameOpen) NicknameDialog(care.childNickname.orEmpty(), onSave = { vm.setNickname(it); nicknameOpen = false }) { nicknameOpen = false }
+    if (nicknameOpen) {
+        NicknameDialog(care.childNickname.orEmpty(), onSave = {
+            vm.setNickname(it)
+            nicknameOpen = false
+        }) { nicknameOpen = false }
+    }
     ImportDialog(importUi, vm)
 }
 
@@ -134,12 +139,12 @@ private fun NicknameDialog(current: String, onSave: (String) -> Unit, onDismiss:
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { save() }),
                 shape = Radius.field,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
         },
         confirmButton = { TextButton(onClick = { save() }) { Text("저장") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
-        shape = Radius.dialog,
+        shape = Radius.dialog
     )
 }
 
@@ -158,7 +163,7 @@ private fun ImportDialog(ui: ImportUi, vm: SettingsViewModel) {
             text = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Tokens.colors.accent) } },
             confirmButton = {},
             dismissButton = { TextButton(onClick = vm::closeImport) { Text("취소") } }, // import.cancel
-            shape = shape,
+            shape = shape
         )
         is ImportUi.PickChild -> AlertDialog(
             onDismissRequest = vm::closeImport,
@@ -171,7 +176,7 @@ private fun ImportDialog(ui: ImportUi, vm: SettingsViewModel) {
             },
             confirmButton = {},
             dismissButton = { TextButton(onClick = vm::closeImport) { Text("취소") } }, // import.cancel
-            shape = shape,
+            shape = shape
         )
         is ImportUi.Preview, is ImportUi.Saving -> {
             val saving = ui is ImportUi.Saving
@@ -191,14 +196,14 @@ private fun ImportDialog(ui: ImportUi, vm: SettingsViewModel) {
                 // 첫 버튼은 '가져오기' 또는(가져올 것이 없으면) '닫기'. 없으면 ViewModel이 닫는다.
                 confirmButton = { TextButton(enabled = !saving, onClick = vm::confirmImport) { Text(p.buttons.first()) } },
                 dismissButton = p.buttons.getOrNull(1)?.let { cancel -> { TextButton(enabled = !saving, onClick = vm::closeImport) { Text(cancel) } } },
-                shape = shape,
+                shape = shape
             )
         }
         is ImportUi.Ended -> AlertDialog(
             onDismissRequest = vm::closeImport,
             text = { Text(ui.message, style = Type.body) },
             confirmButton = { TextButton(onClick = vm::closeImport) { Text("닫기") } }, // banner.close
-            shape = shape,
+            shape = shape
         )
     }
 }

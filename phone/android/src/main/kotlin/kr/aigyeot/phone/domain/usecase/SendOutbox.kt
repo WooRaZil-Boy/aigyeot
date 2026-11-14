@@ -24,7 +24,6 @@ import kr.aigyeot.phone.domain.model.pruned
 import kr.aigyeot.phone.domain.model.rateLimitWaitMs
 import kr.aigyeot.phone.domain.model.reconciledSummary
 import kr.aigyeot.phone.domain.model.untried
-import kr.aigyeot.phone.domain.model.withMessageHold
 import kr.aigyeot.phone.domain.repository.CareRepository
 import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
@@ -37,6 +36,8 @@ import kr.aigyeot.phone.domain.state.Notices
  * 보낼 함 일꾼. 한 일꾼이 넣은 순서대로 하나씩 보낸다. 신호는 합쳐지므로 도는 중에 온 신호는 한 번 더 돌게 한다.
  * 결과는 보낼 때 잡은 자격·항목으로 처리한다. 메시지 POST의 429 기다림은 그 항목을 지우거나 바꿔도, 다시 켜도 지킨다.
  */
+// 신호만 받는 반복이라 값 x는 쓰지 않는다.
+@Suppress("UnusedVariable")
 class SendOutbox(
     private val state: PhoneStateRepository,
     private val care: CareRepository,
@@ -46,7 +47,7 @@ class SendOutbox(
     private val notices: Notices,
     private val visibility: AppVisibility,
     private val clock: Clock,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     private val signal = Channel<Unit>(Channel.CONFLATED)
     private var wake: Job? = null
@@ -157,7 +158,13 @@ class SendOutbox(
             var marked = false
             if (item.payload is OutboxPayload.CareSummary && !item.sentOnce) {
                 var present = false
-                if (!state.commit(c) { s -> present = s.outbox.any { it.id == item.id }; s.markSentOnce(item.id) }) return retrySaveLater()
+                if (!state.commit(c) { s ->
+                        present = s.outbox.any { it.id == item.id }
+                        s.markSentOnce(item.id)
+                    }
+                ) {
+                    return retrySaveLater()
+                }
                 if (!present) continue // 그사이 지워졌다(기록 지우기 등): 다시 고른다
                 marked = true
             }

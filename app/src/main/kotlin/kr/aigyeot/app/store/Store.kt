@@ -66,24 +66,25 @@ import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.TimelineEpisode
 
 /** EngineState 스냅숏 JSON. 필드가 늘어도 옛 스냅숏을 읽게 모르는 키는 버린다. */
-val SnapshotJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+val SnapshotJson = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
 
 /**
  * 기록(store). 받는 곳이 store인 할 일을 저장한다. 호스트 스레드 하나(쓰기 줄 하나)에서 부른다.
  * 예외는 설정 화면의 [saveProfile](IO 스레드, Room 트랜잭션이 직렬화한다). 실패 처리는 DbFailure.kt.
  * [scenarioId]는 지금 도는 장면 id(아니면 null).
  */
-class Store(
-    private val db: AppDatabase,
-    private val clock: () -> Long,
-    private val scenarioId: () -> String? = { null },
-    private val p: Params = Params(),
-) {
-    internal val dao = db.storeDao()   // 화면은 profileFlow() 등 읽기 함수만 쓴다. internal은 시험용
+class Store(private val db: AppDatabase, private val clock: () -> Long, private val scenarioId: () -> String? = { null }, private val p: Params = Params()) {
+    internal val dao = db.storeDao() // 화면은 profileFlow() 등 읽기 함수만 쓴다. internal은 시험용
     private val context = ContextRecorder(p.contextHalfMs, p.contextStepMs)
 
     /** 할 일 하나를 저장한다. 실패해도 호스트 스레드를 멈추지 않고 로그만 남긴다. */
-    fun handle(cmd: Command) { bestEffort("store ${cmd::class.simpleName}") { apply(cmd) }; if (cmd is CloseSession) purgeOld() }
+    fun handle(cmd: Command) {
+        bestEffort("store ${cmd::class.simpleName}") { apply(cmd) }
+        if (cmd is CloseSession) purgeOld()
+    }
 
     /** 인계 알림의 보낼 함 넣기와 한 트랜잭션으로 묶을 쓰기. 실패는 삼키지 않고 던져 바깥 트랜잭션을 되돌린다. */
     fun applyAll(cmds: List<Command>) = cmds.forEach(::apply)
@@ -122,10 +123,10 @@ class Store(
             is LogAlarm -> logAlarm(cmd)
             is CaptureContext -> dao.insertContext(context.capture(cmd.episodeId, cmd.alarmAt).map { it.toEntity() })
             is SaveSteerWindow -> dao.upsertSteer(cmd.record.toEntity())
-            is CloseSession -> closeSession(cmd.sessionId)   // 90일 정리는 묶음 트랜잭션 밖에서 purgeOld로(안에서 삼킨 실패가 바깥 묶음을 몰래 되돌린다)
+            is CloseSession -> closeSession(cmd.sessionId) // 90일 정리는 묶음 트랜잭션 밖에서 purgeOld로(안에서 삼킨 실패가 바깥 묶음을 몰래 되돌린다)
             is SaveSnapshot -> saveSnapshot(cmd.state)
             is SaveFeedingStart -> dao.saveFeedingStart(cmd.at)
-            else -> error("store가 받지 않는 할 일: $cmd")   // DeleteRecords·DeleteRelayRecords는 clearRecords로 함께 받는다
+            else -> error("store가 받지 않는 할 일: $cmd") // DeleteRecords·DeleteRelayRecords는 clearRecords로 함께 받는다
         }
     }
 
@@ -135,7 +136,12 @@ class Store(
         runCatching { SnapshotJson.decodeFromString(EngineState.serializer(), it.state) }
             .onFailure { e ->
                 Log.w(TAG, "스냅숏을 읽지 못해 처음 상태로 시작", e)
-                bestEffort("orphan_close") { tx { dao.closeOpenRealEpisodes(clock()); dao.closeOpenRealSessions(clock()) } }   // 처음 상태에는 그 세션이 없다
+                bestEffort("orphan_close") {
+                    tx {
+                        dao.closeOpenRealEpisodes(clock())
+                        dao.closeOpenRealSessions(clock())
+                    }
+                } // 처음 상태에는 그 세션이 없다
             }.getOrNull()
     }
 
@@ -146,33 +152,53 @@ class Store(
     /** 실패를 삼키지 않고 던진다. 호스트가 die로 처리한다(트랜잭션이라 부분 상태는 남지 않는다). */
     fun clearRecords(snapshot: EngineState) {
         tx {
-            dao.clearContext(); dao.clearPlays(); dao.clearAlarms(); dao.clearSteer()
-            dao.clearEpisodes(); dao.clearSessions(); dao.clearControls()
+            dao.clearContext()
+            dao.clearPlays()
+            dao.clearAlarms()
+            dao.clearSteer()
+            dao.clearEpisodes()
+            dao.clearSessions()
+            dao.clearControls()
             val now = clock()
             // 보낼 함의 항목 + 10분 안에 보낸 id(만료로 보낼 함에서 지워진 보내는 중 항목 포함), 중복 없음
-            val dropIds = (dao.reportOutboxIds() + dao.sentIdsSince(now - SENT_ID_KEEP_MS)).distinct(); dao.clearReportOutbox()
+            val dropIds = (dao.reportOutboxIds() + dao.sentIdsSince(now - SENT_ID_KEEP_MS)).distinct()
+            dao.clearReportOutbox()
             saveSnapshot(snapshot)
-            dao.insertOutbox(OutboxEntity(ulid(now), "records_clear", null,
-                buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString(), now, 0, now))
+            dao.insertOutbox(
+                OutboxEntity(
+                    ulid(now),
+                    "records_clear",
+                    null,
+                    buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString(),
+                    now,
+                    0,
+                    now
+                )
+            )
         }
         context.clear()
         _clearedAt.value = clock()
     }
 
     private val _clearedAt = MutableStateFlow(0L)
+
     /** 마지막으로 기록을 지운 시각(이 프로세스 안, 화면 전용). 홈 물어보기 카드가 지운 전의 질문·답을 내리는 데 쓴다(값이라 흐름이 합쳐져도 놓치지 않는다). */
     val clearedAt: StateFlow<Long> = _clearedAt
 
     /** 장면 경계: 장면 표본이 실제 에피소드의 '울음 직전 30초'에 섞이지 않게 맥락 기록기를 비운다. 기다리던 캡처는 작성 중인 칸까지 쓰고 끝낸다. */
-    fun resetContext() { val rows = context.reset(); bestEffort("context_sample") { insertLive(rows) } }   // 부수 일
+    fun resetContext() {
+        val rows = context.reset()
+        bestEffort("context_sample") { insertLive(rows) }
+    } // 부수 일
 
     // 지운 세션의 제어 기록을 되살리지 않는다
     fun logControl(row: ControlLogEntity) = bestEffort("control_log") { if (!sessionGone(row.sessionId, row)) dao.insertControl(row) }
 
     /** 맥락 기록기에 사건마다 넣는다. 붙잡아 둔 캡처가 있으면 이번에 마감된 초를 쓴다. */
     fun observe(e: Event, s: EngineState) {
-        var once: List<ContextSample>? = null   // 기록기는 사건마다 한 번만 먹인다(다시 할 때는 저장만 다시)
-        bestEffort("context_sample") {   // 부모 조회부터 저장까지 전부 부수 일. 실패가 Step을 끊지 않는다
+        var once: List<ContextSample>? = null // 기록기는 사건마다 한 번만 먹인다(다시 할 때는 저장만 다시)
+        bestEffort("context_sample") {
+            // 부모 조회부터 저장까지 전부 부수 일. 실패가 Step을 끊지 않는다
             insertLive(once ?: context.observe(e, s).also { once = it })
         }
     }
@@ -180,7 +206,12 @@ class Store(
     /** 부모 에피소드 행이 없는(지운·정리된) 캡처는 입구에서 버린다. 한 줄이 외래키를 어기면 같은 묶음의 다른 에피소드 줄까지 잃는다. */
     private fun insertLive(rows: List<ContextSample>) {
         val live = rows.filter { r ->
-            (dao.episode(r.episodeId) != null).also { if (!it) { context.drop(r.episodeId); Log.w(TAG, "부모 에피소드 없음: 버림 ${r.episodeId}") } }
+            (dao.episode(r.episodeId) != null).also {
+                if (!it) {
+                    context.drop(r.episodeId)
+                    Log.w(TAG, "부모 에피소드 없음: 버림 ${r.episodeId}")
+                }
+            }
         }
         if (live.isNotEmpty()) dao.insertContext(live.map { it.toEntity() })
     }
@@ -196,12 +227,12 @@ class Store(
         val before = links.candidate()
         val now = dao.profile()
         dao.upsertProfile(if (now != null) edited.copy(lastFeedingStart = now.lastFeedingStart) else edited)
-        links.candidateMoved(before, clock())   // 부모 노래 켬·끔으로 부모 노래 후보가 바뀌면 같은 트랜잭션에서 두 곡의 song_status(폰 표시도 같은 함수)
+        links.candidateMoved(before, clock()) // 부모 노래 켬·끔으로 부모 노래 후보가 바뀌면 같은 트랜잭션에서 두 곡의 song_status(폰 표시도 같은 함수)
     }
 
     fun profile(): Profile? = dao.profile()?.toProfile()
     fun feedingStart(): Long? = dao.profile()?.lastFeedingStart
-    fun otherGuardians(): Int = db.linkDao().otherGuardians()   // phone_link 쿼리는 LinkDao 한 곳
+    fun otherGuardians(): Int = db.linkDao().otherGuardians() // phone_link 쿼리는 LinkDao 한 곳
 
     /** 판정된 1차 시도(28일, 장면 제외). 판단 코어 history 입력. */
     fun history(now: Long): List<FirstTry> = dao.firstTries(p.statSince(now)).map {
@@ -227,7 +258,7 @@ class Store(
             episodePlayedMs = x?.episode?.let { dao.episodePlayedMs(it.id) } ?: 0,
             episodes = rows.mapValues { it.value.toRecord() },
             history = history(now),
-            told = rows.mapNotNull { (id, e) -> e.handoffToldDriver?.let { id to it } }.toMap(),
+            told = rows.mapNotNull { (id, e) -> e.handoffToldDriver?.let { id to it } }.toMap()
         )
     }
 
@@ -237,8 +268,10 @@ class Store(
     fun selectionFlow() = dao.selectionFlow().retryOnDbError("selection")
     fun sessionsFlow() = dao.sessionsFlow().retryOnDbError("sessions")
     fun reportChanges(sessionId: String) = dao.reportChanges(sessionId).retryOnDbError("report")
+
     /** 리포트 한 건(한 트랜잭션, Report.kt [readReport]). 두 번째 값은 인계가 아직 안 끝났는지. */
     fun okControlsFlow(sessionId: String) = dao.okControlsFlow(sessionId).retryOnDbError("controls")
+
     /** 세션의 울음 경보 시각(홈 '오늘 하루' 차에서 줄의 마름모·횟수). 리포트 목록 '울음 n번'·폰 '차에서 울음'과 같은 규칙 [isCryAlarm]. */
     fun cryAlarms(sessionId: String): List<Long> = dao.episodes(sessionId).filter(::isCryAlarm).map { it.alarmAt ?: it.startedAt }
 
@@ -257,18 +290,24 @@ class Store(
     fun methods(): List<Method> =
         DEFAULT_METHODS + listOfNotNull(candidateSong(dao.profile(), dao.activeSongs(), dao.selection())?.let { Method(MethodKind.SONG, it) })
 
-    fun initialState(seed: Long): EngineState =
-        EngineState.fresh(seed, profile(), methods(), history(clock()), feedingStart(), otherGuardians())
+    fun initialState(seed: Long): EngineState = EngineState.fresh(seed, profile(), methods(), history(clock()), feedingStart(), otherGuardians())
 
     /** 90일 지난 기록을 지운다(열린 세션은 남긴다). */
     fun purgeOld() = bestEffort("purge") {
         val cut = clock() - p.retentionDays * DAY
-        tx { dao.purgeSessions(cut); dao.purgeControls(cut) }
+        tx {
+            dao.purgeSessions(cut)
+            dao.purgeControls(cut)
+        }
     }
 
     // 장면 끝 정리는 다 실패하면 로그만. 다음 시작 복원이 다시 닫는다
     fun closeScenarioSessions(now: Long) = bestEffort("scenario_close") {
-        tx { dao.closeScenarioEpisodes(now); dao.closeScenarioSessions(now); dao.settleScenarioHandoffs() }
+        tx {
+            dao.closeScenarioEpisodes(now)
+            dao.closeScenarioSessions(now)
+            dao.settleScenarioHandoffs()
+        }
     }
 
     /**
@@ -289,21 +328,26 @@ class Store(
         val r = cmd.record
         val old = dao.session(r.id)
         val scenario = old?.scenarioId ?: scenarioId()
-        dao.upsertSession(SessionEntity(
-            r.id, r.startedAt, r.endedAt, r.trigger.name, r.micPath?.name, r.outputRoute?.name, r.driveMin, r.playedMs,
-            r.capReached, r.restLog, r.restore,
-            reportMessageId = old?.reportMessageId ?: r.reportMessageId,
-            // 리포트를 이미 넣었으면(pending=false, id 있음) 되돌리지 않는다. 장면 세션은 리포트를 보내지 않는다
-            reportPending = r.reportPending && scenario == null && old?.reportMessageId == null,
-            scenarioId = scenario, driverUserId = r.driverUserId,
-        ))
+        dao.upsertSession(
+            SessionEntity(
+                r.id, r.startedAt, r.endedAt, r.trigger.name, r.micPath?.name, r.outputRoute?.name, r.driveMin, r.playedMs,
+                r.capReached, r.restLog, r.restore,
+                reportMessageId = old?.reportMessageId ?: r.reportMessageId,
+                // 리포트를 이미 넣었으면(pending=false, id 있음) 되돌리지 않는다. 장면 세션은 리포트를 보내지 않는다
+                reportPending = r.reportPending && scenario == null && old?.reportMessageId == null,
+                scenarioId = scenario, driverUserId = r.driverUserId
+            )
+        )
     }
 
     private fun logAlarm(cmd: LogAlarm) {
         val last = dao.lastAlarm(cmd.sessionId)
         // '이어진 경보': 문턱은 판단 코어 alarmContinues 하나. 이 표는 같은 이유끼리만 잇는다(기록만 한 경보. 판단 코어 alarmRun과 뜻이 달라 합치지 않는다)
-        if (last != null && last.reason == cmd.reason.name && alarmContinues(last.lastAt, cmd.at, p)) dao.extendAlarm(last.id, cmd.at)
-        else dao.insertAlarm(AlarmLogEntity(sessionId = cmd.sessionId, firstAt = cmd.at, lastAt = cmd.at, reason = cmd.reason.name))
+        if (last != null && last.reason == cmd.reason.name && alarmContinues(last.lastAt, cmd.at, p)) {
+            dao.extendAlarm(last.id, cmd.at)
+        } else {
+            dao.insertAlarm(AlarmLogEntity(sessionId = cmd.sessionId, firstAt = cmd.at, lastAt = cmd.at, reason = cmd.reason.name))
+        }
     }
 
     /**
@@ -338,7 +382,7 @@ internal fun EpisodeEntity.toRecord() = EpisodeRecord(
     id, sessionId, startedAt, endedAt, EpisodeTrigger.valueOf(trigger), alarmAt, alarmDelayMs,
     firstMethod?.let(MethodKind::valueOf), firstSongId, firstResult?.let(TryResult::valueOf), firstUnjudged?.let(Unjudged::valueOf),
     secondAction?.let(SecondAction::valueOf), secondMethod?.let(MethodKind::valueOf), secondSongId, secondResult?.let(TryResult::valueOf),
-    handoffCause?.let(HandoffCause::valueOf), handoffKind?.let(HandoffKind::valueOf), waypointAdded, cryMs, recried, playedMs, excludeReasons,
+    handoffCause?.let(HandoffCause::valueOf), handoffKind?.let(HandoffKind::valueOf), waypointAdded, cryMs, recried, playedMs, excludeReasons
 )
 
 /** [old]: 지금 행. 인계 확정 칸(SettleHandoff)과 guardian_notified(link)는 그 값을 지킨다. */
@@ -346,11 +390,11 @@ private fun EpisodeRecord.toEntity(old: EpisodeEntity?) = EpisodeEntity(
     id, sessionId, startedAt, endedAt, trigger.name, alarmAt, alarmDelayMs, firstMethod?.name, firstSongId,
     firstResult?.name, firstUnjudged?.name, secondAction?.name, secondMethod?.name, secondSongId, secondResult?.name,
     handoffCause?.name, handoffKind?.name, waypointAdded, old?.guardianNotified ?: false, cryMs, recried, playedMs, excludeReasons,
-    old?.handoffRestName, old?.handoffToldDriver,
+    old?.handoffRestName, old?.handoffToldDriver
 )
 
 private fun PlayRecord.toEntity() = PlayLogEntity(
-    id, sessionId, episodeId, purpose.name, method.name, songId, startedAt, endedAt, playedMs, endReason.name,
+    id, sessionId, episodeId, purpose.name, method.name, songId, startedAt, endedAt, playedMs, endReason.name
 )
 
 private fun SteerWindowRecord.toEntity() = SteerWindowEntity(sessionId, startAt, speedBand, excluded, cryPresent, playing, reversals, observed)
@@ -359,12 +403,16 @@ private fun SteerWindowRecord.toEntity() = SteerWindowEntity(sessionId, startAt,
 internal fun SteerWindowEntity.toRecord() = SteerWindowRecord(sessionId, startAt, speedBand, excluded, cryPresent, playing, reversals, observed)
 
 /** 맥락 표본 → 행. 창 위치는 읽는 API 미확인이라 비운다. */
-private fun ContextSample.toEntity() = ContextSampleEntity(episodeId, at, speedKmh, brake, steeringDeg,
-    turnSignal.name, gear.name, cabinC, windowPos = null, playback, cryP)
+private fun ContextSample.toEntity() = ContextSampleEntity(
+    episodeId, at, speedKmh, brake, steeringDeg,
+    turnSignal.name, gear.name, cabinC, windowPos = null, playback, cryP
+)
 
 /** Room 행 → 맥락 표본(리포트 계산 입력). [toEntity]의 거꾸로. 행은 [toEntity]만 쓰므로 이름은 늘 enum 값이다. */
-internal fun ContextSampleEntity.toSample() = ContextSample(episodeId, at, speedKmh, brake, steeringDeg,
-    TurnSignal.valueOf(turnSignal), Gear.valueOf(gear), cabinC, playback, cryP)
+internal fun ContextSampleEntity.toSample() = ContextSample(
+    episodeId, at, speedKmh, brake, steeringDeg,
+    TurnSignal.valueOf(turnSignal), Gear.valueOf(gear), cabinC, playback, cryP
+)
 
 /** report_summary body를 outbox body_json으로. 시각은 이미 +09:00 문자열이라 link는 그대로 봉투에 넣는다. */
 fun encodeReport(b: ReportSummaryBody): String = ProtocolJson.encodeToString(ReportSummaryBody.serializer(), b)

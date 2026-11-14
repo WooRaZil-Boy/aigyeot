@@ -30,9 +30,15 @@ class SceneError(msg: String) : Exception(msg)
 data class Scene(val id: String, val title: String, val repeat: Int, val setup: Setup, val steps: List<Cue>)
 
 data class Setup(
-    val profile: Profile?, val feedingStartOffsetSec: Long?, val methods: List<Method>,
-    val history: List<SeedTry>, val seed: Long, val override: Set<String>, val otherGuardians: Int,
-    val care: JsonObject? = null,   // 폰 돌봄 기록 요약 흉내. 시각 칸은 장면 시작 기준 초. [careView]로 CareView가 된다
+    val profile: Profile?,
+    val feedingStartOffsetSec: Long?,
+    val methods: List<Method>,
+    val history: List<SeedTry>,
+    val seed: Long,
+    val override: Set<String>,
+    val otherGuardians: Int,
+    // 폰 돌봄 기록 요약 흉내. 시각 칸은 장면 시작 기준 초. [careView]로 CareView가 된다
+    val care: JsonObject? = null
 )
 
 data class SeedTry(val method: Method, val success: Boolean, val daysAgo: Int)
@@ -48,14 +54,21 @@ data class Say(val intent: String, val method: Method?, val onAsk: Sid?, val byS
 data class Phone(val type: String, val body: JsonObject) : Action
 data class Inject(val event: String, val fields: JsonObject) : Action
 data class Expect(
-    val state: String?, val attempt: Int?, val command: String?, val type: String?, val body: JsonObject?,
-    val sid: Sid?, val method: Method?, val bySec: Double,
+    val state: String?,
+    val attempt: Int?,
+    val command: String?,
+    val type: String?,
+    val body: JsonObject?,
+    val sid: Sid?,
+    val method: Method?,
+    val bySec: Double
 ) : Action
 data class ExpectNone(val command: String, val sid: Sid?, val type: String?, val body: JsonObject?, val forSec: Double) : Action
 
 val TAPS = setOf("BABY_ABOARD", "FEEDING_NOW", "FEEDING_CONFIRM_YES")
 private val INTENTS = setOf("YES", "NO", "STOP", "SWITCH_SOUND")
 val STATES = Phase.entries.map { it.name }.toSet() + "IDLE"
+
 /** 할 일 이름. 직렬화 설명에서 읽어 판단 코어와 늘 같다. */
 val COMMANDS: Set<String> = Command.serializer().descriptor.getElementDescriptor(1).elementNames.map { it.substringAfterLast('.') }.toSet()
 private val EVENTS: Set<String> = Event.serializer().descriptor.getElementDescriptor(1).elementNames.map { it.substringAfterLast('.') }.toSet()
@@ -71,35 +84,47 @@ fun parseMethod(s: String): Method = when {
 fun methodText(m: Method) = if (m.kind == MethodKind.SONG) "SONG:${m.songId}" else m.kind.name
 
 /** inject 사건 만들기. 필드는 메시지 형식의 이름 그대로, at은 호스트 시계로 채운다. */
-fun injectEvent(name: String, fields: JsonObject, at: Long, base: Long = at): Event =
-    if (name == "CareSummary") CareSummary(at, careView(fields, base))   // 시각 칸은 그 단계 t 기준 초
-    else eventJson.decodeFromJsonElement(
+fun injectEvent(name: String, fields: JsonObject, at: Long, base: Long = at): Event = if (name == "CareSummary") {
+    CareSummary(at, careView(fields, base)) // 시각 칸은 그 단계 t 기준 초
+} else {
+    eventJson.decodeFromJsonElement(
         Event.serializer(),
-        JsonObject(fields + mapOf("type" to JsonPrimitive("kr.aigyeot.engine.$name"), "at" to JsonPrimitive(at))),
+        JsonObject(fields + mapOf("type" to JsonPrimitive("kr.aigyeot.engine.$name"), "at" to JsonPrimitive(at)))
     )
+}
 
 /** `setup.care`·`inject CareSummary`의 초 오프셋 칸을 [base](epoch ms) 기준 CareView로. 없는 시각 칸은 null. */
 fun careView(f: JsonObject, base: Long): CareView {
-    f.only("care", "event", "asOfSec", "sleepDiaperEnabled",
-        "lastSleepStartSec", "lastSleepEndSec", "sleepingSinceSec", "todaySleepMin", "nightWakeups", "lastDiaperSec", "todayDiaperCount", "todayFeedCount")
+    f.only(
+        "care", "event", "asOfSec", "sleepDiaperEnabled",
+        "lastSleepStartSec", "lastSleepEndSec", "sleepingSinceSec", "todaySleepMin", "nightWakeups", "lastDiaperSec", "todayDiaperCount", "todayFeedCount"
+    )
     fun at(k: String) = f.long(k)?.let { base + it * 1000 }
     return CareView(
         base + (f.long("asOfSec") ?: throw SceneError("care.asOfSec")) * 1000,
         f.bool("sleepDiaperEnabled") ?: throw SceneError("care.sleepDiaperEnabled"),
         at("lastSleepStartSec"), at("lastSleepEndSec"), at("sleepingSinceSec"),
         f.int("todaySleepMin"), f.int("nightWakeups"), at("lastDiaperSec"), f.int("todayDiaperCount"),
-        f.int("todayFeedCount") ?: throw SceneError("care.todayFeedCount"),
+        f.int("todayFeedCount") ?: throw SceneError("care.todayFeedCount")
     )
 }
 
 fun parseScene(text: String): Scene {
-    val o = try { Json.parseToJsonElement(text) as? JsonObject } catch (e: Exception) { null } ?: throw SceneError("JSON 객체가 아니다")
+    val o = try {
+        Json.parseToJsonElement(text) as? JsonObject
+    } catch (e: Exception) {
+        null
+    } ?: throw SceneError("JSON 객체가 아니다")
     o.only("최상위", "format", "id", "title", "repeat", "setup", "steps", "note")
     if (o.int("format") != 1) throw SceneError("format은 1이어야 한다")
     val setup = setup(o.obj("setup") ?: throw SceneError("setup이 없다"))
     val steps = (o["steps"] as? JsonArray ?: throw SceneError("steps가 없다")).mapIndexed { i, e ->
         val s = e as? JsonObject ?: throw SceneError("steps[$i]가 객체가 아니다")
-        try { cue(s, setup) } catch (x: SceneError) { throw SceneError("steps[$i]: ${x.message}") }
+        try {
+            cue(s, setup)
+        } catch (x: SceneError) {
+            throw SceneError("steps[$i]: ${x.message}")
+        }
     }
     val repeat = o.int("repeat") ?: 1
     if (repeat < 1) throw SceneError("repeat ≥ 1")
@@ -114,7 +139,7 @@ private fun setup(s: JsonObject): Setup {
             p.str("birthYm") ?: throw SceneError("profile.birthYm"),
             enumOf<CarSeat>(p.str("carseat"), "profile.carseat"),
             p.int("feedingIntervalMin"),
-            p.bool("hasSibling") ?: throw SceneError("profile.hasSibling"),
+            p.bool("hasSibling") ?: throw SceneError("profile.hasSibling")
         )
     }
     val history = (s["history"] as? JsonArray ?: JsonArray(emptyList())).map { h ->
@@ -131,8 +156,14 @@ private fun setup(s: JsonObject): Setup {
         if ("CareSummary" !in override) throw SceneError("setup.care를 쓰려면 override에 CareSummary가 있어야 한다")
     }
     return Setup(
-        profile, s.long("feedingStartOffsetSec"), s.strings("methods").map(::parseMethod), history,
-        s.long("seed") ?: throw SceneError("setup.seed"), override, s.int("otherGuardians") ?: 0, care,
+        profile,
+        s.long("feedingStartOffsetSec"),
+        s.strings("methods").map(::parseMethod),
+        history,
+        s.long("seed") ?: throw SceneError("setup.seed"),
+        override,
+        s.int("otherGuardians") ?: 0,
+        care
     )
 }
 
@@ -150,7 +181,7 @@ private fun cue(s: JsonObject, setup: Setup): Cue {
             if (dur <= 0) throw SceneError("audio.durSec > 0")
             Audio(str("file") ?: throw SceneError("audio.file"), num("fromSec") ?: 0.0, dur, num("gainDb") ?: 0.0, bool("cry") ?: false)
         }
-        "tap" -> Tap(v.str()?.takeIf { it in TAPS } ?: throw SceneError("tap '${v}'"))
+        "tap" -> Tap(v.str()?.takeIf { it in TAPS } ?: throw SceneError("tap '$v'"))
         "say" -> v.objOr("say").run {
             only("say", "intent", "method", "onAsk", "by")
             val intent = str("intent")?.takeIf { it in INTENTS } ?: throw SceneError("say.intent")
@@ -173,7 +204,11 @@ private fun cue(s: JsonObject, setup: Setup): Cue {
             val ev = str("event") ?: throw SceneError("inject.event")
             if (ev !in setup.override) throw SceneError("inject '$ev'는 setup.override에 없다")
             val fields = JsonObject(this - "event")
-            try { injectEvent(ev, fields, 0) } catch (e: Exception) { throw SceneError("inject $ev 필드: ${e.message?.lineSequence()?.first()}") }
+            try {
+                injectEvent(ev, fields, 0)
+            } catch (e: Exception) {
+                throw SceneError("inject $ev 필드: ${e.message?.lineSequence()?.first()}")
+            }
             Inject(ev, fields)
         }
         "expect" -> v.objOr("expect").run {
@@ -181,13 +216,26 @@ private fun cue(s: JsonObject, setup: Setup): Cue {
             val state = str("state")?.also { if (it !in STATES) throw SceneError("expect.state '$it'") }
             val cmd = command()
             if (state == null && cmd == null && get("attempt") == null) throw SceneError("expect에 state·attempt·command 중 하나는 있어야 한다")
-            Expect(state, int("attempt"), cmd, str("type"), obj("body"), str("sid")?.let { enumOf<Sid>(it, "expect.sid") },
-                str("method")?.let(::parseMethod), positive("by") ?: throw SceneError("expect.by"))
+            Expect(
+                state,
+                int("attempt"),
+                cmd,
+                str("type"),
+                obj("body"),
+                str("sid")?.let { enumOf<Sid>(it, "expect.sid") },
+                str("method")?.let(::parseMethod),
+                positive("by") ?: throw SceneError("expect.by")
+            )
         }
         "expectNone" -> v.objOr("expectNone").run {
             only("expectNone", "command", "sid", "type", "body", "for")
-            ExpectNone(command() ?: throw SceneError("expectNone.command"), str("sid")?.let { enumOf<Sid>(it, "expectNone.sid") },
-                str("type"), obj("body"), positive("for") ?: throw SceneError("expectNone.for"))
+            ExpectNone(
+                command() ?: throw SceneError("expectNone.command"),
+                str("sid")?.let { enumOf<Sid>(it, "expectNone.sid") },
+                str("type"),
+                obj("body"),
+                positive("for") ?: throw SceneError("expectNone.for")
+            )
         }
         else -> throw SceneError("모르는 동작 '$name'")
     }
@@ -207,8 +255,7 @@ private fun vc(s: String): Vc {
     return Vc(method, path)
 }
 
-private inline fun <reified E : Enum<E>> enumOf(s: String?, what: String): E =
-    enumValues<E>().firstOrNull { it.name == s } ?: throw SceneError("$what '$s'")
+private inline fun <reified E : Enum<E>> enumOf(s: String?, what: String): E = enumValues<E>().firstOrNull { it.name == s } ?: throw SceneError("$what '$s'")
 
 private fun JsonObject.only(what: String, vararg allowed: String) {
     val extra = keys - allowed.toSet()
@@ -224,7 +271,6 @@ private fun JsonObject.int(k: String) = prim(k)?.let { it.intOrNull ?: throw Sce
 private fun JsonObject.long(k: String) = prim(k)?.let { it.longOrNull ?: throw SceneError("${k}는 정수") }
 private fun JsonObject.bool(k: String) = prim(k)?.let { it.booleanOrNull ?: throw SceneError("${k}는 참·거짓") }
 private fun JsonObject.positive(k: String) = num(k)?.also { if (it <= 0) throw SceneError("$k > 0") }
-private fun JsonObject.strings(k: String): List<String> =
-    get(k)?.takeIf { it !is JsonNull }
-        ?.let { v -> (v as? JsonArray ?: throw SceneError("${k}는 문자열 목록")).map { it.str() ?: throw SceneError("${k}는 문자열 목록") } }
-        ?: emptyList()
+private fun JsonObject.strings(k: String): List<String> = get(k)?.takeIf { it !is JsonNull }
+    ?.let { v -> (v as? JsonArray ?: throw SceneError("${k}는 문자열 목록")).map { it.str() ?: throw SceneError("${k}는 문자열 목록") } }
+    ?: emptyList()

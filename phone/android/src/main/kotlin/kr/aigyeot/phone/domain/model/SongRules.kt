@@ -25,7 +25,7 @@ data class SongEntry(
     val seq: Long = 0,
     /** 이 폰에서 지웠다. 늦게 온 받음·거절로 되살리지 않는다. */
     val removedByMe: Boolean = false,
-    val error: String? = null,
+    val error: String? = null
 )
 
 fun songRef(songId: String): JsonObject = buildJsonObject { put("song_id", songId) }
@@ -42,7 +42,7 @@ fun PhoneState.addSong(songId: String, name: String, durationS: Double, file: St
     }
     return copy(
         songs = songs + SongEntry(songId, name, durationS, file, SongPhase.UPLOADING),
-        outbox = outbox + outboxItem(OutboxPayload.Song(songId, body, uploaded = false, file = file), now, id),
+        outbox = outbox + outboxItem(OutboxPayload.Song(songId, body, uploaded = false, file = file), now, id)
     )
 }
 
@@ -50,7 +50,7 @@ fun PhoneState.addSong(songId: String, name: String, durationS: Double, file: St
 fun PhoneState.removeSong(songId: String, now: Long, id: String = ulid(now)) = copy(
     songs = songs.map { if (it.songId == songId) it.copy(phase = SongPhase.REMOVED, removedByMe = true, candidate = false) else it },
     outbox = outbox.filterNot { it.payload is OutboxPayload.Song && it.songId == songId } +
-        outboxItem(OutboxPayload.Message("song_removed", songRef(songId)), now, id),
+        outboxItem(OutboxPayload.Message("song_removed", songRef(songId)), now, id)
 )
 
 /**
@@ -91,7 +91,7 @@ val OutboxItem.songId: String? get() = (payload as? OutboxPayload.Song)?.songId 
  * 이 폰이 고른 것을 따로 기억하지 않는다. 다른 폰·차에서 바꾼 선택이 그대로 보이게 한다.
  */
 fun PhoneState.selectSong(songId: String, now: Long, id: String = ulid(now)) = copy(
-    outbox = outbox + outboxItem(OutboxPayload.Message("song_selected", songRef(songId)), now, id),
+    outbox = outbox + outboxItem(OutboxPayload.Message("song_selected", songRef(songId)), now, id)
 )
 
 /** 이 곡의 song_selected가 아직 보낼 함에 있다(차가 후보로 반영하기 전). */

@@ -23,15 +23,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -88,6 +85,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.coroutines.delay
 import kr.aigyeot.phone.R
 import kr.aigyeot.phone.domain.model.AGO_CHIPS
@@ -117,9 +117,6 @@ import kr.aigyeot.phone.domain.model.sheetQuestion
 import kr.aigyeot.phone.domain.model.sideName
 import kr.aigyeot.phone.domain.model.startValue
 import kr.aigyeot.phone.domain.model.ulid
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
 
 // 빠른 기록·고치기·지난 기록 적기 시트.
 
@@ -130,13 +127,7 @@ import java.time.ZoneOffset
  * '취소' 단추는 없다: 끌어 내림·뒤로·가림막으로 닫는다.
  */
 @Composable
-fun CareSheet(
-    target: CareSheetTarget,
-    chooseKind: Boolean = false,
-    guardian: Boolean,
-    vm: CareSheetViewModel = appViewModel(),
-    onClose: () -> Unit,
-) {
+fun CareSheet(target: CareSheetTarget, chooseKind: Boolean = false, guardian: Boolean, vm: CareSheetViewModel = appViewModel(), onClose: () -> Unit) {
     // 시트 하나에 id 하나(화면을 다시 만들어도 같은 시트로 이어 쓴다). 새 기록의 id도 이것이다.
     val sheetId = rememberSaveable { ulid(System.currentTimeMillis()) }
     LaunchedEffect(sheetId) { vm.open(sheetId, target) }
@@ -204,7 +195,7 @@ fun CareSheet(
         if (Build.VERSION.SDK_INT >= 30) view.performHapticFeedback(HapticFeedbackConstants.REJECT)
     }
     // 이번 실패를 굴린 뒤에만 흔든다(앞 실패의 번호가 새 칸에서 먼저 흔들리지 않게).
-    fun shakeKey(f: SheetField): Int? = shakeAt?.takeIf { errField == f && it == failed?.attempt }
+    fun shakeKey(f: SheetField): Int? = shakeAt?.takeIf { errField == f && it == failed.attempt }
     var pick by rememberSaveable { mutableStateOf<String?>(null) } // "start" | "end" 시각 고르기 창
     var pickDate by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -215,22 +206,24 @@ fun CareSheet(
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = p.surface,
-        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 10.dp).size(36.dp, 5.dp).clip(CircleShape).background(p.textTertiary.copy(alpha = 0.4f))) },
+        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 10.dp).size(36.dp, 5.dp).clip(CircleShape).background(p.textTertiary.copy(alpha = 0.4f))) }
     ) {
         // 시트(대화 상자)의 읽기 이름은 질문이다.
         Column(Modifier.fillMaxWidth().semantics { paneTitle = sheetQuestion(d.kind) }.imePadding().padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
             Column(
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).animateContentSize(if (reduced) snap() else Springs.smooth.spec()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // ① 머리 + ③ 상태 라벨: 고치기면 '고치는 중'과 오른쪽 휴지통 하나(읽기 이름 '지우기', 48dp)를 한 줄에 둔다(고치기에는 ② 종류 칸이 없다).
                 // 확인 창 없이 바로 지우고 띠가 되돌리기를 준다.
-                if (d.original != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("고치는 중", Modifier.weight(1f), style = Type.footnote, color = p.textTertiary) // sheet.editing
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape).pressable(enabled = editable, onClick = vm::delete).semantics { contentDescription = "지우기" },
-                        contentAlignment = Alignment.Center,
-                    ) { AIcon(R.drawable.ic_trash_2, Modifier.size(22.dp), p.textSecondary) } // 지우기는 5초 되돌리기가 있어 빨강으로 칠하지 않는다(빨강은 되돌릴 수 없는 줄만)
+                if (d.original != null) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("고치는 중", Modifier.weight(1f), style = Type.footnote, color = p.textTertiary) // sheet.editing
+                        Box(
+                            Modifier.size(48.dp).clip(CircleShape).pressable(enabled = editable, onClick = vm::delete).semantics { contentDescription = "지우기" },
+                            contentAlignment = Alignment.Center
+                        ) { AIcon(R.drawable.ic_trash_2, Modifier.size(22.dp), p.textSecondary) } // 지우기는 5초 되돌리기가 있어 빨강으로 칠하지 않는다(빨강은 되돌릴 수 없는 줄만)
+                    }
                 }
                 // 지난 기록 적기: 작은 종류 칸(quickKinds 순서).
                 if (chooseKind && d.original == null) {
@@ -250,11 +243,13 @@ fun CareSheet(
                         OptionTiles(
                             sides.map { Tile(sideName(it), sideIcon(it), note = "지난번".takeIf { _ -> it == last }) },
                             sides.indexOf(d.side),
-                            group = "쪽",
+                            group = "쪽"
                         ) { i -> vm.toggleSide(sides[i]) }
-                        if (d.side == FeedSide.BOTTLE) Column(Modifier.bringIntoViewRequester(amountReq), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Shake(shakeKey(SheetField.AMOUNT)) { AmountBlock(d.amount, err = errField == SheetField.AMOUNT, onChange = vm::setAmount) }
-                            if (errSpot == ErrorSpot.AMOUNT) errText?.let { ErrorLine(it) }
+                        if (d.side == FeedSide.BOTTLE) {
+                            Column(Modifier.bringIntoViewRequester(amountReq), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Shake(shakeKey(SheetField.AMOUNT)) { AmountBlock(d.amount, err = errField == SheetField.AMOUNT, onChange = vm::setAmount) }
+                                if (errSpot == ErrorSpot.AMOUNT) errText?.let { ErrorLine(it) }
+                            }
                         }
                     }
                     CareKind.DIAPER -> {
@@ -277,17 +272,17 @@ fun CareSheet(
                     d.rows.forEachIndexed { i, f ->
                         if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = p.line)
                         Column(Modifier.bringIntoViewRequester(rowReq.getValue(f))) {
-                        Shake(shakeKey(f)) {
-                            FoldRow(
-                                d, f, expanded == f, err = errField == f,
-                                onToggle = { expanded = toggleRow(expanded, f) },
-                                onAgo = vm::pick, onTime = { pick = if (f == SheetField.END) "end" else "start" }, onDate = { pickDate = true },
-                                onEndUnknown = vm::setEndUnknown, onNote = vm::setNote,
-                            )
-                        }
-                        if (errSpot == ErrorSpot.ROW && errField == f) {
-                            errText?.let { Box(Modifier.padding(start = 10.dp, end = 14.dp, bottom = 12.dp)) { ErrorLine(it) } }
-                        }
+                            Shake(shakeKey(f)) {
+                                FoldRow(
+                                    d, f, expanded == f, err = errField == f,
+                                    onToggle = { expanded = toggleRow(expanded, f) },
+                                    onAgo = vm::pick, onTime = { pick = if (f == SheetField.END) "end" else "start" }, onDate = { pickDate = true },
+                                    onEndUnknown = vm::setEndUnknown, onNote = vm::setNote
+                                )
+                            }
+                            if (errSpot == ErrorSpot.ROW && errField == f) {
+                                errText?.let { Box(Modifier.padding(start = 10.dp, end = 14.dp, bottom = 12.dp)) { ErrorLine(it) } }
+                            }
                         }
                     }
                 }
@@ -295,9 +290,11 @@ fun CareSheet(
             // ⑨ 아래 고정: 보호자 안내·저장 실패 글 + 저장 단추 하나
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (failed?.problem == null) failed?.message?.let { ErrorLine(it) }
-                if (guardian) Row(verticalAlignment = Alignment.CenterVertically) {
-                    AIcon(R.drawable.ic_smartphone, Modifier.padding(start = 4.dp, end = 6.dp).size(16.dp), p.textTertiary)
-                    Text(GUARDIAN_ONLY, style = Type.footnote, color = p.textTertiary)
+                if (guardian) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AIcon(R.drawable.ic_smartphone, Modifier.padding(start = 4.dp, end = 6.dp).size(16.dp), p.textTertiary)
+                        Text(GUARDIAN_ONLY, style = Type.footnote, color = p.textTertiary)
+                    }
                 }
                 SaveButton(
                     d.saveLabel(shorten = !bigText()),
@@ -306,7 +303,7 @@ fun CareSheet(
                     saving = phase == CareSheetViewModel.Phase.Saving ||
                         (phase is CareSheetViewModel.Phase.Closed && sheetExit(phase, d.kind) == SheetExit.CHECK && !done),
                     done = done,
-                    onClick = { vm.save() },
+                    onClick = { vm.save() }
                 )
             }
         }
@@ -315,8 +312,19 @@ fun CareSheet(
         val zone = d.zone
         val ref = Instant.ofEpochMilli(if (which == "end") d.end ?: d.start else d.start).atZone(zone)
         TimeDialog(
-            ref.hour, ref.minute, onDismiss = { pick = null },
-            onUnknown = if (which == "end") ({ vm.setEndUnknown(); pick = null }) else null,
+            ref.hour,
+            ref.minute,
+            onDismiss = { pick = null },
+            onUnknown = if (which == "end") {
+                (
+                    {
+                        vm.setEndUnknown()
+                        pick = null
+                    }
+                    )
+            } else {
+                null
+            }
         ) { h, m ->
             if (which == "end") vm.setEnd(h, m) else vm.setStart(h, m)
             pick = null
@@ -358,7 +366,7 @@ private fun OptionTiles(tiles: List<Tile>, selected: Int, small: Boolean = false
     val line by animateFloatAsState((sel / cols).toFloat(), if (reduced) snap() else Springs.snappy.spec(), label = "tileY")
     androidx.compose.foundation.layout.BoxWithConstraints(
         Modifier.fillMaxWidth().clip(Radius.large).background(p.textPrimary.copy(alpha = 0.04f)).padding(4.dp)
-            .selectableGroup().semantics { contentDescription = group },
+            .selectableGroup().semantics { contentDescription = group }
     ) {
         val w = maxWidth / cols
         // 칸 높이는 한 묶음 안에서 같아야 엄지가 맞는다. 큰 글자면 글이 커진 만큼 높인다.
@@ -366,38 +374,50 @@ private fun OptionTiles(tiles: List<Tile>, selected: Int, small: Boolean = false
             small -> if (big) 64.dp else 48.dp
             else -> if (big) 128.dp else 92.dp
         }
-        if (selected >= 0) Box(
-            Modifier.offset { IntOffset((w * col).roundToPx(), (h * line).roundToPx()) }.size(w, h)
-                .shadow(if (p.dark) 0.dp else 2.dp, Radius.medium).clip(Radius.medium).background(p.segmentThumb),
-        )
-        Column { tiles.chunked(cols).forEachIndexed { r, chunk -> Row {
-            chunk.forEachIndexed { j, t ->
-                val i = r * cols + j
-                val on = i == selected
-                val fg by animateColorAsState(if (on) p.textPrimary else p.textSecondary, if (reduced) snap() else Motion.fast.spec(), label = "tileFg")
-                val desc = listOfNotNull(t.label, t.note).joinToString(", ")
-                val content: @Composable () -> Unit = {
-                    AIcon(t.icon, Modifier.size(if (small) 20.dp else 28.dp), fg)
-                    Text(t.label, style = if (small) Type.quickLabel else Type.chip, color = fg, maxLines = 1)
-                }
-                Box(
-                    Modifier.size(w, h).clip(Radius.medium)
-                        .selectable(on, interactionSource = null, indication = null, role = Role.RadioButton) {
-                            if (!on) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            onSelect(i)
+        if (selected >= 0) {
+            Box(
+                Modifier.offset { IntOffset((w * col).roundToPx(), (h * line).roundToPx()) }.size(w, h)
+                    .shadow(if (p.dark) 0.dp else 2.dp, Radius.medium).clip(Radius.medium).background(p.segmentThumb)
+            )
+        }
+        Column {
+            tiles.chunked(cols).forEachIndexed { r, chunk ->
+                Row {
+                    chunk.forEachIndexed { j, t ->
+                        val i = r * cols + j
+                        val on = i == selected
+                        val fg by animateColorAsState(if (on) p.textPrimary else p.textSecondary, if (reduced) snap() else Motion.fast.spec(), label = "tileFg")
+                        val desc = listOfNotNull(t.label, t.note).joinToString(", ")
+                        val content: @Composable () -> Unit = {
+                            AIcon(t.icon, Modifier.size(if (small) 20.dp else 28.dp), fg)
+                            Text(t.label, style = if (small) Type.quickLabel else Type.chip, color = fg, maxLines = 1)
                         }
-                        .semantics(mergeDescendants = true) { contentDescription = desc; this.selected = on },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (small) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { content() }
-                    else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        content()
-                        // sheet.last. 한 칸에만 붙어도 모든 칸에 같은 자리를 두어 아이콘·글 줄이 어긋나지 않게 한다.
-                        if (anyNote) Text(t.note ?: "", style = Type.micro, color = p.textTertiary)
+                        Box(
+                            Modifier.size(w, h).clip(Radius.medium)
+                                .selectable(on, interactionSource = null, indication = null, role = Role.RadioButton) {
+                                    if (!on) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    onSelect(i)
+                                }
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = desc
+                                    this.selected = on
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (small) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    content()
+                                    // sheet.last. 한 칸에만 붙어도 모든 칸에 같은 자리를 두어 아이콘·글 줄이 어긋나지 않게 한다.
+                                    if (anyNote) Text(t.note ?: "", style = Type.micro, color = p.textTertiary)
+                                }
+                            }
+                        }
                     }
                 }
             }
-        } } }
+        }
     }
 }
 
@@ -412,14 +432,14 @@ private fun AmountBlock(ml: Int?, err: Boolean, onChange: (Int?) -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(Radius.large).background(p.textPrimary.copy(alpha = 0.04f))
             .border(if (err) 1.5.dp else 0.dp, if (err) p.danger else p.surface.copy(alpha = 0f), Radius.large).padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         RoundStep(R.drawable.ic_minus, "줄이기", enabled = ml != null) {
             onChange(ml?.let { (it - 10).coerceAtLeast(kr.aigyeot.phone.domain.model.AMOUNT_ML.first) })
         }
         Column(
             Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = "양, " + (ml?.let { "${it}ml" } ?: "없음") },
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("양", style = Type.micro, color = p.textTertiary)
             Row(verticalAlignment = Alignment.Bottom) {
@@ -437,7 +457,7 @@ private fun RoundStep(@DrawableRes icon: Int, desc: String, enabled: Boolean = t
     Box(
         Modifier.size(48.dp).shadow(if (p.dark) 0.dp else 1.dp, CircleShape).clip(CircleShape).background(p.segmentThumb)
             .pressable(enabled = enabled, onClick = onClick).semantics { contentDescription = desc },
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) { AIcon(icon, Modifier.size(22.dp), if (enabled) p.textPrimary else p.textTertiary) }
 }
 
@@ -449,24 +469,26 @@ private fun SleepHero(d: CareDraft, err: Boolean, onAgo: (Int?) -> Unit, onTime:
     val clock = koClock(d.start, d.zone)
     Column(
         Modifier.fillMaxWidth().clip(Radius.large).background(p.textPrimary.copy(alpha = 0.04f))
-            .border(if (err) 1.5.dp else 0.dp, if (err) p.danger else p.surface.copy(alpha = 0f), Radius.large),
+            .border(if (err) 1.5.dp else 0.dp, if (err) p.danger else p.surface.copy(alpha = 0f), Radius.large)
     ) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp)) {
             Text("시작", style = Type.micro, color = p.textTertiary)
             Row(
                 Modifier.heightIn(min = 48.dp).clip(Radius.inner).pressable(onClick = onTime).semantics { contentDescription = "시각 고르기, $clock" },
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.Bottom
             ) {
                 Text(clock.substringBefore(' '), Modifier.padding(end = 4.dp, bottom = 4.dp), style = Type.meta, color = if (err) p.danger else p.textSecondary)
                 Text(clock.substringAfter(' '), style = Type.runningTimer, color = if (err) p.danger else p.textPrimary)
             }
-            if (!d.showsAgoChips || d.chip == null) Row(Modifier.padding(top = 4.dp)) {
-                Pill(
-                    dayLabel(t.toLocalDate(), LocalDate.now(d.zone)),
-                    selected = false,
-                    desc = "날짜, ${dayLabel(t.toLocalDate(), LocalDate.now(d.zone))}",
-                    onClick = onDate,
-                )
+            if (!d.showsAgoChips || d.chip == null) {
+                Row(Modifier.padding(top = 4.dp)) {
+                    Pill(
+                        dayLabel(t.toLocalDate(), LocalDate.now(d.zone)),
+                        selected = false,
+                        desc = "날짜, ${dayLabel(t.toLocalDate(), LocalDate.now(d.zone))}",
+                        onClick = onDate
+                    )
+                }
             }
         }
         if (d.showsAgoChips) {
@@ -488,7 +510,7 @@ private fun NoteBox(note: String, onNote: (String) -> Unit, big: Boolean, focus:
     Column(
         Modifier.fillMaxWidth().clip(Radius.large).background(if (big) p.textPrimary.copy(alpha = 0.04f) else p.surface)
             .border(if (focused && big) 1.5.dp else 0.dp, if (focused && big) p.accent else p.surface.copy(alpha = 0f), Radius.large)
-            .heightIn(min = if (big) 132.dp else 72.dp).padding(14.dp),
+            .heightIn(min = if (big) 132.dp else 72.dp).padding(14.dp)
     ) {
         BasicTextField(
             value = note,
@@ -503,11 +525,13 @@ private fun NoteBox(note: String, onNote: (String) -> Unit, big: Boolean, focus:
                     if (note.isEmpty()) Text("예: 트림 잘 함", style = Type.sheetRow, color = p.textTertiary)
                     inner()
                 }
-            },
+            }
         )
         Text(
-            "$n/$NOTE_MAX", Modifier.align(Alignment.End).padding(top = 8.dp).graphicsLayer { alpha = if (focused || n >= 150) 1f else 0f },
-            style = Type.micro, color = p.textTertiary,
+            "$n/$NOTE_MAX",
+            Modifier.align(Alignment.End).padding(top = 8.dp).graphicsLayer { alpha = if (focused || n >= 150) 1f else 0f },
+            style = Type.micro,
+            color = p.textTertiary
         )
     }
 }
@@ -527,7 +551,7 @@ private fun FoldRow(
     onTime: () -> Unit,
     onDate: () -> Unit,
     onEndUnknown: () -> Unit,
-    onNote: (String) -> Unit,
+    onNote: (String) -> Unit
 ) {
     val p = Tokens.colors
     val reduced = LocalReducedMotion.current
@@ -542,7 +566,7 @@ private fun FoldRow(
     val turn by animateFloatAsState(if (open) 180f else 0f, if (reduced) snap() else Motion.fast.spec(), label = "chev")
     Column(
         Modifier.fillMaxWidth().clip(Radius.large)
-            .border(if (err) 1.5.dp else 0.dp, if (err) p.danger else p.surface.copy(alpha = 0f), Radius.large),
+            .border(if (err) 1.5.dp else 0.dp, if (err) p.danger else p.surface.copy(alpha = 0f), Radius.large)
     ) {
         val big = bigText()
         Row(
@@ -553,7 +577,7 @@ private fun FoldRow(
                     if (!memoAdd) stateDescription = if (open) "펼침" else "접힘"
                 }
                 .padding(horizontal = 14.dp, vertical = if (big) 8.dp else 0.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             val valueText: @Composable (Modifier) -> Unit = { m ->
                 if (value != null) {
@@ -563,37 +587,44 @@ private fun FoldRow(
                         if (err) p.danger else p.textPrimary,
                         m,
                         maxLines = if (big) 2 else 1,
-                        overflow = TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
             // 큰 글자면 값이 이름 아래로 내려간다.
-            if (big) Column(Modifier.weight(1f)) {
-                Text(name, style = Type.sheetRow, color = if (memoAdd) p.accentInk else p.textSecondary)
-                valueText(Modifier)
+            if (big) {
+                Column(Modifier.weight(1f)) {
+                    Text(name, style = Type.sheetRow, color = if (memoAdd) p.accentInk else p.textSecondary)
+                    valueText(Modifier)
+                }
             } else {
                 Text(name, Modifier.padding(end = 12.dp), style = Type.sheetRow, color = if (memoAdd) p.accentInk else p.textSecondary)
                 // 값은 오른쪽 끝(⌄ 바로 앞)에 붙인다.
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { valueText(Modifier) }
             }
-            if (memoAdd) AIcon(R.drawable.ic_plus, Modifier.size(20.dp), p.accentInk)
-            else AIcon(R.drawable.ic_chevron_down, Modifier.padding(start = 6.dp).size(18.dp).rotate(turn), p.textTertiary)
+            if (memoAdd) {
+                AIcon(R.drawable.ic_plus, Modifier.size(20.dp), p.accentInk)
+            } else {
+                AIcon(R.drawable.ic_chevron_down, Modifier.padding(start = 6.dp).size(18.dp).rotate(turn), p.textTertiary)
+            }
         }
         AnimatedVisibility(
             open,
             enter = if (reduced) fadeIn(snap()) else expandVertically(Springs.smooth.spec()) + fadeIn(Motion.enter.spec()),
-            exit = if (reduced) fadeOut(snap()) else shrinkVertically(Springs.smooth.spec()) + fadeOut(Motion.exit.spec()),
+            exit = if (reduced) fadeOut(snap()) else shrinkVertically(Springs.smooth.spec()) + fadeOut(Motion.exit.spec())
         ) {
             Column(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (f) {
                     SheetField.START -> {
                         if (d.showsAgoChips) AgoStrip(d.chip, onAgo)
                         // '직접'이거나 칩이 없는 시트(고치기·다른 날)면 알약 [날짜][시각]. 몇 분 전을 고른 동안은 숨긴다.
-                        if (d.showsStart) Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val day = dayLabel(Instant.ofEpochMilli(d.start).atZone(d.zone).toLocalDate(), LocalDate.now(d.zone))
-                            Pill(day, selected = false, desc = "날짜, $day", onClick = onDate)
-                            val clock = koClock(d.start, d.zone)
-                            Pill(clock, selected = true, desc = "시각 고르기, $clock", onClick = onTime)
+                        if (d.showsStart) {
+                            Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                val day = dayLabel(Instant.ofEpochMilli(d.start).atZone(d.zone).toLocalDate(), LocalDate.now(d.zone))
+                                Pill(day, selected = false, desc = "날짜, $day", onClick = onDate)
+                                val clock = koClock(d.start, d.zone)
+                                Pill(clock, selected = true, desc = "시각 고르기, $clock", onClick = onTime)
+                            }
                         }
                     }
                     SheetField.END -> Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -616,14 +647,14 @@ private fun AgoStrip(chip: Int?, onAgo: (Int?) -> Unit, modifier: Modifier = Mod
     val view = LocalView.current
     Row(
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup().semantics { contentDescription = "시작 시각 빠르게 고르기" },
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         (AGO_CHIPS.map { it as Int? } + listOf(null)).forEach { c ->
             val on = chip == c
             val bg by animateColorAsState(
                 if (on) p.textPrimary else p.textPrimary.copy(alpha = 0f),
                 if (reduced) snap() else Springs.snappy.spec(),
-                label = "agoBg",
+                label = "agoBg"
             )
             val fg by animateColorAsState(if (on) p.surface else p.textSecondary, if (reduced) snap() else Springs.snappy.spec(), label = "agoFg")
             Box(
@@ -632,13 +663,13 @@ private fun AgoStrip(chip: Int?, onAgo: (Int?) -> Unit, modifier: Modifier = Mod
                         if (!on) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                         onAgo(c)
                     },
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     c?.let(::agoChipText) ?: "직접",
                     Modifier.clip(CircleShape).background(bg).padding(horizontal = 12.dp, vertical = 7.dp),
                     style = Type.quickLabel,
-                    color = fg,
+                    color = fg
                 )
             }
         }
@@ -651,13 +682,14 @@ private fun Pill(text: String, selected: Boolean, desc: String = text, onClick: 
     val p = Tokens.colors
     Box(
         Modifier.heightIn(min = 48.dp).clip(CircleShape).pressable(onClick = onClick).semantics { contentDescription = desc },
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text,
             Modifier.clip(CircleShape).background(if (selected) p.textPrimary else p.textPrimary.copy(alpha = 0.08f))
                 .padding(horizontal = 14.dp, vertical = 9.dp),
-            style = Type.quickLabel.copy(fontFeatureSettings = "tnum"), color = if (selected) p.surface else p.textSecondary,
+            style = Type.quickLabel.copy(fontFeatureSettings = "tnum"),
+            color = if (selected) p.surface else p.textSecondary
         )
     }
 }
@@ -679,10 +711,20 @@ private fun Shake(key: Int?, content: @Composable () -> Unit) {
     val x = remember { Animatable(0f) }
     // [key]는 이 칸을 탓한 실패의 시도 번호(아니면 null): 같은 오류가 다시 나도 번호가 달라 다시 흔든다.
     LaunchedEffect(key) {
-        if (key != null && !reduced) x.animateTo(0f, keyframes {
-            durationMillis = 360
-            -6f at 50; 6f at 110; -4f at 170; 4f at 230; -2f at 290; 0f at 360
-        })
+        if (key != null && !reduced) {
+            x.animateTo(
+                0f,
+                keyframes {
+                    durationMillis = 360
+                    -6f at 50
+                    6f at 110
+                    -4f at 170
+                    4f at 230
+                    -2f at 290
+                    0f at 360
+                }
+            )
+        }
     }
     Box(Modifier.offset { IntOffset(x.value.dp.roundToPx(), 0) }) { content() }
 }
@@ -701,7 +743,7 @@ private fun SaveButton(label: String, enabled: Boolean, saving: Boolean, done: B
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(Radius.control).background(if (on) p.accent else p.textPrimary.copy(alpha = 0.08f))
             .pressable(enabled = enabled && !saving && !done, onClick = onClick).semantics { contentDescription = label }
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         when {
             done -> AIcon(R.drawable.ic_check, Modifier.size(26.dp).scale(check), p.onAccent)
@@ -711,7 +753,7 @@ private fun SaveButton(label: String, enabled: Boolean, saving: Boolean, done: B
                 Type.strong,
                 if (on) p.onAccent else p.textTertiary,
                 maxLines = 2,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }
@@ -745,7 +787,7 @@ private fun DateDialog(date: LocalDate, max: LocalDate, onDismiss: () -> Unit, o
         selectableDates = object : SelectableDates {
             override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= maxMs
             override fun isSelectableYear(year: Int) = year <= max.year
-        },
+        }
     )
     DatePickerDialog(
         onDismissRequest = onDismiss,
@@ -754,6 +796,6 @@ private fun DateDialog(date: LocalDate, max: LocalDate, onDismiss: () -> Unit, o
                 Text(stringResource(android.R.string.ok))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
     ) { DatePicker(state, showModeToggle = false) }
 }

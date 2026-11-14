@@ -21,7 +21,8 @@ fun sampleBeta(a: Int, b: Int, rng: Long): Pair<Long, Double> {
     fun gamma(k: Int): Double {
         var g = 0.0
         repeat(k) {
-            val (n, x) = splitMix64(r); r = n
+            val (n, x) = splitMix64(r)
+            r = n
             g -= ln(((x ushr 11) + 1) * (1.0 / (1L shl 53)))
         }
         return g
@@ -47,8 +48,12 @@ fun pickFirst(methods: List<Method>, history: List<FirstTry>, rng: Long, perMeth
     var top = -1.0
     for (m in ms) {
         val ok = history.count { it.method == m && it.success }
-        val (n, x) = sampleBeta(1 + ok, 1 + tries.getValue(m) - ok, r); r = n
-        if (x > top) { top = x; pick = m }
+        val (n, x) = sampleBeta(1 + ok, 1 + tries.getValue(m) - ok, r)
+        r = n
+        if (x > top) {
+            top = x
+            pick = m
+        }
     }
     return Pick(pick, r)
 }
@@ -63,7 +68,7 @@ fun best(methods: List<Method>, history: List<FirstTry>, except: Method? = null)
 fun methodScore(successes: Int, attempts: Int): Double = (1.0 + successes) / (2.0 + attempts)
 
 const val MINUTE_MS = 60_000L
-const val DAY_MS = 86_400_000L   // 하루. 앱의 DAY(common/Basics.kt)도 이 값을 쓴다
+const val DAY_MS = 86_400_000L // 하루. 앱의 DAY(common/Basics.kt)도 이 값을 쓴다
 
 /** 성적·history 창(28일)의 시작. 세션 열기·Room history·리포트·홈 화면이 같이 쓴다. */
 fun Params.statSince(now: Long): Long = now - statWindowDays * DAY_MS
@@ -107,7 +112,13 @@ fun remainingMinutes(route: RouteView?): Int? = route?.remainingSec?.let { (it +
  * [except]: 다시 고르는 그 줄과 겹쳐 넘겨받는 줄(같은 객체로 견준다). 세션 id가 없는 줄은 이 세션 것으로 본다(overlap과 같다).
  */
 fun offerBanned(
-    spokenAt: Map<Sid, Long>, queue: List<Line>, sessionId: String?, sid: Sid, now: Long, p: Params = Params(), except: List<Line?> = emptyList(),
+    spokenAt: Map<Sid, Long>,
+    queue: List<Line>,
+    sessionId: String?,
+    sid: Sid,
+    now: Long,
+    p: Params = Params(),
+    except: List<Line?> = emptyList()
 ): Boolean {
     val sids = if (sid == Sid.S07 || sid == Sid.S07_DEPART) setOf(Sid.S07, Sid.S07_DEPART) else setOf(sid)
     return sids.any { k -> spokenAt[k]?.let { now - it < p.offerRepeatMs } == true } ||
@@ -162,8 +173,16 @@ fun nearDestination(route: RouteView?, p: Params = Params()): Boolean =
 fun offerRest(longDrive: Boolean, gear: Gear?, route: RouteView?, now: Long, driveFrom: Long?, p: Params = Params()): Line? {
     if (gear == Gear.P || nearDestination(route, p)) return null
     val rest = pickRest(route, p)
-    return if (rest == null) Line(Sid.S10, emptyMap(), null, longDrive = longDrive) else {
-        val sid = if (longDrive) Sid.S11 else if (rest.hasNursingRoom) Sid.S07 else Sid.S08
+    return if (rest == null) {
+        Line(Sid.S10, emptyMap(), null, longDrive = longDrive)
+    } else {
+        val sid = if (longDrive) {
+            Sid.S11
+        } else if (rest.hasNursingRoom) {
+            Sid.S07
+        } else {
+            Sid.S08
+        }
         val vars = mutableMapOf("distanceKm" to km(rest.distanceKm), "restName" to rest.name)
         if (longDrive) vars["drove"] = hm(now - (driveFrom ?: now))
         Line(sid, vars, rest.id, longDrive = longDrive)
@@ -177,8 +196,13 @@ data class SteerOut(val state: SteerState, val closed: SteerWindowRecord?)
  * 표본이 창 시작 + 60초 이상이면 창을 닫아 기록을 돌려주고 이 표본으로 새 창을 연다.
  */
 fun steer(
-    st: SteerState, sample: VehicleSample, cryPresent: Boolean, playing: Boolean, sessionId: String,
-    p: Params = Params(), observed: Boolean = true,
+    st: SteerState,
+    sample: VehicleSample,
+    cryPresent: Boolean,
+    playing: Boolean,
+    sessionId: String,
+    p: Params = Params(),
+    observed: Boolean = true
 ): SteerOut {
     var w = st.window
     var closed: SteerWindowRecord? = null
@@ -190,7 +214,9 @@ fun steer(
     val acc = w ?: SteerWindowAcc(sample.at, 0.0, 0, 0, false, false, false)
     val x = sample.steeringDeg
     val prev = st.filtered
-    val f = if (prev == null || st.lastSampleAt == null) x else {
+    val f = if (prev == null || st.lastSampleAt == null) {
+        x
+    } else {
         val dt = (sample.at - st.lastSampleAt).coerceAtLeast(0) / 1000.0
         val rc = 1 / (2 * PI * p.steerLowpassHz)
         prev + dt / (rc + dt) * (x - prev)
@@ -201,21 +227,43 @@ fun steer(
     val thr = p.steerReversalDeg
     when (dir) {
         // 첫 방향은 잡음을 넘는 작은 움직임으로만 정하고 극값을 따라간다. 반전에만 3° 문턱을 쓴다.
-        0 -> if (f - ext >= p.steerDirMinDeg) { dir = 1; ext = f } else if (ext - f >= p.steerDirMinDeg) { dir = -1; ext = f }
-        1 -> if (f > ext) ext = f else if (ext - f >= thr) { rev = 1; dir = -1; ext = f }
-        else -> if (f < ext) ext = f else if (f - ext >= thr) { rev = 1; dir = 1; ext = f }
+        0 -> if (f - ext >= p.steerDirMinDeg) {
+            dir = 1
+            ext = f
+        } else if (ext - f >= p.steerDirMinDeg) {
+            dir = -1
+            ext = f
+        }
+        1 -> if (f > ext) {
+            ext = f
+        } else if (ext - f >= thr) {
+            rev = 1
+            dir = -1
+            ext = f
+        }
+        else -> if (f < ext) {
+            ext = f
+        } else if (f - ext >= thr) {
+            rev = 1
+            dir = 1
+            ext = f
+        }
     }
     val next = acc.copy(
-        speedSumKmh = acc.speedSumKmh + sample.speedKmh, speedCount = acc.speedCount + 1,
-        reversals = acc.reversals + rev, excluded = acc.excluded || sample.turnSignal != TurnSignal.NONE,
-        cryPresent = acc.cryPresent || cryPresent, playing = acc.playing || playing,
-        observed = acc.observed && observed,
+        speedSumKmh = acc.speedSumKmh + sample.speedKmh,
+        speedCount = acc.speedCount + 1,
+        reversals = acc.reversals + rev,
+        excluded = acc.excluded || sample.turnSignal != TurnSignal.NONE,
+        cryPresent = acc.cryPresent || cryPresent,
+        playing = acc.playing || playing,
+        observed = acc.observed && observed
     )
     return SteerOut(st.copy(filtered = f, lastSampleAt = sample.at, extremumDeg = ext, dir = dir, window = next), closed)
 }
 
 // ---- 문장 채울 값 ----
 internal fun km(d: Double) = d.roundToInt().toString()
+
 /** 말하는 분 값 하나: 60분 미만 "n분", 이상 "h시간 m분", 정각은 "h시간". 문장 속 모든 경과·분 값이 이 함수를 지난다(차 문장 S06·S11·질문 답). */
 fun spokenMin(min: Long): String {
     val m = min.coerceAtLeast(0)
@@ -223,6 +271,7 @@ fun spokenMin(min: Long): String {
 }
 fun spokenMin(min: Int): String = spokenMin(min.toLong())
 internal fun hm(ms: Long): String = spokenMin(ms / 60_000)
+
 /** 소리 이름 하나(말·화면·질문 답·리포트 `sound.label`·`method_stats.label` 모두 같은 이름을 쓴다). */
 fun methodLabel(k: MethodKind) = when (k) {
     MethodKind.WHITE_NOISE -> "백색소음"

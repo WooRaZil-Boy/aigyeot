@@ -33,7 +33,6 @@ import kr.aigyeot.phone.domain.model.playName
 import kr.aigyeot.phone.domain.model.preCryDrive
 import kr.aigyeot.phone.domain.model.purposeText
 import kr.aigyeot.phone.domain.model.reportCries
-import kr.aigyeot.phone.domain.model.reportRowSub
 import kr.aigyeot.phone.domain.model.reportRowTitle
 import kr.aigyeot.phone.domain.model.reportSpan
 import kr.aigyeot.phone.domain.model.resultText
@@ -49,7 +48,6 @@ import kr.aigyeot.shared.EpisodeTrigger
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.SteeringUnavailableReason
 import kr.aigyeot.shared.TimelineEpisode
-import java.util.Locale
 
 /** 리포트 목록: 새 것이 위. */
 @Composable
@@ -57,8 +55,11 @@ fun ReportsScreen(onBack: () -> Unit, open: (String) -> Unit, vm: ReportsViewMod
     val list by vm.reports.collectAsStateWithLifecycle()
     BackPage("리포트", onBack) {
         StatusBands()
-        if (list.isEmpty()) FootNote("주행이 끝나면 여기에 리포트가 와요")
-        else ListBlock { for (r in list) ReportRow(r, open) }
+        if (list.isEmpty()) {
+            FootNote("주행이 끝나면 여기에 리포트가 와요")
+        } else {
+            ListBlock { for (r in list) ReportRow(r, open) }
+        }
     }
 }
 
@@ -86,9 +87,9 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
                     // '그칠 때까지'는 그친 시각이 리포트에 없어 쓰지 않고, 기존 타일 '울음 시간'(totalCryS 합)을 쓴다(거짓 시간 방지).
                     Kpi("울음 시간", seconds(k.cryS)),
                     Kpi("차가 한 일", "${k.actionKinds}가지"),
-                    Kpi("정차 안내", "${stopNoticeCount(b.timeline.map { it.stop })}번"),
+                    Kpi("정차 안내", "${stopNoticeCount(b.timeline.map { it.stop })}번")
                 ),
-                Modifier.padding(top = 16.dp),
+                Modifier.padding(top = 16.dp)
             )
             outputRouteText(b.outputRoute)?.let { Text(it, Modifier.padding(top = 12.dp), style = Type.caption, color = p.textTertiary) }
             if (b.truncated == true) Text("기록이 많아 일부를 줄였어요", style = Type.caption, color = p.textTertiary)
@@ -107,7 +108,7 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
                         Text(
                             "· ${purposeText(pl.purpose)} ${playName(songs, pl)} ${reportSpan(pl.startedAt, pl.endedAt, zone)} ${seconds(pl.playS)}",
                             style = Type.footnote,
-                            color = p.textTertiary,
+                            color = p.textTertiary
                         )
                     }
                     for ((name, value) in episodeResultLines(songs, e)) EpisodeLine(name, value)
@@ -131,42 +132,49 @@ fun ReportDetailScreen(onBack: () -> Unit, vm: ReportDetailViewModel = appViewMo
                 SteerBars(st.baselinePerMin, st.duringCryPerMin, st.afterResponsePerMin)
             }
         }
-        if (b.preCryContext.isNotEmpty()) Block {
-            BlockHeader("울음 직전 주행")
-            b.preCryContext.forEachIndexed { i, c ->
-                if (i > 0) HorizontalDivider(Modifier.padding(vertical = 12.dp), color = p.line)
-                // '울음 감지 전 {n}초'(iOS·차와 같음): 차는 표본을 경보(감지) 시각까지 모으므로 감지에 걸린 몇 초는 이미 울던 때다. 울음이 둘 이상이면 어느 울음인지 시각을 앞에 붙인다.
-                val at = if (b.preCryContext.size > 1) b.timeline.find { it.episodeId == c.episodeId }?.let { clock(it.startedAt) } else null
-                Text(
-                    listOfNotNull(at, "울음 감지 전 ${c.windowS}초").joinToString(" · "),
-                    Modifier.padding(bottom = 6.dp),
-                    style = Type.caption,
-                    color = p.textTertiary,
-                )
-                KeyValues(
-                    listOfNotNull(
-                        "속도" to "평균 ${"%.0f".format(c.speedKmhAvg)} · 최고 ${"%.0f".format(c.speedKmhMax)}km/h",
-                        "브레이크" to "${c.brakePresses}번",
-                        "큰 조향" to "${c.steeringReversals}번",
-                        c.cabinTempC?.let { "실내" to cabinTempText(it) },
-                    ),
-                )
-                Text(preCryDrive(c), Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
+        if (b.preCryContext.isNotEmpty()) {
+            Block {
+                BlockHeader("울음 직전 주행")
+                b.preCryContext.forEachIndexed { i, c ->
+                    if (i > 0) HorizontalDivider(Modifier.padding(vertical = 12.dp), color = p.line)
+                    // '울음 감지 전 {n}초'(iOS·차와 같음): 차는 표본을 경보(감지) 시각까지 모으므로 감지에 걸린 몇 초는 이미 울던 때다. 울음이 둘 이상이면 어느 울음인지 시각을 앞에 붙인다.
+                    val at = if (b.preCryContext.size > 1) b.timeline.find { it.episodeId == c.episodeId }?.let { clock(it.startedAt) } else null
+                    Text(
+                        listOfNotNull(at, "울음 감지 전 ${c.windowS}초").joinToString(" · "),
+                        Modifier.padding(bottom = 6.dp),
+                        style = Type.caption,
+                        color = p.textTertiary
+                    )
+                    KeyValues(
+                        listOfNotNull(
+                            "속도" to "평균 ${"%.0f".format(c.speedKmhAvg)} · 최고 ${"%.0f".format(c.speedKmhMax)}km/h",
+                            "브레이크" to "${c.brakePresses}번",
+                            "큰 조향" to "${c.steeringReversals}번",
+                            c.cabinTempC?.let { "실내" to cabinTempText(it) }
+                        )
+                    )
+                    Text(preCryDrive(c), Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
+                }
             }
         }
         Block {
             BlockHeader("차가 대신 한 일")
-            if (b.carActions.isEmpty()) Text("없어요", style = Type.body, color = p.textTertiary)
-            else KeyValues(b.carActions.map { a -> actionText(a.action) to ("${a.count}번" + (a.totalS?.let { " · ${seconds(it)}" } ?: "")) })
+            if (b.carActions.isEmpty()) {
+                Text("없어요", style = Type.body, color = p.textTertiary)
+            } else {
+                KeyValues(b.carActions.map { a -> actionText(a.action) to ("${a.count}번" + (a.totalS?.let { " · ${seconds(it)}" } ?: "")) })
+            }
         }
         // 제어 기록(iOS와 같다): 기록이 없어도 블록을 보인다. 줄마다 'API · 대상'(고정폭 작은 글)과 '시도 · 성공 · 실패 · 다시'(흐린 글) 두 줄.
         Block {
             BlockHeader("제어 기록")
             if (b.controls.isEmpty()) Text("없어요", style = Type.body, color = p.textTertiary)
-            for (c in b.controls) Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                // 고정폭 식별자(iOS .footnote.monospaced())
-                Text(controlTitle(c), style = Type.footnote.copy(fontFamily = FontFamily.Monospace), color = p.textPrimary)
-                Text(controlStatsText(c), style = Type.note, color = p.textTertiary)
+            for (c in b.controls) {
+                Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    // 고정폭 식별자(iOS .footnote.monospaced())
+                    Text(controlTitle(c), style = Type.footnote.copy(fontFamily = FontFamily.Monospace), color = p.textPrimary)
+                    Text(controlStatsText(c), style = Type.note, color = p.textTertiary)
+                }
             }
         }
     }
@@ -208,9 +216,11 @@ internal fun KeyValues(rows: List<Pair<String, String>>) {
     BoxWithConstraints {
         val cap = maxWidth * 0.65f
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            for ((k, v) in rows) Row(Modifier.fillMaxWidth()) {
-                Text(k, Modifier.weight(1f).padding(end = 14.dp), style = Type.valueKey, color = p.textTertiary)
-                Text(v, Modifier.widthIn(max = cap), style = Type.chip.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = TextAlign.End)
+            for ((k, v) in rows) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text(k, Modifier.weight(1f).padding(end = 14.dp), style = Type.valueKey, color = p.textTertiary)
+                    Text(v, Modifier.widthIn(max = cap), style = Type.chip.copy(fontFeatureSettings = "tnum"), color = p.textPrimary, textAlign = TextAlign.End)
+                }
             }
         }
     }

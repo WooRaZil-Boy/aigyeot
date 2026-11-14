@@ -39,11 +39,13 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
     signingConfigs {
-        if (releaseKey != null) create("release") {
-            storeFile = rootProject.file(releaseKey.getValue("storeFile")) // 절대 경로 또는 저장소 루트 기준
-            storePassword = releaseKey.getValue("storePassword")
-            keyAlias = releaseKey.getValue("keyAlias")
-            keyPassword = releaseKey.getValue("keyPassword")
+        if (releaseKey != null) {
+            create("release") {
+                storeFile = rootProject.file(releaseKey.getValue("storeFile")) // 절대 경로 또는 저장소 루트 기준
+                storePassword = releaseKey.getValue("storePassword")
+                keyAlias = releaseKey.getValue("keyAlias")
+                keyPassword = releaseKey.getValue("keyPassword")
+            }
         }
     }
     buildTypes {
@@ -53,7 +55,10 @@ android {
             if (releaseKey != null) signingConfig = signingConfigs.getByName("release")
         }
     }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     buildFeatures {
         compose = true
         buildConfig = true

@@ -1,13 +1,13 @@
 package kr.aigyeot.app.ui
 
+import java.time.Instant
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 import kr.aigyeot.app.store.db.AI_NOTICE_VERSION
 import kr.aigyeot.app.store.db.ChildProfileEntity
 import kr.aigyeot.engine.CarSeat
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
-import java.time.Instant
-import java.time.YearMonth
-import java.time.temporal.ChronoUnit
 
 // 아기 설정 양식의 규칙. 화면(SetupScreen)은 이 값·함수로 표시하고 누름만 넘긴다. 오늘은 주입받은 시계로 정한다.
 
@@ -89,11 +89,19 @@ internal fun canSave(consent: Boolean, nickname: String) = consent && nickname.i
  * 동의 시각은 처음 동의한 때를 지킨다.
  */
 internal fun profileEntity(
-    old: ChildProfileEntity?, nickname: String, birth: YearMonth, seat: CarSeat, interval: Int?,
-    sibling: Boolean, song: Boolean, front: Boolean, noRearOutput: Boolean, now: Long,
+    old: ChildProfileEntity?,
+    nickname: String,
+    birth: YearMonth,
+    seat: CarSeat,
+    interval: Int?,
+    sibling: Boolean,
+    song: Boolean,
+    front: Boolean,
+    noRearOutput: Boolean,
+    now: Long
 ) = ChildProfileEntity(
     id = old?.id ?: "child", nickname = nickname.trim(), birthYm = birth.toString(), carseat = seat.name,
     feedingIntervalMin = interval, lastFeedingStart = old?.lastFeedingStart,
     methods = listOfNotNull(Method(MethodKind.WHITE_NOISE), Method(MethodKind.WOMB), Method(MethodKind.LULLABY), if (song) Method(MethodKind.SONG) else null),
-    hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now, aiNoticeVersion = AI_NOTICE_VERSION,
+    hasSibling = sibling, frontFallbackAllowed = noRearOutput && front, consentAt = old?.consentAt ?: now, aiNoticeVersion = AI_NOTICE_VERSION
 )

@@ -6,15 +6,15 @@ import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kr.aigyeot.engine.Params
 import java.io.File
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kr.aigyeot.engine.Params
 
 /**
  * exec가 채우고 link가 부른다('노래 받기 작업'의 '−30 LUFS 사본(실행기)').
@@ -25,7 +25,11 @@ import kotlin.math.roundToInt
 object SongLoudness {
     /** 받은 원본을 −30 LUFS 사본으로 만든다. 거절이면 reason에 song_status 사유(peak_limit·silent·bad_format). */
     suspend fun makeCopy(input: File, output: File): LoudnessResult = withContext(Dispatchers.IO) {
-        val (meter, fmt) = try { measure(input) } catch (e: Exception) { return@withContext LoudnessResult(false, "bad_format") }
+        val (meter, fmt) = try {
+            measure(input)
+        } catch (e: Exception) {
+            return@withContext LoudnessResult(false, "bad_format")
+        }
         val p = Params()
         var (gain, reason) = gainFor(meter.integrated(), meter.peak, p)
         if (gain == null) return@withContext LoudnessResult(false, reason)
@@ -34,13 +38,20 @@ object SongLoudness {
             val copy = abs(20 * log10(gain)) < 0.5
             if (!copy) {
                 // 이득을 곱한 PCM을 인코딩 없이 먼저 재어, 목표에서 0.5 dB 넘게 벗어나면 이득을 한 번 고친다(문턱 아래였던 구간이 들어오는 경우)
-                val (g2, why) = refineGain(gain, measureScaled(input, gain, fmt), meter.peak, p)
+                val (g2, why) = refineGain(gain, measureScaled(input, gain), meter.peak, p)
                 if (g2 == null) return@withContext LoudnessResult(false, why)
                 gain = g2
             }
-            val ok = if (copy) { input.copyTo(output, overwrite = true); true }
-                     else transcode(input, output, gain, fmt, p)
-            if (!ok) { output.delete(); return@withContext LoudnessResult(false, "silent") }
+            val ok = if (copy) {
+                input.copyTo(output, overwrite = true)
+                true
+            } else {
+                transcode(input, output, gain, fmt, p)
+            }
+            if (!ok) {
+                output.delete()
+                return@withContext LoudnessResult(false, "silent")
+            }
             LoudnessResult(true)
         } catch (e: Exception) {
             output.delete()
@@ -115,21 +126,33 @@ object SongLoudness {
                         if (i >= 0) {
                             moved = true
                             val n = ex.readSampleData(codec.getInputBuffer(i)!!, 0)
-                            if (n < 0) { codec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM); inDone = true }
-                            else { codec.queueInputBuffer(i, 0, n, ex.sampleTime, 0); ex.advance() }
+                            if (n < 0) {
+                                codec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                inDone = true
+                            } else {
+                                codec.queueInputBuffer(i, 0, n, ex.sampleTime, 0)
+                                ex.advance()
+                            }
                         }
                     }
                     val o = codec.dequeueOutputBuffer(info, 10_000)
                     if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         moved = true
                         val f = codec.outputFormat
-                        if (f.containsKey(MediaFormat.KEY_PCM_ENCODING))
+                        if (f.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
                             require(f.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_16BIT)
+                        }
                         fmt = Fmt(f.getInteger(MediaFormat.KEY_SAMPLE_RATE), f.getInteger(MediaFormat.KEY_CHANNEL_COUNT))
                     } else if (o >= 0) {
                         moved = true
-                        if (!told) { told = true; onFormat(fmt) }
-                        val b = codec.getOutputBuffer(o)!!.apply { position(info.offset); limit(info.offset + info.size) }
+                        if (!told) {
+                            told = true
+                            onFormat(fmt)
+                        }
+                        val b = codec.getOutputBuffer(o)!!.apply {
+                            position(info.offset)
+                            limit(info.offset + info.size)
+                        }
                         val s = ShortArray(info.size / 2).also { b.order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(it) }
                         codec.releaseOutputBuffer(o, false)
                         if (s.isNotEmpty()) onPcm(s, s.size)
@@ -139,7 +162,8 @@ object SongLoudness {
                     check(idle <= MAX_IDLE) { "decoder stalled" }
                 }
             } finally {
-                runCatching { codec.stop() }; codec.release()
+                runCatching { codec.stop() }
+                codec.release()
             }
             return fmt
         } finally {
@@ -155,9 +179,12 @@ object SongLoudness {
 
     /** 이득을 곱해 AAC로 다시 쓰고, 곱한 PCM을 다시 재어 목표 안이면 true. 목표 밖이거나 실패면 `.tmp`를 지운다(실패는 예외). */
     /** 풀어서 이득을 곱한 PCM의 통합 크기(인코딩 없음). 잴 수 없으면 null. */
-    private fun measureScaled(input: File, gain: Double, fmt: Fmt): Double? {
+    private fun measureScaled(input: File, gain: Double): Double? {
         var meter: Loudness? = null
-        decode(input, onFormat = { meter = Loudness(it.rate, it.channels) }) { s, n -> scale(s, n, gain); meter!!.addPcm16(s, n) }
+        decode(input, onFormat = { meter = Loudness(it.rate, it.channels) }) { s, n ->
+            scale(s, n, gain)
+            meter!!.addPcm16(s, n)
+        }
         return meter?.integrated()
     }
 
@@ -167,37 +194,48 @@ object SongLoudness {
         var ok = false
         val enc = MediaCodec.createEncoderByType(mime)
         try {
-            val after = Loudness(fmt.rate, fmt.channels)          // 이득을 곱한 결과를 다시 잰다
+            val after = Loudness(fmt.rate, fmt.channels) // 이득을 곱한 결과를 다시 잰다
             val mux = MediaMuxer(tmp.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             try {
                 var track = -1
-                var frames = 0L                                       // 채널당 표본 수(시각 계산)
-                var eos = false                                       // 인코더 끝 신호를 받았다(drain·feed가 공유)
+                var frames = 0L // 채널당 표본 수(시각 계산)
+                var eos = false // 인코더 끝 신호를 받았다(drain·feed가 공유)
                 val info = MediaCodec.BufferInfo()
                 fun drain(untilEnd: Boolean) {
                     if (eos) return
                     var tries = 0
-                    while (tries++ < 500) {                          // 끝까지 기다려도 최대 5초
+                    while (tries++ < 500) { // 끝까지 기다려도 최대 5초
                         val o = enc.dequeueOutputBuffer(info, if (untilEnd) 10_000 else 0)
                         when {
-                            o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> { track = mux.addTrack(enc.outputFormat); mux.start() }
-                            o >= 0 -> {
-                                if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && info.size > 0)
-                                    mux.writeSampleData(track, enc.getOutputBuffer(o)!!, info)
-                                enc.releaseOutputBuffer(o, false)
-                                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) { eos = true; return }
+                            o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                                track = mux.addTrack(enc.outputFormat)
+                                mux.start()
                             }
-                            !untilEnd -> return                       // INFO_TRY_AGAIN_LATER
+                            o >= 0 -> {
+                                if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && info.size > 0) {
+                                    mux.writeSampleData(track, enc.getOutputBuffer(o)!!, info)
+                                }
+                                enc.releaseOutputBuffer(o, false)
+                                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                                    eos = true
+                                    return
+                                }
+                            }
+                            !untilEnd -> return // INFO_TRY_AGAIN_LATER
                         }
                     }
-                    check(!untilEnd) { "encoder eos timeout" }        // 끝 신호 없이 시간이 지나면 성공이 아니다
+                    check(!untilEnd) { "encoder eos timeout" } // 끝 신호 없이 시간이 지나면 성공이 아니다
                 }
                 fun feed(s: ShortArray, n: Int, end: Boolean) {
                     var off = 0
                     var idle = 0
                     while (off < n || end) {
                         val i = enc.dequeueInputBuffer(10_000)
-                        if (i < 0) { drain(false); check(++idle <= MAX_IDLE) { "encoder input stalled" }; continue }
+                        if (i < 0) {
+                            drain(false)
+                            check(++idle <= MAX_IDLE) { "encoder input stalled" }
+                            continue
+                        }
                         idle = 0
                         val buf = enc.getInputBuffer(i)!!.order(ByteOrder.LITTLE_ENDIAN)
                         val k = minOf(n - off, buf.remaining() / 2)
@@ -213,11 +251,15 @@ object SongLoudness {
                 }
                 val f = MediaFormat.createAudioFormat(mime, fmt.rate, fmt.channels).apply {
                     setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-                    setInteger(MediaFormat.KEY_BIT_RATE, 64_000)                 // 모노 64 kbps 안팎
+                    setInteger(MediaFormat.KEY_BIT_RATE, 64_000) // 모노 64 kbps 안팎
                 }
                 enc.configure(f, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 enc.start()
-                decode(input) { s, n -> scale(s, n, gain); after.addPcm16(s, n); feed(s, n, false) }
+                decode(input) { s, n ->
+                    scale(s, n, gain)
+                    after.addPcm16(s, n)
+                    feed(s, n, false)
+                }
                 feed(ShortArray(0), 0, true)
                 drain(true)
                 mux.stop()
@@ -229,12 +271,13 @@ object SongLoudness {
             ok = true
             return true
         } finally {
-            runCatching { enc.stop() }; enc.release()
+            runCatching { enc.stop() }
+            enc.release()
             if (!ok) tmp.delete()
         }
     }
 
-    private const val MAX_IDLE = 500                              // 연속 이만큼 진전이 없으면 멈춘 것으로 본다(약 5~10초)
+    private const val MAX_IDLE = 500 // 연속 이만큼 진전이 없으면 멈춘 것으로 본다(약 5~10초)
 }
 
 data class LoudnessResult(val ok: Boolean, val reason: String? = null)

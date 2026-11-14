@@ -1,9 +1,9 @@
 package kr.aigyeot.app.detect
 
-import kr.aigyeot.engine.Params
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kr.aigyeot.engine.Params
 
 // 판별층 계산이 파이썬(rt_train.py 식)과 같은 값을 내는가. 기대값은 실제 cry_head24_rt.json으로 파이썬에서 계산했다.
 class CryHeadTest {
@@ -23,7 +23,7 @@ class CryHeadTest {
         assertEquals(Params().alarmThreshold, CryHead.trainedThreshold(headFile.readText()), "판별층을 다시 학습해 문턱이 바뀌면 Params.alarmThreshold를 먼저 고친다")
         assertEquals(Params().yamnetHopMs, Detect.WINDOW_MS)
         assertEquals(Detect.WINDOW_SAMPLES * 1000L / Detect.SAMPLE_RATE, Detect.WINDOW_MS, "창 한 걸음은 15600표본 ÷ 16 kHz")
-        val head = CryHead(intArrayOf(0), doubleArrayOf(0.0, 0.0), 0.0)   // 늘 p = 0.5
+        val head = CryHead(intArrayOf(0), doubleArrayOf(0.0, 0.0), 0.0) // 늘 p = 0.5
         fun alarms(p: Params) = SegmentTracker(head, p).let { t -> (1..4).mapNotNull { t.push(FloatArray(521), it * Detect.WINDOW_MS, 0) }.map { it.alarm } }
         assertEquals(listOf(false, true), alarms(Params(alarmThreshold = 0.5)), "Params 문턱 이상 두 구간이면 경보")
         assertEquals(listOf(false, false), alarms(Params(alarmThreshold = 0.51)))

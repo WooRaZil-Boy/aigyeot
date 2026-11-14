@@ -58,15 +58,23 @@ const val RING_FPS = 15
 fun stageMark(elapsedMs: Long, firstFrameMs: Long?, failedMs: Long?, still: Boolean): StageMark {
     if (failedMs != null && elapsedMs >= failedMs) return StageMark.FAILED
     if (elapsedMs < STAGE_MARK_DELAY_MS) return StageMark.HIDDEN
-    if (firstFrameMs != null && (firstFrameMs <= STAGE_MARK_DELAY_MS || elapsedMs >= maxOf(firstFrameMs,
-            STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS))) return StageMark.HIDDEN
+    if (firstFrameMs != null &&
+        (
+            firstFrameMs <= STAGE_MARK_DELAY_MS ||
+                elapsedMs >= maxOf(
+                    firstFrameMs,
+                    STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS
+                )
+            )
+    ) {
+        return StageMark.HIDDEN
+    }
     return if (still) StageMark.STILL else StageMark.RING
 }
 
 /** 표시가 더는 바뀌지 않는가(시계를 멈춰도 되는가). */
-internal fun stageMarkSettled(elapsedMs: Long, firstFrameMs: Long?, failedMs: Long?): Boolean =
-    (failedMs != null && elapsedMs >= failedMs) ||
-        (firstFrameMs != null && (firstFrameMs <= STAGE_MARK_DELAY_MS || elapsedMs >= maxOf(firstFrameMs, STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS)))
+internal fun stageMarkSettled(elapsedMs: Long, firstFrameMs: Long?, failedMs: Long?): Boolean = (failedMs != null && elapsedMs >= failedMs) ||
+    (firstFrameMs != null && (firstFrameMs <= STAGE_MARK_DELAY_MS || elapsedMs >= maxOf(firstFrameMs, STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS)))
 
 /**
  * 새 알림(첫 그림·실패) 없이 표시가 바뀔 다음 시각(칸을 붙인 때부터 ms): 800ms 나타남, 고리가 보였으면 최소 표시 끝. 알림이 와야만 바뀌면 null(기다리지 않는다).
@@ -87,22 +95,32 @@ internal fun stageMarkNextMs(elapsedMs: Long, firstFrameMs: Long?, failedMs: Lon
 @Stable
 internal class StageLoad {
     private val born = SystemClock.uptimeMillis()
-    var firstFrameMs by mutableStateOf<Long?>(null); private set
-    var failedMs by mutableStateOf<Long?>(null); private set
-    var held by mutableStateOf<android.view.View?>(null); private set
+    var firstFrameMs by mutableStateOf<Long?>(null)
+        private set
+    var failedMs by mutableStateOf<Long?>(null)
+        private set
+    var held by mutableStateOf<android.view.View?>(null)
+        private set
 
     fun elapsed() = SystemClock.uptimeMillis() - born
 
     /** [hide]: 표시가 보일 수 있는 칸인가(정지 그림이 덮는 홈 무대는 숨기지 않는다). */
     fun firstFrame(v: android.view.View, hide: Boolean) {
         val at = elapsed()
-        if (hide && at > STAGE_MARK_DELAY_MS) { v.alpha = 0f; held = v }
+        if (hide && at > STAGE_MARK_DELAY_MS) {
+            v.alpha = 0f
+            held = v
+        }
         firstFrameMs = at
     }
 
-    fun failed() { if (failedMs == null) failedMs = elapsed() }
+    fun failed() {
+        if (failedMs == null) failedMs = elapsed()
+    }
 
-    fun entered() { held = null }
+    fun entered() {
+        held = null
+    }
 }
 
 /** 표시·3D의 나타남과 사라짐: 동작 줄이기 바로, 주행 중 200ms 한 번(선형, 주행 중 규칙), 아니면 [token]. */
@@ -152,21 +170,36 @@ internal fun BoxScope.StageMarkLayer(load: StageLoad, reduced: Boolean, drive: B
                     delay(1000L / RING_FPS)
                 }
             }
-            Canvas(Modifier.size(64.dp).semantics { contentDescription = STAGE_LOADING; progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }) {
+            Canvas(
+                Modifier.size(64.dp).semantics {
+                    contentDescription = STAGE_LOADING
+                    progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                }
+            ) {
                 val w = 5.dp.toPx()
                 drawCircle(p.textPrimary.copy(alpha = 0.1f), radius = (size.minDimension - w) / 2, style = Stroke(w))
                 rotate(step * 360f / RING_FPS) {
-                    drawArc(p.accentInk, -90f, 90f, false, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w),
-                            style = Stroke(w, cap = StrokeCap.Round))
+                    drawArc(
+                        p.accentInk,
+                        -90f,
+                        90f,
+                        false,
+                        topLeft = Offset(w / 2, w / 2),
+                        size = Size(size.width - w, size.height - w),
+                        style = Stroke(w, cap = StrokeCap.Round)
+                    )
                 }
             }
         }
         AnimatedVisibility(mark == StageMark.STILL || mark == StageMark.FAILED, enter = fadeIn(fade), exit = fadeOut(fade)) {
-            val read = mark == StageMark.STILL   // 실패 표시는 읽지 않는다
+            val read = mark == StageMark.STILL // 실패 표시는 읽지 않는다
             Box(
                 Modifier.size(64.dp).semantics {
-                    if (read) { contentDescription = STAGE_LOADING; progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }
-                },
+                    if (read) {
+                        contentDescription = STAGE_LOADING
+                        progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                    }
+                }
             ) {
                 LineIcon(R.drawable.ic_car_front, 64.dp, p.textTertiary.copy(alpha = 0.5f))
             }

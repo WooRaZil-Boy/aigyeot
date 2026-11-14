@@ -1,5 +1,8 @@
 package kr.aigyeot.app.scenario
 
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kr.aigyeot.app.Golden
 import kr.aigyeot.engine.AddWaypoint
 import kr.aigyeot.engine.AdjustPlayback
@@ -21,9 +24,6 @@ import kr.aigyeot.engine.ShowNotice
 import kr.aigyeot.engine.Speak
 import kr.aigyeot.engine.StartPlayback
 import kr.aigyeot.engine.StopPlayback
-import java.io.File
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 // 장면을 가짜 세상에서 돌려 나온 할 일(시각·종류·핵심 값)을 장면마다 글 파일로 고정한다. 리팩터링 회귀망이다.
 class ScenesGoldenTest {
@@ -51,7 +51,7 @@ class ScenesGoldenTest {
         is LogAlarm -> "LogAlarm ${c.reason}"
         ReleaseAudio -> "ReleaseAudio"
         CancelSpeech -> "CancelSpeech"
-        else -> null   // 저장·스냅숏 할 일은 값이 길고 반복이라 뺀다
+        else -> null // 저장·스냅숏 할 일은 값이 길고 반복이라 뺀다
     }
 
     private fun record(id: String): String {

@@ -39,8 +39,10 @@ class NumberCheckTest {
     }
 
     @Test fun noDigits_approxOrdinalZero() {
-        listOf("서너 분 걸려요.", "한두 번이에요.", "두세 시간이에요.", "너댓 번 울었어요.", "네댓 분이에요.", "대여섯 개예요.", "서너분 남았어요.",
-            "첫 번째예요.", "첫번째 시도예요.", "둘째 날이에요.", "셋째 번이에요.", "열째 시간이에요.", "영분 지났어요.", "공시간이에요.").forEach { assertFalse(noDigits(it), it) }
+        listOf(
+            "서너 분 걸려요.", "한두 번이에요.", "두세 시간이에요.", "너댓 번 울었어요.", "네댓 분이에요.", "대여섯 개예요.", "서너분 남았어요.",
+            "첫 번째예요.", "첫번째 시도예요.", "둘째 날이에요.", "셋째 번이에요.", "열째 시간이에요.", "영분 지났어요.", "공시간이에요."
+        ).forEach { assertFalse(noDigits(it), it) }
         listOf("한도 안이에요.", "정도예요.", "영주에 가요.", "공개했어요.", "공주님이에요.", "첫째로 중요해요.", "첫눈이 와요.").forEach { assertTrue(noDigits(it), it) }
     }
 
@@ -51,17 +53,26 @@ class NumberCheckTest {
 
     @Test fun noDigits_koreanNumeralWithUnit() {
         listOf("세 번 울었어요.", "두 시간 전이에요.", "한 번이요.", "다섯분 지났어요.", "스무 살이에요.", "열 개예요.", "일곱 킬로예요.", "스물 도예요.").forEach { assertFalse(noDigits(it), it) }
-        listOf("열이 있을 수 있어요.", "한참 울 수 있어요.", "세상에서 가장 불편할 수 있어요.", "두고 보세요.").forEach { assertTrue(noDigits(it), it) }   // 단위가 바로 뒤에 오지 않으면 통과
+        listOf("열이 있을 수 있어요.", "한참 울 수 있어요.", "세상에서 가장 불편할 수 있어요.", "두고 보세요.").forEach { assertTrue(noDigits(it), it) } // 단위가 바로 뒤에 오지 않으면 통과
     }
 
     // 낱말 끝의 한 음절 고유어 수("하지만 주변"의 만)는 숫자가 아니다. 진짜 숫자 말은 그대로 걸린다
     @Test fun wordEndingNativeNumeralIsNotNumber() {
-        listOf("죄송하지만 주변 소리까지는 알 수 없어요.", "편안한 곳에서 쉬세요.", "필요한 일은 없어요.", "중요한 시선이 아니에요.", "그렇지만 주위를 살펴보세요.",
-            "정확한 분은 알 수 없어요.", "안전한 곳을 찾아보세요.").forEach { assertTrue(noDigits(it), it) }
-        listOf("세 번 울었어요.", "두 시간 지났어요.", "한 번이요.", "약 두 시간이에요.", "하루에 세 번이에요.", "만 번이요.", "만 주 동안이에요.", "열 시쯤이에요.", "한 곳이에요.",
+        listOf(
+            "죄송하지만 주변 소리까지는 알 수 없어요.",
+            "편안한 곳에서 쉬세요.",
+            "필요한 일은 없어요.",
+            "중요한 시선이 아니에요.",
+            "그렇지만 주위를 살펴보세요.",
+            "정확한 분은 알 수 없어요.",
+            "안전한 곳을 찾아보세요."
+        ).forEach { assertTrue(noDigits(it), it) }
+        listOf(
+            "세 번 울었어요.", "두 시간 지났어요.", "한 번이요.", "약 두 시간이에요.", "하루에 세 번이에요.", "만 번이요.", "만 주 동안이에요.", "열 시쯤이에요.", "한 곳이에요.",
             "서른세 분 기다려 보세요.", "열한 번 울었어요.", "스물두 시간이에요.", "두 주의 적응 기간이 필요해요.", "생후 이십 주차예요.",
             "예순다섯 개예요.", "약열두 시간이에요.", "백한 번 정도예요.", "백열 분 기다려요.", "백쉰 번이에요.", "두 주로 잡으면 돼요.",
-            "세 시도 가능해요.").forEach { assertFalse(noDigits(it), it) }
+            "세 시도 가능해요."
+        ).forEach { assertFalse(noDigits(it), it) }
     }
 
     // 수를 꾸미는 '몇'·'총' 뒤 한 음절 수와 어림수 '세네'·'너덧'은 숫자다. 낱말 끝은 그대로 통과
@@ -79,8 +90,10 @@ class NumberCheckTest {
 
     // 군말 검사
     @Test fun leakedEnglishAndToolWords() {
-        listOf("answer 도구를 호출해 수유 주제를 고릅니다.", "answer를 호출합니다.", "stop_soothing을 호출합니다.", "Rendering the answer for the feeding question.", "Sleep 주제로 알려 드릴게요.",
-            "(function call: answer with topics)", "add_waypoint로 넣을게요.", "도구로 고릅니다.", "호출했어요.", "ｓｗｉｔｃｈ_ｓｏｕｎｄ").forEach { assertFalse(noLeak(it), it) }
+        listOf(
+            "answer 도구를 호출해 수유 주제를 고릅니다.", "answer를 호출합니다.", "stop_soothing을 호출합니다.", "Rendering the answer for the feeding question.", "Sleep 주제로 알려 드릴게요.",
+            "(function call: answer with topics)", "add_waypoint로 넣을게요.", "도구로 고릅니다.", "호출했어요.", "ｓｗｉｔｃｈ_ｓｏｕｎｄ"
+        ).forEach { assertFalse(noLeak(it), it) }
         listOf("백색소음이 도움이 될 수 있어요.", "아기가 우는 이유는 알 수 없지만 불편할 수 있어요.").forEach { assertTrue(noLeak(it), it) }
     }
 
@@ -88,7 +101,7 @@ class NumberCheckTest {
     @Test fun spokenMinute_boundaries() {
         assertEquals(listOf("0분", "59분", "1시간", "1시간 1분", "2시간", "17시간 54분"), listOf(0, 59, 60, 61, 120, 1074).map(::spokenMin))
         assertEquals("0분", spokenMin(-5))
-        for (m in listOf(0L, 59L, 60L, 61L, 1074L)) assertEquals(spokenMin(m), hm(m * 60_000 + 59_999), "hm=$m")   // 초는 내림
+        for (m in listOf(0L, 59L, 60L, 61L, 1074L)) assertEquals(spokenMin(m), hm(m * 60_000 + 59_999), "hm=$m") // 초는 내림
     }
 
     // 모델의 추론 글(실측 원자료에서 뽑음)은 걸리고, 정상 답은 통과한다
@@ -101,13 +114,13 @@ class NumberCheckTest {
             "고 르 겠습니다", "next_rest 쪽이에요.",
             // 프롬프트의 내부 낱말과 다른 글자(실측 원자료)
             "아기가 우는 이유는 지금 상태값만으로는 정확히 알 수 없어요.", "무엇을 말씀하시는지 정확히 알 수 없어서, 우선 정해진 안내 문장으로 답해 드릴게요.",
-            "왜 우는지는 사실이 아닌 추정이라, 두 문장 이내로 답합니다.", "ज़रूर, मैं इसका जवाब देता हूँ।", "ы", "ਸ", "Bạn hỏi về thời gian", "漢字로 말해요.",
+            "왜 우는지는 사실이 아닌 추정이라, 두 문장 이내로 답합니다.", "ज़रूर, मैं इसका जवाब देता हूँ।", "ы", "ਸ", "Bạn hỏi về thời gian", "漢字로 말해요."
         ).forEach { assertFalse(noLeak(it), it) }
         listOf(
             "왜 우는지는 정확히 알 수 없지만, 배가 고프거나 카시트가 불편하거나 차 안이 더울 수 있어요.", "질문이 분명하지 않아서 어떤 걸 물으시는지 알 수 없어요. 수유, 잠, 기저귀, 울음, 카시트, 실내 온도, 쉼터 중에 어떤 게 궁금한지 다시 말씀해 주세요.",
             "아기나 차 상황과는 상관없는 질문이라 제가 정확히 알려 드리기는 어려워요. 다음 쉼터에서 드시고 싶은 걸 골라 보셔도 좋겠어요.", "백색소음을 틀었을 때 그친 적이 있어요. 소리 덕분인지는 알 수 없어요.",
             "A/C를 켜 볼 수 있어요.", "안녕하세요! 뒷좌석 아기 상황이 궁금하시면 편하게 물어보세요.", "날씨는 제가 알 수 있는 정보가 아니에요. 아기와 차 안 상황이라면 말씀해 주세요.",
-            "노래 추천은 제가 도와드리기 어려워요. 뒷좌석 소리를 바꾸고 싶으시면 말씀해 주세요.", "수유·잠·기저귀 중에 궁금한 걸 말씀해 주세요.",
+            "노래 추천은 제가 도와드리기 어려워요. 뒷좌석 소리를 바꾸고 싶으시면 말씀해 주세요.", "수유·잠·기저귀 중에 궁금한 걸 말씀해 주세요."
         ).forEach { assertTrue(noLeak(it), it) }
     }
 
@@ -115,7 +128,8 @@ class NumberCheckTest {
     @Test fun stateClaim_listedExpressions_caught() {
         listOf(
             "아기가 잘 자고 있어요.", "배고파서 울어요.", "괜찮아요.", "숨을 잘 쉬고 있어요.", "잠들었어요.", "깼어요.", "깨어 있어요.",
-            "아파서 울어요.", "열이 있는 것 같아요.", "안전해요.", "안전하게 가고 있어요.", "괜찮습니다.", "호흡이 고르세요.", "기저귀 때문에 울어요.", "심심해서 울어요.", "푹 자는 중이에요.", "아픈 것 같아요.", "배고픈 것 같아요.", "졸린가 봐요.", "많이 졸려해요.",
+            "아파서 울어요.", "열이 있는 것 같아요.", "안전해요.", "안전하게 가고 있어요.", "괜찮습니다.", "호흡이 고르세요.",
+            "기저귀 때문에 울어요.", "심심해서 울어요.", "푹 자는 중이에요.", "아픈 것 같아요.", "배고픈 것 같아요.", "졸린가 봐요.", "많이 졸려해요."
         ).forEach { assertFalse(noStateClaim(it), it) }
     }
 
@@ -127,7 +141,7 @@ class NumberCheckTest {
             "기저귀를 갈았어요.", "갈았어요.", "더워요.", "추워요.", "덥습니다.", "춥습니다.", "온도가 높아요.",
             "휴게소가 있어요.", "휴게소가 없어요.", "수유실이 있어요.", "수유실이 없어요.",
             "울음이 들려요.", "울음소리가 들려요.", "먹었습니다.", "먹였습니다.", "먹었고요.", "울었습니다.", "그쳤습니다.", "잤습니다.", "잤고요.",
-            "잘 통했어요.", "효과가 있었어요.", "효과가 없었어요.",
+            "잘 통했어요.", "효과가 있었어요.", "효과가 없었어요."
         ).forEach { assertFalse(noStateClaim(it), it) }
     }
 
@@ -144,8 +158,8 @@ class NumberCheckTest {
     @Test fun stateClaim_spaceAndFullwidthVariants_caught() {
         assertFalse(noStateClaim("아기가 잘  자고   있어요"))
         assertFalse(noStateClaim("잘\n자고\t있어요"))
-        assertFalse(noStateClaim("괜\u3000찮\u00A0아 요"))                                  // 전각·줄 바꿈 없는 공백
-        assertFalse(noStateClaim(java.text.Normalizer.normalize("괜찮아요", java.text.Normalizer.Form.NFD)))  // 풀어 쓴 자모
+        assertFalse(noStateClaim("괜\u3000찮\u00A0아 요")) // 전각·줄 바꿈 없는 공백
+        assertFalse(noStateClaim(java.text.Normalizer.normalize("괜찮아요", java.text.Normalizer.Form.NFD))) // 풀어 쓴 자모
         assertFalse(noStateClaim("숨 을 쉬어요"))
     }
 
@@ -157,7 +171,7 @@ class NumberCheckTest {
     @Test fun presentSleepStateFailsEvenWithRecord() {
         assertFalse(noStateClaim("기록상 지금 잘 자고 있어요."))
         assertFalse(noStateClaim("기록상\n깼어요."))
-        assertFalse(noStateClaim("기록상 오늘 3번 먹었어요."))   // 수유 사실 단정("먹었어")이라 막힌다
+        assertFalse(noStateClaim("기록상 오늘 3번 먹었어요.")) // 수유 사실 단정("먹었어")이라 막힌다
     }
 
     @Test fun firstSentences() {
@@ -189,13 +203,23 @@ class NumberCheckTest {
 
     // 수사 꼴마다 단위 목록이 달라 새던 말
     @Test fun noDigits_c249_oneUnitList() {
-        listOf("십여 분 동안 울 수 있어요.", "삼 일쯤 걸려요.", "일 년이 지나요.", "백 미터 앞이에요.", "백 밀리리터예요.", "삼십 퍼센트예요.", "두 돌 무렵이에요.",
-            "서너 가지예요.", "수십 분 걸려요.", "한 곳이에요.", "세 명이에요.", "오 개월이에요.").forEach { assertFalse(noDigits(it), it) }
+        listOf(
+            "십여 분 동안 울 수 있어요.", "삼 일쯤 걸려요.", "일 년이 지나요.", "백 미터 앞이에요.", "백 밀리리터예요.", "삼십 퍼센트예요.", "두 돌 무렵이에요.",
+            "서너 가지예요.", "수십 분 걸려요.", "한 곳이에요.", "세 명이에요.", "오 개월이에요."
+        ).forEach { assertFalse(noDigits(it), it) }
     }
 
     @Test fun noDigits_c249_wordsStillPass() {
-        listOf("백색소음이 도움이 될 수 있어요.", "이 소리가 익숙해질 수 있어요.", "천천히 달래 주세요.", "만약 계속 울면 쉬어 가세요.", "한동안 낯설 수 있어요.", "세상 소리가 낯설 수 있어요.",
-            "상황을 이해해 주세요.", "아이 배가 고플 수 있어요.").forEach { assertTrue(noDigits(it), it) }
+        listOf(
+            "백색소음이 도움이 될 수 있어요.",
+            "이 소리가 익숙해질 수 있어요.",
+            "천천히 달래 주세요.",
+            "만약 계속 울면 쉬어 가세요.",
+            "한동안 낯설 수 있어요.",
+            "세상 소리가 낯설 수 있어요.",
+            "상황을 이해해 주세요.",
+            "아이 배가 고플 수 있어요."
+        ).forEach { assertTrue(noDigits(it), it) }
     }
 
     // 영·공 붙여 쓴 꼴도 단위를 보고, 두 음절 이상 한자어 수는 앞이 한글이어도 본다
@@ -206,68 +230,112 @@ class NumberCheckTest {
 
     @Test fun noDigits_c256_multiSyllableSinoAfterHangul() {
         listOf("약삼십 분 정도 쉬어 가도 좋아요.", "약이십 분 걸려요.", "약 삼십 분이에요.").forEach { assertFalse(noDigits(it), it) }
-        listOf("백색소음이 도움이 될 수 있어요.", "이 소리가 익숙해질 수 있어요.", "천천히 달래 주세요.", "만약 계속 울면 쉬어 가세요.", "상황을 이해해 주세요.", "이곳에서 쉬어요.",
-            "오시면 돼요.", "아이 배가 고플 수 있어요.").forEach { assertTrue(noDigits(it), it) }
+        listOf(
+            "백색소음이 도움이 될 수 있어요.",
+            "이 소리가 익숙해질 수 있어요.",
+            "천천히 달래 주세요.",
+            "만약 계속 울면 쉬어 가세요.",
+            "상황을 이해해 주세요.",
+            "이곳에서 쉬어요.",
+            "오시면 돼요.",
+            "아이 배가 고플 수 있어요."
+        ).forEach { assertTrue(noDigits(it), it) }
     }
 
     // ---- 수사 꼴 × 단위 표. 띄어 쓴 꼴은 모든 단위가 막히고, 붙여 쓴 꼴은 낱말과 겹치는 단위만 뺀다 ----
-    private val units = listOf("번째", "시간", "주일", "개월", "차례", "마리", "가지", "군데", "킬로", "키로", "미터", "센티", "밀리", "리터", "그램", "칼로리", "퍼센트", "프로",
-        "초", "분", "시", "일", "날", "주", "달", "월", "년", "해", "살", "세", "돌", "번", "회", "개", "명", "곳", "배")
+    private val units = listOf(
+        "번째", "시간", "주일", "개월", "차례", "마리", "가지", "군데", "킬로", "키로", "미터", "센티", "밀리", "리터", "그램", "칼로리", "퍼센트", "프로",
+        "초", "분", "시", "일", "날", "주", "달", "월", "년", "해", "살", "세", "돌", "번", "회", "개", "명", "곳", "배"
+    )
 
-    @Test fun grid_native_oneSyllable() {   // 한·두·세·네: 일(세일·네일·한일)·월·해("그만해"는 만)·세(한세상)는 낱말과 겹쳐 붙임에서 뺀다
-        listOf("한", "두", "세", "네").forEach { n -> units.forEach { u ->
-            assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
-            if (u !in setOf("일", "월", "해", "세")) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
-        } }
+    @Test fun grid_native_oneSyllable() { // 한·두·세·네: 일(세일·네일·한일)·월·해("그만해"는 만)·세(한세상)는 낱말과 겹쳐 붙임에서 뺀다
+        listOf("한", "두", "세", "네").forEach { n ->
+            units.forEach { u ->
+                assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
+                if (u !in setOf("일", "월", "해", "세")) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
+            }
+        }
         listOf("세일 중이에요.", "네일 아트예요.", "한일 관계예요.", "한세상 걸려요.", "그만해요.", "한도 안이에요.").forEach { assertTrue(noDigits(it), it) }
     }
 
     @Test fun grid_native_multiSyllable() {
-        listOf("다섯", "여섯", "스무", "서른").forEach { n -> units.forEach { u ->
-            assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
-            if (u !in setOf("일", "월", "해", "세")) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
-        } }
+        listOf("다섯", "여섯", "스무", "서른").forEach { n ->
+            units.forEach { u ->
+                assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
+                if (u !in setOf("일", "월", "해", "세")) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
+            }
+        }
         listOf("한참 울 수 있어요.", "열이 있을 수 있어요.", "두고 보세요.", "세상에서 가장 불편할 수 있어요.", "한동안 낯설 수 있어요.").forEach { assertTrue(noDigits(it), it) }
     }
 
-    @Test fun grid_native_yeoAndSu() {   // '여'(만여 명)·'수'(수천 명, 수만 개)
+    @Test fun grid_native_yeoAndSu() { // '여'(만여 명)·'수'(수천 명, 수만 개)
         listOf("만여 명이에요.", "만여명이에요.", "서른여 개예요.", "열여 분이에요.", "수천 명이에요.", "수천명이에요.", "수만 곳이에요.", "수만곳이에요.").forEach { assertFalse(noDigits(it), it) }
     }
 
-    @Test fun grid_sino_oneSyllable() {   // 한 음절 한자어 수는 앞이 한글이면 낱말의 일부. 붙임에서 시·날·세·해·돌·명·곳·마리·가지·군데·차례는 뺀다
+    @Test fun grid_sino_oneSyllable() { // 한 음절 한자어 수는 앞이 한글이면 낱말의 일부. 붙임에서 시·날·세·해·돌·명·곳·마리·가지·군데·차례는 뺀다
         val excluded = setOf("시", "날", "세", "해", "돌", "명", "곳", "마리", "가지", "군데", "차례")
-        listOf("삼", "오", "십", "백").forEach { n -> units.forEach { u ->
-            assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
-            if (u !in excluded) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
-        } }
-        listOf("오시면 돼요.", "이날 쉬어요.", "이해해 주세요.", "이곳에서 쉬어요.", "일명 소리예요.", "이세 장난감이에요.", "오시오.", "아이 배가 고플 수 있어요.", "백색소음이 좋아요.", "이 소리가 익숙해요.", "천천히 쉬세요.", "만약 울면 쉬어요.")
+        listOf("삼", "오", "십", "백").forEach { n ->
+            units.forEach { u ->
+                assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
+                if (u !in excluded) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
+            }
+        }
+        listOf(
+            "오시면 돼요.",
+            "이날 쉬어요.",
+            "이해해 주세요.",
+            "이곳에서 쉬어요.",
+            "일명 소리예요.",
+            "이세 장난감이에요.",
+            "오시오.",
+            "아이 배가 고플 수 있어요.",
+            "백색소음이 좋아요.",
+            "이 소리가 익숙해요.",
+            "천천히 쉬세요.",
+            "만약 울면 쉬어요."
+        )
             .forEach { assertTrue(noDigits(it), it) }
     }
 
-    @Test fun grid_sino_multiSyllable() {   // 두 음절 이상(·수): 시·해·가지만 뺀다. 앞이 한글이어도 본다
+    @Test fun grid_sino_multiSyllable() { // 두 음절 이상(·수): 시·해·가지만 뺀다. 앞이 한글이어도 본다
         val excluded = setOf("시", "해", "가지")
-        listOf("십이", "삼십", "이십오", "수십", "수백", "수천").forEach { n -> units.forEach { u ->
-            assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
-            if (u !in excluded) { assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u"); assertFalse(noDigits("약$n$u 됐어요."), "앞이 한글 약$n$u") }
-        } }
+        listOf("십이", "삼십", "이십오", "수십", "수백", "수천").forEach { n ->
+            units.forEach { u ->
+                assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
+                if (u !in excluded) {
+                    assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
+                    assertFalse(noDigits("약$n$u 됐어요."), "앞이 한글 약$n$u")
+                }
+            }
+        }
         listOf("십이명이에요.", "삼십곳이에요.", "수십여 명이에요.", "약삼십 분 걸려요.", "약 삼십 분 걸려요.").forEach { assertFalse(noDigits(it), it) }
         listOf("오십시오.", "이사해요.", "오이가지 무침이에요.").forEach { assertTrue(noDigits(it), it) }
     }
 
-    @Test fun grid_zero() {   // 영·공: 띄어 쓴 꼴은 모든 단위, 붙인 꼴은 시·주·달·개·회·배·프로·일·월·세·해·돌·명(공시·공주·영달·공개·공회전·영배·공명·공세·공해·공돌·영명)을 뺀다
+    @Test fun grid_zero() { // 영·공: 띄어 쓴 꼴은 모든 단위, 붙인 꼴은 시·주·달·개·회·배·프로·일·월·세·해·돌·명(공시·공주·영달·공개·공회전·영배·공명·공세·공해·공돌·영명)을 뺀다
         val excluded = setOf("시", "주", "달", "개", "회", "배", "프로", "일", "월", "세", "해", "돌", "명", "주일")
-        listOf("영", "공").forEach { n -> units.forEach { u ->
-            assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
-            if (u !in excluded) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
-        } }
+        listOf("영", "공").forEach { n ->
+            units.forEach { u ->
+                assertFalse(noDigits("$n $u 됐어요."), "띄어 씀 $n $u")
+                if (u !in excluded) assertFalse(noDigits("$n$u 됐어요."), "붙여 씀 $n$u")
+            }
+        }
         listOf("영퍼센트예요.", "영 도예요.", "공시가 났어요.", "영주에 가요.", "공개했어요.", "영월에 가요.", "공해가 심해요.", "공명이 커요.").let { l ->
-            l.take(2).forEach { assertFalse(noDigits(it), it) }; l.drop(2).forEach { assertTrue(noDigits(it), it) }
+            l.take(2).forEach { assertFalse(noDigits(it), it) }
+            l.drop(2).forEach { assertTrue(noDigits(it), it) }
         }
     }
 
     @Test fun grid_approxOrdinalHalf() {
-        listOf("서너", "한두", "두세", "대여섯", "예닐곱").forEach { n -> units.forEach { u -> assertFalse(noDigits("$n $u 됐어요."), "$n $u"); assertFalse(noDigits("$n$u 됐어요."), "$n$u") } }
-        listOf("첫째", "둘째", "셋째", "열째").forEach { n -> listOf("번째", "시간", "날", "주", "달", "해", "번", "회").forEach { u -> assertFalse(noDigits("$n $u 됐어요."), "$n $u") } }
+        listOf("서너", "한두", "두세", "대여섯", "예닐곱").forEach { n ->
+            units.forEach { u ->
+                assertFalse(noDigits("$n $u 됐어요."), "$n $u")
+                assertFalse(noDigits("$n$u 됐어요."), "$n$u")
+            }
+        }
+        listOf("첫째", "둘째", "셋째", "열째").forEach { n ->
+            listOf("번째", "시간", "날", "주", "달", "해", "번", "회").forEach { u -> assertFalse(noDigits("$n $u 됐어요."), "$n $u") }
+        }
         listOf("반 시간", "반시간", "반 년", "반년", "반 개월", "반 주일", "반 일").forEach { assertFalse(noDigits("$it 걸려요."), it) }
         listOf("반찬을 먹어요.", "반드시 쉬세요.", "반가워요.", "첫째로 중요해요.", "첫눈이 와요.").forEach { assertTrue(noDigits(it), it) }
     }
@@ -276,10 +344,11 @@ class NumberCheckTest {
     @Test fun half_usesCommonUnits() {
         val spaced = listOf(
             "번째", "시간", "주일", "개월", "차례", "마리", "가지", "군데", "킬로", "키로", "미터", "센티", "밀리", "리터", "그램", "칼로리", "퍼센트", "프로", "초",
-            "분", "시", "일", "날", "주", "달", "월", "년", "해", "살", "세", "돌", "번", "회", "개", "명", "곳", "배", "도",
+            "분", "시", "일", "날", "주", "달", "월", "년", "해", "살", "세", "돌", "번", "회", "개", "명", "곳", "배", "도"
         )
         spaced.forEach { assertFalse(noDigits("반 $it 안에 달라질 수 있어요."), "반 $it") }
-        val attached = listOf("번째", "시간", "주일", "개월", "차례", "마리", "가지", "군데", "킬로", "키로", "미터", "센티", "밀리", "리터", "그램", "칼로리", "퍼센트", "초", "일", "년", "번", "개", "배")
+        val attached =
+            listOf("번째", "시간", "주일", "개월", "차례", "마리", "가지", "군데", "킬로", "키로", "미터", "센티", "밀리", "리터", "그램", "칼로리", "퍼센트", "초", "일", "년", "번", "개", "배")
         attached.forEach { assertFalse(noDigits("반$it 안에 달라질 수 있어요."), "반$it") }
         listOf("반찬을 먹어요.", "반드시 쉬세요.", "반가워요.", "반대예요.", "반응이 있어요.", "반시계 방향이에요.", "반주를 해요.", "반달이 떠요.", "반배고파요.").forEach { assertTrue(noDigits(it), it) }
     }

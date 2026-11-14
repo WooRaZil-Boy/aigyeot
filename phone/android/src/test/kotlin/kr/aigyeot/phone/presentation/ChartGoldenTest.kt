@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.presentation
 
+import java.time.LocalDate
 import kotlinx.serialization.json.JsonObject
 import kr.aigyeot.phone.Golden
 import kr.aigyeot.phone.domain.model.APP_ZONE
@@ -12,7 +13,6 @@ import kr.aigyeot.phone.show
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.ReportSummaryBody
 import org.junit.Test
-import java.time.LocalDate
 
 /** 차트 값: 대표 입력(기록 한 벌과 리포트 예제)에서 순수 함수가 내는 값을 골든 파일과 견준다. */
 class ChartGoldenTest {
@@ -24,8 +24,7 @@ class ChartGoldenTest {
     private fun ev(kind: CareKind, start: Long, end: Long? = null, deleted: Boolean = false) =
         CareEvent("e${n++}", kind, start, end, zone = zone.id, createdAt = start, updatedAt = start, deletedAt = if (deleted) start else null)
 
-    private fun report(name: String): ReportSummaryBody =
-        ProtocolJson.decodeFromJsonElement(ReportSummaryBody.serializer(), fixture(name).body as JsonObject)
+    private fun report(name: String): ReportSummaryBody = ProtocolJson.decodeFromJsonElement(ReportSummaryBody.serializer(), fixture(name).body as JsonObject)
 
     private fun careLines(): List<String> = buildList {
         val care = CareFile(
@@ -36,8 +35,8 @@ class ChartGoldenTest {
                 ev(CareKind.FEED, at(3, 15), at(3, 35)),
                 ev(CareKind.FEED, at(14, 0)),
                 ev(CareKind.FEED, at(9, 0), at(9, 20), deleted = true),
-                ev(CareKind.DIAPER, at(12, 58)),
-            ),
+                ev(CareKind.DIAPER, at(12, 58))
+            )
         )
         val day = dayChart(care, emptyList(), today, now, zone, showCar = false)
         add("dayChart.nowMin: ${day.nowMin.show()}")

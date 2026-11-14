@@ -7,9 +7,9 @@ import ai.pleos.playground.stt.listener.OnInitializeListener as SttInit
 import ai.pleos.playground.stt.listener.ResultListener
 import android.content.Context
 import android.util.Log
+import java.util.Locale
 import kr.aigyeot.app.exec.SttGate
 import kr.aigyeot.app.exec.SttPort
-import java.util.Locale
 
 // ---- 듣기 ----
 
@@ -20,13 +20,14 @@ import java.util.Locale
 internal class PleosStt(private val ctx: Context, private val ex: ExecThread) : SttPort {
     private var stt: SpeechToText? = null
     private var ready = false
-    private var listening: ResultListener? = null              // addListener한 것. release에서 뗀다
+    private var listening: ResultListener? = null // addListener한 것. release에서 뗀다
     private var gate = newGate()
 
     private fun newGate() = SttGate(
         sendAudio = { if (ready) runCatching { stt?.sendAudio(it) } },
         completeAudioSend = { if (ready) runCatching { stt?.completeAudioSend() } },
-        stopSdk = { if (ready) runCatching { stt?.stop() } })
+        stopSdk = { if (ready) runCatching { stt?.stop() } }
+    )
 
     fun start() {
         val g = newGate().also { gate = it }
@@ -37,18 +38,34 @@ internal class PleosStt(private val ctx: Context, private val ex: ExecThread) : 
             override fun onUpdatedEpdData(on: Long, off: Long) {}
             override fun onStartedRecognition() {}
             override fun onEndedRecognition() {}
-            override fun onError(e: SttError) = ex.guard { Log.w(TAG, "stt $e"); g.error() }
+            override fun onError(e: SttError) = ex.guard {
+                Log.w(TAG, "stt $e")
+                g.error()
+            }
             override fun onReady() {}
             override fun onUpdatedRms(rms: Double) {}
         }
         s.initialize(object : SttInit {
             override fun onSuccess() = ex.guard {
-                if (stt === s) ex.off.run {                          // SDK 설정은 잠금 밖 레인에서, 칸은 잠금 안에서
-                    s.setLocale(Locale.KOREA); s.addListener(listener)
-                    ex.guard { if (stt === s) { listening = listener; ready = true } else runCatching { s.removeListener(listener) } }
+                if (stt === s) {
+                    ex.off.run {
+                        // SDK 설정은 잠금 밖 레인에서, 칸은 잠금 안에서
+                        s.setLocale(Locale.KOREA)
+                        s.addListener(listener)
+                        ex.guard {
+                            if (stt === s) {
+                                listening = listener
+                                ready = true
+                            } else {
+                                runCatching { s.removeListener(listener) }
+                            }
+                        }
+                    }
                 }
             }
-            override fun onFailure(e: SttError) { Log.w(TAG, "stt init $e") }
+            override fun onFailure(e: SttError) {
+                Log.w(TAG, "stt init $e")
+            }
         })
     }
 
@@ -56,6 +73,7 @@ internal class PleosStt(private val ctx: Context, private val ex: ExecThread) : 
     override fun feed(pcm: ByteArray) = gate.feed(pcm)
     override fun finish() = gate.finish()
     override fun cancel() = gate.cancel()
+
     // 공식 순서: 리스너 해제 뒤 release
     fun release() {
         cancel()

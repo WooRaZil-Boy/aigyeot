@@ -15,12 +15,7 @@ import kr.aigyeot.shared.PushTokenPatch
 // 이 기기의 중계 설정(초대·인계 알림 받기·푸시 토큰). 401은 어디서든 연결 끊김이다.
 
 /** owner의 '초대 코드 만들기'. */
-class Invite(
-    private val state: PhoneStateRepository,
-    private val relay: RelayClient,
-    private val lose: LoseConnection,
-    private val log: Logger,
-) {
+class Invite(private val state: PhoneStateRepository, private val relay: RelayClient, private val lose: LoseConnection, private val log: Logger) {
     suspend operator fun invoke(): Result<InviteResponse> {
         val c = state.creds ?: return Result.failure(IllegalStateException("연결이 없어요"))
         val r = relay.invite(c.token)
@@ -38,11 +33,7 @@ class Invite(
 }
 
 /** guardian의 '인계 알림 받기'. 중계가 원본이고 응답으로 맞춘다. 실패하면 문구. */
-class SetHandoffAlerts(
-    private val state: PhoneStateRepository,
-    private val relay: RelayClient,
-    private val lose: LoseConnection,
-) {
+class SetHandoffAlerts(private val state: PhoneStateRepository, private val relay: RelayClient, private val lose: LoseConnection) {
     suspend operator fun invoke(on: Boolean): String? {
         val c = state.creds ?: return null
         return when (val r = relay.patchMe(c.token, PatchDeviceRequest(handoffAlerts = on))) {
@@ -59,7 +50,7 @@ class RegisterPush(
     private val relay: RelayClient,
     private val lose: LoseConnection,
     private val tokens: PushTokens,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     /** 연결 반복이 붙기 전에 부른다. */
     suspend fun now(c: Credentials) = register(c, tokens.token())

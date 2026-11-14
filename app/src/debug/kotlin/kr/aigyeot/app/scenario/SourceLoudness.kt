@@ -15,7 +15,10 @@ fun whiteNoiseLufs(sec: Int = 10): Double? {
     val m = Loudness(WhiteNoise.RATE, 1)
     val noise = WhiteNoise(seed = 1)
     val buf = ShortArray(WhiteNoise.RATE)
-    repeat(sec) { noise.fill(buf); m.addPcm16(buf, buf.size) }
+    repeat(sec) {
+        noise.fill(buf)
+        m.addPcm16(buf, buf.size)
+    }
     return m.integrated()
 }
 
@@ -37,4 +40,7 @@ internal fun androidLufs(ctx: Context, m: Method): Double? = try {
             .use { fd -> SongLoudness.lufs { it.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) } }
         MethodKind.SONG -> m.songId?.let { CarPaths.songFile(ctx, it) }?.takeIf { it.isFile }?.let { f -> SongLoudness.lufs { it.setDataSource(f.path) } }
     }
-} catch (e: Exception) { Log.w("SCENARIO", "음원 크기를 재지 못함 $m", e); null }
+} catch (e: Exception) {
+    Log.w("SCENARIO", "음원 크기를 재지 못함 $m", e)
+    null
+}

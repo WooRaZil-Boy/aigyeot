@@ -23,7 +23,8 @@ class StopTextTest {
 
     @Test
     fun `연결된 휴대폰 부제는 Android와 iPhone이고 열거 이름을 보이지 않는다`() {
-        fun d(id: String, pl: kr.aigyeot.shared.Platform) = kr.aigyeot.shared.DeviceInfo(id, kr.aigyeot.shared.Role.GUARDIAN, pl, "2026-11-11T00:00:00Z", null, true)
+        fun d(id: String, pl: kr.aigyeot.shared.Platform) =
+            kr.aigyeot.shared.DeviceInfo(id, kr.aigyeot.shared.Role.GUARDIAN, pl, "2026-11-11T00:00:00Z", null, true)
         assertEquals("Android", phoneSub(d("a", kr.aigyeot.shared.Platform.ANDROID), myDeviceId = "me"))
         assertEquals("iPhone · 이 휴대폰", phoneSub(d("me", kr.aigyeot.shared.Platform.IOS), myDeviceId = "me"))
     }
@@ -63,7 +64,7 @@ class StopTextTest {
     @Test fun `뒤붙임까지 전체 줄이 iOS와 같다`() {
         assertEquals(
             "달래기 20분 끝남 · 휴게소에 들르자고 제안했어요 · 경유지 추가 · 다른 보호자에게 알림",
-            stopText(StopReason.SESSION_CAP, HandoffKind.REST_OFFER, "휴게소", true, true, true),
+            stopText(StopReason.SESSION_CAP, HandoffKind.REST_OFFER, "휴게소", true, true, true)
         )
     }
 
@@ -98,8 +99,18 @@ class StopTextTest {
         // 차 타일 값: 1분 미만 '방금', 그 밖은 경과 + ' 전'
         val now = 1_793_944_800_000L
         fun tile(agoMs: Long) = carTileText(
-            listOf(kr.aigyeot.shared.DeviceInfo("d_car", kr.aigyeot.shared.Role.CAR, kr.aigyeot.shared.Platform.PLEOS, rfc3339(now - DAY), rfc3339(now - agoMs), false)),
-            online = true, now = now,
+            listOf(
+                kr.aigyeot.shared.DeviceInfo(
+                    "d_car",
+                    kr.aigyeot.shared.Role.CAR,
+                    kr.aigyeot.shared.Platform.PLEOS,
+                    rfc3339(now - DAY),
+                    rfc3339(now - agoMs),
+                    false
+                )
+            ),
+            online = true,
+            now = now
         )
         assertEquals("차 꺼짐 · 마지막 연락 방금", tile(30_000))
         assertEquals("차 꺼짐 · 마지막 연락 5분 전", tile(5 * MINUTE))

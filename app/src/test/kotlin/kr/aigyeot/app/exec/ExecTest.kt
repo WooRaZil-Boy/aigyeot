@@ -2,6 +2,9 @@ package kr.aigyeot.app.exec
 
 import ai.pleos.playground.navi.constants.TurnType
 import ai.pleos.playground.navi.data.TBTInfo
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kr.aigyeot.engine.AddWaypoint
 import kr.aigyeot.engine.Answer
 import kr.aigyeot.engine.Area
@@ -35,9 +38,6 @@ import kr.aigyeot.engine.StartPlayback
 import kr.aigyeot.engine.WaypointResult
 import kr.aigyeot.engine.YesNo
 import kr.aigyeot.engine.fresh
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 // Exec 공개 모양(handle)의 분배와 state() 읽기(앞 틀기 허락, 마이크 서비스), SDK가 던질 때의 실패 결과
 class ExecTest {
@@ -53,11 +53,24 @@ class ExecTest {
     private var stops = 0
     private var reemits = 0
     private var ttsStopThrows = false
-    private var st: EngineState? = EngineState.fresh(1, Profile("2026-02", CarSeat.LEFT, 180, false, frontFallbackAllowed = false), emptyList(), emptyList(), null, 0)
+    private var st: EngineState? = EngineState.fresh(
+        1,
+        Profile("2026-02", CarSeat.LEFT, 180, false, frontFallbackAllowed = false),
+        emptyList(),
+        emptyList(),
+        null,
+        0
+    )
 
     private val tts = object : TtsPort {
-        override fun speak(text: String, done: (Boolean) -> Unit) { if (throwOn) error("tts 없음"); spoken += text; ttsDone = done }
-        override fun stop() { if (ttsStopThrows) error("tts stop 실패") }
+        override fun speak(text: String, done: (Boolean) -> Unit) {
+            if (throwOn) error("tts 없음")
+            spoken += text
+            ttsDone = done
+        }
+        override fun stop() {
+            if (ttsStopThrows) error("tts stop 실패")
+        }
     }
     private val stt = object : SttPort {
         override fun begin(onText: (String, Boolean) -> Unit) {}
@@ -65,20 +78,40 @@ class ExecTest {
         override fun finish() {}
         override fun cancel() {}
     }
-    private val tap = object : MicTap { override fun open(sink: (ByteArray) -> Unit) {}; override fun close() {} }
+    private val tap = object : MicTap {
+        override fun open(sink: (ByteArray) -> Unit) {}
+        override fun close() {}
+    }
     private val askedRests = mutableListOf<RestCandidate?>()
-    private val navi = object : NaviPort { override fun addWaypoint(restId: String, rest: RestCandidate?, done: (Boolean, String) -> Unit) { askedRests += rest; done(false, "no_coords") }
+    private val navi = object : NaviPort {
+        override fun addWaypoint(restId: String, rest: RestCandidate?, done: (Boolean, String) -> Unit) {
+            askedRests += rest
+            done(false, "no_coords")
+        }
         override fun cancelWaypoint() {}
     }
-    private val exec = Exec({ t.now }, { r.events += it }, { if (logThrows) error("로그 저장 실패"); r.rows += it }, { st },
-        ExecIo(Any(), t, audio, tts, stt, tap, car, navi, start = { starts++ }, stop = { stops++ }, reemit = { reemits++; if (reemits > 1) error("SDK 실패") }))
+    private val exec = Exec(
+        { t.now },
+        { r.events += it },
+        {
+            if (logThrows) error("로그 저장 실패")
+            r.rows += it
+        },
+        { st },
+        ExecIo(Any(), t, audio, tts, stt, tap, car, navi, start = { starts++ }, stop = { stops++ }, reemit = {
+            reemits++
+            if (reemits > 1) error("SDK 실패")
+        })
+    )
 
     private val start = StartPlayback("s1-1", PlayKind.AUTO, Method(MethodKind.WHITE_NOISE), 1_056_000, 2_000)
 
     // 장면 끝 호스트가 부르는 다시 내기는 실제 연결 하나(차량 신호·경로)로 가고, 연결이 던져도 호스트로 새지 않는다
     @Test fun `reemitAll은 실제 연결의 다시 내기를 부르고 예외를 삼킨다`() {
-        exec.reemitAll(); assertEquals(1, reemits)
-        exec.reemitAll(); assertEquals(2, reemits, "던져도 호스트 스레드로 새지 않는다")
+        exec.reemitAll()
+        assertEquals(1, reemits)
+        exec.reemitAll()
+        assertEquals(2, reemits, "던져도 호스트 스레드로 새지 않는다")
     }
 
     @Test fun `할 일을 받는 곳으로 나눈다`() {
@@ -149,7 +182,8 @@ class ExecTest {
     }
 
     @Test fun `start를 여러 번 불러도 한 번만 시작하고 stop 뒤 start는 다시 시작한다`() {
-        exec.start(); exec.start()
+        exec.start()
+        exec.start()
         assertEquals(1, starts)
         exec.stop()
         assertEquals(1, stops)
@@ -161,7 +195,9 @@ class ExecTest {
     @Test fun `stop은 두 번 불러도 한 번만 정리하고 시작 안 했으면 아무것도 안 한다`() {
         exec.stop()
         assertEquals(0, stops, "시작 안 했으면 아무것도 안 함")
-        exec.start(); exec.stop(); exec.stop()
+        exec.start()
+        exec.stop()
+        exec.stop()
         assertEquals(1, stops)
     }
 
@@ -188,13 +224,19 @@ class ExecTest {
     @Test fun `stop 뒤 옛 제어 작업의 재시도가 차량에 다시 쓰지 않는다`() {
         val key = ControlKind.WINDOW_LOCK to Area.ROW_2_LEFT
         exec.start()
-        car.values[key] = 1.0; car.applyAfterMs = null
+        car.values[key] = 1.0
+        car.applyAfterMs = null
         exec.handle(SetWindowLock("s1-3", mapOf(Area.ROW_2_LEFT to false)))
         t.advance(2_000)
         assertEquals(listOf(0.0), car.writes.map { it.third })
         assertTrue(r.of<ControlResult>().isEmpty(), "조건: 옛 작업이 진행 중이다")
-        exec.stop(); exec.start()
-        assertEquals(ControlResult(t.now, "s1-3", ControlKind.WINDOW_LOCK, Area.ROW_2_LEFT, false, 1.0, 1.0), r.of<ControlResult>().single(), "stop 때 옛 작업을 ok=false로 닫는다")
+        exec.stop()
+        exec.start()
+        assertEquals(
+            ControlResult(t.now, "s1-3", ControlKind.WINDOW_LOCK, Area.ROW_2_LEFT, false, 1.0, 1.0),
+            r.of<ControlResult>().single(),
+            "stop 때 옛 작업을 ok=false로 닫는다"
+        )
         car.applyAfterMs = 300
         exec.handle(SetWindowLock("s1-4", mapOf(Area.ROW_2_LEFT to true)))
         t.advance(30_000)

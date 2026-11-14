@@ -23,7 +23,7 @@ class OwnershipTest {
         "Qa" to setOf("QaReducer.kt"),
         "Control" to setOf("ControlReducer.kt"),
         "Speech" to setOf("SpeechReducer.kt"),
-        "Record" to setOf("RecordReducer.kt"),
+        "Record" to setOf("RecordReducer.kt")
     )
 
     private fun own(reducer: String, vararg fields: String) = fields.map { it to reducer }
@@ -33,14 +33,16 @@ class OwnershipTest {
         own("Tx", "now", "seq", "rng"),
         own("Facts", "profile", "methodsNext", "otherGuardians", "care", "careSeq", "careRoom", "history"),
         own("Feeding", "feedingStart", "nursingStop", "departChecked"),
-        own("Life", "car", "gear", "gearSince", "rearDoorOpen", "inCall", "micRunning", "micPath", "cabinC", "route", "seatHeat", "pauses",
-            "s16Said", "doorOpenedSinceP", "reserved", "suspendedAt", "driverUserId", "boardNotice", "session", "micNoticeArmed", "s17Said", "bootAt"),
+        own(
+            "Life", "car", "gear", "gearSince", "rearDoorOpen", "inCall", "micRunning", "micPath", "cabinC", "route", "seatHeat", "pauses",
+            "s16Said", "doorOpenedSinceP", "reserved", "suspendedAt", "driverUserId", "boardNotice", "session", "micNoticeArmed", "s17Said", "bootAt"
+        ),
         own("Soothe", "stage", "episode", "playedMs", "alarmRun", "cryRuns", "output", "mixedUntil"),
         own("Offer", "offers", "spokenAt", "pendingAsk", "waypointPending", "addedRestIds", "driveFrom", "longDriveOffered", "leftParkAt", "handoffs"),
         own("Qa", "qa"),
         own("Control", "windowLockPending", "controls", "windowLockBefore", "comfortDone", "comfortPending", "ambient"),
         own("Speech", "queue", "speaking", "lastDoneAt"),
-        own("Record", "steer", "restLog", "recordsCleared"),
+        own("Record", "steer", "restLog", "recordsCleared")
     ).flatten().toMap()
 
     /** 남은 예외: Tx.kt의 `ses {}`는 세션 잎 칸을 고치는 통로라 `session`을 통째로 바꿔 끼운다(어느 잎 칸인지는 위 표가 본다). */
@@ -109,15 +111,47 @@ class OwnershipTest {
             var i = 0
             while (i < t.length) {
                 when {
-                    t.startsWith("//", i) -> { while (i < t.length && t[i] != '\n') i++ }
-                    t.startsWith("/*", i) -> { val e = t.indexOf("*/", i + 2).let { if (it < 0) t.length else it + 2 }; t.substring(i, e).forEach { b.append(if (it == '\n') '\n' else ' ') }; i = e }
-                    t[i] == '"' -> {
-                        b.append('"'); i++
-                        while (i < t.length && t[i] != '"') { if (t[i] == '\\') { b.append(' '); i++ }; b.append(if (t[i] == '\n') '\n' else ' '); i++ }
-                        if (i < t.length) { b.append('"'); i++ }
+                    t.startsWith("//", i) -> {
+                        while (i < t.length && t[i] != '\n') i++
                     }
-                    t[i] == '\'' && i + 2 < t.length -> { val e = t.indexOf('\'', i + 2) + 1; repeat(e - i) { b.append(' ') }; i = e }
-                    else -> { b.append(t[i]); i++ }
+                    t.startsWith("/*", i) -> {
+                        val e = t.indexOf("*/", i + 2).let {
+                            if (it <
+                                0
+                            ) {
+                                t.length
+                            } else {
+                                it + 2
+                            }
+                        }
+                        t.substring(i, e).forEach { b.append(if (it == '\n') '\n' else ' ') }
+                        i = e
+                    }
+                    t[i] == '"' -> {
+                        b.append('"')
+                        i++
+                        while (i < t.length && t[i] != '"') {
+                            if (t[i] == '\\') {
+                                b.append(' ')
+                                i++
+                            }
+                            b.append(if (t[i] == '\n') '\n' else ' ')
+                            i++
+                        }
+                        if (i < t.length) {
+                            b.append('"')
+                            i++
+                        }
+                    }
+                    t[i] == '\'' && i + 2 < t.length -> {
+                        val e = t.indexOf('\'', i + 2) + 1
+                        repeat(e - i) { b.append(' ') }
+                        i = e
+                    }
+                    else -> {
+                        b.append(t[i])
+                        i++
+                    }
                 }
             }
             return b.toString()
@@ -129,7 +163,12 @@ class OwnershipTest {
             val at = Regex("""class\s+$type\s*\(""").find(code)!!.range.last
             var depth = 0
             var i = at
-            while (true) { if (code[i] == '(') depth++; if (code[i] == ')') depth--; if (depth == 0) break; i++ }
+            while (true) {
+                if (code[i] == '(') depth++
+                if (code[i] == ')') depth--
+                if (depth == 0) break
+                i++
+            }
             return Regex("""\bva[lr]\s+(\w+)""").findAll(code.substring(at, i)).map { it.groupValues[1] }.toList()
         }
     }

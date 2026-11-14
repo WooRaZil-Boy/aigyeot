@@ -15,9 +15,13 @@ class PrepareDetectTest {
         override fun start() {}
         override fun read(out: ShortArray) = PcmSource.END
         override fun isSilenced() = false
-        override fun close() { closed++ }
+        override fun close() {
+            closed++
+        }
     }
-    private class FakeScorer : WindowScorer, Closeable {
+    private class FakeScorer :
+        WindowScorer,
+        Closeable {
         override fun score(window: ShortArray) = FloatArray(521)
         override fun close() {}
     }
@@ -25,7 +29,15 @@ class PrepareDetectTest {
 
     @Test fun `판별층 JSON이 깨지면 입력원도 모델도 만들지 않는다`() {
         var made = 0
-        assertNull(prepareDetect({ "{깨짐" }, { made++; FakeSource() }, { made++; FakeScorer() }))
+        assertNull(
+            prepareDetect({ "{깨짐" }, {
+                made++
+                FakeSource()
+            }, {
+                made++
+                FakeScorer()
+            })
+        )
         assertEquals(0, made)
     }
 

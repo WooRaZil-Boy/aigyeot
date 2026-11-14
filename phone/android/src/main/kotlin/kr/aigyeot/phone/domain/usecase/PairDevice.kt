@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +34,6 @@ import kr.aigyeot.phone.domain.state.GoneCleanupEvent
 import kr.aigyeot.phone.domain.state.LinkSwitch
 import kr.aigyeot.phone.domain.state.Notices
 import kr.aigyeot.shared.Role
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 코드로 연결하기. 이미 연결된 차가 있으면 먼저 끊고, 둘 다 성공해야 역할이 실린다.
@@ -54,7 +54,7 @@ class PairDevice(
     private val notices: Notices,
     private val clock: Clock,
     private val scope: CoroutineScope,
-    private val log: Logger,
+    private val log: Logger
 ) {
     private val _run = MutableStateFlow<PairRun?>(null)
     val run: StateFlow<PairRun?> = _run.asStateFlow()

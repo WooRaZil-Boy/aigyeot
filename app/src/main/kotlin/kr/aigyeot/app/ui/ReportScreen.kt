@@ -44,10 +44,13 @@ import kr.aigyeot.shared.CarActionKind
  */
 @Composable
 fun ReportsScreen(
-    rows: List<ReportRow>, openId: String?, detail: @Composable (String) -> ReportDetailUiState,
-    onOpen: (String) -> Unit, onBack: (toList: Boolean) -> Unit,
+    rows: List<ReportRow>,
+    openId: String?,
+    detail: @Composable (String) -> ReportDetailUiState,
+    onOpen: (String) -> Unit,
+    onBack: (toList: Boolean) -> Unit
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
-    val narrow = maxWidth < NarrowPage   // 목록 560 + 상세 두 칸이 들어가는 폭(설정·시연과 같은 기준)이 아니면 목록과 상세를 따로
+    val narrow = maxWidth < NarrowPage // 목록 560 + 상세 두 칸이 들어가는 폭(설정·시연과 같은 기준)이 아니면 목록과 상세를 따로
     val detailOnly = narrow && openId != null
     // 목록 스크롤은 화면 맨 위에서 하나: 840 이하에서 상세를 보고 돌아와도, 넓은 창에서 다른 리포트를 골라도 그대로(목록이 컴포지션에서 빠져도 남는다)
     val listState = rememberLazyListState()
@@ -55,14 +58,38 @@ fun ReportsScreen(
     Column(Modifier.fillMaxSize()) {
         Header("주행 리포트", { onBack(detailOnly) })
         when {
-            detailOnly -> key(openId) { Detail(detail(openId!!), narrow = true, Modifier.fillMaxSize()) }
+            detailOnly -> key(openId) { Detail(detail(openId), narrow = true, Modifier.fillMaxSize()) }
             narrow -> ReportList(rows, null, onOpen, listState, Modifier.fillMaxSize())
             else -> Row(Modifier.fillMaxSize()) {
                 val sel = openId ?: rows.firstOrNull { it.enabled }?.id
-                ReportList(rows, sel, onOpen, listState, Modifier.width(560.dp + 44.dp + 18.dp).fillMaxHeight(), PaddingValues(start = 44.dp,
-                        end = 18.dp, top = 32.dp, bottom = 40.dp))
-                if (sel != null) key(sel) { Detail(detail(sel), narrow = false, Modifier.weight(1f).fillMaxHeight(), PaddingValues(start = 18.dp,
-                        end = 44.dp, top = 32.dp, bottom = 40.dp)) }
+                ReportList(
+                    rows,
+                    sel,
+                    onOpen,
+                    listState,
+                    Modifier.width(560.dp + 44.dp + 18.dp).fillMaxHeight(),
+                    PaddingValues(
+                        start = 44.dp,
+                        end = 18.dp,
+                        top = 32.dp,
+                        bottom = 40.dp
+                    )
+                )
+                if (sel != null) {
+                    key(sel) {
+                        Detail(
+                            detail(sel),
+                            narrow = false,
+                            Modifier.weight(1f).fillMaxHeight(),
+                            PaddingValues(
+                                start = 18.dp,
+                                end = 44.dp,
+                                top = 32.dp,
+                                bottom = 40.dp
+                            )
+                        )
+                    }
+                }
             }
         }
     }
@@ -75,8 +102,14 @@ private val PagePad = PaddingValues(start = 44.dp, end = 44.dp, top = 32.dp, bot
 
 /** 목록(왼쪽): '주행' 제목 + 행(아이콘 route, '{날짜} {구간}', 부가 '울음 n번'). 열린 세션은 '주행 중'이라 열 수 없다. */
 @Composable
-private fun ReportList(rows: List<ReportRow>, selected: String?, onOpen: (String) -> Unit, state: LazyListState, modifier: Modifier,
-        pad: PaddingValues = PagePad) {
+private fun ReportList(
+    rows: List<ReportRow>,
+    selected: String?,
+    onOpen: (String) -> Unit,
+    state: LazyListState,
+    modifier: Modifier,
+    pad: PaddingValues = PagePad
+) {
     val p = LocalPalette.current
     LazyColumn(modifier, state = state, contentPadding = pad, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item { Sect("주행") }
@@ -100,17 +133,23 @@ private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier,
         v.episodes.forEach { Panel(label = it.title) { EpisodeChart(it.chart) } }
         // 두 칸은 상세의 실제 폭이 두 칸을 받을 때만(창 1200처럼 상세가 좁으면 차 그림 200이 글자 칸을 다 먹는다)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            if (narrow || maxWidth < TwoCards) Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                DidCard(v)
-                SteerCard(v)
-            } else Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                DidCard(v, Modifier.weight(1f).fillMaxHeight())
-                SteerCard(v, Modifier.weight(1f).fillMaxHeight())
+            if (narrow || maxWidth < TwoCards) {
+                Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                    DidCard(v)
+                    SteerCard(v)
+                }
+            } else {
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    DidCard(v, Modifier.weight(1f).fillMaxHeight())
+                    SteerCard(v, Modifier.weight(1f).fillMaxHeight())
+                }
             }
         }
-        if (v.methods.isNotEmpty()) Panel(label = "소리별 성적") {
-            MethodDotsChart(v.methods)
-            Note("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.", Modifier.padding(top = 6.dp))
+        if (v.methods.isNotEmpty()) {
+            Panel(label = "소리별 성적") {
+                MethodDotsChart(v.methods)
+                Note("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.", Modifier.padding(top = 6.dp))
+            }
         }
         // 순서: 숫자 줄 → 에피소드 띠 → 차가 한 일 | 조향 → 방법별 성적. 디자인에 자리가 없는 사실은 맨 아래에
         Panel(label = "자세히") { v.details.forEach { DetailText(it) } }
@@ -120,8 +159,11 @@ private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier,
 @Composable
 private fun DetailText(d: DetailLine) {
     val p = LocalPalette.current
-    if (d.head) Text(d.text, Modifier.padding(top = 10.dp), style = CarType.bodyS.copy(fontWeight = FontWeight(600)), color = p.textPrimary)
-    else Body(d.text)
+    if (d.head) {
+        Text(d.text, Modifier.padding(top = 10.dp), style = CarType.bodyS.copy(fontWeight = FontWeight(600)), color = p.textPrimary)
+    } else {
+        Body(d.text)
+    }
 }
 
 /** 차가 대신 한 일: 위에서 본 3D 정지 그림(칩은 실제로 한 것만) + 한 일 목록. */
@@ -148,14 +190,14 @@ private fun DidCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifi
 
 /** 3D 'did' 자리(정차 화면에서만 보이고 조작 없음, 지난 주행의 정지 그림: 상태가 바뀔 때 한 장만, 바람 결·효과 움직임 없음). 화면을 떠나면 놓는다. */
 @Composable
-private fun CarStill(v: ReportView, modifier: Modifier) =
-    Car3dStill(Stage3d(view = View3d.DID, light = Light3d.BASE, callouts = v.callouts), modifier)
+private fun CarStill(v: ReportView, modifier: Modifier) = Car3dStill(Stage3d(view = View3d.DID, light = Light3d.BASE, callouts = v.callouts), modifier)
 
 /** 평소 대비 조향 보정. 비교할 수 없으면 그 이유 한 줄. */
 @Composable
 private fun SteerCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifier, label = "평소 대비 조향 보정") {
-    if (v.steer == null) Body(v.steerText ?: "")
-    else {
+    if (v.steer == null) {
+        Body(v.steerText ?: "")
+    } else {
         SteerChart(v.steer)
         Note("1분당 큰 조향 보정 횟수예요", Modifier.padding(top = 6.dp))
     }

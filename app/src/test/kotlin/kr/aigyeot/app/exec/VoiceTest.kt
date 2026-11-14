@@ -1,5 +1,12 @@
 package kr.aigyeot.app.exec
 
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.util.TimeZone
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kr.aigyeot.engine.Answer
 import kr.aigyeot.engine.Ask
 import kr.aigyeot.engine.Event
@@ -9,38 +16,56 @@ import kr.aigyeot.engine.Sid
 import kr.aigyeot.engine.Speak
 import kr.aigyeot.engine.SpeechDone
 import kr.aigyeot.engine.YesNo
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.util.TimeZone
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 // Speak·Ask·Listen·CancelSpeech, SpeechDone·Answer, Heard. 듣기 창 끝 + 1초 안에 Heard
 class VoiceTest {
     private class FakeTts : TtsPort {
-        val said = mutableListOf<String>(); var done: ((Boolean) -> Unit)? = null; var stops = 0
-        override fun speak(text: String, done: (Boolean) -> Unit) { said += text; this.done = done }
-        override fun stop() { stops++ }
+        val said = mutableListOf<String>()
+        var done: ((Boolean) -> Unit)? = null
+        var stops = 0
+        override fun speak(text: String, done: (Boolean) -> Unit) {
+            said += text
+            this.done = done
+        }
+        override fun stop() {
+            stops++
+        }
     }
     private class FakeStt : SttPort {
         var throwBegin = false
-        var onText: ((String, Boolean) -> Unit)? = null; val fed = mutableListOf<ByteArray>(); var finished = 0; var cancels = 0
-        override fun begin(onText: (String, Boolean) -> Unit) { if (throwBegin) error("stt 실패"); this.onText = onText }
-        override fun feed(pcm: ByteArray) { fed += pcm }
-        override fun finish() { finished++ }
-        override fun cancel() { cancels++ }
+        var onText: ((String, Boolean) -> Unit)? = null
+        val fed = mutableListOf<ByteArray>()
+        var finished = 0
+        var cancels = 0
+        override fun begin(onText: (String, Boolean) -> Unit) {
+            if (throwBegin) error("stt 실패")
+            this.onText = onText
+        }
+        override fun feed(pcm: ByteArray) {
+            fed += pcm
+        }
+        override fun finish() {
+            finished++
+        }
+        override fun cancel() {
+            cancels++
+        }
     }
     private class FakeTap : MicTap {
         var sink: ((ByteArray) -> Unit)? = null
-        override fun open(sink: (ByteArray) -> Unit) { this.sink = sink }
-        override fun close() { sink = null }
+        override fun open(sink: (ByteArray) -> Unit) {
+            this.sink = sink
+        }
+        override fun close() {
+            sink = null
+        }
     }
 
     private val t = FakeTime()
     private val r = Rec()
-    private val tts = FakeTts(); private val stt = FakeStt(); private val tap = FakeTap()
+    private val tts = FakeTts()
+    private val stt = FakeStt()
+    private val tap = FakeTap()
     private var mic = true
     private val v = Voice(tts, stt, tap, t, { t.now }, { r.events += it }, { mic })
 
@@ -48,7 +73,8 @@ class VoiceTest {
         v.speak(Speak("s1-3", Sid.S02, mapOf("method" to "자장가")))
         assertEquals("뒤에서 울어요. 뒷자리에 자장가 틀었어요.", tts.said.single())
         assertTrue(r.events.isEmpty())
-        t.advance(2_000); tts.done!!(true)
+        t.advance(2_000)
+        tts.done!!(true)
         assertEquals(listOf<Event>(SpeechDone(t.now, "s1-3", true)), r.events)
     }
 
@@ -56,9 +82,11 @@ class VoiceTest {
     @Test fun `said는 말하기 시작에 보이고 못 말하면 거둔다`() {
         v.speak(Speak("s1-1", Sid.S02, mapOf("method" to "자장가")))
         val first = v.said.value!!
-        assertEquals(Sid.S02, first.sid); assertEquals(t.now, first.at)
+        assertEquals(Sid.S02, first.sid)
+        assertEquals(t.now, first.at)
         tts.done!!(true)
-        t.advance(1_000); v.speak(Speak("s1-2", Sid.QA, mapOf("text" to "두 시간 전에 먹였어요.")))
+        t.advance(1_000)
+        v.speak(Speak("s1-2", Sid.QA, mapOf("text" to "두 시간 전에 먹였어요.")))
         assertEquals(Sid.QA, v.said.value!!.sid, "끝나기 전, 말하는 동안 보인다")
         tts.done!!(false)
         assertEquals(first, v.said.value, "못 말한 문장은 거두고 앞 문장으로")
@@ -77,14 +105,20 @@ class VoiceTest {
 
     @Test fun `cancelIfSpeaking은 말하는 중인 그 발화만 끊고 끝났으면 그 spoken을 돌려준다`() {
         v.speak(Speak("s1-3", Sid.S10, emptyMap()))
-        assertNull(v.cancelIfSpeaking("다른")); assertEquals(0, tts.stops)
-        assertNull(v.cancelIfSpeaking("s1-3")); assertEquals(1, tts.stops)
+        assertNull(v.cancelIfSpeaking("다른"))
+        assertEquals(0, tts.stops)
+        assertNull(v.cancelIfSpeaking("s1-3"))
+        assertEquals(1, tts.stops)
         tts.done!!(true)
         assertTrue(r.events.isEmpty(), "끊은 발화의 늦은 끝 신호는 버린다")
-        v.speak(Speak("s1-4", Sid.S10, emptyMap())); tts.done!!(true); val at4 = t.now
-        t.now += 3_000   // 묻는 시각이 늦어도 실제 완료 시각을 돌려준다
+        v.speak(Speak("s1-4", Sid.S10, emptyMap()))
+        tts.done!!(true)
+        val at4 = t.now
+        t.now += 3_000 // 묻는 시각이 늦어도 실제 완료 시각을 돌려준다
         assertEquals(true to at4, v.cancelIfSpeaking("s1-4"), "이미 끝났다: spoken=true")
-        v.speak(Speak("s1-5", Sid.S10, emptyMap())); tts.done!!(false); val at5 = t.now
+        v.speak(Speak("s1-5", Sid.S10, emptyMap()))
+        tts.done!!(false)
+        val at5 = t.now
         assertEquals(false to at5, v.cancelIfSpeaking("s1-5"), "이미 끝났다: spoken=false")
         assertEquals(listOf<Event>(SpeechDone(at4, "s1-4", true), SpeechDone(at5, "s1-5", false)), r.events)
     }
@@ -105,11 +139,13 @@ class VoiceTest {
         assertEquals(SpeechDone(t.now, "s1-4", true), r.events.single())
         tap.sink!!(byteArrayOf(1, 2))
         assertEquals(1, stt.fed.size, "마이크 서비스 PCM을 STT에 넣는다")
-        t.advance(2_000); stt.onText!!("응", false)
+        t.advance(2_000)
+        stt.onText!!("응", false)
         t.advance(4_000)
-        assertNull(tap.sink, "6초가 지나면 PCM을 그만 받는다"); assertEquals(1, stt.finished)
+        assertNull(tap.sink, "6초가 지나면 PCM을 그만 받는다")
+        assertEquals(1, stt.finished)
         stt.onText!!("응 들러", true)
-        t.advance(Voice.STT_FINAL_GRACE_MS)                // 유예가 끝날 때 낸다
+        t.advance(Voice.STT_FINAL_GRACE_MS) // 유예가 끝날 때 낸다
         assertEquals(Answer(t.now, "s1-4", YesNo.YES), r.events.last())
     }
 
@@ -171,8 +207,10 @@ class VoiceTest {
         tts.done!!(true)
         r.events.clear()
         v.cancel()
-        assertNull(tap.sink); assertEquals(1, stt.cancels)
-        t.advance(10_000); stt.onText?.invoke("응", true)
+        assertNull(tap.sink)
+        assertEquals(1, stt.cancels)
+        t.advance(10_000)
+        stt.onText?.invoke("응", true)
         assertTrue(r.events.isEmpty(), "끊은 듣기의 답을 내지 않는다")
         v.speak(Speak("s1-6", Sid.S12, emptyMap()))
         v.cancel()
@@ -202,7 +240,7 @@ class VoiceTest {
         stt.onText!!("응", false)
         t.advance(6_000)
         assertEquals(1, stt.finished, "조건: 듣기 창이 닫혔다")
-        stt.onText!!("", true)                            // 실제 연결부는 오류도 ("", true)로 넘긴다
+        stt.onText!!("", true) // 실제 연결부는 오류도 ("", true)로 넘긴다
         t.advance(Voice.STT_FINAL_GRACE_MS)
         assertEquals(Answer(t.now, "s1-4", YesNo.NONE), r.events.last())
         assertEquals(0, stt.cancels, "정상 최종 결과로 끝나면 cancel하지 않는다")
@@ -223,7 +261,8 @@ class VoiceTest {
         assertEquals(Answer(t.now, "s1-4", YesNo.NO), r.events.last(), "엔진 쪽 판정: '아니 괜찮아 아'는 NO")
         assertEquals(YesNo.NO, Voice.yesNo("아니 괜찮아 아"))
         v.listen(Listen("s1-5", 5_000))
-        stt.onText!!("다음 쉼터", true); stt.onText!!("얼마나 남았어", true)
+        stt.onText!!("다음 쉼터", true)
+        stt.onText!!("얼마나 남았어", true)
         t.advance(5_000 + Voice.STT_FINAL_GRACE_MS)
         assertEquals(Heard(t.now, "s1-5", "다음 쉼터 얼마나 남았어"), r.events.last())
     }
@@ -231,9 +270,11 @@ class VoiceTest {
     @Test fun `창이 닫힌 뒤 유예 중에 최종이 여럿 오면 유예가 끝날 때 이어 한 번에 낸다`() {
         v.ask(Ask("s1-4", Sid.S08, emptyMap(), 6_000))
         tts.done!!(true)
-        t.advance(6_000 + 100); stt.onText!!("응", true)
+        t.advance(6_000 + 100)
+        stt.onText!!("응", true)
         assertEquals(1, r.events.size, "첫 최종에서 바로 끝내지 않는다(SpeechDone만)")
-        t.advance(100); stt.onText!!("아니 괜찮아", true)
+        t.advance(100)
+        stt.onText!!("아니 괜찮아", true)
         t.advance(Voice.STT_FINAL_GRACE_MS)
         val a = r.events.last() as Answer
         assertEquals(YesNo.NO, a.answer, "'응 아니 괜찮아'는 지금 yesNo 규칙의 결과")
@@ -243,7 +284,8 @@ class VoiceTest {
 
     @Test fun `창이 닫힌 뒤 최종 하나만 와도 유예가 끝날 때 나간다`() {
         v.listen(Listen("s1-5", 5_000))
-        t.advance(5_000 + 100); stt.onText!!("다음 쉼터", true)
+        t.advance(5_000 + 100)
+        stt.onText!!("다음 쉼터", true)
         assertTrue(r.events.isEmpty())
         t.advance(Voice.STT_FINAL_GRACE_MS - 100)
         assertEquals(Heard(t.now, "s1-5", "다음 쉼터"), r.events.last())
@@ -254,14 +296,15 @@ class VoiceTest {
         v.listen(Listen("s1-5", 5_000))
         stt.onText!!("아니 괜찮아", true)
         stt.onText!!("", true)
-        stt.onText!!("아", false)                          // 최종이 있으면 뒤의 부분 결과도 쓰지 않는다
+        stt.onText!!("아", false) // 최종이 있으면 뒤의 부분 결과도 쓰지 않는다
         t.advance(5_000 + Voice.STT_FINAL_GRACE_MS)
         assertEquals(Heard(t.now, "s1-5", "아니 괜찮아"), r.events.last())
     }
 
     @Test fun `최종이 하나도 없으면 마지막 부분 결과를 쓴다`() {
         v.listen(Listen("s1-5", 5_000))
-        stt.onText!!("다음", false); stt.onText!!("다음 쉼터", false)
+        stt.onText!!("다음", false)
+        stt.onText!!("다음 쉼터", false)
         t.advance(5_000 + Voice.STT_FINAL_GRACE_MS)
         assertEquals(Heard(t.now, "s1-5", "다음 쉼터"), r.events.last())
     }
@@ -296,8 +339,11 @@ class VoiceTest {
             assertEquals("오후 3시 10분쯤 배고플 시간이라, 30킬로미터 앞 수유실 있는 안성휴게소를 경유지로 넣을까요?", dep(at(15, 10)))
             assertEquals("오후 3시쯤 배고플 시간이라, 30킬로미터 앞 수유실 있는 안성휴게소를 경유지로 넣을까요?", dep(at(15, 0)))
             assertEquals("오전 12시 5분", Lines.clock(at(0, 5)))
-            assertEquals("오후 12시", Lines.clock(at(12, 0))); assertEquals("곧", Lines.clock("곧"))
-        } finally { TimeZone.setDefault(tz) }
+            assertEquals("오후 12시", Lines.clock(at(12, 0)))
+            assertEquals("곧", Lines.clock("곧"))
+        } finally {
+            TimeZone.setDefault(tz)
+        }
         assertEquals("아직 울어요. 백색소음으로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "백색소음")))
         assertEquals("아직 울어요. 자장가로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "자장가")))
         assertEquals("아직 울어요. 우리 노래로 바꿨어요.", Lines.text(Sid.S03, mapOf("method" to "우리 노래")))
@@ -306,8 +352,10 @@ class VoiceTest {
         assertEquals("안성휴게소를 경유지로 넣었어요.", Lines.text(Sid.S09, mapOf("restName" to "안성휴게소")))
         assertEquals("망향 졸음쉼터를 경유지로 넣었어요.", Lines.text(Sid.S09, mapOf("restName" to "망향 졸음쉼터")))
         assertEquals("서울만남의광장을 경유지로 넣었어요.", Lines.text(Sid.S09, mapOf("restName" to "서울만남의광장")))
-        assertEquals("1시간 50분째 달리고 있어요. 12킬로미터 앞 안성휴게소에서 쉬어 갈까요?",
-            Lines.text(Sid.S11, mapOf("drove" to "1시간 50분", "distanceKm" to "12", "restName" to "안성휴게소")))
+        assertEquals(
+            "1시간 50분째 달리고 있어요. 12킬로미터 앞 안성휴게소에서 쉬어 갈까요?",
+            Lines.text(Sid.S11, mapOf("drove" to "1시간 50분", "distanceKm" to "12", "restName" to "안성휴게소"))
+        )
         assertEquals("질문 답", Lines.text(Sid.QA, mapOf("text" to "질문 답")))
     }
 }

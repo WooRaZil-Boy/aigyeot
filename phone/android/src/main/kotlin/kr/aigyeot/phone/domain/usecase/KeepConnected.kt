@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -42,7 +43,6 @@ import kr.aigyeot.phone.domain.repository.SocketHandle
 import kr.aigyeot.phone.domain.repository.SocketListener
 import kr.aigyeot.phone.domain.state.AppVisibility
 import kr.aigyeot.shared.Role
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 연결 유지. 폰은 앱이 화면 앞에 있을 때만 WebSocket으로 붙는다. 연결 반복은 한 자격(연결 세대)으로만 돈다.
@@ -60,7 +60,7 @@ class KeepConnected(
     private val network: NetworkWatcher,
     private val visibility: AppVisibility,
     private val clock: Clock,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     private val _status = MutableStateFlow(LinkStatus())
 
@@ -266,10 +266,12 @@ class KeepConnected(
             is RelayResult.Err -> when (r.status) {
                 401 -> lose.lost(c)
                 // 상태 요청도 메시지 POST다: 같은 기다림에 넣어 보낼 함도 지키고, 끝나면 다시 판단한다. 옛 연결의 늦은 429는 새 연결을 멈추지 않는다.
-                429 -> if (state.isCurrent(c)) rateLimitWaitMs(r.retryAfterS).let { w ->
-                    outbox.holdInMemory(c, clock.now() + w)
-                    state.commit(c) { it.withMessageHold(clock.now(), w) }
-                    retryStateAt(c, clock.now() + w)
+                429 -> if (state.isCurrent(c)) {
+                    rateLimitWaitMs(r.retryAfterS).let { w ->
+                        outbox.holdInMemory(c, clock.now() + w)
+                        state.commit(c) { it.withMessageHold(clock.now(), w) }
+                        retryStateAt(c, clock.now() + w)
+                    }
                 }
             }
             RelayResult.Offline, RelayResult.Unreached -> Unit // 표시를 둔 채 다음 연결 때 다시 판단한다(보낼 함에 넣지 않는다)
@@ -292,6 +294,7 @@ class KeepConnected(
     private suspend fun runSocket(c: Credentials, onOpen: () -> Unit): Int {
         val frames = Channel<String>(Channel.UNLIMITED)
         var closeCode = -1
+
         // 4001·업그레이드 401은 콜백에서 바로 앱 범위로 넘긴다. 받은 함 처리 중이거나 화면이 뒤로 가 이 반복이 취소돼도 잃지 않는다.
         fun lostIf(code: Int) {
             if (code == 4001 || code == 401) scope.launch { lose.lost(c) }
@@ -318,7 +321,7 @@ class KeepConnected(
                     frames.close()
                     lostIf(closeCode)
                 }
-            },
+            }
         )
         open = ws
         var lastPong = clock.now()

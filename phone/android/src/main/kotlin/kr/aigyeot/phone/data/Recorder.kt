@@ -5,8 +5,8 @@ import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Build
-import kr.aigyeot.phone.domain.repository.SongRecorder
 import java.io.File
+import kr.aigyeot.phone.domain.repository.SongRecorder
 
 /**
  * 우리 노래 녹음: MPEG_4 + AAC, 44.1 kHz 모노 64 kbps, 3분에서 멈춘다.

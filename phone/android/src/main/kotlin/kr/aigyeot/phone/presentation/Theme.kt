@@ -19,7 +19,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -68,7 +67,7 @@ data class Palette(
     val cDiaper: Color,
     val cNote: Color,
     val cCar: Color,
-    val dark: Boolean,
+    val dark: Boolean
 )
 
 /**
@@ -114,7 +113,7 @@ val LightPalette = Palette(
     cDiaper = Color(0xFF8B95A1),
     cNote = Color(0xFF8B95A1),
     cCar = Color(0xFFEB6834),
-    dark = false,
+    dark = false
 )
 
 val DarkPalette = Palette(
@@ -145,7 +144,7 @@ val DarkPalette = Palette(
     cDiaper = Color(0xFF6B7684),
     cNote = Color(0xFF6B7684),
     cCar = Color(0xFFD95926),
-    dark = true,
+    dark = true
 )
 
 /** Pretendard Variable 1.3.9(OFL, res/font). 굵기마다 가변 축 `wght`를 그 값으로 둔다. */
@@ -164,7 +163,7 @@ private fun style(size: Double, line: Int, weight: Int, tracking: Double = 0.0) 
     // 한국어는 낱말 단위로 줄을 바꾼다(word-break: keep-all). API 33+에서 먹고 그 아래는 기본 줄바꿈.
     lineBreak = LineBreak(LineBreak.Strategy.HighQuality, LineBreak.Strictness.Strict, LineBreak.WordBreak.Phrase),
     // 기기 언어가 한국어가 아니어도 한국어 규칙으로 줄을 바꾼다(낱말 단위 줄바꿈은 글자의 로케일을 본다).
-    localeList = LocaleList("ko-KR"),
+    localeList = LocaleList("ko-KR")
 )
 
 /** 글자 단계(tokens.json type.phone: 크기/줄 높이/굵기). 자간은 em 값. `timer`는 고정폭 숫자(tnum). */
@@ -181,64 +180,92 @@ object Type {
     // 크기·굵기 조합 하나에 이름 하나(시험이 겹침을 막는다). 화면은 단계·역할로만 고르고 크기·굵기를 직접 쓰지 않는다(고정폭 숫자·자간·색은 덧붙여도 된다).
     /** 타임라인 시간 머리(.tl .hr span 11·600). */
     val hourMark = style(11.0, 14, 600)
+
     /** 숫자 칸 부제, 날짜 띠 요일(.datestrip span 12·500). */
     val micro = style(12.0, 16, 500)
+
     /** 줄 부제·덧붙임(.tl .ev span, .foot-note 12.5·500). */
     val footnote = style(12.5, 17, 500)
+
     /** 배지·말풍선(.badge, .ch-tip 12.5·600). */
     val tag = style(12.5, 16, 600)
+
     /** 흐린 안내 긴 글(.bnote 13·400). */
     val note = style(13.0, 18, 400)
+
     /** 첫 안내 목록(.ilist 13.5/20·500). */
     val introItem = style(13.5, 20, 500)
+
     /** 목록 줄 부제(.lrow span 14/20·400). 화면 안 오류는 iOS와 같이 caption. */
     val rowSub = style(14.0, 20, 400)
+
     /** 링크·흐린 머리·알림 글·안내 띠 글(.bh a, .anoti p 14/20·500). */
     val meta = style(14.0, 20, 500)
+
     /** 빠른 기록 이름(.qb 14·600). */
     val quickLabel = style(14.0, 18, 600)
+
     /** 띠 단추·부제 굵은 조각(14/20·700). */
     val metaStrong = style(14.0, 20, 700)
+
     /** 타임라인 줄 제목(.tl .ev b 14.5/20·500). */
     val eventTitle = style(14.5, 20, 500)
+
     /** 배너 앱 이름(.ncard b 14.5/20·700). */
     val bannerTitle = style(14.5, 20, 700)
+
     /** 이름·값 줄의 이름, 빈 목록 안내(15/22·400). */
     val valueKey = style(15.0, 22, 400)
+
     /** 타이머 상태·되돌리기 띠 글(15/22·500). */
     val bodyMedium = style(15.0, 22, 500)
+
     /** 칩·세그먼트·값(.chip, .segp span 15·600). */
     val chip = style(15.0, 22, 600)
+
     /** 알림 제목(.anoti b 15/20·700), 되돌리기 띠 단추. */
     val action = style(15.0, 20, 700)
+
     /** 시트 행 이름·입력(.sheet .row 15.5·500). */
     val sheetRow = style(15.5, 21, 500)
+
     /** 시트 값 칩(.sheet .row em 15.5·600). */
     val sheetValue = style(15.5, 21, 600)
+
     /** 첫 안내 첫 줄(.intro p.lead 16/24·500). */
     val lead = style(16.0, 24, 500)
+
     /** 목록 줄 제목·진행 중 판 제목(.lrow b, .run-c b 16/22·600). */
     val rowTitle = style(16.0, 22, 600)
+
     /** 날짜 띠 날(.datestrip b 17·500, 고정폭 숫자). */
     val dateNumber = style(17.0, 22, 500).copy(fontFeatureSettings = "tnum")
+
     /** 버튼(.pbtn 17·600 → 700), 방법별 성적 숫자(.dm b). */
     val strong = style(17.0, 22, 700)
+
     /** 큰 버튼, 시트 제목(18/24·700). */
     val strongLarge = style(18.0, 24, 700)
+
     /** 진행 중 판 시계(28/32·700, 고정폭 숫자). */
     val runningTimer = style(28.0, 32, 700, -0.02).copy(fontFeatureSettings = "tnum")
+
     /** 녹음 시간(.rec .rt 44·600, 고정폭 숫자). */
     val recordTimer = style(44.0, 48, 600, -0.02).copy(fontFeatureSettings = "tnum")
 
     // 안드로이드 화면에만 있는 자리.
     /** 아래 내비게이션 이름(.p-android .nav button 11/14·500, 고른 칸도 색만 바뀐다). */
     val navLabel = style(11.0, 14, 500)
+
     /** 알림 행동 단추(.anoti .acts span 13.5·600). */
     val bannerAction = style(13.5, 18, 600)
+
     /** 위 막대 제목·접힌 큰 제목(.p-android .ph-mini 22/28·600). */
     val barTitle = style(22.0, 28, 600)
+
     /** 초대 코드(고정폭 숫자·글자 사이를 띄움, iOS는 시스템 고정폭). */
     val inviteCode = style(34.0, 42, 700).copy(fontFeatureSettings = "tnum", letterSpacing = 0.06.sp)
+
     /** 연결 코드 확인(고정폭 숫자·글자 사이를 띄움). */
     val pairCode = style(36.0, 44, 700).copy(fontFeatureSettings = "tnum", letterSpacing = 0.08.sp)
 }
@@ -253,12 +280,16 @@ object Radius {
     val medium = RoundedCornerShape(rM)
     val large = RoundedCornerShape(rL)
     val xl = RoundedCornerShape(rXL)
+
     /** 알림창(확인·겹침·가져오기). */
     val dialog = RoundedCornerShape(24.dp)
+
     /** 단추·띠·스낵바·메뉴(.pbtn 16). */
     val control = RoundedCornerShape(16.dp)
+
     /** 입력 칸·세그먼트 판·탭 칸(14). */
     val field = RoundedCornerShape(14.dp)
+
     /** 판 안 작은 칸: 세그먼트 고른 칸·값 칩·말풍선·띠 행동(10). 그림자처럼 그려 쓰는 곳은 [rInner]. */
     val rInner: Dp = 10.dp
     val inner = RoundedCornerShape(rInner)
@@ -287,26 +318,36 @@ object Motion {
     const val RISE_DELAY_MS = 60
     const val RISE_STAGGER_MS = 50
     const val RISE_MAX_MS = 500
+
     /** 차트가 왼쪽부터 드러남(charts.js grow 0.9초 cb(.65,0,.35,1)). */
     val chartReveal = camera.copy(ms = 900)
+
     /** 막대 하나가 자람(0.6초 enter 곡선)과 막대 사이 간격(0.04초, 8개마다 다시). */
     val chartBar = enter.copy(ms = 600)
     const val CHART_BAR_STAGGER_MS = 40
+
     /** 방법별 성적 점이 튐(charts.js: spring 강성 600·감쇠 30 → 감쇠비 30 / (2·√600))과 점 사이 간격(0.02초). */
     val dotPop = SpringToken(30f / (2f * kotlin.math.sqrt(600f)), 600f)
     const val DOT_STAGGER_MS = 20L
+
     /** 차트 말풍선(.ch-tip 120ms linear). */
     val tip = press.copy(ms = 120)
+
     /** 새 수유가 들어올 때 판 둘레 빛(.flash 1.2초 base 곡선). */
     val flash = base.copy(ms = 1200)
+
     /** 살아 있는 점(live 1.8초, 앞 60% 동안 퍼짐). */
     val live = base.copy(ms = 1800)
+
     /** 녹음 소리 결 한 번(.wave i 1.2초). */
     val wave = base.copy(ms = 1200)
+
     /** 타이머 초침 한 바퀴(60초 linear). */
     val secondHand = press.copy(ms = 60_000)
+
     /** 인계 배너가 나감(.banner.out 260ms exit 곡선). */
     val bannerOut = exit.copy(ms = 260)
+
     /** 숫자 굴림의 새 글자 나타남·옛 글자 사라짐. */
     val rollIn = base.copy(ms = 120)
     val rollOut = base.copy(ms = 90)
@@ -373,7 +414,7 @@ fun AigyeotTheme(content: @Composable () -> Unit) {
         inverseOnSurface = p.surface,
         inversePrimary = p.surface, // 스낵바 '되돌리기' 글자(먹색 띠 위 흰 글자)
         scrim = Color(0x520A0C0E), // 스크림 rgba(10,12,14,.32)
-        error = p.danger,
+        error = p.danger
     )
     val type = Typography().run {
         copy(
@@ -391,13 +432,13 @@ fun AigyeotTheme(content: @Composable () -> Unit) {
             bodySmall = Type.caption,
             labelLarge = labelLarge.copy(fontFamily = Pretendard, fontWeight = FontWeight.SemiBold),
             labelMedium = labelMedium.copy(fontFamily = Pretendard),
-            labelSmall = labelSmall.copy(fontFamily = Pretendard),
+            labelSmall = labelSmall.copy(fontFamily = Pretendard)
         )
     }
     MaterialTheme(
         colorScheme = scheme,
         typography = type,
-        shapes = Shapes(small = Radius.small, medium = Radius.medium, large = Radius.large, extraLarge = Radius.xl),
+        shapes = Shapes(small = Radius.small, medium = Radius.medium, large = Radius.large, extraLarge = Radius.xl)
     ) {
         CompositionLocalProvider(LocalPalette provides p, content = content)
     }

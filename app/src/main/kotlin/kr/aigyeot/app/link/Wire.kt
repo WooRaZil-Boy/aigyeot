@@ -12,9 +12,9 @@ import kr.aigyeot.shared.SoundMethod
 
 // 중계와 주고받는 봉투·소리 이름·재시도 간격. ULID·시각 문자열 같은 범용 도우미는 common/Basics.kt에 있다.
 
-internal const val SENT_ID_MAX = 100   // 결과를 모르는 보낸 id는 최근 100개까지(넣은 순서)
-internal const val SENT_ID_KEEP_MS = 10 * 60_000L   // 보낸 리포트·알림 id 보관: 늦은 POST가 닿을 수 있는 시간
-internal const val KEEP_MS = 7 * DAY   // 보낼 함·처리한 id·끊김 표시 보관
+internal const val SENT_ID_MAX = 100 // 결과를 모르는 보낸 id는 최근 100개까지(넣은 순서)
+internal const val SENT_ID_KEEP_MS = 10 * 60_000L // 보낸 리포트·알림 id 보관: 늦은 POST가 닿을 수 있는 시간
+internal const val KEEP_MS = 7 * DAY // 보낼 함·처리한 id·끊김 표시 보관
 
 /** 판단 코어 음원 종류 ↔ 전송 값(sound.method). 리포트·질문 답이 같이 쓴다. */
 internal fun soundMethod(k: MethodKind): SoundMethod = when (k) {
@@ -39,7 +39,7 @@ internal fun envelopeOf(id: String, type: String, body: JsonObject, createdAt: L
 private val TIME_KEYS = setOf("at", "occurred_at", "started_at", "ended_at", "last_feeding_start", "window_start_expected")
 
 internal fun withRfc3339Times(body: JsonObject): JsonObject = JsonObject(
-    body.mapValues { (k, v) -> v.timeOrSelf(k) },
+    body.mapValues { (k, v) -> v.timeOrSelf(k) }
 )
 
 private fun JsonElement.timeOrSelf(key: String): JsonElement {

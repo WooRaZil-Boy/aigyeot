@@ -19,19 +19,22 @@ class DriverRequestTest {
         val sim = session().request()
         assertEquals(Phase.WAIT, sim.ses.phase)
         assertEquals(EpisodeTrigger.SWITCH_SOUND, sim.ep.trigger)
-        assertNull(sim.ep.first); assertNull(sim.ep.alarmAt)
+        assertNull(sim.ep.first)
+        assertNull(sim.ep.alarmAt)
         assertEquals(EpisodeTrigger.SWITCH_SOUND, sim.step<SaveEpisode>().single().record.trigger)
         assertEquals(StartPlayback(sim.play().id, PlayKind.REQUEST, LL, sim.t + 56_000, 2_000), sim.step<StartPlayback>().single())
     }
 
     @Test fun switchInIdle_noop() {
         val sim = idle().request()
-        assertTrue(sim.cmds.isEmpty()); assertNull(sim.s.session)
+        assertTrue(sim.cmds.isEmpty())
+        assertNull(sim.s.session)
     }
 
     @Test fun switchInCall_ignored() {
         val sim = session().ev(CallMode(T0, true)).request()
-        assertTrue(sim.cmds.isEmpty()); assertEquals(Phase.LISTENING, sim.ses.phase)
+        assertTrue(sim.cmds.isEmpty())
+        assertEquals(Phase.LISTENING, sim.ses.phase)
     }
 
     @Test fun requestPlay56s() {
@@ -57,37 +60,45 @@ class DriverRequestTest {
     @Test fun requestFocusDenied_saysS18() {
         val sim = waiting().request()
         sim.ev(PlaybackRejected(sim.t, sim.play().id, RejectReason.FOCUS_DENIED))
-        assertNull(sim.ses.play); assertEquals(Phase.WAIT, sim.ses.phase)
+        assertNull(sim.ses.play)
+        assertEquals(Phase.WAIT, sim.ses.phase)
         assertTrue(Sid.S18 in sim.sids())
     }
 
     @Test fun requestStartError_staysWaitNoSpeech() {
         val sim = waiting().request()
         sim.ev(PlaybackRejected(sim.t, sim.play().id, RejectReason.ERROR))
-        assertNull(sim.ses.play); assertEquals(Phase.WAIT, sim.ses.phase)
+        assertNull(sim.ses.play)
+        assertEquals(Phase.WAIT, sim.ses.phase)
         assertTrue(Sid.S18 !in sim.sids())
         sim.clear().tick(5 * MIN)
-        assertEquals(Phase.LISTENING, sim.ses.phase)                  // 5분 타이머는 계속
+        assertEquals(Phase.LISTENING, sim.ses.phase) // 5분 타이머는 계속
         assertTrue(sim.all<StartPlayback>().none { it.kind == PlayKind.AUTO })
     }
 
     @Test fun requestStopsInPlace_timerContinues() {
         val stops: List<(Sim) -> Event> = listOf(
-            { DriverStop(it.t, Via.VOICE) }, { CallMode(it.t, true) }, { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
-            { GearChanged(it.t, Gear.P) }, { Suspend(it.t) },
+            { DriverStop(it.t, Via.VOICE) },
+            { CallMode(it.t, true) },
+            { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
+            { GearChanged(it.t, Gear.P) },
+            { Suspend(it.t) }
         )
         for (stop in stops) {
             val sim = waiting().tick(MIN).request().started().tick(5_000)
             val q = sim.ses.quietMs
             assertEquals(MIN + 5_000, q)
             sim.ev(stop(sim))
-            assertEquals(Phase.WAIT, sim.ses.phase); assertNull(sim.ses.play)
+            assertEquals(Phase.WAIT, sim.ses.phase)
+            assertNull(sim.ses.play)
             assertEquals(1, sim.step<StopPlayback>().size)
-            assertEquals(q, sim.ses.quietMs)                            // 0으로 되돌리지 않는다
+            assertEquals(q, sim.ses.quietMs) // 0으로 되돌리지 않는다
         }
         val sus = waiting().request().started().ev(Suspend(T0 + MIN))
-        assertEquals(listOf("StopPlayback", "SavePlay", "SaveEpisode", "SaveSession", "CancelSpeech", "ReleaseAudio", "SaveSnapshot"),
-            sus.cmds.map { it::class.simpleName })
+        assertEquals(
+            listOf("StopPlayback", "SavePlay", "SaveEpisode", "SaveSession", "CancelSpeech", "ReleaseAudio", "SaveSnapshot"),
+            sus.cmds.map { it::class.simpleName }
+        )
     }
 
     @Test fun capDuringRequest_fadeStayWait() {
@@ -102,18 +113,20 @@ class DriverRequestTest {
 
     @Test fun noListeningDuringRequest() {
         val sim = waiting().request().started().quiet(6 * MIN).tick(1_000)
-        assertEquals(Phase.WAIT, sim.ses.phase); assertNotNull(sim.ses.play)
+        assertEquals(Phase.WAIT, sim.ses.phase)
+        assertNotNull(sim.ses.play)
     }
 
     @Test fun requestEndsAfterFiveQuiet_listening() {
-        val sim = waiting().tick(4 * MIN + 10_000).request().started().end()   // 4분 10초 + 56초
+        val sim = waiting().tick(4 * MIN + 10_000).request().started().end() // 4분 10초 + 56초
         assertEquals(Phase.LISTENING, sim.ses.phase)
         assertNull(sim.ses.episode)
         assertNotNull(sim.step<SaveEpisode>().last().record.endedAt)
         val cap = waiting().tick(4 * MIN + 10_000)
         cap.s = cap.s.copy(session = cap.ses.copy(playedMs = P.sessionPlayCapMs - 56_000))
         cap.request().started().end()
-        assertEquals(Phase.LISTENING, cap.ses.phase); assertTrue(cap.ses.capReached(P))
+        assertEquals(Phase.LISTENING, cap.ses.phase)
+        assertTrue(cap.ses.capReached(P))
     }
 
     @Test fun switchWhilePlaying_restarts() {
@@ -149,7 +162,10 @@ class DriverRequestTest {
 
     @Test fun repeatedRequests_neverExceedCaps() {
         val sim = waiting()
-        repeat(5) { sim.request(); if (sim.s.session!!.play != null) sim.started().end() }
+        repeat(5) {
+            sim.request()
+            if (sim.s.session!!.play != null) sim.started().end()
+        }
         assertEquals(112_000, sim.ep.playedMs)
         assertTrue(sim.ses.playedMs <= P.sessionPlayCapMs)
         assertTrue(Sid.S18 in sim.sids())
@@ -159,7 +175,8 @@ class DriverRequestTest {
     @Test fun requestPlaybackError_staysWait() {
         val sim = waiting().request().started()
         sim.ev(PlaybackEnded(sim.t + 4_000, sim.play().id, EndReason.ERROR))
-        assertEquals(Phase.WAIT, sim.ses.phase); assertNull(sim.ses.play)
+        assertEquals(Phase.WAIT, sim.ses.phase)
+        assertNull(sim.ses.play)
         assertEquals(PlayEndReason.ERROR, sim.step<SavePlay>().single().record.endReason)
         assertTrue(sim.step<Speak>().isEmpty() && sim.step<StartPlayback>().isEmpty())
     }
@@ -204,10 +221,11 @@ class DriverRequestTest {
         val sim = waiting().tick(4 * MIN + 10_000).request().started().tick(51_000)
         assertEquals(5 * MIN + 1_000, sim.ses.quietMs)
         sim.ev(InputLost(sim.t, PauseReason.SILENCED)).end()
-        assertEquals(Phase.WAIT, sim.ses.phase)                       // 멈춤 표시가 있으면 LISTENING으로 가지 않는다
-        assertNotNull(sim.ses.episode); assertEquals(1, sim.ses.attemptNo)
+        assertEquals(Phase.WAIT, sim.ses.phase) // 멈춤 표시가 있으면 LISTENING으로 가지 않는다
+        assertNotNull(sim.ses.episode)
+        assertEquals(1, sim.ses.attemptNo)
         assertTrue(sim.step<SaveEpisode>().none { it.record.endedAt != null })
         sim.ev(InputRestored(sim.t + 1_000, PauseReason.SILENCED)).tick(1_000)
-        assertEquals(Phase.LISTENING, sim.ses.phase)                  // 입력이 돌아오면 조용함 5분을 다시 센다
+        assertEquals(Phase.LISTENING, sim.ses.phase) // 입력이 돌아오면 조용함 5분을 다시 센다
     }
 }

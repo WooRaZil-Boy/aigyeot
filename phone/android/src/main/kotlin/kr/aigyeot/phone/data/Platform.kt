@@ -8,6 +8,9 @@ import android.net.Uri
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import java.io.ByteArrayOutputStream
+import java.util.UUID
+import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -19,9 +22,6 @@ import kr.aigyeot.phone.domain.repository.Mark
 import kr.aigyeot.phone.domain.repository.MarkEdit
 import kr.aigyeot.phone.domain.repository.NetworkWatcher
 import kr.aigyeot.phone.domain.repository.PushTokens
-import java.io.ByteArrayOutputStream
-import java.util.UUID
-import kotlin.coroutines.resume
 
 class AndroidLogger(private val tag: String) : Logger {
     override fun d(msg: String) {
@@ -56,10 +56,12 @@ class PrefsLinkMarks(context: Context) : LinkMarks {
     override suspend fun commitInBackground(vararg edits: MarkEdit): Boolean = withContext(Dispatchers.IO) { edit(edits).commit() }
 
     private fun edit(edits: Array<out MarkEdit>) = prefs.edit().also { e ->
-        for (x in edits) when (x) {
-            is MarkEdit.Put -> e.putString(key(x.mark), x.value)
-            is MarkEdit.Flag -> e.putBoolean(key(x.mark), x.on)
-            is MarkEdit.Remove -> e.remove(key(x.mark))
+        for (x in edits) {
+            when (x) {
+                is MarkEdit.Put -> e.putString(key(x.mark), x.value)
+                is MarkEdit.Flag -> e.putBoolean(key(x.mark), x.on)
+                is MarkEdit.Remove -> e.remove(key(x.mark))
+            }
         }
     }
 

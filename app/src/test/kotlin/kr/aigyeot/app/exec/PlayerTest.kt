@@ -1,5 +1,10 @@
 package kr.aigyeot.app.exec
 
+import java.util.Locale
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kr.aigyeot.engine.AdjustPlayback
 import kr.aigyeot.engine.EndReason
 import kr.aigyeot.engine.Event
@@ -16,11 +21,6 @@ import kr.aigyeot.engine.PlaybackStarted
 import kr.aigyeot.engine.RejectReason
 import kr.aigyeot.engine.StartPlayback
 import kr.aigyeot.engine.StopPlayback
-import java.util.Locale
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 // 실행기가 지킬 재생 규칙(존·폴백·이득·끝 시각·포커스·ReleaseAudio)과 볼륨 상한
 class PlayerTest {
@@ -40,7 +40,12 @@ class PlayerTest {
         assertTrue(track.rear && track.started && audio.focusHeld)
         assertEquals(1.0f, track.gains.first(), "첫 이득이 1.0")
         assertFalse(track.gainBeforeStart, "시작 전에는 gain을 부르지 않는다")
-        assertTrue(r.rows.any { it.api == "requestAudioFocus" && it.ok && it.goal.contains("USAGE_MEDIA") && it.goal.contains("GAIN_TRANSIENT") }, "포커스 결과와 요청 context·gain 종류를 ControlLog에")
+        assertTrue(
+            r.rows.any {
+                it.api == "requestAudioFocus" && it.ok && it.goal.contains("USAGE_MEDIA") && it.goal.contains("GAIN_TRANSIENT")
+            },
+            "포커스 결과와 요청 context·gain 종류를 ControlLog에"
+        )
         assertTrue(r.rows.any { it.api == "getRoutedDevice" && it.actual == REAR_ZONE && it.ok }, "출력 장치를 ControlLog에")
     }
 
@@ -53,7 +58,8 @@ class PlayerTest {
     }
 
     @Test fun `뒷좌석 출력이 없고 앞 틀기를 허락하면 기본 존에 이득 0_3으로 튼다`() {
-        audio.rear = false; front = true
+        audio.rear = false
+        front = true
         start()
         val s = r.of<PlaybackStarted>().single()
         assertTrue(s.fallback)
@@ -62,7 +68,8 @@ class PlayerTest {
     }
 
     @Test fun `뒷좌석 장치는 있으나 실제 경로가 다른 곳이고 앞 틀기를 허락하면 첫 이득부터 0_3`() {
-        audio.routed = "bus0_media_out"; front = true
+        audio.routed = "bus0_media_out"
+        front = true
         start()
         assertTrue(audio.rear && track.rear, "뒷좌석 장치가 있어 뒷좌석으로 열었다")
         assertEquals(listOf(0.3f), track.gains, "1.0을 거치지 않는다")
@@ -80,7 +87,8 @@ class PlayerTest {
         start()
         assertEquals(PlaybackStarted(t.now, "s1-1", null, fallback = false), r.of<PlaybackStarted>().single())
         assertTrue(track.started && track.gains.isEmpty(), "확인 전에는 이득을 정하지 않는다")
-        pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK)); pl.adjust(AdjustPlayback("s1-1", PlayMode.NORMAL))
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.NORMAL))
         assertTrue(track.gains.isEmpty(), "그사이 모드 변경도 소리를 열지 않는다")
         audio.onRouted!!(null)
         assertTrue(track.gains.isEmpty(), "null 콜백은 확정이 아니다")
@@ -136,7 +144,8 @@ class PlayerTest {
     }
 
     @Test fun `경로 null 뒤 다른 곳이고 허락하면 첫 이득이 0_3이다`() {
-        audio.routed = null; front = true
+        audio.routed = null
+        front = true
         start()
         assertTrue(track.gains.isEmpty(), "조건")
         audio.onRouted!!("bus0_media_out")
@@ -153,7 +162,8 @@ class PlayerTest {
         t.advance(1)
         assertEquals(listOf(1.0f), track.gains)
         // 다시 읽어도 null
-        r.events.clear(); start("s1-2")
+        r.events.clear()
+        start("s1-2")
         t.advance(Player.ROUTE_CONFIRM_MS)
         assertTrue(track.gains.isEmpty())
         assertEquals(EndReason.ERROR, r.of<PlaybackEnded>().last().reason)
@@ -206,7 +216,8 @@ class PlayerTest {
     }
 
     @Test fun `시작하자마자 다른 곳으로 나가고 앞 틀기를 허락하면 폴백으로 알리고 이득 0_3`() {
-        audio.routed = "bus0_media_out"; front = true
+        audio.routed = "bus0_media_out"
+        front = true
         start()
         val s = r.of<PlaybackStarted>().single()
         assertTrue(s.fallback, "D12: fallback = true로 알린다")
@@ -228,7 +239,7 @@ class PlayerTest {
         t.advance(55_000)
         pl.stop(StopPlayback("s1-1", true))
         assertTrue(r.of<PlaybackEnded>().isEmpty() && t.now < 1_056_000, "끝 시각 1초 전, 아직 안 끝남")
-        t.advance(1_000)                                  // 56초: 끝 시각 타이머가 먼저 선다
+        t.advance(1_000) // 56초: 끝 시각 타이머가 먼저 선다
         assertEquals(PlaybackEnded(t.now, "s1-1", EndReason.STOPPED), r.events.last())
         t.advance(5_000)
         assertEquals(1, r.of<PlaybackEnded>().size)
@@ -238,7 +249,7 @@ class PlayerTest {
         start()
         t.advance(53_990)
         assertEquals(1.0f, track.gains.last(), "54초 전에는 줄이지 않는다")
-        t.advance(1_010)                                  // 55.0초: 절반쯤
+        t.advance(1_010) // 55.0초: 절반쯤
         assertTrue(track.gains.last() in 0.45f..0.55f, "가운데 ${track.gains.last()}")
         assertTrue(r.of<PlaybackEnded>().isEmpty())
         t.advance(1_000)
@@ -257,7 +268,8 @@ class PlayerTest {
     }
 
     @Test fun `StopPlayback(fade=false)는 바로 멈추고 STOPPED`() {
-        start(); t.advance(5_000)
+        start()
+        t.advance(5_000)
         pl.stop(StopPlayback("s1-1", false))
         assertEquals(PlaybackEnded(t.now, "s1-1", EndReason.STOPPED), r.events.last())
         assertTrue(track.released)
@@ -266,7 +278,8 @@ class PlayerTest {
     }
 
     @Test fun `StopPlayback(fade=true)는 2초 줄인 뒤 STOPPED`() {
-        start(); t.advance(5_000)
+        start()
+        t.advance(5_000)
         pl.stop(StopPlayback("s1-1", true))
         t.advance(1_000)
         assertTrue(track.gains.last() in 0.45f..0.55f)
@@ -287,17 +300,21 @@ class PlayerTest {
         pl.adjust(AdjustPlayback("s1-1", PlayMode.NORMAL))
         assertEquals(1.0f, track.gains.last(), "감쇄 직전 1.0까지만")
         pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
-        t.advance(55_000)                                 // 감쇄 중 페이드 절반
+        t.advance(55_000) // 감쇄 중 페이드 절반
         pl.adjust(AdjustPlayback("s1-1", PlayMode.NORMAL))
         assertTrue(track.gains.last() in 0.45f..0.55f, "페이드 값 ${track.gains.last()}")
     }
 
     @Test fun `이득은 1_0을 넘지 않고 감쇄 해제 말고는 재생 중 올리지 않는다`() {
         start()
-        t.advance(20_000); pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
-        t.advance(10_000); pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
-        t.advance(10_000); pl.adjust(AdjustPlayback("s1-1", PlayMode.NORMAL))
-        t.advance(15_000); pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
+        t.advance(20_000)
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
+        t.advance(10_000)
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
+        t.advance(10_000)
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.NORMAL))
+        t.advance(15_000)
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
         t.advance(10_000)
         val g = track.gains
         assertTrue(g.all { it <= 1.0f })
@@ -307,12 +324,14 @@ class PlayerTest {
 
     @Test fun `감쇄 중 일시 정지하면 NORMAL 없이 페이드에 들어가도 감쇄가 풀리지 않는다`() {
         start()
-        t.advance(20_000); pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
+        t.advance(20_000)
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
         assertEquals(Player.DUCK_GAIN, track.gains.last())
         val from = track.gains.size - 1
-        t.advance(30_000); pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
+        t.advance(30_000)
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
         assertTrue(track.paused && t.now < 1_054_000, "일시 정지 중이고 페이드 전")
-        t.advance(5_500)                                  // 55.5초: 페이드 안, 끝 시각 전
+        t.advance(5_500) // 55.5초: 페이드 안, 끝 시각 전
         assertTrue(r.of<PlaybackEnded>().isEmpty())
         val after = track.gains.drop(from)
         assertTrue(after.size > 3, "페이드 단계가 기록됐다: $after")
@@ -325,15 +344,18 @@ class PlayerTest {
         pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
         pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
         pl.adjust(AdjustPlayback("s1-1", PlayMode.DUCK))
-        assertFalse(track.paused); assertEquals(Player.DUCK_GAIN, track.gains.last())
+        assertFalse(track.paused)
+        assertEquals(Player.DUCK_GAIN, track.gains.last())
         pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
         pl.adjust(AdjustPlayback("s1-1", PlayMode.NORMAL))
-        assertFalse(track.paused); assertEquals(1.0f, track.gains.last())
+        assertFalse(track.paused)
+        assertEquals(1.0f, track.gains.last())
     }
 
     @Test fun `일시 정지 동안에도 endAt은 그대로다`() {
         start()
-        t.advance(10_000); pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
+        t.advance(10_000)
+        pl.adjust(AdjustPlayback("s1-1", PlayMode.PAUSE))
         assertTrue(track.paused)
         t.advance(46_000)
         assertEquals(EndReason.DEADLINE, r.of<PlaybackEnded>().single().reason)
@@ -343,14 +365,16 @@ class PlayerTest {
         start()
         audio.onFocus!!(FocusChange.LOSS_TRANSIENT_CAN_DUCK)
         assertEquals(FocusChanged(t.now, "s1-1", FocusChange.LOSS_TRANSIENT_CAN_DUCK), r.events.last())
-        pl.stop(StopPlayback("s1-1", false)); r.events.clear()
+        pl.stop(StopPlayback("s1-1", false))
+        r.events.clear()
         audio.onFocus!!(FocusChange.GAIN)
         assertTrue(r.events.isEmpty(), "끝난 재생의 포커스 변화는 내지 않는다")
     }
 
     @Test fun `끝난 재생의 영구 포커스 상실은 그 재생 id로 알린다`() {
         start()
-        pl.stop(StopPlayback("s1-1", false)); r.events.clear()
+        pl.stop(StopPlayback("s1-1", false))
+        r.events.clear()
         assertTrue(r.of<PlaybackEnded>().isEmpty())
         audio.onFocus!!(FocusChange.LOSS)
         assertEquals(listOf<Event>(FocusChanged(t.now, "s1-1", FocusChange.LOSS)), r.events, "5.5 14c: GAIN·일시 상실만 버린다")
@@ -361,14 +385,20 @@ class PlayerTest {
         start()
         assertEquals(listOf<Event>(PlaybackRejected(t.now, "s1-1", RejectReason.ERROR)), r.events)
         assertEquals(0, t.pending())
-        audio.throwRear = false; audio.throwOpen = true
-        r.events.clear(); start("s1-2")
+        audio.throwRear = false
+        audio.throwOpen = true
+        r.events.clear()
+        start("s1-2")
         assertEquals(listOf<Event>(PlaybackRejected(t.now, "s1-2", RejectReason.ERROR)), r.events)
         assertFalse(audio.focusHeld, "포커스를 얻었으면 돌려준다")
-        audio.throwOpen = false; audio.throwFocus = true
-        r.events.clear(); start("s1-3")
+        audio.throwOpen = false
+        audio.throwFocus = true
+        r.events.clear()
+        start("s1-3")
         assertEquals(listOf<Event>(PlaybackRejected(t.now, "s1-3", RejectReason.ERROR)), r.events)
-        audio.throwFocus = false; r.events.clear(); start("s1-4")
+        audio.throwFocus = false
+        r.events.clear()
+        start("s1-4")
         assertTrue(r.events.single() is PlaybackStarted, "앞 실패가 상태를 남기지 않았다")
     }
 
@@ -384,13 +414,22 @@ class PlayerTest {
         assertTrue(r.rows.any { it.api == "stopPlayback" })
         t.advance(60_000)
         assertEquals(before, r.events.size, "끝 시각이 지나도 사건이 없다")
-        pl.release()                                      // 남은 재생이 없어도 포커스만 안전하게
+        pl.release() // 남은 재생이 없어도 포커스만 안전하게
     }
 
     @Test fun `재생 중 새 StartPlayback이 오면 앞 재생을 먼저 끝낸다`() {
-        start("s1-1"); start("s1-2")
-        assertEquals(listOf("s1-1" to "started", "s1-1" to "ended", "s1-2" to "started"),
-            r.events.map { when (it) { is PlaybackStarted -> it.playId to "started"; is PlaybackEnded -> it.playId to "ended"; else -> "" to "" } })
+        start("s1-1")
+        start("s1-2")
+        assertEquals(
+            listOf("s1-1" to "started", "s1-1" to "ended", "s1-2" to "started"),
+            r.events.map {
+                when (it) {
+                    is PlaybackStarted -> it.playId to "started"
+                    is PlaybackEnded -> it.playId to "ended"
+                    else -> "" to ""
+                }
+            }
+        )
         assertTrue(audio.tracks[0].released && !audio.tracks[1].released)
     }
 
@@ -412,7 +451,7 @@ class PlayerTest {
         p2.release()
         assertTrue(r.rows.size >= 3 && r.rows.all { it.sessionId == "S9" }, r.rows.map { it.api to it.sessionId }.toString())
         audio.rear = false
-        p2.start(StartPlayback("S9-2", PlayKind.AUTO, noise, t.now + 56_000, 2_000))   // 뒷좌석 없음: getDevices 줄
+        p2.start(StartPlayback("S9-2", PlayKind.AUTO, noise, t.now + 56_000, 2_000)) // 뒷좌석 없음: getDevices 줄
         assertTrue(r.rows.last().api == "getDevices" && r.rows.last().sessionId == "S9")
     }
 }

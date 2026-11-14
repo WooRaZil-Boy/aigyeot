@@ -53,7 +53,7 @@ class RecordCare(
     /** debug 빌드만 시연 시드를 받는다. */
     private val allowDebugSeed: Boolean,
     /** 되돌리기 띠가 떠 있는 시간(5초, 화면 읽기면 50초: [undoBandMs]). 띠를 띄울 때마다 묻는다. 시험만 줄인다. */
-    private val undoMs: () -> Long = { UNDO_MS },
+    private val undoMs: () -> Long = { UNDO_MS }
 ) {
     private val zone get() = APP_ZONE.id
 

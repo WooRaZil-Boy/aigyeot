@@ -1,5 +1,7 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.io.File
+import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -41,15 +43,15 @@ import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
 import kr.aigyeot.shared.SendMessageResponse
 import kr.aigyeot.shared.UploadSongResponse
-import java.io.File
-import kotlin.io.path.createTempDirectory
 
 // 유스케이스 시험 도구: 파일 저장소는 진짜(임시 폴더), 중계·prefs·Keystore·FCM·네트워크는 가짜다. 배선은 AppContainer와 같다.
 
 const val NOW = 1_762_300_000_000L
 val OWNER = Credentials("c_7F3AK2N9X0Q4M8T1V6B5R3H2CD", "d_5KQ2M8T1V6B5R3H2CD7F3AK2N9", "tok-owner", Role.OWNER)
 
-class FakeRelay : RelayClient, RelaySocket {
+class FakeRelay :
+    RelayClient,
+    RelaySocket {
     override var clockSkewMs: Long? = null
     private var ticket = 0L
     override fun lastTicket() = ticket
@@ -72,9 +74,16 @@ class FakeRelay : RelayClient, RelaySocket {
     override suspend fun pair(code: String, pushToken: String?, installId: String) = pairResult.also { ticket++ }
     override suspend fun devices(token: String) = devicesResult.also { ticket++ }
     override suspend fun patchMe(token: String, body: PatchDeviceRequest) = patchResult.also { ticket++ }
-    override suspend fun deleteMe(token: String) = deleteResult.also { deleted += token; ticket++ }
+    override suspend fun deleteMe(token: String) = deleteResult.also {
+        deleted += token
+        ticket++
+    }
     override suspend fun invite(token: String) = inviteResult.also { ticket++ }
-    override suspend fun send(token: String, env: Envelope) = sendResult(env).also { sent += env; ticket++ }
+    override suspend fun send(token: String, env: Envelope) = sendResult(env).also {
+        sent += env
+        ticket++
+    }
+
     /** 있으면 받은 함 요청이 이것이 끝날 때까지 답하지 않는다(도는 받기를 만든다). */
     var inboxGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
 
@@ -91,8 +100,12 @@ class FakeRelay : RelayClient, RelaySocket {
             RelayResult.Unreached -> RelayResult.Unreached
         }
     }
-    override suspend fun ack(token: String, ids: List<String>): RelayResult<Unit> = RelayResult.Ok(200, Unit).also { acked += ids; ticket++ }
-    override suspend fun putSong(token: String, songId: String, file: File): RelayResult<UploadSongResponse> = RelayResult.Ok(201, UploadSongResponse(songId, file.length()))
+    override suspend fun ack(token: String, ids: List<String>): RelayResult<Unit> = RelayResult.Ok(200, Unit).also {
+        acked += ids
+        ticket++
+    }
+    override suspend fun putSong(token: String, songId: String, file: File): RelayResult<UploadSongResponse> =
+        RelayResult.Ok(201, UploadSongResponse(songId, file.length()))
 
     override fun open(token: String, listener: SocketListener): SocketHandle {
         this.listener = listener
@@ -119,10 +132,12 @@ class MemoryMarks(initial: Map<Mark, String> = emptyMap()) : LinkMarks {
     override suspend fun commitInBackground(vararg edits: MarkEdit) = commit(*edits)
 
     private fun write(edits: Array<out MarkEdit>) {
-        for (e in edits) when (e) {
-            is MarkEdit.Put -> if (e.value == null) values.remove(e.mark) else values[e.mark] = e.value
-            is MarkEdit.Flag -> values[e.mark] = e.on.toString()
-            is MarkEdit.Remove -> values.remove(e.mark)
+        for (e in edits) {
+            when (e) {
+                is MarkEdit.Put -> if (e.value == null) values.remove(e.mark) else values[e.mark] = e.value
+                is MarkEdit.Flag -> values[e.mark] = e.on.toString()
+                is MarkEdit.Remove -> values.remove(e.mark)
+            }
         }
     }
 }
@@ -168,9 +183,13 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     val notices = Notices()
     val care = FileCareRepository(File(dir, "care.json"), File(dir, "export"), Quiet, notices::saveFailed)
     val state = FilePhoneStateRepository(
-        File(dir, "phone_state.json"), credentials, Quiet, clock,
-        migrating = { !care.care.value.migratedFeedings }, onSaveFailed = notices::saveFailed,
-        goneCleanupPending = this.marks.get(Mark.GONE_CLEANUP_PENDING),
+        File(dir, "phone_state.json"),
+        credentials,
+        Quiet,
+        clock,
+        migrating = { !care.care.value.migratedFeedings },
+        onSaveFailed = notices::saveFailed,
+        goneCleanupPending = this.marks.get(Mark.GONE_CLEANUP_PENDING)
     )
     init {
         notices.showDrops(state.state.value.unseenDrops) // AppContainer와 같다
@@ -179,7 +198,9 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     val link = LinkSwitch(this.marks, notices)
     val visibility = AppVisibility()
     val songs = AppSongFileStore(File(dir, "songs"), File(dir, "cache").apply { mkdirs() }, state)
-    val pushTokens = object : PushTokens { override suspend fun token(): String? = null }
+    val pushTokens = object : PushTokens {
+        override suspend fun token(): String? = null
+    }
     val network = FakeNetwork()
     val wipe = WipeLink(state, care, credentials, songs, notices, link, scope, Quiet)
     val lose = LoseConnection(state, link, wipe, scope)
@@ -189,6 +210,7 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     val push = RegisterPush(state, relay, lose, pushTokens, scope)
     val connection = KeepConnected(state, relay, relay, inbox, outbox, lose, disconnect, push, network, visibility, clock, scope)
     val reconcile = ReconcileCareSummary(state, care, outbox, notices, clock)
+
     /** 띠 시간(앱은 화면 읽기·시스템 권장 시간으로 정한다). 시험이 띠를 띄우기 전후에 바꿔 볼 수 있다. */
     var undoBand = undoMs
     val recordCare = RecordCare(care, state, reconcile, songs, notices, clock, scope, Quiet, allowDebugSeed = true, undoMs = { undoBand })
@@ -208,8 +230,14 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     suspend fun settle() = delay(100)
 
     fun envelope(type: String, body: JsonObject, id: String, seq: Long, fromCar: Boolean = true) = Envelope(
-        v = 1, id = id, seq = seq, type = type, car = OWNER.carId, from = if (fromCar) kr.aigyeot.shared.Sender(Role.CAR, null) else null,
-        ts = kr.aigyeot.phone.domain.model.rfc3339(now), body = body,
+        v = 1,
+        id = id,
+        seq = seq,
+        type = type,
+        car = OWNER.carId,
+        from = if (fromCar) kr.aigyeot.shared.Sender(Role.CAR, null) else null,
+        ts = kr.aigyeot.phone.domain.model.rfc3339(now),
+        body = body
     )
 }
 
@@ -220,7 +248,7 @@ fun kitTest(
     prepare: (File) -> Unit = {},
     /** 되돌리기 띠 시간(앱은 5초). 시험은 기본 2초, 띠가 끝나는 것을 보는 시험은 더 줄이거나 늘린다. */
     undoMs: Long = 2_000,
-    block: suspend Kit.() -> Unit,
+    block: suspend Kit.() -> Unit
 ) = runBlocking {
     val job = SupervisorJob(coroutineContext[Job])
     val dir = createTempDirectory().toFile()

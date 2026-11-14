@@ -15,7 +15,7 @@ class AigyeotApp : Application() {
         super.onCreate()
         // 인계 알림 채널. minSdk 26이라 채널이 늘 있다.
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "인계 알림", NotificationManager.IMPORTANCE_HIGH),
+            NotificationChannel(CHANNEL, "인계 알림", NotificationManager.IMPORTANCE_HIGH)
         )
         // 진행 중 수유·잠. LOW(무음 분류)는 기본 설정에서 잠금 화면에 안 보여 DEFAULT로 두고 소리·진동을 끈다.
         // 채널 중요도는 만든 뒤 바뀌지 않아 옛 id(LOW로 만든 개발판)는 지운다.
@@ -27,7 +27,7 @@ class AigyeotApp : Application() {
                     enableVibration(false)
                     setShowBadge(false)
                     lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-                },
+                }
             )
         }
         container = AppContainer(this).also { it.lifecycle.start() }

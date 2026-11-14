@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.model
 
+import java.time.ZoneId
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -14,7 +15,6 @@ import kr.aigyeot.shared.HandoffAlertBody
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.ReportSummaryBody
 import kr.aigyeot.shared.Role
-import java.time.ZoneId
 
 // 폰의 지금 상태와 받은 메시지 처리('받는 쪽 규칙'). 안드로이드 없이 JVM에서 시험한다.
 // 단순화: Room 대신, 양이 작아(리포트 90일, 곡 3개) 한 JSON 파일로 둔다. 커지면 Room으로 옮긴다.
@@ -35,7 +35,7 @@ data class FeedingRecord(
     val reflected: Boolean = false,
     val failed: String? = null,
     /** 보낸 돌봄 기록의 시작(ms). 중계가 `at`을 고쳐도 남아, 오늘 카드의 수유와 전송 상태를 맞춘다. 옛 기록은 null. */
-    val startAt: Long? = null,
+    val startAt: Long? = null
 )
 
 /** 기기마다 마지막으로 적용한 연결 변경 seq와 끊김 표시(`paired`·`unpaired`, `snapshot_seq`). 기기 id는 다시 쓰지 않는다. */
@@ -52,9 +52,9 @@ data class StoredAlert(val id: String, val seq: Long, val receivedAt: Long, val 
  * 이 수유 항목은 차에 반영됐거나 보냈다: 버려도 실패로 알리지 않는다('차에 반영됨').
  * 넘겨받은 항목은 보내기 전 사본일 수 있다(보내는 사이 반영됨): 지금 보낼 함의 같은 id도 본다.
  */
-internal fun PhoneState.feedingDone(item: OutboxItem): Boolean =
-    item.reflected || outbox.any { it.id == item.id && it.reflected } ||
-        feedings.any { it.msgId == item.id && (it.reflected || it.sentAt != null) }
+internal fun PhoneState.feedingDone(item: OutboxItem): Boolean = item.reflected ||
+    outbox.any { it.id == item.id && it.reflected } ||
+    feedings.any { it.msgId == item.id && (it.reflected || it.sentAt != null) }
 
 @Serializable
 data class PhoneState(
@@ -113,12 +113,11 @@ data class PhoneState(
      * 띠에 남은 수유 버림의 시작 시각(msgId → epoch ms). 기록 지우기로 기록 줄·보낼 함이 없어진 뒤 늦게 온 `feeding_state`가
      * 같은 시각이면 그 버림 안내를 걷는 데 쓴다('차에 반영됨'). `unseenDrops`에 남은 것만 둔다.
      */
-    val droppedFeedingAt: Map<String, Long> = emptyMap(),
+    val droppedFeedingAt: Map<String, Long> = emptyMap()
 ) {
     companion object {
         /** 새로 연결했을 때. 다른 차의 seq 캐시는 모두 버린다. */
-        fun paired(carId: String, deviceId: String, role: Role, now: Long) =
-            PhoneState(carId = carId, myDeviceId = deviceId, role = role, lastMessageAt = now)
+        fun paired(carId: String, deviceId: String, role: Role, now: Long) = PhoneState(carId = carId, myDeviceId = deviceId, role = role, lastMessageAt = now)
 
         /**
          * 앱을 시작할 때 읽은 상태가 지금 자격의 차 것이 아니면(빈 상태로 복구, 상태 파일을 바꾸기 전에 죽음)
@@ -127,8 +126,11 @@ data class PhoneState(
          */
         fun recoverIfNeeded(loaded: PhoneState, carId: String, deviceId: String, role: Role, now: Long): PhoneState? =
             // 같은 차라도 기기·역할이 바뀌었으면(같은 차에 다시 연결하다 죽음) 옛 상태를 쓰지 않는다. 이전 버전 파일의 빈 칸은 같다고 본다.
-            if (loaded.carId == carId && (loaded.myDeviceId ?: deviceId) == deviceId && (loaded.role ?: role) == role) null
-            else paired(carId, deviceId, role, now).needState()
+            if (loaded.carId == carId && (loaded.myDeviceId ?: deviceId) == deviceId && (loaded.role ?: role) == role) {
+                null
+            } else {
+                paired(carId, deviceId, role, now).needState()
+            }
 
         /**
          * 앱을 시작할 때의 상태. 연결이 없으면 남은 상태 파일을 쓰지 않는다: 모두 옛 차의 것이다
@@ -150,13 +152,18 @@ fun PhoneState.pruned(now: Long, sending: String? = null): PhoneState {
     val (old, kept) = outbox.partition { now - it.createdAt >= KEEP_IDS_MS && it.id != sending }
     var feedings = feedings
     var songs = songs
-    for (item in old) when {
-        item.isFeeding -> feedings = feedings.map {
-            if (it.msgId == item.id && !it.reflected && it.failed == null && it.sentAt == null) it.copy(failed = "보내지 못함 · 7일 지남") else it
-        }
-        item.payload is OutboxPayload.Song -> songs = songs.map {
-            if (it.songId == item.songId && (it.phase == SongPhase.UPLOADING || it.phase == SongPhase.WAITING) && it.error == null)
-                it.copy(error = "7일이 지나 보내지 못했어요. 다시 녹음해 주세요.") else it
+    for (item in old) {
+        when {
+            item.isFeeding -> feedings = feedings.map {
+                if (it.msgId == item.id && !it.reflected && it.failed == null && it.sentAt == null) it.copy(failed = "보내지 못함 · 7일 지남") else it
+            }
+            item.payload is OutboxPayload.Song -> songs = songs.map {
+                if (it.songId == item.songId && (it.phase == SongPhase.UPLOADING || it.phase == SongPhase.WAITING) && it.error == null) {
+                    it.copy(error = "7일이 지나 보내지 못했어요. 다시 녹음해 주세요.")
+                } else {
+                    it
+                }
+            }
         }
     }
     val toNotify = old.filter { item -> !item.isFeeding || !feedingDone(item) }
@@ -174,15 +181,14 @@ fun PhoneState.pruned(now: Long, sending: String? = null): PhoneState {
         // 차에 닿지 못한 요약을 버렸다: 내용이 같아도 다음 계기에 다시 보낸다(iOS `expireOutbox`와 같음).
         // 뒤에 남은 요약이 있으면 표시는 그것을 가리키므로 둔다.
         lastSentCareSummary =
-            if (old.any { it.payload is OutboxPayload.CareSummary } && kept.none { it.payload is OutboxPayload.CareSummary }) null else lastSentCareSummary,
+        if (old.any { it.payload is OutboxPayload.CareSummary } && kept.none { it.payload is OutboxPayload.CareSummary }) null else lastSentCareSummary,
         reports = reports.filterValues { now - it.receivedAt < KEEP_RECORDS_MS },
-        alerts = alerts.filter { now - it.receivedAt < KEEP_RECORDS_MS },
+        alerts = alerts.filter { now - it.receivedAt < KEEP_RECORDS_MS }
     )
 }
 
 /** 앱을 열 때, WebSocket·받은 함을 처리하기 전에('현재 상태 다시 받기'). */
-fun PhoneState.onAppOpen(now: Long) =
-    if (lastMessageAt != null && now - lastMessageAt > STATE_STALE_MS) needState() else this
+fun PhoneState.onAppOpen(now: Long) = if (lastMessageAt != null && now - lastMessageAt > STATE_STALE_MS) needState() else this
 
 /** '상태 요청 필요'를 켜고 세대를 올린다. */
 fun PhoneState.needState() = copy(stateRequestNeeded = true, stateNeedGen = stateNeedGen + 1)
@@ -201,7 +207,7 @@ fun PhoneState.shouldRequestState(now: Long) =
 fun PhoneState.keepingClear(from: PhoneState, migrating: Boolean = false) = copy(
     clearingCareIds = from.clearingCareIds,
     clearingSince = from.clearingSince,
-    migrationFeedings = if (migrating) from.feedings + from.migrationFeedings else emptyList(),
+    migrationFeedings = if (migrating) from.feedings + from.migrationFeedings else emptyList()
 )
 
 /**
@@ -257,7 +263,7 @@ fun PhoneState.clearedRecords(careIds: List<String> = emptyList(), at: Long? = n
     messageHoldUntil = messageHoldUntil, // 지운 항목이 받은 429도 지킨다
     // 지운 수유의 시각을 남기지 않는다('기록을 지운다'). 시각이 없으면 늦은 반영으로 그 버림 안내를 걷을 수 없으니 안내도 함께 걷는다.
     unseenDrops = unseenDrops.filterValues { it != "feeding_started" },
-    droppedFeedingAt = emptyMap(),
+    droppedFeedingAt = emptyMap()
 )
 
 // ---- 사용자 동작(보낼 함에 넣는다) ----
@@ -270,7 +276,7 @@ internal fun PhoneState.startFeeding(now: Long, id: String = ulid(now), at: Long
     val env = envelope("feeding_started", buildJsonObject { put("at", rfc3339(at)) }, now, id)
     return copy(
         feedings = (feedings + FeedingRecord(id, rfc3339(at), startAt = at)).takeLast(50),
-        outbox = outbox + OutboxItem(env.id, OutboxPayload.Message(env.type, env.body), env.ts, now),
+        outbox = outbox + OutboxItem(env.id, OutboxPayload.Message(env.type, env.body), env.ts, now)
     )
 }
 
@@ -315,6 +321,7 @@ fun PhoneState.reconciledCareSummary(care: CareFile, now: Long, zone: ZoneId, id
     // 바꿔치우면 같은 초의 옛 요약이 중계에 늦게 닿아 seq가 커져 새것을 덮을 수 있다.
     val pending = outbox.indexOfFirst { it.payload is OutboxPayload.CareSummary && !it.tried(sending) }
     val last = lastSentCareAsOf
+
     // 같은 날이고 24시간 안이어야 한다: 날이 바뀌면 차는 앞 요약의 '오늘' 값을 빼고, 24시간이 지나면 요약을 쓰지 않는다(iOS와 같음).
     // 25시간인 날(서머타임)은 같은 날짜여도 24시간이 지날 수 있다.
     fun day(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
@@ -323,17 +330,27 @@ fun PhoneState.reconciledCareSummary(care: CareFile, now: Long, zone: ZoneId, id
         val p = outbox[pending].body
         val pAsOf = instantOf((p["as_of"] as? JsonPrimitive)?.contentOrNull)
         // 앞서 보낸 더 늦은 as_of보다 이르면(시계를 되돌린 사이 넣었다) 차가 무시하므로 지금 as_of로 바꾼다(iOS와 같음).
-        if (pAsOf != null && JsonObject(p - "as_of") == key && pAsOf <= asOf && asOf - pAsOf < DAY && day(pAsOf) == day(asOf) &&
+        if (pAsOf != null &&
+            JsonObject(p - "as_of") == key &&
+            pAsOf <= asOf &&
+            asOf - pAsOf < DAY &&
+            day(pAsOf) == day(asOf) &&
             pAsOf >= (maxSentCareAsOf ?: pAsOf)
-        ) return this
+        ) {
+            return this
+        }
     } else if (key == lastSentCareSummary && last != null && last <= asOf && last >= (maxSentCareAsOf ?: last) && asOf - last < DAY && day(last) == day(asOf)) {
         return this
     }
     // 같은 초에 또 바뀌어도 그대로 보낸다: 차는 as_of가 같으면 중계 seq가 큰 것을 받는다(iOS와 같음).
     val fresh = outboxItem(OutboxPayload.CareSummary(body, tried = false), now, id)
     // 안 보낸 요약은 하나만. 줄의 자리와 재시도 대기(429 Retry-After·백오프)는 새것이 이어받는다.
-    val next = if (pending < 0) outbox + fresh else outbox.mapIndexed { i, it ->
-        if (i == pending) fresh.copy(attempts = it.attempts, nextTryAt = maxOf(fresh.nextTryAt, it.nextTryAt), networkWait = it.networkWait) else it
+    val next = if (pending < 0) {
+        outbox + fresh
+    } else {
+        outbox.mapIndexed { i, it ->
+            if (i == pending) fresh.copy(attempts = it.attempts, nextTryAt = maxOf(fresh.nextTryAt, it.nextTryAt), networkWait = it.networkWait) else it
+        }
     }
     return copy(outbox = next, lastSentCareSummary = key, lastSentCareAsOf = asOf, maxSentCareAsOf = maxOf(maxSentCareAsOf ?: asOf, asOf))
 }
@@ -344,8 +361,11 @@ fun PhoneState.reconciledCareSummary(care: CareFile, now: Long, zone: ZoneId, id
  */
 fun PhoneState.reconciled(care: CareFile, now: Long, zone: ZoneId, sending: String? = null): PhoneState =
     // 기록 지우기를 마치기 전에는 지울 수유도 보내지 않는다(iOS `enqueueLatestFeeding`과 같음).
-    if (!care.migratedFeedings || clearingCareIds != null) this
-    else reconciledFeeding(care.events, now).reconciledCareSummary(care, now, zone, sending = sending)
+    if (!care.migratedFeedings || clearingCareIds != null) {
+        this
+    } else {
+        reconciledFeeding(care.events, now).reconciledCareSummary(care, now, zone, sending = sending)
+    }
 
 /** 요약만 다시 맞춘다(보내기 직전 재계산·지우기를 마친 뒤). 수유는 정해진 네 계기에서만 보낸다. 막는 조건은 [reconciled]와 같다. */
 fun PhoneState.reconciledSummary(care: CareFile, now: Long, zone: ZoneId, sending: String? = null): PhoneState =

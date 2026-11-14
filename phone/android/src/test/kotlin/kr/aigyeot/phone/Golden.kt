@@ -1,7 +1,7 @@
 package kr.aigyeot.phone
 
-import org.junit.Assert.assertEquals
 import java.io.File
+import org.junit.Assert.assertEquals
 
 /** 골든 줄에 쓰는 값 글자: 값이 없으면 "-". */
 fun Any?.show(): String = this?.toString() ?: "-"

@@ -13,7 +13,6 @@ import com.google.android.filament.View
 import com.google.android.filament.Viewport
 import com.google.android.filament.android.FilamentHelper
 import com.google.android.filament.android.UiHelper
-import kr.aigyeot.phone.presentation.Motion
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan
@@ -23,13 +22,15 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.tan
+import kr.aigyeot.phone.presentation.Motion
 
 /** 카메라 자리(폰이 쓰는 둘. 차 좌표: 앞 +X, 위 +Y, 오른쪽 +Z, az는 앞에서 왼쪽으로 도는 각). */
 enum class CarPose(val az: Float, val el: Float, val d: Float, val r: Float, val fov: Float, val tx: Float, val ty: Float, val tz: Float) {
     /** 오늘·차 탭 카드. */
     TILE(34f, 13f, 8.3f, 2.75f, 26f, 0.05f, 0.58f, 0f),
+
     /** 첫 안내 무대. */
-    PHONE(34f, 14f, 10.6f, 3.0f, 26f, 0.05f, 0.6f, 0f),
+    PHONE(34f, 14f, 10.6f, 3.0f, 26f, 0.05f, 0.6f, 0f)
     ;
 
     /** 세로로 긴 화면에서는 반폭 [r]이 가로로 들어오게 물러난다. */
@@ -44,23 +45,32 @@ private const val D2R = (PI / 180).toFloat()
  * 돌리기는 방위만 바꾼다(가로 끌기; 세로 끌기는 화면 굴리기에 넘긴다, 손가락 처리는 Compose 쪽).
  */
 @SuppressLint("ViewConstructor")
-class CarTextureView(context: Context, private val pose: CarPose, private val cs: CarScene) : TextureView(context), Choreographer.FrameCallback {
+class CarTextureView(context: Context, private val pose: CarPose, private val cs: CarScene) :
+    TextureView(context),
+    Choreographer.FrameCallback {
     private val engine = cs.engine
     private val renderer: Renderer = engine.createRenderer().apply {
-        clearOptions = clearOptions.apply { clear = true; clearColor = doubleArrayOf(0.0, 0.0, 0.0, 0.0) }
+        clearOptions = clearOptions.apply {
+            clear = true
+            clearColor = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+        }
     }
     private val view: View = engine.createView().apply {
         scene = cs.scene
         blendMode = View.BlendMode.TRANSLUCENT
         colorGrading = cs.colorGrading
         isShadowingEnabled = false
-        multiSampleAntiAliasingOptions = multiSampleAntiAliasingOptions.apply { enabled = true; sampleCount = 4 }
+        multiSampleAntiAliasingOptions = multiSampleAntiAliasingOptions.apply {
+            enabled = true
+            sampleCount = 4
+        }
     }
     private val camEntity = EntityManager.get().create()
     private val camera: Camera = engine.createCamera(camEntity).apply { setExposure(1f) }.also { view.camera = it }
     private var swapChain: SwapChain? = null
     private var aspect = 1.6f
     private var az = pose.az
+
     /** 아직 돌지 않은 회전량(도). OrbitControls처럼 끌기는 쌓고, 프레임마다 남은 양의 0.09씩 돈다(감쇠). */
     private var pending = 0f
     private var lastFrame = 0L
@@ -69,7 +79,12 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
     private var destroyed = false
 
     var dark = false
-        set(v) { if (field != v) { field = v; invalidate3d() } }
+        set(v) {
+            if (field != v) {
+                field = v
+                invalidate3d()
+            }
+        }
 
     /** 손으로 돌려 처음 자리가 아닌가('처음 자리로' 단추를 보일지). */
     var onMoved: ((Boolean) -> Unit)? = null
@@ -86,7 +101,10 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
                 invalidate3d()
             }
             override fun onDetachedFromSurface() {
-                swapChain?.let { engine.destroySwapChain(it); engine.flushAndWait() }
+                swapChain?.let {
+                    engine.destroySwapChain(it)
+                    engine.flushAndWait()
+                }
                 swapChain = null
             }
             override fun onResized(width: Int, height: Int) {
@@ -106,10 +124,15 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
         isOpaque = false
         // UiHelper가 단 수신기를 감싸 첫 onSurfaceTextureUpdated를 안다(차 앱 CarView와 같은 방법). SwapChain 다 그림 알림은 에뮬레이터 OpenGL에서 오지 않는다.
         val inner = surfaceTextureListener
-        if (inner != null) surfaceTextureListener = object : SurfaceTextureListener by inner {
-            override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) {
-                inner.onSurfaceTextureUpdated(st)
-                if (!shown) { shown = true; onFirstFrame?.invoke() }
+        if (inner != null) {
+            surfaceTextureListener = object : SurfaceTextureListener by inner {
+                override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) {
+                    inner.onSurfaceTextureUpdated(st)
+                    if (!shown) {
+                        shown = true
+                        onFirstFrame?.invoke()
+                    }
+                }
             }
         }
     }
@@ -140,22 +163,44 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
         set(v) {
             if (field == v) return
             field = v
-            if (v) { az = (az + pending) % 360f; pending = 0f; back?.let { az = pose.az; back = null }; invalidate3d() }
+            if (v) {
+                az = (az + pending) % 360f
+                pending = 0f
+                back?.let {
+                    az = pose.az
+                    back = null
+                }
+                invalidate3d()
+            }
         }
 
     /** '처음 자리로'(1.1초, 동작 줄이기면 바로). */
     fun reset(animate: Boolean) {
         pending = 0f
         setMoved(false)
-        if (!animate) { az = pose.az; invalidate3d(); return }
+        if (!animate) {
+            az = pose.az
+            invalidate3d()
+            return
+        }
         val to = az + (((pose.az - az + 540f) % 360f) - 180f)
         back = Back(az, to, System.nanoTime())
         invalidate3d()
     }
 
-    private fun setMoved(m: Boolean) { if (moved != m) { moved = m; onMoved?.invoke(m) } }
+    private fun setMoved(m: Boolean) {
+        if (moved != m) {
+            moved = m
+            onMoved?.invoke(m)
+        }
+    }
 
-    private fun invalidate3d() { if (!posted && !destroyed) { posted = true; Choreographer.getInstance().postFrameCallback(this) } }
+    private fun invalidate3d() {
+        if (!posted && !destroyed) {
+            posted = true
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
 
     override fun doFrame(frameTimeNanos: Long) {
         posted = false
@@ -165,7 +210,12 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
             val k = min(1f, (System.nanoTime() - b.start) / 1e6f / Motion.camera.ms)
             val e = Motion.camera.easing.transform(k) // 카메라 이동 곡선 cubic-bezier(.65,0,.35,1)
             az = b.from + (b.to - b.from) * e
-            if (k >= 1f) { back = null; az = pose.az } else more = true
+            if (k >= 1f) {
+                back = null
+                az = pose.az
+            } else {
+                more = true
+            }
         }
         // 감쇠: 프레임 간격(60Hz 기준 배수)만큼 남은 회전량을 줄인다(화면 주사율과 무관하게 같은 시간에 멈춘다).
         val f = if (lastFrame == 0L) 1f else ((frameTimeNanos - lastFrame) / 1e6f / FRAME_MS).coerceIn(0.25f, 4f)
@@ -175,16 +225,24 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
             az = (az + step) % 360f
             pending -= step
             more = true
-        } else pending = 0f
+        } else {
+            pending = 0f
+        }
         cs.theme(dark)
         val dist = pose.distance(aspect)
-        val a = az * D2R; val e = pose.el * D2R
+        val a = az * D2R
+        val e = pose.el * D2R
         camera.setProjection(pose.fov.toDouble(), aspect.toDouble(), 0.1, 80.0, Camera.Fov.VERTICAL)
         camera.lookAt(
             (cos(e) * cos(a) * dist + pose.tx).toDouble(), (sin(e) * dist + pose.ty).toDouble(), (-cos(e) * sin(a) * dist + pose.tz).toDouble(),
-            pose.tx.toDouble(), pose.ty.toDouble(), pose.tz.toDouble(), 0.0, 1.0, 0.0,
+            pose.tx.toDouble(), pose.ty.toDouble(), pose.tz.toDouble(), 0.0, 1.0, 0.0
         )
-        val rendered = renderer.beginFrame(sc, frameTimeNanos).also { if (it) { renderer.render(view); renderer.endFrame() } }
+        val rendered = renderer.beginFrame(sc, frameTimeNanos).also {
+            if (it) {
+                renderer.render(view)
+                renderer.endFrame()
+            }
+        }
         if (more || !rendered) invalidate3d() else lastFrame = 0L
     }
 
@@ -194,7 +252,9 @@ class CarTextureView(context: Context, private val pose: CarPose, private val cs
         Choreographer.getInstance().removeFrameCallback(this)
         ui.detach()
         swapChain?.let { engine.destroySwapChain(it) }
-        engine.destroyRenderer(renderer); engine.destroyView(view); engine.destroyCameraComponent(camEntity)
+        engine.destroyRenderer(renderer)
+        engine.destroyView(view)
+        engine.destroyCameraComponent(camEntity)
         EntityManager.get().destroy(camEntity)
     }
 

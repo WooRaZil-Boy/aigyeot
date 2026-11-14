@@ -31,8 +31,9 @@ internal class Inbox(
     private val status: MutableStateFlow<LinkStatus>,
     private val wakeOutbox: () -> Unit,
     private val wakeSongs: () -> Unit,
-    private val recheck: () -> Unit,        // 폰이 생기거나 없어졌다: 소켓 유지 여부를 다시 판단
-    private val onNewOwner: () -> Unit,     // 연결 코드가 쓰였다: 화면이 열려 있으면 새 코드
+    private val recheck: () -> Unit, // 폰이 생기거나 없어졌다: 소켓 유지 여부를 다시 판단
+    // 연결 코드가 쓰였다: 화면이 열려 있으면 새 코드
+    private val onNewOwner: () -> Unit
 ) {
     private val dao = room.dao
 
@@ -46,9 +47,14 @@ internal class Inbox(
                     val msgs = r.value.messages.sortedBy { it.seq ?: 0 }
                     val done = mutableListOf<String>()
                     var failed = false
-                    for (env in msgs) when (receive(env, c)) {
-                        Link.Rx.ACK -> if (env.id.isNotEmpty()) done += env.id
-                        Link.Rx.FAIL -> { failed = true; break }
+                    for (env in msgs) {
+                        when (receive(env, c)) {
+                            Link.Rx.ACK -> if (env.id.isNotEmpty()) done += env.id
+                            Link.Rx.FAIL -> {
+                                failed = true
+                                break
+                            }
+                        }
                     }
                     for (ids in done.chunked(100)) {
                         val a = relay.ack(c.token, ids)
@@ -77,7 +83,7 @@ internal class Inbox(
         }
         val carId = (c ?: creds.cred)?.carId ?: env.car
         var out: Applied? = null
-        if (!bestEffortSuspend("받기 저장 id=${env.id} type=${env.type}") { out = room.receive(env, clock(), carId) }) return Link.Rx.FAIL   // 다 실패하면 ack하지 않는다
+        if (!bestEffortSuspend("받기 저장 id=${env.id} type=${env.type}") { out = room.receive(env, clock(), carId) }) return Link.Rx.FAIL // 다 실패하면 ack하지 않는다
         out?.let { after(it, carId) }
         Link.Rx.ACK
     }
@@ -85,8 +91,9 @@ internal class Inbox(
     /** 차 화면 수유 입력: 받기와 같은 잠금에서 폰 feeding_started와 같은 수유 함수를 쓴다. 다 실패하면 로그만(사건을 내지 않는다). */
     suspend fun feedingFromCar(at: Long) = rx.withLock {
         var out: Applied? = null
-        if (bestEffortSuspend("차 화면 수유 저장") { out = room.tx { Applied().also { room.feedingStarted(at, FeedingFrom.CAR_SCREEN, null, clock(), it) } } })
+        if (bestEffortSuspend("차 화면 수유 저장") { out = room.tx { Applied().also { room.feedingStarted(at, FeedingFrom.CAR_SCREEN, null, clock(), it) } } }) {
             out?.let { after(it) }
+        }
     }
 
     /** 커밋 뒤: 사건, 파일 정리, 일꾼 깨우기, 화면 상태(5단계). */
@@ -94,13 +101,18 @@ internal class Inbox(
         out.deleteFiles.forEach { File(it).delete() }
         out.events.forEach(post)
         // 실제 최신 요약은 Room 행(care_applied) 하나가 든다. link는 사건만 내고, 장면 중이면 호스트가 버리고 장면 끝 복원 ⑤가 이 행으로 맞춘다
-        if (out.careCleared) post(CareCleared(clock()))   // 요약을 보낸 owner가 빠졌다. 행은 커밋 안에서 지웠다
-        out.care?.let { c -> post(CareSummary(clock(), c, out.careSeq, carId)) }   // 판정·Room 행은 커밋 안에서 끝났다
+        if (out.careCleared) post(CareCleared(clock())) // 요약을 보낸 owner가 빠졌다. 행은 커밋 안에서 지웠다
+        out.care?.let { c -> post(CareSummary(clock(), c, out.careSeq, carId)) } // 판정·Room 행은 커밋 안에서 끝났다
         if (out.outbox) wakeOutbox()
         if (out.download) wakeSongs()
-        if (out.phones) { refreshStatus(); recheck() } else if (out.status) refreshStatus()
+        if (out.phones) {
+            refreshStatus()
+            recheck()
+        } else if (out.status) {
+            refreshStatus()
+        }
         out.justPaired?.let { id -> status.update { it.copy(justPaired = id, error = null) } }
-        if (out.newOwner) onNewOwner()   // 연결 코드가 쓰였다. 화면이 열려 있으면 새 코드
+        if (out.newOwner) onNewOwner() // 연결 코드가 쓰였다. 화면이 열려 있으면 새 코드
     }
 
     // 화면 표시용 읽기라 다 실패해도 던지지 않는다(뒤의 재확인·justPaired를 막지 않는다). 상태는 직전 값, 다음 갱신 때 맞춰진다
@@ -113,17 +125,21 @@ internal class Inbox(
     }
 
     /** 기기 목록 대조. 받기와 섞이지 않게 같은 잠금 안에서 한다. */
-    suspend fun reconcileDevices(c: Cred): Boolean {
-        return when (val r = relay.devices(c.token)) {
-            // after도 잠금 안: LinkChanged 순서. 그사이 방이 바뀌었으면 옛 방의 목록을 새 방에 적용하지 않는다
-            // 방이 바뀌어 적용 안 했으면 false. 다 실패해도 false(적용 안 함). 호출자는 다음 확인·대조 때 다시 한다
-            is Res.Ok -> rx.withLock {
-                var out: Applied? = null
-                bestEffortSuspend("기기 목록 대조") { out = if (creds.cred === c) Applied().also { room.reconcile(r.value, clock(), it) } else null }
-                out?.let { after(it); true } ?: false
-            }
-            is Res.Err -> { if (r.status == 401) creds.invalidate(c); false }
-            Res.Offline -> false
+    suspend fun reconcileDevices(c: Cred): Boolean = when (val r = relay.devices(c.token)) {
+        // after도 잠금 안: LinkChanged 순서. 그사이 방이 바뀌었으면 옛 방의 목록을 새 방에 적용하지 않는다
+        // 방이 바뀌어 적용 안 했으면 false. 다 실패해도 false(적용 안 함). 호출자는 다음 확인·대조 때 다시 한다
+        is Res.Ok -> rx.withLock {
+            var out: Applied? = null
+            bestEffortSuspend("기기 목록 대조") { out = if (creds.cred === c) Applied().also { room.reconcile(r.value, clock(), it) } else null }
+            out?.let {
+                after(it)
+                true
+            } ?: false
         }
+        is Res.Err -> {
+            if (r.status == 401) creds.invalidate(c)
+            false
+        }
+        Res.Offline -> false
     }
 }

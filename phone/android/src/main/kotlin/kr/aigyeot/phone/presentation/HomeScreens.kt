@@ -14,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -86,12 +85,16 @@ internal fun GuardianAlerts(s: PhoneState, go: (Route) -> Unit) {
     val p = Tokens.colors
     // 화면이 떠 있는 동안 새로 온 인계 알림 판만 들어온다.
     val known = remember { s.alerts.map { it.id }.toSet() }
-    for (a in s.alerts.asReversed().take(5)) key(a.id) { EnterNew(a.id !in known) {
-        Block(padding = androidx.compose.foundation.layout.PaddingValues(18.dp), onClick = { go(Route.Alert(a.id)) }) {
-            Badge("차에서 · ${agoText(instantOf(a.body.occurredAt) ?: a.receivedAt, now)}", R.drawable.ic_car_front, child = true) // '~ 전'
-            Text(a.body.text, Modifier.padding(top = 10.dp), style = Type.headline, color = p.textPrimary)
+    for (a in s.alerts.asReversed().take(5)) {
+        key(a.id) {
+            EnterNew(a.id !in known) {
+                Block(padding = androidx.compose.foundation.layout.PaddingValues(18.dp), onClick = { go(Route.Alert(a.id)) }) {
+                    Badge("차에서 · ${agoText(instantOf(a.body.occurredAt) ?: a.receivedAt, now)}", R.drawable.ic_car_front, child = true) // '~ 전'
+                    Text(a.body.text, Modifier.padding(top = 10.dp), style = Type.headline, color = p.textPrimary)
+                }
+            }
         }
-    } }
+    }
 }
 
 /** 인계 알림 상세(guardian). */
@@ -108,7 +111,7 @@ fun AlertScreen(onBack: () -> Unit, vm: AlertViewModel = appViewModel()) {
                 Badge(
                     "차에서 · ${agoText(instantOf(alert.body.occurredAt) ?: alert.receivedAt, System.currentTimeMillis())}",
                     R.drawable.ic_car_front,
-                    child = true,
+                    child = true
                 )
                 Text(alert.body.text, Modifier.padding(top = 10.dp, bottom = 6.dp), style = Type.headline, color = p.textPrimary)
                 // 이름·값 두 칸(iOS detailRow와 같음, '이름: 값' 콜론 없음)
@@ -126,7 +129,7 @@ private fun qr(text: String): Bitmap {
         BarcodeFormat.QR_CODE,
         512,
         512,
-        mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 1),
+        mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 1)
     )
     return Bitmap.createBitmap(m.width, m.height, Bitmap.Config.RGB_565).apply {
         for (x in 0 until m.width) for (y in 0 until m.height) setPixel(x, y, if (m[x, y]) 0xFF000000.toInt() else -1)
@@ -144,13 +147,15 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
         if (ui.role == Role.GUARDIAN) {
             Group {
                 SettingRow(
-                    "인계 알림 받기", R.drawable.ic_bell, sub = "아기가 계속 울면 알려요", // 인계 알림 부제
+                    "인계 알림 받기",
+                    R.drawable.ic_bell,
+                    sub = "아기가 계속 울면 알려요", // 인계 알림 부제
                     enabled = !ui.busy,
                     checked = ui.handoffAlerts,
                     onCheckedChange = { on ->
                         if (on && Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
                         vm.setHandoff(on)
-                    },
+                    }
                 )
             }
             FootNote("리포트는 알림을 꺼도 받아요") // 인계 알림 안내 글
@@ -171,7 +176,7 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
                         Box(
                             Modifier.size(196.dp).clip(Radius.control).background(androidx.compose.ui.graphics.Color.White).padding(10.dp)
                                 .semantics { contentDescription = "초대 QR" },
-                            contentAlignment = Alignment.Center,
+                            contentAlignment = Alignment.Center
                         ) {
                             Image(qr(inv.link).asImageBitmap(), null, Modifier.size(176.dp))
                             AppMark(40.dp, 11.dp)
@@ -191,12 +196,16 @@ fun GuardiansScreen(onBack: () -> Unit, vm: GuardiansViewModel = appViewModel())
                 }
                 if (!ui.online) Text("인터넷이 필요해요", Modifier.padding(top = 8.dp), style = Type.caption, color = p.textTertiary)
             }
-            if (ui.phones.isNotEmpty()) ListBlock("연결된 휴대폰") {
-                for (d in ui.phones) ListRow(
-                    if (d.role == Role.OWNER) "함께 타는 보호자" else "다른 보호자",
-                    phoneSub(d, ui.myDeviceId),
-                    icon = if (d.role == Role.OWNER) R.drawable.ic_car_front else R.drawable.ic_smartphone,
-                )
+            if (ui.phones.isNotEmpty()) {
+                ListBlock("연결된 휴대폰") {
+                    for (d in ui.phones) {
+                        ListRow(
+                            if (d.role == Role.OWNER) "함께 타는 보호자" else "다른 보호자",
+                            phoneSub(d, ui.myDeviceId),
+                            icon = if (d.role == Role.OWNER) R.drawable.ic_car_front else R.drawable.ic_smartphone
+                        )
+                    }
+                }
             }
         }
         ui.error?.let { Text(it, style = Type.caption, color = p.danger) }

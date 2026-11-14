@@ -10,9 +10,9 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.util.Log
+import java.util.Locale
 import kr.aigyeot.app.exec.TtsGate
 import kr.aigyeot.app.exec.TtsPort
-import java.util.Locale
 
 // ---- 말하기 ----
 
@@ -23,18 +23,24 @@ import java.util.Locale
 internal class PleosTts(private val ctx: Context, private val ex: ExecThread) : TtsPort {
     private val am = ctx.getSystemService(AudioManager::class.java)
     private var tts: TextToSpeech? = null
-    private var events: EventListener? = null                 // addEventListener한 것. release에서 뗀다
+    private var events: EventListener? = null // addEventListener한 것. release에서 뗀다
     private val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
     private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(attrs)
         // DUCK·GAIN은 무시
-        .setOnAudioFocusChangeListener({ c -> if (c == AudioManager.AUDIOFOCUS_LOSS || c == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
-            ex.guard { gate.focusLost() } }, ex.handler).build()
+        .setOnAudioFocusChangeListener({ c ->
+            if (c == AudioManager.AUDIOFOCUS_LOSS || c == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                ex.guard { gate.focusLost() }
+            }
+        }, ex.handler).build()
     private var gate: TtsGate = newGate()
 
     private fun newGate() = TtsGate(
-        sdkSpeak = { (tts ?: error("tts 없음")).speak(it, true) }, sdkStop = { tts?.stop() },
+        sdkSpeak = { (tts ?: error("tts 없음")).speak(it, true) },
+        sdkStop = { tts?.stop() },
         requestFocus = { am.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED },
-        abandonFocus = { am.abandonAudioFocusRequest(focus) }, sched = ex)
+        abandonFocus = { am.abandonAudioFocusRequest(focus) },
+        sched = ex
+    )
 
     fun start() {
         val g = newGate().also { gate = it }
@@ -43,26 +49,41 @@ internal class PleosTts(private val ctx: Context, private val ex: ExecThread) : 
             override fun onStart() {}
             override fun onReady() {}
             override fun onDone() = ex.guard { g.settled(true) }
-            override fun onError(e: TtsError) = ex.guard { Log.w(TAG, "tts $e"); g.settled(false) }
+            override fun onError(e: TtsError) = ex.guard {
+                Log.w(TAG, "tts $e")
+                g.settled(false)
+            }
             override fun onStop() = ex.guard { g.settled(false) }
             override fun onUpdatedRms(rms: Double) {}
         }
         t.initialize(object : TtsInit {
             override fun onSuccess() = ex.guard {
-                if (tts !== t) return@guard                          // 그사이 release됐다
-                ex.off.run {                                          // SDK 설정은 잠금 밖 레인에서, 칸·워밍업은 잠금 안에서
+                if (tts !== t) return@guard // 그사이 release됐다
+                ex.off.run {
+                    // SDK 설정은 잠금 밖 레인에서, 칸·워밍업은 잠금 안에서
                     t.setLocale(Locale.KOREA)
                     t.setAudioAttributes(attrs)
                     t.addEventListener(ev)
-                    ex.guard { if (tts === t) { events = ev; g.warm() } else runCatching { t.removeEventListener(ev) } }
+                    ex.guard {
+                        if (tts === t) {
+                            events = ev
+                            g.warm()
+                        } else {
+                            runCatching { t.removeEventListener(ev) }
+                        }
+                    }
                 }
             }
-            override fun onFailure(e: TtsError) = ex.guard { Log.w(TAG, "tts init $e"); g.initFailed() }
+            override fun onFailure(e: TtsError) = ex.guard {
+                Log.w(TAG, "tts init $e")
+                g.initFailed()
+            }
         })
     }
 
     override fun speak(text: String, done: (Boolean) -> Unit) = gate.speak(text, done)
     override fun stop() = gate.stop()
+
     // 공식 순서: 리스너 해제 뒤 release
     fun release() {
         gate.stop()

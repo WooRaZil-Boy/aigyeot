@@ -1,5 +1,7 @@
 package kr.aigyeot.app.scenario
 
+import java.io.File
+import kotlin.test.assertFailsWith
 import kr.aigyeot.app.exec.RestAreas
 import kr.aigyeot.engine.CabinTemp
 import kr.aigyeot.engine.Method
@@ -9,8 +11,6 @@ import kr.aigyeot.engine.Sid
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import kotlin.test.assertFailsWith
 
 class SceneFileTest {
     private fun scene(steps: String, override: String = "\"CabinTemp\"", extra: String = "") = """
@@ -18,7 +18,8 @@ class SceneFileTest {
          "setup":{"profile":{"birthYm":"2026-02","carseat":"RIGHT","feedingIntervalMin":null,"hasSibling":false},
                   "methods":["WHITE_NOISE","SONG:s1"],"history":[{"method":"LULLABY","result":"FAIL","daysAgo":3}],
                   "seed":7,"override":[$override],"otherGuardians":1},
-         "steps":[$steps]}""".trimIndent()
+         "steps":[$steps]}
+    """.trimIndent()
 
     private fun bad(steps: String, override: String = "\"CabinTemp\"", extra: String = "") =
         assertFailsWith<SceneError> { parseScene(scene(steps, override, extra)) }.message!!
@@ -31,7 +32,7 @@ class SceneFileTest {
 
     @Test fun `assets의 장면 파일은 모두 읽힌다`() {
         val files = File("src/debug/assets/scenario").listFiles { f -> f.extension == "json" }!!
-        assertEquals(27, files.size)   // A~E, C2, D2, F14 20개
+        assertEquals(27, files.size) // A~E, C2, D2, F14 20개
         files.forEach { f -> assertEquals(f.nameWithoutExtension, parseScene(f.readText()).id) }
     }
 
@@ -50,7 +51,10 @@ class SceneFileTest {
     }
 
     @Test fun `모든 동작과 setup을 읽는다`() {
-        val s = parseScene(scene("""
+        val s =
+            parseScene(
+                scene(
+                    """
             {"t":0,"vc":"PUT /vehicle/gear?gear=Drive"},
             {"t":1,"inject":{"event":"CabinTemp","celsius":27}},
             {"t":2,"audio":{"file":"cry/a.pcm","fromSec":1,"durSec":40,"gainDb":-6,"cry":true}},
@@ -60,7 +64,9 @@ class SceneFileTest {
             {"t":5,"phone":{"type":"feeding_started","body":{"atOffsetSec":-9}}},
             {"t":6,"expect":{"command":"SendToPhone","type":"handoff_alert","body":{"kind":"x"},"by":14}},
             {"t":7,"expectNone":{"command":"Speak","sid":"S12","for":10},"note":"설명"}
-        """))
+        """
+                )
+            )
         assertEquals(2, s.repeat)
         assertEquals(MethodKind.SONG, s.setup.methods[1].kind)
         assertEquals("s1", s.setup.methods[1].songId)
@@ -68,35 +74,44 @@ class SceneFileTest {
         assertEquals(Vc("PUT", "/vehicle/gear?gear=Drive"), s.steps[0].action)
         assertEquals(Audio("cry/a.pcm", 1.0, 40.0, -6.0, true), s.steps[2].action)
         assertEquals(Sid.S07, (s.steps[4].action as Say).onAsk)
-        assertEquals(30.0, (s.steps[5].action as Say).bySec, 0.0)   // by 기본값
+        assertEquals(30.0, (s.steps[5].action as Say).bySec, 0.0) // by 기본값
         assertEquals("설명", s.steps[8].note)
         assertTrue(injectEvent("CabinTemp", (s.steps[1].action as Inject).fields, 5) == CabinTemp(5, 27.0))
     }
 
     @Test fun `RouteState 주입은 쉼터 목록까지 사건으로 바뀐다`() {
-        val s = parseScene(scene("""{"t":1,"inject":{"event":"RouteState","hasDestination":true,"remainingSec":360,"rests":[
-            {"id":"r1","name":"휴게소","kind":"REST_AREA","distanceKm":7,"hasNursingRoom":true}]}}""", "\"RouteState\""))
+        val s =
+            parseScene(
+                scene(
+                    """{"t":1,"inject":{"event":"RouteState","hasDestination":true,"remainingSec":360,"rests":[
+            {"id":"r1","name":"휴게소","kind":"REST_AREA","distanceKm":7,"hasNursingRoom":true}]}}""",
+                    "\"RouteState\""
+                )
+            )
         val e = injectEvent("RouteState", (s.steps[0].action as Inject).fields, 9) as RouteState
         assertEquals(7.0, e.rests.single().distanceKm, 0.0)
         assertEquals("키가 없으면 쉼터 목록을 기다리지 않는다", false, e.restsPending)
-        val p = parseScene(scene("""{"t":1,"inject":{"event":"RouteState","hasDestination":true,"remainingSec":360,"rests":[],"restsPending":true}}""", "\"RouteState\""))
+        val p =
+            parseScene(
+                scene("""{"t":1,"inject":{"event":"RouteState","hasDestination":true,"remainingSec":360,"rests":[],"restsPending":true}}""", "\"RouteState\"")
+            )
         assertEquals("장면도 기다림을 흉내 낼 수 있다", true, (injectEvent("RouteState", (p.steps[0].action as Inject).fields, 9) as RouteState).restsPending)
     }
 
     @Test fun `형식 오류는 거절한다`() {
         assertTrue(bad("""{"t":1,"jump":"x"}""").contains("모르는 동작"))
         assertTrue(bad("""{"t":1,"tap":"BABY_ABOARD","vc":"PUT /x"}""").contains("하나"))
-        assertTrue(bad("""{"t":1,"inject":{"event":"RearDoor","side":"LEFT","open":true}}""").contains("override"))   // override에 없는 사건
+        assertTrue(bad("""{"t":1,"inject":{"event":"RearDoor","side":"LEFT","open":true}}""").contains("override")) // override에 없는 사건
         assertTrue(bad("""{"t":1,"inject":{"event":"CabinTemp","celsius":"따뜻"}}""").contains("CabinTemp"))
         assertTrue(bad("""{"t":1,"inject":{"event":"CabinTemp","celsius":20,"humid":1}}""").contains("CabinTemp"))
-        assertTrue(bad("""{"t":1,"vc":"PUT /vehicle/controls?speed=50&brake=0"}""").contains("네 값"))       // 네 값을 늘 함께
+        assertTrue(bad("""{"t":1,"vc":"PUT /vehicle/controls?speed=50&brake=0"}""").contains("네 값")) // 네 값을 늘 함께
         assertTrue(bad("""{"t":1,"vc":"PUT /vehicle/controls?speed=5.5&accelerator=0&brake=0&steering=0"}""").contains("정수"))
         assertTrue(bad("""{"t":1,"vc":"DELETE /vehicle/gear"}""").contains("vc"))
         assertTrue(bad("""{"t":1,"tap":"HONK"}""").contains("tap"))
         assertTrue(bad("""{"t":1,"say":{"intent":"YES"}}""").contains("onAsk"))
         assertTrue(bad("""{"t":1,"say":{"intent":"SWITCH_SOUND"}}""").contains("method"))
         assertTrue(bad("""{"t":1,"expect":{"state":"SLEEPING","by":3}}""").contains("state"))
-        assertTrue(bad("""{"t":1,"expect":{"command":"StartPlay","by":3}}""").contains("할 일"))   // 틀린 이름의 expectNone이 조용히 통과하지 않게
+        assertTrue(bad("""{"t":1,"expect":{"command":"StartPlay","by":3}}""").contains("할 일")) // 틀린 이름의 expectNone이 조용히 통과하지 않게
         assertTrue(bad("""{"t":1,"expectNone":{"command":"Speek","for":3}}""").contains("할 일"))
         assertTrue(bad("""{"t":1,"expect":{"state":"IDLE"}}""").contains("by"))
         assertTrue(bad("""{"t":1,"expect":{"by":3}}""").contains("하나는"))

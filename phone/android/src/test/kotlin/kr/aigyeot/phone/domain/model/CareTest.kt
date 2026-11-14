@@ -1,5 +1,9 @@
 package kr.aigyeot.phone.domain.model
 
+import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
@@ -7,7 +11,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kr.aigyeot.phone.fixture
 import kr.aigyeot.phone.sharedFile
 import kr.aigyeot.shared.CareSummaryBody
-import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.FeedingStateBody
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.ReportSummaryBody
@@ -18,10 +21,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 /**
  * 돌봄 기록 규칙, 표준 예제, 내보내기. 시험 이름은 iOS와 같은 글자다(iOS는 `test_` + 같은 글자).
@@ -44,7 +43,7 @@ class CareTest {
         side: FeedSide? = null,
         ml: Int? = null,
         note: String? = null,
-        deletedAt: Long? = null,
+        deletedAt: Long? = null
     ) = CareEvent(id, kind, start, end, endUnknown, zone, side, ml, null, note, CareSource.PHONE, start, start, deletedAt)
 
     private fun feed(id: String, start: Long, end: Long? = null, endUnknown: Boolean = end == null, deletedAt: Long? = null) =
@@ -209,7 +208,10 @@ class CareTest {
         val back = store.load()
         assertEquals(now - HOUR, back.lastSentFeedingAt)
         assertEquals(sent, feedingSent(back).single())
-        val blocked = File(dir, "blocked.json").apply { mkdirs(); File(this, "x").writeText("x") } // 디렉터리라 이름 바꾸기가 실패한다
+        val blocked = File(dir, "blocked.json").apply {
+            mkdirs()
+            File(this, "x").writeText("x")
+        } // 디렉터리라 이름 바꾸기가 실패한다
         assertTrue(runCatching { kr.aigyeot.phone.data.StateStore(blocked).save(s) }.isFailure)
         dir.deleteRecursively()
     }
@@ -381,8 +383,14 @@ class CareTest {
         assertEquals("잠 · 오후 11:00–오전 2:00 · 3시간", logRowText(sleep, seoul))
         // 끝이 시작과 같은 오전·오후면 날짜가 달라도 끝의 오전·오후를 뺀다(iOS와 같음).
         assertEquals("오후 11:00–1:00", "${koClock(at(2026, 11, 4, 23), seoul)}–${koClockAfter(at(2026, 11, 4, 23), at(2026, 11, 5, 13), seoul)}")
-        assertEquals("수유 · 오후 12:52–1:07 · 왼쪽", logRowText(ev("f", CareKind.FEED, at(2026, 11, 5, 12, 52), at(2026, 11, 5, 13, 7), side = FeedSide.LEFT), seoul))
-        assertEquals("수유 · 오후 3:00–3:05 · 젖병 120ml", logRowText(ev("b", CareKind.FEED, at(2026, 11, 5, 15), at(2026, 11, 5, 15, 5), side = FeedSide.BOTTLE, ml = 120), seoul))
+        assertEquals(
+            "수유 · 오후 12:52–1:07 · 왼쪽",
+            logRowText(ev("f", CareKind.FEED, at(2026, 11, 5, 12, 52), at(2026, 11, 5, 13, 7), side = FeedSide.LEFT), seoul)
+        )
+        assertEquals(
+            "수유 · 오후 3:00–3:05 · 젖병 120ml",
+            logRowText(ev("b", CareKind.FEED, at(2026, 11, 5, 15), at(2026, 11, 5, 15, 5), side = FeedSide.BOTTLE, ml = 120), seoul)
+        )
         assertEquals("수유 · 오후 3:00–3:05", logRowText(ev("b", CareKind.FEED, at(2026, 11, 5, 15), at(2026, 11, 5, 15, 5)), seoul))
         // 시작과 끝이 같은 분이면 시각 하나만. 초가 달라도 같은 분이면 같다. 분이 바뀌면 구간.
         val f457 = at(2026, 11, 5, 16, 57)
@@ -392,7 +400,10 @@ class CareTest {
         assertEquals("탑승 · 오후 4:57", CarLine("s", null, f457, f457 + 1_000, null, null).text(seoul))
         assertEquals("수유 · 오후 12:00 · 끝 시각 모름", logRowText(feed("u", at(2026, 11, 5, 12)), seoul))
         assertEquals("수유 · 오후 12:00 · 왼쪽 · 끝 시각 모름", logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.LEFT), seoul))
-        assertEquals("수유 · 오후 12:00 · 젖병 80ml · 끝 시각 모름", logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.BOTTLE, ml = 80), seoul))
+        assertEquals(
+            "수유 · 오후 12:00 · 젖병 80ml · 끝 시각 모름",
+            logRowText(ev("u", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, side = FeedSide.BOTTLE, ml = 80), seoul)
+        )
         // 수유·잠·기저귀에 단 메모는 둘째 줄, 메모 기록은 첫 줄에만.
         assertEquals("트림 함", memoLine(ev("m", CareKind.FEED, at(2026, 11, 5, 12), endUnknown = true, note = "트림 함")))
         assertNull(memoLine(ev("m", CareKind.NOTE, at(2026, 11, 5, 12), note = "트림 함")))
@@ -434,7 +445,7 @@ class CareTest {
             feed("d", day(5, 2)),
             feed("e", day(5, 4, 30)),
             feed("x", day(5, 5), deletedAt = now), // 지운 것은 빼고
-            feed("old", day(4, 9) - 7 * DAY), // 7일 밖
+            feed("old", day(4, 9) - 7 * DAY) // 7일 밖
         )
         val p4 = carePattern(CareFile(events = feeds), emptyList(), now, seoul)
         assertEquals(LocalDate.of(2026, 10, 30), p4.days.first())
@@ -504,7 +515,13 @@ class CareTest {
         assertEquals(HOUR, on.sleepPerDayMs!!.last()) // 진행 중 잠은 합계에 넣지 않는다
         assertEquals(1, on.sleepDays)
         // 자정을 넘는 잠은 걸친 두 날을 모두 센다(23시~2시 → 11월 4일·5일). 길이는 그날 몫만 더한다.
-        val cross = carePattern(CareFile(events = listOf(ev("x", CareKind.SLEEP, at(2026, 11, 4, 23), at(2026, 11, 5, 2))), sleepDiaperEnabled = true), emptyList(), now, seoul)
+        val cross =
+            carePattern(
+                CareFile(events = listOf(ev("x", CareKind.SLEEP, at(2026, 11, 4, 23), at(2026, 11, 5, 2))), sleepDiaperEnabled = true),
+                emptyList(),
+                now,
+                seoul
+            )
         assertEquals(2, cross.sleepDays)
         assertEquals("평균 1시간 30분", avgDurationText(cross.sleepPerDayMs!!))
         assertEquals("평균 1시간", avgDurationText(on.sleepPerDayMs))
@@ -541,11 +558,11 @@ class CareTest {
                     timeline = listOf(
                         ep.copy(
                             sound = kr.aigyeot.shared.SoundRef(kr.aigyeot.shared.SoundMethod.WHITE_NOISE, "x"),
-                            result = kr.aigyeot.shared.EpisodeResult.UNDETERMINED,
-                        ),
-                    ),
-                ),
-            ),
+                            result = kr.aigyeot.shared.EpisodeResult.UNDETERMINED
+                        )
+                    )
+                )
+            )
         )[1]
         assertEquals("차에서 울음 · 오전 8:05 · 백색소음 · 판정하지 못함", unknown.text(seoul))
         // 소리 바꾸기 요청으로 시작한 에피소드는 '울음' 줄로 만들지 않는다.
@@ -561,7 +578,10 @@ class CareTest {
         assertEquals("11월 5일(목)", reportDate(report, seoul))
         assertEquals("울음 1번", reportRowSub(switched))
         assertEquals("울음 기록 없음 · 연습 장면", reportRowSub(report.copy(timeline = emptyList(), simulated = true)))
-        assertEquals("11월 5일(목) 오후 11:50–오전 12:20", reportRowTitle(report.copy(startedAt = "2026-11-05T23:50:00+09:00", endedAt = "2026-11-06T00:20:00+09:00"), seoul))
+        assertEquals(
+            "11월 5일(목) 오후 11:50–오전 12:20",
+            reportRowTitle(report.copy(startedAt = "2026-11-05T23:50:00+09:00", endedAt = "2026-11-06T00:20:00+09:00"), seoul)
+        )
         assertEquals("오전 3:04–3:05", reportSpan("2026-11-06T03:04:10+09:00", "2026-11-06T03:05:00+09:00", seoul)) // 재생 줄
         assertEquals("오전 3:04", reportSpan("2026-11-06T03:04:10+09:00", "bad", seoul))
     }
@@ -588,7 +608,7 @@ class CareTest {
         // 없는 키는 기본값, 모르는 키는 무시.
         val sparse = CareJson.decodeFromString(
             CareFile.serializer(),
-            """{"version":1,"events":[{"id":"x","kind":"NOTE","startAt":1,"zone":"Asia/Seoul","source":"PHONE","createdAt":1,"updatedAt":1,"later":true}],"future":1}""",
+            """{"version":1,"events":[{"id":"x","kind":"NOTE","startAt":1,"zone":"Asia/Seoul","source":"PHONE","createdAt":1,"updatedAt":1,"later":true}],"future":1}"""
         )
         assertFalse(sparse.sleepDiaperEnabled)
         assertFalse(sparse.migratedFeedings)
@@ -622,8 +642,8 @@ class CareTest {
         val file = CareFile(
             events = listOf(
                 feed("old", now - 400 * DAY, now - 400 * DAY + 10 * MINUTE),
-                ev("memo", CareKind.NOTE, now - 1000 * DAY, note = "첫 메모"),
-            ),
+                ev("memo", CareKind.NOTE, now - 1000 * DAY, note = "첫 메모")
+            )
         )
         assertEquals(file, file.purged(now))
         val dir = kotlin.io.path.createTempDirectory().toFile()
@@ -643,7 +663,7 @@ class CareTest {
             "FEED,2026-11-05T12:00:00+09:00,,true,,,,",
             "FEED,2026-11-05T15:00:00+09:00,2026-11-05T15:05:00+09:00,false,BOTTLE,120,,",
             "DIAPER,2026-11-05T15:10:00+09:00,,false,,,WET,",
-            "SLEEP,2026-11-05T16:00:00+09:00,,false,,,,",
+            "SLEEP,2026-11-05T16:00:00+09:00,,false,,,,"
         ).joinToString("\r\n") + "\r\n"
         assertEquals(expected, file.toCsv(seoul))
         assertTrue(file.toCsv(seoul).toByteArray(Charsets.UTF_8).take(3) == listOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
@@ -652,8 +672,8 @@ class CareTest {
             events = listOf(
                 ev("n1", CareKind.NOTE, at(2026, 11, 5, 9), note = "트림 잘 함"),
                 ev("n2", CareKind.NOTE, at(2026, 11, 5, 10) + 999, note = "트림, \"잘\" 함\n다시"),
-                ev("n3", CareKind.NOTE, at(2026, 11, 5, 11), note = "x").copy(zone = "UTC"),
-            ),
+                ev("n3", CareKind.NOTE, at(2026, 11, 5, 11), note = "x").copy(zone = "UTC")
+            )
         )
         val lines = notes.toCsv(seoul).removePrefix("\uFEFF").split("\r\n")
         assertEquals("NOTE,2026-11-05T09:00:00+09:00,,false,,,,트림 잘 함", lines[1])

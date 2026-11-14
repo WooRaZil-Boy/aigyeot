@@ -28,7 +28,7 @@ class AppLifecycle(
     private val recordCare: RecordCare,
     private val disconnect: Disconnect,
     private val ongoing: OngoingNotice,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     /** 앱을 만든 뒤 한 번. 시작 화면을 정하기 전에 앞 프로세스의 끊기를 마무리한다(즉시 부분). 나머지는 메인 흐름의 다음 차례에 돈다. */
     fun start() {

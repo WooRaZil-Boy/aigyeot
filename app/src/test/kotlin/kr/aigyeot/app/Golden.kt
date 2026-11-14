@@ -22,7 +22,8 @@ internal object Golden {
         if (!file.exists()) fail("골든 파일이 없다: ${file.path} (GOLDEN_UPDATE=1로 시험을 돌려 만든다)")
         val want = file.readText()
         if (want != text) {
-            val a = want.lines(); val b = text.lines()
+            val a = want.lines()
+            val b = text.lines()
             val i = (0 until maxOf(a.size, b.size)).first { a.getOrNull(it) != b.getOrNull(it) }
             fail("골든 파일 ${file.path} 와 다르다(${i + 1}번째 줄)\n저장: ${a.getOrNull(i)}\n지금: ${b.getOrNull(i)}")
         }

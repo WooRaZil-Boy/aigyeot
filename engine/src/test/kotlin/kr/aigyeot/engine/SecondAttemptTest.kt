@@ -12,13 +12,14 @@ class SecondAttemptTest {
 
     @Test fun hot_lowersHvacReplaysFirstNoS04Yet() {
         val sim = session().ev(CabinTemp(T0, 27.6)).wait2()
-        assertEquals(WN, sim.step<StartPlayback>().single().method)     // 1차 음원을 다시
+        assertEquals(WN, sim.step<StartPlayback>().single().method) // 1차 음원을 다시
         sim.started()
         assertEquals(SecondAction.COMFORT, sim.ep.second!!.action)
         assertTrue(sim.ses.comfortDone)
         val hv = sim.step<LowerHvac>().single()
-        assertEquals(listOf(Area.ROW_1_LEFT), hv.areas); assertEquals(-2.0, hv.deltaC)
-        assertTrue(Sid.S04 !in sim.sids())                              // 결과가 오기 전에는 말하지 않는다
+        assertEquals(listOf(Area.ROW_1_LEFT), hv.areas)
+        assertEquals(-2.0, hv.deltaC)
+        assertTrue(Sid.S04 !in sim.sids()) // 결과가 오기 전에는 말하지 않는다
         sim.flush()
         assertTrue(Sid.S04 !in sim.sids())
         assertEquals(ComfortPending(hv.cmdId, 28.0, sim.play().id), sim.ses.comfortPending)
@@ -33,10 +34,10 @@ class SecondAttemptTest {
         val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
         hvac(sim, true, 22.0, 20.5)
         assertNull(sim.ses.comfortPending)
-        assertEquals(sim.play().id, sim.s.speech.queue.single { it.sid == Sid.S04 }.playId)   // 그 재생
+        assertEquals(sim.play().id, sim.s.speech.queue.single { it.sid == Sid.S04 }.playId) // 그 재생
         sim.flush()
         val s04 = sim.all<Speak>().single { it.sid == Sid.S04 }
-        assertEquals(mapOf("tempC" to "28", "loweredC" to "1.5"), s04.vars)   // before − after
+        assertEquals(mapOf("tempC" to "28", "loweredC" to "1.5"), s04.vars) // before − after
     }
 
     @Test fun hvacFailedOrPlayEnded_noS04() {
@@ -47,7 +48,7 @@ class SecondAttemptTest {
         assertTrue(Sid.S04 !in fail.sids())
 
         val ended = session().ev(CabinTemp(T0, 27.6)).wait2().started()
-        ended.ev(Tick(ended.play().endAt))                      // 그 재생이 끝남
+        ended.ev(Tick(ended.play().endAt)) // 그 재생이 끝남
         hvac(ended, true, 22.0, 20.0)
         assertNull(ended.ses.comfortPending)
         ended.flush()
@@ -68,10 +69,10 @@ class SecondAttemptTest {
         val sim = session().ev(CabinTemp(T0, 27.6)).wait2().started()
         assertTrue(sim.ses.comfortPending != null)
         sim.ev(Resume(sim.t + 1_000))
-        assertTrue(sim.ses.comfortPending != null)               // Resume은 지우지 않는다
+        assertTrue(sim.ses.comfortPending != null) // Resume은 지우지 않는다
         sim.ev(Boot(sim.t + 1_000, Gear.D, 10))
         assertNull(sim.ses.comfortPending)
-        assertTrue(sim.ses.comfortDone)                          // comfortDone은 그대로
+        assertTrue(sim.ses.comfortDone) // comfortDone은 그대로
     }
 
     @Test fun feeding_otherBestS03S06Offer() {
@@ -88,7 +89,8 @@ class SecondAttemptTest {
         val b = session(prof = profile(interval = 180), feedingStart = T0 - 144 * MIN + 30_000).route(rest("a", 9.0)).wait2()
         b.s = b.s.copy(session = b.ses.copy(episode = b.ep.copy(s06Said = true)))
         b.started()
-        assertEquals(1, b.sids().count { it == Sid.S03 }); assertTrue(Sid.S06 !in b.sids())
+        assertEquals(1, b.sids().count { it == Sid.S03 })
+        assertTrue(Sid.S06 !in b.sids())
     }
 
     @Test fun else_otherBestSaysS03() {

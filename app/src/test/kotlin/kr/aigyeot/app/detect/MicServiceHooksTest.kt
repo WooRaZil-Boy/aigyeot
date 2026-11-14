@@ -1,15 +1,15 @@
 package kr.aigyeot.app.detect
 
-import kr.aigyeot.engine.Event
-import kr.aigyeot.engine.InputLost
-import kr.aigyeot.engine.PauseReason.DETECTOR_TIMEOUT
-import kr.aigyeot.engine.PauseReason.MIC_ERROR
-import kr.aigyeot.engine.PauseReason.SILENCED
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kr.aigyeot.engine.Event
+import kr.aigyeot.engine.InputLost
+import kr.aigyeot.engine.PauseReason.DETECTOR_TIMEOUT
+import kr.aigyeot.engine.PauseReason.MIC_ERROR
+import kr.aigyeot.engine.PauseReason.SILENCED
 
 // 감지 연결점: 호스트의 대조(runningPauses·assumePausedNow)와 exec STT의 pcmTap
 class MicServiceHooksTest {
@@ -17,7 +17,11 @@ class MicServiceHooksTest {
     private val events = CopyOnWriteArrayList<Event>()
     private fun detector() = CryDetector(head, { FloatArray(521) }, { 0L }, { events += it })
 
-    @AfterTest fun reset() { MicService.running = null; MicService.pendingPauses = emptySet(); MicService.pcmTap = null }
+    @AfterTest fun reset() {
+        MicService.running = null
+        MicService.pendingPauses = emptySet()
+        MicService.pcmTap = null
+    }
 
     @Test fun `서비스가 없으면 runningPauses는 null이고 assumePausedNow는 다음 서비스 몫으로 남긴다`() {
         assertNull(MicService.runningPauses())
@@ -37,16 +41,28 @@ class MicServiceHooksTest {
 
     @Test fun `pcmTap은 읽은 창을 받고 받는 쪽이 던져도 감지는 이어진다`() {
         val got = mutableListOf<Int>()
-        MicService.pcmTap = { pcm, n -> got += n; check(pcm.size >= n); error("받는 쪽 오류") }
+        MicService.pcmTap = { pcm, n ->
+            got += n
+            check(pcm.size >= n)
+            error("받는 쪽 오류")
+        }
         var left = 2
         val source = object : PcmSource {
             override fun start() {}
-            override fun read(out: ShortArray) = if (left-- > 0) { out.fill(100); out.size } else PcmSource.END
+            override fun read(out: ShortArray) = if (left-- > 0) {
+                out.fill(100)
+                out.size
+            } else {
+                PcmSource.END
+            }
             override fun isSilenced() = false
             override fun close() {}
         }
         var ended: Boolean? = null
-        DetectorRunner(source, detector()) { ended = it }.apply { start(); join() }
+        DetectorRunner(source, detector()) { ended = it }.apply {
+            start()
+            join()
+        }
         assertEquals(listOf(Detect.WINDOW_SAMPLES, Detect.WINDOW_SAMPLES), got)
         assertEquals(false, ended, "파일 끝까지 읽었다(오류로 멈추지 않음)")
         assertEquals(emptyList(), events.filterIsInstance<InputLost>())

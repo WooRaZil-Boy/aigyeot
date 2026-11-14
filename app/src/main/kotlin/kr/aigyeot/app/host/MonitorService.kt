@@ -37,21 +37,36 @@ class MonitorService : Service() {
         super.onCreate()
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "탑승·주행", NotificationManager.IMPORTANCE_LOW))
-        val n = Notification.Builder(this, CHANNEL).setContentTitle("탑승과 주행을 살피고 있어요")   // 탑승 전·주행 중 모두 맞는 글
+        val n = Notification.Builder(this, CHANNEL).setContentTitle("탑승과 주행을 살피고 있어요") // 탑승 전·주행 중 모두 맞는 글
             .setSmallIcon(R.drawable.ic_stat_aigyeot).setOngoing(true).build()
-        try { startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) }
-        catch (e: Exception) { Log.e(TAG, "startForeground 실패", e); stopSelf(); return }
-        g = Graph.get(this)   // 호스트 복원(①~⑤)이 여기서 큐에 들어간다
+        try {
+            startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } catch (
+            e: Exception
+        ) {
+            Log.e(TAG, "startForeground 실패", e)
+            stopSelf()
+            return
+        }
+        g = Graph.get(this) // 호스트 복원(①~⑤)이 여기서 큐에 들어간다
         g.startModules()
         // 전원 정책 리스너(되면 우선) → 화면 꺼짐·켜짐 → 시계 점프 → 네트워크. 같은 짐작을 여러 신호가 내도 한 번만 넣는다
         watchPowerPolicy()
         screen = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) = signal(off = i.action == Intent.ACTION_SCREEN_OFF, i.action ?: "")
-        }.also { registerReceiver(it, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON) }) }
+        }.also {
+            registerReceiver(
+                it,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                    addAction(Intent.ACTION_SCREEN_ON)
+                }
+            )
+        }
         net = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 Log.i(TAG, "신호 network")
-                g.host.post(Tick(0))   // 호스트가 깨어 시계 점프를 본다
+                g.host.post(Tick(0)) // 호스트가 깨어 시계 점프를 본다
             }
         }.also { getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(it) }
     }
@@ -80,13 +95,16 @@ class MonitorService : Service() {
         net?.let { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
         power?.let { (pm, l) -> runCatching { pm.removePowerPolicyListener(l) } }
         runCatching { car?.disconnect() }
-        if (::g.isInitialized) { g.stopModules(); g.host.flush() }
+        if (::g.isInitialized) {
+            g.stopModules()
+            g.host.flush()
+        }
         super.onDestroy()
     }
 
     private fun signal(off: Boolean, source: String) {
         Log.i(TAG, "신호 $source off=$off")
-        if (off) g.host.suspend() else g.host.resume()   // 중복은 호스트가 막는다
+        if (off) g.host.suspend() else g.host.resume() // 중복은 호스트가 막는다
     }
 
     companion object {
@@ -102,6 +120,10 @@ class MonitorService : Service() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
-        try { MonitorService.start(context) } catch (e: Exception) { Log.e("monitor", "부팅 시작 실패", e) }
+        try {
+            MonitorService.start(context)
+        } catch (e: Exception) {
+            Log.e("monitor", "부팅 시작 실패", e)
+        }
     }
 }

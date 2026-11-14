@@ -1,13 +1,13 @@
 package kr.aigyeot.phone.domain.model
 
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kr.aigyeot.shared.Role
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.ZoneId
-import java.time.ZoneOffset
 
 class BasicsTest {
     @Test fun `연결 429 잠금은 Retry-After를 따르고 없으면 10초`() {
@@ -126,11 +126,14 @@ class BasicsTest {
                 "차와 주고받아요" to "수유 시작 시각, 우리 노래, 수유·잠·기저귀 요약, 주행 리포트, 인계 알림이에요",
                 "울음소리와 차 위치는 보내지 않아요" to "차 안 마이크 소리도 보내지 않아요",
                 "아이곁 중계 서버를 거쳐요" to "인계 알림은 Google·Apple 알림 서버도 거쳐요",
-                "차에서 물으면 AI 서버를 써요" to "답을 만들려고 수유·잠·기저귀 숫자를 보내요",
+                "차에서 물으면 AI 서버를 써요" to "답을 만들려고 수유·잠·기저귀 숫자를 보내요"
             ),
-            IntroText.SHORT,
+            IntroText.SHORT
         )
-        assertEquals(listOf("자세히 보기", "오가는 정보 자세히 보기", "오가는 정보", "닫기"), listOf(IntroText.MORE, IntroText.MORE_A11Y, IntroText.SHEET_TITLE, IntroText.SHEET_CLOSE))
+        assertEquals(
+            listOf("자세히 보기", "오가는 정보 자세히 보기", "오가는 정보", "닫기"),
+            listOf(IntroText.MORE, IntroText.MORE_A11Y, IntroText.SHEET_TITLE, IntroText.SHEET_CLOSE)
+        )
         assertEquals(listOf("주고받는 것", "보내지 않는 것", "거치는 서버", "AI 서버"), IntroText.SHEET.map { it.first })
         // 원문 보존: 라벨 + ": " + 글(주고받는·보내지 않는 것)과 거치는 서버·AI 글이 원문 그대로다.
         val (sends, notSent, relay, ai) = IntroText.SHEET

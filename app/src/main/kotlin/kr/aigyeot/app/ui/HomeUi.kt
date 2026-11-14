@@ -1,5 +1,6 @@
 package kr.aigyeot.app.ui
 
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kr.aigyeot.app.exec.HeardText
@@ -31,7 +32,6 @@ import kr.aigyeot.engine.toldShown
 import kr.aigyeot.shared.EpisodeResult
 import kr.aigyeot.shared.HandoffKind
 import kr.aigyeot.shared.TimelineEpisode
-import kotlin.math.roundToInt
 
 // 홈 화면 투영. 판단 코어 상태·연결·시계·차가 말한 문장에서 [homeUi]가 한 번에 계산한다.
 // 화면(HomeScreen·DriveScreen)은 그리기만 한다. 엔진 상태·판단 규칙은 바꾸지 않는다.
@@ -47,11 +47,13 @@ enum class StepMark { NONE, NOW, DONE, FAIL }
 sealed interface HomeCard {
     /** 달래기 단계: 막대 넷(1차·듣기 틈·2차·쉼터)과 지금 단계 시간([from]부터 [totalMs]까지, 화면이 1초마다 센다). */
     data class Track(val marks: List<StepMark>, val subs: List<String>, val from: Long?, val totalMs: Long?) : HomeCard
+
     /** 쉼터: 이름·부가('수유실 · 7km')·경유지로 넣었는가. */
     data class Rest(val name: String, val sub: String?, val added: Boolean) : HomeCard
     /** 정차 중 마지막 에피소드 흐름(시작 시각 + 차례). */
     /** [head]: 제목 머리(episodeHead: 울음 경보 '울음', 운전자 요청 '소리 바꾸기 요청'). */
     data class Episode(val at: Long, val head: String, val flow: List<FlowItem>) : HomeCard
+
     /** 물어보기: 듣는 중이면 마이크, 들은 질문, 답. */
     data class Ask(val listening: Boolean, val question: String?, val answer: String?) : HomeCard
 }
@@ -59,11 +61,14 @@ data class FlowItem(val text: String, val tone: Tone)
 
 /** 마지막 수유 카드. [start] null이면 기록 없음. [intervalMin]은 평소 간격(없으면 막대 없음). */
 data class FeedCard(
-    val start: Long?, val intervalMin: Int?,
+    val start: Long?,
+    val intervalMin: Int?,
     /** 지난 시간 'h:mm'(1분 미만 '방금'), 1분 미만이면 [fresh]('지난 시간' 꼬리 없음). */
-    val ago: String = "", val fresh: Boolean = false,
+    val ago: String = "",
+    val fresh: Boolean = false,
     /** 막대(간격 × [FEED_BAR_SPAN]까지)에 찬 몫과 간격 시작 눈금 자리(판단 코어 windowStartExpected와 같은 값). 간격이 없으면 null. */
-    val fill: Float? = null, val windowMark: Float? = null,
+    val fill: Float? = null,
+    val windowMark: Float? = null
 )
 
 /** 수유 막대 끝 = 평소 간격의 1.25배. */
@@ -76,9 +81,12 @@ internal fun feedCard(start: Long?, intervalMin: Int?, now: Long, p: Params = Pa
     val iv = intervalMin?.takeIf { it > 0 }
     val full = iv?.let { it * 60_000.0 * FEED_BAR_SPAN }
     return FeedCard(
-        start, intervalMin, agoText(ago), ago < 60_000,
+        start,
+        intervalMin,
+        agoText(ago),
+        ago < 60_000,
         fill = full?.let { (ago / it).toFloat().coerceIn(0f, 1f) },
-        windowMark = full?.let { f -> kr.aigyeot.engine.windowStartExpected(start, iv, p)?.let { ((it - start) / f).toFloat() } },
+        windowMark = full?.let { f -> kr.aigyeot.engine.windowStartExpected(start, iv, p)?.let { ((it - start) / f).toFloat() } }
     )
 }
 
@@ -110,7 +118,7 @@ data class HomeUi(
     val drive: DriveSay,
     val ambientDimmed: Boolean,
     /** 출발 전·아기 탔어요의 '오늘 하루'(아는 값만). */
-    val day: DayChartData? = null,
+    val day: DayChartData? = null
 )
 
 /**
@@ -124,13 +132,19 @@ internal class AskPick {
     private var pickedAt = Long.MIN_VALUE
     private var room: String? = null
     private var hadCare = false
-    fun pressed(now: Long) { askAt = now }
+    fun pressed(now: Long) {
+        askAt = now
+    }
+
     /**
      * [clearedAt]: 마지막 기록 지우기 시각(Store.clearedAt). 판단 코어가 질문 창·말 안 한 답을 버리듯(수명 표 CLEAR) 그 전에 고른 질문·답 카드도 내린다.
      */
     fun pick(s: EngineState?, heard: HeardText?, now: Long, clearedAt: Long = 0L): String? {
         // 내린 뒤 그 전에 들은 글로 다시 고르지 않는다
-        if (id != null && (s?.careRoom != room || (hadCare && s?.care == null) || clearedAt > pickedAt)) { id = null; pickedAt = now }
+        if (id != null && (s?.careRoom != room || (hadCare && s?.care == null) || clearedAt > pickedAt)) {
+            id = null
+            pickedAt = now
+        }
         if (clearedAt > pickedAt) pickedAt = clearedAt
         val w = s?.speech?.qa?.listenId
         when {
@@ -139,7 +153,13 @@ internal class AskPick {
         }
         return id
     }
-    private fun select(w: String, s: EngineState?, now: Long) { id = w; askAt = null; pickedAt = now; room = s?.careRoom; hadCare = s?.care != null }
+    private fun select(w: String, s: EngineState?, now: Long) {
+        id = w
+        askAt = null
+        pickedAt = now
+        room = s?.careRoom
+        hadCare = s?.care != null
+    }
 }
 
 /** 세션 하나의 Room 읽기 값. [of]는 지금 세션의 값일 때만 돌려준다. */
@@ -163,25 +183,34 @@ fun stepKey(s: EngineState?): String {
  * [lastQa]: 가장 최근에 열린 질문 창의 listenId(그 창이 받은 질문과 그 뒤 답만 카드에 보인다). [done]: 이 세션에 실제로 해낸 제어 api(control_log 성공 줄).
  */
 fun homeUi(
-    s: EngineState?, now: Long, link: LinkStatus, said: Said?, heard: HeardText?, stepFrom: Long, last: TimelineEpisode?,
-    done: Set<OkControl> = emptySet(), carDay: List<CarSpan> = emptyList(), zone: java.time.ZoneId = TimeText.zone,
-    lastQa: String? = null, p: Params = Params(),
+    s: EngineState?,
+    now: Long,
+    link: LinkStatus,
+    said: Said?,
+    heard: HeardText?,
+    stepFrom: Long,
+    last: TimelineEpisode?,
+    done: Set<OkControl> = emptySet(),
+    carDay: List<CarSpan> = emptyList(),
+    zone: java.time.ZoneId = TimeText.zone,
+    lastQa: String? = null,
+    p: Params = Params()
 ): HomeUi {
     val x = s?.session
     val parked = s?.car?.gear == Gear.P
     val qa = s?.speech?.qa
     val card = card(s, said, heard, stepFrom, last, lastQa, p)
-    val shownSaid = said?.takeIf { it.at >= stepFrom && it.sid != Sid.QA }   // 질문 답은 물어보기 카드가 보인다
+    val shownSaid = said?.takeIf { it.at >= stepFrom && it.sid != Sid.QA } // 질문 답은 물어보기 카드가 보인다
     return HomeUi(
         status = statusText(s),
-        eyebrow = eyebrow(s, p),
+        eyebrow = eyebrow(s),
         sub = sub(s, now),
         said = shownSaid,
         card = card,
         feed = feedCard(s?.feedingStart, s?.profile?.feedingIntervalMin, now, p),
         showDay = x == null,
         // 마이크가 멈췄으면 세션·예약 중이어도 '아기 탔어요'로 다시 켤 수 있게
-        cta = Cta(board = (x == null && s?.ign?.reserved != true) || s?.car?.micRunning != true, askHero = parked || qa != null),
+        cta = Cta(board = (x == null && s?.ign?.reserved != true) || s.car.micRunning != true, askHero = parked || qa != null),
         confirmShown = s?.ign?.nursingStop?.confirmShown == true,
         askEnabled = askEnabled(s),
         pausesWarning = x != null && s.car.pauses.isNotEmpty(),
@@ -190,7 +219,7 @@ fun homeUi(
         stage = stage(s, done),
         drive = drive(s),
         ambientDimmed = s?.ambientDimmed == true,
-        day = if (x == null) dayChart(s, carDay, now, zone) else null,
+        day = if (x == null) dayChart(s, carDay, now, zone) else null
     )
 }
 
@@ -200,8 +229,16 @@ internal const val MIC_OFF = "아직 듣지 못하고 있어요"
 internal enum class Sound { NONE, PENDING, PLAYING, PAUSED }
 
 internal fun soundNow(x: kr.aigyeot.engine.SessionState): Sound {
-    val pl = when (val st = x.stage) { is Stage.Attempt -> st.play; is Stage.Wait -> st.play; else -> null } ?: return Sound.NONE
-    return when { pl.startedAt == null -> Sound.PENDING; pl.mode == kr.aigyeot.engine.PlayMode.PAUSE -> Sound.PAUSED; else -> Sound.PLAYING }
+    val pl = when (val st = x.stage) {
+        is Stage.Attempt -> st.play
+        is Stage.Wait -> st.play
+        else -> null
+    } ?: return Sound.NONE
+    return when {
+        pl.startedAt == null -> Sound.PENDING
+        pl.mode == kr.aigyeot.engine.PlayMode.PAUSE -> Sound.PAUSED
+        else -> Sound.PLAYING
+    }
 }
 
 /**
@@ -218,13 +255,19 @@ internal fun drivingWithoutSession(s: EngineState?): Boolean =
 internal fun idleListening(s: EngineState?): Boolean = s?.car?.micRunning == true && !drivingWithoutSession(s)
 
 internal fun statusText(s: EngineState?): String {
-    val x = s?.session ?: return if (s?.ign?.reserved == true) "출발하면 듣기 시작해요" else if (drivingWithoutSession(s)) MIC_OFF else "출발 전이에요"
+    val x = s?.session ?: return if (s?.ign?.reserved == true) {
+        "출발하면 듣기 시작해요"
+    } else if (drivingWithoutSession(s)) {
+        MIC_OFF
+    } else {
+        "출발 전이에요"
+    }
     return when (x.phase) {
         // 판단 코어가 소리를 보지 않는 동안(마이크 꺼짐·입력 끊김 판정 멈춤)은 듣는다고 쓰지 않는다. hears()는 판단 코어와 같은 조건
         Phase.LISTENING -> if (s.hears()) "아기 소리를 듣고 있어요" else MIC_OFF
         // 소리 사실은 soundNow 한 곳에서(3D 소리 결과 같은 값): 잠시 멈춤이면 튼다고 쓰지 않고, 뒷자리라고 확실할 때만 '뒷자리에서'
         Phase.ATTEMPT -> when (soundNow(x)) {
-            Sound.PENDING -> "소리를 준비하고 있어요"   // 재생 시작 전(포커스 거절이면 틀지 않는다)에는 튼다고 쓰지 않는다
+            Sound.PENDING -> "소리를 준비하고 있어요" // 재생 시작 전(포커스 거절이면 틀지 않는다)에는 튼다고 쓰지 않는다
             Sound.PAUSED -> "잠시 소리를 멈췄어요"
             else -> if (rearSure(x)) "뒷자리에서 소리를 틀고 있어요" else "소리를 틀고 있어요"
         }
@@ -236,7 +279,7 @@ internal fun statusText(s: EngineState?): String {
 }
 
 /** 눈썹 이름: 듣기 꺼짐·듣기 켜짐·듣는 중·정차 중·울음 감지 · n초·n차 · 방법·듣기 틈 · n초·사람에게 넘김·경유지 추가. */
-internal fun eyebrow(s: EngineState?, p: Params = Params()): Eyebrow {
+internal fun eyebrow(s: EngineState?): Eyebrow {
     val x = s?.session ?: return if (idleListening(s)) Eyebrow("듣기 켜짐", Tone.ACCENT, live = true) else Eyebrow("듣기 꺼짐", Tone.MUTED)
     val parked = s.car.gear == Gear.P
     return when (val st = x.stage) {
@@ -246,11 +289,14 @@ internal fun eyebrow(s: EngineState?, p: Params = Params()): Eyebrow {
             if (st.play.startedAt == null) {
                 val delayMs = st.alarm?.let { it.alarmAt - it.delayFromAt } ?: x.episode?.alarmDelayMs
                 Eyebrow("울음 감지" + (delayMs?.let { " · " + seconds1(it) } ?: ""), Tone.CHILD)
-            } else Eyebrow("${st.n}차 · ${methodLabel(m.kind)}", Tone.METHOD)
+            } else {
+                Eyebrow("${st.n}차 · ${methodLabel(m.kind)}", Tone.METHOD)
+            }
         }
         is Stage.Gap, is Stage.Confirm -> Eyebrow(
             "듣기 틈" + (st.window?.let { " · ${((it.end - it.from) / 1000.0).roundToInt()}초" } ?: ""),
-            Tone.ACCENT, live = st.window != null && s.hears(),
+            Tone.ACCENT,
+            live = st.window != null && s.hears()
         )
         is Stage.Handoff -> if (x.episode?.waypointAdded == true) Eyebrow("경유지 추가", Tone.ACCENT) else Eyebrow("사람에게 넘김", Tone.CHILD)
         is Stage.Wait -> st.play?.let { Eyebrow(methodLabel(it.method.kind), Tone.METHOD) } ?: listening(parked, s)
@@ -258,8 +304,13 @@ internal fun eyebrow(s: EngineState?, p: Params = Params()): Eyebrow {
     }
 }
 
-private fun listening(parked: Boolean, s: EngineState) =
-    if (parked) Eyebrow("정차 중", Tone.MUTED) else if (s.hears()) Eyebrow("듣는 중", Tone.ACCENT, live = true) else Eyebrow("듣기 꺼짐", Tone.MUTED)
+private fun listening(parked: Boolean, s: EngineState) = if (parked) {
+    Eyebrow("정차 중", Tone.MUTED)
+} else if (s.hears()) {
+    Eyebrow("듣는 중", Tone.ACCENT, live = true)
+} else {
+    Eyebrow("듣기 꺼짐", Tone.MUTED)
+}
 
 /** 감지 지연 "2.4초"(소수 한 자리). */
 internal fun seconds1(ms: Long) = "%.1f초".format(ms / 1000.0)
@@ -285,8 +336,13 @@ private fun pills(link: LinkStatus, cabinC: Double?): Pills {
 private fun card(s: EngineState?, said: Said?, heard: HeardText?, stepFrom: Long, last: TimelineEpisode?, lastQa: String?, p: Params): HomeCard? {
     val qa = s?.speech?.qa
     // 카드는 '물어보기'로 연 질문 창 하나의 것만: 안내 뒤 자동 듣기 창은 카드가 아니다. 열린 창이면 그 창이 받은 질문, 닫힌 뒤면 그 창의 질문과 그 뒤 이 단계에서 말한 답
-    if (qa != null && qa.listenId == lastQa) return HomeCard.Ask(listening = qa.step == kr.aigyeot.engine.QaStep.HEARING,
-            question = heard?.takeIf { it.listenId == qa.listenId }?.text, answer = null)
+    if (qa != null && qa.listenId == lastQa) {
+        return HomeCard.Ask(
+            listening = qa.step == kr.aigyeot.engine.QaStep.HEARING,
+            question = heard?.takeIf { it.listenId == qa.listenId }?.text,
+            answer = null
+        )
+    }
     val q = heard?.takeIf { it.listenId == lastQa }
     val answer = said?.takeIf { q != null && it.sid == Sid.QA && it.at >= q.at && it.at >= stepFrom }?.text
     if (q != null && answer != null) return HomeCard.Ask(listening = false, question = q.text, answer = answer)
@@ -307,16 +363,48 @@ internal fun track(st: Stage, ep: kr.aigyeot.engine.EpisodeState?, p: Params, of
     // 1차·듣기 틈 두 칸은 1차 결과 하나로 정한다: 2차 시도부터 인계까지 같은 값(1차가 미판정이면 실패로 그리지 않는다)
     val afterFirst = if (firstFail) StepMark.FAIL else StepMark.DONE
     val marks = when (st) {
-        is Stage.Attempt -> if (st.n <= 1) listOf(StepMark.NOW, StepMark.NONE, StepMark.NONE, StepMark.NONE) else listOf(afterFirst, afterFirst,
-                StepMark.NOW, StepMark.NONE)
-        is Stage.Gap, is Stage.Confirm -> if (st.n <= 1) listOf(StepMark.DONE, StepMark.NOW, StepMark.NONE, StepMark.NONE) else listOf(afterFirst,
-                afterFirst, StepMark.DONE, StepMark.NONE)
+        is Stage.Attempt -> if (st.n <= 1) {
+            listOf(StepMark.NOW, StepMark.NONE, StepMark.NONE, StepMark.NONE)
+        } else {
+            listOf(
+                afterFirst,
+                afterFirst,
+                StepMark.NOW,
+                StepMark.NONE
+            )
+        }
+        is Stage.Gap, is Stage.Confirm -> if (st.n <= 1) {
+            listOf(StepMark.DONE, StepMark.NOW, StepMark.NONE, StepMark.NONE)
+        } else {
+            listOf(
+                afterFirst,
+                afterFirst,
+                StepMark.DONE,
+                StepMark.NONE
+            )
+        }
         is Stage.Handoff -> listOf(
             if (ep?.first != null) afterFirst else StepMark.NONE,
-            if (firstFail) StepMark.FAIL else if (ep?.second != null) StepMark.DONE else StepMark.NONE,   // 2차를 했으면 틈을 지났다
-            if (secondFail) StepMark.FAIL else if (ep?.second != null) StepMark.DONE else StepMark.NONE,
+            if (firstFail) {
+                StepMark.FAIL
+            } else if (ep?.second != null) {
+                StepMark.DONE
+            } else {
+                StepMark.NONE
+            }, // 2차를 했으면 틈을 지났다
+            if (secondFail) {
+                StepMark.FAIL
+            } else if (ep?.second != null) {
+                StepMark.DONE
+            } else {
+                StepMark.NONE
+            },
             // 쉼터 칸은 쉼터를 실제로 물었거나 넣었을 때만(쉼터 없음·도착 안내·P 정차 인계는 쉼터 제안이 아니다)
-            when { ep?.waypointAdded == true -> StepMark.DONE; offered -> StepMark.NOW; else -> StepMark.NONE },
+            when {
+                ep?.waypointAdded == true -> StepMark.DONE
+                offered -> StepMark.NOW
+                else -> StepMark.NONE
+            }
         )
         else -> List(4) { StepMark.NONE }
     }
@@ -338,7 +426,7 @@ private fun rest(s: EngineState): HomeCard.Rest? {
     val rests = s.car.route?.rests.orEmpty()
     val id = x.pendingAsk?.restId ?: x.waypointPending?.restId ?: x.addedRestIds.lastOrNull() ?: return null
     val r = rests.firstOrNull { it.id == id } ?: return null
-    val isAdded = id in x.addedRestIds   // 그 쉼터가 넣어졌는지만(같은 에피소드에서 앞 쉼터를 넣었어도 이 쉼터는 아님)
+    val isAdded = id in x.addedRestIds // 그 쉼터가 넣어졌는지만(같은 에피소드에서 앞 쉼터를 넣었어도 이 쉼터는 아님)
     val sub = listOfNotNull(if (r.hasNursingRoom) "수유실" else null, "${formatKm(r.distanceKm)}km").joinToString(" · ")
     return HomeCard.Rest(r.name, sub, isAdded)
 }
@@ -356,8 +444,14 @@ internal fun episodeCard(e: TimelineEpisode): HomeCard.Episode? {
         }
         e.stop?.let { st -> if (st.mode == HandoffKind.REST_OFFER && toldShown(st.toldDriver, settled = true)) add(FlowItem("쉼터 제안", Tone.CHILD)) }
         // 1차든 2차든 그쳤으면
-        if (e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS) add(FlowItem(resultText(EpisodeResult.SUCCESS),
-                Tone.ACCENT))
+        if (e.result == EpisodeResult.SUCCESS || e.second?.result == EpisodeResult.SUCCESS) {
+            add(
+                FlowItem(
+                    resultText(EpisodeResult.SUCCESS),
+                    Tone.ACCENT
+                )
+            )
+        }
     }
     return if (flow.isEmpty()) null else HomeCard.Episode(at, episodeHead(e.trigger), flow)
 }
@@ -366,13 +460,17 @@ internal fun episodeCard(e: TimelineEpisode): HomeCard.Episode? {
 
 internal fun stage(s: EngineState?, done: Set<OkControl> = emptySet()): Stage3d {
     val x = s?.session
-    val seat = when (s?.profile?.carseat) { CarSeat.LEFT -> Seat3d.RL; CarSeat.CENTER -> Seat3d.RC; else -> Seat3d.RR }
+    val seat = when (s?.profile?.carseat) {
+        CarSeat.LEFT -> Seat3d.RL
+        CarSeat.CENTER -> Seat3d.RC
+        else -> Seat3d.RR
+    }
     // 칩 선·3D 표시는 실제로 해낸 뒷자리 쪽만: 잠금은 결과를 받은 영역(windowLockBefore 키), 열선은 성공한 control_log 영역(가운데 카시트는 양쪽을 따로)
     val heat = if (x == null) emptySet() else done.filter { it.act == ControlAct.SEAT_HEAT_OFF }.mapNotNull { sideOf(it.target) }.toSet()
     val lock = x?.windowLockBefore?.keys.orEmpty().mapNotNull { sideOf(it.name) }.toSet()
     val callouts = buildSet {
-        if (lock.isNotEmpty()) add(Callout3d.LOCK)          // 앱이 뒷창을 잠갔다(세션이 닫힐 때 되돌림)
-        if (s?.ambientDimmed == true) add(Callout3d.DIM)              // 낮춤이 확인된 동안
+        if (lock.isNotEmpty()) add(Callout3d.LOCK) // 앱이 뒷창을 잠갔다(세션이 닫힐 때 되돌림)
+        if (s?.ambientDimmed == true) add(Callout3d.DIM) // 낮춤이 확인된 동안
         // 열선·공조는 명령을 낸 것이 아니라 해낸 것만(이 세션 control_log 성공 줄, 리포트 seat_heater_off·cabin_cool과 같은 근거)
         if (x != null && done.any { it.act == ControlAct.CABIN_COOL }) add(Callout3d.HVAC)
         if (x != null && heat.isNotEmpty()) add(Callout3d.HEAT)
@@ -385,20 +483,37 @@ private fun sessionStage(x: kr.aigyeot.engine.SessionState, mic: Boolean, callou
     // 소리 결은 소리가 실제로 나가고(일시 정지 아님) 뒷자리라고 확실할 때만
     val ripple = soundNow(x) == Sound.PLAYING && rearSure(x)
     return when (val st = x.stage) {
-        is Stage.Attempt -> if (st.play.startedAt == null) Stage3d(View3d.REAR, Light3d.ALERT, callouts = callouts, seat = seat)
-            else Stage3d(View3d.REAR, Light3d.SOOTHE, ripple = ripple, callouts = callouts, seat = seat)
+        is Stage.Attempt -> if (st.play.startedAt == null) {
+            Stage3d(View3d.REAR, Light3d.ALERT, callouts = callouts, seat = seat)
+        } else {
+            Stage3d(View3d.REAR, Light3d.SOOTHE, ripple = ripple, callouts = callouts, seat = seat)
+        }
         // 듣는 빛·듣기 표시는 판단 코어가 소리를 볼 때만(마이크 꺼짐·입력 끊김에 듣는다는 거짓 표시 방지, S17)
         is Stage.Gap, is Stage.Confirm -> Stage3d(View3d.REAR, Light3d.BASE, listen = mic, callouts = callouts, seat = seat)
         is Stage.Handoff -> Stage3d(View3d.REAR, Light3d.BASE, callouts = callouts, seat = seat)
-        is Stage.Wait -> Stage3d(View3d.CABIN, if (st.play != null) Light3d.SOOTHE else if (mic) Light3d.LISTEN else Light3d.BASE, ripple = ripple,
-                callouts = callouts, seat = seat)
+        is Stage.Wait -> Stage3d(
+            View3d.CABIN,
+            if (st.play != null) {
+                Light3d.SOOTHE
+            } else if (mic) {
+                Light3d.LISTEN
+            } else {
+                Light3d.BASE
+            },
+            ripple = ripple,
+            callouts = callouts,
+            seat = seat
+        )
         Stage.Listening -> Stage3d(View3d.CABIN, if (mic) Light3d.LISTEN else Light3d.BASE, callouts = callouts, seat = seat)
     }
 }
 
 /** control_log 영역 → 뒷자리 쪽(열선 칩 앵커). 뒷줄이 아니면 null. */
-private fun sideOf(target: String) = when (target) { "ROW_2_LEFT" -> Seat3d.RL; "ROW_2_RIGHT" -> Seat3d.RR; else -> null }
-
+private fun sideOf(target: String) = when (target) {
+    "ROW_2_LEFT" -> Seat3d.RL
+    "ROW_2_RIGHT" -> Seat3d.RR
+    else -> null
+}
 
 /** 주행 중 큰 기호: 달래는 중이면 방법 아이콘, 울음 감지면 아기(주황), 인계면 위치, 그 밖은 귀. */
 internal fun drive(s: EngineState?): DriveSay {
@@ -414,8 +529,11 @@ internal fun drive(s: EngineState?): DriveSay {
     return DriveSay(sym, ask = x?.pendingAsk != null)
 }
 
-private fun symbolOf(k: MethodKind) = when (k) { MethodKind.LULLABY -> Symbol.LULLABY; MethodKind.WHITE_NOISE -> Symbol.NOISE
-    MethodKind.WOMB -> Symbol.WOMB; MethodKind.SONG -> Symbol.SONG
+private fun symbolOf(k: MethodKind) = when (k) {
+    MethodKind.LULLABY -> Symbol.LULLABY
+    MethodKind.WHITE_NOISE -> Symbol.NOISE
+    MethodKind.WOMB -> Symbol.WOMB
+    MethodKind.SONG -> Symbol.SONG
 }
 
 /**
@@ -425,13 +543,15 @@ private fun symbolOf(k: MethodKind) = when (k) { MethodKind.LULLABY -> Symbol.LU
 internal fun dayChart(s: EngineState?, car: List<CarSpan>, now: Long, zone: java.time.ZoneId): DayChartData? {
     val day0 = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
     fun min(t: Long) = ((t - day0) / 60_000).toInt().coerceIn(0, 1440)
-    fun today(t: Long?) = t != null && t >= day0 && t < day0 + 86_400_000L   // 오늘 날짜면(시계 눈금 now는 10초마다라 방금 기록이 그보다 늦을 수 있다)
+    fun today(t: Long?) = t != null && t >= day0 && t < day0 + 86_400_000L // 오늘 날짜면(시계 눈금 now는 10초마다라 방금 기록이 그보다 늦을 수 있다)
+
     // 칸 고르기 하나(두 폰 inDay와 같은 규칙): 그날과 실제로 겹치는 구간만. 자정에 딱 끝난 전날 구간(길이 0 칸)은 오늘 칸이 아니다.
     // 그림은 분 칸, 길이는 그날 안으로 자른 기록 시각의 차이
     fun dayBlock(a: Long, e: Long): DayBlock? {
         val end0 = day0 + 86_400_000L
         if (!(a < end0 && (e > day0 || (e == a && a >= day0)))) return null
-        val from = maxOf(a, day0); val to = minOf(e, end0)
+        val from = maxOf(a, day0)
+        val to = minOf(e, end0)
         return DayBlock(min(from)..min(to), to - from)
     }
     val care = s?.care?.takeIf { it.freshAt(now) && today(it.asOf) }
@@ -439,28 +559,48 @@ internal fun dayChart(s: EngineState?, car: List<CarSpan>, now: Long, zone: java
         if (care?.sleepDiaperEnabled == true) {
             val blocks = listOfNotNull(
                 care.lastSleepStartAt?.let { a -> care.lastSleepEndAt?.takeIf { e -> e >= a }?.let { e -> dayBlock(a, e) } },
-                care.sleepingSince?.let { a -> dayBlock(a, maxOf(a, care.asOf)) },   // 잠든 중은 요약 계산 시각(as_of)까지만: 합계(todaySleepMin)와 같은 기준. 끝이 시작보다 앞서지 않게
+                care.sleepingSince?.let { a -> dayBlock(a, maxOf(a, care.asOf)) } // 잠든 중은 요약 계산 시각(as_of)까지만: 합계(todaySleepMin)와 같은 기준. 끝이 시작보다 앞서지 않게
             )
             // 값은 합계가 먼저(차는 오늘 잠 칸을 다 모른다), 합계가 0분일 때만 칸으로 '1분 미만'·'0번'을 가른다([sleepValue])
             care.todaySleepMin?.let { add(DayLane("잠", DataColor.SLEEP, null, sleepValue(it, blocks.isNotEmpty()), blocks)) }
         }
         val feedDots = listOfNotNull(s?.feedingStart?.takeIf(::today)?.let(::min))
-        if (care != null) add(DayLane("수유", DataColor.FEED, null, "${care.todayFeedCount}번", dots = feedDots))
-        // 차트 안 시각은 24시간제
-        else if (feedDots.isNotEmpty()) add(DayLane("수유", DataColor.FEED, null, "마지막 " + TimeText.clock(s!!.feedingStart!!, ClockMode.CHART),
-                dots = feedDots))
-        if (care?.sleepDiaperEnabled == true) care.todayDiaperCount?.let { n ->
-            add(DayLane("기저귀", DataColor.DIAPER, null, "${n}번", dots = listOfNotNull(care.lastDiaperAt?.takeIf(::today)?.let(::min))))
+        if (care != null) {
+            add(DayLane("수유", DataColor.FEED, null, "${care.todayFeedCount}번", dots = feedDots))
+        } // 차트 안 시각은 24시간제
+        else if (feedDots.isNotEmpty()) {
+            add(
+                DayLane(
+                    "수유",
+                    DataColor.FEED,
+                    null,
+                    "마지막 " + TimeText.clock(s!!.feedingStart!!, ClockMode.CHART),
+                    dots = feedDots
+                )
+            )
         }
-        val inToday = car.mapNotNull { c -> dayBlock(c.from, c.to ?: now)?.let { c to it } }   // 자정에 딱 끝난 세션은 오늘 칸이 아니다
+        if (care?.sleepDiaperEnabled == true) {
+            care.todayDiaperCount?.let { n ->
+                add(DayLane("기저귀", DataColor.DIAPER, null, "${n}번", dots = listOfNotNull(care.lastDiaperAt?.takeIf(::today)?.let(::min))))
+            }
+        }
+        val inToday = car.mapNotNull { c -> dayBlock(c.from, c.to ?: now)?.let { c to it } } // 자정에 딱 끝난 세션은 오늘 칸이 아니다
         if (inToday.isNotEmpty()) {
             val spans = inToday.map { it.first }
             val drives = inToday.map { it.second }
-            val driveMs = drives.sumOf { it.ms }   // 합계와 툴팁이 같은 값
-            val cries = spans.flatMap { it.alarms }.filter(::today)   // 울음 경보 에피소드마다 한 번(리포트 목록 '울음 n번'과 같은 수)
+            val driveMs = drives.sumOf { it.ms } // 합계와 툴팁이 같은 값
+            val cries = spans.flatMap { it.alarms }.filter(::today) // 울음 경보 에피소드마다 한 번(리포트 목록 '울음 n번'과 같은 수)
             // 세션 구간(출발 D부터 도착 뒤 뒷문 열 때까지)이라 중간 정차도 들어 있다: '주행'이 아니라 아기가 타 있던 '탑승' 시간
-            add(DayLane("차에서", DataColor.CAR, "탑승 " + TimeText.duration(driveMs), "울음 ${cries.size}번",
-                blocks = drives, diamonds = cries.map(::min)))
+            add(
+                DayLane(
+                    "차에서",
+                    DataColor.CAR,
+                    "탑승 " + TimeText.duration(driveMs),
+                    "울음 ${cries.size}번",
+                    blocks = drives,
+                    diamonds = cries.map(::min)
+                )
+            )
         }
     }
     return if (lanes.isEmpty()) null else DayChartData(lanes, min(now))

@@ -1,12 +1,12 @@
 package kr.aigyeot.phone.domain.repository
 
+import java.io.File
 import kotlinx.coroutines.flow.StateFlow
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.model.Connection
 import kr.aigyeot.phone.domain.model.Credentials
 import kr.aigyeot.phone.domain.model.PhoneState
 import kr.aigyeot.phone.domain.model.creds
-import java.io.File
 
 // 저장소 인터페이스. 구현은 data/에 있다. 사실 하나는 저장소 하나가 원본이다.
 

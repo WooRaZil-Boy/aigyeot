@@ -14,12 +14,7 @@ import kr.aigyeot.engine.PauseReason.SILENCED
  * 사건 큐·호스트는 모른다. [emit]은 읽기 스레드와 감시 스레드에서 불리니 큐에 넣기만 하는 스레드 안전한 함수여야 한다.
  * 같은 사유의 InputLost는 복귀 전까지 한 번만 낸다.
  */
-class CryDetector(
-    head: CryHead,
-    private val scorer: WindowScorer,
-    private val clock: () -> Long,
-    private val emit: (Event) -> Unit,
-) {
+class CryDetector(head: CryHead, private val scorer: WindowScorer, private val clock: () -> Long, private val emit: (Event) -> Unit) {
     private val tracker = SegmentTracker(head)
     private val pauses = mutableSetOf<PauseReason>()
     private var started = false
@@ -34,25 +29,35 @@ class CryDetector(
     @Volatile var injectedCryAt: Long? = null
 
     /** 입력을 열 때 부른다. 감시 기준 시각을 잡는다. */
-    @Synchronized fun start() { started = true; lastSegmentAt = clock(); graceUntil = lastSegmentAt + FIRST_SEGMENT_MS }
+    @Synchronized fun start() {
+        started = true
+        lastSegmentAt = clock()
+        graceUntil = lastSegmentAt + FIRST_SEGMENT_MS
+    }
 
     /**
      * 앞 감지기·복원에서 아직 풀리지 않은 끊김 사유를 이어받는다(InputLost는 다시 내지 않는다). 실제 입력이 돌아오면 사유마다 InputRestored를 낸다:
      * MIC_ERROR·SILENCED는 첫 창에서(그 창이 아직 무음이면 SILENCED는 그대로), DETECTOR_TIMEOUT은 구간이 나올 때.
      */
-    @Synchronized fun assumePaused(reasons: Set<PauseReason>) { pauses += reasons }
+    @Synchronized fun assumePaused(reasons: Set<PauseReason>) {
+        pauses += reasons
+    }
 
     /** 지금 풀리지 않은 끊김 사유. 서비스가 끝날 때 다음 감지기에 넘긴다. */
     @Synchronized fun pauses(): Set<PauseReason> = pauses.toSet()
 
     /** 멈춘 뒤로는 onWindow·finish·checkTimeout이 아무것도 내지 않는다(점수 계산 중이던 결과도 버린다). onMicError도 force 없이는 내지 않는다. */
-    @Synchronized fun shutdown() { closed = true }
+    @Synchronized fun shutdown() {
+        closed = true
+    }
 
     /**
      * 읽기 오류·마이크 서비스 비정상 종료. 러너가 보내는 오류는 잠금 안에서 [shutdown] 여부를 다시 본다(종료 뒤에 InputLost가 나가면 이어받기가 어긋난다).
      * 서비스 [kr.aigyeot.app.detect.MicService.onDestroy]가 보내는 마지막 알림만 [force]로 닫힌 뒤에도 낸다.
      */
-    @Synchronized fun onMicError(force: Boolean = false) { if (force || !closed) lose(MIC_ERROR) }
+    @Synchronized fun onMicError(force: Boolean = false) {
+        if (force || !closed) lose(MIC_ERROR)
+    }
 
     /** 창 하나. [window]는 [Detect.WINDOW_SAMPLES]표본. 점수 계산은 잠금 밖에서 해서 감시([checkTimeout])가 막히지 않는다. */
     fun onWindow(window: ShortArray, silenced: Boolean) {
@@ -91,7 +96,9 @@ class CryDetector(
     }
 
     /** 입력이 끝났을 때(녹음 파일). 창이 3개보다 적으면 채운 구간 하나를 낸다. */
-    @Synchronized fun finish() { if (!closed) tracker.flushShort(clock(), injectedCryAt)?.let(::publish) }
+    @Synchronized fun finish() {
+        if (!closed) tracker.flushShort(clock(), injectedCryAt)?.let(::publish)
+    }
 
     /**
      * 판별기 무응답: 구간이 3초 넘게 안 오면 InputLost(DETECTOR_TIMEOUT). 감시 스레드가 주기적으로 부른다.
@@ -117,5 +124,7 @@ class CryDetector(
         emit(InputRestored(at, reason))
     }
 
-    private companion object { val FIRST_SEGMENT_MS = Detect.SEGMENT_WINDOWS * Detect.WINDOW_MS }
+    private companion object {
+        val FIRST_SEGMENT_MS = Detect.SEGMENT_WINDOWS * Detect.WINDOW_MS
+    }
 }

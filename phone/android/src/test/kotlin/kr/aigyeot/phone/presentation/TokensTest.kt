@@ -31,7 +31,7 @@ class TokensTest {
         "accent" to p.accent, "accentInk" to p.accentInk, "onAccent" to p.onAccent, "accentSoft" to p.accentSoft, "onAccentSoft" to p.onAccentSoft,
         "glow" to p.glow, "child" to p.child, "childSoft" to p.childSoft, "childGlow" to p.childGlow,
         "warning" to p.warning, "danger" to p.danger, "active" to p.active, "fill" to p.fill, "onFill" to p.onFill,
-        "cFeed" to p.cFeed, "cSleep" to p.cSleep, "cDiaper" to p.cDiaper, "cNote" to p.cNote, "cCar" to p.cCar,
+        "cFeed" to p.cFeed, "cSleep" to p.cSleep, "cDiaper" to p.cDiaper, "cNote" to p.cNote, "cCar" to p.cCar
     )
 
     @Test
@@ -62,8 +62,13 @@ class TokensTest {
     fun `글자 단계는 폰 값(크기·줄 높이·굵기)과 같다`() {
         val src = json.getValue("type").jsonObject.getValue("phone").jsonObject
         val mine: Map<String, TextStyle> = mapOf(
-            "hero" to Type.hero, "display" to Type.display, "title" to Type.title, "headline" to Type.headline,
-            "body" to Type.body, "caption" to Type.caption, "timer" to Type.timer,
+            "hero" to Type.hero,
+            "display" to Type.display,
+            "title" to Type.title,
+            "headline" to Type.headline,
+            "body" to Type.body,
+            "caption" to Type.caption,
+            "timer" to Type.timer
         )
         assertEquals(src.keys - "\$comment", mine.keys)
         for ((name, s) in mine) {
@@ -91,7 +96,7 @@ class TokensTest {
             "lead" to (Type.lead to Triple(16f, 24f, 500)), "rowTitle" to (Type.rowTitle to Triple(16f, 22f, 600)),
             "dateNumber" to (Type.dateNumber to Triple(17f, 22f, 500)), "strong" to (Type.strong to Triple(17f, 22f, 700)),
             "strongLarge" to (Type.strongLarge to Triple(18f, 24f, 700)), "runningTimer" to (Type.runningTimer to Triple(28f, 32f, 700)),
-            "recordTimer" to (Type.recordTimer to Triple(44f, 48f, 600)),
+            "recordTimer" to (Type.recordTimer to Triple(44f, 48f, 600))
         )
         for ((name, v) in roles) {
             val (s, want) = v
@@ -117,16 +122,25 @@ class TokensTest {
     fun `모션 곡선과 스프링은 tokens json과 같다`() {
         val motion = json.getValue("motion").jsonObject
         val mine = mapOf(
-            "press" to Motion.press, "fast" to Motion.fast, "base" to Motion.base, "enter" to Motion.enter,
-            "exit" to Motion.exit, "camera" to Motion.camera, "light" to Motion.light, "ripple" to Motion.ripple,
+            "press" to Motion.press,
+            "fast" to Motion.fast,
+            "base" to Motion.base,
+            "enter" to Motion.enter,
+            "exit" to Motion.exit,
+            "camera" to Motion.camera,
+            "light" to Motion.light,
+            "ripple" to Motion.ripple
         )
         assertEquals(motion.keys - "\$comment", mine.keys)
         for ((name, c) in mine) {
             assertEquals(name, 2, motion.getValue(name).jsonArray.size)
             val (ms, curve) = motion.getValue(name).jsonArray.let { it[0].jsonPrimitive.int to it[1].jsonPrimitive.content }
             assertEquals(name, ms, c.ms)
-            val want = if (curve == "linear") listOf(0f, 0f, 1f, 1f)
-            else Regex("""cubic-bezier\(([^)]*)\)""").find(curve)!!.groupValues[1].split(",").map { it.trim().toFloat() }
+            val want = if (curve == "linear") {
+                listOf(0f, 0f, 1f, 1f)
+            } else {
+                Regex("""cubic-bezier\(([^)]*)\)""").find(curve)!!.groupValues[1].split(",").map { it.trim().toFloat() }
+            }
             assertEquals(name, want, listOf(c.x1, c.y1, c.x2, c.y2))
         }
         val spring = json.getValue("spring").jsonObject
@@ -140,5 +154,4 @@ class TokensTest {
             assertEquals(name, o.getValue("stiffness").jsonPrimitive.float, s.stiffness)
         }
     }
-
 }

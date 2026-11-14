@@ -23,7 +23,8 @@ class QueuedFeedingLineTest {
     @Test fun s06_phoneFeedingStartedWhileQueued_notSpoken() {
         val sim = waitingS06().ev(FeedingStarted(T0 + 1, T0 + 1, FeedingFrom.PHONE, "m1"))
         sim.tickToSpeak()
-        assertFalse(sim.spokeS06()); assertTrue(sim.s.speech.queue.none { it.sid == Sid.S06 })
+        assertFalse(sim.spokeS06())
+        assertTrue(sim.s.speech.queue.none { it.sid == Sid.S06 })
         assertFalse(sim.ep.s06Said)
     }
 
@@ -33,7 +34,7 @@ class QueuedFeedingLineTest {
         assertFalse(sim.spokeS06())
     }
 
-    @Test fun s06_feedingStartMovedOutOfWindow_droppedAtPop() {   // 수유 확인이 feedingStart를 옮긴 것과 같은 상태 변화
+    @Test fun s06_feedingStartMovedOutOfWindow_droppedAtPop() { // 수유 확인이 feedingStart를 옮긴 것과 같은 상태 변화
         val sim = waitingS06()
         sim.s = sim.s.copy(feedingStart = sim.t - MIN)
         sim.tickToSpeak()
@@ -72,16 +73,16 @@ class QueuedFeedingLineTest {
 
     @Test fun door_openValueOnAlreadyOpenSide_noCloseSessionNoFlagChange() {
         val sim = idle()
-        sim.s = sim.s.copy(car = sim.s.car.copy(rearDoorOpen = setOf(Side.LEFT)))   // 이미 열린 쪽, doorOpenedSinceP는 거짓
+        sim.s = sim.s.copy(car = sim.s.car.copy(rearDoorOpen = setOf(Side.LEFT))) // 이미 열린 쪽, doorOpenedSinceP는 거짓
         sim.ev(RearDoor(sim.t, Side.LEFT, true))
-        assertFalse(sim.s.ign.doorOpenedSinceP)   // 같은 값: 아무것도 하지 않는다
+        assertFalse(sim.s.ign.doorOpenedSinceP) // 같은 값: 아무것도 하지 않는다
         assertTrue(sim.cmds.isEmpty())
     }
 
     @Test fun door_repeatedOpenWithSession_doesNotCloseSession() {
-        val sim = session()                          // D, 세션 열림, 문 닫힘
+        val sim = session() // D, 세션 열림, 문 닫힘
         sim.s = sim.s.copy(car = sim.s.car.copy(rearDoorOpen = setOf(Side.LEFT), gear = Gear.P))
-        sim.ev(RearDoor(sim.t, Side.LEFT, true))      // 이미 열림: 사실 맞추기뿐
+        sim.ev(RearDoor(sim.t, Side.LEFT, true)) // 이미 열림: 사실 맞추기뿐
         assertTrue(sim.s.session != null)
         assertTrue(sim.cmds.none { it is CloseSession })
     }
@@ -107,7 +108,8 @@ class FeedingConfirmNoticeTest {
 
     @Test fun sceneStart_noConfirm_noHide() {
         val sim = parked()
-        assertNotNull(sim.s.ign.nursingStop!!.firstPAt); assertTrue(!sim.s.ign.nursingStop!!.confirmShown)
+        assertNotNull(sim.s.ign.nursingStop!!.firstPAt)
+        assertTrue(!sim.s.ign.nursingStop!!.confirmShown)
         val step = Engine().sceneStart(sim.s, sim.s, sim.t + 100).realStep
         assertTrue(step.commands.none { it is HideNotice })
         assertEquals(sim.s.ign.nursingStop, step.state.ign.nursingStop)

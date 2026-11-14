@@ -14,12 +14,13 @@ import kotlin.math.tan
  */
 internal class Loudness(rate: Int, private val channels: Int) {
     private val f = Array(channels) { KWeight(rate) }
-    private val step = rate / 10                       // 100ms 표본(채널당)
-    private val sub = ArrayList<Double>()              // 100ms마다 채널 합 제곱 평균
+    private val step = rate / 10 // 100ms 표본(채널당)
+    private val sub = ArrayList<Double>() // 100ms마다 채널 합 제곱 평균
     private var acc = 0.0
     private var n = 0
     private var ch = 0
-    var peak = 0.0; private set                        // 표본 정점(1.0 = 0 dBFS)
+    var peak = 0.0
+        private set // 표본 정점(1.0 = 0 dBFS)
 
     /** 끼운(interleaved) 표본, −1..1. */
     fun add(x: Double) {
@@ -28,11 +29,17 @@ internal class Loudness(rate: Int, private val channels: Int) {
         acc += y * y
         if (++ch == channels) {
             ch = 0
-            if (++n == step) { sub += acc / step; acc = 0.0; n = 0 }
+            if (++n == step) {
+                sub += acc / step
+                acc = 0.0
+                n = 0
+            }
         }
     }
 
-    fun addPcm16(pcm: ShortArray, count: Int) { for (i in 0 until count) add(pcm[i] / 32768.0) }
+    fun addPcm16(pcm: ShortArray, count: Int) {
+        for (i in 0 until count) add(pcm[i] / 32768.0)
+    }
 
     /** 통합 크기. 문턱을 넘는 창이 없으면(거의 무음·400ms 미만) null. */
     fun integrated(): Double? {
@@ -58,8 +65,13 @@ internal class Loudness(rate: Int, private val channels: Int) {
             val vh = 10.0.pow(3.999843853973347 / 20)
             val vb = vh.pow(0.4996667741545416)
             var a0 = 1 + k / q1 + k * k
-            s1 = doubleArrayOf((vh + vb * k / q1 + k * k) / a0, 2 * (k * k - vh) / a0, (vh - vb * k / q1 + k * k) / a0,
-                2 * (k * k - 1) / a0, (1 - k / q1 + k * k) / a0)
+            s1 = doubleArrayOf(
+                (vh + vb * k / q1 + k * k) / a0,
+                2 * (k * k - vh) / a0,
+                (vh - vb * k / q1 + k * k) / a0,
+                2 * (k * k - 1) / a0,
+                (1 - k / q1 + k * k) / a0
+            )
             // 2단: 고역 통과(38 Hz)
             k = tan(PI * 38.13547087602444 / rate)
             val q2 = 0.5003270373238773
@@ -93,7 +105,9 @@ internal class Loudness(rate: Int, private val channels: Int) {
  */
 internal class WhiteNoise(seed: Long = System.nanoTime()) {
     private val r = SplittableRandom(seed)
-    fun fill(buf: ShortArray) { for (i in buf.indices) buf[i] = (r.nextDouble(-AMP, AMP) * 32767).toInt().toShort() }
+    fun fill(buf: ShortArray) {
+        for (i in buf.indices) buf[i] = (r.nextDouble(-AMP, AMP) * 32767).toInt().toShort()
+    }
 
     companion object {
         const val RATE = 48_000

@@ -18,7 +18,7 @@ import kr.aigyeot.engine.Step
 /** 마이크 서비스와 맞추는 곳. 기본은 MicService companion, 시험은 가짜. */
 class MicPort(
     val runningPauses: () -> Set<PauseReason>? = MicService::runningPauses,
-    val assumePausedNow: (Set<PauseReason>) -> Unit = MicService::assumePausedNow,
+    val assumePausedNow: (Set<PauseReason>) -> Unit = MicService::assumePausedNow
 )
 
 /**
@@ -35,25 +35,36 @@ class Host(
     mic: MicPort = MicPort(),
     userId: () -> Int = { Process.myUid() / 100_000 },
     /** 기기가 잠든 누적 시간(elapsedRealtime − uptimeMillis). 화면·전원 신호 없는 잠듦을 시계 점프로 알아챈다. */
-    slept: () -> Long = { SystemClock.elapsedRealtime() - SystemClock.uptimeMillis() },
+    slept: () -> Long = { SystemClock.elapsedRealtime() - SystemClock.uptimeMillis() }
 ) : HostApi {
     @Volatile var targets = Targets({}, {}, {})
 
     // 넷은 서로 부른다. 순환은 호출 때 읽는 람다로 끊는다(만드는 동안에는 부르지 않는다)
     private val router: CommandRouter = CommandRouter(store, clock, p, { targets }, inScene = { scene.scenario != null }, fatal = { runner.die(it) })
-    private val runner: EngineRunner = EngineRunner(engine, store, clock, slept, { targets }, router,
-        inScene = { scene.scenario != null }, reconcileLink = { restore.reconcileLink(it) })
+    private val runner: EngineRunner = EngineRunner(
+        engine,
+        store,
+        clock,
+        slept,
+        { targets },
+        router,
+        inScene = { scene.scenario != null },
+        reconcileLink = { restore.reconcileLink(it) }
+    )
     private val restore: RestoreUseCase = RestoreUseCase(runner, engine, store, clock, mic, userId, { targets }, inScene = { scene.scenario != null })
     private val scene: SceneController = SceneController(runner, router, restore, engine, store, clock, { targets })
 
     override val steps: StateFlow<Step?> = runner.steps
     override val stepLog: SharedFlow<Step> = runner.stepLog
     override val stepLogDrops: StateFlow<Long> = runner.drops
+
+    @Suppress("ktlint:standard:backing-property-naming")
     private val _control = MutableSharedFlow<ControlLogEntity>(extraBufferCapacity = 256)
     override val controlLog: SharedFlow<ControlLogEntity> = _control
 
     /** 지금 도는 장면 id. store가 SaveSession 때 붙인다. */
     val scenarioId: String? get() = scene.scenario?.id
+
     /** 지금 도는 장면(없으면 null). 장면 중에는 ClearRecords를 받지 않으므로(EngineRunner) 화면은 이것으로 '모든 기록 지우기'를 끈다. */
     val activeScene: StateFlow<ScenarioSetup?> = scene.scenarioFlow
 
@@ -68,7 +79,7 @@ class Host(
     /** exec의 control_log 한 줄: store에 쓰고 장면 측정용 흐름에도 낸다. */
     fun logControl(row: ControlLogEntity) {
         _control.tryEmit(row)
-        runner.execute { store.logControl(row) }   // 부모 세션이 없으면 store가 버린다
+        runner.execute { store.logControl(row) } // 부모 세션이 없으면 store가 버린다
     }
 
     /** 복원 ①~⑤. 한 번만. 큐의 첫 일이 되도록 호스트를 만든 곳에서 바로 부른다. */

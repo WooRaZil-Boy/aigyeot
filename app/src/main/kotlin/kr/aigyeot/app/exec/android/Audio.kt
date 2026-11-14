@@ -26,7 +26,7 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
 
     override fun requestFocus(onChange: (FocusChange) -> Unit): Boolean {
         abandonFocus()
-        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)   // 달래기는 일시 재생이라 영구 GAIN으로 앞좌석 앱을 멈춰 세우지 않는다
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) // 달래기는 일시 재생이라 영구 GAIN으로 앞좌석 앱을 멈춰 세우지 않는다
             .setAudioAttributes(media)
             .setOnAudioFocusChangeListener({ c -> ex.guard { focusOf(c)?.let(onChange) } }, ex.handler).build()
         if (am.requestAudioFocus(req) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return false
@@ -34,7 +34,10 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
         return true
     }
 
-    override fun abandonFocus() { focus?.let { am.abandonAudioFocusRequest(it) }; focus = null }
+    override fun abandonFocus() {
+        focus?.let { am.abandonAudioFocusRequest(it) }
+        focus = null
+    }
 
     override fun open(method: Method, rear: Boolean, onRouted: (String?) -> Unit, onError: () -> Unit): Track? = try {
         val dev = if (rear) rear() else null
@@ -49,7 +52,10 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
                 FileTrack(media, dev, ex, onRouted, onError) { it.setDataSource(f.path) }
             }
         }
-    } catch (e: Exception) { Log.w(TAG, "open $method", e); null }
+    } catch (e: Exception) {
+        Log.w(TAG, "open $method", e)
+        null
+    }
 
     private fun focusOf(c: Int) = when (c) {
         AudioManager.AUDIOFOCUS_LOSS -> FocusChange.LOSS

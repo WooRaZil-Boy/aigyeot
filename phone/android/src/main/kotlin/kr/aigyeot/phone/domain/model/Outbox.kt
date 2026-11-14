@@ -26,8 +26,7 @@ sealed interface SendResult {
  * 지금 보낼 차례인 항목. 맨 앞이 기다리는 중이면 뒤도 기다린다(순서 유지).
  * 맨 앞이 7일 지났으면 보내지 않는다(건너뛰지도 않는다): 만료 정리([pruned]) 저장이 먼저 지우고 표시를 남긴다.
  */
-fun PhoneState.nextToSend(now: Long): OutboxItem? =
-    outbox.firstOrNull()?.takeIf { it.nextTryAt <= now && now - it.createdAt < KEEP_IDS_MS }
+fun PhoneState.nextToSend(now: Long): OutboxItem? = outbox.firstOrNull()?.takeIf { it.nextTryAt <= now && now - it.createdAt < KEEP_IDS_MS }
 
 /** 망 실패로 생긴 기다림이 남은 항목이 있는가(iOS `hasNetworkWait`). */
 fun PhoneState.hasNetworkWait(now: Long): Boolean = outbox.any { it.networkWait && it.nextTryAt > now }
@@ -40,8 +39,7 @@ fun PhoneState.hurriedNetworkWaits(now: Long): PhoneState =
     copy(outbox = outbox.map { if (it.networkWait && it.nextTryAt > now) it.copy(nextTryAt = now) else it })
 
 /** 메시지 429 기다림을 늘린다(더 늦은 끝을 남긴다). */
-fun PhoneState.withMessageHold(now: Long, waitMs: Long): PhoneState =
-    copy(messageHoldUntil = maxOf(messageHoldUntil?.takeIf { it > now } ?: 0, now + waitMs))
+fun PhoneState.withMessageHold(now: Long, waitMs: Long): PhoneState = copy(messageHoldUntil = maxOf(messageHoldUntil?.takeIf { it > now } ?: 0, now + waitMs))
 
 /** 보낼 함 항목의 이번 단계가 메시지 POST인가(노래 파일 PUT은 따로 제한한다). */
 val OutboxItem.posting: Boolean get() = payload !is OutboxPayload.Song || uploaded
@@ -58,9 +56,13 @@ fun PhoneState.afterSend(item: OutboxItem, r: SendResult, now: Long, aheadMs: Lo
     val summary = item.payload is OutboxPayload.CareSummary
     // 보내는 사이 새 요약이 옛것을 바꿨으면: 다시 보낼 기다림(429 Retry-After·백오프)은 새것이 이어받고, 옛것의 실패는 알리지 않는다.
     val wasQueued = outbox.any { it.id == id }
-    val target = if (wasQueued || !summary) id
-    else outbox.firstOrNull { it.payload is OutboxPayload.CareSummary }?.id ?: id
+    val target = if (wasQueued || !summary) {
+        id
+    } else {
+        outbox.firstOrNull { it.payload is OutboxPayload.CareSummary }?.id ?: id
+    }
     fun change(f: (OutboxItem) -> OutboxItem) = copy(outbox = outbox.map { if (it.id == target) f(it) else it })
+
     // 기다림 이유를 함께 적는다: 망 실패(응답 없음·닿지 않음)만 당길 수 있다(iOS `scheduleRetry`의 `network`와 같다).
     fun retry(waitMs: Long, network: Boolean = false) =
         change { it.copy(attempts = it.attempts + 1, nextTryAt = maxOf(it.nextTryAt, now + waitMs), networkWait = network) }
@@ -81,11 +83,11 @@ fun PhoneState.afterSend(item: OutboxItem, r: SendResult, now: Long, aheadMs: Lo
                         val fixed = at ?: it.at
                         val reflected = it.reflected || (last != null && instantOf(fixed) == last)
                         it.copy(sentAt = now, at = fixed, reflected = reflected, failed = if (reflected) null else it.failed)
-                    },
+                    }
                 )
             }
             item.payload is OutboxPayload.Song -> dropped.copy(
-                songs = songs.map { if (it.songId == item.songId && it.phase == SongPhase.UPLOADING) it.copy(phase = SongPhase.WAITING) else it },
+                songs = songs.map { if (it.songId == item.songId && it.phase == SongPhase.UPLOADING) it.copy(phase = SongPhase.WAITING) else it }
             )
             // 차가 미래 요약으로 버렸을 수 있다: 내용이 같아도 다음 계기에 다시 보낸다(iOS와 같음).
             summary -> if (aheadMs > CAR_FUTURE_MS && noSummaryLeft()) dropped.copy(lastSentCareSummary = null) else dropped
@@ -109,16 +111,20 @@ fun PhoneState.afterSend(item: OutboxItem, r: SendResult, now: Long, aheadMs: Lo
             // 차가 아직 처리하지 않은 노래 파일이 3개: 차가 켜진 뒤 다시.
             r.code == "song_quota" -> retry(SONG_QUOTA_WAIT_MS)
             // 400·403·409 id_conflict·413·415 등은 다시 보내도 같아서 버리고 화면에 알린다.
-            else -> if (!wasQueued) dropped
-            // 차에 이미 반영된 수유는 실패로 적지도 띠로 알리지도 않는다('차에 반영됨').
-            else if (item.isFeeding && feedingDone(item)) dropped
-            else dropped.markFailed(item, r).copy(
-                unseenDrops = unseenDrops.withDrop(id, item.type),
-                droppedFeedingAt = item.feedingAt?.takeIf { item.isFeeding }?.let { droppedFeedingAt + (id to it) } ?: droppedFeedingAt,
-                // 차에 닿지 못한 요약이다: 내용이 같아도 다음 계기에 다시 보낸다(중계가 그 type을 받게 된 뒤 등).
-                // 뒤에 남은 요약이 있으면 표시는 그것을 가리키므로 둔다.
-                lastSentCareSummary = if (summary && noSummaryLeft()) null else lastSentCareSummary,
-            )
+            else -> if (!wasQueued) {
+                dropped
+            } // 차에 이미 반영된 수유는 실패로 적지도 띠로 알리지도 않는다('차에 반영됨').
+            else if (item.isFeeding && feedingDone(item)) {
+                dropped
+            } else {
+                dropped.markFailed(item, r).copy(
+                    unseenDrops = unseenDrops.withDrop(id, item.type),
+                    droppedFeedingAt = item.feedingAt?.takeIf { item.isFeeding }?.let { droppedFeedingAt + (id to it) } ?: droppedFeedingAt,
+                    // 차에 닿지 못한 요약이다: 내용이 같아도 다음 계기에 다시 보낸다(중계가 그 type을 받게 된 뒤 등).
+                    // 뒤에 남은 요약이 있으면 표시는 그것을 가리키므로 둔다.
+                    lastSentCareSummary = if (summary && noSummaryLeft()) null else lastSentCareSummary
+                )
+            }
         }
     }
 }
@@ -139,12 +145,16 @@ fun dropNotice(type: String): String? = when (type) {
  * 띠 글에 한 줄을 더한다. 띠가 하나라 떠 있는 안내(다른 버림·저장 실패)를 덮지 않고 줄을 바꿔 함께 보인다.
  * 같은 글은 한 번. 사용자가 띠를 닫으면 다음 안내부터 새로 모은다.
  */
-fun withNoticeLine(notice: String?, line: String): String =
-    if (notice == null) line else if (line in notice.lines()) notice else "$notice\n$line"
+fun withNoticeLine(notice: String?, line: String): String = if (notice == null) {
+    line
+} else if (line in notice.lines()) {
+    notice
+} else {
+    "$notice\n$line"
+}
 
 /** 버린 메시지들의 안내를 띠 글에 더한다. */
-fun withDropNotices(notice: String?, types: List<String>): String? =
-    types.mapNotNull(::dropNotice).fold(notice) { n, line -> withNoticeLine(n, line) }
+fun withDropNotices(notice: String?, types: List<String>): String? = types.mapNotNull(::dropNotice).fold(notice) { n, line -> withNoticeLine(n, line) }
 
 private fun PhoneState.markFailed(item: OutboxItem, r: SendResult.Failed): PhoneState {
     // 화면 문구는 앱이 정한다: 중계의 코드를 보이지 않는다(iOS와 같은 글).

@@ -3,6 +3,8 @@ package kr.aigyeot.phone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import java.time.Instant
+import java.time.ZoneId
 import kr.aigyeot.phone.domain.model.APP_ZONE
 import kr.aigyeot.phone.domain.model.CareEvent
 import kr.aigyeot.phone.domain.model.CareFile
@@ -12,8 +14,6 @@ import kr.aigyeot.phone.domain.model.FeedSide
 import kr.aigyeot.phone.domain.model.MINUTE
 import kr.aigyeot.phone.domain.model.onDate
 import kr.aigyeot.phone.domain.model.ulid
-import java.time.Instant
-import java.time.ZoneId
 
 // debug 빌드만: 시연 시드. release에는 들어가지 않는다.
 // 넣기: adb shell am broadcast -n kr.aigyeot.phone/.DebugSeedReceiver (앱이 꺼져 있어도 된다)
@@ -26,8 +26,12 @@ import java.time.ZoneId
 private val PAST_FEEDS = listOf("06:50", "09:50", "12:50", "15:50", "18:50", "21:30", "23:40") // 20분씩, 왼쪽·오른쪽 번갈아
 private val PAST_SLEEPS = listOf("00:10" to "06:40", "07:20" to "09:40", "10:20" to "12:40", "16:20" to "18:40") // 합 13시간 30분
 private val PAST_DIAPERS = listOf(
-    "06:45" to Diaper.WET, "09:45" to Diaper.DIRTY, "12:45" to Diaper.WET,
-    "15:45" to Diaper.WET, "18:45" to Diaper.BOTH, "23:35" to Diaper.WET,
+    "06:45" to Diaper.WET,
+    "09:45" to Diaper.DIRTY,
+    "12:45" to Diaper.WET,
+    "15:45" to Diaper.WET,
+    "18:45" to Diaper.BOTH,
+    "23:35" to Diaper.WET
 )
 
 /**
@@ -45,7 +49,22 @@ fun demoSeed(nowMs: Long, zone: ZoneId, keep: CareFile = CareFile()): CareFile {
     fun hm(day: java.time.LocalDate, s: String) = onDate(day, s.take(2).toInt(), s.takeLast(2).toInt(), zone)
     for (d in 6 downTo 1) {
         val day = today.minusDays(d.toLong())
-        PAST_FEEDS.forEachIndexed { i, s -> hm(day, s).let { add(CareKind.FEED, it, it + 20 * MINUTE, side = if (i % 2 == 0) FeedSide.LEFT else FeedSide.RIGHT) } }
+        PAST_FEEDS.forEachIndexed { i, s ->
+            hm(day, s).let {
+                add(
+                    CareKind.FEED,
+                    it,
+                    it + 20 * MINUTE,
+                    side = if (i % 2 ==
+                        0
+                    ) {
+                        FeedSide.LEFT
+                    } else {
+                        FeedSide.RIGHT
+                    }
+                )
+            }
+        }
         // 짧으면 낮잠 셋의 시작을 10분까지 당기고(앞 수유 끝과 닿을 뿐 겹치지 않는다), 길면 밤잠을 끝에서 7시간 전(실제 시각)에 시작한다.
         val night = hm(day, PAST_SLEEPS[0].second) - hm(day, PAST_SLEEPS[0].first)
         val pull = minOf(10 * MINUTE, maxOf(0L, 390 * MINUTE - night) / 3)

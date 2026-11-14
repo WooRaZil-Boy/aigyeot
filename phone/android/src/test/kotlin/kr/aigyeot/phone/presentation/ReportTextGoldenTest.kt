@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.presentation
 
+import java.time.ZoneId
 import kotlinx.serialization.json.JsonObject
 import kr.aigyeot.phone.Golden
 import kr.aigyeot.phone.domain.model.actionText
@@ -23,14 +24,12 @@ import kr.aigyeot.phone.show
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.ReportSummaryBody
 import org.junit.Test
-import java.time.ZoneId
 
 /** 리포트 화면에 나가는 글: 리포트 예제 파일마다 문구 함수가 내는 줄을 골든 파일과 견준다. */
 class ReportTextGoldenTest {
     private val zone = ZoneId.of("Asia/Seoul")
 
-    private fun body(name: String): ReportSummaryBody =
-        ProtocolJson.decodeFromJsonElement(ReportSummaryBody.serializer(), fixture(name).body as JsonObject)
+    private fun body(name: String): ReportSummaryBody = ProtocolJson.decodeFromJsonElement(ReportSummaryBody.serializer(), fixture(name).body as JsonObject)
 
     private fun lines(name: String): List<String> = buildList {
         val b = body(name)

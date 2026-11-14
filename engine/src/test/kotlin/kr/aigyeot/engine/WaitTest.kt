@@ -41,7 +41,7 @@ class WaitTest {
             g.ev(FocusChanged(g.t + 1_000, old, FocusChange.LOSS))
             assertEquals(Phase.WAIT, g.ses.phase)
             assertEquals(Unjudged.FOCUS_LOSS, g.ep.first!!.unjudged)
-            g.recry()                                           // 그 뒤 울음은 2차 자동 재생을 부르지 않는다
+            g.recry() // 그 뒤 울음은 2차 자동 재생을 부르지 않는다
             assertTrue(g.step<StartPlayback>().isEmpty())
             assertEquals(AlarmOnly.WAITING, g.alarm().step<LogAlarm>().single().reason)
         }
@@ -51,7 +51,8 @@ class WaitTest {
         val sim = session().attempt1()
         sim.waitedFrom(SwitchSound(sim.t + 1_000, LL), Unjudged.SWITCH_SOUND, PlayEndReason.SWITCH_SOUND)
         val start = sim.step<StartPlayback>().single()
-        assertEquals(PlayKind.REQUEST, start.kind); assertEquals(LL, start.method)
+        assertEquals(PlayKind.REQUEST, start.kind)
+        assertEquals(LL, start.method)
         assertTrue(sim.cmds.indexOfFirst { it is StopPlayback } < sim.cmds.indexOf(start))
     }
 
@@ -60,16 +61,18 @@ class WaitTest {
         sim.waitedFrom(Suspend(sim.t + 1_000), Unjudged.SUSPEND, PlayEndReason.SUSPEND)
         val names = sim.cmds.map { it::class.simpleName }
         val i = listOf("StopPlayback", "CancelSpeech", "ReleaseAudio", "SaveSnapshot").map { names.indexOf(it) }
-        assertEquals(i.sorted(), i); assertEquals(names.lastIndex, i.last())
+        assertEquals(i.sorted(), i)
+        assertEquals(names.lastIndex, i.last())
         assertEquals(sim.t, (sim.cmds.last() as SaveSnapshot).state.ign.suspendedAt)
-        assertTrue(sim.s.speech.queue.isEmpty()); assertNull(sim.s.speech.speaking)
+        assertTrue(sim.s.speech.queue.isEmpty())
+        assertNull(sim.s.speech.speaking)
     }
 
     @Test fun suspendWithoutPlay_cancelsSpeechReleasesSaves() {
         for (sim in listOf(idle(), session(), session().handoff())) {
             val phase = sim.s.session?.phase
             // 인계가 큐에 둔 S10이 버려지면 같은 Step에 이름 없는 알림이 나간다
-            val alert = if (sim.s.openLedger() != null) listOf("SendToPhone", "SettleHandoff") else emptyList()   // 말하지 않은 인계 줄은 확정(SettleHandoff)으로 false를 남긴다
+            val alert = if (sim.s.openLedger() != null) listOf("SendToPhone", "SettleHandoff") else emptyList() // 말하지 않은 인계 줄은 확정(SettleHandoff)으로 false를 남긴다
             sim.ev(Suspend(sim.t + 1_000))
             assertEquals(listOf("CancelSpeech", "ReleaseAudio") + alert + "SaveSnapshot", sim.cmds.map { it::class.simpleName })
             assertEquals(phase, sim.s.session?.phase)
@@ -83,7 +86,7 @@ class WaitTest {
         assertEquals(Phase.WAIT, sim.ses.phase)
         assertTrue(sim.cmds.isEmpty())
         sim.alarm(1_000)
-        assertTrue(sim.step<StartPlayback>().isEmpty())   // WAIT는 자동 재생 없음
+        assertTrue(sim.step<StartPlayback>().isEmpty()) // WAIT는 자동 재생 없음
         // 장시간 제안 시점을 넘겨 Resume해도 그 Step에는 말하지 않는다. 다음 Tick에 새로 요청한다.
         val long = session().route(rest("a", 10.0)).ev(Suspend(T0 + MIN)).ev(Resume(T0 + 121 * MIN))
         assertTrue(long.cmds.isEmpty())
@@ -93,7 +96,8 @@ class WaitTest {
 
     @Test fun resumeMicOff_nextParkShowsNotice() {
         val sim = session().ev(Suspend(T0 + MIN)).ev(MicService(T0 + MIN, false, null)).ev(Resume(T0 + 20 * MIN))
-        assertTrue(sim.ses.micNoticeArmed); assertTrue(!sim.ses.s17Said)
+        assertTrue(sim.ses.micNoticeArmed)
+        assertTrue(!sim.ses.s17Said)
         sim.gear(Gear.P, MIN)
         assertEquals(Notice.BABY_ABOARD, sim.step<ShowNotice>().single().kind)
         assertTrue(sim.step<Speak>().none { it.sid == Sid.S16 || it.sid == Sid.S17 })
@@ -102,14 +106,15 @@ class WaitTest {
     // 엔진 쪽 동작만 본다, Room 대조는 호스트 시험
     @Test fun restoreWithStaleSnapshot_roomCapAndEndWin() {
         val sim = session()
-        sim.s = sim.s.copy(session = sim.ses.copy(playedMs = P.sessionPlayCapMs))   // ② Room 누적이 이김
+        sim.s = sim.s.copy(session = sim.ses.copy(playedMs = P.sessionPlayCapMs)) // ② Room 누적이 이김
         sim.ev(Boot(sim.t + MIN, Gear.D, 10)).alarm()
         assertTrue(sim.step<StartPlayback>().isEmpty())
         assertEquals(AlarmOnly.SESSION_CAP, sim.step<LogAlarm>().single().reason)
         val ended = session()
-        ended.s = ended.s.copy(session = null)                                                          // ②(a) Room에서 끝난 세션
+        ended.s = ended.s.copy(session = null) // ②(a) Room에서 끝난 세션
         ended.ev(Boot(ended.t + MIN, Gear.D, 10))
-        assertTrue(ended.cmds.all { it is RestoreAmbientLedger || it == HideNotice(Notice.BABY_ABOARD) || it == HideNotice(Notice.MIC_STOPPED) })   // 장부 되돌림과 알림 내림만
+        // 장부 되돌림과 알림 내림만
+        assertTrue(ended.cmds.all { it is RestoreAmbientLedger || it == HideNotice(Notice.BABY_ABOARD) || it == HideNotice(Notice.MIC_STOPPED) })
     }
 
     @Test fun restoreWhilePlaying_treatedAsPlaybackError() {
@@ -119,12 +124,14 @@ class WaitTest {
         assertEquals(Phase.WAIT, sim.ses.phase)
         assertEquals(20_000, sim.ses.playedMs)
         val rec = sim.step<SavePlay>().single().record
-        assertEquals(PlayEndReason.ERROR, rec.endReason); assertEquals(sim.t, rec.endedAt)
+        assertEquals(PlayEndReason.ERROR, rec.endReason)
+        assertEquals(sim.t, rec.endedAt)
         // endAt 뒤에 온 끝은 endAt까지만 센다(실행기는 endAt에 멈췄다). 지난 기대값은 복원 시각까지 70초('상한 쪽으로 보수적')
         val late = session().attempt1()
         late.ev(PlaybackEnded(late.t + 70_000, late.play().id, EndReason.ERROR))
         assertEquals(Phase.WAIT, late.ses.phase)
-        assertEquals(56_000, late.ses.playedMs); assertEquals(56_000, late.ep.playedMs)
+        assertEquals(56_000, late.ses.playedMs)
+        assertEquals(56_000, late.ep.playedMs)
         assertEquals(56_000, late.step<SavePlay>().single().record.playedMs)
     }
 
@@ -145,13 +152,14 @@ class WaitTest {
         val oldEnd = sim.ses.windowEnd!!
         sim.ev(InputLost(oldEnd + MIN, PauseReason.MIC_ERROR))
         assertEquals(Phase.GAP, sim.ses.phase)
-        assertNull(sim.ses.judgeFrom); assertNull(sim.ses.windowEnd)
+        assertNull(sim.ses.judgeFrom)
+        assertNull(sim.ses.windowEnd)
         assertEquals(Unjudged.MIC_ERROR, sim.ep.first!!.unjudged)
-        sim.seg(oldEnd, 0.1)                                    // 멈춘 동안 들어온 구간은 버린다
+        sim.seg(oldEnd, 0.1) // 멈춘 동안 들어온 구간은 버린다
         assertEquals(Phase.GAP, sim.ses.phase)
         sim.ev(MicService(sim.t, true, MicPath.APP_LAUNCH)).ev(InputRestored(sim.t + 1_000, PauseReason.MIC_ERROR))
         assertEquals(sim.t, sim.ses.judgeFrom)
-        sim.seg(sim.t, 0.1)                                     // 새 창 안의 첫 구간만으로는 넘어가지 않는다
+        sim.seg(sim.t, 0.1) // 새 창 안의 첫 구간만으로는 넘어가지 않는다
         assertEquals(Phase.GAP, sim.ses.phase)
     }
 
@@ -165,10 +173,14 @@ class WaitTest {
 
     @Test fun suspended_noNewAudioCommandsUntilResume() {
         val sim = session().route(rest("a", 5.0)).ev(Suspend(T0 + MIN)).clear()
-        sim.ev(SwitchSound(sim.t, LL)); sim.noAudio()
-        sim.ev(Tick(T0 + 3 * 60 * MIN)); sim.noAudio()        // 장시간 제안 시점
-        sim.alarm(); sim.noAudio()
-        sim.ev(RearDoor(sim.t, Side.LEFT, false)); sim.noAudio()
+        sim.ev(SwitchSound(sim.t, LL))
+        sim.noAudio()
+        sim.ev(Tick(T0 + 3 * 60 * MIN))
+        sim.noAudio() // 장시간 제안 시점
+        sim.alarm()
+        sim.noAudio()
+        sim.ev(RearDoor(sim.t, Side.LEFT, false))
+        sim.noAudio()
         assertTrue(sim.s.speech.queue.isEmpty())
         assertTrue(sim.all<Speak>().isEmpty() && sim.all<StartPlayback>().isEmpty())
         sim.ev(Resume(sim.t + 1_000)).ev(SwitchSound(sim.t + 2_000, LL))
@@ -203,7 +215,7 @@ class WaitTest {
         assertEquals(AdjustPlayback(sim.play().id, PlayMode.PAUSE), sim.step<AdjustPlayback>().single())
         assertEquals(Phase.ATTEMPT, sim.ses.phase)
         sim.toGap()
-        assertEquals(56_000, sim.ses.playedMs)                  // 멈춘 동안도 센다
+        assertEquals(56_000, sim.ses.playedMs) // 멈춘 동안도 센다
     }
 
     @Test fun canDuck_ducks() {
@@ -219,13 +231,14 @@ class WaitTest {
         sim.ev(FocusChanged(sim.t, sim.play().id, FocusChange.LOSS_TRANSIENT))
         sim.ev(FocusChanged(sim.t + 10_000, sim.play().id, FocusChange.GAIN))
         assertEquals(PlayMode.NORMAL, sim.step<AdjustPlayback>().single().mode)
-        assertEquals(end, sim.play().endAt)                     // 끝 시각은 그대로
+        assertEquals(end, sim.play().endAt) // 끝 시각은 그대로
     }
 
     @Test fun decidedFirstNotOverwritten() {
         val sim = session().attempt2()
         sim.ev(DriverStop(sim.t + 1_000, Via.TOOL))
-        assertEquals(TryResult.FAIL, sim.ep.first!!.result); assertNull(sim.ep.first!!.unjudged)
+        assertEquals(TryResult.FAIL, sim.ep.first!!.result)
+        assertNull(sim.ep.first!!.unjudged)
         assertEquals(listOf(Unjudged.DRIVER_STOP), sim.ep.laterReasons)
         val g = session().attempt2().toGap().gear(Gear.P, 1_000)
         assertEquals(Phase.WAIT, g.ses.phase)
@@ -236,7 +249,8 @@ class WaitTest {
         val sim = session().handoff().tick(MIN).ev(Suspend(T0 + 5 * MIN))
         val q = sim.ses.quietMs
         repeat(5) { sim.tick(5 * MIN) }
-        assertEquals(q, sim.ses.quietMs); assertEquals(Phase.HANDOFF, sim.ses.phase)
+        assertEquals(q, sim.ses.quietMs)
+        assertEquals(Phase.HANDOFF, sim.ses.phase)
     }
 
     @Test fun resume_doesNotCountSuspendedTime() {
@@ -251,8 +265,13 @@ class WaitTest {
 
     @Test fun everyStopPath_accumulatesOnce() {
         val autoStops: List<(Sim) -> Event> = listOf(
-            { DriverStop(it.t, Via.VOICE) }, { GearChanged(it.t, Gear.P) }, { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
-            { SwitchSound(it.t, LL) }, { Suspend(it.t) }, { CallMode(it.t, true) }, { PlaybackEnded(it.t, it.play().id, EndReason.ERROR) },
+            { DriverStop(it.t, Via.VOICE) },
+            { GearChanged(it.t, Gear.P) },
+            { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
+            { SwitchSound(it.t, LL) },
+            { Suspend(it.t) },
+            { CallMode(it.t, true) },
+            { PlaybackEnded(it.t, it.play().id, EndReason.ERROR) }
         )
         for (stop in autoStops) {
             val sim = session().attempt1().tick(10_000)
@@ -264,8 +283,13 @@ class WaitTest {
             assertEquals(10_000, sim.ses.playedMs)
         }
         val requestStops: List<(Sim) -> Event> = listOf(
-            { DriverStop(it.t, Via.TOOL) }, { CallMode(it.t, true) }, { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
-            { GearChanged(it.t, Gear.P) }, { Suspend(it.t) }, { SwitchSound(it.t, WN) }, { PlaybackEnded(it.t, it.play().id, EndReason.ERROR) },
+            { DriverStop(it.t, Via.TOOL) },
+            { CallMode(it.t, true) },
+            { FocusChanged(it.t, it.play().id, FocusChange.LOSS) },
+            { GearChanged(it.t, Gear.P) },
+            { Suspend(it.t) },
+            { SwitchSound(it.t, WN) },
+            { PlaybackEnded(it.t, it.play().id, EndReason.ERROR) }
         )
         for (stop in requestStops) {
             val sim = session().ev(SwitchSound(T0, LL)).started().tick(7_000)
@@ -289,22 +313,24 @@ class WaitTest {
         val sim = session().attempt1()
         sim.waitedFrom(CallMode(sim.t + 1_000, true), Unjudged.CALL, PlayEndReason.CALL)
         assertTrue(sim.step<CancelSpeech>().isNotEmpty())
-        assertTrue(sim.s.speech.queue.isEmpty()); assertNull(sim.s.speech.speaking)
+        assertTrue(sim.s.speech.queue.isEmpty())
+        assertNull(sim.s.speech.speaking)
     }
 
     @Test fun callStopsRequestPlay() {
         val sim = session().ev(SwitchSound(T0, LL)).started()
         val id = sim.play().id
         sim.ev(CallMode(sim.t + 1_000, true))
-        assertEquals(Phase.WAIT, sim.ses.phase); assertNull(sim.ses.play)
+        assertEquals(Phase.WAIT, sim.ses.phase)
+        assertNull(sim.ses.play)
         assertEquals(StopPlayback(id, false), sim.step<StopPlayback>().single())
         assertEquals(1, sim.step<CancelSpeech>().size)
     }
 
     @Test fun noSpeechInCall() {
         val sim = session().tick(6 * MIN).handoff().ev(CallMode(T0 + 10 * MIN, true)).clear()
-        sim.ev(SwitchSound(sim.t, LL))                        // HANDOFF의 S18도 말하지 않는다
-        sim.gear(Gear.P, 1_000)                                // S12도
+        sim.ev(SwitchSound(sim.t, LL)) // HANDOFF의 S18도 말하지 않는다
+        sim.gear(Gear.P, 1_000) // S12도
         sim.tick(10_000)
         assertTrue(sim.s.speech.queue.isEmpty())
         assertTrue(sim.all<Speak>().isEmpty() && sim.all<Ask>().isEmpty())
@@ -312,7 +338,8 @@ class WaitTest {
 
     @Test fun callEnds_backToNormal() {
         val sim = session().ev(CallMode(T0, true)).ev(CallMode(T0 + MIN, false))
-        assertTrue(sim.cmds.isEmpty()); assertTrue(!sim.s.car.inCall)
+        assertTrue(sim.cmds.isEmpty())
+        assertTrue(!sim.s.car.inCall)
         sim.alarm()
         assertEquals(1, sim.step<StartPlayback>().size)
     }
@@ -322,15 +349,17 @@ class WaitTest {
         fun snap() = session().handoff().tick(4 * MIN).also { assertEquals(4 * MIN, it.ses.quietMs) }
         val boot = snap()
         boot.ev(Boot(boot.t + 10 * MIN, Gear.D, 10))
-        assertEquals(Phase.HANDOFF, boot.ses.phase); assertEquals(4 * MIN, boot.ses.quietMs)
+        assertEquals(Phase.HANDOFF, boot.ses.phase)
+        assertEquals(4 * MIN, boot.ses.quietMs)
         boot.tick(59_000)
         assertEquals(Phase.HANDOFF, boot.ses.phase)
         boot.tick(1_000)
-        assertEquals(Phase.LISTENING, boot.ses.phase)       // 복원 뒤 1분만 더 조용하면 돌아간다
-        val lost = snap()                                    // 보정 InputLost를 먼저 넣어도 같다
+        assertEquals(Phase.LISTENING, boot.ses.phase) // 복원 뒤 1분만 더 조용하면 돌아간다
+        val lost = snap() // 보정 InputLost를 먼저 넣어도 같다
         lost.ev(InputLost(lost.t + 10 * MIN, PauseReason.MIC_ERROR)).ev(Boot(lost.t + 10 * MIN, Gear.D, 10))
-        assertEquals(Phase.HANDOFF, lost.ses.phase); assertEquals(4 * MIN, lost.ses.quietMs)
-        assertEquals(2, lost.ses.attemptNo)                  // 에피소드 한도도 그대로
+        assertEquals(Phase.HANDOFF, lost.ses.phase)
+        assertEquals(4 * MIN, lost.ses.quietMs)
+        assertEquals(2, lost.ses.attemptNo) // 에피소드 한도도 그대로
         val res = snap()
         res.ev(Resume(res.t + 10 * MIN))
         assertEquals(4 * MIN, res.ses.quietMs)
@@ -338,8 +367,10 @@ class WaitTest {
         val mic = snap()
         val at = mic.t + 10 * MIN
         mic.ev(MicService(at, false, null)).ev(InputLost(at, PauseReason.MIC_ERROR)).ev(Boot(at, Gear.D, 10))
-        assertEquals(Phase.HANDOFF, mic.ses.phase); assertEquals(4 * MIN, mic.ses.quietMs)
-        assertEquals(2, mic.ses.attemptNo); assertNotNull(mic.ses.episode)
+        assertEquals(Phase.HANDOFF, mic.ses.phase)
+        assertEquals(4 * MIN, mic.ses.quietMs)
+        assertEquals(2, mic.ses.attemptNo)
+        assertNotNull(mic.ses.episode)
         assertTrue(mic.log.none { it is SaveEpisode && it.record.endedAt != null })
     }
 }

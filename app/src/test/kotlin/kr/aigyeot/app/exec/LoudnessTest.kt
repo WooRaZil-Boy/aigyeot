@@ -22,7 +22,7 @@ class LoudnessTest {
     @Test fun `997Hz 사인은 진폭 dBFS에서 3_01을 뺀 LUFS다`() {
         for (rate in listOf(44_100, 48_000)) {
             val l = Loudness(rate, 1)
-            val a = 0.1                                           // −20 dBFS 정점
+            val a = 0.1 // −20 dBFS 정점
             repeat(rate * 5) { l.add(a * sin(2 * PI * 997 * it / rate)) }
             assertEquals(20 * log10(a) - 3.01, l.integrated()!!, 0.1, "rate=$rate")
         }
@@ -30,7 +30,11 @@ class LoudnessTest {
 
     @Test fun `스테레오는 두 채널 에너지를 더한다`() {
         val l = Loudness(48_000, 2)
-        repeat(48_000 * 3) { val x = 0.1 * sin(2 * PI * 997 * it / 48_000); l.add(x); l.add(x) }
+        repeat(48_000 * 3) {
+            val x = 0.1 * sin(2 * PI * 997 * it / 48_000)
+            l.add(x)
+            l.add(x)
+        }
         assertEquals(20 * log10(0.1) - 3.01 + 3.01, l.integrated()!!, 0.1)
     }
 
@@ -44,7 +48,7 @@ class LoudnessTest {
     @Test fun `상대 문턱은 조용한 구간을 뺀다`() {
         val l = Loudness(48_000, 1)
         repeat(48_000 * 5) { l.add(0.1 * sin(2 * PI * 997 * it / 48_000)) }
-        repeat(48_000 * 5) { l.add(0.001 * sin(2 * PI * 997 * it / 48_000)) }    // −40 dB 더 작음: 상대 문턱(−10 LU) 아래
+        repeat(48_000 * 5) { l.add(0.001 * sin(2 * PI * 997 * it / 48_000)) } // −40 dB 더 작음: 상대 문턱(−10 LU) 아래
         assertEquals(20 * log10(0.1) - 3.01, l.integrated()!!, 0.2)
     }
 
@@ -52,7 +56,10 @@ class LoudnessTest {
         val n = WhiteNoise(seed = 7)
         val l = Loudness(WhiteNoise.RATE, 1)
         val buf = ShortArray(4_800)
-        repeat(100) { n.fill(buf); l.addPcm16(buf, buf.size) }              // 10초
+        repeat(100) {
+            n.fill(buf)
+            l.addPcm16(buf, buf.size)
+        } // 10초
         val got = l.integrated()!!
         assertTrue(abs(got - -30.0) <= 0.5, "백색소음 $got LUFS")
     }

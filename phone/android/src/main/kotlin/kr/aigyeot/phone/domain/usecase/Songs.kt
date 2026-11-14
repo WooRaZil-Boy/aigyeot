@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -28,7 +29,6 @@ import kr.aigyeot.phone.domain.repository.RelayClient
 import kr.aigyeot.phone.domain.repository.RelayResult
 import kr.aigyeot.phone.domain.repository.SongFileStore
 import kr.aigyeot.phone.domain.state.Notices
-import java.io.File
 
 // 우리 노래(owner, '노래 거절').
 
@@ -43,7 +43,7 @@ class RecordSong(
     private val outbox: SendOutbox,
     private val notices: Notices,
     private val clock: Clock,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     private val _sends = MutableStateFlow<Map<String, SongSend>>(emptyMap())
     val sends: StateFlow<Map<String, SongSend>> = _sends.asStateFlow()
@@ -101,7 +101,10 @@ class RecordSong(
         try {
             copyAndCommit(recording, name, durationS, replacing)
         } finally {
-            val orphan = synchronized(sendingRecordings) { sendingRecordings -= recording; orphanRecordings.remove(recording) }
+            val orphan = synchronized(sendingRecordings) {
+                sendingRecordings -= recording
+                orphanRecordings.remove(recording)
+            }
             if (orphan) withContext(NonCancellable) { songs.delete(recording) }
         }
     }.await()
@@ -125,7 +128,8 @@ class RecordSong(
                         s.songsFull(s.replaceable(replacing)) -> s.also { full = true } // 바꿀 곡은 저장하는 지금 다시 본다
                         else -> s.replacedSong(replacing, songId, name, durationS, fileName, clock.now()).also { added = true }
                     }
-                } && added -> null
+                } &&
+                    added -> null
                 full -> {
                     songs.delete(songs.file(fileName))
                     SONGS_FULL
@@ -161,12 +165,7 @@ class UploadSong(private val relay: RelayClient, private val songs: SongFileStor
 }
 
 /** 실험에 쓸 곡 고르기. 지금 후보는 차가 보내는 `song_status.candidate`가 원본이다. */
-class SelectSong(
-    private val state: PhoneStateRepository,
-    private val outbox: SendOutbox,
-    private val clock: Clock,
-    private val scope: CoroutineScope,
-) {
+class SelectSong(private val state: PhoneStateRepository, private val outbox: SendOutbox, private val clock: Clock, private val scope: CoroutineScope) {
     operator fun invoke(songId: String) {
         scope.launch {
             val c = state.creds ?: return@launch
@@ -182,7 +181,7 @@ class RemoveSong(
     private val songs: SongFileStore,
     private val outbox: SendOutbox,
     private val clock: Clock,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     operator fun invoke(songId: String) {
         scope.launch {

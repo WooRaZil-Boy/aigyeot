@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.data
 
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,7 +11,6 @@ import kotlinx.coroutines.withContext
 import kr.aigyeot.phone.domain.model.CareFile
 import kr.aigyeot.phone.domain.repository.CareRepository
 import kr.aigyeot.phone.domain.repository.Logger
-import java.io.File
 
 /** 돌봄 기록(`care.json`). 연결과 상관없이 쓴다. 끊어도 지우지 않는다. */
 class FileCareRepository(
@@ -18,7 +18,7 @@ class FileCareRepository(
     /** 내 기록 내보내기 캐시. 기록 지우기가 함께 지운다. */
     private val exportDir: File,
     private val log: Logger,
-    private val onSaveFailed: () -> Unit,
+    private val onSaveFailed: () -> Unit
 ) : CareRepository {
     private val store = CareStore(file)
     private val lock = Mutex()

@@ -17,19 +17,21 @@ data class Preset(val az: Float, val el: Float, val d: Float, val r: Float, val 
 /** [event]: 사건 시점(울음 감지~넘김). 소리 결·바람 결처럼 계속 움직이는 표현은 이 시점에서만 돌린다([Stage3d.live]). */
 enum class View3d(val preset: Preset, val event: Boolean = false) {
     HERO(Preset(38f, 15f, 9.4f, 3.0f, 27f, floatArrayOf(0.1f, 0.62f, 0f), 0f)),
+
     /**
      * 차 앱 기본(정차 홈·듣는 중·기다림·주행 중·연결 화면): 뒷좌석 실내 X-ray. 왼쪽 Driving view가 차 바깥 모습을 늘 보여 주어(앱이 숨길 수 없는 시스템 영역)
      * 같은 바깥 모습을 또 두지 않는다. 뒷줄 가운데를 보고 REAR보다 높고 넓게 잡아, 울음 감지 때 아기 자리로 다가가는 이동이 보이게 한다.
      * 거리 9.0은 넓고 낮은 상자(연결 화면 타일·좁은 창 무대)에서도 차 앞뒤가 위아래로 잘리지 않게 고른 값이다(세로로 긴 홈 무대는 반폭 2.8로 물러난다).
      */
     CABIN(Preset(210f, 50f, 9.0f, 2.8f, 30f, floatArrayOf(-0.4f, 0.55f, 0f), 1f)),
+
     /** X-ray: 아기 자리 쪽 뒤·위에서 실내를 내려다본다(뒷문 스피커·뒷창·열선·독서등·송풍구가 한 화면에). */
     REAR(Preset(222f, 40f, 6.4f, 2.45f, 30f, null, 1f), event = true),
     TOP(Preset(180f, 87f, 10.5f, 1.25f, 30f, floatArrayOf(-0.15f, 0.5f, 0f), 1f)),
     SIDE(Preset(90f, 6f, 10.5f, 2.9f, 27f, floatArrayOf(0f, 0.62f, 0f), 0f)),
     PHONE(Preset(34f, 14f, 10.6f, 3.0f, 26f, floatArrayOf(0.05f, 0.6f, 0f), 0f)),
     TILE(Preset(34f, 13f, 8.3f, 2.75f, 26f, floatArrayOf(0.05f, 0.58f, 0f), 0f)),
-    DID(Preset(205f, 52f, 7.0f, 2.3f, 30f, floatArrayOf(-0.45f, 0.6f, 0.1f), 1f)),
+    DID(Preset(205f, 52f, 7.0f, 2.3f, 30f, floatArrayOf(-0.45f, 0.6f, 0.1f), 1f))
 }
 
 /** 카시트 자리 → 아기 자리 z(m). */
@@ -43,7 +45,7 @@ enum class Callout3d(val anchors: List<String>) {
     LOCK(listOf("Anchor_Window_RR", "Anchor_Window_RL")),
     HEAT(listOf("Anchor_Heat_RR", "Anchor_Heat_RL")),
     DIM(listOf("Anchor_Lamp_R")),
-    HVAC(listOf("Anchor_Vent_R")),
+    HVAC(listOf("Anchor_Vent_R"))
     ;
 
     /** 칩 선이 가리킬 앵커: [Stage3d.sides]에 쪽이 있으면 그 쪽 앵커만, 없으면 가까운 쪽. */
@@ -65,17 +67,20 @@ data class Stage3d(
     /** 칩마다 실제로 해낸 뒷자리 쪽(RL·RR: 잠근 뒷창, 끈 열선). 있으면 칩 선·3D 표시는 이 쪽만, 없으면(쪽을 모르는 그림) 둘 다. */
     val sides: Map<Callout3d, Set<Seat3d>> = emptyMap(),
     val drive: Boolean = false,
-    val reducedMotion: Boolean = false,
+    val reducedMotion: Boolean = false
 ) {
     /** 움직임을 써도 되는가(정차 중·동작 켜짐). */
     val motionOk get() = !drive && !reducedMotion
+
     /**
      * 계속 움직이는 표현(소리 결·바람 결)을 돌려도 되는가: 움직임을 쓸 수 있고 사건 시점일 때만. 기본 실내(CABIN) 같은 대기 시점에서는 멈춘 그림으로 두어
      * 정차해 기다리는 동안 3D가 쉬지 않고 그리지 않게 한다(CPU 예산). 한 번 움직이는 효과(열선·잠금·맥박)와 카메라 이동은 따로다.
      */
     val live get() = motionOk && view.event
+
     /** 소리 결이 돈다(소리가 실제로 나가고 [live]). 아니면 멈춘 고리. */
     val rippling get() = ripple && live
+
     /** 바람 결이 흐른다(공조 칩이 있고 [live]이며 실내가 보일 때, [xray] = 지금 껍데기 투명도). 아니면 멈춘 줄. */
     fun flowing(xray: Float) = Callout3d.HVAC in callouts && live && xray > 0.3f
 }
@@ -85,6 +90,7 @@ data class Cam(val az: Float, val el: Float, val d: Float, val fov: Float, val t
 
 object CarMath {
     const val D2R = (PI / 180).toFloat()
+
     /** 아기 자리 목표. */
     fun seatTarget(seat: Seat3d) = floatArrayOf(-0.62f, 0.62f, seat.z * 0.45f)
 
@@ -104,17 +110,22 @@ object CarMath {
 
     /** 카메라 위치(목표 + 구면). */
     fun eye(c: Cam): FloatArray {
-        val a = c.az * D2R; val e = c.el * D2R
+        val a = c.az * D2R
+        val e = c.el * D2R
         return floatArrayOf(cos(e) * cos(a) * c.d + c.t[0], sin(e) * c.d + c.t[1], -cos(e) * sin(a) * c.d + c.t[2])
     }
 
     /** 두 자리 사이(방위는 짧은 쪽으로 돈다). */
     fun lerp(a: Cam, b: Cam, e: Float): Cam {
         val daz = ((b.az - a.az + 540f) % 360f) - 180f
-        return Cam(a.az + daz * e, a.el + (b.el - a.el) * e, a.d + (b.d - a.d) * e, a.fov + (b.fov - a.fov) * e,
-                FloatArray(3) { a.t[it] + (b.t[it] - a.t[it]) * e })
+        return Cam(
+            a.az + daz * e,
+            a.el + (b.el - a.el) * e,
+            a.d + (b.d - a.d) * e,
+            a.fov + (b.fov - a.fov) * e,
+            FloatArray(3) { a.t[it] + (b.t[it] - a.t[it]) * e }
+        )
     }
-
 }
 
 /**
@@ -126,18 +137,33 @@ object CarMath {
  * 움직임을 쓰면 안 되면(주행 중·동작 줄이기) 모두 없다.
  */
 class Effects {
-    var heatFrom: Long? = null; private set
-    var lockFrom: Long? = null; private set
-    var pulseFrom: Long? = null; private set
+    var heatFrom: Long? = null
+        private set
+    var lockFrom: Long? = null
+        private set
+    var pulseFrom: Long? = null
+        private set
 
     /** [arriveIn]: 카메라가 지금 상태의 자리에 닿기까지 남은 시간(나노초, 움직이지 않으면 0). */
     fun onSet(before: Stage3d, s: Stage3d, ok: Boolean, arriveIn: Long, now: Long) {
-        heatFrom = if (Callout3d.HEAT !in s.callouts || !ok) null else if (Callout3d.HEAT !in before.callouts) now else heatFrom
-        lockFrom = if (Callout3d.LOCK !in s.callouts || !ok) null else if (Callout3d.LOCK !in before.callouts) now else lockFrom
+        heatFrom = if (Callout3d.HEAT !in s.callouts || !ok) {
+            null
+        } else if (Callout3d.HEAT !in before.callouts) {
+            now
+        } else {
+            heatFrom
+        }
+        lockFrom = if (Callout3d.LOCK !in s.callouts || !ok) {
+            null
+        } else if (Callout3d.LOCK !in before.callouts) {
+            now
+        } else {
+            lockFrom
+        }
         pulseFrom = when {
             s.light != Light3d.ALERT || !ok -> null
             before.light != Light3d.ALERT -> now + arriveIn
-            pulseFrom?.let { it > now } == true -> now + arriveIn   // 아직 시작 전이면 새 도착 시각에 맞춘다(이동 중 목표가 바뀜)
+            pulseFrom?.let { it > now } == true -> now + arriveIn // 아직 시작 전이면 새 도착 시각에 맞춘다(이동 중 목표가 바뀜)
             else -> pulseFrom
         }
     }
@@ -147,12 +173,14 @@ class Effects {
 
     fun at(t: Long): Frame {
         fun prog(from: Long?, ms: Int): Float? = from?.let { (t - it) / 1e6f / ms }?.takeIf { it < 1f }
-        val h = prog(heatFrom, 1600); val l = prog(lockFrom, 900); val p = prog(pulseFrom, 1200)
+        val h = prog(heatFrom, 1600)
+        val l = prog(lockFrom, 900)
+        val p = prog(pulseFrom, 1200)
         return Frame(
             heatWarm = h?.coerceAtLeast(0f)?.let { 1 - it * it * (3 - 2 * it) } ?: 0f,
             lockK = l?.coerceAtLeast(0f)?.let { 1 + 0.9f * kotlin.math.sin(PI * it).toFloat() } ?: 1f,
             pulseK = p?.takeIf { it >= 0f },
-            running = h != null || l != null || p != null,
+            running = h != null || l != null || p != null
         )
     }
 }

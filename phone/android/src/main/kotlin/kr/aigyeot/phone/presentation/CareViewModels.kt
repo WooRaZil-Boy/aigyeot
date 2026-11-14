@@ -3,6 +3,8 @@ package kr.aigyeot.phone.presentation
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import java.io.File
+import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -58,8 +60,6 @@ import kr.aigyeot.phone.domain.usecase.KeepConnected
 import kr.aigyeot.phone.domain.usecase.RecordCare
 import kr.aigyeot.shared.ProtocolJson
 import kr.aigyeot.shared.Role
-import java.io.File
-import java.time.LocalDate
 
 // 돌봄 기록 화면의 ViewModel. 원본은 care.json(CareRepository)·state.json(PhoneStateRepository)이고, 화면 상태는 그것에서 계산한다.
 
@@ -72,10 +72,10 @@ internal fun careTabsUi(c: Connection, run: DisconnectRun?) = CareTabsUiState(c.
 
 class CareTabsViewModel(
     state: PhoneStateRepository,
-    private val notices: Notices,
+    notices: Notices,
     private val recordCare: RecordCare,
     private val disconnect: Disconnect,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     val ui: StateFlow<CareTabsUiState> = derive(state.connection, disconnect.run) { careTabsUi(state.connection.value, disconnect.run.value) }
 
@@ -90,13 +90,7 @@ class CareTabsViewModel(
 }
 
 /** 오늘 탭. */
-data class CareUiState(
-    val care: CareFile,
-    val phone: PhoneState,
-    val connection: Connection,
-    val online: Boolean,
-    val careNotice: String?,
-) {
+data class CareUiState(val care: CareFile, val phone: PhoneState, val connection: Connection, val online: Boolean, val careNotice: String?) {
     val connected get() = connection is Connection.Paired
     val role get() = connection.role
     val guardian get() = role == Role.GUARDIAN
@@ -111,7 +105,7 @@ class TodayViewModel(
     connection: KeepConnected,
     private val recordCare: RecordCare,
     private val lifecycle: AppLifecycle,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     val ui: StateFlow<CareUiState> = derive(care.care, state.state, state.connection, connection.status, notices.careNotice) {
         CareUiState(care.care.value, state.state.value, state.connection.value, connection.status.value.online, notices.careNotice.value)
@@ -135,8 +129,7 @@ data class TimerUiState(val id: String, val care: CareFile, val connected: Boole
     val event: CareEvent? get() = care.events.find { it.id == id }
 }
 
-internal fun timerUi(id: String, care: CareFile, c: Connection) =
-    TimerUiState(id, care, c is Connection.Paired, c.role == Role.GUARDIAN)
+internal fun timerUi(id: String, care: CareFile, c: Connection) = TimerUiState(id, care, c is Connection.Paired, c.role == Role.GUARDIAN)
 
 class TimerViewModel(
     private val id: String,
@@ -144,7 +137,7 @@ class TimerViewModel(
     private val care: CareRepository,
     private val recordCare: RecordCare,
     private val clock: Clock,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     val ui: StateFlow<TimerUiState> = derive(care.care, state.connection) { timerUi(id, care.care.value, state.connection.value) }
 
@@ -155,8 +148,12 @@ class TimerViewModel(
     /** 실패 번호(시트와 같은 규칙): 같은 오류가 다시 나도 새 값을 낸다. */
     private var failures = 0
 
-    fun setSide(side: FeedSide) { viewModelScope.launch { recordCare.editOngoing(id) { it.withSide(side) } } }
-    fun setAmount(ml: Int?) { viewModelScope.launch { recordCare.editOngoing(id) { it.copy(amountMl = ml) } } }
+    fun setSide(side: FeedSide) {
+        viewModelScope.launch { recordCare.editOngoing(id) { it.withSide(side) } }
+    }
+    fun setAmount(ml: Int?) {
+        viewModelScope.launch { recordCare.editOngoing(id) { it.copy(amountMl = ml) } }
+    }
 
     /** 어느 시각을 고르나(iOS `TimeField`): 시작 시각 수정, 끝 시각 고르기(최대 길이를 넘긴 기록). */
     enum class TimeField { START, END }
@@ -177,10 +174,14 @@ class TimerViewModel(
     }
 
     /** 겹침을 묻는 창에서 '그래도 저장'. */
-    fun confirmTime() { (_phase.value as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { save(it.event) } }
+    fun confirmTime() {
+        (_phase.value as? CareSheetViewModel.Phase.ConfirmOverlap)?.let { save(it.event) }
+    }
 
     /** 겹침을 묻는 창에서 '고치기'. */
-    fun keepEditing() { _phase.value = CareSheetViewModel.Phase.Editing }
+    fun keepEditing() {
+        _phase.value = CareSheetViewModel.Phase.Editing
+    }
 
     /** 진행 중인 그 기록에 시작·끝만 얹는다. 저장하지 못하면 앞 실패 글을 둔다(띠가 실패를 말한다). */
     private fun save(next: CareEvent) {
@@ -221,7 +222,7 @@ class CareSheetViewModel(
     private val recordCare: RecordCare,
     private val clock: Clock,
     private val saved: SavedStateHandle,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     /**
      * 시트 단계(iOS `Phase{editing, confirmOverlap, failed, closed}`와 같은 이름). 안드로이드 저장은 비동기라 [Saving]이 더 있다.
@@ -259,7 +260,7 @@ class CareSheetViewModel(
     private var failures = 0
 
     private val _sheet = MutableStateFlow(
-        saved.get<String>(K_DRAFT)?.let { runCatching { ProtocolJson.decodeFromString(CareDraft.serializer(), it) }.getOrNull() }?.let { SheetState(it) },
+        saved.get<String>(K_DRAFT)?.let { runCatching { ProtocolJson.decodeFromString(CareDraft.serializer(), it) }.getOrNull() }?.let { SheetState(it) }
     )
     val sheet: StateFlow<SheetState?> = _sheet.asStateFlow()
 
@@ -350,7 +351,7 @@ class CareSheetViewModel(
                     editing && care.care.value.events.none { it.id == e.id && it.deletedAt == null } -> Phase.Closed(saved = false) // 저장 중 지워짐
                     // 저장 실패는 시트 안에서도 보인다. 띠의 다른 줄(버림 안내)은 시트에 옮기지 않는다.
                     else -> Phase.Failed(SAVE_FAILED.takeIf { notices.notice.value?.lines()?.contains(it) == true }, attempt = ++failures)
-                },
+                }
             )
         }
     }
@@ -378,7 +379,7 @@ enum class SheetExit {
     HAPTIC,
 
     /** 바로 닫힘(저장하지 않은 닫힘: 지우기·지워진 기록). */
-    NONE,
+    NONE
 }
 
 /**
@@ -401,7 +402,7 @@ class RecordsViewModel(
     care: CareRepository,
     private val recordCare: RecordCare,
     private val notices: Notices,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     val ui: StateFlow<RecordsUiState> = derive(care.care, state.state, state.connection) {
         RecordsUiState(care.care.value, state.state.value, state.connection.value)
@@ -420,11 +421,7 @@ data class CarUiState(val phone: PhoneState, val connection: Connection, val onl
     val owner get() = connection.role == Role.OWNER
 }
 
-class CarViewModel(
-    state: PhoneStateRepository,
-    connection: KeepConnected,
-    scope: CoroutineScope = vmScope(),
-) : ViewModel(scope) {
+class CarViewModel(state: PhoneStateRepository, connection: KeepConnected, scope: CoroutineScope = vmScope()) : ViewModel(scope) {
     val ui: StateFlow<CarUiState> = derive(state.state, state.connection, connection.status) {
         CarUiState(state.state.value, state.connection.value, connection.status.value.online)
     }
@@ -461,14 +458,14 @@ class SettingsViewModel(
     private val clock: Clock,
     /** 기록 가져오기: 고른 문서를 메모리로만 읽는다(상한 + 1바이트까지, 열거나 읽지 못하면 null). 앱은 ContentResolver, 시험은 가짜. */
     private val readDocument: suspend (uri: String) -> ByteArray?,
-    scope: CoroutineScope = vmScope(),
+    scope: CoroutineScope = vmScope()
 ) : ViewModel(scope) {
     val ui: StateFlow<SettingsUiState> = derive(care.care, state.connection, state.state, disconnect.run) {
         SettingsUiState(
             care.care.value,
             state.connection.value is Connection.Paired,
             disconnect.run.value,
-            state.state.value.devices.count { it.role != Role.CAR },
+            state.state.value.devices.count { it.role != Role.CAR }
         )
     }
 

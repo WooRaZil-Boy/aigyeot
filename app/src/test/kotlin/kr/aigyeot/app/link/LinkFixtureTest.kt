@@ -35,17 +35,26 @@ class LinkFixtureTest : LinkKit() {
 
     @Test fun receivedFixtures_applyWithoutBodyErrors() {
         profile()
-        for (f in listOf("paired.json", "feeding_started.json", "song_added.json", "song_selected.json", "song_removed.json", "state_request.json", "unpaired.json")) {
+        for (f in listOf(
+            "paired.json",
+            "feeding_started.json",
+            "song_added.json",
+            "song_selected.json",
+            "song_removed.json",
+            "state_request.json",
+            "unpaired.json"
+        )) {
             assertEquals(Link.Rx.ACK, runBlocking { link.receive(envOf(f)) }, f)
         }
         assertEquals(instantOf("2026-11-05T08:12:21+09:00"), events.filterIsInstance<FeedingStarted>().single().startedAt)
-        assertTrue(dao.mark(PHONE) != null)                                   // paired.json의 기기
-        assertTrue(dao.songs().isNotEmpty())                                  // song_added.json·song_removed.json
+        assertTrue(dao.mark(PHONE) != null) // paired.json의 기기
+        assertTrue(dao.songs().isNotEmpty()) // song_added.json·song_removed.json
     }
 
     @Test fun sentBodies_roundTripAndMatchFixtureFields() {
         profile(lastFeeding = T0)
-        song(SA, ACTIVE, 10); song(SB, REJECTED, 11)
+        song(SA, ACTIVE, 10)
+        song(SB, REJECTED, 11)
         // 예제는 폰이 보내는 모양이라 from·seq가 없다. 중계가 채운 모양으로 받는다
         runBlocking { link.receive(envOf("state_request.json").copy(seq = 800, from = Sender(Role.OWNER, PHONE))) }
         val fs = outbox("feeding_state").single()
@@ -57,7 +66,7 @@ class LinkFixtureTest : LinkKit() {
             assertEquals(st.bodyJson, ProtocolJson.encodeToString(SongStatusBody.serializer(), b))
             assertEquals(bodyKeys("song_status.json"), keys(st.bodyJson))
         }
-        assertEquals(envOf("feeding_state_reply.json").to, fs.toDevice)       // state_request의 답은 그 폰에게만
+        assertEquals(envOf("feeding_state_reply.json").to, fs.toDevice) // state_request의 답은 그 폰에게만
     }
 
     @Test fun llmRequestAndToolResponse_matchFixtures() {
@@ -72,9 +81,18 @@ class LinkFixtureTest : LinkKit() {
         assertEquals("소리를 바꿀게요.", text)
         val a = ProtocolJson.decodeFromString(LlmResponse.serializer(), fixture("api_llm_response_answer.json"))
         // 예제는 글 없이 사실 주제(feeding·sleep)만 고른 응답이라 차가 주제 문장을 말한다. 상태값은 돌봄 요약 예제의 것
-        val care = ProtocolJson.decodeFromJsonElement(LlmState.serializer(), Json.parseToJsonElement(fixture("api_llm_request_care.json")).jsonObject.getValue("state"))
-        assertEquals("마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요. 기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분, 지난밤에는 2번 깼어요.",
-            qaEventsCare(a, "L1", T0, care, "q", emptyList()).let { assertEquals("", it.second, "글은 호스트가 큐에서 짠다"); fallbackReply(it.factTopics, care) })
-        assertEquals("수유 기록을 확인할 수 없어요. 잠 기록을 확인할 수 없어요.", qaEventsCare(a, "L1", T0, st, "q", emptyList()).let { fallbackReply(it.factTopics, st) })   // 상태값이 비면 확인할 수 없다
+        val care = ProtocolJson.decodeFromJsonElement(
+            LlmState.serializer(),
+            Json.parseToJsonElement(fixture("api_llm_request_care.json")).jsonObject.getValue("state")
+        )
+        assertEquals(
+            "마지막 수유 시작부터 2시간 50분 지났고, 기록상 오늘 3번 먹었어요. 기록상 40분 전에 시작한 잠이 아직 끝나지 않았고, 오늘은 모두 7시간 10분, 지난밤에는 2번 깼어요.",
+            qaEventsCare(a, "L1", T0, care, "q", emptyList()).let {
+                assertEquals("", it.second, "글은 호스트가 큐에서 짠다")
+                fallbackReply(it.factTopics, care)
+            }
+        )
+        // 상태값이 비면 확인할 수 없다
+        assertEquals("수유 기록을 확인할 수 없어요. 잠 기록을 확인할 수 없어요.", qaEventsCare(a, "L1", T0, st, "q", emptyList()).let { fallbackReply(it.factTopics, st) })
     }
 }

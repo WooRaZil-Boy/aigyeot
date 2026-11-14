@@ -1,5 +1,10 @@
 package kr.aigyeot.app.ui
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kr.aigyeot.app.link.LinkStatus
 import kr.aigyeot.app.link.LinkedPhone
 import kr.aigyeot.app.link.db.SongSelectionEntity
@@ -15,11 +20,6 @@ import kr.aigyeot.engine.OpenTrigger
 import kr.aigyeot.engine.SessionState
 import kr.aigyeot.engine.Stage
 import kr.aigyeot.engine.fresh
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private const val T0 = 1_800_000_000_000L
 
@@ -48,7 +48,7 @@ class UiStateMappingTest {
         assertEquals(listOf(false, false), songRows(listOf(song("a", "x", null), song("b", "y", null)), null, emptyList()).map { it.selected })
     }
 
-    @Test fun reportRows_openSessionDisabled_simulationMarked() {   // 한 줄 글자가 제목(날짜·구간)과 부가로 나뉘었다. 자세한 문구는 ReportViewTest
+    @Test fun reportRows_openSessionDisabled_simulationMarked() { // 한 줄 글자가 제목(날짜·구간)과 부가로 나뉘었다. 자세한 문구는 ReportViewTest
         fun s(id: String, end: Long?, scene: String?) = SessionEntity(id, T0, end, "T", null, null, 0, 0, false, "[]", null, null, false, scene, 10)
         val rows = reportRows(listOf(s("a", null, null), s("b", T0 + 60_000, "sc")))
         assertEquals(listOf(false, true), rows.map { it.enabled })
@@ -72,19 +72,33 @@ class UiStateMappingTest {
         val f = fresh()
         val ses = SessionState(
             id = "S1", openedAt = T0, trigger = OpenTrigger.DOOR_THEN_D, methods = emptyList(), stage = Stage.Handoff(1),
-            episode = null, playedMs = 0, s17Said = false, micNoticeArmed = false, recordsCleared = false,
+            episode = null, playedMs = 0, s17Said = false, micNoticeArmed = false, recordsCleared = false
         )
         assertEquals("자동 달래기를 멈췄어요", statusText(f.copy(session = ses)))
     }
 
     @Test fun route_keysRoundTrip() {
-        for (r in listOf(Route.Home, Route.Setup, Route.Connect, Route.Songs, Route.Reports, Route.Report("S1"), Route.Demo, Route.DemoScenes)) assertEquals(r, Route.parse(r.key))
+        for (r in listOf(
+            Route.Home,
+            Route.Setup,
+            Route.Connect,
+            Route.Songs,
+            Route.Reports,
+            Route.Report("S1"),
+            Route.Demo,
+            Route.DemoScenes
+        )) {
+            assertEquals(r, Route.parse(r.key))
+        }
         assertEquals(Route.Home, Route.parse("모르는 값"))
     }
 
     // 화면을 옮기면 갈 화면과 그 위 화면(parentOf 사슬) 밖의 입력은 버린다. 저장하지 않고 나간 설정 입력이 다시 열 때 남지 않는다
     @Test fun route_move_dropsLeftScreenInput_keepsParentWhileInChild() {
-        val home = Route.Home.key; val setup = Route.Setup.key; val songs = Route.Songs.key; val demo = Route.Demo.key
+        val home = Route.Home.key
+        val setup = Route.Setup.key
+        val songs = Route.Songs.key
+        val demo = Route.Demo.key
         assertEquals(setOf(setup), keysToDrop(setOf(home, setup), Route.Home), "설정에서 저장하지 않고 홈으로(뒤로·닫기): 설정 입력을 버린다")
         assertEquals(emptySet(), keysToDrop(setOf(home, setup), Route.Songs), "설정 → 노래: 설정 입력은 남아 돌아오면 이어 쓴다")
         assertEquals(setOf(songs), keysToDrop(setOf(home, setup, songs), Route.Setup), "노래 → 설정: 노래 화면 상태만 버린다")
@@ -95,7 +109,8 @@ class UiStateMappingTest {
 
     // 리포트 목록과 리포트 하나는 한 화면 열쇠다. 넓은 창에서 다른 리포트를 골라도, 840 이하에서 상세 → 목록으로 돌아와도 목록 입력(스크롤)을 버리지 않는다
     @Test fun route_reportsShareScreenKey_noDropBetweenReports() {
-        assertEquals(Route.Reports.screen, Route.Report("A").screen); assertEquals(Route.Report("A").screen, Route.Report("B").screen)
+        assertEquals(Route.Reports.screen, Route.Report("A").screen)
+        assertEquals(Route.Report("A").screen, Route.Report("B").screen)
         val seen = setOf(Route.Home.screen, Route.Report("A").screen)
         assertEquals(emptySet(), keysToDrop(seen, Route.Report("B")), "넓은 창에서 A → B")
         assertEquals(emptySet(), keysToDrop(seen, Route.Reports), "840 이하 상세 → 목록(뒤로)")

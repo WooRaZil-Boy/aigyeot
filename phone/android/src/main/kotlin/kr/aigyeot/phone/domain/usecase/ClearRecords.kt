@@ -1,5 +1,6 @@
 package kr.aigyeot.phone.domain.usecase
 
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kr.aigyeot.phone.domain.model.clearedRecords
@@ -9,7 +10,6 @@ import kr.aigyeot.phone.domain.repository.Clock
 import kr.aigyeot.phone.domain.repository.PhoneStateRepository
 import kr.aigyeot.phone.domain.repository.SongFileStore
 import kr.aigyeot.phone.domain.state.Notices
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * '이 휴대폰의 기록 지우기': 커밋 → 파일 정리 → 기기 목록 확인과 상태 요청 판단. 돌봄 기록도 지운다.
@@ -24,7 +24,7 @@ class ClearRecords(
     private val connection: KeepConnected,
     private val outbox: SendOutbox,
     private val clock: Clock,
-    private val scope: CoroutineScope,
+    private val scope: CoroutineScope
 ) {
     /** 누른 횟수. 노래 보내기가 시작할 때 보고 커밋할 때 다시 본다(지운 뒤 노래를 되살리지 않게, [RecordSong]). */
     private val gen = AtomicInteger(0)

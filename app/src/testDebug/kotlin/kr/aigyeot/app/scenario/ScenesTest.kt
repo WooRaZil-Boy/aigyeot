@@ -1,5 +1,6 @@
 package kr.aigyeot.app.scenario
 
+import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -16,19 +17,19 @@ import kr.aigyeot.engine.Speak
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /** 가짜 호스트 + 진짜 판단 코어로 assets/scenario의 장면을 끝까지 돌린다. */
 class ScenesTest {
     private val dir = File("src/debug/assets/scenario")
     private fun scene(id: String) = parseScene(File(dir, "$id.json").readText())
+
     /** 녹음: 'stop'은 울음이 시작 20초 뒤 그침(rt_outcome.py 정답 '그침' 5~25초), 나머지는 녹음 내내 운다. */
     private val cryLen = mapOf("cry/stop_40s.pcm" to 20.0, "cry/stop_50s.pcm" to 20.0)
 
     private fun runAll(id: String): List<RunRow> {
         val s = scene(id)
         return (0 until s.repeat).map { k -> FakeWorld(cryLen).play(s, k) }
-            .also { File("build/scenario-jvm").apply { mkdirs() }.resolve("$id.csv").writeText(csv(it)) }   // 측정표(가짜 세상)
+            .also { File("build/scenario-jvm").apply { mkdirs() }.resolve("$id.csv").writeText(csv(it)) } // 측정표(가짜 세상)
     }
 
     /** 시나리오 기준: 끝까지 처리, 경보 지연 3초 이하, 시도 2회·에피소드 112초·세션 20분 이하, 운전자 조작 0, 이득 위반 0. */
@@ -49,44 +50,60 @@ class ScenesTest {
         val rows = runAll("A")
         assertEquals(5, rows.size)
         assertMeetsLimits("A", rows)
-        rows.forEach { assertEquals(1, it.maxAttempts); assertEquals("bus100_audio_zone_1", it.routedDevice) }
+        rows.forEach {
+            assertEquals(1, it.maxAttempts)
+            assertEquals("bus100_audio_zone_1", it.routedDevice)
+        }
     }
 
     @Test fun `장면 B 실내 27도 - 쾌적 조정 2차`() {
         val rows = runAll("B")
         assertMeetsLimits("B", rows)
-        rows.forEach { assertEquals(2, it.maxAttempts); assertEquals(1.0, it.controlOkRate!!, 0.0) }
+        rows.forEach {
+            assertEquals(2, it.maxAttempts)
+            assertEquals(1.0, it.controlOkRate!!, 0.0)
+        }
         // S04는 실제로 낮춘 값(22℃ → 20℃)을 말한다
-        val w = FakeWorld(cryLen); w.play(scene("B"))
+        val w = FakeWorld(cryLen)
+        w.play(scene("B"))
         assertEquals("2", w.commands.map { it.second }.filterIsInstance<Speak>().first { it.sid == Sid.S04 }.vars["loweredC"])
     }
 
     @Test fun `장면 C 수유 시간대 - 쉼터 응 뒤 경유지`() {
         val rows = runAll("C")
-        assertMeetsLimits("C", rows)   // 쉼터 '응'은 운전자 조작에서 뺀다
+        assertMeetsLimits("C", rows) // 쉼터 '응'은 운전자 조작에서 뺀다
     }
 
     @Test fun `장면 C2 출발 - 수유실 제안 응 뒤 경유지`() {
         val rows = runAll("C2")
         assertMeetsLimits("C2", rows, alarm = false)
-        val w = FakeWorld(cryLen); w.play(scene("C2"))
+        val w = FakeWorld(cryLen)
+        w.play(scene("C2"))
         val ask = w.commands.map { it.second }.filterIsInstance<Ask>().single { it.sid == Sid.S07_DEPART }
-        assertEquals("안성휴게소(부산방향)", ask.vars["restName"]); assertEquals("30", ask.vars["distanceKm"])
+        assertEquals("안성휴게소(부산방향)", ask.vars["restName"])
+        assertEquals("30", ask.vars["distanceKm"])
     }
 
     @Test fun `장면 C2의 setup care는 장면 상태 care에 들어간다`() {
-        val w = FakeWorld(cryLen); w.play(scene("C2"))
+        val w = FakeWorld(cryLen)
+        w.play(scene("C2"))
         val care = w.events.filterIsInstance<CareSummary>().single().summary
         assertEquals(FakeWorld.T0 - 60_000, care.asOf)
-        assertEquals(FakeWorld.T0 - 12_600_000, care.lastSleepStartAt); assertEquals(FakeWorld.T0 - 3_600_000, care.lastDiaperAt)
-        assertEquals(2, care.todayFeedCount); assertEquals(null, care.sleepingSince)
+        assertEquals(FakeWorld.T0 - 12_600_000, care.lastSleepStartAt)
+        assertEquals(FakeWorld.T0 - 3_600_000, care.lastDiaperAt)
+        assertEquals(2, care.todayFeedCount)
+        assertEquals(null, care.sleepingSince)
         assertEquals(care, w.steps.value!!.state.care)
     }
 
     @Test fun `장면 D 계속 울음 - 두 번 뒤 인계`() {
         val rows = runAll("D")
         assertMeetsLimits("D", rows)
-        rows.forEach { assertEquals(2, it.maxAttempts); assertTrue(it.handoffMs!! in 100_000..130_000); assertTrue(it.maxEpisodePlayMs in 110_000..112_000) }   // 시도마다 재생 시작이 0.2초 늦다
+        rows.forEach {
+            assertEquals(2, it.maxAttempts)
+            assertTrue(it.handoffMs!! in 100_000..130_000)
+            assertTrue(it.maxEpisodePlayMs in 110_000..112_000)
+        } // 시도마다 재생 시작이 0.2초 늦다
     }
 
     @Test fun `장면 D2 도심 - 인계인데 6분 남음`() = assertMeetsLimits("D2", runAll("D2"))
@@ -127,6 +144,6 @@ class ScenesTest {
         val a = scene("A")
         val base = FakeWorld(cryLen).play(a).alarmLatencyMs!!
         val late = FakeWorld(cryLen, audioDelayMs = 2_000).play(a).alarmLatencyMs!!
-        assertTrue("지연 없음 $base, 2초 지연 $late", Math.abs(late - base) < 1_500)   // 예정 시각을 기준으로 재면 2초 더 길게 잰다
+        assertTrue("지연 없음 $base, 2초 지연 $late", Math.abs(late - base) < 1_500) // 예정 시각을 기준으로 재면 2초 더 길게 잰다
     }
 }

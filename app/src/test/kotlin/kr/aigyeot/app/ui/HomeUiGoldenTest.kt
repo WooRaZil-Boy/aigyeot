@@ -1,5 +1,7 @@
 package kr.aigyeot.app.ui
 
+import java.time.ZoneId
+import kotlin.test.Test
 import kr.aigyeot.app.link.LinkStatus
 import kr.aigyeot.engine.EngineState
 import kr.aigyeot.engine.EpisodeState
@@ -17,8 +19,6 @@ import kr.aigyeot.engine.Stage
 import kr.aigyeot.engine.TryOutcome
 import kr.aigyeot.engine.TryRecord
 import kr.aigyeot.engine.fresh
-import java.time.ZoneId
-import kotlin.test.Test
 
 private const val T0 = 1_800_000_000_000L
 
@@ -34,7 +34,7 @@ class HomeUiGoldenTest {
     private fun driving(stage: Stage, episode: EpisodeState?): EngineState {
         val session = SessionState(
             id = "S1", openedAt = T0, trigger = OpenTrigger.DOOR_THEN_D, methods = listOf(lullaby), stage = stage, episode = episode, playedMs = 0,
-            s17Said = false, micNoticeArmed = false, recordsCleared = false,
+            s17Said = false, micNoticeArmed = false, recordsCleared = false
         )
         return fresh().let { it.copy(session = session, car = it.car.copy(gear = Gear.D, micRunning = true)) }
     }
@@ -50,7 +50,7 @@ class HomeUiGoldenTest {
             "카드: ${u.card}",
             "단추: ${u.cta}",
             "큰 기호: ${u.drive}",
-            "무대: ${u.stage}",
+            "무대: ${u.stage}"
         ).joinToString("\n")
     }
 
@@ -65,7 +65,7 @@ class HomeUiGoldenTest {
             "듣기 틈" to driving(Stage.Gap(1, JudgeWindow(T0, T0 + 8_000)), ep(TryRecord(lullaby, null))),
             "2차 재생 중" to driving(Stage.Attempt(2, play(2, T0, noise)), ep(TryRecord(lullaby, null, fail))),
             "확인 중" to driving(Stage.Confirm(2, JudgeWindow(T0, T0 + 8_000)), ep(TryRecord(lullaby, null, fail), TryRecord(noise, null))),
-            "사람에게 넘김" to driving(Stage.Handoff(2), ep(TryRecord(lullaby, null, fail), TryRecord(noise, null, fail))),
+            "사람에게 넘김" to driving(Stage.Handoff(2), ep(TryRecord(lullaby, null, fail), TryRecord(noise, null, fail)))
         )
         assertGolden("home_ui.txt", states.joinToString("\n\n") { (label, s) -> dump(label, s) })
     }

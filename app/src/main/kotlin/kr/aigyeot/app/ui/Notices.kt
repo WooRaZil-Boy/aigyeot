@@ -20,6 +20,7 @@ object Notices {
     const val FEEDING_YES = "feeding_yes"
     const val FEEDING_NO = "feeding_no"
     private const val CHANNEL = "notice"
+
     /** 매니페스트의 비공개 activity-alias. MainActivity는 이 이름으로 들어온 intent만 EXTRA를 처리한다. */
     const val ENTRY = "kr.aigyeot.app.NoticeEntry"
 
@@ -29,10 +30,14 @@ object Notices {
         val b = Notification.Builder(ctx, CHANNEL).setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setAutoCancel(true)
         when (kind) {
             // 상태대로 다시 띄워도(장면 끝·프로세스 시작·첫 P) 떠 있으면 소리는 한 번
-            Notice.BABY_ABOARD -> b.setContentTitle("아기가 탔나요?").setContentText("누르면 듣기를 켜요").setContentIntent(open(ctx,
-                    BABY_ABOARD)).setOnlyAlertOnce(true)
+            Notice.BABY_ABOARD -> b.setContentTitle("아기가 탔나요?").setContentText("누르면 듣기를 켜요").setContentIntent(
+                open(
+                    ctx,
+                    BABY_ABOARD
+                )
+            ).setOnlyAlertOnce(true)
             Notice.MIC_STOPPED -> b.setContentTitle("듣기가 멈췄어요").setContentText("누르면 다시 들어요").setContentIntent(open(ctx, MIC_RESTART)).setOnlyAlertOnce(true)
-            Notice.FEEDING_CONFIRM -> b.setContentTitle("수유하셨어요?").setContentIntent(open(ctx, null)).setOnlyAlertOnce(true)   // Boot가 다시 띄워도 소리는 한 번
+            Notice.FEEDING_CONFIRM -> b.setContentTitle("수유하셨어요?").setContentIntent(open(ctx, null)).setOnlyAlertOnce(true) // Boot가 다시 띄워도 소리는 한 번
                 .addAction(Notification.Action.Builder(null, "네", open(ctx, FEEDING_YES)).build())
                 .addAction(Notification.Action.Builder(null, "아니요", open(ctx, FEEDING_NO)).build())
             Notice.SAFETY_CONTROL_FAILED -> b.setContentTitle("열선을 끄지 못했어요").setContentText("세운 뒤 뒷좌석 열선을 확인해 주세요")
@@ -43,8 +48,9 @@ object Notices {
     fun cancel(ctx: Context, kind: Notice) = ctx.getSystemService(NotificationManager::class.java).cancel(kind.ordinal + 10)
 
     private fun open(ctx: Context, action: String?): PendingIntent = PendingIntent.getActivity(
-        ctx, action.hashCode(),
+        ctx,
+        action.hashCode(),
         Intent().setComponent(ComponentName(ctx, ENTRY)).putExtra(EXTRA, action).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
 }

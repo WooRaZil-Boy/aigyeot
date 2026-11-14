@@ -27,7 +27,8 @@ data class ChildProfileEntity(
     @ColumnInfo(name = "has_sibling") val hasSibling: Boolean,
     @ColumnInfo(name = "front_fallback_allowed") val frontFallbackAllowed: Boolean,
     @ColumnInfo(name = "consent_at") val consentAt: Long,
-    @ColumnInfo(name = "ai_notice_version") val aiNoticeVersion: Int,   // 옛 DB 행은 이전에서 0
+    // 옛 DB 행은 이전에서 0
+    @ColumnInfo(name = "ai_notice_version") val aiNoticeVersion: Int
 )
 
 /** 지금 AI 전송 안내 판. 안내 문구가 바뀌어 다시 동의받아야 하면 올린다. */
@@ -56,14 +57,14 @@ data class SessionEntity(
     @ColumnInfo(name = "report_message_id") val reportMessageId: String?,
     @ColumnInfo(name = "report_pending") val reportPending: Boolean,
     @ColumnInfo(name = "scenario_id") val scenarioId: String?,
-    @ColumnInfo(name = "driver_user_id") val driverUserId: Int,
+    @ColumnInfo(name = "driver_user_id") val driverUserId: Int
 )
 
 /** Episode. */
 @Entity(
     tableName = "episode",
     foreignKeys = [ForeignKey(SessionEntity::class, ["id"], ["session_id"], onDelete = ForeignKey.CASCADE)],
-    indices = [Index("session_id"), Index("first_result", "started_at")],
+    indices = [Index("session_id"), Index("first_result", "started_at")]
 )
 data class EpisodeEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
@@ -90,7 +91,7 @@ data class EpisodeEntity(
     @ColumnInfo(name = "played_ms") val playedMs: Long,
     @ColumnInfo(name = "exclude_reasons") val excludeReasons: List<Unjudged>,
     @ColumnInfo(name = "handoff_rest_name") val handoffRestName: String? = null,
-    @ColumnInfo(name = "handoff_told_driver") val handoffToldDriver: Boolean? = null,
+    @ColumnInfo(name = "handoff_told_driver") val handoffToldDriver: Boolean? = null
 )
 
 /** 재생마다 한 줄. */
@@ -98,9 +99,9 @@ data class EpisodeEntity(
     tableName = "play_log",
     foreignKeys = [
         ForeignKey(SessionEntity::class, ["id"], ["session_id"], onDelete = ForeignKey.CASCADE),
-        ForeignKey(EpisodeEntity::class, ["id"], ["episode_id"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(EpisodeEntity::class, ["id"], ["episode_id"], onDelete = ForeignKey.CASCADE)
     ],
-    indices = [Index("session_id"), Index("episode_id")],
+    indices = [Index("session_id"), Index("episode_id")]
 )
 data class PlayLogEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
@@ -112,28 +113,28 @@ data class PlayLogEntity(
     @ColumnInfo(name = "started_at") val startedAt: Long?,
     @ColumnInfo(name = "ended_at") val endedAt: Long,
     @ColumnInfo(name = "played_ms") val playedMs: Long,
-    @ColumnInfo(name = "end_reason") val endReason: String,
+    @ColumnInfo(name = "end_reason") val endReason: String
 )
 
 /** 기록만 한 경보. 표는 FK만 적어 CASCADE는 다른 기록 표와 맞춘 것이다. */
 @Entity(
     tableName = "alarm_log",
     foreignKeys = [ForeignKey(SessionEntity::class, ["id"], ["session_id"], onDelete = ForeignKey.CASCADE)],
-    indices = [Index("session_id")],
+    indices = [Index("session_id")]
 )
 data class AlarmLogEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0,
     @ColumnInfo(name = "session_id") val sessionId: String,
     @ColumnInfo(name = "first_at") val firstAt: Long,
     @ColumnInfo(name = "last_at") val lastAt: Long,
-    @ColumnInfo(name = "reason") val reason: String,
+    @ColumnInfo(name = "reason") val reason: String
 )
 
 /** ContextSample. */
 @Entity(
     tableName = "context_sample",
     primaryKeys = ["episode_id", "at"],
-    foreignKeys = [ForeignKey(EpisodeEntity::class, ["id"], ["episode_id"], onDelete = ForeignKey.CASCADE)],
+    foreignKeys = [ForeignKey(EpisodeEntity::class, ["id"], ["episode_id"], onDelete = ForeignKey.CASCADE)]
 )
 data class ContextSampleEntity(
     @ColumnInfo(name = "episode_id") val episodeId: String,
@@ -146,7 +147,7 @@ data class ContextSampleEntity(
     @ColumnInfo(name = "cabin_c") val cabinC: Double?,
     @ColumnInfo(name = "window_pos") val windowPos: Int?,
     @ColumnInfo(name = "playback") val playback: String?,
-    @ColumnInfo(name = "cry_p") val cryP: Double?,
+    @ColumnInfo(name = "cry_p") val cryP: Double?
 )
 
 /** ControlLog. exec가 만들고 호스트가 store와 HostApi.controlLog로 넘긴다. */
@@ -163,14 +164,15 @@ data class ControlLogEntity(
     @ColumnInfo(name = "applied_ms") val appliedMs: Long?,
     @ColumnInfo(name = "ok") val ok: Boolean,
     @ColumnInfo(name = "retries") val retries: Int,
-    @ColumnInfo(name = "cmd_id") val cmdId: String? = null,   // 그 줄을 낸 명령의 cmdId·playId. 리포트가 한 명령의 여러 줄을 한 번으로 센다(앰비언트 밝기·색)
+    // 그 줄을 낸 명령의 cmdId·playId. 리포트가 한 명령의 여러 줄을 한 번으로 센다(앰비언트 밝기·색)
+    @ColumnInfo(name = "cmd_id") val cmdId: String? = null
 )
 
 /** 조향 창. CASCADE는 alarm_log와 같은 이유. */
 @Entity(
     tableName = "steer_window",
     primaryKeys = ["session_id", "start_at"],
-    foreignKeys = [ForeignKey(SessionEntity::class, ["id"], ["session_id"], onDelete = ForeignKey.CASCADE)],
+    foreignKeys = [ForeignKey(SessionEntity::class, ["id"], ["session_id"], onDelete = ForeignKey.CASCADE)]
 )
 data class SteerWindowEntity(
     @ColumnInfo(name = "session_id") val sessionId: String,
@@ -181,7 +183,7 @@ data class SteerWindowEntity(
     @ColumnInfo(name = "playing") val playing: Boolean,
     @ColumnInfo(name = "reversals") val reversals: Int,
     /** 이 창 동안 판단 코어가 울음을 봤나. 아니면 cry_present=0이 '울음 없음'이 아니라 '보지 못함'이다. */
-    @ColumnInfo(name = "observed", defaultValue = "1") val observed: Boolean = true,
+    @ColumnInfo(name = "observed", defaultValue = "1") val observed: Boolean = true
 )
 
 /** PhoneLink. */
@@ -192,7 +194,7 @@ data class PhoneLinkEntity(
     @ColumnInfo(name = "role") val role: String,
     @ColumnInfo(name = "linked_at") val linkedAt: Long,
     @ColumnInfo(name = "last_seen_at") val lastSeenAt: Long?,
-    @ColumnInfo(name = "handoff_alerts") val handoffAlerts: Boolean,
+    @ColumnInfo(name = "handoff_alerts") val handoffAlerts: Boolean
 )
 
 /** Song. */
@@ -208,7 +210,7 @@ data class SongEntity(
     @ColumnInfo(name = "status") val status: String,
     @ColumnInfo(name = "reject_reason") val rejectReason: String?,
     @ColumnInfo(name = "added_seq") val addedSeq: Long?,
-    @ColumnInfo(name = "last_seq") val lastSeq: Long,
+    @ColumnInfo(name = "last_seq") val lastSeq: Long
 )
 
 /** 상태 저장(한 행, id = 1). */
@@ -216,14 +218,18 @@ data class SongEntity(
 data class EngineSnapshotEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: Int = 1,
     @ColumnInfo(name = "saved_at") val savedAt: Long,
-    @ColumnInfo(name = "state") val state: String, // EngineState JSON
+    // EngineState JSON
+    @ColumnInfo(name = "state") val state: String
 )
 
 /** 목록 칼럼 ↔ JSON String. */
 class Converters {
     @TypeConverter fun methodsToJson(v: List<Method>): String = Json.encodeToString(v)
+
     @TypeConverter fun methodsFromJson(v: String): List<Method> = Json.decodeFromString(v)
+
     @TypeConverter fun unjudgedToJson(v: List<Unjudged>): String = Json.encodeToString(v)
+
     @TypeConverter fun unjudgedFromJson(v: String): List<Unjudged> = Json.decodeFromString(v)
 }
 
@@ -235,6 +241,7 @@ object ControlApi {
     const val HVAC_TEMP = "setHvacTemperature"
     const val AMBIENT_BRIGHTNESS = "setAmbientLightBrightness"
     const val AMBIENT_COLOR = "setAmbientLightBrightnessColor"
+
     /** 앰비언트 줄 목표: 낮춤 "dim:값", 되돌림 "restore:값". */
     const val DIM = "dim:"
     const val RESTORE = "restore:"

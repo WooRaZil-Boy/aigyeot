@@ -51,20 +51,25 @@ class LinkRelayLiveTest {
 
     private fun waitFor(what: String, ms: Long = 10_000, cond: () -> Boolean) {
         val until = System.currentTimeMillis() + ms
-        while (!cond()) { check(System.currentTimeMillis() < until) { "시간 초과: $what" }; Thread.sleep(5) }
+        while (!cond()) {
+            check(System.currentTimeMillis() < until) { "시간 초과: $what" }
+            Thread.sleep(5)
+        }
     }
 
     @Test fun pairFeedingStateRequestQa_overRealRelay() {
         assumeTrue("AIGYEOT_RELAY가 없어 건너뜀", base != null)
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         val db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).build()
-        db.openHelper.writableDatabase.execSQL(   // 첫 설정을 마친 차(아기 프로필 있음)
-            "INSERT INTO child_profile VALUES ('p', '지우', '2026-03', 'LEFT', 180, NULL, '[]', 0, 0, 0, 1)",
+        db.openHelper.writableDatabase.execSQL( // 첫 설정을 마친 차(아기 프로필 있음)
+            "INSERT INTO child_profile VALUES ('p', '지우', '2026-03', 'LEFT', 180, NULL, '[]', 0, 0, 0, 1)"
         )
         val events = CopyOnWriteArrayList<Pair<Long, Event>>()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val link = Link(ctx, db, System::currentTimeMillis, { events += System.currentTimeMillis() to it }, { null },
-            OkRelay(base!!), FakeCipher, { null }, { _, _ -> LoudnessResult(false, "bad_format") }, scope)
+        val link = Link(
+            ctx, db, System::currentTimeMillis, { events += System.currentTimeMillis() to it }, { null },
+            OkRelay(base!!), FakeCipher, { null }, { _, _ -> LoudnessResult(false, "bad_format") }, scope
+        )
         try {
             link.start()
             link.openPairing()
@@ -83,22 +88,34 @@ class LinkRelayLiveTest {
 
             val at = rfc3339(System.currentTimeMillis() - 5_000)
             val tTap = System.currentTimeMillis()
-            val (sc, sb) = call("POST", "/v1/messages", token, """{"v":1,"id":"${ulid(tTap)}","type":"feeding_started","ts":"${rfc3339(tTap)}","body":{"at":"$at"}}""")
+            val (sc, sb) = call(
+                "POST",
+                "/v1/messages",
+                token,
+                """{"v":1,"id":"${ulid(tTap)}","type":"feeding_started","ts":"${rfc3339(tTap)}","body":{"at":"$at"}}"""
+            )
             assertEquals(201, sc, sb)
             waitFor("차 FeedingStarted") { events.any { it.second is FeedingStarted } }
             val tapToCar = events.first { it.second is FeedingStarted }.first - tTap
 
-            fun inbox() = Json.parseToJsonElement(call("GET", "/v1/inbox?after_seq=0&limit=100", token).second).jsonObject.getValue("messages").jsonArray.map { it.jsonObject }
+            fun inbox() = Json.parseToJsonElement(call("GET", "/v1/inbox?after_seq=0&limit=100", token).second).jsonObject.getValue("messages").jsonArray.map {
+                it.jsonObject
+            }
             var reflected = 0L
             waitFor("폰 feeding_state(차에 반영됨)") {
-                inbox().any { m -> m["type"]?.jsonPrimitive?.content == "feeding_state" &&
-                    instantOf(m.getValue("body").jsonObject["last_feeding_start"]?.jsonPrimitive?.content) == instantOf(at) }
+                inbox().any { m ->
+                    m["type"]?.jsonPrimitive?.content == "feeding_state" &&
+                        instantOf(m.getValue("body").jsonObject["last_feeding_start"]?.jsonPrimitive?.content) == instantOf(at)
+                }
                     .also { if (it) reflected = System.currentTimeMillis() - tTap }
             }
 
             val tReq = System.currentTimeMillis()
             val before = inbox().size
-            assertEquals(201, call("POST", "/v1/messages", token, """{"v":1,"id":"${ulid(tReq)}","type":"state_request","ts":"${rfc3339(tReq)}","body":{}}""").first)
+            assertEquals(
+                201,
+                call("POST", "/v1/messages", token, """{"v":1,"id":"${ulid(tReq)}","type":"state_request","ts":"${rfc3339(tReq)}","body":{}}""").first
+            )
             waitFor("state_request 답") { inbox().size > before }
             val stateMs = System.currentTimeMillis() - tReq
 
@@ -110,18 +127,24 @@ class LinkRelayLiveTest {
                 waitFor("QaReply $i") { events.any { (it.second as? QaReply)?.listenId == "live$i" } }
                 val (at, r) = events.first { (it.second as? QaReply)?.listenId == "live$i" }
                 qaMs = at - tQa
-                println("LIVE qa q=\"$q\" ms=$qaMs llm=${(r as QaReply).llm} care=${r.careUsed} topics=${r.factTopics + r.fallbackTopics} " +
-                    "tools=${events.filter { it.first >= tQa && it.second !is QaReply }.map { it.second::class.simpleName }} text=\"${r.text}\"")
+                println(
+                    "LIVE qa q=\"$q\" ms=$qaMs llm=${(r as QaReply).llm} care=${r.careUsed} topics=${r.factTopics + r.fallbackTopics} " +
+                        "tools=${events.filter { it.first >= tQa && it.second !is QaReply }.map { it.second::class.simpleName }} text=\"${r.text}\""
+                )
             }
 
             link.disconnect(phone)
             waitFor("차 끊기") { link.status.value.phones.none { it.deviceId == phone } }
             assertEquals(401, call("GET", "/v1/inbox?after_seq=0&limit=100", token).first)
 
-            println("LIVE pair_ms=$pairMs tap_to_car_ms=$tapToCar tap_to_phone_feeding_state_ms=$reflected state_request_ms=$stateMs qa_offline_ms=$qaMs conn=${link.status.value.conn}")
+            println(
+                "LIVE pair_ms=$pairMs tap_to_car_ms=$tapToCar tap_to_phone_feeding_state_ms=$reflected state_request_ms=$stateMs qa_offline_ms=$qaMs conn=${link.status.value.conn}"
+            )
             assertTrue(tapToCar >= 0)
         } finally {
-            link.stop(); scope.cancel(); db.close()
+            link.stop()
+            scope.cancel()
+            db.close()
         }
     }
 }
