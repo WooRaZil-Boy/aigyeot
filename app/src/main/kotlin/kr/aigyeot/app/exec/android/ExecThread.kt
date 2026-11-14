@@ -1,16 +1,16 @@
 package kr.aigyeot.app.exec.android
 
 import android.content.Context
-import java.io.File
-import kr.aigyeot.app.exec.FileLedger
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import kr.aigyeot.app.exec.CallbackEntry
 import kr.aigyeot.app.exec.ExecIo
+import kr.aigyeot.app.exec.FileLedger
 import kr.aigyeot.app.exec.OffLock
 import kr.aigyeot.app.exec.Sched
 import kr.aigyeot.engine.Event
+import java.io.File
 
 // 실제 Pleos·안드로이드 연결. 판단·규칙은 Player·Voice·Controls에 있고, 여기는 호출을 옮기기만 한다(JVM 시험 밖, 에뮬레이터로 확인).
 

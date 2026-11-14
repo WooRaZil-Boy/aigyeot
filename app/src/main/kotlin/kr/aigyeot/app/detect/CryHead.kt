@@ -8,19 +8,19 @@ import kotlinx.serialization.json.jsonPrimitive
 import kr.aigyeot.engine.Params
 import kotlin.math.exp
 
-// 감지 상수(명세서 6장, 계약 3.2). YAMNet 창은 0.975초 = 15600표본이다.
+// 감지 상수. YAMNet 창은 0.975초 = 15600표본이다.
 object Detect {
     const val SAMPLE_RATE = 16_000
     const val WINDOW_SAMPLES = 15_600
-    /** C303 A21: 창 한 걸음은 판단 코어 Params.yamnetHopMs 하나(15600표본 ÷ 16 kHz). */
+    /** 창 한 걸음은 판단 코어 Params.yamnetHopMs 하나(15600표본 ÷ 16 kHz). */
     val WINDOW_MS: Long = Params().yamnetHopMs
     const val SEGMENT_WINDOWS = 3
-    const val SILENCE_SAMPLES = 3 * SAMPLE_RATE // rms 0.0이 3초(C68)
-    const val TIMEOUT_MS = 3_000L // 구간이 3초 넘게 안 오면 판별기 무응답(G41)
+    const val SILENCE_SAMPLES = 3 * SAMPLE_RATE // rms 0.0이 3초
+    const val TIMEOUT_MS = 3_000L // 구간이 3초 넘게 안 오면 판별기 무응답
 }
 
 // 울음 판별층: 고른 24개 YAMNet 클래스 점수의 3창 평균(24) + 최대(24) → 로지스틱(rt_train.py와 같은 식).
-// C303 ④(A21): 경보 문턱은 판단 코어 Params.alarmThreshold 하나다(SegmentTracker). 판별층 JSON의 "threshold"는 학습 기록이며 시험이 그 값과 같은지 본다
+// 경보 문턱은 판단 코어 Params.alarmThreshold 하나다(SegmentTracker). 판별층 JSON의 "threshold"는 학습 기록이며 시험이 그 값과 같은지 본다
 class CryHead(val classes: IntArray, val w: DoubleArray, val bias: Double) {
     init { require(w.size == classes.size * 2) { "가중치는 클래스 수의 2배여야 한다" } }
 
@@ -50,7 +50,7 @@ class CryHead(val classes: IntArray, val w: DoubleArray, val bias: Double) {
             )
         }
 
-        /** 판별층 JSON에 학습 때 적은 문턱(없으면 null). 판정에는 쓰지 않는다: Params.alarmThreshold와 다르면 시험이 실패한다(C303 ④). */
+        /** 판별층 JSON에 학습 때 적은 문턱(없으면 null). 판정에는 쓰지 않는다: Params.alarmThreshold와 다르면 시험이 실패한다. */
         fun trainedThreshold(json: String): Double? = Json.parseToJsonElement(json).jsonObject["threshold"]?.jsonPrimitive?.doubleOrNull
     }
 }

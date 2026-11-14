@@ -22,7 +22,7 @@ internal class TtsGate(
     private var queued: Pair<String, (Boolean) -> Unit>? = null
     private var cancelWait: () -> Unit = {}
 
-    /** 초기화 성공. 빈 문장으로 예열한다(C72). */
+    /** 초기화 성공. 빈 문장으로 예열한다. */
     fun warm() {
         up = true
         inflight = true
@@ -59,7 +59,7 @@ internal class TtsGate(
     }
 
     /**
-     * 오디오 포커스를 잃었다(LOSS·LOSS_TRANSIENT, C321 ②). 말하던 문장을 멈추고 그 문장을 실패로 끝낸다. 예열·앞 요청뿐이면 아무것도 안 한다.
+     * 오디오 포커스를 잃었다(LOSS·LOSS_TRANSIENT). 말하던 문장을 멈추고 그 문장을 실패로 끝낸다. 예열·앞 요청뿐이면 아무것도 안 한다.
      * [stop]과 달리 큐는 비우지 않는다: 다음 문장은 판단 코어가 정한 것이라 다시 포커스를 요청하고, 거절되면 그때 실패로 끝난다.
      */
     fun focusLost() {

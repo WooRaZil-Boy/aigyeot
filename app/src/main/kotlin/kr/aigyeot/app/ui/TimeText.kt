@@ -5,8 +5,8 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 
 /**
- * 시각 글자 한 곳(디자인 v6 결정 11-09): 차트 안(축·'지금'·툴팁)만 24시간제 `HH:MM`, 나머지는 문구표(phone-care-plan 7.1) '오전/오후 h:mm'.
- * 같은 값을 화면마다 따로 만들지 않는다. 시간대는 기기 시간대(한국 한정, 범위 결정 11-07).
+ * 시각 글자 한 곳: 차트 안(축·'지금'·툴팁)만 24시간제 `HH:MM`, 나머지는 '오전/오후 h:mm'.
+ * 같은 값을 화면마다 따로 만들지 않는다. 시간대는 기기 시간대(한국 한정).
  */
 enum class ClockMode { CHART, TEXT }
 

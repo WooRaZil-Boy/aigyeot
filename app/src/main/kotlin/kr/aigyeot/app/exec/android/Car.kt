@@ -29,18 +29,19 @@ import kr.aigyeot.app.exec.AmbientArea
 import kr.aigyeot.app.exec.AmbientPort
 import kr.aigyeot.app.exec.AutoColor
 import kr.aigyeot.app.exec.Changed
-import kr.aigyeot.app.exec.ReadyProbe
-import kr.aigyeot.app.exec.notSupported
 import kr.aigyeot.app.exec.ControlPort
+import kr.aigyeot.app.exec.ReadyProbe
 import kr.aigyeot.app.exec.Sampler
 import kr.aigyeot.app.exec.gearOf
 import kr.aigyeot.app.exec.inCall
+import kr.aigyeot.app.exec.notSupported
 import kr.aigyeot.app.exec.turnOf
 import kr.aigyeot.engine.Area
 import kr.aigyeot.engine.CabinTemp
 import kr.aigyeot.engine.CallMode
 import kr.aigyeot.engine.ControlKind
 import kr.aigyeot.engine.Event
+import kr.aigyeot.engine.Gear
 import kr.aigyeot.engine.GearChanged
 import kr.aigyeot.engine.RearDoor
 import kr.aigyeot.engine.SeatHeat
@@ -53,14 +54,19 @@ private fun window(a: Area) = WindowArea(WindowValue.valueOf(a.name))
 private val REAR_SEATS = listOf(Area.ROW_2_LEFT, Area.ROW_2_RIGHT)
 
 /**
- * 차량 구독(계약 3.3)과 제어(4.2). C71: 리스너를 받는 4인자 Car.createCar로 붙고, CarService가 다시 준비되면 다시 구독한다.
+ * 차량 구독과 제어. 리스너를 받는 4인자 Car.createCar로 붙고, CarService가 다시 준비되면 다시 구독한다.
  * Pleos Vehicle은 준비 신호가 없어 프로브처럼 initialize 1.5초 뒤 구독한다(설계값).
  */
-internal class PleosCar(private val ctx: Context, private val ex: ExecThread, private val clock: () -> Long, private val post: (Event) -> Unit) : ControlPort, AmbientPort {
+internal class PleosCar(
+    private val ctx: Context,
+    private val ex: ExecThread,
+    private val clock: () -> Long,
+    private val post: (Event) -> Unit,
+) : ControlPort, AmbientPort {
     private var vehicle: Vehicle? = null
     private var car: Car? = null
     private var props: CarPropertyManager? = null           // 속도·기어가 함께 쓰는 매니저 참조(구독 중에만). '속도 등록됨'이 아니다
-    private var speedOn = false                              // 속도 등록 성공(CAR_SPEED 권한이 있을 때만 true). C321 resubscribeSpeed가 본다
+    private var speedOn = false                              // 속도 등록 성공(CAR_SPEED 권한이 있을 때만 true). resubscribeSpeed가 본다
     private val am = ctx.getSystemService(AudioManager::class.java)
     private var changed = Changed()                      // start마다 새로: 다시 시작하면 지금 기어·통화를 다시 낸다
     private val sampler = Sampler(clock, post)
@@ -69,16 +75,16 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
     private fun <T : Any> emit(key: String, v: T, e: () -> Event) = changed.emit(key, v, e, post)
     private fun emitGear(raw: Int?) { gearOf(raw)?.let { emit("gear", it) { GearChanged(clock(), it) } } }
 
-    /** 장면 끝(V12): 받은 차량 신호의 지금 값을 중복 억제 없이 다시 낸다(Exec.reemitAll, exec 잠금 안). */
+    /** 장면 끝: 받은 차량 신호의 지금 값을 중복 억제 없이 다시 낸다(Exec.reemitAll, exec 잠금 안). */
     fun reemit() { changed.reemit(post); sampler.reemit() }
 
-    /** C328: 마지막으로 받은 기어(없으면 null). exec 잠금 안에서 부른다. */
-    fun lastGear(): kr.aigyeot.engine.Gear? = changed.value("gear") as? kr.aigyeot.engine.Gear
+    /** 마지막으로 받은 기어(없으면 null). exec 잠금 안에서 부른다. */
+    fun lastGear(): Gear? = changed.value("gear") as? Gear
 
     /** 한 구독(subscribe)의 신호 리스너 묶음. 콜백 첫 줄에서 구독 번호가 다르면 무시한다(CarService 재연결로 같은 start 안에서 다시 구독해도 옛 구독의 늦은 응답을 버린다)(앞 회차의 늦은 응답이 새 구독을 건드리지 않게). */
     private inner class Listeners(val sub: Int) {
         fun on(f: () -> Unit) = ex.guard { if (subGen == sub) f() }
-        /** C367: 이 구독에서 리스너 값이 이미 온 키(gear·seatX). 초기 조회(getIntProperty·getHvacSeatTemperature)는 binder 스레드에서 돌아 콜백보다 늦게 처리될 수 있다.
+        /** 이 구독에서 리스너 값이 이미 온 키(gear·seatX). 초기 조회(getIntProperty·getHvacSeatTemperature)는 binder 스레드에서 돌아 콜백보다 늦게 처리될 수 있다.
          *  리스너 값이 하나라도 왔으면 그것이 더 새 값이니 초기 조회는 버린다(Changed는 다른 값을 걸러 주지 않는다). 잠금 안에서만 만진다. */
         val live = HashSet<String>()
         val gearL = object : CarPropertyManager.CarPropertyEventCallback {
@@ -98,7 +104,8 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
             }
         }
         val cabinL = object : HvacTemperatureListener {
-            override fun onHvacTemperatureUpdated(v: Float?) = on { vehicle?.let { veh -> ex.off.run { readCabin(veh, sub) } } }   // 단위가 정해진 읽기로 다시 읽는다(바인더라 잠금 밖 레인에서)
+            // 단위가 정해진 읽기로 다시 읽는다(바인더라 잠금 밖 레인에서)
+            override fun onHvacTemperatureUpdated(v: Float?) = on { vehicle?.let { veh -> ex.off.run { readCabin(veh, sub) } } }
             override fun onFailed(e: Exception) { Log.w(TAG, "cabin", e) }
         }
         val steerL = object : SteeringWheelAngleListener {
@@ -121,7 +128,12 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
     private var ls: Listeners? = null
     private var modeL: AudioManager.OnModeChangedListener? = null   // start마다 새로(시작 번호를 잡는다)
 
-    private fun door(side: Side, pos: Int?) { if (pos == null) return; val open = pos > 0; emit("door$side", open) { RearDoor(clock(), side, open) } }   // C321 ③: 위치를 못 읽으면 닫힘으로 단정하지 않는다
+    // 위치를 못 읽으면 닫힘으로 단정하지 않는다
+    private fun door(side: Side, pos: Int?) {
+        if (pos == null) return
+        val open = pos > 0
+        emit("door$side", open) { RearDoor(clock(), side, open) }
+    }
     private fun call(mode: Int) { val c = inCall(mode); emit("call", c) { CallMode(clock(), c) } }
     // 바인더 호출(SDK get*/register*·Car 연결)은 잠금 밖 레인(ex.off)에서 한다. 잠금 안(ex.guard)은 상태 칸만 만진다(OffLock 설명).
     private fun readCabin(v: Vehicle, sub: Int) = v.getHVAC().getHvacTemperatureCurrent(seat(Area.ROW_1_LEFT), TemperatureUnit.CELSIUS,
@@ -143,32 +155,36 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         val my = ++gen
         changed = Changed()
         ex.off.run {
-            // C370: 초기화 단계는 서로 막지 않는다. 한 단계가 던져도 나머지(차 제어 준비·Car 연결·통화 감시)는 계속한다. 던진 단계의 칸은 null로 둔다
+            // 초기화 단계는 서로 막지 않는다. 한 단계가 던져도 나머지(차 제어 준비·Car 연결·통화 감시)는 계속한다. 던진 단계의 칸은 null로 둔다
             val v: Vehicle? = runCatching { Vehicle(ctx) }.onFailure { e -> Log.w(TAG, "vehicle create", e) }.getOrNull()
             // initialize가 던져도 v는 그대로 쓴다(전과 같다): 준비 여부는 아래 ReadyProbe가 capability 응답으로 판단한다
             v?.let { runCatching { it.initialize() }.onFailure { e -> Log.w(TAG, "vehicle init", e) } }
             // Car 수명 콜백은 main 스레드에서도 올 수 있다: 거기서는 아무 바인더도 부르지 않고 레인에 넘기기만 한다
-            val c: Car? = runCatching { Car.createCar(ctx, ex.handler, Car.CAR_WAIT_TIMEOUT_DO_NOT_WAIT) { cc, ready -> ex.off.run { onCarState(my, cc, ready) } } }
+            val c: Car? = runCatching {
+                Car.createCar(ctx, ex.handler, Car.CAR_WAIT_TIMEOUT_DO_NOT_WAIT) { cc, ready -> ex.off.run { onCarState(my, cc, ready) } } }
                 .onFailure { e -> Log.w(TAG, "car connect", e) }.getOrNull()
             var ml: AudioManager.OnModeChangedListener? = null
             if (Build.VERSION.SDK_INT >= 31) {
                 // executor에 이미 넣은 옛 콜백은 제거해도 취소되지 않으므로 시작 번호로 거른다
                 val l = AudioManager.OnModeChangedListener { m -> ex.guard { if (gen == my) call(m) } }
-                ml = runCatching { am.addOnModeChangedListener(ctx.mainExecutor, l); l }.onFailure { e -> Log.w(TAG, "call listener", e) }.getOrNull()   // 등록 실패면 null
+                // 등록 실패면 null
+                ml = runCatching { am.addOnModeChangedListener(ctx.mainExecutor, l); l }.onFailure { e -> Log.w(TAG, "call listener", e) }.getOrNull()
             }
             val mode: Int? = runCatching { am.mode }.onFailure { e -> Log.w(TAG, "audio mode", e) }.getOrNull()   // 못 읽으면 null: CallMode를 내지 않는다
             val stale = synchronized(ex.lock) {
                 if (gen != my) true
                 else {
                     vehicle = v; car = c; modeL = ml; mode?.let { call(it) }
-                    // initialize()는 서비스 연결을 비동기로 시작하고 완료 콜백이 없다(공식 문서). 가벼운 capability 읽기 하나가 처음 실제로 응답한 때를 준비로 본다(4.2 ①)
+                    // initialize()는 서비스 연결을 비동기로 시작하고 완료 콜백이 없다(공식 문서). 가벼운 capability 읽기 하나가 처음 실제로 응답한 때를 준비로 본다
                     if (v != null) probe = ReadyProbe(ex, READY_PROBE_MS, { gen == my },
-                        { ok, fail -> ex.off.run { v.getLight().checkAmbientLightBrightnessCapabilities({ _, _ -> ex.guard { ok() } }, { e -> ex.guard { fail(e) } }) } },
+                        { ok, fail -> ex.off.run { v.getLight().checkAmbientLightBrightnessCapabilities(
+                            { _, _ -> ex.guard { ok() } }, { e -> ex.guard { fail(e) } }) } },
                         { onReady() }).also { it.start() }
                     false
                 }
             }
-            if (stale) { runCatching { ml?.let { am.removeOnModeChangedListener(it) } }; runCatching { c?.disconnect() }; runCatching { v?.release() } }   // 그사이 stop·다시 start
+            // 그사이 stop·다시 start
+            if (stale) { runCatching { ml?.let { am.removeOnModeChangedListener(it) } }; runCatching { c?.disconnect() }; runCatching { v?.release() } }
         }
     }
 
@@ -191,13 +207,13 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         }
     }
 
-    /** 공개 AAOS 경로(CarPropertyManager GEAR_SELECTION, CAR_POWERTRAIN, C324)로 지금 기어를 한 번 읽는다. 바인더 호출이라 잠금 밖에서만 부른다. */
+    /** 공개 AAOS 경로(CarPropertyManager GEAR_SELECTION, CAR_POWERTRAIN)로 지금 기어를 한 번 읽는다. 바인더 호출이라 잠금 밖에서만 부른다. */
     private fun gearOnce(c: Car): Int? =
         runCatching { (c.getCarManager(Car.PROPERTY_SERVICE) as CarPropertyManager).getIntProperty(VehiclePropertyIds.GEAR_SELECTION, 0) }
             .onFailure { Log.w(TAG, "gear read", it) }.getOrNull()
 
     /**
-     * C321 ①: 속도 권한(CAR_SPEED)이 구독 뒤에 허용되면 같은 입구로 다시 구독한다(잠금 안에서 부른다). 속도가 이미 등록돼 있거나 Car가 준비되지 않았으면 아무것도 안 한다
+     * 속도 권한(CAR_SPEED)이 구독 뒤에 허용되면 같은 입구로 다시 구독한다(잠금 안에서 부른다). 속도가 이미 등록돼 있거나 Car가 준비되지 않았으면 아무것도 안 한다
      * (준비 콜백이 어차피 구독한다). 다시 구독해도 기어·뒷문·열선·온도는 [Changed]가 같은 값을 걸러, reemit과도 어긋나지 않는다.
      */
     fun resubscribeSpeed() { val c = readyCar ?: return; if (!speedOn) { val my = gen; ex.off.run { subscribe(c, my) } } }
@@ -216,9 +232,13 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         val v = plan.v; val l = plan.l; val sub = plan.sub
         unregister(v, plan.oldL, plan.oldProps)
         runCatching {
-            l.doorL.forEach { (side, d) -> v.getDoor().registerDoorPosition(DoorArea(if (side == Side.LEFT) DoorValue.ROW_2_LEFT else DoorValue.ROW_2_RIGHT), d) }
+            l.doorL.forEach { (side, d) ->
+                v.getDoor().registerDoorPosition(DoorArea(if (side == Side.LEFT) DoorValue.ROW_2_LEFT else DoorValue.ROW_2_RIGHT), d) }
             l.seatL.forEach { (a, x) -> v.getSeat().registerHvacSeatTemperature(seat(a), x) }
-            l.seatL.keys.forEach { a -> v.getSeat().getHvacSeatTemperature(seat(a), { h -> l.on { h?.let { if ("seat$a" !in l.live) emit("seat$a", it) { SeatHeat(clock(), a, it) } } } }, {}) }   // C367: 리스너 값이 먼저 왔으면 늦은 초기 조회는 버린다
+            // 리스너 값이 먼저 왔으면 늦은 초기 조회는 버린다
+            l.seatL.keys.forEach { a ->
+                v.getSeat().getHvacSeatTemperature(seat(a),
+                    { h -> l.on { h?.let { if ("seat$a" !in l.live) emit("seat$a", it) { SeatHeat(clock(), a, it) } } } }, {}) }
             v.getHVAC().registerHvacTemperatureCurrent(seat(Area.ROW_1_LEFT), l.cabinL)
             readCabin(v, sub)
             v.getSteeringWheel().registerSteeringWheelAngle(l.steerL)
@@ -230,8 +250,9 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         var speed = false
         if (m != null) {
             runCatching {
-                // C326: 권한이 없으면 예외 없이 false를 돌려준다
-                if (!m.registerCallback(l.gearL, VehiclePropertyIds.GEAR_SELECTION, CarPropertyManager.SENSOR_RATE_ONCHANGE)) Log.w(TAG, "subscribe gear(CAR_POWERTRAIN 권한?)")
+                // 권한이 없으면 예외 없이 false를 돌려준다
+                if (!m.registerCallback(l.gearL, VehiclePropertyIds.GEAR_SELECTION, CarPropertyManager.SENSOR_RATE_ONCHANGE))
+                    Log.w(TAG, "subscribe gear(CAR_POWERTRAIN 권한?)")
                 gearNow = m.getIntProperty(VehiclePropertyIds.GEAR_SELECTION, 0)
             }.onFailure { Log.w(TAG, "subscribe gear(CAR_POWERTRAIN 권한?)", it) }
             runCatching {
@@ -241,7 +262,13 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         }
         val stale = synchronized(ex.lock) {
             if (gen != my || subGen != sub) true
-            else { if (m != null) props = m; speedOn = speed; if ("gear" !in l.live) gearNow?.let { emitGear(it) }; false }   // C367: 그사이 기어 콜백이 먼저 왔으면 늦은 초기 조회(P)가 D를 덮지 않게
+            // 그사이 기어 콜백이 먼저 왔으면 늦은 초기 조회(P)가 D를 덮지 않게
+            else {
+                if (m != null) props = m
+                speedOn = speed
+                if ("gear" !in l.live) gearNow?.let { emitGear(it) }
+                false
+            }
         }
         if (stale) unregister(v, l, m)                                    // 그사이 stop·끊김·다시 구독
     }
@@ -250,7 +277,8 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
     private fun unregister(v: Vehicle?, l: Listeners?, pm: CarPropertyManager?) {
         if (l == null) return
         if (v != null) {
-            l.doorL.forEach { (side, d) -> runCatching { v.getDoor().unregisterDoorPosition(DoorArea(if (side == Side.LEFT) DoorValue.ROW_2_LEFT else DoorValue.ROW_2_RIGHT), d) } }
+            l.doorL.forEach { (side, d) ->
+                runCatching { v.getDoor().unregisterDoorPosition(DoorArea(if (side == Side.LEFT) DoorValue.ROW_2_LEFT else DoorValue.ROW_2_RIGHT), d) } }
             l.seatL.forEach { (a, x) -> runCatching { v.getSeat().unregisterHvacSeatTemperature(seat(a), x) } }
             runCatching { v.getHVAC().unregisterHvacTemperatureCurrent(seat(Area.ROW_1_LEFT), l.cabinL) }
             runCatching { v.getSteeringWheel().unregisterSteeringWheelAngle(l.steerL) }
@@ -282,8 +310,10 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         try {
             when (kind) {
                 ControlKind.SEAT_HEAT -> v.getSeat().getHvacSeatTemperature(seat(area), { x -> ex.guard { cb(x?.toDouble()) } }, fail)
-                ControlKind.WINDOW_LOCK -> v.getWindow().getCurrentWindowLockState(window(area), { x -> ex.guard { cb(x?.let { if (it) 1.0 else 0.0 }) } }, fail)
-                ControlKind.READING_LIGHT -> v.getLight().getReadingLightSwitch(seat(area), { x -> ex.guard { cb(x?.let { if (it == LightSwitch.ON) 1.0 else 0.0 }) } }, fail)
+                ControlKind.WINDOW_LOCK -> v.getWindow().getCurrentWindowLockState(window(area),
+                    { x -> ex.guard { cb(x?.let { if (it) 1.0 else 0.0 }) } }, fail)
+                ControlKind.READING_LIGHT -> v.getLight().getReadingLightSwitch(seat(area),
+                    { x -> ex.guard { cb(x?.let { if (it == LightSwitch.ON) 1.0 else 0.0 }) } }, fail)
                 ControlKind.HVAC_TEMP -> v.getHVAC().getHvacTemperature(seat(area), TemperatureUnit.CELSIUS, { x -> ex.guard { cb(x?.toDouble()) } }, fail)
                 ControlKind.AMBIENT_BRIGHTNESS, ControlKind.AMBIENT_COLOR -> cb(null)   // 앰비언트는 AmbientPort(영역이 capability)
             }
@@ -297,14 +327,16 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
             when (kind) {
                 ControlKind.SEAT_HEAT -> v.getSeat().setHvacSeatTemperature(seat(area), value.toInt(), { _, _ -> ex.guard { ack(true) } }, fail)
                 ControlKind.WINDOW_LOCK -> v.getWindow().setWindowLock(window(area), value == 1.0, { _, _ -> ex.guard { ack(true) } }, fail)
-                ControlKind.READING_LIGHT -> v.getLight().setReadingLightSwitch(seat(area), if (value == 1.0) LightSwitch.ON else LightSwitch.OFF, { _ -> ex.guard { ack(true) } }, fail)
-                ControlKind.HVAC_TEMP -> v.getHVAC().setHvacTemperature(seat(area), value.toFloat(), TemperatureUnit.CELSIUS, { _, _ -> ex.guard { ack(true) } }, fail)
+                ControlKind.READING_LIGHT -> v.getLight().setReadingLightSwitch(seat(area),
+                    if (value == 1.0) LightSwitch.ON else LightSwitch.OFF, { _ -> ex.guard { ack(true) } }, fail)
+                ControlKind.HVAC_TEMP -> v.getHVAC().setHvacTemperature(seat(area), value.toFloat(),
+                    TemperatureUnit.CELSIUS, { _, _ -> ex.guard { ack(true) } }, fail)
                 ControlKind.AMBIENT_BRIGHTNESS, ControlKind.AMBIENT_COLOR -> ack(false)   // 앰비언트는 AmbientPort
             }
         } catch (e: Exception) { ack(false) }
     }
 
-    /** 공조 설정 범위의 최솟값(Pleos `checkHvacTemperatureCapabilities`, CAR_CLIMATE 권한). 못 읽으면 null(C101). */
+    /** 공조 설정 범위의 최솟값(Pleos `checkHvacTemperatureCapabilities`, CAR_CLIMATE 권한). 못 읽으면 null. */
     override fun minTemp(area: Area, cb: (Double?) -> Unit) {
         val v = vehicle ?: return cb(null)
         try {
@@ -312,7 +344,7 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         } catch (e: Exception) { cb(null) }
     }
 
-    // ---- 앰비언트 조명(기능 D, 4.2). Vehicle 2.3.2 Light, 권한 CAR_LIGHTS. 영역은 capability가 돌려준 SeatArea 하나 ----
+    // ---- 앰비언트 조명. Vehicle 2.3.2 Light, 권한 CAR_LIGHTS. 영역은 capability가 돌려준 SeatArea 하나 ----
 
     private fun lightFail(cb: () -> Unit): (Exception) -> Unit = { e -> ex.guard { Log.w(TAG, "ambient ${e.message}"); cb() } }
 
@@ -330,7 +362,7 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         } catch (e: Exception) { cb(null) }
     }
 
-    /** 스위치 ON, 또는 AUTOMATIC이고 State가 ON일 때만 true(C359 결정 ②). 그 밖·읽기 실패는 false. 스위치는 읽기만 한다. */
+    /** 스위치 ON, 또는 AUTOMATIC이고 State가 ON일 때만 true. 그 밖·읽기 실패는 false. 스위치는 읽기만 한다. */
     override fun lit(a: AmbientArea, cb: (Boolean?) -> Unit) {
         val v = vehicle ?: return cb(null)
         val h = a.handle as SeatArea
@@ -350,14 +382,15 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
         } catch (e: Exception) { cb(null) }
     }
 
-    /** capability가 ERROR_NOT_SUPPORTED_PROPERTY로 실패하면 NONE(11-08 실측: 에뮬레이터). 있으면 값이 false일 때만 OFF, 나머지(true·null·그 밖 실패)는 UNKNOWN. */
+    /** capability가 ERROR_NOT_SUPPORTED_PROPERTY로 실패하면 NONE(에뮬레이터). 있으면 값이 false일 때만 OFF, 나머지(true·null·그 밖 실패)는 UNKNOWN. */
     override fun autoColor(cb: (AutoColor) -> Unit) {
         val v = vehicle ?: return cb(AutoColor.UNKNOWN)
         val l = v.getLight()
         try {
             l.checkAmbientColorAutoByDriveModeEnabledCapabilities({ _ ->
                 try {
-                    l.getAmbientColorAutoByDriveModeEnabled({ on -> ex.guard { cb(if (on == false) AutoColor.OFF else AutoColor.UNKNOWN) } }, lightFail { cb(AutoColor.UNKNOWN) })
+                    l.getAmbientColorAutoByDriveModeEnabled({ on -> ex.guard { cb(if (on == false) AutoColor.OFF else AutoColor.UNKNOWN) } },
+                        lightFail { cb(AutoColor.UNKNOWN) })
                 } catch (e: Exception) { ex.guard { cb(AutoColor.UNKNOWN) } }
             }, { e -> ex.guard { cb(if (notSupported(e)) AutoColor.NONE else AutoColor.UNKNOWN) } })
         } catch (e: Exception) { cb(AutoColor.UNKNOWN) }
@@ -365,24 +398,28 @@ internal class PleosCar(private val ctx: Context, private val ex: ExecThread, pr
 
     override fun readBrightness(a: AmbientArea, cb: (Int?) -> Unit) {
         val v = vehicle ?: return cb(null)
-        try { v.getLight().getAmbientLightBrightness(a.handle as SeatArea, { x -> ex.guard { cb(x) } }, lightFail { cb(null) }) } catch (e: Exception) { cb(null) }
+        try { v.getLight().getAmbientLightBrightness(a.handle as SeatArea, { x -> ex.guard { cb(x) } }, lightFail { cb(null) }) }
+        catch (e: Exception) { cb(null) }
     }
 
     /** 24비트 RGB(알파 뺌). */
     override fun readColor(a: AmbientArea, cb: (Int?) -> Unit) {
         val v = vehicle ?: return cb(null)
-        try { v.getLight().getAmbientLightBrightnessColor(a.handle as SeatArea, { x -> ex.guard { cb(x?.and(0xFFFFFF)) } }, lightFail { cb(null) }) } catch (e: Exception) { cb(null) }
+        try { v.getLight().getAmbientLightBrightnessColor(a.handle as SeatArea, { x -> ex.guard { cb(x?.and(0xFFFFFF)) } }, lightFail { cb(null) }) }
+        catch (e: Exception) { cb(null) }
     }
 
     override fun writeBrightness(a: AmbientArea, v: Int, ack: (Boolean) -> Unit) {
         val veh = vehicle ?: return ack(false)
-        try { veh.getLight().setAmbientLightBrightness(a.handle as SeatArea, v, { _, _ -> ex.guard { ack(true) } }, lightFail { ack(false) }) } catch (e: Exception) { ack(false) }
+        try { veh.getLight().setAmbientLightBrightness(a.handle as SeatArea, v, { _, _ -> ex.guard { ack(true) } }, lightFail { ack(false) }) }
+        catch (e: Exception) { ack(false) }
     }
 
     /** [argb]는 32비트 ARGB(Ambients가 알파 0xFF를 붙여 넘긴다). */
     override fun writeColor(a: AmbientArea, argb: Int, ack: (Boolean) -> Unit) {
         val veh = vehicle ?: return ack(false)
-        try { veh.getLight().setAmbientLightBrightnessColor(a.handle as SeatArea, argb, { _, _ -> ex.guard { ack(true) } }, lightFail { ack(false) }) } catch (e: Exception) { ack(false) }
+        try { veh.getLight().setAmbientLightBrightnessColor(a.handle as SeatArea, argb, { _, _ -> ex.guard { ack(true) } }, lightFail { ack(false) }) }
+        catch (e: Exception) { ack(false) }
     }
 
     private companion object { const val SUBSCRIBE_DELAY_MS = 1_500L; const val READY_PROBE_MS = 1_000L }

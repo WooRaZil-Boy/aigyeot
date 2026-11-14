@@ -16,9 +16,9 @@ import kr.aigyeot.engine.WaypointResult
 import kotlin.math.abs
 
 /**
- * 차 제어 넷과 경유지(계약 4.2). F19: 명령 뒤 0.1초부터 0.15초 간격으로 다시 읽고, 5초 안에 목표가 안 되면 한 번 다시 보내고,
+ * 차 제어 넷과 경유지. 명령 뒤 0.1초부터 0.15초 간격으로 다시 읽고, 5초 안에 목표가 안 되면 한 번 다시 보내고,
  * 그래도 안 되면 ok = false. 영역마다 ControlResult 하나와 control_log 한 줄. ok는 쓰기 성공 콜백과 다시 읽은 값이 모두 맞을 때만이다
- * (거절된 명령은 값이 우연히 같아도 실패, 11-02 프로브 measure와 같은 정의).
+ * (거절된 명령은 값이 우연히 같아도 실패, 프로브 measure와 같은 정의).
  */
 internal class Controls(
     private val port: ControlPort,
@@ -33,7 +33,7 @@ internal class Controls(
     fun seatHeat(c: SetSeatHeat) = c.areas.forEach { verify(c.cmdId, ControlKind.SEAT_HEAT, it, c.level.toDouble()) }
     fun windowLock(c: SetWindowLock) = c.values.forEach { (a, v) -> verify(c.cmdId, ControlKind.WINDOW_LOCK, a, if (v) 1.0 else 0.0) }
     fun readingLight(c: SetReadingLight) = c.areas.forEach { verify(c.cmdId, ControlKind.READING_LIGHT, it, if (c.on) 1.0 else 0.0) }
-    /** 목표 = max(지금 설정 온도 + deltaC, 설정 최솟값)(C101). 설정 온도를 읽지 못하면 보내지 않고 실패. */
+    /** 목표 = max(지금 설정 온도 + deltaC, 설정 최솟값). 설정 온도를 읽지 못하면 보내지 않고 실패. */
     fun lowerHvac(c: LowerHvac) = c.areas.forEach { verify(c.cmdId, ControlKind.HVAC_TEMP, it, null, c.deltaC) }
 
     private inner class Job(val cmdId: String, val kind: ControlKind, val area: Area) {
@@ -48,7 +48,7 @@ internal class Controls(
         val timers = mutableListOf<() -> Unit>()
     }
 
-    /** [target]이 null이면 바꾸기 전 값 + [delta]가 목표다(LowerHvac). 이 경우 목표는 max(그 값, 설정 최솟값)이고 이미 최솟값 이하면 쓰지 않고 실패(C101). */
+    /** [target]이 null이면 바꾸기 전 값 + [delta]가 목표다(LowerHvac). 이 경우 목표는 max(그 값, 설정 최솟값)이고 이미 최솟값 이하면 쓰지 않고 실패. */
     private fun verify(cmdId: String, kind: ControlKind, area: Area, target: Double?, delta: Double = 0.0) {
         val j = Job(cmdId, kind, area)
         jobs += j
@@ -85,7 +85,7 @@ internal class Controls(
         val want = j.target!!
         val ack = { ok: Boolean ->
             if (!j.done && j.attempt == n) {
-                j.acked = ok                                               // 거절이면 이 시도는 성공할 수 없다. 5초 타이머가 다시 보낸다(계약 4.2)
+                j.acked = ok                                               // 거절이면 이 시도는 성공할 수 없다. 5초 타이머가 다시 보낸다
                 j.ackMs = clock() - j.t0
             }
         }
@@ -126,12 +126,12 @@ internal class Controls(
     private fun same(kind: ControlKind, v: Double, want: Double) = if (kind == ControlKind.HVAC_TEMP) abs(v - want) < 0.05 else v == want
     private fun fmt(v: Double) = if (v == v.toLong().toDouble()) v.toLong().toString() else "%.1f".format(v)
 
-    // ---- 경유지(4.3 '응이면 addWaypoint 후 S09', C75: 결과 콜백으로만 성공) ----
+    // ---- 경유지('응이면 addWaypoint 후 S09', 결과 콜백으로만 성공) ----
 
     private inner class Wp(val c: AddWaypoint) { val t0 = clock(); var cancel: () -> Unit = {} }
     private var wp: Wp? = null
 
-    /** 계약 4.2 F19 예외(명세서 17장 C95): 결과 콜백으로만 확인, 다시 보내지 않음, [Params.waypointTimeoutMs](20초, C110). */
+    /** 재시도 예외: 결과 콜백으로만 확인, 다시 보내지 않음, [Params.waypointTimeoutMs](20초). */
     fun waypoint(c: AddWaypoint) {
         wp?.let { wpDone(it, false, "superseded") }
         val w = Wp(c).also { wp = it }

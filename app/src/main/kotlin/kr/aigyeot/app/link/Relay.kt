@@ -2,6 +2,9 @@ package kr.aigyeot.app.link
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import java.io.File
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
@@ -14,6 +17,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import kr.aigyeot.app.common.ulid
 import kr.aigyeot.shared.DevicesResponse
 import kr.aigyeot.shared.Envelope
 import kr.aigyeot.shared.ErrorResponse
@@ -34,25 +38,22 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import java.io.File
-import java.io.IOException
-import java.util.concurrent.TimeUnit
 
-/** 중계 주소(contracts-link 0장). 한 곳에만 둔다. release는 배포한 중계(L98·L101), 폰 두 앱과 같은 글자. */
+/** 중계 주소. 한 곳에만 둔다. release는 배포한 중계, 폰 두 앱과 같은 글자. */
 internal object RelayAddress {
     const val DEBUG = "http://10.0.2.2:8787"   // 에뮬레이터에서 맥의 wrangler dev
-    const val RELEASE = "https://aigyeot-relay.byuncorry.workers.dev"   // HTTPS·WSS만(0장 '전송')
+    const val RELEASE = "https://aigyeot-relay.byuncorry.workers.dev"   // HTTPS·WSS만
     fun of(ctx: Context) = if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) DEBUG else RELEASE
 }
 
-/** 중계 응답. Err의 code는 오류 본문의 `error.code`(1.1). */
+/** 중계 응답. Err의 code는 오류 본문의 `error.code`. */
 sealed interface Res<out T> {
     data class Ok<T>(val status: Int, val value: T) : Res<T>
     data class Err(val status: Int, val code: String?, val retryAfterS: Long?) : Res<Nothing>
     data object Offline : Res<Nothing>
 }
 
-/** WebSocket 한 개. 보내기는 ack·ping 글자뿐이다(2장). */
+/** WebSocket 한 개. 보내기는 ack·ping 글자뿐이다. */
 interface RelaySocket {
     fun send(text: String): Boolean
     fun cancel()
@@ -65,7 +66,7 @@ interface SocketEvents {
     fun onClosed(code: Int)
 }
 
-/** 중계 HTTP API·WebSocket을 감싼 얇은 층(contracts-link 1·2장). 시험은 가짜로 바꾼다. */
+/** 중계 HTTP API·WebSocket을 감싼 얇은 층. 시험은 가짜로 바꾼다. */
 interface Relay {
     suspend fun registerCar(): Res<RegisterCarResponse>
     suspend fun pairCode(token: String): Res<PairCodeResponse>
@@ -77,13 +78,17 @@ interface Relay {
     suspend fun ack(token: String, ids: List<String>): Res<Unit>
     /** 노래 파일을 [dest]에 쓴다. 값은 받은 바이트 수. [maxBytes]를 넘으면 maxBytes + 1에서 멈춘다. */
     suspend fun song(token: String, songId: String, dest: File, maxBytes: Long): Res<Long>
-    /** [id]는 보낼 함 records_clear 항목 id: 다시 보내도 같아서 중계가 두 번째를 건너뛴다(L67). [dropIds]는 1,000개 이하(L81), 지우기 때 보낼 함에서 뺀 report_summary·handoff_alert id: 본문 `{"drop_ids":[…]}`로 보내 늦게 닿은 같은 id를 중계가 배달하지 않게 한다(L79). */
+    /**
+     * [id]는 보낼 함 records_clear 항목 id: 다시 보내도 같아서 중계가 두 번째를 건너뛴다.
+     * [dropIds]는 1,000개 이하, 지우기 때 보낼 함에서 뺀 report_summary·handoff_alert id:
+     * 본문 `{"drop_ids":[…]}`로 보내 늦게 닿은 같은 id를 중계가 배달하지 않게 한다.
+     */
     suspend fun deleteRecords(token: String, id: String, dropIds: List<String>): Res<Unit>
     suspend fun llm(token: String, req: LlmRequest): Res<LlmResponse>
     fun socket(token: String, events: SocketEvents): RelaySocket
 }
 
-/** ack 봉투(3.3 `ack`). WebSocket 프레임과 `POST /v1/ack`가 같이 쓴다. */
+/** ack 봉투(`ack`). WebSocket 프레임과 `POST /v1/ack`가 같이 쓴다. */
 internal fun ackEnvelope(ids: List<String>, now: Long) =
     envelopeOf(ulid(now), "ack", buildJsonObject { put("ids", JsonArray(ids.map { JsonPrimitive(it) })) }, now)
 
@@ -91,7 +96,7 @@ internal fun ackFrame(ids: List<String>, now: Long) = ProtocolJson.encodeToStrin
 
 /**
  * 받은 함 응답. 봉투 하나를 못 읽어도 나머지는 받는다. 못 읽는 봉투는 id가 있으면 v = 0 'unreadable'로 바꿔
- * 받는 쪽 1단계(v != 1 → 로그·ack만)가 ack하게 하고(안 그러면 함이 영원히 막힌다), id·seq 둘 다 없으면 버린다(8.3).
+ * 받는 쪽 1단계(v != 1 → 로그·ack만)가 ack하게 하고(안 그러면 함이 영원히 막힌다), id·seq 둘 다 없으면 버린다.
  * seq는 읽히면 id가 없어도 남긴다(쪽 넘기기 `after_seq`가 멈추지 않게). 빈 id는 ack하지 않는다.
  */
 internal fun parseInbox(text: String): InboxResponse {
@@ -110,10 +115,10 @@ internal fun parseEnvelope(e: JsonElement): Envelope? =
         Envelope(v = 0, id = id ?: "", seq = seq, type = "unreadable", ts = "", body = JsonObject(emptyMap()))
     }
 
-/** OkHttp 구현. 토큰은 Authorization 헤더로만 보내고, 본문·토큰은 로그에 남기지 않는다(6.6). */
+/** OkHttp 구현. 토큰은 Authorization 헤더로만 보내고, 본문·토큰은 로그에 남기지 않는다. */
 internal class OkRelay(private val baseUrl: String, private val http: OkHttpClient = OkHttpClient()) : Relay {
     private val jsonType = "application/json; charset=utf-8".toMediaType()
-    private val llmHttp = http.newBuilder().callTimeout(10, TimeUnit.SECONDS).build()   // 8.8 HTTP 타임아웃 10초
+    private val llmHttp = http.newBuilder().callTimeout(10, TimeUnit.SECONDS).build()   // HTTP 타임아웃 10초
 
     private fun <T> encode(s: KSerializer<T>, v: T): RequestBody = ProtocolJson.encodeToString(s, v).toRequestBody(jsonType)
     private fun <T> parse(s: KSerializer<T>): (Response) -> T = { ProtocolJson.decodeFromString(s, it.body.string()) }
@@ -188,7 +193,8 @@ internal class OkRelay(private val baseUrl: String, private val http: OkHttpClie
     )
 
     override suspend fun deleteRecords(token: String, id: String, dropIds: List<String>) =
-        exec({ req("/v1/records?id=$id", token).delete(buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString().toRequestBody(jsonType)).build() }, nothing)
+        exec({ req("/v1/records?id=$id", token)
+            .delete(buildJsonObject { put("drop_ids", JsonArray(dropIds.map(::JsonPrimitive))) }.toString().toRequestBody(jsonType)).build() }, nothing)
 
     override suspend fun llm(token: String, req: LlmRequest) = exec(
         { req("/v1/llm", token).post(encode(LlmRequest.serializer(), req)).build() },
@@ -196,7 +202,7 @@ internal class OkRelay(private val baseUrl: String, private val http: OkHttpClie
         llmHttp,
     )
 
-    /** `GET /v1/ws`. OkHttp `pingInterval`은 쓰지 않는다(글자 ping으로 통일, 2장). */
+    /** `GET /v1/ws`. OkHttp `pingInterval`은 쓰지 않는다(글자 ping으로 통일). */
     override fun socket(token: String, events: SocketEvents): RelaySocket {
         val url = baseUrl.replaceFirst("http", "ws") + "/v1/ws"   // http→ws, https→wss
         val ws = try {

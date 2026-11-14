@@ -22,6 +22,8 @@ internal object DemoEntry {
     fun Screen(g: Graph, onBack: () -> Unit) {
         val ctx = LocalContext.current
         val vm = viewModel<DemoViewModel>(factory = viewModelFactory { initializer { DemoViewModel(scenario(g, ctx)) } })
-        DemoScreen(vm.uiState.collectAsStateWithLifecycle().value, vm.scenes.collectAsStateWithLifecycle().value, vm::run, vm::stop, vm::checkVc, onBack)   // 화면이 안 보이면 CPU·메모리 재기를 멈춘다
+        // 화면이 안 보이면 CPU·메모리 재기를 멈춘다
+        DemoScreen(vm.uiState.collectAsStateWithLifecycle().value, vm.scenes.collectAsStateWithLifecycle().value, vm::run, vm::stop, vm::checkVc,
+                onBack)
     }
 }

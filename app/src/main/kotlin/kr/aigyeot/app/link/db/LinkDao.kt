@@ -11,7 +11,7 @@ import kr.aigyeot.app.store.db.SongEntity
 
 /**
  * link의 쿼리. 다른 모듈의 표(phone_link·song·child_profile·episode)도 여기서 쿼리한다.
- * 모두 막는 호출이다. link는 IO 스레드의 `runInTransaction` 안에서 부른다(contracts-link 8.3 '한 Room 트랜잭션').
+ * 모두 막는 호출이다. link는 IO 스레드의 `runInTransaction` 안에서 부른다('한 Room 트랜잭션').
  */
 @Dao
 interface LinkDao {
@@ -20,7 +20,7 @@ interface LinkDao {
     @Query("DELETE FROM relay_credential") fun clearCredential()
     @Insert fun insertCredential(c: RelayCredentialEntity)
 
-    // ---- outbox: 넣은 순서(rowid)대로 보낸다(8.5). store가 넣은 report_summary·records_clear도 같은 순서에 든다 ----
+    // ---- outbox: 넣은 순서(rowid)대로 보낸다. store가 넣은 report_summary·records_clear도 같은 순서에 든다 ----
     @Insert fun insertOutbox(o: OutboxEntity)
     @Query("SELECT * FROM outbox ORDER BY rowid LIMIT 1") fun outboxFront(): OutboxEntity?
     @Query("SELECT * FROM outbox ORDER BY rowid") fun outbox(): List<OutboxEntity>
@@ -30,7 +30,7 @@ interface LinkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) fun insertSentId(e: SentIdEntity)
     @Query("DELETE FROM sent_id WHERE sent_at < :before") fun expireSentIds(before: Long)
     @Query("DELETE FROM sent_id WHERE id = :id") fun deleteSentId(id: String)
-    /** L86: 넣은 순서(rowid, REPLACE는 새 rowid)로 최근 [keep]개만 남긴다. 시계와 무관. */
+    /** 넣은 순서(rowid, REPLACE는 새 rowid)로 최근 [keep]개만 남긴다. 시계와 무관. */
     @Query("DELETE FROM sent_id WHERE rowid NOT IN (SELECT rowid FROM sent_id ORDER BY rowid DESC LIMIT :keep)") fun capSentIds(keep: Int)
 
     // ---- processed_message(7일) ----
@@ -59,7 +59,7 @@ interface LinkDao {
     @Query("DELETE FROM phone_link_mark") fun clearMarks()
     @Query("DELETE FROM phone_link_mark WHERE unpaired = 1 AND updated_at < :before") fun expireMarks(before: Long)
 
-    // ---- care_applied(한 행, C144) ----
+    // ---- care_applied(한 행) ----
     @Query("SELECT * FROM care_applied LIMIT 1") fun careApplied(): CareAppliedEntity?
     @Upsert fun putCareApplied(c: CareAppliedEntity)
     @Query("DELETE FROM care_applied") fun clearCareApplied()
@@ -71,9 +71,9 @@ interface LinkDao {
     @Query("DELETE FROM phone_link WHERE id = :id") fun deletePhoneLink(id: String)
     @Query("DELETE FROM phone_link") fun clearPhoneLinks()
     @Query("UPDATE phone_link SET last_seen_at = :at WHERE id = :id") fun setLastSeen(id: String, at: Long)
-    /** C303 A12: 알림 받을 보호자 수(H8). 판단 코어 LinkChanged·보낼 함 넣기·store 처음 상태가 이 쿼리 하나를 쓴다. */
+    /** 알림 받을 보호자 수. 판단 코어 LinkChanged·보낼 함 넣기·store 처음 상태가 이 쿼리 하나를 쓴다. */
     @Query("SELECT COUNT(*) FROM phone_link WHERE role = 'guardian' AND handoff_alerts = 1") fun otherGuardians(): Int
-    /** C303 A13: 보낼 폰 수. 보낼 함 넣기·소켓 유지·리포트 만들기가 이 쿼리 하나를 쓴다. */
+    /** 보낼 폰 수. 보낼 함 넣기·소켓 유지·리포트 만들기가 이 쿼리 하나를 쓴다. */
     @Query("SELECT COUNT(*) FROM phone_link") fun phoneCount(): Int
 
     // ---- song(store 표) ----
@@ -85,6 +85,6 @@ interface LinkDao {
     // ---- child_profile·episode(store 표) ----
     @Query("SELECT * FROM child_profile LIMIT 1") fun profile(): ChildProfileEntity?
     @Query("UPDATE child_profile SET last_feeding_start = :at") fun setLastFeedingStart(at: Long)
-    /** 결정 ③(V7): handoff_alert를 보낼 함에 넣은 트랜잭션에서만 부른다(LinkRoom.enqueue). guardian_notified를 쓰는 유일한 곳. */
+    /** handoff_alert를 보낼 함에 넣은 트랜잭션에서만 부른다(LinkRoom.enqueue). guardian_notified를 쓰는 유일한 곳. */
     @Query("UPDATE episode SET guardian_notified = 1 WHERE id = :episodeId") fun markGuardianNotified(episodeId: String)
 }

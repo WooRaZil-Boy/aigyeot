@@ -17,11 +17,12 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.IBinder
 import android.util.Log
+import kr.aigyeot.app.R
 import kr.aigyeot.engine.Tick
 
 /**
- * 감시 서비스(specialUse, 구현 계획 2장). 부팅·앱 시작 때 뜬다. 실행기·연결을 붙들고, Suspend·Resume을 짐작해 호스트에 넣는다(C67).
- * 마이크는 쓰지 않는다(명세서 6장).
+ * 감시 서비스(specialUse). 부팅·앱 시작 때 뜬다. 실행기·연결을 붙들고, Suspend·Resume을 짐작해 호스트에 넣는다.
+ * 마이크는 쓰지 않는다.
  */
 class MonitorService : Service() {
     private lateinit var g: Graph
@@ -36,20 +37,20 @@ class MonitorService : Service() {
         super.onCreate()
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "탑승·주행", NotificationManager.IMPORTANCE_LOW))
-        val n = Notification.Builder(this, CHANNEL).setContentTitle("탑승과 주행을 살피고 있어요")   // 탑승 전·주행 중 모두 맞는 글(11-12 결정)
-            .setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setOngoing(true).build()
+        val n = Notification.Builder(this, CHANNEL).setContentTitle("탑승과 주행을 살피고 있어요")   // 탑승 전·주행 중 모두 맞는 글
+            .setSmallIcon(R.drawable.ic_stat_aigyeot).setOngoing(true).build()
         try { startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) }
         catch (e: Exception) { Log.e(TAG, "startForeground 실패", e); stopSelf(); return }
         g = Graph.get(this)   // 호스트 복원(①~⑤)이 여기서 큐에 들어간다
         g.startModules()
-        // C67: 전원 정책 리스너(되면 우선) → 화면 꺼짐·켜짐 → 시계 점프 → 네트워크. 같은 짐작을 여러 신호가 내도 한 번만 넣는다
+        // 전원 정책 리스너(되면 우선) → 화면 꺼짐·켜짐 → 시계 점프 → 네트워크. 같은 짐작을 여러 신호가 내도 한 번만 넣는다
         watchPowerPolicy()
         screen = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) = signal(off = i.action == Intent.ACTION_SCREEN_OFF, i.action ?: "")
         }.also { registerReceiver(it, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON) }) }
         net = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                Log.i(TAG, "C67 신호 network")
+                Log.i(TAG, "신호 network")
                 g.host.post(Tick(0))   // 호스트가 깨어 시계 점프를 본다
             }
         }.also { getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(it) }
@@ -67,9 +68,9 @@ class MonitorService : Service() {
                     }
                     pm.addPowerPolicyListener(mainExecutor, CarPowerPolicyFilter.Builder().setComponents(PowerComponent.AUDIO).build(), l)
                     power = pm to l
-                }.onFailure { Log.w(TAG, "C67 전원 정책 리스너 못 붙음", it) }
+                }.onFailure { Log.w(TAG, "전원 정책 리스너 못 붙음", it) }
             }
-        }.onFailure { Log.w(TAG, "C67 Car 연결 실패", it) }.getOrNull()
+        }.onFailure { Log.w(TAG, "Car 연결 실패", it) }.getOrNull()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -84,7 +85,7 @@ class MonitorService : Service() {
     }
 
     private fun signal(off: Boolean, source: String) {
-        Log.i(TAG, "C67 신호 $source off=$off")
+        Log.i(TAG, "신호 $source off=$off")
         if (off) g.host.suspend() else g.host.resume()   // 중복은 호스트가 막는다
     }
 
@@ -97,7 +98,7 @@ class MonitorService : Service() {
     }
 }
 
-/** 부팅 때 감시 서비스를 띄운다(명세서 6장, 11-02 실측). */
+/** 부팅 때 감시 서비스를 띄운다. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return

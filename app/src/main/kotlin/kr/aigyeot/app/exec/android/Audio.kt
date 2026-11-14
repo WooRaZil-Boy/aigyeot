@@ -26,7 +26,7 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
 
     override fun requestFocus(onChange: (FocusChange) -> Unit): Boolean {
         abandonFocus()
-        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)   // C321 ①: 달래기는 일시 재생이라 영구 GAIN으로 앞좌석 앱을 멈춰 세우지 않는다
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)   // 달래기는 일시 재생이라 영구 GAIN으로 앞좌석 앱을 멈춰 세우지 않는다
             .setAudioAttributes(media)
             .setOnAudioFocusChangeListener({ c -> ex.guard { focusOf(c)?.let(onChange) } }, ex.handler).build()
         if (am.requestAudioFocus(req) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return false
@@ -61,7 +61,7 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
 
     companion object {
         /**
-         * 음원 ② 녹음 자장가(11-04 렌더링): 브람스 「자장가」 Op.49 No.4(퍼블릭 도메인), MIDI Rabanus Flavus(Wikimedia Commons, CC0,
+         * 음원 녹음 자장가(직접 렌더링): 브람스 「자장가」 Op.49 No.4(퍼블릭 도메인), MIDI Rabanus Flavus(Wikimedia Commons, CC0,
          * 'Guten Abend, gut Nacht (Wiegenlied).mid')의 네 성부를 GM 10번 오르골로 바꿔 FluidSynth 2.6.2와 FluidR3_GM(Frank Wen, MIT,
          * Debian fluid-soundfont-gm 3.1-6)으로 44.1kHz 렌더링 → 모노 → −5.0 dB → AAC-LC 64kbps. ffmpeg ebur128로 −30.0 LUFS, 정점 −12.5 dBFS, 65.8초.
          * 없으면 PlaybackRejected(ERROR).
@@ -69,7 +69,7 @@ internal class AndroidAudio(private val ctx: Context, private val ex: ExecThread
         const val LULLABY_ASSET = "sound/lullaby.m4a"
 
         /**
-         * 음원 뱃속 소리(C118, 11-06): 외부 음원 없이 직접 합성(`tools/sound/womb.py`). 60초 이음새 없는 반복, AAC 64kbps 모노 44.1kHz,
+         * 음원 뱃속 소리: 외부 음원 없이 직접 합성(`tools/sound/womb.py`). 60초 이음새 없는 반복, AAC 64kbps 모노 44.1kHz,
          * −30.0 LUFS, 정점 −13.2 dBFS. 자장가와 같은 FileTrack으로 반복 재생한다. 없으면 PlaybackRejected(ERROR).
          */
         const val WOMB_ASSET = "sound/womb.m4a"

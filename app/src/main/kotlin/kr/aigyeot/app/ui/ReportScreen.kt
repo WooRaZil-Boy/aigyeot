@@ -3,21 +3,21 @@ package kr.aigyeot.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -28,17 +28,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import kr.aigyeot.app.R
-import kr.aigyeot.app.ui.car3d.CarView
 import kr.aigyeot.app.ui.car3d.Light3d
 import kr.aigyeot.app.ui.car3d.Stage3d
 import kr.aigyeot.app.ui.car3d.View3d
 import kr.aigyeot.shared.CarActionKind
 
-// 주행 리포트(시안 car.js reports(): 왼쪽 목록 560 + 오른쪽 상세, 창 폭 840 이하면 목록과 상세를 한 줄로 따로).
-// 상세 순서: 날짜·구간 → 숫자 줄 → 에피소드 띠 → 차가 대신 한 일 | 평소 대비 조향 → 방법별 성적 → 자세히(시안에 자리가 없는 사실).
-// 화면은 ReportView를 그리기만 한다(계산은 ReportViewModels.kt).
+// 주행 리포트: 왼쪽 목록 560 + 오른쪽 상세, 창 폭 840 이하면 목록과 상세를 한 줄로 따로).
+// 상세 순서: 날짜·구간 → 숫자 줄 → 에피소드 띠 → 차가 대신 한 일 | 평소 대비 조향 → 방법별 성적 → 자세히(디자인에 자리가 없는 사실).
+// 화면은 ReportView를 그리기만 한다(계산은 ReportView.kt).
 
 /**
  * 리포트 화면 하나. [openId]: 고른 리포트(넓은 창에서 없으면 열 수 있는 첫 줄). 좁은 창(840 이하)에서는 [openId]가 있으면 상세만, 없으면 목록만.
@@ -61,21 +59,24 @@ fun ReportsScreen(
             narrow -> ReportList(rows, null, onOpen, listState, Modifier.fillMaxSize())
             else -> Row(Modifier.fillMaxSize()) {
                 val sel = openId ?: rows.firstOrNull { it.enabled }?.id
-                ReportList(rows, sel, onOpen, listState, Modifier.width(560.dp + 44.dp + 18.dp).fillMaxHeight(), PaddingValues(start = 44.dp, end = 18.dp, top = 32.dp, bottom = 40.dp))
-                if (sel != null) key(sel) { Detail(detail(sel), narrow = false, Modifier.weight(1f).fillMaxHeight(), PaddingValues(start = 18.dp, end = 44.dp, top = 32.dp, bottom = 40.dp)) }
+                ReportList(rows, sel, onOpen, listState, Modifier.width(560.dp + 44.dp + 18.dp).fillMaxHeight(), PaddingValues(start = 44.dp,
+                        end = 18.dp, top = 32.dp, bottom = 40.dp))
+                if (sel != null) key(sel) { Detail(detail(sel), narrow = false, Modifier.weight(1f).fillMaxHeight(), PaddingValues(start = 18.dp,
+                        end = 44.dp, top = 32.dp, bottom = 40.dp)) }
             }
         }
     }
 }
 
-/** 차가 한 일 | 조향 두 칸이 들어가는 상세 폭: 칸마다 안쪽 여백 64 + 차 그림 200 + 간격 20 + 글자 200, 칸 사이 28(시안 창 1706의 상세 약 1022는 두 칸). */
+/** 차가 한 일 | 조향 두 칸이 들어가는 상세 폭: 칸마다 안쪽 여백 64 + 차 그림 200 + 간격 20 + 글자 200, 칸 사이 28(창 1706의 상세 약 1022는 두 칸). */
 private val TwoCards = (64 + 200 + 20 + 200).dp * 2 + 28.dp
 
 private val PagePad = PaddingValues(start = 44.dp, end = 44.dp, top = 32.dp, bottom = 40.dp)
 
-/** 목록(시안 왼쪽): '주행' 제목 + 행(아이콘 route, '{날짜} {구간}', 부가 '울음 n번'). 열린 세션은 '주행 중'이라 열 수 없다. */
+/** 목록(왼쪽): '주행' 제목 + 행(아이콘 route, '{날짜} {구간}', 부가 '울음 n번'). 열린 세션은 '주행 중'이라 열 수 없다. */
 @Composable
-private fun ReportList(rows: List<ReportRow>, selected: String?, onOpen: (String) -> Unit, state: LazyListState, modifier: Modifier, pad: PaddingValues = PagePad) {
+private fun ReportList(rows: List<ReportRow>, selected: String?, onOpen: (String) -> Unit, state: LazyListState, modifier: Modifier,
+        pad: PaddingValues = PagePad) {
     val p = LocalPalette.current
     LazyColumn(modifier, state = state, contentPadding = pad, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item { Sect("주행") }
@@ -88,7 +89,7 @@ private fun ReportList(rows: List<ReportRow>, selected: String?, onOpen: (String
     }
 }
 
-/** 상세(시안 오른쪽 .detail, 칸 사이 22). 좁은 창이면 두 칸(차가 한 일 | 조향)도 세로로 쌓는다. */
+/** 상세(오른쪽, 칸 사이 22). 좁은 창이면 두 칸(차가 한 일 | 조향)도 세로로 쌓는다. */
 @Composable
 private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier, pad: PaddingValues = PagePad) {
     val p = LocalPalette.current
@@ -111,7 +112,7 @@ private fun Detail(ui: ReportDetailUiState, narrow: Boolean, modifier: Modifier,
             MethodDotsChart(v.methods)
             Note("그 소리를 틀었을 때 그친 횟수예요. 소리 덕분인지는 알 수 없어요.", Modifier.padding(top = 6.dp))
         }
-        // 시안 순서(car.js reports: 숫자 줄 → 에피소드 띠 → 차가 한 일 | 조향 → 방법별 성적)를 지키고, 시안에 자리가 없는 사실은 맨 아래에
+        // 순서: 숫자 줄 → 에피소드 띠 → 차가 한 일 | 조향 → 방법별 성적. 디자인에 자리가 없는 사실은 맨 아래에
         Panel(label = "자세히") { v.details.forEach { DetailText(it) } }
     }
 }
@@ -123,7 +124,7 @@ private fun DetailText(d: DetailLine) {
     else Body(d.text)
 }
 
-/** 차가 대신 한 일(시안 .did): 위에서 본 3D 정지 그림(칩은 실제로 한 것만) + 한 일 목록. */
+/** 차가 대신 한 일: 위에서 본 3D 정지 그림(칩은 실제로 한 것만) + 한 일 목록. */
 @Composable
 private fun DidCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifier, label = "차가 대신 한 일") {
     val p = LocalPalette.current
@@ -150,7 +151,7 @@ private fun DidCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifi
 private fun CarStill(v: ReportView, modifier: Modifier) =
     Car3dStill(Stage3d(view = View3d.DID, light = Light3d.BASE, callouts = v.callouts), modifier)
 
-/** 평소 대비 조향 보정(시안 Charts.steer + note). 비교할 수 없으면 그 이유 한 줄. */
+/** 평소 대비 조향 보정. 비교할 수 없으면 그 이유 한 줄. */
 @Composable
 private fun SteerCard(v: ReportView, modifier: Modifier = Modifier) = Panel(modifier, label = "평소 대비 조향 보정") {
     if (v.steer == null) Body(v.steerText ?: "")

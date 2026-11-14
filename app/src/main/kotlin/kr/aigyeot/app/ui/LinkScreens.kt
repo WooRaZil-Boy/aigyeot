@@ -1,7 +1,6 @@
 package kr.aigyeot.app.ui
 
 import android.graphics.Bitmap
-import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -49,14 +48,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -76,8 +73,8 @@ import kotlin.math.floor
 import kotlin.math.sqrt
 
 /**
- * 연결 화면(contracts-link 8.7, 시안 connect()): 열면 코드를 받고(①), 닫으면 지운다(④). 왼쪽 QR·코드·남은 시간, 오른쪽 연결된 휴대폰·끊기·목록 새로 보기와 연결 그림.
- * 연결 상태·"연결됐어요"·오류 문장(8.6)은 맨 위에 그대로 둔다.
+ * 연결 화면: 열면 코드를 받고, 닫으면 지운다. 왼쪽 QR·코드·남은 시간, 오른쪽 연결된 휴대폰·끊기·목록 새로 보기와 연결 그림.
+ * 연결 상태·"연결됐어요"·오류 문장은 맨 위에 그대로 둔다.
  */
 @Composable
 fun ConnectScreen(
@@ -104,20 +101,21 @@ fun ConnectScreen(
     }
 }
 
-/** QR 옆 코드 칸의 최소 폭: '123 456'이 자동 크기 최소(48sp)로 한 줄에 들어가는 폭(약 220dp). 시안 차 창 1706의 두 열(코드 칸 약 323)은 옆에 둔다. */
+/** QR 옆 코드 칸의 최소 폭: '123 456'이 자동 크기 최소(48sp)로 한 줄에 들어가는 폭(약 220dp). 차 창 1706의 두 열(코드 칸 약 323)은 옆에 둔다. */
 private val QR_CODE_MIN = 240.dp
 
-/** QR 카드(시안 .qrcard): 실제 QR(가운데 앱 로고) + 안내 + 코드(3자리 띄움) + 남은 시간. 시안 QR은 장식이라 무늬는 쓰지 않는다(IMPLEMENT 4장). */
+/** QR 카드: 실제 QR(가운데 앱 로고) + 안내 + 코드(3자리 띄움) + 남은 시간. 디자인의 QR 무늬는 장식이라 쓰지 않는다. */
 @Composable
 private fun QrCard(code: String, uri: String?, remainingS: Long?) = BoxWithConstraints(Modifier.fillMaxWidth()) {
     val p = LocalPalette.current
     // 카드 실제 폭으로 정한다(창 폭이 아니라): QR 옆 코드 칸이 QR_CODE_MIN보다 좁으면(두 열 1280 등) 코드를 QR 아래에 둔다(6자리가 잘리지 않게)
-    // 시안: 넓으면 QR 360, 좁은 창이면 QR 260을 옆에. 그래도 코드 칸이 모자라면 QR 260 아래에 코드
+    // 넓으면 QR 360, 좁은 창이면 QR 260을 옆에. 그래도 코드 칸이 모자라면 QR 260 아래에 코드
     val qr = if (maxWidth >= 36.dp * 2 + 360.dp + 36.dp + QR_CODE_MIN) 360.dp else 260.dp
     val stacked = maxWidth < 36.dp * 2 + qr + 36.dp + QR_CODE_MIN
     val body: @Composable (@Composable () -> Unit) -> Unit = { c ->
         val m = Modifier.fillMaxWidth().clip(RoundedCornerShape(CarRadius.l)).background(p.surface).padding(36.dp)
-        if (stacked) Column(m, verticalArrangement = Arrangement.spacedBy(28.dp)) { c() } else Row(m, horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) { c() }
+        if (stacked) Column(m, verticalArrangement = Arrangement.spacedBy(28.dp)) { c() } else Row(m,
+                horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) { c() }
     }
     body {
         // 다크에서도 흰 판 위 검은 무늬: 뒤집힌 QR은 찍지 못하는 카메라가 있다
@@ -129,7 +127,9 @@ private fun QrCard(code: String, uri: String?, remainingS: Long?) = BoxWithConst
             Text("휴대폰 앱에서 QR을 찍거나 코드를 넣어 주세요", style = CarType.label.copy(fontWeight = FontWeight(600)), color = p.textTertiary)
             BasicText(
                 code.chunked(3).joinToString(" "), Modifier.padding(top = 10.dp),
-                style = CarType.numeral.copy(lineHeight = 80.sp, fontWeight = FontWeight(300), letterSpacing = 0.08.em, fontFeatureSettings = "tnum", color = p.textPrimary),   // 시안 .code 300 72/80
+                // 코드 글자 300 72/80
+                style = CarType.numeral.copy(lineHeight = 80.sp, fontWeight = FontWeight(300), letterSpacing = 0.08.em, fontFeatureSettings = "tnum",
+                        color = p.textPrimary),
                 maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = CarType.headlineS.fontSize, maxFontSize = CarType.numeral.fontSize),
             )
             remainingS?.let { s ->
@@ -172,14 +172,15 @@ internal fun qrLogoModules(n: Int): Int {
 
 /** 연결 링크(aigyeot://pair?code=…)의 QR(ZXing, 오류 정정 H). 가운데 로고 칸의 모듈을 비운다. 만들지 못하면 null. */
 internal fun pairQr(text: String): PairQr? = runCatching {
-    val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to QR_MARGIN))
+    val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H,
+            EncodeHintType.MARGIN to QR_MARGIN))
     val l = qrLogoModules(m.width - 2 * QR_MARGIN)
     val o = (m.width - l) / 2
     for (y in o until o + l) for (x in o until o + l) m.unset(x, y)
     PairQr(m, l)
 }.getOrNull()
 
-/** 연결된 휴대폰(시안 '연결된 휴대폰 N대' + 행 + 끊기) + 목록 새로 보기 + 연결 그림. */
+/** 연결된 휴대폰('연결된 휴대폰 N대' + 행 + 끊기) + 목록 새로 보기 + 연결 그림. */
 @Composable
 private fun Phones(st: LinkStatus, onDisconnect: (String) -> Unit, onRefresh: () -> Unit) {
     Sect("연결된 휴대폰", st.phones.size.takeIf { it > 0 }?.let { "${it}대" })
@@ -192,12 +193,13 @@ private fun Phones(st: LinkStatus, onDisconnect: (String) -> Unit, onRefresh: ()
     LinkArt()
 }
 
-/** 연결 그림(시안 .linkart): 3D 차 정지 그림(TILE) + 폰 둘 + 점선. 점선은 정차 화면이라 흐르고, 동작 줄이기면 멈춘다. */
+/** 연결 그림: 3D 차 정지 그림(TILE) + 폰 둘 + 점선. 점선은 정차 화면이라 흐르고, 동작 줄이기면 멈춘다. */
 @Composable
 private fun LinkArt() {
     val p = LocalPalette.current
     val phase: State<Float>? = if (reducedMotion()) null
-        else rememberInfiniteTransition("link").animateFloat(0f, -DASH * 2, infiniteRepeatable(tween(Tokens.loopMs.getValue("dash"), easing = LinearEasing)), label = "dash")
+        else rememberInfiniteTransition("link").animateFloat(0f, -DASH * 2, infiniteRepeatable(tween(Tokens.loopMs.getValue("dash"),
+                easing = LinearEasing)), label = "dash")
     val glow = lerp(p.stage, Color.White, 0.45f)
     Box(
         Modifier.padding(top = 20.dp).fillMaxWidth().height(300.dp).clip(RoundedCornerShape(CarRadius.l))
@@ -206,8 +208,10 @@ private fun LinkArt() {
         Car3dStill(Stage3d(view = View3d.CABIN, light = Light3d.LISTEN), Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.94f).align(Alignment.TopCenter))
         Canvas(Modifier.fillMaxSize().padding(start = 70.dp, end = 70.dp, top = 40.dp, bottom = 70.dp)) {
             val sx = size.width / 100f; val sy = size.height / 60f
-            fun curve(x0: Float, c1: Float, c2: Float) = Path().apply { moveTo(x0 * sx, 48 * sy); cubicTo(c1 * sx, 10 * sy, c2 * sx, 10 * sy, 50 * sx, 30 * sy) }
-            val stroke = Stroke(3.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(DASH.dp.toPx(), DASH.dp.toPx()), (phase?.value ?: 0f).dp.toPx()))
+            fun curve(x0: Float, c1: Float, c2: Float) = Path().apply { moveTo(x0 * sx, 48 * sy); cubicTo(c1 * sx, 10 * sy, c2 * sx, 10 * sy,
+                    50 * sx, 30 * sy) }
+            val stroke = Stroke(3.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(DASH.dp.toPx(), DASH.dp.toPx()),
+                    (phase?.value ?: 0f).dp.toPx()))
             drawPath(curve(8f, 30f, 45f), p.accent, style = stroke)
             drawPath(curve(92f, 70f, 55f), p.accent, style = stroke)
         }
@@ -222,10 +226,11 @@ private const val DASH = 10f   // 점선 한 칸(dp)
 private fun PhoneChip(modifier: Modifier) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(22.dp)
-    Box(modifier.size(72.dp).shadow(12.dp, shape).clip(shape).background(p.surface), Alignment.Center) { LineIcon(R.drawable.ic_smartphone, 38.dp, p.accentInk) }
+    Box(modifier.size(72.dp).shadow(12.dp, shape).clip(shape).background(p.surface), Alignment.Center) { LineIcon(R.drawable.ic_smartphone, 38.dp,
+            p.accentInk) }
 }
 
-/** 정차 화면의 연결 상태 한 줄(contracts-link 8.6, 한 칸의 상태라 모두 명사형, C385). NONE은 표시하지 않는다. CONNECTED는 연결된 폰이 있을 때만 "연결됨"(C106). */
+/** 정차 화면의 연결 상태 한 줄(한 칸의 상태라 모두 명사형). NONE은 표시하지 않는다. CONNECTED는 연결된 폰이 있을 때만 "연결됨". */
 internal fun connText(c: LinkConn, hasPhone: Boolean): String? = when (c) {
     LinkConn.NONE -> null
     LinkConn.CONNECTING -> "휴대폰과 연결하는 중"
@@ -234,7 +239,7 @@ internal fun connText(c: LinkConn, hasPhone: Boolean): String? = when (c) {
 }
 
 /**
- * "연결됐어요"를 마지막으로 보여 준 기기 id(8.4 '새 행이면 화면에 연결됐어요', 8.7 ③). 프로세스 수명이라 다른 화면에 있거나 주행 제한으로
+ * "연결됐어요"를 마지막으로 보여 준 기기 id('새 행이면 화면에 연결됐어요'). 프로세스 수명이라 다른 화면에 있거나 주행 제한으로
  * 가려진 동안 붙은 기기도 다음에 정차 화면을 그릴 때 한 번 보인다.
  */
 internal class PairedNotice {
@@ -247,7 +252,7 @@ internal val pairedNotice = PairedNotice()
 
 internal class LinkLine(val text: String, val error: Boolean = false)
 
-/** 연결 상태·"연결됐어요"([paired])·오류 문장(link가 넣은 그대로, 8.6 '차 토큰 무효' 등) 순서. */
+/** 연결 상태·"연결됐어요"([paired])·오류 문장(link가 넣은 그대로, '차 토큰 무효' 등) 순서. */
 internal fun linkLines(st: LinkStatus, paired: Boolean): List<LinkLine> = listOfNotNull(
     connText(st.conn, st.phones.isNotEmpty())?.let(::LinkLine),
     if (paired) LinkLine("연결됐어요") else null,
@@ -262,7 +267,7 @@ internal fun LinkLines(st: LinkStatus) {
     linkLines(st, paired).forEach { Body(it.text, if (it.error) LocalPalette.current.danger else Color.Unspecified) }
 }
 
-/** 노래 고르기 화면(G20, 시안 목록 행 결). 고른 노래는 다음 주행부터 쓴다. */
+/** 노래 고르기 화면(목록 행). 고른 노래는 다음 주행부터 쓴다. */
 @Composable
 fun SongsScreen(rows: List<SongRow>, onSelect: (String) -> Unit, onBack: () -> Unit) =
     Page("우리 노래", onBack) {

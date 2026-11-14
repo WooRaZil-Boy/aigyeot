@@ -7,7 +7,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-/** 실행기 낮춤 장부(계약 4.2, C363): `DimAmbient`로 실제로 쓴 값(종류별 before·set). 값은 밝기 정수, 색은 24비트 RGB. */
+/** 실행기 낮춤 장부: `DimAmbient`로 실제로 쓴 값(종류별 before·set). 값은 밝기 정수, 색은 24비트 RGB. */
 @Serializable
 internal data class LedgerEntry(val brightness: AmbientValue? = null, val color: AmbientValue? = null) {
     val isEmpty: Boolean get() = brightness == null && color == null

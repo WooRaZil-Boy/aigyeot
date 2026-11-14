@@ -6,7 +6,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.Color
 
 /**
- * 디자인 v6 토큰: 시안 tokens.json(공용 사본 shared/src/test/resources/design/tokens.json) 한 출처의 차 값.
+ * 디자인 토큰: tokens.json(공용 사본 shared/src/test/resources/design/tokens.json) 한 출처의 차 값.
  * 손으로 옮겼고 TokensTest가 사본과 값을 하나씩 대조한다. 값을 바꿀 때는 tokens.json을 먼저 고친다.
  */
 object Tokens {
@@ -80,12 +80,12 @@ object Tokens {
     val spring: Map<String, Pair<Float, Float>> = mapOf("snappy" to (0.86f to 600f), "smooth" to (1.0f to 385f), "bouncy" to (0.78f to 420f))
 
     /**
-     * 차 화면의 되풀이 움직임 한 주기(ms). tokens.json 밖, 시안 car.css 키프레임 값 그대로(한 곳에 둔다):
-     * live = 듣는 점 숨쉬기(@keyframes live 1.8s), micRing = 물어보기 마이크 테(2s), levels = 마이크 막대(@keyframes lv 1.1s), dash = 연결 그림 점선(1.2s).
+     * 차 화면의 되풀이 움직임 한 주기(ms). tokens.json 밖의 키프레임 값(한 곳에 둔다):
+     * live = 듣는 점 숨쉬기(1.8s), micRing = 물어보기 마이크 테, levels = 마이크 막대(1.1s), dash = 연결 그림 점선(1.2s).
      */
     val loopMs: Map<String, Int> = mapOf("live" to 1800, "micRing" to 2000, "levels" to 1100, "dash" to 1200)
 
-    /** 주행 중 상태가 바뀔 때 한 번 쓰는 페이드(ms, 시안 4.7 차 규칙). */
+    /** 주행 중 상태가 바뀔 때 한 번 쓰는 페이드(ms). */
     const val DRIVE_FADE_MS = 200
 }
 

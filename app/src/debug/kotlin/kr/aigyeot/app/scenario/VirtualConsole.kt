@@ -5,7 +5,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 에뮬레이터 Virtual Console HTTP(기준 문서 7장). 앱 안에서 127.0.0.1:8088로 보낸다(평문은 debug 네트워크 설정만 허락).
+ * 에뮬레이터 Virtual Console HTTP. 앱 안에서 127.0.0.1:8088로 보낸다(평문은 debug 네트워크 설정만 허락).
  * 막는 호출이라 IO 스레드에서 부른다. 세션 신호가 3초 넘게 끊기면 차량 입력이 먹지 않는다(`emulator_inactive`).
  */
 class VirtualConsole(private val base: String = "http://127.0.0.1:8088") {

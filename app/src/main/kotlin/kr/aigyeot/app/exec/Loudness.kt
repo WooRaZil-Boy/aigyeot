@@ -1,5 +1,6 @@
 package kr.aigyeot.app.exec
 
+import java.util.SplittableRandom
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.log10
@@ -87,11 +88,11 @@ internal class Loudness(rate: Int, private val channels: Int) {
 }
 
 /**
- * 음원 ① 백색소음. 표본마다 새 난수를 만들어 짧은 버퍼를 되풀이하지 않는다(명세서 5장 표).
- * 균등 분포 ±[AMP]는 BS.1770으로 −30 LUFS다(11-04 계산: 진폭 1.0일 때 −1.63 LUFS → 0.03815, LoudnessTest가 확인).
+ * 음원 백색소음. 표본마다 새 난수를 만들어 짧은 버퍼를 되풀이하지 않는다.
+ * 균등 분포 ±[AMP]는 BS.1770으로 −30 LUFS다(계산: 진폭 1.0일 때 −1.63 LUFS → 0.03815, LoudnessTest가 확인).
  */
 internal class WhiteNoise(seed: Long = System.nanoTime()) {
-    private val r = java.util.SplittableRandom(seed)
+    private val r = SplittableRandom(seed)
     fun fill(buf: ShortArray) { for (i in buf.indices) buf[i] = (r.nextDouble(-AMP, AMP) * 32767).toInt().toShort() }
 
     companion object {

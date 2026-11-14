@@ -1,6 +1,5 @@
 package kr.aigyeot.app.ui.car3d
 
-import kr.aigyeot.app.ui.Tokens
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -28,6 +27,7 @@ import com.google.android.filament.gltfio.MaterialProvider
 import com.google.android.filament.gltfio.ResourceLoader
 import com.google.android.filament.gltfio.UbershaderProvider
 import com.google.android.filament.utils.Utils
+import kr.aigyeot.app.ui.Tokens
 import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -42,9 +42,9 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * 3D 엔진 하나(프로세스 수명, 메인 스레드 전용). GLB 하나(assets/car/aigyeot_car.glb), 재질 덮어쓰기(이름이 계약), 스튜디오 환경광,
+ * 3D 엔진 하나(프로세스 수명, 메인 스레드 전용). GLB 하나(assets/car/aigyeot_car.glb), 재질 덮어쓰기(재질 이름이 약속), 스튜디오 환경광,
  * 제어 표시(고리·소리 결·그림자), X-ray 유령 껍데기를 든다. 보기([CarView])는 그리기 전에 자기 상태를 [apply]로 장면에 얹는다.
- * 시안 js/car3d.js의 makeScene·applyState·studio를 Filament로 옮겼다.
+ * three.js로 짠 원본 연출(장면 구성·상태 적용·스튜디오 조명)을 Filament로 옮겼다.
  */
 class CarEngine private constructor(private val prep: Prep, val engine: Engine) {
     companion object {
@@ -76,7 +76,8 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             val main = Handler(Looper.getMainLooper())
             // 준비가 실패하면(자산 읽기·재질 컴파일·Filament 단계 예외) 로그를 남기고 기다리던 보기에 알린다(그 칸은 실패 정지 표시, 앱은 그대로).
             // 다음에 붙는 보기가 처음부터 다시 부른다
-            fun failed(t: Throwable) { Log.e(TAG, "3D 준비 실패: 3D 칸을 비워 둔다", t); loading = false; waiting.toList().also { waiting.clear() }.forEach { it.second() } }
+            fun failed(t: Throwable) { Log.e(TAG, "3D 준비 실패: 3D 칸을 비워 둔다",
+                    t); loading = false; waiting.toList().also { waiting.clear() }.forEach { it.second() } }
             Thread({
                 val prep = try { Prep.load(app) } catch (t: Throwable) { main.post { failed(t) }; return@Thread }
                 main.post {
@@ -85,7 +86,10 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
                         // 생성자(재질 공급·자산 읽개·색 보정)가 실패하면 만든 Engine을 바로 놓는다: 남기면 이 프로세스에서 다음 Engine.create가 막혀 3D가 다시 뜨지 않는다
                         val engine = Engine.create()
                         val e = try { CarEngine(prep, engine) } catch (t: Throwable) { runCatching { engine.destroy() }; throw t }
-                        e.build(main, { t -> e.release(); failed(t) }) { inst = e; loading = false; waiting.toList().also { waiting.clear() }.forEach { it.first(e) } }
+                        e.build(main,
+                                { t -> e.release(); failed(t) }) {
+                            inst = e; loading = false; waiting.toList().also { waiting.clear() }.forEach { it.first(e) }
+                        }
                     } catch (t: Throwable) { failed(t) }
                 }
             }, "car3d-prep").start()
@@ -97,8 +101,11 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         val GLOW = (Tokens.color.getValue("glow").first and 0xFFFFFF).toInt()
         val CHILD_GLOW = (Tokens.color.getValue("childGlow").first and 0xFFFFFF).toInt()
 
-        /** 바깥 껍데기(X-ray에서 사라진다)·유령 겹(프레넬 테두리로 남는다). 이름 규칙은 시안 그대로. */
-        private val SHELL = Regex("^(Body|Body_Roof|Door_F_|Door_R_|Door_Handle|Mirror_|DLO_|Belt_|Grille|Head_Lamp|Rear_Lamp|Rear_Stop|Panel_Gap|Fuel_Door|Opera_Glass|Glass_|Sunroof_Glass|WheelWell|Parcel_Shelf|Lamp_R_Pod|Door_Trim_|Door_Upper_|Armrest_R_)")
+        /** 바깥 껍데기(X-ray에서 사라진다)·유령 겹(프레넬 테두리로 남는다). 이름 규칙은 원본 연출과 같다. */
+        private val SHELL = Regex(
+            "^(Body|Body_Roof|Door_F_|Door_R_|Door_Handle|Mirror_|DLO_|Belt_|Grille|Head_Lamp|Rear_Lamp|Rear_Stop|Panel_Gap|Fuel_Door|" +
+                "Opera_Glass|Glass_|Sunroof_Glass|WheelWell|Parcel_Shelf|Lamp_R_Pod|Door_Trim_|Door_Upper_|Armrest_R_)",
+        )
         private val GHOST = Regex("^(Body|Body_Roof|Mirror_Head|Door_F_.*Window|Door_R_.*Window|Opera_Glass|Glass_Front|Glass_Rear|Sunroof_Glass)")
         private val CHILD = Regex("^ChildSeat")
         /**
@@ -108,9 +115,9 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
          */
         private val SHELL_INNER = Regex("^(Door_Trim_|Door_Upper_|Armrest_R_|Parcel_Shelf|WheelWell)")
         private val SHELL_GLASS = Regex("^(Glass_|Opera_Glass|Sunroof_Glass|Door_[FR]_[LR]_Window)")
-        /** X-ray에서 가는 빛 선으로 남길 짜임(시안 v7 LINES). */
+        /** X-ray에서 가는 빛 선으로 남길 짜임. */
         private val LINES = Regex("^(Panel_Gap|DLO_Chrome)")
-        /** 유령 껍데기 바탕 불투명도(시안 v7 uBase). */
+        /** 유령 껍데기 바탕 불투명도. */
         private const val GHOST_BASE = 0.014f
     }
 
@@ -149,7 +156,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
     private var childSeatGhost = 0
     private var childSeatLocal: FloatArray? = null
 
-    // 맞춤 재질(matc로 미리 컴파일한 assets/materials, R2)
+    // 맞춤 재질(matc로 미리 컴파일한 assets/materials)
     private lateinit var ghostMat: Material
     private lateinit var flatMat: Material
     private lateinit var vtxMat: Material
@@ -201,7 +208,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             {
                 ghostMat = material("ghost"); flatMat = material("flat")
                 ghost = ghostMat.createInstance("ghost"); childGhost = ghostMat.createInstance("childGhost")
-                // 유령 바탕 0.014(시안 v7: 가운데는 더 비고 테두리는 또렷, 테두리 계수 0.86·지수 2.9는 ghost.mat)
+                // 유령 바탕 0.014(가운데는 더 비고 테두리는 또렷, 테두리 계수 0.86·지수 2.9는 ghost.mat)
                 ghost.setParameter("base", GHOST_BASE); childGhost.setParameter("base", GHOST_BASE)
                 indicator = flatMat.createInstance("indicator")
                 lineMi = flatMat.createInstance("lines")
@@ -219,7 +226,14 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             try { steps[i++]() } catch (e: Throwable) { return fail(e) }
             ((System.nanoTime() - t) / 1_000_000).let { each += it; loadMs += it }
             if (i < steps.size) main.post { next() }
-            else { Log.i(TAG, "3D 준비 메인 ${loadMs}ms(단계 ${each.joinToString("·")}ms, 작업 스레드 ${prep.ms}ms: ${prep.detail}), 렌더러블 ${asset.renderableEntities.size}, 껍데기 ${shellRenderables.size}, 유령 ${ghostRenderables.size}"); done() }
+            else {
+                Log.i(
+                    TAG,
+                    "3D 준비 메인 ${loadMs}ms(단계 ${each.joinToString("·")}ms, 작업 스레드 ${prep.ms}ms: ${prep.detail}), " +
+                        "렌더러블 ${asset.renderableEntities.size}, 껍데기 ${shellRenderables.size}, 유령 ${ghostRenderables.size}",
+                )
+                done()
+            }
         }
         next()
     }
@@ -228,20 +242,23 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         LightManager.Builder(LightManager.Type.DIRECTIONAL).color(1f, 1f, 1f).intensity(1.4f).direction(-3f, -6f, 2f).castShadows(false).build(engine, key)
         LightManager.Builder(LightManager.Type.POINT).color(1f, 1f, 1f).intensityCandela(0f).falloff(1.3f).castShadows(false).build(engine, seatLight)
         val warm = lin(0xFFF4E6)
-        LightManager.Builder(LightManager.Type.POINT).color(warm[0], warm[1], warm[2]).intensityCandela(0f).falloff(4.5f).position(-0.35f, 1.18f, 0f).castShadows(false).build(engine, cabin)
+        LightManager.Builder(LightManager.Type.POINT).color(warm[0], warm[1], warm[2]).intensityCandela(0f).falloff(4.5f).position(-0.35f, 1.18f,
+                0f).castShadows(false).build(engine, cabin)
         scene.addEntity(key); scene.addEntity(seatLight); scene.addEntity(cabin)
         scene.addEntity(shadowMesh().entity)
         seatRing = Mesh(ring(0.30f, 0.315f, 96, 0f, (2 * PI).toFloat()), addMat.createInstance("seatRing"), 5).also { rotFlat(it.entity, 1f) }
         listenDisc = Mesh(ring(0f, 0.2f, 64, 0f, (2 * PI).toFloat()), addMat.createInstance("listenDisc"), 5).also { rotFlat(it.entity, 1f) }
-        for (sp in listOf("Anchor_Speaker_RL", "Anchor_Speaker_RR")) for (i in 0 until 3) arcs += Arc(sp, i, Mesh(ring(0.93f, 1f, 40, 0f, 1f), vtxMat.createInstance("arc"), 5))
+        for (sp in listOf("Anchor_Speaker_RL", "Anchor_Speaker_RR")) for (i in 0 until 3) arcs += Arc(sp, i, Mesh(ring(0.93f, 1f, 40, 0f, 1f),
+                vtxMat.createInstance("arc"), 5))
         flowMi = flowMat.createInstance("flow")
         lin(0x9EC7E6).let { flowMi.setParameter("color", it[0], it[1], it[2]) }
         val vent = anchor("Anchor_Vent_R")
-        for (sd in listOf(-1f, 1f)) flows += tube(listOf(vent, floatArrayOf(vent[0] - 0.18f, vent[1] + 0.12f, sd * 0.12f), floatArrayOf(-0.72f, 0.84f, sd * 0.32f), floatArrayOf(-0.98f, 0.92f, sd * 0.42f)), 0.035f, flowMi)
+        for (sd in listOf(-1f, 1f)) flows += tube(listOf(vent, floatArrayOf(vent[0] - 0.18f, vent[1] + 0.12f, sd * 0.12f), floatArrayOf(-0.72f,
+                0.84f, sd * 0.32f), floatArrayOf(-0.98f, 0.92f, sd * 0.42f)), 0.035f, flowMi)
         flows.forEach { visible(it, false) }
     }
 
-    /** 장면에 보기 하나의 상태를 얹는다(시안 applyState). [k]는 X-ray 정도(0 일반 ↔ 1 실내 보기). */
+    /** 장면에 보기 하나의 상태를 얹는다. [k]는 X-ray 정도(0 일반 ↔ 1 실내 보기). */
     /** [pulseK]: 울음 감지 빛 맥박 진행(0~1, 1.2초), 없으면 null. */
     fun apply(s: Stage3d, k: Float, dark: Boolean, heatWarm: Float, lockK: Float, ripplePhase: Float?, pulseK: Float?, flowT: Float = 0f) {
         val pulse = pulseK?.let { 2.6f * sin(PI.toFloat() * min(1f, it * 1.5f)) * (1 - it * 0.6f) } ?: 0f
@@ -251,7 +268,8 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         val teal = lin(GLOW); val apricot = lin(CHILD_GLOW)
         // 실내 앰비언트 선: 듣는 중 파랑, 달래는 중 방법 색(v6: 파랑 하나), 경보 주황. 조명 낮춤이면 낮게
         val ambC = if (s.light == Light3d.ALERT) apricot else if (s.light == Light3d.SOOTHE) methodC else teal
-        val ambI = when (s.light) { Light3d.BASE -> 0f; Light3d.LISTEN -> 2.2f; Light3d.SOOTHE -> 2.6f; Light3d.ALERT -> 2.8f } * (if (Callout3d.DIM in on) 0.3f else 1f)
+        val ambI = when (s.light) { Light3d.BASE -> 0f; Light3d.LISTEN -> 2.2f; Light3d.SOOTHE -> 2.6f; Light3d.ALERT -> 2.8f } *
+            (if (Callout3d.DIM in on) 0.3f else 1f)
         emissive("Ambient", ambC, ambI)
         emissive("Reading_Lamp", lin(0xFFE2B8), k * (if (Callout3d.DIM in on) 0.12f else 0.9f))
         val sl = lm.getInstance(seatLight)
@@ -294,7 +312,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         moveChildSeat(s.seat)
         val seat = anchor(s.seat.anchor)
         lm.setPosition(sl, seat[0], seat[1] + 0.15f, seat[2])
-        // 고리: 맥박 동안 1.2초 내내 1 → 2.8배로 퍼지며 사라진다(빛 세기와 따로, 시안 pulse)
+        // 고리: 맥박 동안 1.2초 내내 1 → 2.8배로 퍼지며 사라진다(빛 세기와 따로)
         place(seatRing.entity, seat[0] + 0.02f, 0.585f, seat[2], 1f + (pulseK ?: 0f) * 1.8f)
         place(listenDisc.entity, seat[0] + 0.02f, 0.585f, seat[2], 1f)
         val ringA = if (pulseK != null) 0.95f * (1 - pulseK) else if (s.light == Light3d.BASE) 0.35f else 0.55f
@@ -338,7 +356,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         for (e in main.entities) {
             val ri = rm.getInstance(e)
             if (ri == 0) continue
-            // 선루프 가림막은 껍데기 규칙 밖이지만 X-ray에서 같이 흐려진다(시안: 투명 재질, 불투명도 1-k)
+            // 선루프 가림막은 껍데기 규칙 밖이지만 X-ray에서 같이 흐려진다(투명 재질, 불투명도 1-k)
             val shell = named(e, SHELL) || nameOf(e) == "Roofglass_Shade"
             val colors = glbColor[nameOf(e)].orEmpty()
             for (p in 0 until rm.getPrimitiveCount(ri)) {
@@ -352,20 +370,23 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
                     val opaque = MaterialInstance.duplicate(orig, "shell_$mname").also { if (baseMat != null) spec.applyTo(it, baseMat) }
                     val fadeKey = keyFor(spec, hasColor, 2)
                     val fadeMat = provider.getMaterial(fadeKey, IntArray(8), "fade_$mname")
-                    val fade = provider.createMaterialInstance(fadeKey, IntArray(8), "fade_$mname", null)?.also { if (fadeMat != null) spec.applyTo(it, fadeMat) }
+                    val fade = provider.createMaterialInstance(fadeKey, IntArray(8), "fade_$mname",
+                            null)?.also { if (fadeMat != null) spec.applyTo(it, fadeMat) }
                     shellOpaque[ri to p] = opaque
                     if (fade != null) { shellFade[ri to p] = fade; shellFadeByName.getOrPut(mname) { mutableListOf() } += fade }
                     rm.setMaterialInstanceAt(ri, p, opaque)
                 } else {
-                    val mi = mats.getOrPut(if (shell) "shell_$mname" else mname) { orig.also { if (spec != null && baseMat != null) spec.applyTo(it, baseMat); if (baseMat != null) matOf[it] = baseMat } }
+                    val mi = mats.getOrPut(if (shell) "shell_$mname" else mname) { orig.also { if (spec != null && baseMat != null) spec.applyTo(it,
+                            baseMat); if (baseMat != null) matOf[it] = baseMat } }
                     if (mi !== orig) rm.setMaterialInstanceAt(ri, p, mi)
                 }
                 if (mname == "Indicator") { rm.setMaterialInstanceAt(ri, p, indicator); lockRims[e] = sideIn(e, "Lock_Outline") }
                 if (mname == "Heat_Pad") {
-                    // 열선 패드는 반투명(시안: 불투명도 0.25 + 0.65×X-ray): BLEND 짝 하나를 모든 패드가 같이 쓴다
+                    // 열선 패드는 반투명(불투명도 0.25 + 0.65×X-ray): BLEND 짝 하나를 모든 패드가 같이 쓴다
                     val key = keyFor(SPECS["Heat_Pad"], hasColor, 2)
                     val m = provider.getMaterial(key, IntArray(8), "heat")
-                    val mi = heatMi ?: provider.createMaterialInstance(key, IntArray(8), "heat", null)?.also { if (m != null) { SPECS.getValue("Heat_Pad").applyTo(it, m); matOf[it] = m } }
+                    val mi = heatMi ?: provider.createMaterialInstance(key, IntArray(8), "heat",
+                            null)?.also { if (m != null) { SPECS.getValue("Heat_Pad").applyTo(it, m); matOf[it] = m } }
                     heatMi = mi
                     if (mi != null) rm.setMaterialInstanceAt(ri, p, mi)
                     heatPads[e] = sideIn(e, "Heat_Pad")
@@ -432,11 +453,13 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
 
     private fun emissive(name: String, c: FloatArray, i: Float) {
         listOfNotNull(mats[name], mats["shell_$name"]).forEach { mi ->
-            if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", c[0] * i * EMISSIVE_GAIN, c[1] * i * EMISSIVE_GAIN, c[2] * i * EMISSIVE_GAIN)
+            if (matOf[mi]?.hasParameter("emissiveFactor") == true) mi.setParameter("emissiveFactor", c[0] * i * EMISSIVE_GAIN,
+                    c[1] * i * EMISSIVE_GAIN, c[2] * i * EMISSIVE_GAIN)
         }
     }
 
-    private fun baseColor(name: String, c: FloatArray, a: Float) = listOfNotNull(mats[name], mats["shell_$name"]).forEach { it.setParameter("baseColorFactor", c[0], c[1], c[2], a) }
+    private fun baseColor(name: String, c: FloatArray, a: Float) = listOfNotNull(mats[name],
+            mats["shell_$name"]).forEach { it.setParameter("baseColorFactor", c[0], c[1], c[2], a) }
 
     private fun moveChildSeat(seat: Seat3d) {
         val local = childSeatLocal ?: return
@@ -457,7 +480,10 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         fun cr(i: Int, t: Float): FloatArray {
             val p0 = pts[max(i - 1, 0)]; val p1 = pts[i]; val p2 = pts[min(i + 1, pts.size - 1)]; val p3 = pts[min(i + 2, pts.size - 1)]
             val t2 = t * t; val t3 = t2 * t
-            return FloatArray(3) { k -> 0.5f * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3) }
+            return FloatArray(3) { k ->
+                0.5f * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 +
+                    (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3)
+            }
         }
         val spans = pts.size - 1
         val centers = (0..seg).map { j -> val u = j.toFloat() / seg * spans; val i = min(u.toInt(), spans - 1); cr(i, u - i) }
@@ -481,7 +507,8 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         val idx = ShortArray(seg * rad * 6)
         for (j in 0 until seg) for (q in 0 until rad) {
             val a = j * (rad + 1) + q; val b = a + rad + 1; val o = (j * rad + q) * 6
-            idx[o] = a.toShort(); idx[o + 1] = b.toShort(); idx[o + 2] = (a + 1).toShort(); idx[o + 3] = (a + 1).toShort(); idx[o + 4] = b.toShort(); idx[o + 5] = (b + 1).toShort()
+            idx[o] = a.toShort(); idx[o + 1] = b.toShort(); idx[o + 2] = (a + 1).toShort()
+            idx[o + 3] = (a + 1).toShort(); idx[o + 4] = b.toShort(); idx[o + 5] = (b + 1).toShort()
         }
         val n = pos.size / 3
         val vb = VertexBuffer.Builder().vertexCount(n).bufferCount(2)
@@ -498,12 +525,13 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         return e
     }
 
-    // 스튜디오 환경광(시안 studio: 어두운 방 + 위 소프트박스 + 옆 띠, 외부 HDRI 없음) ───────────
+    // 스튜디오 환경광(어두운 방 + 위 소프트박스 + 옆 띠, 외부 HDRI 없음) ───────────
 
     /** CPU에서 만든 큐브맵 밉들([Prep.cube])을 올린다(형식 RGB16F, 면 6개를 층으로). */
     private fun uploadIbl(levels: List<ByteBuffer>): IndirectLight {
         val size = 64
-        val tex = Texture.Builder().width(size).height(size).levels(levels.size).sampler(Texture.Sampler.SAMPLER_CUBEMAP).format(Texture.InternalFormat.RGB16F).build(engine)
+        val tex = Texture.Builder().width(size).height(size).levels(levels.size).sampler(Texture.Sampler.SAMPLER_CUBEMAP)
+            .format(Texture.InternalFormat.RGB16F).build(engine)
         var s = size
         levels.forEachIndexed { lv, buf ->
             tex.setImage(engine, lv, 0, 0, 0, s, s, 6, Texture.PixelBufferDescriptor(buf, Texture.Format.RGB, Texture.Type.FLOAT))
@@ -524,14 +552,16 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
                 .attribute(VertexBuffer.VertexAttribute.COLOR, 1, VertexBuffer.AttributeType.UBYTE4, 0, 4).normalized(VertexBuffer.VertexAttribute.COLOR)
                 .build(engine)
             vbOf[entity] = vb
-            vb.setBufferAt(engine, 0, ByteBuffer.allocateDirect(pos.size * 4).order(ByteOrder.nativeOrder()).also { b -> pos.forEach { b.putFloat(it) }; b.flip() })
+            vb.setBufferAt(engine, 0,
+                    ByteBuffer.allocateDirect(pos.size * 4).order(ByteOrder.nativeOrder()).also { b -> pos.forEach { b.putFloat(it) }; b.flip() })
             vb.setBufferAt(engine, 1, ByteBuffer.allocateDirect(n * 4).order(ByteOrder.nativeOrder()).also { b ->
                 repeat(n) { i -> val a = ((vertexAlpha?.get(i) ?: 1f) * 255).toInt().coerceIn(0, 255).toByte(); b.put(-1).put(-1).put(-1).put(a) }; b.flip()
             })
             val ib = IndexBuffer.Builder().indexCount(idx.size).bufferType(IndexBuffer.Builder.IndexType.USHORT).build(engine)
             ib.setBuffer(engine, ByteBuffer.allocateDirect(idx.size * 2).order(ByteOrder.nativeOrder()).also { b -> idx.forEach { b.putShort(it) }; b.flip() })
             var mx = 0f; for (v in pos) mx = max(mx, abs(v))
-            RenderableManager.Builder(1).boundingBox(Box(0f, 0f, 0f, mx + 0.01f, mx + 0.01f, mx + 0.01f)).geometry(0, RenderableManager.PrimitiveType.TRIANGLES, vb, ib)
+            RenderableManager.Builder(1).boundingBox(Box(0f, 0f, 0f, mx + 0.01f, mx + 0.01f, mx + 0.01f)).geometry(0,
+                    RenderableManager.PrimitiveType.TRIANGLES, vb, ib)
                 .material(0, mi).culling(false).castShadows(false).receiveShadows(false).priority(priority).build(engine, entity)
             scene.addEntity(entity)
         }
@@ -551,7 +581,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         return pos to idx
     }
 
-    /** 고리를 바닥에 눕힌다(시안 rotation.x = -π/2: 링 평면 XY → XZ, +Y가 -Z로). */
+    /** 고리를 바닥에 눕힌다(x축으로 -π/2 회전: 링 평면 XY → XZ, +Y가 -Z로). */
     private fun rotFlat(e: Int, s: Float) = tm.setTransform(tm.getInstance(e), flat(0f, 0f, 0f, s))
     private fun flat(x: Float, y: Float, z: Float, s: Float) = floatArrayOf(s, 0f, 0f, 0f, 0f, 0f, -s, 0f, 0f, s, 0f, 0f, x, y, z, 1f)
     private fun place(e: Int, x: Float, y: Float, z: Float, s: Float) = tm.setTransform(tm.getInstance(e), flat(x, y, z, s))
@@ -565,7 +595,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
             val dx = at[0] - sp[0]; val dz = at[2] - sp[2]
             a.reach = max(0.35f, sqrt(dx * dx + dz * dz))
             val ang = atan2(-dz, dx); val spread = 72f * CarMath.D2R
-            // 눕힌 뒤 XY의 +Y가 세계 -Z가 되므로 각은 시안과 같은 식(atan2(-dz, dx))
+            // 눕힌 뒤 XY의 +Y가 세계 -Z가 되므로 각은 atan2(-dz, dx)
             val (pos, _) = ring(0.93f, 1f, 40, ang - spread / 2, spread)
             a.mesh.updatePositions(pos)
         }
@@ -577,7 +607,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         vb.setBufferAt(engine, 0, ByteBuffer.allocateDirect(pos.size * 4).order(ByteOrder.nativeOrder()).also { b -> pos.forEach { b.putFloat(it) }; b.flip() })
     }
 
-    /** 손으로 그린 부드러운 바닥 그림자(시안 shadow: 겹친 둥근 사각형 + 바퀴 접지 네 점)를 꼭짓점 알파 격자로. */
+    /** 손으로 그린 부드러운 바닥 그림자(겹친 둥근 사각형 + 바퀴 접지 네 점)를 꼭짓점 알파 격자로. */
     private fun shadowMesh(): Mesh {
         val nx = 48; val nz = 24; val sx = 7.6f; val sz = 3.8f
         val pos = FloatArray((nx + 1) * (nz + 1) * 3); val alpha = FloatArray((nx + 1) * (nz + 1)); val idx = ShortArray(nx * nz * 6)
@@ -595,7 +625,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
         return Mesh(pos to idx, vtxMat.createInstance("shadow"), 0, alpha).also { it.color(floatArrayOf(0f, 0f, 0f), 1f) }
     }
 
-    /** 시안 캔버스(512×256)의 그림자 알파: 둥근 사각형 26겹(0.028+0.02k) + 바퀴 자리 방사 그러데이션(0.55→0). */
+    /** 캔버스(512×256)의 그림자 알파: 둥근 사각형 26겹(0.028+0.02k) + 바퀴 자리 방사 그러데이션(0.55→0). */
     private fun shadowAlpha(x: Float, y: Float): Float {
         var a = 0f
         for (i in 0 until 26) {
@@ -619,7 +649,7 @@ class CarEngine private constructor(private val prep: Prep, val engine: Engine) 
 
 /**
  * 작업 스레드에서 미리 하는 일(Filament 없음): GLB 바이트, 노드마다 COLOR_0(구운 AO) 여부, 스튜디오 환경광 큐브맵 밉(라이트·다크).
- * 에뮬레이터(GLES 3.0, 기능 수준 1)에서 IBLPrefilterContext가 전제 조건으로 멈춰(실측 11-10) 큐브맵을 CPU에서 만든다:
+ * 에뮬레이터(GLES 3.0, 기능 수준 1)에서 IBLPrefilterContext가 전제 조건으로 멈춰(실측) 큐브맵을 CPU에서 만든다:
  * 0단계는 스튜디오 밝기를 해석적으로, 다음 단계는 2×2 평균(거친 재질일수록 흐린 반사).
  */
 class Prep private constructor(
@@ -641,7 +671,8 @@ class Prep private constructor(
             val t2 = System.nanoTime()
             // 맞춤 재질은 빌드 때 matc(Filament 1.77.3)로 컴파일한 꾸러미(assets/materials, 원본 src/main/materials/*.mat). 실행 중 컴파일(filamat-jni, ABI당 약 9MB)을 빼 APK를 줄였다
             val mats = listOf("ghost", "flat", "vtx", "add", "flow").associateWith { n ->
-                ctx.assets.open("materials/$n.filamat").use { it.readBytes() }.let { b -> ByteBuffer.allocateDirect(b.size).order(ByteOrder.nativeOrder()).put(b).also { it.flip() } }
+                ctx.assets.open("materials/$n.filamat").use { it.readBytes() }
+                    .let { b -> ByteBuffer.allocateDirect(b.size).order(ByteOrder.nativeOrder()).put(b).also { it.flip() } }
             }
             return Prep(bytes, colors, cube, mats, (System.nanoTime() - t0) / 1_000_000, "읽기 ${(t1 - t0) / 1_000_000}·환경광 ${(t2 - t1) / 1_000_000}")
         }
@@ -674,7 +705,8 @@ class Prep private constructor(
 
         /** 큐브맵 밉 단계마다 면 6개를 이어 붙인 RGB float 버퍼(올리기만 하면 된다). */
         private fun cubeLevels(dark: Boolean): List<ByteBuffer> = cubeFaces(dark).map { faces ->
-            ByteBuffer.allocateDirect(faces.sumOf { it.size } * 4).order(ByteOrder.nativeOrder()).also { b -> faces.forEach { px -> px.forEach { b.putFloat(it) } }; b.flip() }
+            ByteBuffer.allocateDirect(faces.sumOf { it.size } * 4).order(ByteOrder.nativeOrder())
+                .also { b -> faces.forEach { px -> px.forEach { b.putFloat(it) } }; b.flip() }
         }
 
         private fun cubeFaces(dark: Boolean): List<Array<FloatArray>> {
@@ -683,7 +715,8 @@ class Prep private constructor(
             var faces = Array(6) { f -> FloatArray(size * size * 3).also { px ->
                 for (y in 0 until size) for (x in 0 until size) {
                     val sc = (x + 0.5f) / size * 2 - 1; val tc = (y + 0.5f) / size * 2 - 1
-                    val d = when (f) { 0 -> floatArrayOf(1f, -tc, -sc); 1 -> floatArrayOf(-1f, -tc, sc); 2 -> floatArrayOf(sc, 1f, tc); 3 -> floatArrayOf(sc, -1f, -tc); 4 -> floatArrayOf(sc, -tc, 1f); else -> floatArrayOf(-sc, -tc, -1f) }
+                    val d = when (f) { 0 -> floatArrayOf(1f, -tc, -sc); 1 -> floatArrayOf(-1f, -tc, sc); 2 -> floatArrayOf(sc, 1f,
+                            tc); 3 -> floatArrayOf(sc, -1f, -tc); 4 -> floatArrayOf(sc, -tc, 1f); else -> floatArrayOf(-sc, -tc, -1f) }
                     val l = sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])
                     val c = studioRadiance(d[0] / l, d[1] / l, d[2] / l, room, floor, dark)
                     val o = (y * size + x) * 3; px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]
@@ -698,7 +731,10 @@ class Prep private constructor(
                 faces = Array(6) { f -> FloatArray(n * n * 3).also { o ->
                     val q = src[f]
                     for (y in 0 until n) for (x in 0 until n) for (c in 0 until 3) {
-                        o[(y * n + x) * 3 + c] = (q[((2 * y) * ss + 2 * x) * 3 + c] + q[((2 * y) * ss + 2 * x + 1) * 3 + c] + q[((2 * y + 1) * ss + 2 * x) * 3 + c] + q[((2 * y + 1) * ss + 2 * x + 1) * 3 + c]) / 4
+                        o[(y * n + x) * 3 + c] = (
+                            q[((2 * y) * ss + 2 * x) * 3 + c] + q[((2 * y) * ss + 2 * x + 1) * 3 + c] +
+                                q[((2 * y + 1) * ss + 2 * x) * 3 + c] + q[((2 * y + 1) * ss + 2 * x + 1) * 3 + c]
+                            ) / 4
                     }
                 } }
                 s = n
@@ -709,8 +745,8 @@ class Prep private constructor(
 }
 
 /**
- * 원점에서 (dx,dy,dz)로 본 스튜디오 밝기(선형, 시안 v7 studio). 바닥 밝은 자리(라이트 0.62·다크 0.10), 천장 긴 띠 셋(가운데 4.2, 옆 3.4),
- * 벽 긴 띠 3.2, 낮은 띠 1.8, 앞뒤 세로 판 2.2. 다크는 바닥 자리 밖 조명을 0.55배. 천장 옆 띠는 시안에서 원점을 향해 약 19° 기울지만 수평 판으로 둔다.
+ * 원점에서 (dx,dy,dz)로 본 스튜디오 밝기(선형). 바닥 밝은 자리(라이트 0.62·다크 0.10), 천장 긴 띠 셋(가운데 4.2, 옆 3.4),
+ * 벽 긴 띠 3.2, 낮은 띠 1.8, 앞뒤 세로 판 2.2. 다크는 바닥 자리 밖 조명을 0.55배. 천장 옆 띠는 원본에서 원점을 향해 약 19° 기울지만 수평 판으로 둔다.
  */
 private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, floor: FloatArray, dark: Boolean): FloatArray {
     var best = Float.MAX_VALUE; var k = -1f
@@ -740,7 +776,7 @@ private fun studioRadiance(dx: Float, dy: Float, dz: Float, room: FloatArray, fl
 }
 
 
-/** 재질 하나의 덮어쓸 값(시안 materials(): 색은 sRGB → 선형). */
+/** 재질 하나의 덮어쓸 값(색은 sRGB → 선형). */
 private class Spec(hex: Int, val roughness: Float, val metallic: Float = 0f, val clearCoat: Float? = null, val ccRough: Float = 0f,
                    val blend: Boolean = false, val alpha: Float = 1f, clearHex: Int? = null, val emissive: FloatArray? = null, val emissiveStrength: Float = 1f,
                    colorGain: Float = 1f, val reflectance: Float? = null) {
@@ -752,7 +788,8 @@ private class Spec(hex: Int, val roughness: Float, val metallic: Float = 0f, val
         if (m.hasParameter("roughnessFactor")) mi.setParameter("roughnessFactor", roughness)
         if (m.hasParameter("metallicFactor")) mi.setParameter("metallicFactor", metallic)
         if (reflectance != null && m.hasParameter("reflectance")) mi.setParameter("reflectance", reflectance)
-        if (clearCoat != null && m.hasParameter("clearCoatFactor")) { mi.setParameter("clearCoatFactor", clearCoat); if (m.hasParameter("clearCoatRoughnessFactor")) mi.setParameter("clearCoatRoughnessFactor", ccRough) }
+        if (clearCoat != null && m.hasParameter("clearCoatFactor")) { mi.setParameter("clearCoatFactor",
+                clearCoat); if (m.hasParameter("clearCoatRoughnessFactor")) mi.setParameter("clearCoatRoughnessFactor", ccRough) }
         // 제공자가 새로 만든 인스턴스는 emissiveStrength가 0이라(발광 = 색 × 세기) 늘 넣는다. 발광이 없는 재질은 1(색만으로)
         val hasStrength = m.hasParameter("emissiveStrength")
         if (hasStrength) mi.setParameter("emissiveStrength", if (emissive != null) emissiveStrength else 1f)
@@ -763,12 +800,12 @@ private class Spec(hex: Int, val roughness: Float, val metallic: Float = 0f, val
     }
 }
 
-/** 시안 car3d.js materials()의 값. 유리는 투과 대신 BLEND(GLB 알파)에 틴트 색. 램프 발광은 GLB 값 그대로. */
+/** 재질별 덮어쓸 값. 유리는 투과 대신 BLEND(GLB 알파)에 틴트 색. 램프 발광은 GLB 값 그대로. */
 private val SPECS: Map<String, Spec> = mapOf(
     "Paint" to Spec(0xE4E7EA, 0.42f, 0.26f, clearCoat = 1f, ccRough = 0.03f),
     "Trim_Black" to Spec(0x141618, 0.55f),
     "Black_Gloss" to Spec(0x07080A, 0.12f, clearCoat = 1f, ccRough = 0.03f),
-    // 크롬 환경광 1.5배(시안 envMapIntensity): Filament 표준 재질에는 재질마다 환경광 배율이 없어, 금속 1의 반사색(기본색)을 1.5배로 올린다
+    // 크롬 환경광 1.5배: Filament 표준 재질에는 재질마다 환경광 배율이 없어, 금속 1의 반사색(기본색)을 1.5배로 올린다
     "Chrome" to Spec(0xE2E6EA, 0.08f, 1f, colorGain = 1.5f),
     "Grille_Chrome" to Spec(0xCFD4DA, 0.16f, 1f),
     "Grille_Base" to Spec(0x08090B, 0.45f),
@@ -804,10 +841,10 @@ private val SPECS: Map<String, Spec> = mapOf(
     "ChildSeat_Base" to Spec(0x3B3D41, 0.45f),
 )
 
-/** 유리 정반사 세기(시안 specularIntensity 0.25 → Filament reflectance). */
+/** 유리 정반사 세기(0.25 → Filament reflectance). */
 private const val GLASS_REFLECTANCE = 0.25f
 
-/** 발광 세기 보정(Filament 발광 단위를 시안 three.js 세기에 맞추는 값, 에뮬레이터 캡처로 맞춤). */
+/** 발광 세기 보정(Filament 발광 단위를 원본 three.js 세기에 맞추는 값, 에뮬레이터 캡처로 맞춤). */
 private const val EMISSIVE_GAIN = 1f
 
 internal fun lin(hex: Int): FloatArray = intArrayOf((hex shr 16) and 0xFF, (hex shr 8) and 0xFF, hex and 0xFF).let { c ->

@@ -4,8 +4,8 @@ import kr.aigyeot.engine.CrySegment
 import kr.aigyeot.engine.Params
 
 // YAMNet 창 점수를 받아 3창 구간(0.975초씩 밀림)마다 CrySegment를 만든다.
-// 경보 = 문턱 이상 구간이 alarmSegments(2)개 이어짐: 이 구간과 바로 앞 구간(rt_train.py alarm, G3). 시계·스레드·안드로이드가 없어 JVM에서 시험한다.
-// C303 ④(A21): 문턱·구간 수는 판단 코어 Params 하나(판단 코어가 같은 문턱으로 재울음·울음 시간·조향을 본다)
+// 경보 = 문턱 이상 구간이 alarmSegments(2)개 이어짐: 이 구간과 바로 앞 구간(rt_train.py alarm). 시계·스레드·안드로이드가 없어 JVM에서 시험한다.
+// 문턱·구간 수는 판단 코어 Params 하나(판단 코어가 같은 문턱으로 재울음·울음 시간·조향을 본다)
 class SegmentTracker(private val head: CryHead, private val p: Params = Params()) {
     private class Win(val scores: FloatArray, val endMs: Long)
     private val wins = ArrayDeque<Win>()

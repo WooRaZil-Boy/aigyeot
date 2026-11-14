@@ -10,16 +10,16 @@ import kr.aigyeot.engine.Params
 import kr.aigyeot.engine.RestoreAmbient
 import kotlin.math.roundToInt
 
-/** 앰비언트 한 영역(기능 D, 4.2 `DimAmbient` ①): capability의 SeatArea 하나와 밝기 범위. [handle]은 포트 구현이 쓰는 SDK 객체다. */
+/** 앰비언트 한 영역: capability의 SeatArea 하나와 밝기 범위. [handle]은 포트 구현이 쓰는 SDK 객체다. */
 internal class AmbientArea(val target: String, val min: Int, val max: Int, val handle: Any)
 
-/** 주행 모드 자동 색(4.2 `DimAmbient` ④). NONE = 자동 색이 없는 차(capability가 ERROR_NOT_SUPPORTED_PROPERTY), OFF = 꺼짐, UNKNOWN = 켜짐이거나 모름. */
+/** 주행 모드 자동 색. NONE = 자동 색이 없는 차(capability가 ERROR_NOT_SUPPORTED_PROPERTY), OFF = 꺼짐, UNKNOWN = 켜짐이거나 모름. */
 internal enum class AutoColor { NONE, OFF, UNKNOWN }
 
 /** 앰비언트 조명 읽기·쓰기(Pleos Light, CAR_LIGHTS). 값은 밝기 정수, 색은 24비트 RGB(알파 뺌). 실패·못 읽음은 null·false. */
 internal interface AmbientPort {
     fun area(cb: (AmbientArea?) -> Unit)
-    /** 스위치 ON, 또는 AUTOMATIC이고 State가 ON일 때만 true. OFF·그 밖은 false, 읽기 실패는 null(Ambients가 재시도한 뒤 꺼짐으로 본다, 4.2 ②). */
+    /** 스위치 ON, 또는 AUTOMATIC이고 State가 ON일 때만 true. OFF·그 밖은 false, 읽기 실패는 null(Ambients가 재시도한 뒤 꺼짐으로 본다). */
     fun lit(a: AmbientArea, cb: (Boolean?) -> Unit)
     fun autoColor(cb: (AutoColor) -> Unit)
     fun readBrightness(a: AmbientArea, cb: (Int?) -> Unit)
@@ -40,8 +40,8 @@ internal object NoAmbient : AmbientPort {
 }
 
 /**
- * 앰비언트 조명 실행기(기능 D, 계약 4.2 `DimAmbient`·`RestoreAmbient`). 명령마다 종류(밝기·색) 하나에 ControlResult 하나를 늘 낸다.
- * 쓴 종류는 F19로 다시 읽어 확인하고(control_log 한 줄), 쓰지 않은 종류(꺼짐·이미 낮음·같은 색·자동 색·운전자가 바꿈·읽기 실패)는
+ * 앰비언트 조명 실행기(`DimAmbient`·`RestoreAmbient`). 명령마다 종류(밝기·색) 하나에 ControlResult 하나를 늘 낸다.
+ * 쓴 종류는 다시 읽어 확인하고(control_log 한 줄), 쓰지 않은 종류(꺼짐·이미 낮음·같은 색·자동 색·운전자가 바꿈·읽기 실패)는
  * ok = false로 결과만 내고 control_log 줄은 쓰지 않는다(시도가 아니다, [note]에 한 줄).
  */
 internal class Ambients(
@@ -51,19 +51,19 @@ internal class Ambients(
     private val post: (Event) -> Unit,
     private val log: ControlLogger,
     private val p: Params,
-    private val ledger: LedgerStore = NoLedger,   // 실행기 낮춤 장부(4.2, C363)
+    private val ledger: LedgerStore = NoLedger,   // 실행기 낮춤 장부
     private val note: (String) -> Unit = {},
 ) {
     private val open = mutableSetOf<Task>()   // 진행 중인 종류별 작업(closeAll이 닫는다)
     /**
-     * 종류별 차례(C368): 한 종류(밝기·색)를 읽고 쓰는 작업은 한 번에 하나만 돈다(낮춤·되돌림·장부 되돌림 모두, 들어온 차례). 뒤 작업은 앞 작업이 끝난 뒤(썼든 건너뛰었든
+     * 종류별 차례: 한 종류(밝기·색)를 읽고 쓰는 작업은 한 번에 하나만 돈다(낮춤·되돌림·장부 되돌림 모두, 들어온 차례). 뒤 작업은 앞 작업이 끝난 뒤(썼든 건너뛰었든
      * 버려졌든) 그 종류의 지금 값을 새로 읽으며 시작한다. 그래서 되돌림이 반영되기 전에 낮춤이 낮은 값을 읽지 않고, 같은 종류 되돌림이 겹치면 뒤 것은 지금 값이 이미 set이 아니라 건너뛴다.
      */
     private val lanes = mapOf(ControlKind.AMBIENT_BRIGHTNESS to ArrayDeque<Task>(), ControlKind.AMBIENT_COLOR to ArrayDeque<Task>())
     private var holdNext = false   // abandon이 여럿을 닫는 동안은 다음 작업을 시작하지 않는다(닫힐 것을 읽지 않게)
 
     /**
-     * 차례가 와서 할 일을 채운다(영역·켜짐·자동 색을 읽은 뒤). 차례 자체는 작업을 만들 때(명령을 받는 즉시) 이미 잡았다(C368): 앞 명령이 영역을 읽는 동안 뒤 명령이 앞지르지 못한다.
+     * 차례가 와서 할 일을 채운다(영역·켜짐·자동 색을 읽은 뒤). 차례 자체는 작업을 만들 때(명령을 받는 즉시) 이미 잡았다: 앞 명령이 영역을 읽는 동안 뒤 명령이 앞지르지 못한다.
      * 맨 앞이면 바로 시작한다.
      */
     private fun arm(t: Task, turn: () -> Unit) {
@@ -80,7 +80,7 @@ internal class Ambients(
         h.turn?.invoke()
     }
 
-    /** 읽기 재시도(4.2 ②): 못 읽으면(null·던짐) [Params.verifyRetries]번 [Params.verifyIntervalMs] 뒤에 다시 읽는다. 읽기마다 이 함수 하나를 거친다. */
+    /** 읽기 재시도: 못 읽으면(null·던짐) [Params.verifyRetries]번 [Params.verifyIntervalMs] 뒤에 다시 읽는다. 읽기마다 이 함수 하나를 거친다. */
     private fun <T : Any> reading(f: ((T?) -> Unit) -> Unit, cb: (T?) -> Unit, n: Int = 0) {
         var done = false
         var cancel: () -> Unit = {}
@@ -90,7 +90,7 @@ internal class Ambients(
                 if (v == null && n < p.verifyRetries) sched.after(p.verifyIntervalMs) { reading(f, cb, n + 1) } else cb(v)
             }
         }
-        cancel = sched.after(p.verifyTimeoutMs) { once(null) }   // 응답 없음도 실패로 센다(4.2 ②)   // 응답 없음도 실패로 센다(4.2 ②)
+        cancel = sched.after(p.verifyTimeoutMs) { once(null) }   // 응답 없음도 실패로 센다
         try { f(once) } catch (e: Exception) { once(null) }
     }
     private fun readBrightness(a: AmbientArea, cb: (Int?) -> Unit) = reading({ k -> port.readBrightness(a, k) }, cb)
@@ -100,7 +100,7 @@ internal class Ambients(
         var done = false
         val timers = mutableListOf<() -> Unit>()
         var finishNow: (Boolean, Int?, Int?) -> Unit = { _, _, _ -> }
-        var restoring = false      // 되돌림 작업: 결과가 정해지면(resolved) 장부에서 그 종류를 지운다(C373)
+        var restoring = false      // 되돌림 작업: 결과가 정해지면(resolved) 장부에서 그 종류를 지운다
         var quiet = false          // 장부 되돌림: 결과를 판단 코어로 보내지 않는다
         var turn: (() -> Unit)? = null   // 차례가 오면 할 일(그 종류의 지금 값 읽기부터)
         var started = false
@@ -108,7 +108,8 @@ internal class Ambients(
 
     /** 영역을 못 읽거나 던지면 null로 본다. */
     private fun withArea(cmdId: String, kinds: Collection<ControlKind>, restoring: Boolean = false, quiet: Boolean = false, f: (AmbientArea) -> Unit) {
-        val tasks = kinds.associateWith { Task(cmdId, it).also { t -> t.restoring = restoring; t.quiet = quiet; open.add(t); lanes.getValue(t.kind) += t } }   // 차례는 받는 즉시 잡는다(C368)
+        // 차례는 받는 즉시 잡는다
+        val tasks = kinds.associateWith { Task(cmdId, it).also { t -> t.restoring = restoring; t.quiet = quiet; open.add(t); lanes.getValue(t.kind) += t } }
         fun skipAll(why: String) { note("ambient $cmdId skip: $why"); tasks.values.forEach { settle(it, false, null, null) } }
         var got = false
         reading<AmbientArea>({ k -> port.area(k) }, { a ->   // 영역 읽기도 시간 제한·재시도는 reading 하나가 한다
@@ -117,8 +118,9 @@ internal class Ambients(
                 if (a == null) skipAll("no area") else try { f(a) } catch (e: Exception) { skipAll("error $e") }
             }
         })
-        // 읽기 콜백이 끝내 안 오는 SDK에서도 결과를 영원히 기다리지 않게(쓰기는 F19가 5초 안에 끝낸다)
-        sched.after(p.verifyTimeoutMs * 4) { tasks.values.forEach { if (!it.done) { runCatching { it.finishNow(false, null, null) }; settle(it, false, null, null) } } }
+        // 읽기 콜백이 끝내 안 오는 SDK에서도 결과를 영원히 기다리지 않게(쓰기는 다시 읽기 확인이 5초 안에 끝낸다)
+        sched.after(p.verifyTimeoutMs * 4) {
+            tasks.values.forEach { if (!it.done) { runCatching { it.finishNow(false, null, null) }; settle(it, false, null, null) } } }
     }
 
     private fun task(cmdId: String, kind: ControlKind) = open.firstOrNull { it.cmdId == cmdId && it.kind == kind && !it.done }
@@ -134,7 +136,7 @@ internal class Ambients(
     }
 
     /**
-     * 되돌림의 결과가 정해졌다(C373): 장부는 이 함수 하나로만 지운다. 정해진 결과는 둘뿐이다: 되돌림 쓰기가 확인됐다, 또는 지금 값을 읽었는데 set과 다르다(운전자가 바꿨다).
+     * 되돌림의 결과가 정해졌다: 장부는 이 함수 하나로만 지운다. 정해진 결과는 둘뿐이다: 되돌림 쓰기가 확인됐다, 또는 지금 값을 읽었는데 set과 다르다(운전자가 바꿨다).
      * 못 읽음·쓰기 실패·확인 못 함은 미정이라 부르지 않는다(장부가 남아 다음 장부 되돌림이 다시 본다). 낮춤 작업은 지우지 않는다.
      */
     private fun resolved(t: Task) { if (t.restoring) ledgerSet(t.kind, null) }
@@ -153,8 +155,8 @@ internal class Ambients(
      * 판단 코어로 결과를 보내지 않고 control_log에 `restore:` 줄만(cmd_id = RestoreAmbientLedger의 cmdId) 남긴다.
      */
     fun restoreFromLedger(cmdId: String) {
-        // C366: 판단 코어가 이 명령을 낸 것은 Dimming을 버렸다는 뜻이다(주인 없는 낮춤). 살아 있는 낮춤(읽기 재시도 대기·쓰기 재전송)은 장부를 읽기 전에 버린다.
-        // 되돌림 작업(예: 장면 끝 AM15의 RestoreAmbient)은 건드리지 않는다
+        // 판단 코어가 이 명령을 낸 것은 Dimming을 버렸다는 뜻이다(주인 없는 낮춤). 살아 있는 낮춤(읽기 재시도 대기·쓰기 재전송)은 장부를 읽기 전에 버린다.
+        // 되돌림 작업(예: 장면 끝 RestoreAmbient)은 건드리지 않는다
         abandon { !it.restoring }
         val e = runCatching { ledger.read() }.getOrNull() ?: return
         if (e.isEmpty) { runCatching { ledger.write(null) }; return }
@@ -163,11 +165,11 @@ internal class Ambients(
 
     fun dim(c: DimAmbient) {
         val kinds = listOf(ControlKind.AMBIENT_BRIGHTNESS, ControlKind.AMBIENT_COLOR)
-        // C369: 켜짐·자동 색도 지금 값처럼 차례가 온 뒤에 읽는다(앞 작업이 재전송을 기다리는 동안 스위치가 꺼졌는데 옛 켜짐으로 쓰지 않게). 종류마다 차례 안에서 읽는다
+        // 켜짐·자동 색도 지금 값처럼 차례가 온 뒤에 읽는다(앞 작업이 재전송을 기다리는 동안 스위치가 꺼졌는데 옛 켜짐으로 쓰지 않게). 종류마다 차례 안에서 읽는다
         withArea(c.cmdId, kinds) { a -> dimBrightness(c, a); dimColor(c, a) }
     }
 
-    /** 판단 스냅숏(C372). [allowed] = (낮춤) 켜짐, 색은 자동 색 NONE·OFF까지. (되돌림은 늘 true). [now] = 그 종류의 지금 값(색은 24비트). 허용이 아니면 now는 없다. */
+    /** 판단 스냅숏. [allowed] = (낮춤) 켜짐, 색은 자동 색 NONE·OFF까지. (되돌림은 늘 true). [now] = 그 종류의 지금 값(색은 24비트). 허용이 아니면 now는 없다. */
     private class Snap(val allowed: Boolean, val now: Int?)
 
     /** 한 번만 읽는다(재시도 없음). [Params.verifyTimeoutMs] 안에 응답이 없거나 던지면 null. 늦은 응답은 무시한다. */
@@ -180,7 +182,7 @@ internal class Ambients(
     }
 
     /**
-     * 판단에 쓰는 차 값을 한 묶음으로 잇달아 읽는 함수 하나(C372, C369·C371을 대신함). (낮춤) 켜짐 → (색) 자동 색 → 그 종류의 지금 값. 되돌림은 지금 값만.
+     * 판단에 쓰는 차 값을 한 묶음으로 잇달아 읽는 함수 하나. (낮춤) 켜짐 → (색) 자동 색 → 그 종류의 지금 값. 되돌림은 지금 값만.
      * 읽기 하나라도 못 읽으면(실패·무응답) 그 값만 다시 읽지 않고 [Params.verifyIntervalMs] 뒤 묶음 전체를 처음부터 다시 읽는다([Params.verifyRetries]번까지). 그래도 안 되면 null.
      * 꺼짐과 자동 색 UNKNOWN은 실패가 아니라 답이라 다시 읽지 않는다. 차례 시작과 다시 보내기 앞에서만 부른다. 부른 쪽이 응답 뒤 작업이 살아 있는지 본다.
      */
@@ -212,7 +214,7 @@ internal class Ambients(
         val target = a.min + ((a.max - a.min) * c.level).roundToInt()
         val kind = ControlKind.AMBIENT_BRIGHTNESS
         arm(t) {
-            snapshot(kind, a, dim = true, { s ->   // 차례가 온 뒤 읽은 한 번의 스냅숏으로 판단하고 곧바로 쓴다(C372)
+            snapshot(kind, a, dim = true, { s ->   // 차례가 온 뒤 읽은 한 번의 스냅숏으로 판단하고 곧바로 쓴다
                 if (task(c.cmdId, kind) == null) return@snapshot   // 버려진 작업의 늦은 응답은 아무것도 바꾸지 않는다
                 val b = s?.now
                 when {
@@ -272,11 +274,16 @@ internal class Ambients(
     ) {
         if (task(cmdId, kind) == null) return   // 버려진 작업의 늦은 읽기 응답은 아무것도 바꾸지 않는다
         if (now == null) { note("ambient $cmdId skip restore $kind: read failed"); skip(cmdId, kind, null); return }   // 미정: 장부는 그대로
-        if (now != v.set) { note("ambient $cmdId skip restore $kind: now=$now set=${v.set}"); task(cmdId, kind)?.let { resolved(it) }; skip(cmdId, kind, now); return }   // 정해짐(운전자가 바꿨다): 장부를 지운다
+        if (now != v.set) {   // 정해짐(운전자가 바꿨다): 장부를 지운다
+            note("ambient $cmdId skip restore $kind: now=$now set=${v.set}")
+            task(cmdId, kind)?.let { resolved(it) }
+            skip(cmdId, kind, now)
+            return
+        }
         write(cmdId, kind, a, now, v.before, api, ControlApi.RESTORE + fmt(v.before), fmt, read, put)   // 되돌림은 스위치를 보지 않는다
     }
 
-    /** F19(4.2): 쓰기 성공 콜백과 다시 읽은 값이 모두 맞아야 ok. 5초 안에 안 되면 한 번 다시 보내고, 그래도 안 되면 ok = false. */
+    /** 쓰기 성공 콜백과 다시 읽은 값이 모두 맞아야 ok. 5초 안에 안 되면 한 번 다시 보내고, 그래도 안 되면 ok = false. */
     private fun write(
         cmdId: String, kind: ControlKind, a: AmbientArea, before: Int, want: Int, api: String, goal: String, fmt: (Int) -> String,
         read: (AmbientArea, (Int?) -> Unit) -> Unit, put: (Int, (Boolean) -> Unit) -> Unit,
@@ -289,7 +296,7 @@ internal class Ambients(
         fun finish(ok: Boolean) {
             if (t.done) return
             log.row(cmdId, api, a.target, goal, last?.let(fmt), ok, ackMs, if (ok) clock() - t0 else null, attempt)
-            if (ok) resolved(t)   // 되돌림 쓰기가 확인됐다. 실패·확인 못 함은 미정이라 장부를 남긴다(C373)
+            if (ok) resolved(t)   // 되돌림 쓰기가 확인됐다. 실패·확인 못 함은 미정이라 장부를 남긴다
             settle(t, ok, before, last)
         }
         t.finishNow = { ok, _, _ -> finish(ok) }   // 첫 put 바로 앞에서 건다: 그 전에 버려지면 settle만(시도가 아니라 control_log 없음)
@@ -317,13 +324,19 @@ internal class Ambients(
             t.timers += sched.after(p.verifyTimeoutMs) {
                 if (!t.done && attempt == n) {
                     if (n >= p.verifyRetries) finish(false)
-                    else snapshot(kind, a, dimGoal, { s ->   // 4.2 ③·C372: 다시 보내기 앞에 스냅숏을 새로 읽는다(낮춤은 켜짐·자동 색까지)
+                    else snapshot(kind, a, dimGoal, { s ->   // 다시 보내기 앞에 스냅숏을 새로 읽는다(낮춤은 켜짐·자동 색까지)
                         if (t.done || attempt != n) return@snapshot
                         val cur = s?.now
                         when {
-                            s == null -> finish(false)                                                                // 못 읽으면 덮을지 모르니 보내지 않고 실패(첫 시도가 있었다: control_log)
+                            // 못 읽으면 덮을지 모르니 보내지 않고 실패(첫 시도가 있었다: control_log)
+                            s == null -> finish(false)
                             !s.allowed -> { note("ambient $cmdId stop resend $kind: ${refusal(kind)}"); finish(false) }
-                            cur != null && cur != before && cur != want -> { note("ambient $cmdId skip resend $kind: now=$cur before=$before"); resolved(t); settle(t, false, cur, cur) }   // 운전자(또는 차)가 바꿨다: 정해짐, 장부를 지운다(C373)
+                            // 운전자(또는 차)가 바꿨다: 정해짐, 장부를 지운다
+                            cur != null && cur != before && cur != want -> {
+                                note("ambient $cmdId skip resend $kind: now=$cur before=$before")
+                                resolved(t)
+                                settle(t, false, cur, cur)
+                            }
                             else -> send(n + 1)
                         }
                     })

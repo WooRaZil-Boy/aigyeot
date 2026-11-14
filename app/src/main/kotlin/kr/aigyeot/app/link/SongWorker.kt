@@ -19,7 +19,7 @@ import java.io.File
 
 private val MAX_SONG_BYTES = Params().songMaxBytes
 
-/** 노래 받기 작업(8.4): 받아 검사하고 −30 LUFS 사본을 만든다. 범주 W(한 바퀴 실패 뒤 다시 깨움). */
+/** 노래 받기 작업: 받아 검사하고 −30 LUFS 사본을 만든다. 한 바퀴 실패 뒤 다시 깨운다. */
 internal class SongWorker(
     private val context: Context,
     private val room: LinkRoom,
@@ -63,7 +63,7 @@ internal class SongWorker(
         }
     }
 
-    /** 크기·길이·형식 검사 → −30 LUFS 사본(실행기) → 마지막 트랜잭션(8.4). */
+    /** 크기·길이·형식 검사 → −30 LUFS 사본(실행기) → 마지막 트랜잭션. */
     private suspend fun finishSong(d: SongDownloadEntity, raw: File, size: Long?, failed: String?) {
         val p = if (failed == null) probe(raw) else null
         val checked = failed ?: when {
@@ -77,7 +77,7 @@ internal class SongWorker(
             try { makeCopy(raw, copy) } catch (e: CancellationException) { throw e }   // 취소는 거절이 아니다. 다음에 다시 받는다
             catch (e: Exception) { LoudnessResult(false, "bad_format") }
         } else null
-        // 실행기의 거절 이유는 그대로 싣는다. 3.3 열거에 없는 글자면 bad_format으로 둔다(폰이 읽지 못하는 값을 보내지 않게)
+        // 실행기의 거절 이유는 그대로 싣는다. 열거에 없는 글자면 bad_format으로 둔다(폰이 읽지 못하는 값을 보내지 않게)
         val reason = checked ?: made?.takeIf { !it.ok }?.let { m -> m.reason?.takeIf { LinkRoom.rejectReason(it) != null } ?: "bad_format" }
         val out = Applied()
         rx.withLock {

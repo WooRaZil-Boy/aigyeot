@@ -7,14 +7,14 @@ import kr.aigyeot.engine.Gear
 import kr.aigyeot.engine.TurnSignal
 import kr.aigyeot.engine.VehicleSample
 
-/** 맥락 1초 표본 하나(F17). [at]은 그 초의 끝이다. 저장소가 context_sample 행으로 바꿔 쓰고, 리포트 계산(preCry)은 이 타입만 읽는다. */
+/** 맥락 1초 표본 하나. [at]은 그 초의 끝이다. 저장소가 context_sample 행으로 바꿔 쓰고, 리포트 계산(preCry)은 이 타입만 읽는다. */
 data class ContextSample(
     val episodeId: String, val at: Long, val speedKmh: Double, val brake: Boolean, val steeringDeg: Double,
     val turnSignal: TurnSignal, val gear: Gear, val cabinC: Double?, val playback: String?, val cryP: Double?,
 )
 
 /**
- * 맥락 기록기(F17, 계약 4.3). 사건 흐름의 VehicleSample·CabinTemp·CrySegment·재생 상태를 1초 칸으로 묶어 최근 [halfMs]를 들고 있다가,
+ * 맥락 기록기. 사건 흐름의 VehicleSample·CabinTemp·CrySegment·재생 상태를 1초 칸으로 묶어 최근 [halfMs]를 들고 있다가,
  * CaptureContext가 오면 경보 −30초 ~ +30초를 [ContextSample]로 낸다(+쪽은 그 초가 지날 때마다 낸다).
  * 차량 표본이나 기어를 아직 모르는 초는 줄을 만들지 않는다(없는 값을 지어내지 않는다).
  */
@@ -53,16 +53,16 @@ class ContextRecorder(private val halfMs: Long = 30_000, private val stepMs: Lon
     }
 
     /**
-     * 모든 기록 지우기(5.9): 메모리 버퍼와 기다리는 캡처, 작성 중인 칸을 버린다.
+     * 모든 기록 지우기: 메모리 버퍼와 기다리는 캡처, 작성 중인 칸을 버린다.
      * 차량·기어·실내 온도 같은 지금 차 상태 값은 기록이 아니라 남겨도 된다.
      */
     fun clear() { recent.clear(); pending.clear(); bucket = Long.MIN_VALUE; cryP = null }
 
-    /** 지운 에피소드의 기다리는 캡처를 버린다(C262). */
+    /** 지운 에피소드의 기다리는 캡처를 버린다. */
     fun drop(episodeId: String) { pending.remove(episodeId) }
 
     /**
-     * 장면 경계(수명 표 장면 시작·끝의 맥락 캡처, C319): 작성 중인 칸은 경계 앞 세계의 값이라 마감해 기다리는 캡처의 줄로 돌려주고, 캡처는 거기서 끝낸다
+     * 장면 경계(장면 시작·끝의 맥락 캡처): 작성 중인 칸은 경계 앞 세계의 값이라 마감해 기다리는 캡처의 줄로 돌려주고, 캡처는 거기서 끝낸다
      * (그 뒤 칸은 다른 세계 표본이라 쓰지 않는다). 그다음 [clear]에 더해 차량·기어·실내 온도·재생 값도 비운다(장면 값을 다음 칸이 이어받지 않게).
      */
     fun reset(): List<ContextSample> {

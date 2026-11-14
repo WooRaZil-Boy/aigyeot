@@ -1,10 +1,7 @@
 package kr.aigyeot.app.ui
 
-import kr.aigyeot.shared.CarActionKind
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,38 +34,42 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kr.aigyeot.app.R
 import kr.aigyeot.app.ui.car3d.Callout3d
 import kr.aigyeot.app.ui.car3d.CarView
 import kr.aigyeot.app.ui.car3d.Stage3d
 import kr.aigyeot.app.ui.car3d.View3d
-import androidx.compose.ui.res.imageResource
+import kr.aigyeot.shared.CarActionKind
 import kotlin.math.roundToInt
 
-// 홈 무대(시안 js/car-stage.js): 실시간 3D 차 + 그 위 '차가 한 일' 칩(무대 위쪽 띠, 3D 앵커까지 선, 그릴 때마다 다시 잼).
+// 홈 무대: 실시간 3D 차 + 그 위 '차가 한 일' 칩(무대 위쪽 띠, 3D 앵커까지 선, 그릴 때마다 다시 잼).
 // 정차 중: 끌어서 돌려 보기(처음엔 안내, 돌린 뒤엔 '처음 자리로' 단추), 상태가 바뀌면 카메라가 날아간다(1.1초).
 // 주행 중: 조작·카메라 이동·소리 결 움직임·칩 없음, 상태가 바뀔 때 200ms 페이드 한 번(Pleos 주행 안전 설계).
 
 
-/** 칩 글자·아이콘(시안 DATA.CALLOUTS). 리포트 '차가 대신 한 일'과 같은 이름은 그 함수 하나에서 가져온다(C385). 열선만 칩 자리가 좁아 '열선 끔'. */
+/** 칩 글자·아이콘. 리포트 '차가 대신 한 일'과 같은 이름은 그 함수 하나에서 가져온다. 열선만 칩 자리가 좁아 '열선 끔'. */
 internal fun calloutText(c: Callout3d) = when (c) {
     Callout3d.LOCK -> actionName(CarActionKind.REAR_WINDOW_LOCK)
     Callout3d.HEAT -> "열선 끔"
     Callout3d.DIM -> actionName(CarActionKind.AMBIENT_DIM)
-    Callout3d.HVAC -> actionName(CarActionKind.CABIN_COOL)   // 시안 '공조 2° 낮춤'의 폭은 최솟값에 걸리면 달라져(실제 낮춘 폭을 기록하지 않음) 글자에 숫자를 쓰지 않는다
+    Callout3d.HVAC -> actionName(CarActionKind.CABIN_COOL)   // '공조 2° 낮춤'의 폭은 최솟값에 걸리면 달라져(실제 낮춘 폭을 기록하지 않음) 글자에 숫자를 쓰지 않는다
 }
 
 internal fun calloutIcon(c: Callout3d) = when (c) {
-    Callout3d.LOCK -> R.drawable.ic_lock; Callout3d.HEAT -> R.drawable.ic_flame_kindling; Callout3d.DIM -> R.drawable.ic_sun_dim; Callout3d.HVAC -> R.drawable.ic_snowflake
+    Callout3d.LOCK -> R.drawable.ic_lock; Callout3d.HEAT -> R.drawable.ic_flame_kindling
+    Callout3d.DIM -> R.drawable.ic_sun_dim; Callout3d.HVAC -> R.drawable.ic_snowflake
 }
 
 /**
- * 칩 가로 자리(시안 place): 앵커 x를 [margin, W-margin]에 묶고 sp 간격으로 벌린 뒤 넘치면 왼쪽으로 민다.
+ * 칩 가로 자리: 앵커 x를 [margin, W-margin]에 묶고 sp 간격으로 벌린 뒤 넘치면 왼쪽으로 민다.
  * 칩이 많거나 무대가 좁으면(칩 넷·분할 840) 여백을 W의 15%까지, 간격을 남은 폭 ÷ (n-1)까지 줄여 무대 밖으로 나가지 않게 한다.
  */
 internal fun chipXs(anchorXs: List<Float?>, w: Float, sp0: Float = 280f, margin0: Float = 200f): List<Float> {
@@ -84,7 +85,7 @@ internal fun chipXs(anchorXs: List<Float?>, w: Float, sp0: Float = 280f, margin0
 }
 
 /**
- * 첫 3D 장 전에 홈 무대에 둘 정지 그림(11-11 결정): 시작 연출 첫 장인 바깥 모습(HERO)을 홈 무대 크기(998×1097px, CarView '첫 화면' 로그)에서 찍은
+ * 첫 3D 장 전에 홈 무대에 둘 정지 그림: 시작 연출 첫 장인 바깥 모습(HERO)을 홈 무대 크기(998×1097px, CarView '첫 화면' 로그)에서 찍은
  * 투명 PNG(debug Car3dSpikeActivity `--es capture --ez noseat true`, 기본 빛, 칩 없음). 지금 상태를 담지 않게 카시트를 빼고 듣는 빛 없이 찍었다:
  * 바깥 모습에서도 옆 유리로 카시트가, 앞 유리로 듣는 빛이 보여 그대로면 다른 자리·빛을 안내하게 된다(car3d_cabin_1111.txt 13절 화소 대조).
  * 3D로 바뀌면 지금 자리의 카시트와 빛이 나타난다.
@@ -134,21 +135,24 @@ fun CarStage(stage: Stage3d, modifier: Modifier = Modifier, interactive: Boolean
         val v = view ?: return@LaunchedEffect
         if (!crossfade) return@LaunchedEffect
         val ms = posterFadeMs(stageNow, exact = false)
-        androidx.compose.animation.core.animate(0f, 1f, animationSpec = tween(ms, easing = if (stageNow.drive) androidx.compose.animation.core.LinearEasing else Tokens.motion.getValue("enter").easing)) { k, _ -> v.alpha = k; posterK = 1f - k }
+        androidx.compose.animation.core.animate(0f, 1f, animationSpec = tween(ms,
+                easing = if (stageNow.drive) androidx.compose.animation.core.LinearEasing else Tokens.motion.getValue("enter").easing)
+        ) { k, _ -> v.alpha = k; posterK = 1f - k }
         unveiled = true
     }
-    var shown by remember { mutableStateOf<List<Callout3d>>(emptyList()) }      // 카메라가 닿은 뒤에만 칩(시안 set: 도착 뒤 callouts)
+    var shown by remember { mutableStateOf<List<Callout3d>>(emptyList()) }      // 카메라가 닿은 뒤에만 칩(도착 뒤에 띄운다)
     var anchors by remember { mutableStateOf<List<FloatArray?>>(emptyList()) }
     var moved by remember { mutableStateOf(false) }
     val fade = remember { Animatable(1f) }
     val last = remember { arrayOfNulls<Stage3d>(1) }
 
-    // 주행 중 상태가 바뀌면 200ms 페이드 한 번(시안 .cs.fade). 앞 상태는 시작할 때 바꿔 둔다: 페이드가 도중에 끊기고(A→B→A) 돌아와도 다시 끝까지 간다
+    // 주행 중 상태가 바뀌면 200ms 페이드 한 번. 앞 상태는 시작할 때 바꿔 둔다: 페이드가 도중에 끊기고(A→B→A) 돌아와도 다시 끝까지 간다
     LaunchedEffect(stage) {
         val prev = last[0]; last[0] = stage
-        if (stage.drive && prev != null && prev != stage) { fade.snapTo(0f); fade.animateTo(1f, tween(Tokens.DRIVE_FADE_MS, easing = androidx.compose.animation.core.LinearEasing)) } else fade.snapTo(1f)
+        if (stage.drive && prev != null && prev != stage) { fade.snapTo(0f); fade.animateTo(1f, tween(Tokens.DRIVE_FADE_MS,
+                easing = androidx.compose.animation.core.LinearEasing)) } else fade.snapTo(1f)
     }
-    // 칩 등장(시안 .co coIn: 칩마다 90ms 늦게, 아래 10에서 올라오며 나타남, 선은 같이 페이드). 동작 줄이기면 바로
+    // 칩 등장: 칩마다 90ms 늦게, 아래 10에서 올라오며 나타남, 선은 같이 페이드. 동작 줄이기면 바로
     val enter = Tokens.motion.getValue("enter")
     val reveal = remember(shown) { shown.map { Animatable(if (stage.reducedMotion) 1f else 0f) } }
     LaunchedEffect(reveal) {
@@ -156,7 +160,7 @@ fun CarStage(stage: Stage3d, modifier: Modifier = Modifier, interactive: Boolean
     }
 
     BoxWithConstraints(modifier.onSizeChanged { size = it }) {
-        // 바닥 빛(시안 .cs-floor, 가장자리는 투명이라 화면 분위기 빛과 이어진다) + 접지 그림자 띠
+        // 바닥 빛(가장자리는 투명이라 화면 분위기 빛과 이어진다) + 접지 그림자 띠
         Box(Modifier.fillMaxSize().background(floorBrush(p)))
         if (posterOn() && posterImg != null) PosterImage(posterImg) { posterK }
         AndroidView(
@@ -186,7 +190,10 @@ fun CarStage(stage: Stage3d, modifier: Modifier = Modifier, interactive: Boolean
                     v.set(stage, animate = true) { shown = if (stage.drive) emptyList() else callouts }
                 }
                 // 칩 자리는 값이 바뀔 때만 상태에 넣는다(FloatArray는 참조로 비교돼, 매 장 새 목록을 넣으면 칩이 떠 있는 동안 60fps로 다시 그린다)
-                v.onRender = { if (shown.isNotEmpty()) shown.map { c -> c.anchorsIn(stage).mapNotNull(v::project).minByOrNull { it[2] } }.let { if (!sameAnchors(anchors, it)) anchors = it } }
+                v.onRender = {
+                    if (shown.isNotEmpty()) shown.map { c -> c.anchorsIn(stage).mapNotNull(v::project).minByOrNull { it[2] } }
+                        .let { if (!sameAnchors(anchors, it)) anchors = it }
+                }
             },
             onRelease = { it.destroy(); view = null },
         )
@@ -208,13 +215,15 @@ fun CarStage(stage: Stage3d, modifier: Modifier = Modifier, interactive: Boolean
             }
             shown.forEachIndexed { i, c ->
                 val k = { reveal.getOrNull(i)?.value ?: 1f }
-                Chip(c, Modifier.offset { IntOffset(xs[i].roundToInt(), y.roundToInt()) }.graphicsLayer { alpha = k(); translationY = (1 - k()) * 10.dp.toPx() })
+                Chip(c, Modifier.offset { IntOffset(xs[i].roundToInt(),
+                        y.roundToInt()) }.graphicsLayer { alpha = k(); translationY = (1 - k()) * 10.dp.toPx() })
             }
         }
         if (interactive && !stage.drive) {
             // 처음엔 안내, 돌린 뒤엔 '처음 자리로'(80, 유리)
             if (!moved) Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(percent = 50)).background(p.surface.copy(alpha = 0.7f)).padding(horizontal = 20.dp),
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(percent = 50)).background(p.surface.copy(alpha = 0.7f)).padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 LineIcon(R.drawable.ic_rotate_3d, 28.dp, p.accentInk)
@@ -241,7 +250,7 @@ private fun PosterImage(img: androidx.compose.ui.graphics.ImageBitmap, alpha: ()
     }
 }
 
-/** 칩(시안 .co-chip: 높이 56, 반경 28, 유리, 아이콘 28 브랜드 글자색 + 글자 700 24). 가운데가 x에 오게. */
+/** 칩(높이 56, 반경 28, 유리, 아이콘 28 브랜드 글자색 + 글자 700 24). 가운데가 x에 오게. */
 @Composable
 private fun Chip(c: Callout3d, modifier: Modifier) {
     val p = LocalPalette.current
@@ -257,7 +266,7 @@ private fun Chip(c: Callout3d, modifier: Modifier) {
     }
 }
 
-/** 무대 바닥(시안 .cs-floor 라이트·다크, radial 62%×58% 가운데). 바깥은 투명. */
+/** 무대 바닥(라이트·다크, radial 62%×58% 가운데). 바깥은 투명. */
 private fun floorBrush(p: Palette): Brush = object : androidx.compose.ui.graphics.ShaderBrush() {
     override fun createShader(size: androidx.compose.ui.geometry.Size) = androidx.compose.ui.graphics.RadialGradientShader(
         center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2), radius = maxOf(size.width * 0.62f, size.height * 0.58f),

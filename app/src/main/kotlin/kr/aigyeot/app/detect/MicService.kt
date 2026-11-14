@@ -9,19 +9,22 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.content.ContextCompat
+import kr.aigyeot.app.R
 import kr.aigyeot.engine.CrySegment
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.InputLost
 import kr.aigyeot.engine.MicPath
-import kr.aigyeot.engine.PauseReason
 import kr.aigyeot.engine.MicService as MicServiceEvent
+import kr.aigyeot.engine.PauseReason
+import java.io.Closeable
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * 마이크 Foreground Service(foregroundServiceType=microphone, START_NOT_STICKY). 주행 내내 입력을 읽어 감지 사건을 낸다.
  *
- * **앱 화면이 있을 때만 [start]를 부른다**(명세서 6장): 화면 없는 시작은 막혀 있다(11-02 실측). 화면에서 시작하면 앱이 뒤로 가도 녹음이 이어진다.
- * 예기치 않게 멈추면 InputLost(MIC_ERROR) + MicService(running=false)를 낸다(C69). 프로세스가 죽으면 서비스는 저절로 다시 뜨지 않으며(START_NOT_STICKY),
- * 그 복원은 호스트의 몫이다(계약 2.4).
+ * **앱 화면이 있을 때만 [start]를 부른다**: 화면 없는 시작은 막혀 있다. 화면에서 시작하면 앱이 뒤로 가도 녹음이 이어진다.
+ * 예기치 않게 멈추면 InputLost(MIC_ERROR) + MicService(running=false)를 낸다. 프로세스가 죽으면 서비스는 저절로 다시 뜨지 않으며(START_NOT_STICKY),
+ * 그 복원은 호스트의 몫이다.
  */
 class MicService : Service() {
     private var runner: DetectorRunner? = null
@@ -38,12 +41,12 @@ class MicService : Service() {
         path = intent?.getStringExtra(EXTRA_PATH)?.let { runCatching { MicPath.valueOf(it) }.getOrNull() }
         try {
             startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        } catch (e: Exception) { // 앱 화면 없이 시작하면 SecurityException(11-02 실측)
+        } catch (e: Exception) { // 앱 화면 없이 시작하면 SecurityException
             intentional = false
             stopSelf()
             return START_NOT_STICKY
         }
-        // 판별층·모델 준비는 MicService(running=true)보다 먼저 한다. 실패하면 onDestroy가 InputLost(MIC_ERROR) + MicService(running=false)만 낸다(계약 2.4, C69·C70)
+        // 판별층·모델 준비는 MicService(running=true)보다 먼저 한다. 실패하면 onDestroy가 InputLost(MIC_ERROR) + MicService(running=false)만 낸다
         val prep = prepareDetect(
             { assets.open(HEAD_ASSET).bufferedReader().use { it.readText() } },
             { sourceFactory?.invoke(this) ?: MicPcmSource(this) },
@@ -83,7 +86,7 @@ class MicService : Service() {
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "듣기", NotificationManager.IMPORTANCE_LOW))
         return Notification.Builder(this, CHANNEL).setContentTitle("아이곁이 듣는 중이에요")
-            .setSmallIcon(kr.aigyeot.app.R.drawable.ic_stat_aigyeot).setOngoing(true).build()
+            .setSmallIcon(R.drawable.ic_stat_aigyeot).setOngoing(true).build()
     }
 
     companion object {
@@ -106,14 +109,14 @@ class MicService : Service() {
         /** 읽은 PCM(16kHz mono s16)을 그대로 넘긴다. exec STT가 쓴다. 감지 스레드에서 부르므로 빨리 돌아와야 하고, 배열은 다시 쓰이니 필요하면 복사한다. */
         @Volatile var pcmTap: ((ShortArray, Int) -> Unit)? = null
         /** 판단 코어로 보낸 울음 구간을 그대로 넘긴다(읽기 전용, debug 빌드의 시연·측정 화면이 읽는 울음 확률 선). 감지 스레드에서 부르므로 빨리 돌아와야 한다. */
-        val segmentTaps = java.util.concurrent.CopyOnWriteArraySet<(CrySegment) -> Unit>()   // 구독자마다 하나(지울 때 남의 것을 지우지 않게). 비어 있으면 아무 일도 하지 않는다
+        val segmentTaps = CopyOnWriteArraySet<(CrySegment) -> Unit>()   // 구독자마다 하나(지울 때 남의 것을 지우지 않게). 비어 있으면 아무 일도 하지 않는다
         /** 지금 도는 서비스의 감지기. 서비스가 시작·끝날 때만 바꾼다. */
         @Volatile internal var running: CryDetector? = null
 
-        /** 서비스가 돌고 있으면 감지기의 풀리지 않은 사유, 아니면 null(C82 대조용). */
+        /** 서비스가 돌고 있으면 감지기의 풀리지 않은 사유, 아니면 null(호스트 대조용). */
         fun runningPauses(): Set<PauseReason>? = running?.pauses()
 
-        /** 돌고 있는 감지기에 '엔진에만 있는 사유'를 넣는다(C82). 그사이 서비스가 끝났으면 다음 서비스가 이어받게 [pendingPauses]에 넣는다. */
+        /** 돌고 있는 감지기에 '엔진에만 있는 사유'를 넣는다. 그사이 서비스가 끝났으면 다음 서비스가 이어받게 [pendingPauses]에 넣는다. */
         fun assumePausedNow(reasons: Set<PauseReason>) = synchronized(this) {
             running?.assumePaused(reasons) ?: run { pendingPauses = pendingPauses + reasons }
         }
@@ -128,7 +131,7 @@ class MicService : Service() {
 
 /** 판별층 → 입력원 → 모델 순으로 준비한다. 하나라도 실패하면 먼저 만든 것을 닫고 null. 서비스에서 떼어 JVM에서 시험한다. */
 internal fun <S> prepareDetect(readHead: () -> String, makeSource: () -> PcmSource, makeScorer: () -> S): Triple<CryHead, PcmSource, S>?
-    where S : WindowScorer, S : java.io.Closeable {
+    where S : WindowScorer, S : Closeable {
     val head = try { CryHead.parse(readHead()) } catch (e: Exception) { return null }
     val source = try { makeSource() } catch (e: Exception) { return null }
     val sc = try { makeScorer() } catch (e: Throwable) { source.close(); return null }

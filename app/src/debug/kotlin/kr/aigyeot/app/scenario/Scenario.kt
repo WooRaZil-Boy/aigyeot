@@ -23,8 +23,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kr.aigyeot.app.common.CarPaths
 import kr.aigyeot.app.detect.MicService
 import kr.aigyeot.app.host.HostApi
@@ -32,14 +32,15 @@ import kr.aigyeot.app.link.Link
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MicPath
 import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * 장면 재생기(F18, 계약 7장). 장면을 시간축대로 돌리고 기대값을 판정해 측정표를 쓴다.
- * 판단 코어 상태는 [HostApi.stepLog]로 읽기만 하고, 입력은 Virtual Console·녹음·사건 주입으로 넣는다(계약 1.1).
- * 마이크 서비스를 켜므로 장면 화면(앱 화면)이 떠 있을 때만 [run]한다(명세서 6장).
+ * 장면 재생기. 장면을 시간축대로 돌리고 기대값을 판정해 측정표를 쓴다.
+ * 판단 코어 상태는 [HostApi.stepLog]로 읽기만 하고, 입력은 Virtual Console·녹음·사건 주입으로 넣는다.
+ * 마이크 서비스를 켜므로 장면 화면(앱 화면)이 떠 있을 때만 [run]한다.
  */
 class Scenario(
     private val context: Context,
@@ -98,10 +99,10 @@ class Scenario(
     private fun writeWhole(f: File, text: String) {
         val tmp = File(f.parentFile, f.name + ".tmp")
         tmp.writeText(text)
-        if (!tmp.renameTo(f)) { tmp.delete(); throw java.io.IOException("이름 바꾸기 실패: ${f.name}") }
+        if (!tmp.renameTo(f)) { tmp.delete(); throw IOException("이름 바꾸기 실패: ${f.name}") }
     }
 
-    /** 앱 안에서 Virtual Console(127.0.0.1:8088)에 닿는지(계약 7.1 미측정 항목). 세션 신호 뒤 차량 상태를 읽어 본다. */
+    /** 앱 안에서 Virtual Console(127.0.0.1:8088)에 닿는지(측정 전 항목). 세션 신호 뒤 차량 상태를 읽어 본다. */
     suspend fun checkVc(): String = withContext(Dispatchers.IO) {
         val s = vc.send("POST", VirtualConsole.SESSION)
         val st = vc.send("GET", "/vehicle/state")
@@ -134,7 +135,8 @@ class Scenario(
         fun save(): Boolean {
             _results.value = SceneResults(scene.id, rows.toList())
             val wrote = try { writeWhole(out, csv(rows)); true } catch (e: Exception) { Log.w(TAG, "결과 파일 쓰기 실패: $e"); false }
-            try { File(dir, out.nameWithoutExtension + ".txt").writeText(rows.joinToString("\n") { r -> "run ${r.run}: " + (r.failures.ifEmpty { listOf("통과") }).joinToString(" | ") } + "\n") }
+            try { File(dir, out.nameWithoutExtension + ".txt").writeText(
+                rows.joinToString("\n") { r -> "run ${r.run}: " + (r.failures.ifEmpty { listOf("통과") }).joinToString(" | ") } + "\n") }
             catch (e: Exception) { Log.w(TAG, "결과 요약 글 쓰기 실패: $e") }   // 보조 파일이라 CSV 상태에 넣지 않는다
             return wrote
         }
@@ -166,7 +168,7 @@ class Scenario(
         }
     }
 
-    /** 앱 화면이 앞에 있을 때만 마이크 서비스를 켠다(명세서 6장). 켰으면 true. */
+    /** 앱 화면이 앞에 있을 때만 마이크 서비스를 켠다. 켰으면 true. */
     private fun startMicIfForeground(): Boolean {
         val info = ActivityManager.RunningAppProcessInfo().also { ActivityManager.getMyMemoryState(it) }
         if (info.importance > ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) return false
@@ -179,7 +181,7 @@ class Scenario(
     private suspend fun runOnce(scene: Scene, k: Int, n: Int, micOff: Boolean): RunRow {
         // 세션 신호 확인이 먼저다(t0·장면 전 Step 기준을 대기 뒤에 잡는다): 첫 vc가 세션 신호보다 먼저 나가면 emulator_inactive로 실패한다. 최대 3번
         var waitNote: String? = null
-        var stoppedEarly = false   // 대기 중 멈춤이어도 행은 남긴다(계약 7.4 '실행마다 한 줄')
+        var stoppedEarly = false   // 대기 중 멈춤이어도 행은 남긴다(실행마다 한 줄)
         try {
             withContext(Dispatchers.IO) {
                 for (i in 0 until 3) {
@@ -203,7 +205,7 @@ class Scenario(
                 val pcm = openRecording(a.file).let { MixSource.load(it, a.fromSec, a.durSec) }
                 mix.play(pcm, a.durSec, a.gainDb)
                 val started = host.clock()   // 실제로 섞기 시작한 시각
-                if (a.cry) {   // C36: 경보 지연 기준점을 감지기에 알린다. 녹음이 끝나면 지운다
+                if (a.cry) {   // 경보 지연 기준점을 감지기에 알린다. 녹음이 끝나면 지운다
                     MicService.running?.injectedCryAt = started
                     scope.launch { delay(Math.round(a.durSec * 1000)); MicService.running?.let { if (it.injectedCryAt == started) it.injectedCryAt = null } }
                 }
@@ -220,7 +222,7 @@ class Scenario(
             override fun simulated(what: String) { Log.i(TAG, "시뮬레이션 입력 $what") }
             override fun lufs(method: Method): Double? = loudness.lufs(method)
         }
-        val volume = object : BroadcastReceiver() {   // 계약 7.4 system_volume_changes: STREAM_MUSIC 볼륨 변화 콜백을 센다
+        val volume = object : BroadcastReceiver() {   // system_volume_changes: STREAM_MUSIC 볼륨 변화 콜백을 센다
             override fun onReceive(c: Context, i: Intent) {
                 if (i.getIntExtra(EXTRA_STREAM, -1) == AudioManager.STREAM_MUSIC) run.onVolumeChange()
             }
@@ -231,13 +233,13 @@ class Scenario(
         MicService.sourceFactory = { mix }   // BABY_ABOARD가 켜는 마이크 서비스가 장면 입력원을 쓴다
         try {
             ContextCompat.registerReceiver(context, volume, IntentFilter(VOLUME_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
-            // stepLog는 모든 Step을 버퍼에 담아 순서대로 낸다(느려도 중간 Step을 놓치지 않는다, 계약 2.4). startScenario보다 먼저 붙어(UNDISPATCHED:
+            // stepLog는 모든 Step을 버퍼에 담아 순서대로 낸다(느려도 중간 Step을 놓치지 않는다). startScenario보다 먼저 붙어(UNDISPATCHED:
             // launch가 돌아올 때 이미 구독) 장면 첫 Step부터 받고, 그 앞에 큐에 들어 있던 실제 사건의 Step은 SceneGate가 버린다.
             val gate = SceneGate(run.seed)
             jobs += scope.launch(Dispatchers.Unconfined, CoroutineStart.UNDISPATCHED) { host.stepLog.collect { if (gate.accept(it)) run.onStep(it) } }
             host.startScenario(run.setup())
             jobs += scope.launch(Dispatchers.Unconfined) { host.controlLog.collect { run.onControl(it) } }
-            jobs += scope.launch(Dispatchers.IO) {   // 세션 신호: 실행 중 1초마다(계약 7.1)
+            jobs += scope.launch(Dispatchers.IO) {   // 세션 신호: 실행 중 1초마다
                 while (isActive) { val r = vc.send("POST", VirtualConsole.SESSION); if (!r.ok) note = "VC 세션 실패 ${r.code} ${r.body.take(60)}"; delay(1_000) }
             }
             jobs += scope.launch(Dispatchers.IO) {   // 차량 입력은 순서대로 하나씩
@@ -254,7 +256,8 @@ class Scenario(
                 if (run.done(now)) break
                 if (now > run.endAt + OVERTIME_MS) { run.finish("시간 초과"); break }
                 run.advance(now)
-                _progress.value = ScenarioProgress(scene.id, k + 1, n, ((now - t0) / 1000).toDouble(), run.firstFail(), note ?: "연습 장면 실행 중")   // 정수 초: 같은 값이면 StateFlow가 거른다
+                // 정수 초: 같은 값이면 StateFlow가 거른다
+                _progress.value = ScenarioProgress(scene.id, k + 1, n, ((now - t0) / 1000).toDouble(), run.firstFail(), note ?: "연습 장면 실행 중")
                 delay(TICK_MS)
             }
         } catch (e: CancellationException) {

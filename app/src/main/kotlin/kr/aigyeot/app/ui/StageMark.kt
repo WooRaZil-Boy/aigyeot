@@ -37,17 +37,17 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kr.aigyeot.app.R
 
-// 3D 준비 표시(디자인 v8c 안 A, 세 앱 같은 규칙·값, contracts-car `stage`(3D) 행 끝): 첫 그림 전에 3D 칸 가운데에 직접 그린 고리.
+// 3D 준비 표시(세 앱 같은 규칙·값): 첫 그림 전에 3D 칸 가운데에 직접 그린 고리.
 // 첫 그림 신호는 CarView.onFirstFrame(TextureView에 첫 장이 들어온 때), 실패는 CarView.onFailed(CarEngine 준비 실패).
 
 /** 아무것도 안 보임 · 도는 고리 · 정지 표시(동작 줄이기·주행 중, 읽음) · 실패 정지 표시(읽지 않음). */
 enum class StageMark { HIDDEN, RING, STILL, FAILED }
 
-/** 설계값(v8c-3): 이만큼 지나도 첫 그림이 없을 때만 보이고, 한 번 보이면 [STAGE_MARK_MIN_MS]는 둔다. */
+/** 설계값: 이만큼 지나도 첫 그림이 없을 때만 보이고, 한 번 보이면 [STAGE_MARK_MIN_MS]는 둔다. */
 const val STAGE_MARK_DELAY_MS = 800L
 const val STAGE_MARK_MIN_MS = 400L
 
-/** 고리를 다시 그리는 횟수(초당, 11-11 결정, 세 앱 같음). 한 바퀴 1초를 이만큼 끊어 한 장에 360/15 = 24°. */
+/** 고리를 다시 그리는 횟수(초당, 세 앱 같음). 한 바퀴 1초를 이만큼 끊어 한 장에 360/15 = 24°. */
 const val RING_FPS = 15
 
 /**
@@ -58,7 +58,8 @@ const val RING_FPS = 15
 fun stageMark(elapsedMs: Long, firstFrameMs: Long?, failedMs: Long?, still: Boolean): StageMark {
     if (failedMs != null && elapsedMs >= failedMs) return StageMark.FAILED
     if (elapsedMs < STAGE_MARK_DELAY_MS) return StageMark.HIDDEN
-    if (firstFrameMs != null && (firstFrameMs <= STAGE_MARK_DELAY_MS || elapsedMs >= maxOf(firstFrameMs, STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS))) return StageMark.HIDDEN
+    if (firstFrameMs != null && (firstFrameMs <= STAGE_MARK_DELAY_MS || elapsedMs >= maxOf(firstFrameMs,
+            STAGE_MARK_DELAY_MS + STAGE_MARK_MIN_MS))) return StageMark.HIDDEN
     return if (still) StageMark.STILL else StageMark.RING
 }
 
@@ -112,7 +113,7 @@ internal fun <T> stageFade(reduced: Boolean, drive: Boolean, token: String): Fin
 }
 
 /**
- * 3D 칸 가운데 준비 표시(v8c-3 차 값: 고리 지름 64·굵기 5, 바탕 `textPrimary` 10%, 호 `accentInk` ¼바퀴·둥근 끝, 1초에 한 바퀴를 초당 [RING_FPS]장으로 끊어 그림.
+ * 3D 칸 가운데 준비 표시(차 값: 고리 지름 64·굵기 5, 바탕 `textPrimary` 10%, 호 `accentInk` ¼바퀴·둥근 끝, 1초에 한 바퀴를 초당 [RING_FPS]장으로 끊어 그림.
  * 정지 표시는 차 선 아이콘 64 `textTertiary` 50%). 나타남·사라짐 220ms(`base`), 고리 뒤에 숨겨 둔 3D는 360ms(`enter`)로 들어온다.
  * [enabled]가 거짓이면(홈 무대 정지 그림이 덮을 때) 아무것도 그리지 않고 시계도 돌리지 않는다.
  */
@@ -142,7 +143,7 @@ internal fun BoxScope.StageMarkLayer(load: StageLoad, reduced: Boolean, drive: B
     val fade = stageFade<Float>(reduced, drive, "base")
     Box(Modifier.align(Alignment.Center)) {
         AnimatedVisibility(mark == StageMark.RING, enter = fadeIn(fade), exit = fadeOut(fade)) {
-            // 다시 그리는 횟수는 초당 RING_FPS번(정차 홈 듣는 점과 같은 방법): 매 장 돌리면 창 전체를 초당 60장 다시 그려 같은 CPU의 3D 준비가 늦어진다(v8c-3).
+            // 다시 그리는 횟수는 초당 RING_FPS번(정차 홈 듣는 점과 같은 방법): 매 장 돌리면 창 전체를 초당 60장 다시 그려 같은 CPU의 3D 준비가 늦어진다.
             // 화면을 떠나면 프레임 시계와 함께 멈춘다
             val step by produceState(0) {
                 val t0 = withFrameMillis { it }
@@ -155,18 +156,23 @@ internal fun BoxScope.StageMarkLayer(load: StageLoad, reduced: Boolean, drive: B
                 val w = 5.dp.toPx()
                 drawCircle(p.textPrimary.copy(alpha = 0.1f), radius = (size.minDimension - w) / 2, style = Stroke(w))
                 rotate(step * 360f / RING_FPS) {
-                    drawArc(p.accentInk, -90f, 90f, false, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w), style = Stroke(w, cap = StrokeCap.Round))
+                    drawArc(p.accentInk, -90f, 90f, false, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w),
+                            style = Stroke(w, cap = StrokeCap.Round))
                 }
             }
         }
         AnimatedVisibility(mark == StageMark.STILL || mark == StageMark.FAILED, enter = fadeIn(fade), exit = fadeOut(fade)) {
             val read = mark == StageMark.STILL   // 실패 표시는 읽지 않는다
-            Box(Modifier.size(64.dp).semantics { if (read) { contentDescription = STAGE_LOADING; progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate } }) {
+            Box(
+                Modifier.size(64.dp).semantics {
+                    if (read) { contentDescription = STAGE_LOADING; progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }
+                },
+            ) {
                 LineIcon(R.drawable.ic_car_front, 64.dp, p.textTertiary.copy(alpha = 0.5f))
             }
         }
     }
 }
 
-/** 7.1 design.stage.loading(U90, 세 앱 같음): 읽기 이름만, 보이는 글은 없다. */
+/** design.stage.loading(세 앱 같음): 읽기 이름만, 보이는 글은 없다. */
 internal const val STAGE_LOADING = "3D 차 준비 중"

@@ -38,7 +38,7 @@
         <!-- CCP(로터리 컨트롤러)를 지원하지 않는다고 선언한다(Pleos CCP 개발 가이드) -->
         <meta-data android:name="com.hmg.rotary.ROTARY_SUPPORTED" android:value="false" />
         <!-- 아래 셋의 클래스는 호스트·화면 모듈이 만든다 -->
-        <!-- DO(distractionOptimized)를 선언한다(C365·C378): 주행 중에는 CarUxRestrictions 값에 따라 주행 중 화면 하나만 그린다(조작·움직임 없음) -->
+        <!-- DO(distractionOptimized)를 선언한다: 주행 중에는 CarUxRestrictions 값에 따라 주행 중 화면 하나만 그린다(조작·움직임 없음) -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -49,13 +49,13 @@
             </intent-filter>
         </activity>
 
-        <!-- 알림 전용 입구(C352): 알림 PendingIntent만 이 이름을 가리키므로 다른 앱은 notice_action을 보낼 수 없다 -->
+        <!-- 알림 전용 입구: 알림 PendingIntent만 이 이름을 가리키므로 다른 앱은 notice_action을 보낼 수 없다 -->
         <activity-alias
             android:name=".NoticeEntry"
             android:targetActivity=".MainActivity"
             android:exported="false" />
 
-        <!-- 감시 서비스: 부팅 때 시작해 중계 연결과 뒷문·기어 감시를 붙든다(구현 계획 2장) -->
+        <!-- 감시 서비스: 부팅 때 시작해 중계 연결과 뒷문·기어 감시를 붙든다. -->
         <service
             android:name=".host.MonitorService"
             android:exported="false"
@@ -73,7 +73,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- 감지: 마이크 Foreground Service. 앱 화면이 있을 때만 시작한다(명세서 6장) -->
+        <!-- 감지: 마이크 Foreground Service. 앱 화면이 있을 때만 시작한다. -->
         <service
             android:name=".detect.MicService"
             android:exported="false"

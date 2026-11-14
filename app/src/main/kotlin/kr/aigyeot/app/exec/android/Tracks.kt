@@ -9,12 +9,13 @@ import android.media.MediaPlayer
 import kr.aigyeot.app.exec.Track
 import kr.aigyeot.app.exec.WhiteNoise
 
-/** 음원 ① 백색소음을 실시간으로 만들어 흘린다. 쓰는 스레드는 트랙이 멈추면(pause) 기다린다. */
+/** 음원 백색소음을 실시간으로 만들어 흘린다. 쓰는 스레드는 트랙이 멈추면(pause) 기다린다. */
 internal class NoiseTrack(attrs: AudioAttributes, dev: AudioDeviceInfo?, private val ex: ExecThread,
                           onRouted: (String?) -> Unit, private val onError: () -> Unit) : Track {
     private val rate = WhiteNoise.RATE
     private val track = AudioTrack.Builder().setAudioAttributes(attrs)
-        .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+        .setAudioFormat(AudioFormat.Builder().setSampleRate(rate)
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
         .setBufferSizeInBytes(maxOf(AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), rate / 5 * 2))
         .setTransferMode(AudioTrack.MODE_STREAM).build()
     private val noise = WhiteNoise()
@@ -67,7 +68,7 @@ internal class NoiseTrack(attrs: AudioAttributes, dev: AudioDeviceInfo?, private
     }
 }
 
-/** 음원 ②③ 파일(자장가 wav, 부모 노래 m4a). 노래는 이미 −30 LUFS 사본이다(SongLoudness). */
+/** 음원 파일(자장가 wav, 부모 노래 m4a). 노래는 이미 −30 LUFS 사본이다(SongLoudness). */
 internal class FileTrack(attrs: AudioAttributes, dev: AudioDeviceInfo?, ex: ExecThread, onRouted: (String?) -> Unit, onError: () -> Unit,
                          source: (MediaPlayer) -> Unit) : Track {
     private val mp = MediaPlayer()

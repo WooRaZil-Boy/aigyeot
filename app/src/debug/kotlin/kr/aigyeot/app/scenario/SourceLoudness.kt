@@ -3,14 +3,14 @@ package kr.aigyeot.app.scenario
 import android.content.Context
 import android.util.Log
 import kr.aigyeot.app.common.CarPaths
-import kr.aigyeot.app.exec.android.AndroidAudio
 import kr.aigyeot.app.exec.Loudness
 import kr.aigyeot.app.exec.SongLoudness
 import kr.aigyeot.app.exec.WhiteNoise
+import kr.aigyeot.app.exec.android.AndroidAudio
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
 
-/** 음원 ① 백색소음을 exec 생성기로 [sec]초 만들어 exec [Loudness](BS.1770)로 잰다. */
+/** 음원 백색소음을 exec 생성기로 [sec]초 만들어 exec [Loudness](BS.1770)로 잰다. */
 fun whiteNoiseLufs(sec: Int = 10): Double? {
     val m = Loudness(WhiteNoise.RATE, 1)
     val noise = WhiteNoise(seed = 1)
@@ -19,7 +19,7 @@ fun whiteNoiseLufs(sec: Int = 10): Double? {
     return m.integrated()
 }
 
-/** 장면에서 쓴 음원의 통합 크기 캐시(계약 7.4 lufs_violations). 잰 값만 남기고, 못 잰 것(null)은 다음에 다시 잰다. */
+/** 장면에서 쓴 음원의 통합 크기 캐시(lufs_violations). 잰 값만 남기고, 못 잰 것(null)은 다음에 다시 잰다. */
 internal class SourceLoudness(private val measure: (Method) -> Double?) {
     private val cache = HashMap<Method, Double>()
 
@@ -33,7 +33,8 @@ internal class SourceLoudness(private val measure: (Method) -> Double?) {
 internal fun androidLufs(ctx: Context, m: Method): Double? = try {
     when (m.kind) {
         MethodKind.WHITE_NOISE -> whiteNoiseLufs()
-        MethodKind.WOMB, MethodKind.LULLABY -> ctx.assets.openFd(if (m.kind == MethodKind.WOMB) AndroidAudio.WOMB_ASSET else AndroidAudio.LULLABY_ASSET).use { fd -> SongLoudness.lufs { it.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) } }
+        MethodKind.WOMB, MethodKind.LULLABY -> ctx.assets.openFd(if (m.kind == MethodKind.WOMB) AndroidAudio.WOMB_ASSET else AndroidAudio.LULLABY_ASSET)
+            .use { fd -> SongLoudness.lufs { it.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) } }
         MethodKind.SONG -> m.songId?.let { CarPaths.songFile(ctx, it) }?.takeIf { it.isFile }?.let { f -> SongLoudness.lufs { it.setDataSource(f.path) } }
     }
 } catch (e: Exception) { Log.w("SCENARIO", "음원 크기를 재지 못함 $m", e); null }

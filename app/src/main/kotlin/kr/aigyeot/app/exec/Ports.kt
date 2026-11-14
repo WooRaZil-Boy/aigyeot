@@ -13,7 +13,7 @@ internal fun interface Sched { fun after(ms: Long, task: () -> Unit): () -> Unit
 
 /** 재생(AudioManager·AudioTrack·MediaPlayer). 재생은 한 번에 하나다. */
 internal interface AudioPort {
-    /** C74: getDevices(OUTPUTS)에 bus100_audio_zone_1이 있는가. */
+    /** getDevices(OUTPUTS)에 bus100_audio_zone_1이 있는가. */
     fun hasRearOutput(): Boolean
     /** USAGE_MEDIA 포커스 요청(동기). 거절이면 false. 바뀌면 [onChange]. */
     fun requestFocus(onChange: (FocusChange) -> Unit): Boolean
@@ -34,13 +34,13 @@ internal interface Track {
     fun release()
 }
 
-/** Pleos TTS. 운전자 한 문장(C72). [done]은 말했으면 true. */
+/** Pleos TTS. 운전자 한 문장. [done]은 말했으면 true. */
 internal interface TtsPort {
     fun speak(text: String, done: (Boolean) -> Unit)
     fun stop()
 }
 
-/** Pleos STT ON_DEVICE, PCM 직접 넣기(sendAudio). 11-03 실측 경로(stt_listen_1103). */
+/** Pleos STT ON_DEVICE, PCM 직접 넣기(sendAudio). */
 internal interface SttPort {
     /** [onText]의 두 번째 값은 최종 결과인지(ResultListener.onUpdated의 completed). */
     fun begin(onText: (String, Boolean) -> Unit)
@@ -59,11 +59,11 @@ internal interface MicTap {
 internal interface ControlPort {
     fun read(kind: ControlKind, area: Area, cb: (Double?) -> Unit)
     fun write(kind: ControlKind, area: Area, value: Double, ack: (Boolean) -> Unit)
-    /** 공조 설정 온도 최솟값(차가 알려 주는 범위, C101). 못 읽으면 null — [Controls]가 `Params.hvacMinC`를 쓴다. */
+    /** 공조 설정 온도 최솟값(차가 알려 주는 범위). 못 읽으면 null — [Controls]가 `Params.hvacMinC`를 쓴다. */
     fun minTemp(area: Area, cb: (Double?) -> Unit) = cb(null)
 }
 
-/** NaviHelper addWaypoint. 결과 콜백(경로 변경)이나 오류만 [done]으로 준다(C75). [note]는 ControlLog actual. */
+/** NaviHelper addWaypoint. 결과 콜백(경로 변경)이나 오류만 [done]으로 준다. [note]는 ControlLog actual. */
 internal interface NaviPort {
     /** [rest]는 판단 코어 경로 상태의 그 쉼터(이름·남은 거리, 좌표 찾기에 쓴다). 모르면 null. */
     fun addWaypoint(restId: String, rest: RestCandidate?, done: (ok: Boolean, note: String) -> Unit)

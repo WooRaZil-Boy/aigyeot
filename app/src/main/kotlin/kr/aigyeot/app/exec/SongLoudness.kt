@@ -1,5 +1,6 @@
 package kr.aigyeot.app.exec
 
+import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaExtractor
@@ -16,13 +17,13 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * exec가 채우고 link가 부른다(contracts-link 8.4 '노래 받기 작업'의 '−30 LUFS 사본(실행기)').
+ * exec가 채우고 link가 부른다('노래 받기 작업'의 '−30 LUFS 사본(실행기)').
  * 방법: m4a를 풀어 BS.1770 통합 크기와 표본 정점을 잰다 → 이득 = 10^((−30 − 크기)/20) → 맞춘 정점이 −1 dBFS를 넘으면 peak_limit
  * → 같은 표본율·채널의 AAC-LC m4a로 다시 쓴다(파일 이름 약속 CarPaths.songFile 그대로). 이득이 ±0.5 dB 안이면 다시 쓰지 않고 복사한다.
  * 이득을 곱한 PCM을 다시 재어 −30 LUFS ±[Params.lufsTolerance] 밖이면 사본을 거절한다(문턱 아래였던 구간이 이득으로 들어오는 경우).
  */
 object SongLoudness {
-    /** 받은 원본을 −30 LUFS 사본으로 만든다. 거절이면 reason에 contracts-link 3.3 song_status 사유(peak_limit·silent·bad_format). */
+    /** 받은 원본을 −30 LUFS 사본으로 만든다. 거절이면 reason에 song_status 사유(peak_limit·silent·bad_format). */
     suspend fun makeCopy(input: File, output: File): LoudnessResult = withContext(Dispatchers.IO) {
         val (meter, fmt) = try { measure(input) } catch (e: Exception) { return@withContext LoudnessResult(false, "bad_format") }
         val p = Params()
@@ -122,7 +123,8 @@ object SongLoudness {
                     if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         moved = true
                         val f = codec.outputFormat
-                        if (f.containsKey(MediaFormat.KEY_PCM_ENCODING)) require(f.getInteger(MediaFormat.KEY_PCM_ENCODING) == android.media.AudioFormat.ENCODING_PCM_16BIT)
+                        if (f.containsKey(MediaFormat.KEY_PCM_ENCODING))
+                            require(f.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_16BIT)
                         fmt = Fmt(f.getInteger(MediaFormat.KEY_SAMPLE_RATE), f.getInteger(MediaFormat.KEY_CHANNEL_COUNT))
                     } else if (o >= 0) {
                         moved = true
@@ -180,7 +182,8 @@ object SongLoudness {
                         when {
                             o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> { track = mux.addTrack(enc.outputFormat); mux.start() }
                             o >= 0 -> {
-                                if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && info.size > 0) mux.writeSampleData(track, enc.getOutputBuffer(o)!!, info)
+                                if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && info.size > 0)
+                                    mux.writeSampleData(track, enc.getOutputBuffer(o)!!, info)
                                 enc.releaseOutputBuffer(o, false)
                                 if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) { eos = true; return }
                             }
@@ -210,7 +213,7 @@ object SongLoudness {
                 }
                 val f = MediaFormat.createAudioFormat(mime, fmt.rate, fmt.channels).apply {
                     setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-                    setInteger(MediaFormat.KEY_BIT_RATE, 64_000)                 // 명세서 14장 '모노 64 kbps 안팎'
+                    setInteger(MediaFormat.KEY_BIT_RATE, 64_000)                 // 모노 64 kbps 안팎
                 }
                 enc.configure(f, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 enc.start()

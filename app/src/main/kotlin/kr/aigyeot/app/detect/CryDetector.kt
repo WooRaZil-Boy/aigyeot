@@ -30,7 +30,7 @@ class CryDetector(
     private var zeroDeadline = 0L // 그 확인 대기가 끝나는 시각. 표본이 더 안 와 SILENCED가 안 나가도 이때부터는 무응답 검사를 한다
     private var closed = false
 
-    /** 장면 재생기가 `cry: true` 녹음을 넣은 시각(C36). 켜 있는 동안 구간에 실린다. */
+    /** 장면 재생기가 `cry: true` 녹음을 넣은 시각. 켜 있는 동안 구간에 실린다. */
     @Volatile var injectedCryAt: Long? = null
 
     /** 입력을 열 때 부른다. 감시 기준 시각을 잡는다. */
@@ -49,7 +49,7 @@ class CryDetector(
     @Synchronized fun shutdown() { closed = true }
 
     /**
-     * 읽기 오류·마이크 서비스 비정상 종료(C69). 러너가 보내는 오류는 잠금 안에서 [shutdown] 여부를 다시 본다(종료 뒤에 InputLost가 나가면 이어받기가 어긋난다).
+     * 읽기 오류·마이크 서비스 비정상 종료. 러너가 보내는 오류는 잠금 안에서 [shutdown] 여부를 다시 본다(종료 뒤에 InputLost가 나가면 이어받기가 어긋난다).
      * 서비스 [kr.aigyeot.app.detect.MicService.onDestroy]가 보내는 마지막 알림만 [force]로 닫힌 뒤에도 낸다.
      */
     @Synchronized fun onMicError(force: Boolean = false) { if (force || !closed) lose(MIC_ERROR) }
@@ -66,11 +66,11 @@ class CryDetector(
             zeroRun = if (allZero) run else window.size - 1 - last // 다음 창으로 이어질 끝쪽 연속 0
             if (allZero && !lastZero) zeroDeadline = end - Detect.WINDOW_MS + Detect.TIMEOUT_MS // 0 확인 대기의 고정 만료: 첫 0 창 시작 + 3초
             lastZero = allZero
-            // C68: isClientSilenced가 없어도 rms 0.0이 3초면 무음. 복귀하는 창의 앞쪽 0까지 합쳐 문턱을 넘으면 먼저 SILENCED를 낸다
+            // isClientSilenced가 없어도 rms 0.0이 3초면 무음. 복귀하는 창의 앞쪽 0까지 합쳐 문턱을 넘으면 먼저 SILENCED를 낸다
             if (silenced || run >= Detect.SILENCE_SAMPLES) lose(SILENCED)
             if (!silenced && !allZero && SILENCED in pauses) restore(SILENCED, end) // 무음 표시가 꺼지고 0이 아닌 표본이 올 때만 복귀(전부 0이면 그대로)
-            // rms 0.0인 창은 아직 SILENCED 전이라도 추적기에 넣지 않고 비운다: 무음이 낀 구간을 '조용함'(그침)으로 내보내면 되돌릴 수 없다(C68)
-            // 마지막 구간 수신 시각은 건드리지 않는다: 가끔 끼는 0 창이 무응답 감시를 미루지 못하게(G41). 무음 확인 중에는 checkTimeout이 기다린다
+            // rms 0.0인 창은 아직 SILENCED 전이라도 추적기에 넣지 않고 비운다: 무음이 낀 구간을 '조용함'(그침)으로 내보내면 되돌릴 수 없다
+            // 마지막 구간 수신 시각은 건드리지 않는다: 가끔 끼는 0 창이 무응답 감시를 미루지 못하게. 무음 확인 중에는 checkTimeout이 기다린다
             if (allZero) tracker.reset()
             silenced || allZero
         }
@@ -94,7 +94,7 @@ class CryDetector(
     @Synchronized fun finish() { if (!closed) tracker.flushShort(clock(), injectedCryAt)?.let(::publish) }
 
     /**
-     * 판별기 무응답(G41): 구간이 3초 넘게 안 오면 InputLost(DETECTOR_TIMEOUT). 감시 스레드가 주기적으로 부른다.
+     * 판별기 무응답: 구간이 3초 넘게 안 오면 InputLost(DETECTOR_TIMEOUT). 감시 스레드가 주기적으로 부른다.
      * 입력을 새로 연 뒤(열기·MIC_ERROR·SILENCED 복귀)의 첫 구간은 창 3개가 차야 나오므로 기준을 그 + 2.925초로 늦춘다. 구간을 한 번 받은 뒤(무응답 복귀 포함)에는
      * 마지막 구간 시각부터 3초다. 다른 사유로 멈춘 동안은 보지 않는다.
      */

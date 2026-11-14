@@ -12,8 +12,11 @@ import com.google.mediapipe.tasks.audio.core.RunningMode
 import com.google.mediapipe.tasks.components.containers.AudioData
 import com.google.mediapipe.tasks.core.BaseOptions
 import java.io.BufferedInputStream
+import java.io.Closeable
 import java.io.File
+import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Arrays
 
 // 16kHz 모노 s16 PCM 입력원. 한 번에 YAMNet 창 하나(15600표본)를 채워 돌려준다.
 interface PcmSource {
@@ -32,7 +35,7 @@ interface PcmSource {
 // 창 점수기. 창(15600표본) → 521 점수. MediaPipe는 JVM에서 돌지 않으니 시험에서는 가짜로 바꾼다.
 fun interface WindowScorer { fun score(window: ShortArray): FloatArray }
 
-class MediaPipeScorer(context: Context, modelAsset: String = "yamnet.tflite") : WindowScorer, java.io.Closeable {
+class MediaPipeScorer(context: Context, modelAsset: String = "yamnet.tflite") : WindowScorer, Closeable {
     private val classifier = AudioClassifier.createFromOptions(context, AudioClassifier.AudioClassifierOptions.builder()
         .setBaseOptions(BaseOptions.builder().setModelAssetPath(modelAsset).build())
         .setRunningMode(RunningMode.AUDIO_CLIPS).build()) // setMaxResults 호출 금지: -1은 기기에서 IllegalArgumentException. 생략하면 521개 전부 온다(프로브와 같다)
@@ -63,8 +66,8 @@ class FilePcmSource(private val file: File, private val realtime: Boolean = fals
         var n = 0
         while (n < bytes.size) { val r = ins.read(bytes, n, bytes.size - n); if (r < 0) break; n += r }
         if (n == 0) return PcmSource.END
-        java.util.Arrays.fill(bytes, n, bytes.size, 0)
-        java.nio.ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(out, 0, Detect.WINDOW_SAMPLES)
+        Arrays.fill(bytes, n, bytes.size, 0)
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(out, 0, Detect.WINDOW_SAMPLES)
         if (realtime) Thread.sleep(Detect.WINDOW_MS)
         return Detect.WINDOW_SAMPLES
     }
@@ -73,7 +76,7 @@ class FilePcmSource(private val file: File, private val realtime: Boolean = fals
     override fun close() { input?.close(); input = null }
 }
 
-// 차 마이크(AudioRecord). 무음 처리는 registerAudioRecordingCallback으로 본다(명세서 6장).
+// 차 마이크(AudioRecord). 무음 처리는 registerAudioRecordingCallback으로 본다.
 class MicPcmSource(context: Context) : PcmSource {
     private var rec: AudioRecord? = null
     @Volatile private var silenced = false
@@ -89,7 +92,8 @@ class MicPcmSource(context: Context) : PcmSource {
     }
 
     override fun start() {
-        val size = maxOf(AudioRecord.getMinBufferSize(Detect.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), Detect.WINDOW_SAMPLES * 4)
+        val size = maxOf(AudioRecord.getMinBufferSize(Detect.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT),
+            Detect.WINDOW_SAMPLES * 4)
         val r = AudioRecord(MediaRecorder.AudioSource.MIC, Detect.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
         if (r.state != AudioRecord.STATE_INITIALIZED) { r.release(); error("AudioRecord 초기화 실패") } // rec에 넣기 전이라 close가 못 놓는다
         rec = r

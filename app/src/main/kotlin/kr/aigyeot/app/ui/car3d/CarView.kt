@@ -1,6 +1,5 @@
 package kr.aigyeot.app.ui.car3d
 
-import kr.aigyeot.app.ui.Tokens
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.Choreographer
@@ -14,12 +13,13 @@ import com.google.android.filament.View
 import com.google.android.filament.Viewport
 import com.google.android.filament.android.FilamentHelper
 import com.google.android.filament.android.UiHelper
+import kr.aigyeot.app.ui.Tokens
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * 3D 보기 하나(TextureView 하나). 그리기는 필요할 때만: 카메라 이동·손가락 회전(감쇠)·소리 결·빛 맥박이 실제로 움직일 때만 다음 프레임을 잇고,
- * 그 밖에는 0프레임(시안 car3d.js View). 주행 중([Stage3d.drive])·동작 줄이기면 조작을 끄고 상태가 바뀔 때 한 장만 그린다.
+ * 그 밖에는 0프레임. 주행 중([Stage3d.drive])·동작 줄이기면 조작을 끄고 상태가 바뀔 때 한 장만 그린다.
  * [intro]면(홈 무대) 앱 프로세스에서 처음 한 번, 첫 그림을 바깥 모습(HERO)으로 그리고 잠깐 멈췄다가 지금 상태 자리로 돌며 껍데기가 X-ray로 바뀐다.
  * 메인 스레드 전용. 화면을 떠나면 [destroy].
  */
@@ -100,7 +100,8 @@ class CarView(context: Context, private val interactive: Boolean, intro: Boolean
     private var destroyed = false
 
     /** 카메라 이동. [start]가 [PENDING]이면 첫 그림을 기다리는 시작 연출. [intro]는 앞 멈춤([hold])이 있고, 손으로 끌면 그 자리에서 넘겨준다. [cont]는 움직이던 중에 바뀐 목표([CONT_EASE]). */
-    private data class Fly(val from: Cam, val to: Cam, val x0: Float, val x1: Float, val start: Long, val ms: Int, val done: () -> Unit, val intro: Boolean = false, val cont: Boolean = false) {
+    private data class Fly(val from: Cam, val to: Cam, val x0: Float, val x1: Float, val start: Long, val ms: Int, val done: () -> Unit,
+            val intro: Boolean = false, val cont: Boolean = false) {
         fun arriveIn(now: Long) = if (start == PENDING) (INTRO_HOLD_MS + ms) * 1_000_000L else (start + ms * 1_000_000L - now).coerceAtLeast(0)
     }
 
@@ -211,7 +212,9 @@ class CarView(context: Context, private val interactive: Boolean, intro: Boolean
     }
 
     // 미뤄 둔 깨움(doFrame의 wake)이 남아 있으면 지우고 다음 장으로 당긴다(한 장을 두 번 부르지 않게)
-    fun invalidate3d() { if (!posted && !destroyed) { posted = true; Choreographer.getInstance().run { removeFrameCallback(this@CarView); postFrameCallback(this@CarView) } } }
+    fun invalidate3d() {
+        if (!posted && !destroyed) { posted = true; Choreographer.getInstance().run { removeFrameCallback(this@CarView); postFrameCallback(this@CarView) } }
+    }
 
     /** 화면이 숨으면(액티비티 멈춤·다른 화면) 프레임을 잇지 않는다. 다시 보이면 한 장부터 다시. */
     override fun onWindowVisibilityChanged(visibility: Int) {
@@ -349,11 +352,12 @@ class CarView(context: Context, private val interactive: Boolean, intro: Boolean
             invalidate3d(); return true
         }
         if (!interactive || !state.motionOk || (fly != null && fly?.intro != true)) return false
-        val k = 0.55f * 360f / max(1, height)   // 시안 OrbitControls rotateSpeed 0.55: 화면 높이만큼 끌면 약 200도(2π·dx/높이·0.55)
+        val k = 0.55f * 360f / max(1, height)   // 회전 속도 0.55: 화면 높이만큼 끌면 약 200도(2π·dx/높이·0.55)
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 fly?.takeIf { it.intro }?.let { f -> fly = null; endHold(); xray = f.x1; f.done() }   // 시작 연출 중 끌면 그 자리에서 손에 넘긴다(껍데기는 바로 X-ray)
-                parent?.requestDisallowInterceptTouchEvent(true); dragging = true; lastX = ev.x; lastY = ev.y; lastMoveAt = ev.eventTime; vAz = 0f; vEl = 0f; setMoved(true); invalidate3d() }
+                parent?.requestDisallowInterceptTouchEvent(true); dragging = true; lastX = ev.x; lastY = ev.y; lastMoveAt = ev.eventTime
+                vAz = 0f; vEl = 0f; setMoved(true); invalidate3d() }
             MotionEvent.ACTION_MOVE -> {
                 // 오른쪽으로 끌면 방위가 줄어든다(three OrbitControls rotateLeft와 같은 방향), 아래로 끌면 위에서 내려다본다
                 val daz = -(ev.x - lastX) * k; val del = (ev.y - lastY) * k
@@ -411,7 +415,7 @@ class CarView(context: Context, private val interactive: Boolean, intro: Boolean
 internal fun drawnSince(shownTs: Long, fromNs: Long): Boolean = fromNs >= 0 && shownTs >= fromNs
 
 /**
- * 홈 무대의 첫 그림이 시작 연출을 소진하는가(계약 `stage`(3D)): 정차 홈이면 소진한다(동작 줄이기면 연출 없이 cabin이고 그것으로 끝).
+ * 홈 무대의 첫 그림이 시작 연출을 소진하는가: 정차 홈이면 소진한다(동작 줄이기면 연출 없이 cabin이고 그것으로 끝).
  * 주행 중 무대가 먼저 보였으면 소진하지 않는다: 그 보기는 연출 없이 지금 자리이고 연출은 처음 정차 홈에서 한다(정차 홈은 새 CarView라 다시 무장한다).
  */
 internal fun consumeIntro(s: Stage3d): Boolean = !s.drive

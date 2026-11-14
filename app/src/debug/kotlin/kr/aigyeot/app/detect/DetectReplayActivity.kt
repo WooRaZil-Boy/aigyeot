@@ -12,7 +12,8 @@ import java.util.Locale
 
 // debug 전용(기기 회귀): 앱 files 폴더의 .pcm(16kHz mono s16le)을 감지 파이프라인(실제 YAMNet + 판별층)에 넣고,
 // 프로브 SoundProbe와 같은 형식의 로그를 찍는다. 태그 DETECT. 맥 기준값(ref.json)과 소수 둘째 자리까지 같아야 한다.
-//   am start -n kr.aigyeot.app/.detect.DetectReplayActivity --user 10 [--es file 이름] [--ez realtime true] [--ei repeat N]   (이름 생략하면 .pcm 전부, realtime은 창마다 0.975초를 기다려 마이크 속도로 흘린다)
+//   am start -n kr.aigyeot.app/.detect.DetectReplayActivity --user 10 [--es file 이름] [--ez realtime true] [--ei repeat N]
+//   (이름 생략하면 .pcm 전부, realtime은 창마다 0.975초를 기다려 마이크 속도로 흘린다)
 class DetectReplayActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,7 +36,10 @@ class DetectReplayActivity : Activity() {
         val timed = WindowScorer { w -> val a = System.nanoTime(); val r = scorer.score(w); synchronized(times) { times += System.nanoTime() - a }; r }
         repeat(repeatN) { replayOnce(f, head, timed, scorer, segs) }
         val ts = synchronized(times) { times.sorted() }
-        if (ts.isNotEmpty()) Log.i(TAG, "SCORE ${f.nameWithoutExtension} windows=${ts.size} median=${ts[ts.size / 2] / 1000}us p99=${ts[(ts.size * 0.99).toInt().coerceAtMost(ts.size - 1)] / 1000}us max=${ts.last() / 1000}us")
+        if (ts.isNotEmpty()) {
+            Log.i(TAG, "SCORE ${f.nameWithoutExtension} windows=${ts.size} median=${ts[ts.size / 2] / 1000}us " +
+                "p99=${ts[(ts.size * 0.99).toInt().coerceAtMost(ts.size - 1)] / 1000}us max=${ts.last() / 1000}us")
+        }
         scorer.close()
     }
 

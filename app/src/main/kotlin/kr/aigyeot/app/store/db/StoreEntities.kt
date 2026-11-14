@@ -10,11 +10,11 @@ import kotlinx.serialization.json.Json
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.Unjudged
 
-// 계약 contracts-car.md 6.1의 store 몫 표. 칼럼 이름·타입·PK·인덱스는 표 그대로다(시각 epoch ms Long, 열거 String, 목록 JSON String).
+// store 몫 표. 저장 형식(시각 epoch ms Long, 열거 String, 목록 JSON String).
 // 엔티티 목록·버전은 AppDatabase에 있다.
 // 주의: 부모 행(session·episode)을 @Insert(REPLACE)로 쓰면 지웠다 넣어 CASCADE로 자식 행이 지워진다. @Upsert나 @Update를 쓴다.
 
-/** 13장 ChildProfile(한 행). */
+/** ChildProfile(한 행). */
 @Entity(tableName = "child_profile")
 data class ChildProfileEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
@@ -27,19 +27,19 @@ data class ChildProfileEntity(
     @ColumnInfo(name = "has_sibling") val hasSibling: Boolean,
     @ColumnInfo(name = "front_fallback_allowed") val frontFallbackAllowed: Boolean,
     @ColumnInfo(name = "consent_at") val consentAt: Long,
-    @ColumnInfo(name = "ai_notice_version") val aiNoticeVersion: Int,   // C122. 옛 DB 행은 이전에서 0
+    @ColumnInfo(name = "ai_notice_version") val aiNoticeVersion: Int,   // 옛 DB 행은 이전에서 0
 )
 
-/** 지금 AI 전송 안내 판(C122). 안내 문구가 바뀌어 다시 동의받아야 하면 올린다. */
+/** 지금 AI 전송 안내 판. 안내 문구가 바뀌어 다시 동의받아야 하면 올린다. */
 const val AI_NOTICE_VERSION = 1
 
-/** 프로필이 없거나 지금 판 안내를 확인하지 않았으면 설정 화면부터 보인다(C122). */
+/** 프로필이 없거나 지금 판 안내를 확인하지 않았으면 설정 화면부터 보인다. */
 fun ChildProfileEntity?.needsSetup() = this == null || aiNoticeVersion < AI_NOTICE_VERSION
 
-/** 설정 화면 동의 체크 초기값: 지금 판 안내를 이미 확인한 프로필만 체크된 채다(C122). */
+/** 설정 화면 동의 체크 초기값: 지금 판 안내를 이미 확인한 프로필만 체크된 채다. */
 fun ChildProfileEntity?.consentChecked() = this != null && !needsSetup()
 
-/** 13장 Session. */
+/** Session. */
 @Entity(tableName = "session", indices = [Index("started_at")])
 data class SessionEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
@@ -59,7 +59,7 @@ data class SessionEntity(
     @ColumnInfo(name = "driver_user_id") val driverUserId: Int,
 )
 
-/** 13장 Episode. */
+/** Episode. */
 @Entity(
     tableName = "episode",
     foreignKeys = [ForeignKey(SessionEntity::class, ["id"], ["session_id"], onDelete = ForeignKey.CASCADE)],
@@ -115,7 +115,7 @@ data class PlayLogEntity(
     @ColumnInfo(name = "end_reason") val endReason: String,
 )
 
-/** G4: 기록만 한 경보. 표는 FK만 적어 CASCADE는 다른 기록 표와 맞춘 것이다. */
+/** 기록만 한 경보. 표는 FK만 적어 CASCADE는 다른 기록 표와 맞춘 것이다. */
 @Entity(
     tableName = "alarm_log",
     foreignKeys = [ForeignKey(SessionEntity::class, ["id"], ["session_id"], onDelete = ForeignKey.CASCADE)],
@@ -129,7 +129,7 @@ data class AlarmLogEntity(
     @ColumnInfo(name = "reason") val reason: String,
 )
 
-/** 13장 ContextSample(F17). */
+/** ContextSample. */
 @Entity(
     tableName = "context_sample",
     primaryKeys = ["episode_id", "at"],
@@ -149,7 +149,7 @@ data class ContextSampleEntity(
     @ColumnInfo(name = "cry_p") val cryP: Double?,
 )
 
-/** 13장 ControlLog(F19). exec가 만들고 호스트가 store와 HostApi.controlLog로 넘긴다. */
+/** ControlLog. exec가 만들고 호스트가 store와 HostApi.controlLog로 넘긴다. */
 @Entity(tableName = "control_log", indices = [Index("at"), Index("session_id")])
 data class ControlLogEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0,
@@ -163,10 +163,10 @@ data class ControlLogEntity(
     @ColumnInfo(name = "applied_ms") val appliedMs: Long?,
     @ColumnInfo(name = "ok") val ok: Boolean,
     @ColumnInfo(name = "retries") val retries: Int,
-    @ColumnInfo(name = "cmd_id") val cmdId: String? = null,   // 그 줄을 낸 명령의 cmdId·playId. 리포트가 한 명령의 여러 줄을 한 번으로 센다(앰비언트 밝기·색, C361)
+    @ColumnInfo(name = "cmd_id") val cmdId: String? = null,   // 그 줄을 낸 명령의 cmdId·playId. 리포트가 한 명령의 여러 줄을 한 번으로 센다(앰비언트 밝기·색)
 )
 
-/** G38 조향 창(F9). CASCADE는 alarm_log와 같은 이유. */
+/** 조향 창. CASCADE는 alarm_log와 같은 이유. */
 @Entity(
     tableName = "steer_window",
     primaryKeys = ["session_id", "start_at"],
@@ -180,11 +180,11 @@ data class SteerWindowEntity(
     @ColumnInfo(name = "cry_present") val cryPresent: Boolean,
     @ColumnInfo(name = "playing") val playing: Boolean,
     @ColumnInfo(name = "reversals") val reversals: Int,
-    /** C312: 이 창 동안 판단 코어가 울음을 봤나. 아니면 cry_present=0이 '울음 없음'이 아니라 '보지 못함'이다. */
+    /** 이 창 동안 판단 코어가 울음을 봤나. 아니면 cry_present=0이 '울음 없음'이 아니라 '보지 못함'이다. */
     @ColumnInfo(name = "observed", defaultValue = "1") val observed: Boolean = true,
 )
 
-/** 13장 PhoneLink. */
+/** PhoneLink. */
 @Entity(tableName = "phone_link")
 data class PhoneLinkEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
@@ -195,7 +195,7 @@ data class PhoneLinkEntity(
     @ColumnInfo(name = "handoff_alerts") val handoffAlerts: Boolean,
 )
 
-/** 13장 Song. */
+/** Song. */
 @Entity(tableName = "song", indices = [Index("status")])
 data class SongEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
@@ -211,7 +211,7 @@ data class SongEntity(
     @ColumnInfo(name = "last_seq") val lastSeq: Long,
 )
 
-/** 3-14 ⑤ 상태 저장(한 행, id = 1). */
+/** 상태 저장(한 행, id = 1). */
 @Entity(tableName = "engine_snapshot")
 data class EngineSnapshotEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: Int = 1,
@@ -219,7 +219,7 @@ data class EngineSnapshotEntity(
     @ColumnInfo(name = "state") val state: String, // EngineState JSON
 )
 
-/** 목록 칼럼 ↔ JSON String(6.1 '공통'). */
+/** 목록 칼럼 ↔ JSON String. */
 class Converters {
     @TypeConverter fun methodsToJson(v: List<Method>): String = Json.encodeToString(v)
     @TypeConverter fun methodsFromJson(v: String): List<Method> = Json.decodeFromString(v)
@@ -235,7 +235,7 @@ object ControlApi {
     const val HVAC_TEMP = "setHvacTemperature"
     const val AMBIENT_BRIGHTNESS = "setAmbientLightBrightness"
     const val AMBIENT_COLOR = "setAmbientLightBrightnessColor"
-    /** 앰비언트 줄 목표: 낮춤 "dim:값", 되돌림 "restore:값"(C361). */
+    /** 앰비언트 줄 목표: 낮춤 "dim:값", 되돌림 "restore:값". */
     const val DIM = "dim:"
     const val RESTORE = "restore:"
 }
@@ -244,7 +244,7 @@ object ControlApi {
 enum class ControlAct { SEAT_HEAT_OFF, WINDOW_LOCK, WINDOW_RESTORE, CABIN_COOL, READING_LIGHT_OFF, AMBIENT_DIM, AMBIENT_RESTORE, OTHER }
 
 /**
- * 줄의 뜻(api 이름 + 목표 글자). 열선·공조·독서등은 앱이 끄거나 낮추기만 하므로 api로, 뒷창은 목표가 참이면 잠금·아니면 되돌림(C335·3f),
+ * 줄의 뜻(api 이름 + 목표 글자). 열선·공조·독서등은 앱이 끄거나 낮추기만 하므로 api로, 뒷창은 목표가 참이면 잠금·아니면 되돌림,
  * 앰비언트는 목표 앞 글자로 낮춤·되돌림을 가른다. 경유지·재생 등 다른 줄은 OTHER.
  */
 fun controlAct(api: String, goal: String): ControlAct = when (api) {

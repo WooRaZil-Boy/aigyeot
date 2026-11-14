@@ -19,28 +19,30 @@ import java.util.Locale
 
 internal const val REAR_ZONE = "bus100_audio_zone_1"
 
-/** 포커스 요청 줄의 goal: 원한 결과와 요청 context·gain 종류(Audio.kt의 요청과 같게, C321). */
+/** 포커스 요청 줄의 goal: 원한 결과와 요청 context·gain 종류(Audio.kt의 요청과 같게). */
 internal const val FOCUS_GOAL = "GRANTED(USAGE_MEDIA, GAIN_TRANSIENT)"
 
 /**
- * control_log 한 줄(계약 6.1). session_id·at은 여기서 채운다.
- * V13(P5): session_id는 결과가 온 때의 상태가 아니라 명령을 낸 세션이다. [ref]는 그 명령의 cmdId·playId(`{세션 id}-{seq}`)이고
+ * control_log 한 줄. session_id·at은 여기서 채운다.
+ * session_id는 결과가 온 때의 상태가 아니라 명령을 낸 세션이다. [ref]는 그 명령의 cmdId·playId(`{세션 id}-{seq}`)이고
  * 세션 id는 [sessionIdOf] 하나로 얻는다. 명령 없이 나는 줄(Exec start 등)만 ref가 null이라 지금 세션([session])을 쓴다.
  */
 internal class ControlLogger(private val clock: () -> Long, private val session: () -> String?, private val sink: (ControlLogEntity) -> Unit) {
     /** 저장 쪽이 던져도 삼킨다: 기록 실패가 재생 예약·제어 결과를 끊으면 안 된다(로그는 부수 효과). */
-    fun row(ref: String?, api: String, target: String, goal: String, actual: String?, ok: Boolean, ackMs: Long? = null, appliedMs: Long? = null, retries: Int = 0) {
+    fun row(ref: String?, api: String, target: String, goal: String, actual: String?,
+            ok: Boolean, ackMs: Long? = null, appliedMs: Long? = null, retries: Int = 0) {
         try {
-            sink(ControlLogEntity(sessionId = if (ref != null) sessionIdOf(ref) else session(), at = clock(), api = api, target = target, goal = goal, actual = actual,
+            sink(ControlLogEntity(sessionId = if (ref != null) sessionIdOf(ref) else session(), at = clock(),
+                api = api, target = target, goal = goal, actual = actual,
                 ackMs = ackMs, appliedMs = appliedMs, ok = ok, retries = retries, cmdId = ref))
         } catch (e: Exception) { /* 무시 */ }
     }
 }
 
 /**
- * 뒷좌석 재생(계약 4.1 '실행기가 지킬 재생 규칙', 명세서 7·14장).
+ * 뒷좌석 재생.
  * 이득 = 기본(뒷좌석 1.0, 앞 폴백 0.3) × 페이드 × 감쇄. 기본은 내려가기만 하고 페이드는 시간이 갈수록 작아지므로,
- * 감쇄가 풀릴 때 감쇄 직전 이득(그사이 페이드에 들어갔으면 페이드 값)보다 커지지 않는다(14장 볼륨 상한 ①).
+ * 감쇄가 풀릴 때 감쇄 직전 이득(그사이 페이드에 들어갔으면 페이드 값)보다 커지지 않는다(볼륨 상한).
  */
 internal class Player(
     private val audio: AudioPort,
@@ -48,7 +50,7 @@ internal class Player(
     private val clock: () -> Long,
     private val post: (Event) -> Unit,
     private val log: ControlLogger,
-    private val frontAllowed: () -> Boolean,        // 프로필 frontFallbackAllowed(D12)
+    private val frontAllowed: () -> Boolean,        // 프로필 frontFallbackAllowed
     private val p: Params,
 ) {
     private inner class Cur(val id: String, val track: Track, val rear: Boolean, val endAt: Long, val fadeMs: Long, var base: Float) {
@@ -73,7 +75,7 @@ internal class Player(
         }
         val granted = try {
             audio.requestFocus { change ->
-                // 끝난 재생의 영구 상실도 알린다(5.5 14c: GAP·CONFIRM에서 앞 재생의 LOSS는 WAIT로). 그 밖은 현재 재생일 때만
+                // 끝난 재생의 영구 상실도 알린다(GAP·CONFIRM에서 앞 재생의 LOSS는 WAIT로). 그 밖은 현재 재생일 때만
                 if (change == FocusChange.LOSS || cur?.id == c.playId) post(FocusChanged(clock(), c.playId, change))
             }
         } catch (e: Exception) { return reject(c.playId, "requestAudioFocus ${e.message}") }
@@ -89,11 +91,11 @@ internal class Player(
         cur = x
         // Track.start()는 소리 없이 시작해 경로를 정한다. 이득은 경로를 안 뒤에 처음 정한다(폴백이면 처음부터 0.3)
         val routed = try { track.start() } catch (e: Exception) { cur = null; track.release(); return reject(c.playId, "start ${e.message}") }
-        // 시작하자마자 다른 곳으로 나가면(D12): 허락했으면 이득 0.3의 폴백으로 알리고, 아니면 알린 뒤 바로 멈춘다(PlaybackEnded(ERROR))
+        // 시작하자마자 다른 곳으로 나가면: 허락했으면 이득 0.3의 폴백으로 알리고, 아니면 알린 뒤 바로 멈춘다(PlaybackEnded(ERROR))
         val elsewhere = rear && routed != null && routed != REAR_ZONE
         val front = elsewhere && frontAllowed()
         if (front) x.base = p.fallbackGain.toFloat()
-        // 뒷좌석인데 경로가 아직 null이면 무음으로 알리고(2.4 '재생 시작 결과 먼저'), 첫 onRouted나 확인 타이머가 정한다
+        // 뒷좌석인데 경로가 아직 null이면 무음으로 알리고('재생 시작 결과 먼저'), 첫 onRouted나 확인 타이머가 정한다
         x.pendingRoute = rear && routed == null
         if (!elsewhere && !x.pendingRoute || front) {
             apply(x, if (front) "fallback" else "start")
@@ -105,7 +107,7 @@ internal class Player(
         if (elsewhere && !front) return failed(c.playId, "routed $routed")
         if (x.pendingRoute) x.timers += sched.after(ROUTE_CONFIRM_MS) { confirmRoute(x) }
         x.timers += sched.after(c.endAt - c.fadeMs - clock()) { ramp(x) }
-        // 마지막 페이드 중 StopPlayback(fade)을 받았으면 DEADLINE이 아니라 STOPPED로 끝낸다(4.1)
+        // 마지막 페이드 중 StopPlayback(fade)을 받았으면 DEADLINE이 아니라 STOPPED로 끝낸다
         // 끝 시각까지 경로가 한 번도 안 정해졌으면(소리 없는 재생) DEADLINE(끝까지 틀었다)이 아니라 확인 실패와 같은 ERROR로 끝낸다
         x.timers += sched.after(c.endAt - clock()) {
             if (x.pendingRoute && x.stopFadeAt == null) resolve(x, null, true)
@@ -133,7 +135,7 @@ internal class Player(
         if (wasPaused && clock() < x.endAt) x.track.resume()                 // 남은 시간 안에서 이어 간다(endAt 그대로)
     }
 
-    /** ReleaseAudio·Suspend(3-14 ⑤): 사건 없이(계약 4.1 '돌아오는 사건 없음') 타이머·트랙·포커스를 놓고 control_log 한 줄만 남긴다. */
+    /** ReleaseAudio·Suspend: 사건 없이 타이머·트랙·포커스를 놓고 control_log 한 줄만 남긴다. */
     fun release() {
         cur?.let { x ->
             cur = null
@@ -167,7 +169,7 @@ internal class Player(
         val x = cur?.takeIf { it.id == id && it.rear } ?: return
         if (x.pendingRoute) return resolve(x, addr, false)
         if (addr == null || addr == REAR_ZONE) return
-        if (frontAllowed()) {                                          // D12: 다른 곳으로 나가면 이득 0.3으로만
+        if (frontAllowed()) {                                          // 다른 곳으로 나가면 이득 0.3으로만
             if (x.base > p.fallbackGain) { x.base = p.fallbackGain.toFloat(); apply(x, "fallback") }
             log.row(id, "getRoutedDevice", id, REAR_ZONE, addr, false)
         } else failed(id, "routed $addr")
@@ -222,7 +224,7 @@ internal class Player(
         reject(x.id, "setVolume ${e.message}")
     }
 
-    /** 이득을 바꿀 때마다(페이드 단계 포함) control_log 한 줄(C96: api AudioTrack.setVolume, goal 이득, actual 이유). 경로 미정이면 정하지 않는다. */
+    /** 이득을 바꿀 때마다(페이드 단계 포함) control_log 한 줄(api AudioTrack.setVolume, goal 이득, actual 이유). 경로 미정이면 정하지 않는다. */
     private fun apply(x: Cur, why: String) {
         if (x.pendingRoute) return
         val g = gainOf(x)
@@ -235,11 +237,11 @@ internal class Player(
     companion object {
         const val RAMP_MS = 50L
         /**
-         * 경로 미정(null)인 뒷좌석 재생이 확정을 기다리는 시간(그동안 무음). 설계값. 11-04 에뮬레이터 실측(자장가 MediaPlayer, 포커스 → 경로):
+         * 경로 미정(null)인 뒷좌석 재생이 확정을 기다리는 시간(그동안 무음). 설계값. 에뮬레이터 실측(자장가 MediaPlayer, 포커스 → 경로):
          * 보통 0.08~0.24초, 설치 직후 첫 재생 0.72초, 한 번은 1초 안에 정해지지 않아 ERROR로 끝났다(디코더 준비만 start() +0.55초). 그래서 3배 여유.
          */
         const val ROUTE_CONFIRM_MS = 3_000L
-        /** CAN_DUCK 때 줄이는 배수. 설계값, 근거 없음(14장에 감쇄 크기가 없다). 첫날 들어 보고 정한다. */
+        /** CAN_DUCK 때 줄이는 배수. 설계값, 근거 없음(감쇄 크기의 근거가 없다). 첫날 들어 보고 정한다. */
         const val DUCK_GAIN = 0.5f
     }
 }

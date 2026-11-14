@@ -11,12 +11,12 @@ import kr.aigyeot.app.link.db.RelayCredentialEntity
 import kr.aigyeot.app.store.retryingSuspend
 
 private const val TAG = "Link"
-private const val RELINK = "휴대폰을 다시 연결해 주세요"            // 9장 차 토큰 무효
+private const val RELINK = "휴대폰을 다시 연결해 주세요"            // 차 토큰 무효
 
 internal class Cred(val carId: String, val deviceId: String, val token: String)
 
 /**
- * 차 자격(8.2, 8.6): 읽기·등록·무효 처리. 자격은 link가 나눠 쓰는 두 공유 상태 중 하나다(다른 하나는 LinkStatus 흐름).
+ * 차 자격: 읽기·등록·무효 처리. 자격은 link가 나눠 쓰는 두 공유 상태 중 하나다(다른 하나는 LinkStatus 흐름).
  * 소켓 닫기·연결 코드 비우기·받기 뒤 처리·깨우기는 생성자 람다로 받는다.
  */
 internal class Creds(
@@ -26,7 +26,7 @@ internal class Creds(
     private val cipher: TokenCipher,
     private val clock: () -> Long,
     private val status: MutableStateFlow<LinkStatus>,
-    private val rx: Mutex,                              // 받기는 한 번에 하나, seq 순서(8.3). Link가 만든 하나를 함께 쓴다
+    private val rx: Mutex,                              // 받기는 한 번에 하나, seq 순서. Link가 만든 하나를 함께 쓴다
     private val onRegistered: () -> Unit,               // 등록 전에 쌓인 보낼 함·받을 노래를 바로
     private val dropSocket: () -> Unit,
     private val resetPairing: () -> Unit,               // 화면이 열려 있으면 연결 코드를 비우고 코드 반복을 깨운다
@@ -36,7 +36,7 @@ internal class Creds(
     @Volatile var cred: Cred? = null
         private set
     private val credLock = Mutex()
-    @Volatile private var nextRegisterAt = 0L                   // 차 등록 간격(8.6 '차 토큰 무효'): 이 시각 전에는 등록하지 않는다
+    @Volatile private var nextRegisterAt = 0L                   // 차 등록 간격('차 토큰 무효'): 이 시각 전에는 등록하지 않는다
     @Volatile private var registerTries = 0
 
     /** 연결·코드 받기가 성공하면 등록 간격을 처음으로. */
@@ -73,7 +73,7 @@ internal class Creds(
     }
 
     /**
-     * 차 토큰 무효(401, 닫기 4001): 자격·PhoneLink를 지우고 옛 방 순번을 버린다. 다음 계기에 새로 등록한다(8.6, G7).
+     * 차 토큰 무효(401, 닫기 4001): 자격·PhoneLink를 지우고 옛 방 순번을 버린다. 다음 계기에 새로 등록한다.
      * [c]는 401을 받은 요청의 자격. 그사이 다시 등록했으면 옛 토큰의 늦은 401로 새 방을 지우지 않는다.
      */
     suspend fun invalidate(c: Cred? = null) {
@@ -82,7 +82,7 @@ internal class Creds(
         resetPairing()
         status.update { it.copy(registered = false, error = RELINK) }   // 정리가 실패해도 다시 연결 안내는 남긴다
         rx.withLock {
-            // C302 W: 다 실패하면 던져 부른 일꾼이 다시 한다(옛 자격 행이 남아 다음 401이 이 정리를 다시 부른다)
+            // 다 실패하면 던져 부른 일꾼이 다시 한다(옛 자격 행이 남아 다음 401이 이 정리를 다시 부른다)
             val (out, gone) = retryingSuspend("새 방 정리") { Applied().let { it to room.resetForNewRoom(clock(), it) } }
             gone.forEach { CarPaths.songDownload(context, it).delete(); CarPaths.songFile(context, it).delete() }
             after(out)

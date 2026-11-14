@@ -12,18 +12,18 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kr.aigyeot.engine.CarSeat
+import kr.aigyeot.engine.CareSummary
+import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.Command
 import kr.aigyeot.engine.DEFAULT_METHODS
 import kr.aigyeot.engine.Event
 import kr.aigyeot.engine.Method
 import kr.aigyeot.engine.MethodKind
 import kr.aigyeot.engine.Phase
-import kr.aigyeot.engine.CareSummary
-import kr.aigyeot.engine.CareView
 import kr.aigyeot.engine.Profile
 import kr.aigyeot.engine.Sid
 
-// 장면 파일(계약 7.2·7.3). 모르는 동작·필드·값은 읽을 때 거절한다(틀린 이름의 expectNone이 조용히 통과하지 않게).
+// 장면 파일. 모르는 동작·필드·값은 읽을 때 거절한다(틀린 이름의 expectNone이 조용히 통과하지 않게).
 
 class SceneError(msg: String) : Exception(msg)
 
@@ -32,7 +32,7 @@ data class Scene(val id: String, val title: String, val repeat: Int, val setup: 
 data class Setup(
     val profile: Profile?, val feedingStartOffsetSec: Long?, val methods: List<Method>,
     val history: List<SeedTry>, val seed: Long, val override: Set<String>, val otherGuardians: Int,
-    val care: JsonObject? = null,   // 폰 돌봄 기록 요약 흉내(C119). 시각 칸은 장면 시작 기준 초. [careView]로 CareView가 된다
+    val care: JsonObject? = null,   // 폰 돌봄 기록 요약 흉내. 시각 칸은 장면 시작 기준 초. [careView]로 CareView가 된다
 )
 
 data class SeedTry(val method: Method, val success: Boolean, val daysAgo: Int)
@@ -56,13 +56,13 @@ data class ExpectNone(val command: String, val sid: Sid?, val type: String?, val
 val TAPS = setOf("BABY_ABOARD", "FEEDING_NOW", "FEEDING_CONFIRM_YES")
 private val INTENTS = setOf("YES", "NO", "STOP", "SWITCH_SOUND")
 val STATES = Phase.entries.map { it.name }.toSet() + "IDLE"
-/** 할 일 이름(계약 4장). 직렬화 설명에서 읽어 판단 코어와 늘 같다. */
+/** 할 일 이름. 직렬화 설명에서 읽어 판단 코어와 늘 같다. */
 val COMMANDS: Set<String> = Command.serializer().descriptor.getElementDescriptor(1).elementNames.map { it.substringAfterLast('.') }.toSet()
 private val EVENTS: Set<String> = Event.serializer().descriptor.getElementDescriptor(1).elementNames.map { it.substringAfterLast('.') }.toSet()
 private val CONTROLS = listOf("speed", "accelerator", "brake", "steering")
 private val eventJson = Json { ignoreUnknownKeys = false }
 
-/** 장면 파일의 음원 이름([methodText]의 거꾸로). C303 A19: 곡 없는 종류는 판단 코어 기본 음원 목록에서 읽는다(목록을 따로 적지 않는다). */
+/** 장면 파일의 음원 이름([methodText]의 거꾸로). 곡 없는 종류는 판단 코어 기본 음원 목록에서 읽는다(목록을 따로 적지 않는다). */
 fun parseMethod(s: String): Method = when {
     s.startsWith("SONG:") && s.length > 5 -> Method(MethodKind.SONG, s.removePrefix("SONG:"))
     else -> DEFAULT_METHODS.firstOrNull { it.kind.name == s } ?: throw SceneError("음원 이름 '$s'")
@@ -70,17 +70,18 @@ fun parseMethod(s: String): Method = when {
 
 fun methodText(m: Method) = if (m.kind == MethodKind.SONG) "SONG:${m.songId}" else m.kind.name
 
-/** inject 사건 만들기. 필드는 3장 이름 그대로, at은 호스트 시계로 채운다. */
+/** inject 사건 만들기. 필드는 메시지 형식의 이름 그대로, at은 호스트 시계로 채운다. */
 fun injectEvent(name: String, fields: JsonObject, at: Long, base: Long = at): Event =
-    if (name == "CareSummary") CareSummary(at, careView(fields, base))   // 시각 칸은 그 단계 t 기준 초(7.3)
+    if (name == "CareSummary") CareSummary(at, careView(fields, base))   // 시각 칸은 그 단계 t 기준 초
     else eventJson.decodeFromJsonElement(
         Event.serializer(),
         JsonObject(fields + mapOf("type" to JsonPrimitive("kr.aigyeot.engine.$name"), "at" to JsonPrimitive(at))),
     )
 
-/** `setup.care`·`inject CareSummary`의 초 오프셋 칸을 [base](epoch ms) 기준 CareView로(7.2). 없는 시각 칸은 null. */
+/** `setup.care`·`inject CareSummary`의 초 오프셋 칸을 [base](epoch ms) 기준 CareView로. 없는 시각 칸은 null. */
 fun careView(f: JsonObject, base: Long): CareView {
-    f.only("care", "event", "asOfSec", "sleepDiaperEnabled", "lastSleepStartSec", "lastSleepEndSec", "sleepingSinceSec", "todaySleepMin", "nightWakeups", "lastDiaperSec", "todayDiaperCount", "todayFeedCount")
+    f.only("care", "event", "asOfSec", "sleepDiaperEnabled",
+        "lastSleepStartSec", "lastSleepEndSec", "sleepingSinceSec", "todaySleepMin", "nightWakeups", "lastDiaperSec", "todayDiaperCount", "todayFeedCount")
     fun at(k: String) = f.long(k)?.let { base + it * 1000 }
     return CareView(
         base + (f.long("asOfSec") ?: throw SceneError("care.asOfSec")) * 1000,
@@ -164,7 +165,7 @@ private fun cue(s: JsonObject, setup: Setup): Cue {
             val body = obj("body") ?: JsonObject(emptyMap())
             body.num("atOffsetSec")
             val type = str("type") ?: throw SceneError("phone.type")
-            // 장면 phone은 feeding_started만(11-04 결정): 곡·선택·연결 메시지는 실제 Room과 seq 기록을 바꾼다
+            // 장면 phone은 feeding_started만: 곡·선택·연결 메시지는 실제 Room과 seq 기록을 바꾼다
             if (type != "feeding_started") throw SceneError("phone.type '$type': 장면은 feeding_started만 받는다")
             Phone(type, body)
         }
@@ -195,7 +196,7 @@ private fun cue(s: JsonObject, setup: Setup): Cue {
 
 private fun JsonObject.command(): String? = str("command")?.also { if (it !in COMMANDS) throw SceneError("할 일 이름 '$it'") }
 
-// "PUT /vehicle/gear?gear=Drive"처럼 메서드와 경로. 주행 값은 네 값을 정수로 늘 함께 보낸다(7.3, 빠진 값의 처리는 미측정).
+// "PUT /vehicle/gear?gear=Drive"처럼 메서드와 경로. 주행 값은 네 값을 정수로 늘 함께 보낸다(빠진 값의 처리는 미측정).
 private fun vc(s: String): Vc {
     val m = Regex("""^(GET|PUT|POST) (/\S*)$""").find(s) ?: throw SceneError("vc '$s'")
     val (method, path) = m.destructured
@@ -224,4 +225,6 @@ private fun JsonObject.long(k: String) = prim(k)?.let { it.longOrNull ?: throw S
 private fun JsonObject.bool(k: String) = prim(k)?.let { it.booleanOrNull ?: throw SceneError("${k}는 참·거짓") }
 private fun JsonObject.positive(k: String) = num(k)?.also { if (it <= 0) throw SceneError("$k > 0") }
 private fun JsonObject.strings(k: String): List<String> =
-    get(k)?.takeIf { it !is JsonNull }?.let { v -> (v as? JsonArray ?: throw SceneError("${k}는 문자열 목록")).map { it.str() ?: throw SceneError("${k}는 문자열 목록") } } ?: emptyList()
+    get(k)?.takeIf { it !is JsonNull }
+        ?.let { v -> (v as? JsonArray ?: throw SceneError("${k}는 문자열 목록")).map { it.str() ?: throw SceneError("${k}는 문자열 목록") } }
+        ?: emptyList()
