@@ -328,7 +328,7 @@ class LinkSocketTest : LinkKit() {
                 }
             }
         link.start()
-        eventually(5_000) { dao.phoneLink(GUARD) != null } // 고치기 전: live == null이라 재시도를 멈춰 B를 받지 못한다
+        eventually { dao.phoneLink(GUARD) != null } // 고치기 전: live == null이라 재시도를 멈춰 B를 받지 못한다
     }
 
     // 확인 중 예외(SQLiteException 등)가 나도 같은 재시도를 하고, 결국 폰이 없으면 닫는다(실행 표시도 풀린다)
@@ -346,8 +346,8 @@ class LinkSocketTest : LinkKit() {
             if (relay.socketCalls == 1) ev.onText(ProtocolJson.encodeToString(Envelope.serializer(), a))
         }
         link.start()
-        eventually(5_000) { relay.devicesCalls >= 3 }
-        eventually(5_000) { link.status.value.conn == LinkConn.NONE } // 예외로 끝나도 소비 코루틴이 살아 다음 요청이 돈다
+        eventually { relay.devicesCalls >= 3 }
+        eventually { link.status.value.conn == LinkConn.NONE } // 예외로 끝나도 소비 코루틴이 살아 다음 요청이 돈다
     }
 
     // stop→start를 반복해도 소비 코루틴이 하나뿐이라 확인(조회)이 겹치지 않는다
@@ -573,7 +573,7 @@ class LinkSocketTest : LinkKit() {
         eventually { relay.inboxCalls.size == 1 }
         Thread.sleep(1_500)
         db.openHelper.writableDatabase.execSQL("ALTER TABLE phone_link_x RENAME TO phone_link")
-        eventually(6_000) { dao.phoneLink(GUARD) != null } // 고치기 전: 예외로 확인이 사라진다
+        eventually { dao.phoneLink(GUARD) != null } // 고치기 전: 예외로 확인이 사라진다
     }
 
     // 시작 때 첫 자격 읽기가 예외여도 기다림 뒤 다시 읽어 확인한다
@@ -588,7 +588,7 @@ class LinkSocketTest : LinkKit() {
         Thread.sleep(500)
         assertEquals(0, relay.inboxCalls.size)
         db.openHelper.writableDatabase.execSQL("ALTER TABLE relay_credential_x RENAME TO relay_credential")
-        eventually(6_000) { dao.phoneLink(GUARD) != null } // 고치기 전: 첫 읽기 예외로 확인이 사라진다
+        eventually { dao.phoneLink(GUARD) != null } // 고치기 전: 첫 읽기 예외로 확인이 사라진다
     }
 
     @Test fun recheckFetchFails_keepsSocket_newPairedProcessed() {

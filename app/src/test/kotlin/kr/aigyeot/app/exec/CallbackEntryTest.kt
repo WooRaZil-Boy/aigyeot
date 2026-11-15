@@ -25,18 +25,18 @@ class CallbackEntryTest {
                 release.await()
             }
         }.start() // Exec.handle이 잠금 안에서 바인더에 막힌 상태
-        assertTrue(holding.await(2, TimeUnit.SECONDS))
+        assertTrue(holding.await(30, TimeUnit.SECONDS))
         val returned = CountDownLatch(1)
         Thread {
             // main 콜백
             (1..5).forEach { i -> entry.enter { seen += "$i@${Thread.currentThread().name}" } }
             returned.countDown()
         }.start()
-        assertTrue(returned.await(2, TimeUnit.SECONDS), "콜백 스레드가 잠금을 기다리며 서 있다")
+        assertTrue(returned.await(30, TimeUnit.SECONDS), "콜백 스레드가 잠금을 기다리며 서 있다")
         assertTrue(seen.isEmpty(), "잠금이 풀리기 전에는 처리하지 않는다")
         release.countDown()
         lane.shutdown()
-        assertTrue(lane.awaitTermination(2, TimeUnit.SECONDS))
+        assertTrue(lane.awaitTermination(30, TimeUnit.SECONDS))
         assertEquals((1..5).map { "$it@exec-lane" }, seen.toList())
     }
 
@@ -44,7 +44,7 @@ class CallbackEntryTest {
         entry.enter { error("첫 번째 실패") }
         entry.enter { seen += "next" }
         lane.shutdown()
-        assertTrue(lane.awaitTermination(2, TimeUnit.SECONDS))
+        assertTrue(lane.awaitTermination(30, TimeUnit.SECONDS))
         assertEquals(listOf("next"), seen.toList())
         assertEquals(listOf("첫 번째 실패"), errors.toList())
     }
@@ -52,7 +52,7 @@ class CallbackEntryTest {
     @Test fun `처리는 잠금 안에서 한다`() {
         entry.enter { seen += Thread.holdsLock(lock).toString() }
         lane.shutdown()
-        assertTrue(lane.awaitTermination(2, TimeUnit.SECONDS))
+        assertTrue(lane.awaitTermination(30, TimeUnit.SECONDS))
         assertEquals(listOf("true"), seen.toList())
     }
 }

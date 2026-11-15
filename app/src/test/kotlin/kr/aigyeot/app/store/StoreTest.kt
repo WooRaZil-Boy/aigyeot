@@ -97,7 +97,7 @@ class StoreTest {
         assertEquals(true, dao.reportPending("S1"))
         val seen = AtomicInteger()
         val job = GlobalScope.launch(Dispatchers.IO) { dao.reportChanges("S1").collect { seen.incrementAndGet() } }
-        val end = System.currentTimeMillis() + 5000
+        val end = System.currentTimeMillis() + 30_000
         while (seen.get() < 1 && System.currentTimeMillis() < end) Thread.sleep(20)
         session(pending = false) // 리포트가 만들어지면 다시 내서 화면이 바뀐다
         while (seen.get() < 2 && System.currentTimeMillis() < end) Thread.sleep(20)

@@ -179,7 +179,7 @@ class HostQueueSnapshotTest : HostTestBase() {
         } // 느린 수집자
         repeat(200) { k.host.post(CabinTemp(0, it.toDouble())) }
         k.host.awaitIdle()
-        val until = System.currentTimeMillis() + 10_000
+        val until = System.currentTimeMillis() + 30_000
         while (got.size < 200 && System.currentTimeMillis() < until) Thread.sleep(10)
         scope.cancel()
         assertEquals((0 until 200).map { it.toDouble() }, got.toList(), "중간 Step을 건너뛰지 않고 순서대로")

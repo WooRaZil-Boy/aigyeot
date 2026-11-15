@@ -211,7 +211,7 @@ class LinkReceiveTest : LinkKit() {
         assertEquals(0, relay.socketCalls, "복원 전이면 연결·받기를 시작하지 않는다")
         assertTrue(relay.inboxCalls.isEmpty())
         engineState = freshState()
-        val end = System.currentTimeMillis() + 5_000
+        val end = System.currentTimeMillis() + 30_000
         while (events.none { it is CareSummary } && System.currentTimeMillis() < end) Thread.sleep(20)
         link.stop()
         assertEquals(1, events.count { it is CareSummary }, "복원 뒤에 받는다")

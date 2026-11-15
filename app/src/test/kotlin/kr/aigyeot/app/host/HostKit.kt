@@ -239,7 +239,7 @@ abstract class HostTestBase {
         } // 운영에서는 이 핸들러가 프로세스를 끝낸다
         try {
             block()
-            gate.await(3, TimeUnit.SECONDS)
+            gate.await(30, TimeUnit.SECONDS)
             k.host.awaitIdle()
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(old)

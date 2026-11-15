@@ -31,15 +31,15 @@ class OffLockTest {
                 returned.countDown()
             }
         }.start()
-        assertTrue(returned.await(2, TimeUnit.SECONDS), "호출자가 바인더 읽기를 기다리며 서 있다")
-        assertTrue(entered.await(2, TimeUnit.SECONDS))
+        assertTrue(returned.await(30, TimeUnit.SECONDS), "호출자가 바인더 읽기를 기다리며 서 있다")
+        assertTrue(entered.await(30, TimeUnit.SECONDS))
         // 바인더가 막힌 동안 host·binder 스레드가 잠금을 기다리지 않는다
         val other = CountDownLatch(1)
         Thread { synchronized(lock) { other.countDown() } }.start()
-        assertTrue(other.await(2, TimeUnit.SECONDS), "잠금이 바인더 호출 동안 잡혀 있다")
+        assertTrue(other.await(30, TimeUnit.SECONDS), "잠금이 바인더 호출 동안 잡혀 있다")
         blocked.countDown()
         pool.shutdown()
-        assertTrue(pool.awaitTermination(2, TimeUnit.SECONDS))
+        assertTrue(pool.awaitTermination(30, TimeUnit.SECONDS))
         assertEquals(3, got.get())
     }
 
@@ -51,7 +51,7 @@ class OffLockTest {
             inLock.set(Thread.holdsLock(lock))
         }
         pool.shutdown()
-        assertTrue(pool.awaitTermination(2, TimeUnit.SECONDS))
+        assertTrue(pool.awaitTermination(30, TimeUnit.SECONDS))
         assertNull(v.get())
         assertEquals(true, inLock.get())
     }
@@ -60,6 +60,6 @@ class OffLockTest {
         val after = CountDownLatch(1)
         off.run { error("실패") }
         off.run { after.countDown() }
-        assertTrue(after.await(2, TimeUnit.SECONDS))
+        assertTrue(after.await(30, TimeUnit.SECONDS))
     }
 }

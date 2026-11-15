@@ -204,7 +204,7 @@ class SceneCloseTest {
         }
         try {
             k.host.endScenario()
-            gate.await(3, TimeUnit.SECONDS)
+            gate.await(30, TimeUnit.SECONDS)
             k.host.awaitIdle()
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(old)

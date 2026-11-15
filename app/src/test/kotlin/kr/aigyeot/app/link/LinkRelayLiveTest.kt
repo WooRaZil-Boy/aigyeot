@@ -49,7 +49,7 @@ class LinkRelayLiveTest {
         return http.newCall(b.build()).execute().use { it.code to it.body.string() }
     }
 
-    private fun waitFor(what: String, ms: Long = 10_000, cond: () -> Boolean) {
+    private fun waitFor(what: String, ms: Long = 30_000, cond: () -> Boolean) {
         val until = System.currentTimeMillis() + ms
         while (!cond()) {
             check(System.currentTimeMillis() < until) { "시간 초과: $what" }

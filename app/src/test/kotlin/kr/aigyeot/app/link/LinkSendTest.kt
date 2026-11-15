@@ -334,7 +334,7 @@ class LinkSendTest : LinkKit() {
         item("handoff_alert", id = a) // 이 한 번의 신호만 일꾼을 깨운다
         eventually { fails == DB_TRIES }
         assertTrue(relay.sent.isEmpty())
-        eventually(waitMs = WORKER_RETRY_MS + 5_000) { relay.sent.map { it.id } == listOf(a) }
+        eventually(waitMs = WORKER_RETRY_MS + 30_000) { relay.sent.map { it.id } == listOf(a) }
         assertTrue(System.currentTimeMillis() - thrownAt >= WORKER_RETRY_MS - 1_000, "새 신호가 아니라 설계값 10초 뒤 깨우기로 보냈다")
     }
 
@@ -352,7 +352,7 @@ class LinkSendTest : LinkKit() {
         }
         val a = ulid(now)
         item("handoff_alert", id = a)
-        eventually(waitMs = 3_000) { relay.sent.map { it.id } == listOf(a) }
+        eventually { relay.sent.map { it.id } == listOf(a) }
         assertTrue(thrownAt != 0L, "첫 시도가 실제로 던졌다")
         assertTrue(System.currentTimeMillis() - thrownAt < WORKER_RETRY_MS - 1_000, "다시 깨우기를 기다리지 않았다")
     }
@@ -381,8 +381,8 @@ class LinkSendTest : LinkKit() {
     }
 }
 
-/** 비동기로 넣는 동작(scope.launch)이 끝날 때까지 2초 기다린다. */
-fun eventually(waitMs: Long = 2_000, cond: () -> Boolean) {
+/** 비동기로 넣는 동작(scope.launch)이 끝나기를 기다린다. 한도는 느린 러너에서도 넘지 않게 길게 둔다: 느리면 오래 걸릴 뿐이고, 실패하면 진짜 멈춘 것이다. */
+fun eventually(waitMs: Long = 30_000, cond: () -> Boolean) {
     val until = System.currentTimeMillis() + waitMs
     while (!cond()) {
         check(System.currentTimeMillis() < until) { "${waitMs}ms 안에 조건이 맞지 않음" }

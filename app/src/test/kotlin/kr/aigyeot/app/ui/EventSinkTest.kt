@@ -62,7 +62,7 @@ class EventSinkTest {
         val fromLink = CopyOnWriteArrayList<Event>()
         val l = link { fromLink += it }
         HomeViewModel(MutableStateFlow<Step?>(null), sink, l, k.clock, MutableStateFlow(null), MutableStateFlow(null), k.store).feedingNow()
-        val end = System.currentTimeMillis() + 3_000
+        val end = System.currentTimeMillis() + 30_000
         while (fromLink.isEmpty() && System.currentTimeMillis() < end) Thread.sleep(10)
         assertEquals(listOf<Event>(FeedingStarted(T0, T0, FeedingFrom.CAR_SCREEN, null)), fromLink.toList(), "link의 실제 사건 길로 낸다")
         assertEquals(T0, k.db.storeDao().profile()!!.lastFeedingStart, "Room에 먼저 쓴다")

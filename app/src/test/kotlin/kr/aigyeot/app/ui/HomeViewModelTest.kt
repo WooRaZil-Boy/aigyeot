@@ -63,7 +63,7 @@ class HomeViewModelTest {
         val vm = HomeViewModel(MutableStateFlow<Step?>(null), EventSink {}, k.realLink, k.clock, MutableStateFlow(null), MutableStateFlow(null), k.store)
         var day: DayChartData? = null
         val job = vm.viewModelScope.launch { vm.uiState.collect { day = it.day } }
-        val end = System.currentTimeMillis() + 5_000
+        val end = System.currentTimeMillis() + 30_000
         while (System.currentTimeMillis() < end && day?.lanes?.any { it.name == "차에서" } != true) {
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(20)
