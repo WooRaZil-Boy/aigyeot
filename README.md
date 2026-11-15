@@ -148,7 +148,7 @@ tools/check.sh                   # 린트와 시험 전부: ktlint, engine·shar
 
 - **에뮬레이터 실측:** 경보 지연·내비 경유지·자원은 debug 빌드 차량용 앱으로, 뒷좌석 재생·주행 중 차량 제어는 별도 실측 앱([tools/pleos-probe](tools/pleos-probe/))으로 측정했습니다.
 - **녹음 기반 평가:** 울음 감지와 그침 판정은 휴대폰·가정 녹음에 차량 소음을 섞어 맥에서 평가했습니다.
-- **제출 APK 확인:** 제출 APK로 실행 절차를 처음부터 따라 해 확인했습니다([readme_walkthrough_1114.txt](tools/measure/readme_walkthrough_1114.txt)). 마이크 경로의 울음 감지는 이전 release 빌드로 확인했습니다([blackhole_cry_1113.txt](tools/measure/blackhole_cry_1113.txt)).
+- **제출 APK 확인:** 제출 APK로 실행 절차를 처음부터 따라 해 확인했습니다([readme_walkthrough_1115.txt](tools/measure/readme_walkthrough_1115.txt)). 마이크 경로의 울음 감지는 이전 release 빌드로 확인했습니다([blackhole_cry_1113.txt](tools/measure/blackhole_cry_1113.txt)).
 
 조건과 전체 표는 [tools/measure/README.md](tools/measure/README.md)에 있습니다.
 
