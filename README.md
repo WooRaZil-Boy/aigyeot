@@ -10,7 +10,7 @@
 
 > 아기가 울면 차가 대신 달래 줍니다. 부모는 앞만 보고 운전합니다.
 
-뒷좌석 카시트에 0~2세 아기를 태우고 혼자 운전하는 부모를 위한 Pleos Connect(Android Automotive) 앱입니다. 차가 마이크로 울음을 듣고 뒷좌석 스피커로 달래며, 두 번 해도 울면 보호자와 쉼터로 넘깁니다. 현대자동차그룹 차량용 앱 개발 공모전 출품작이고, 차 앱·보호자 휴대폰 앱(안드로이드·iOS)·중계 서버로 이루어져 있습니다.
+뒷좌석 카시트에 2세 이하 아기를 태우고 혼자 운전하는 부모를 위한 Pleos Connect(Android Automotive) 앱입니다. 차가 마이크로 울음을 듣고 뒷좌석 스피커로 달래며, 두 번 해도 울면 보호자와 쉼터로 넘깁니다. 현대자동차그룹 차량용 앱 개발 공모전 출품작이고, 차 앱·보호자 휴대폰 앱(안드로이드·iOS)·중계 서버로 이루어져 있습니다.
 
 | 정차 홈 | 달래는 중(주행) | 휴대폰 인계 알림 |
 | :---: | :---: | :---: |
@@ -116,7 +116,7 @@ tools/check.sh                   # 린트와 시험 전부: ktlint, engine·shar
 | 내비 경유지 | 앱이 넣은 휴게소가 실제 내비 경로에 '경유'로 들어옴 | [emulator_1110.txt](tools/measure/emulator_1110.txt) 4절 |
 | 자원(3D 화면 포함) | CPU 한 코어 기준 구간 평균 1.63~4.03%, 메모리(PSS) 최대 252MB | [demo_check_1112.txt](tools/measure/demo_check_1112.txt) 7절 |
 | 울음 감지(교차검증, 울음 대 차 소음 비 10 dB) | 재현율 378/457(0.83). 오경보 수치와 조건은 [tools/measure/README.md](tools/measure/README.md#맥-오프라인-평가) | [tools/cry-retrain](tools/cry-retrain/) |
-| 그침·계속 판정(학습에 쓰지 않은 울음 18개로 만든 맥 합성 장면 360개) | 소리를 멈추고 들을 때 359/360. 재생을 켠 채 판정하면 노래 장면에서 실제로 그친 72번 중 18번을 '아직 운다'로 잘못 봄 | [tools/cry-retrain](tools/cry-retrain/) |
+| 그침·계속 판정(학습에 쓰지 않은 울음 18개로 만든 맥 합성 장면 360개) | 소리를 멈추고 들을 때 359/360. 재생을 켠 채 판정한 비교 장면(따로 만듦)에서는 동요를 튼 장면에서 실제로 그친 72번 중 18번을 '아직 운다'로 잘못 봄 | [tools/cry-retrain](tools/cry-retrain/) |
 
 ## 알려진 한계
 
@@ -139,6 +139,7 @@ tools/check.sh                   # 린트와 시험 전부: ktlint, engine·shar
 | `relay/` | 중계 서버(Cloudflare Workers + Durable Objects) |
 | `tools/` | 시연 스크립트(`demo`), 실측 기록(`measure`), 울음 판별층 학습·평가(`cry-retrain`), 에뮬레이터 실측 앱(`pleos-probe`), 시뮬레이션(`sim`), 전체 시험(`check.sh`) |
 | `apk/` | 제출용 release APK |
+| `site/` | 검증 결과·실제 화면·디자인 시안·개발 도구를 모은 정적 페이지(브라우저에서 `index.html`을 열면 됨) |
 
 ## 라이선스와 출처
 
