@@ -21,6 +21,7 @@
 | APK | 차량용 앱 [`apk/곁빛_아이곁_release.apk`](apk/곁빛_아이곁_release.apk), 안드로이드 휴대폰 앱 [`apk/곁빛_아이곁_휴대폰_release.apk`](apk/곁빛_아이곁_휴대폰_release.apk). 둘 다 release 키로 서명 |
 | 실행 | 에뮬레이터를 띄우고 `SERIAL=<차 에뮬레이터 시리얼> tools/demo/prepare.sh apk/곁빛_아이곁_release.apk` ([실행 방법](#실행-방법)) |
 | 테스트 환경 | Pleos Connect Emulator v2.1.0(Android 14, API 34, 2560×1440), macOS(Apple Silicon) ([테스트 환경과 필요한 설정](#테스트-환경과-필요한-설정)) |
+| 개발·검증 자료 | https://aigyeot-site.byuncorry.workers.dev (검증 결과·실제 화면·디자인 시안·개발 도구. 원본은 [`site/`](site)) |
 | 구조와 규칙 | [ARCHITECTURE.md](ARCHITECTURE.md) |
 
 ## 주요 기능
