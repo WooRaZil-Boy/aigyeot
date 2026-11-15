@@ -183,6 +183,9 @@ class UseCaseTest {
         assertEquals(1, first.attempts)
         clearRecords()
         until("지움") { care.care.value.events.isEmpty() && state.state.value.clearingCareIds == null }
+        // 지운 뒤 다시 계산한 요약이 아직 옛 응답(연결 실패)으로 보내지는 중일 수 있다: 그 보냄이 끝난 뒤에 망을 돌려야 당긴 기다림을 덮어쓰지 않는다.
+        outbox.pump()
+        until("지운 뒤 요약의 망 실패") { state.state.value.outbox.singleOrNull()?.let { it.id != first.id && it.networkWait } == true && outbox.sending == null }
         relay.sendResult = ok
         outbox.hurryNetworkWaits() // 망이 돌아왔다
         until("보낼 함 비움") { state.state.value.outbox.isEmpty() }

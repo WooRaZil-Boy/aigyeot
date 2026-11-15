@@ -221,9 +221,9 @@ class Kit(val scope: CoroutineScope, val dir: File, creds: Credentials?, marks: 
     val removeSong = RemoveSong(state, songs, outbox, clock, scope)
     val lifecycle = AppLifecycle(state, care, songs, link, this.marks, visibility, connection, outbox, recordCare, disconnect, { }, scope)
 
-    /** 조건이 참이 될 때까지 기다린다(앱 범위 작업·IO 저장이 끝나기를). */
+    /** 조건이 참이 될 때까지 기다린다(앱 범위 작업·IO 저장이 끝나기를). 한도는 느린 러너에서도 넘지 않을 만큼 길게 둔다: 느리면 오래 걸릴 뿐이고, 실패하면 진짜 멈춘 것이다. */
     suspend fun until(what: String = "조건", cond: () -> Boolean) {
-        runCatching { withTimeout(3_000) { while (!cond()) delay(5) } }.getOrElse { throw AssertionError("기다려도 $what 아님") }
+        runCatching { withTimeout(30_000) { while (!cond()) delay(5) } }.getOrElse { throw AssertionError("기다려도 $what 아님") }
     }
 
     /** 앱 범위 작업이 돌 틈을 준다. */
