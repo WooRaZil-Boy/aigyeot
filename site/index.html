@@ -46,7 +46,7 @@
       <li><a href="#latency"><span class="spec-k">울음 시작 → 경보</span><span class="spec-v">1.7~2.7<i>초</i></span><span class="spec-n">서명한 release 빌드(제출 APK 이전 판), 에뮬레이터 마이크로 실제 소리를 넣은 유효 7회</span></a></li>
       <li><a href="#features"><span class="spec-k">주행 중 차량 제어 반영</span><span class="spec-v">24<i>/24</i></span><span class="spec-n">기어 D·60km/h에서 시트 열선·창 잠금·앞 공조 설정 온도·무드 조명 색 <span class="nw">각 6/6</span>, 별도 실측 앱으로 잼</span></a></li>
       <li><a href="#resource"><span class="spec-k">메모리 최대(3D 화면 포함)</span><span class="spec-v">252<i>MB</i></span><span class="spec-n">CPU는 한 코어 기준 구간 평균 1.63~4.03%</span></a></li>
-      <li><a href="#tools"><span class="spec-k">단위 시험</span><span class="spec-v">2,500<i>개+</i></span><span class="spec-n">판단 코어 줄 커버리지 약 98%, CI가 95% 하한을 강제</span></a></li>
+      <li><a href="#tools"><span class="spec-k">단위 시험</span><span class="spec-v">2,500<i>개+</i></span><span class="spec-n">판단 엔진 테스트 커버리지 약 98%, CI가 95% 하한을 강제</span></a></li>
     </ul>
   </div>
 
@@ -389,7 +389,7 @@
   <div class="tool-sec">
     <h2>시험</h2>
     <div>
-      <p>단위 시험은 2,500개가 넘고, 판단 코어의 줄 커버리지는 약 98%입니다(CI가 95% 하한을 강제). 차·휴대폰·중계 서버가 주고받는 메시지 JSON 예제 46개는 여러 모듈의 시험이 함께 읽어 형식이 어긋나지 않게 합니다.</p>
+      <p>단위 시험은 2,500개가 넘고, 판단 엔진의 테스트 커버리지는 약 98%입니다(CI가 95% 하한을 강제). 차·휴대폰·중계 서버가 주고받는 메시지 JSON 예제 46개는 여러 모듈의 시험이 함께 읽어 형식이 어긋나지 않게 합니다.</p>
       <p class="src"><a href="https://github.com/WooRaZil-Boy/aigyeot/blob/main/ARCHITECTURE.md#6-시험">ARCHITECTURE.md 6. 시험</a>, <a href="https://github.com/WooRaZil-Boy/aigyeot/blob/main/.github/workflows/ci.yml">CI 워크플로</a></p>
     </div>
   </div>
