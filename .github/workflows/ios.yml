@@ -1,18 +1,10 @@
 name: iOS
 
-# macOS 러너는 비싸서 iOS 앱·시연 스크립트가 바뀔 때만 돈다. 손으로도 돌릴 수 있다(Actions 탭 → Run workflow).
+# main 푸시와 PR마다 돈다. 손으로도 돌릴 수 있다(Actions 탭 → Run workflow).
 on:
   push:
     branches: [main]
-    paths:
-      - "phone/ios/**"
-      - "tools/demo/**"
-      - ".github/workflows/ios.yml"
   pull_request:
-    paths:
-      - "phone/ios/**"
-      - "tools/demo/**"
-      - ".github/workflows/ios.yml"
   workflow_dispatch:
 
 concurrency:
