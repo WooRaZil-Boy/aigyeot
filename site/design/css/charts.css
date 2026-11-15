@@ -1,0 +1,71 @@
+
+.chwrap { position: relative; }
+.ch { width: 100%; height: auto; display: block; overflow: visible; font-family: var(--font); }
+.ch text { fill: var(--text-tertiary); font-weight: 500; font-variant-numeric: tabular-nums; }
+.ch .tick.on { fill: var(--text-primary); font-weight: 700; }
+.ch .lane { fill: var(--text-secondary); font-weight: 600; }
+.ch .grid, .ch .axis { stroke: var(--line); stroke-width: 1; }
+.ch .f-sleep { fill: var(--c-sleep); } .ch .f-feed { fill: var(--c-feed); } .ch .f-diaper { fill: var(--c-diaper); } .ch .f-car, .ch .car { fill: var(--c-car); }
+.ch circle.f-sleep, .ch circle.f-feed, .ch circle.f-diaper { stroke: none; }
+.ch .drive { fill: color-mix(in srgb, var(--c-car) 9%, transparent); }
+.ch .now { stroke: var(--text-primary); stroke-width: 1.5; }
+.ch .rest { fill: var(--surface); opacity: .6; }
+
+.ch .trk { fill: var(--surface-raised); }
+.ch .lv { fill: var(--text-tertiary); font-weight: 500; }
+.ch .lv .lb { fill: var(--text-primary); font-weight: 700; }
+.ch .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.ch .ring { stroke: var(--surface); stroke-width: 2px; }
+.ch-day .lane { fill: var(--text-primary); font-weight: 600; }
+.ch .nowt { fill: var(--text-primary); font-weight: 700; }
+.ch .hot { fill: var(--hot, var(--c-feed)); }
+.ch .cold { fill: color-mix(in srgb, var(--text-primary) 13%, transparent); }
+.ch .target { stroke: var(--text-tertiary); stroke-width: 1; }
+.ch .tlab { font-weight: 600; }
+.ch .val { fill: var(--text-primary); font-weight: 700; }
+.ch .val.dim { fill: var(--text-tertiary); font-weight: 600; }
+.ch .hit { fill: transparent; }
+.ch .cell { fill: var(--surface-raised); }
+.ch .snd { fill: var(--text-primary); }
+.ch .gapb { fill: var(--surface-raised); }
+.ch .in { fill: var(--surface); font-weight: 600; }
+.ch .mark { stroke: color-mix(in srgb, var(--text-primary) 18%, transparent); stroke-width: 1; }
+.ch .mdot { fill: var(--text-primary); stroke: var(--surface); stroke-width: 2; }
+.ch .mlab { fill: var(--text-secondary); font-weight: 600; }
+.ch [data-tip] { outline: none; transition: filter 120ms linear, opacity 120ms linear; }
+.ch .lift { filter: brightness(1.15) saturate(1.05); }
+.ch-week path { transform-box: fill-box; transform-origin: 50% 100%; }
+.ch-tip { position: absolute; z-index: 9; pointer-events: none; padding: 7px 10px; border-radius: 10px; background: var(--text-primary); color: var(--surface);
+  font: 600 12.5px/1.3 var(--font); white-space: nowrap; opacity: 0; transform: translateY(4px); transition: opacity 120ms linear, transform 120ms linear; }
+.ch-tip.on { opacity: 1; transform: none; }
+
+.kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi > div { display: grid; gap: 2px; align-content: start; }
+.kpi span { font: 500 13px/18px var(--font); color: var(--text-tertiary); }
+.kpi b { font: 700 20px/28px var(--font); color: var(--text-primary); letter-spacing: -0.02em; }
+.kpi em { font: 500 12px/16px var(--font); font-style: normal; color: var(--text-tertiary); }
+
+.dm { display: grid; gap: 14px; }
+.dm-row { display: grid; grid-template-columns: 74px 1fr auto; align-items: center; gap: 12px; outline: none; }
+.dm-n { font: 600 15px/20px var(--font); color: var(--text-primary); }
+.dm-d { display: flex; gap: 5px; flex-wrap: wrap; }
+.dm-d i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-primary) 26%, transparent); }
+.dm-d i.on { background: var(--text-primary); box-shadow: none; }
+.dm-row.unk .dm-n { color: var(--text-tertiary); }
+.dm-row.unk .dm-d i { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-primary) 14%, transparent); }
+.dm-v { font: 500 14px/1 var(--font); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dm-v b { color: var(--text-primary); font-weight: 700; font-size: 17px; }
+
+.app .ch-tip { font: 600 24px/1.3 var(--font); padding: 12px 16px; border-radius: 16px; }
+.app .kpi span, .app .kpi em { font: var(--car-label); color: var(--text-tertiary); }
+.app .kpi b { font: 700 40px/52px var(--font); }
+.app .dm { gap: 22px; }
+.app .dm-row { grid-template-columns: 170px 1fr auto; gap: 20px; }
+.app .dm-n { font: var(--car-label); font-size: 28px; font-weight: 600; }
+.app .dm-d { gap: 8px; } .app .dm-d i { width: 22px; height: 22px; }
+.app .dm-v { font: var(--car-label); } .app .dm-v b { font-size: 32px; }
+.ch .drive { fill: color-mix(in srgb, var(--c-car) 22%, var(--surface-raised)); }
+.app .kpi.k4 { grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.app .kpi b { font-variant-numeric: tabular-nums; }
+.chwrap + .kpi { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.app .chwrap + .kpi { margin-top: 22px; padding-top: 20px; }

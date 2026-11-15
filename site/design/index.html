@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>아이곁 디자인 시안</title>
+<link rel="stylesheet" href="vendor/pretendard/index.css">
+<link rel="stylesheet" href="css/tokens.css?v=4">
+<link rel="stylesheet" href="css/shell.css?v=4">
+<link rel="stylesheet" href="css/car.css?v=4">
+<link rel="stylesheet" href="css/charts.css?v=5"><link rel="stylesheet" href="css/phone.css?v=4">
+<link rel="stylesheet" href="css/system.css?v=4">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="lg-refract" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="3" result="n"/>
+    <feGaussianBlur in="n" stdDeviation="2" result="nb"/>
+    <feDisplacementMap in="SourceGraphic" in2="nb" scale="18" xChannelSelector="R" yChannelSelector="G" result="d"/>
+    <feGaussianBlur in="d" stdDeviation="5"/>
+  </filter>
+</svg>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="logo" id="logo"></span>아이곁<small>디자인 시안 · 화면의 시각·거리·이름·성적 숫자는 예시</small></div>
+    <div class="seg" id="tabs">
+      <button data-v="story" aria-pressed="true">한 장면</button>
+      <button data-v="car" aria-pressed="false">차</button>
+      <button data-v="android" aria-pressed="false">안드로이드</button>
+      <button data-v="ios" aria-pressed="false">iOS</button>
+      <button data-v="system" aria-pressed="false">시스템</button>
+    </div>
+    <span class="spacer"></span>
+    <span class="opt">테마</span>
+    <div class="seg" id="theme"><button data-v="auto" aria-pressed="false">자동</button><button data-v="light" aria-pressed="true">라이트</button><button data-v="dark" aria-pressed="false">다크</button></div>
+    <span class="opt">모션</span>
+    <div class="seg" id="motion"><button data-v="full" aria-pressed="true">켜기</button><button data-v="reduced" aria-pressed="false">줄이기</button></div>
+  </header>
+  <main>
+    <section class="view on" id="v-story"></section>
+    <section class="view" id="v-car"></section>
+    <section class="view" id="v-android"></section>
+    <section class="view" id="v-ios"></section>
+    <section class="view" id="v-system"></section>
+  </main>
+</div>
+
+<script src="js/gen-icons.js?v=4"></script>
+<script src="vendor/three/three-bundle.min.js"></script>
+<script src="js/gen-car.js?v=4"></script>
+<script src="vendor/motion/motion.js"></script>
+<script src="js/core.js?v=4"></script>
+<script src="js/data.js?v=4"></script>
+<script src="js/charts.js?v=5"></script><script src="js/car3d.js?v=4"></script>
+<script src="js/car-stage.js?v=4"></script>
+<script src="js/car.js?v=4"></script>
+<script src="js/phone.js?v=4"></script>
+<script src="js/system.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
+</body>
+</html>
