@@ -1,8 +1,23 @@
 name: iOS
 
-# macOS 러너의 Xcode 판이 프로젝트와 맞는지 확인하기 전이라 손으로만 돌린다(Actions 탭 → Run workflow).
+# macOS 러너는 비싸서 iOS 앱·시연 스크립트가 바뀔 때만 돈다. 손으로도 돌릴 수 있다(Actions 탭 → Run workflow).
 on:
+  push:
+    branches: [main]
+    paths:
+      - "phone/ios/**"
+      - "tools/demo/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "phone/ios/**"
+      - "tools/demo/**"
+      - ".github/workflows/ios.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
