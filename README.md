@@ -1,3 +1,5 @@
+<img src=".github/assets/app-icon.png" alt="아이곁 앱 아이콘" width="96" height="96">
+
 # 아이곁
 
 [![CI](https://github.com/WooRaZil-Boy/aigyeot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/WooRaZil-Boy/aigyeot/actions/workflows/ci.yml)
@@ -23,6 +25,13 @@
 | 테스트 환경 | Pleos Connect Emulator v2.1.0(Android 14, API 34, 2560×1440), macOS(Apple Silicon) ([테스트 환경과 필요한 설정](#테스트-환경과-필요한-설정)) |
 | 개발·검증 자료 | https://aigyeot-site.byuncorry.workers.dev (검증 결과·실제 화면·디자인 시안·개발 도구. 원본은 [`site/`](site)) |
 | 구조와 규칙 | [ARCHITECTURE.md](ARCHITECTURE.md) |
+
+**시연 영상**
+
+| 영상 | 내용 | 원본 |
+| --- | --- | --- |
+| [사용 장면(1분 52초)](.github/assets/demo-scenario.mp4) | 에뮬레이터 녹화와 차량 내부 상황 그림으로 울음 감지·달래기·정차 안내 과정을 소개합니다. | [원본 구글 드라이브](https://drive.google.com/file/d/1H7ZWLLC6Xl29hH-0lohAiz3oozpdh92T/view) |
+| [에뮬레이터 화면(2분 38초)](.github/assets/demo-emulator.mp4) | 공식 Pleos Connect 에뮬레이터에서 앱의 주요 기능이 작동하는 모습을 보여 줍니다. | — |
 
 ## 주요 기능
 
