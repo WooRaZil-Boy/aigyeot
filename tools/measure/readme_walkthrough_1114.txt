@@ -1,6 +1,6 @@
 # README '실행 방법' 1·2·4단계(안드로이드) 따라 하기 — 2026-11-14 22:08~22:14
 목적: 저장소 README.md '실행 방법'을 처음 보는 사람처럼 글자 그대로 따라 해, 제출 APK가 공식 Pleos Connect 에뮬레이터에서 설치·실행되고 앱이 보이는지 확인한다.
-기준: HEAD 7de8ec6 + 작업 트리의 README.md(커밋 전 수정본). 아래 'README n줄'은 이 수정본의 줄 번호다.
+기준: HEAD f3cdca2 + 작업 트리의 README.md(커밋 전 수정본). 아래 'README n줄'은 이 수정본의 줄 번호다.
 APK(빌드하지 않고 그대로 사용):
   apk/곁빛_아이곁_release.apk — 91,766,869 B, sha256 c8c953f03574ee544f75f894a2a867b8e319953c29ee532ddfa036ca0728f7e1
   apk/곁빛_아이곁_휴대폰_release.apk — 29,199,794 B, sha256 217a8737b81911f520297e049093d91aa75c03d336ee014cb9075b9e42da0290
