@@ -337,16 +337,23 @@ class LinkSocketTest : LinkKit() {
         phone()
         val a = relayEnv("unpaired", 10, """{"device_id":"$PHONE","role":"owner","by":"self"}""")
         relay.devicesRes = Res.Ok(200, DevicesResponse(530, listOf(device(PHONE, Role.OWNER))))
+        var thrownAt = 0 // 예외를 던진 호출 번호
         relay.onDevices = {
-            if (relay.devicesCalls == 2) throw SQLiteException("boom") // 1번째는 붙을 때, 2번째가 마지막 폰 확인
-            if (relay.devicesCalls >= 3) relay.devicesRes = Res.Ok(200, DevicesResponse(531, emptyList()))
+            // 1번째(붙을 때) 뒤에는 unpaired가 온 뒤라 중계 목록에도 폰이 없다
+            if (relay.devicesCalls >= 2) relay.devicesRes = Res.Ok(200, DevicesResponse(531, emptyList()))
+            // 예외는 마지막 폰 확인 경로에서 한 번만 던진다. 호출 번호로 고르면 연결 반복 쪽 조회에 걸릴 때가 있고,
+            // 그러면 연결 반복이 60초 기다려(Connection.startLoop) 시험이 실행 순서에 따라 갈린다
+            if (thrownAt == 0 && Thread.currentThread().stackTrace.any { "recheckOnce" in it.className }) {
+                thrownAt = relay.devicesCalls
+                throw SQLiteException("boom")
+            }
         }
         relay.onSocket = { ev ->
             ev.onOpen()
             if (relay.socketCalls == 1) ev.onText(ProtocolJson.encodeToString(Envelope.serializer(), a))
         }
         link.start()
-        eventually { relay.devicesCalls >= 3 }
+        eventually { thrownAt > 0 && relay.devicesCalls > thrownAt } // 예외 뒤에도 같은 확인을 다시 한다
         eventually { link.status.value.conn == LinkConn.NONE } // 예외로 끝나도 소비 코루틴이 살아 다음 요청이 돈다
     }
 
